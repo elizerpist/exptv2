@@ -1,5 +1,15 @@
 # SummaryPill ballistic-primary-controls prototype
 
+> **Superseded experiment record — 2026-08-24.** The implementation described
+> here is `92b73600` and is no longer the runtime baseline. Its
+> settle-only primary controls are withdrawn from Legacy after source review
+> showed that they do not publish a prepared frame at the child rail's
+> discrete-crossing cadence. The retained SearchPill and withdrawn standalone
+> Ledger amount remain unchanged. The current comparison is documented in
+> `2026-08-24-selectable-summary-pill-experiments-design.md`: pre-92 Legacy,
+> Segmented, and Swipe Mode are isolated runtime choices; none is accepted
+> product architecture.
+
 ## Scope
 
 This approved, deliberately narrow experiment withdraws the temporary

@@ -145,6 +145,8 @@ abstract final class SummaryNavigationProjector {
             : SummaryContentChangeReason.railClosed,
       DashboardTimeNavigationChangeKind.retainedChild =>
         SummaryContentChangeReason.childSettled,
+      DashboardTimeNavigationChangeKind.temporalTarget =>
+        SummaryContentChangeReason.initial,
       DashboardTimeNavigationChangeKind.direction =>
         SummaryContentChangeReason.initial,
       DashboardTimeNavigationChangeKind.query =>

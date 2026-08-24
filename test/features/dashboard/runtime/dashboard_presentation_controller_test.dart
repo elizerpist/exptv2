@@ -5,6 +5,7 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -342,6 +343,42 @@ void main() {
     expect(commits.length, committedCallbacks + 1);
     expect(motionStates, <bool>[true, false]);
   });
+
+  test(
+    'experimental DAY crossing publishes the existing prepared child directly',
+    () {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2026, 7, 14),
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(revision: 7),
+        publishImmediately: true,
+      );
+      controller.setRailOpen(true);
+      scheduler.fireFrame();
+      final candidate = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 4,
+      );
+      expect(candidate, isNotNull);
+      final publishesBefore = controller.visibleFrames.visiblePublishCount;
+
+      expect(controller.publishPreparedExperimentalChild(candidate!), isTrue);
+      scheduler.fireFrame();
+
+      final visible = controller.visibleFrames.value!;
+      expect(controller.navigation.state.dayCursor, 18);
+      expect(visible.queryKey, candidate.temporalAnchor.sourceChildQueryKey);
+      expect(visible.mode, DashboardVisibleMode.committed);
+      expect(visible.amount.queryKey, visible.logBox.queryKey);
+      expect(controller.visibleFrames.visiblePublishCount, publishesBefore + 1);
+    },
+  );
 
   test(
     'separate display frames expose intermediate values on the first fling',

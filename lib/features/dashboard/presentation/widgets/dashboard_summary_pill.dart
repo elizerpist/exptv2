@@ -1,24 +1,22 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../time_navigation/application/dashboard_time_navigation_controller.dart';
-import '../../time_navigation/application/dashboard_time_navigation_state.dart';
-import '../../time_navigation/domain/time_plane.dart';
 import '../../time_navigation/presentation/summary_navigation_presentation.dart';
-import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import '../dashboard_amount_update_policy.dart';
 import '../summary_navigation_motion_controller.dart';
-import '../summary_text_content.dart';
 import 'summary_navigation_motion_region.dart';
-import 'summary_pill_primary_controls.dart';
+import 'summary_pill_text_transition.dart';
 
 /// Stable SummaryPill shell with independently listening navigation and amount
 /// leaves. Prepared amount text is consumed directly; preview frames never
@@ -38,9 +36,6 @@ final class DashboardSummaryPill extends StatefulWidget {
     required this.onMoveBroader,
     required this.onMovePrevious,
     required this.onMoveNext,
-    this.onSelectPlaneTarget,
-    this.motherLabelForOffset,
-    this.onSelectMotherOffset,
     this.onSelectionHaptic,
     this.performanceCounters,
   });
@@ -58,10 +53,6 @@ final class DashboardSummaryPill extends StatefulWidget {
   final VoidCallback onMoveBroader;
   final VoidCallback onMovePrevious;
   final VoidCallback onMoveNext;
-  final void Function(TimePlane target, {required bool finer})?
-  onSelectPlaneTarget;
-  final String? Function(int offset)? motherLabelForOffset;
-  final ValueChanged<int>? onSelectMotherOffset;
   final VoidCallback? onSelectionHaptic;
   final DashboardPerformanceCounters? performanceCounters;
 
@@ -69,7 +60,25 @@ final class DashboardSummaryPill extends StatefulWidget {
   State<DashboardSummaryPill> createState() => _DashboardSummaryPillState();
 }
 
-final class _DashboardSummaryPillState extends State<DashboardSummaryPill> {
+final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
+    with SingleTickerProviderStateMixin {
+  static const _touchSlop = 8.0;
+  static const _shellDragFactor = .10;
+  static const _maximumShellTravel = 8.0;
+  static const _maximumSumResistance = 5.0;
+  static const _shellReturnDuration = Duration(milliseconds: 100);
+
+  _SummaryGestureAxis? _axis;
+  double _dx = 0;
+  double _dy = 0;
+  Offset _returnStartOffset = Offset.zero;
+  bool _didEmitThresholdHaptic = false;
+  int _shellGeneration = 0;
+  int? _returnShellGeneration;
+  int? _stagedTextGeneration;
+  bool _returnStartsTextTransition = false;
+  late final ValueNotifier<Offset> _shellOffset;
+  late final AnimationController _shellReturnController;
   late Listenable _navigationChanges;
 
   @override
@@ -79,6 +88,11 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill> {
       widget.navigation,
       widget.visibleFrames.navigationLane,
     ]);
+    _shellOffset = ValueNotifier(Offset.zero);
+    _shellReturnController =
+        AnimationController(vsync: this, duration: _shellReturnDuration)
+          ..addListener(_handleShellReturnTick)
+          ..addStatusListener(_handleShellReturnStatus);
   }
 
   @override
@@ -91,6 +105,60 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill> {
         widget.visibleFrames.navigationLane,
       ]);
     }
+  }
+
+  SummaryNavigationPresentation get _navigationPresentation {
+    final state = widget.navigation.state;
+    final base = SummaryNavigationProjector.project(state);
+    final visible = widget.visibleFrames.value;
+    if (!state.isRailOpen ||
+        visible == null ||
+        visible.parentQueryKey != state.parentQueryKey ||
+        visible.navigationEpoch != state.navigationEpoch) {
+      return base;
+    }
+    return SummaryNavigationPresentation(
+      plane: base.plane,
+      planeTitle: base.planeTitle,
+      subtitle: SummaryNavigationProjector.liveRailChildSubtitle(
+        plane: visible.plane,
+        visibleChildScope: visible.scope.timeScope,
+        fallback: visible.childLabel,
+      ),
+      isRailOpen: true,
+      revision: visible.frameGeneration,
+      changeReason: SummaryContentChangeReason.railPreviewTick,
+      direction: base.direction,
+      isPreview: visible.mode == DashboardVisibleMode.preview,
+    );
+  }
+
+  void _handleShellReturnTick() {
+    _setShellOffset(
+      Offset.lerp(
+        _returnStartOffset,
+        Offset.zero,
+        Curves.easeOutCubic.transform(_shellReturnController.value),
+      )!,
+    );
+  }
+
+  void _handleShellReturnStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    final generation = _returnShellGeneration;
+    if (generation == null || generation != _shellGeneration) return;
+    final textGeneration = _stagedTextGeneration;
+    final startsText = _returnStartsTextTransition;
+    _setShellOffset(Offset.zero);
+    _returnShellGeneration = null;
+    _stagedTextGeneration = null;
+    _returnStartsTextTransition = false;
+    if (startsText && textGeneration != null) {
+      widget.navigationMotionController.completeShellReturn(
+        generation: textGeneration,
+      );
+    }
+    widget.onMotionActiveChanged?.call(false);
   }
 
   @override
@@ -106,29 +174,23 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill> {
       child: Row(
         children: [
           SizedBox(width: horizontalInset),
+          const Icon(
+            Icons.calendar_month_outlined,
+            color: FluviVisualTokens.textSecondary,
+            size: FluviVisualTokens.iconSize,
+          ),
+          const SizedBox(width: FluviVisualTokens.controlInnerGap),
           Expanded(
-            child: SummaryPillPrimaryControls(
-              height: widget.bounds.height,
-              navigation: widget.navigation,
-              onMotionActiveChanged: widget.onMotionActiveChanged,
-              onSelectPlaneTarget:
-                  widget.onSelectPlaneTarget ?? _legacyPlaneTarget,
-              motherLabelForOffset:
-                  widget.motherLabelForOffset ?? _legacyMotherLabel,
-              onSelectMotherOffset:
-                  widget.onSelectMotherOffset ?? _legacyMotherOffset,
-              railFeedback: _SummaryRailFeedbackSlot(
-                listenable: _navigationChanges,
-                navigation: widget.navigation,
-                visibleFrames: widget.visibleFrames,
-                motionController: widget.navigationMotionController,
-                performanceCounters: widget.performanceCounters,
-              ),
+            child: _SummaryNavigationTextSlot(
+              listenable: _navigationChanges,
+              presentation: () => _navigationPresentation,
+              motionController: widget.navigationMotionController,
+              performanceCounters: widget.performanceCounters,
             ),
           ),
           ConstrainedBox(
             constraints: BoxConstraints(maxWidth: widget.bounds.width * .40),
-            child: _PreparedAmountSlot(
+            child: SummaryPillPreparedAmountSlot(
               visibleFrames: widget.visibleFrames,
               performanceCounters: widget.performanceCounters,
               onMotionActiveChanged: widget.onAmountMotionActiveChanged,
@@ -145,70 +207,194 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill> {
     return SizedBox(
       width: widget.bounds.width,
       height: widget.bounds.height,
-      child: Transform.translate(
-        key: const ValueKey('dashboard-summary-shell-transform'),
-        offset: Offset.zero,
-        child: RepaintBoundary(
-          key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
-          child: shell,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (_) => _beginGesture(),
+        onPanUpdate: _updateGesture,
+        onPanEnd: _finishGesture,
+        onPanCancel: _startShellReturn,
+        child: ValueListenableBuilder<Offset>(
+          valueListenable: _shellOffset,
+          child: RepaintBoundary(
+            key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
+            child: shell,
+          ),
+          builder: (context, offset, child) => Transform.translate(
+            key: const ValueKey('dashboard-summary-shell-transform'),
+            offset: offset,
+            child: child,
+          ),
         ),
       ),
     );
   }
 
-  void _legacyPlaneTarget(TimePlane target, {required bool finer}) {
-    if (target == widget.navigation.state.plane) return;
-    if (finer) {
-      widget.onMoveFiner();
-    } else {
-      widget.onMoveBroader();
-    }
+  void _beginGesture() {
+    widget.onMotionActiveChanged?.call(true);
+    _shellReturnController.stop();
+    _shellGeneration += 1;
+    _returnShellGeneration = null;
+    _stagedTextGeneration = null;
+    _returnStartsTextTransition = false;
+    widget.navigationMotionController.cancelStagedTextMotion();
+    _axis = null;
+    _dx = 0;
+    _dy = 0;
+    _setShellOffset(Offset.zero);
+    _didEmitThresholdHaptic = false;
   }
 
-  String? _legacyMotherLabel(int offset) {
-    if (offset == 0) {
-      final state = widget.navigation.state;
-      return switch (state.plane) {
-        TimePlane.sum => 'Minden időszak',
-        TimePlane.year => state.yearCursor.toString(),
-        TimePlane.month => DashboardTimeLabelFormatter.yearMonth(
-          state.monthCursor,
+  void _updateGesture(DragUpdateDetails details) {
+    _dx += details.delta.dx;
+    _dy += details.delta.dy;
+    _axis ??= _axisFor(_dx, _dy);
+    final axis = _axis;
+    if (axis == null) return;
+    final distance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
+    final direction = distance < 0
+        ? SummaryTransitionDirection.forward
+        : SummaryTransitionDirection.backward;
+    final candidate = axis == _SummaryGestureAxis.horizontal
+        ? widget.horizontalCandidateBuilder(direction)
+        : null;
+    final canNavigate =
+        axis != _SummaryGestureAxis.horizontal || candidate != null;
+    if (distance.abs() >= 28 && !_didEmitThresholdHaptic && canNavigate) {
+      _emitSelectionHaptic();
+    }
+    if (axis == _SummaryGestureAxis.horizontal) {
+      final maximum = canNavigate ? _maximumShellTravel : _maximumSumResistance;
+      _setShellOffset(
+        Offset((_dx * _shellDragFactor).clamp(-maximum, maximum).toDouble(), 0),
+      );
+    } else {
+      _setShellOffset(
+        Offset(
+          0,
+          (_dy * _shellDragFactor)
+              .clamp(-_maximumShellTravel, _maximumShellTravel)
+              .toDouble(),
         ),
-      };
+      );
     }
-    final candidate = widget.horizontalCandidateBuilder(
-      offset.isNegative
-          ? SummaryTransitionDirection.backward
-          : SummaryTransitionDirection.forward,
-    );
-    return candidate?.subtitle;
   }
 
-  void _legacyMotherOffset(int offset) {
-    if (offset.isNegative) {
-      widget.onMovePrevious();
-    } else {
-      widget.onMoveNext();
+  void _finishGesture(DragEndDetails details) {
+    final axis = _axis;
+    if (axis == null) {
+      _startShellReturn();
+      return;
     }
+    final distance = axis == _SummaryGestureAxis.vertical ? _dy : _dx;
+    final velocity = axis == _SummaryGestureAxis.vertical
+        ? details.velocity.pixelsPerSecond.dy
+        : details.velocity.pixelsPerSecond.dx;
+    final shouldCommit = distance.abs() >= 28 || velocity.abs() >= 360;
+    final forward = distance.abs() >= 28 ? distance < 0 : velocity < 0;
+    final direction = forward
+        ? SummaryTransitionDirection.forward
+        : SummaryTransitionDirection.backward;
+    if (!shouldCommit ||
+        (axis == _SummaryGestureAxis.horizontal &&
+            widget.horizontalCandidateBuilder(direction) == null)) {
+      _startShellReturn();
+      return;
+    }
+    if (!_didEmitThresholdHaptic) _emitSelectionHaptic();
+    _commitWithShellReturn(
+      axis: axis == _SummaryGestureAxis.horizontal
+          ? SummaryTransitionAxis.horizontal
+          : SummaryTransitionAxis.vertical,
+      direction: direction,
+      onCommit: axis == _SummaryGestureAxis.horizontal
+          ? (forward ? widget.onMoveNext : widget.onMovePrevious)
+          // `forward` remains the physical visual direction: negative/up is
+          // forward and positive/down is backward. The temporal plane order
+          // is SUM -> YEAR -> MONTH, so physical down selects finer while up
+          // selects broader.
+          : (forward ? widget.onMoveBroader : widget.onMoveFiner),
+    );
+  }
+
+  void _commitWithShellReturn({
+    required SummaryTransitionAxis axis,
+    required SummaryTransitionDirection direction,
+    required VoidCallback onCommit,
+  }) {
+    final generation = widget.navigationMotionController.holdTextForShellReturn(
+      outgoing: _textContent(_navigationPresentation),
+      axis: axis,
+      direction: direction,
+    );
+    // Structural motion starts synchronously. Data preparation continues in
+    // its independent owner and is never awaited by this animation.
+    onCommit();
+    widget.navigationMotionController.bindShellReturnIncoming(
+      generation: generation,
+      incoming: _textContent(_navigationPresentation),
+    );
+    _startShellReturn(stagedTextGeneration: generation);
+  }
+
+  SummaryTextContent _textContent(SummaryNavigationPresentation value) =>
+      SummaryTextContent(title: value.planeTitle, subtitle: value.subtitle);
+
+  void _startShellReturn({int? stagedTextGeneration}) {
+    _returnStartOffset = _shellOffset.value;
+    _axis = null;
+    _dx = 0;
+    _dy = 0;
+    _didEmitThresholdHaptic = false;
+    _returnShellGeneration = _shellGeneration;
+    _stagedTextGeneration = stagedTextGeneration;
+    _returnStartsTextTransition = stagedTextGeneration != null;
+    _shellReturnController
+      ..value = 0
+      ..forward();
+  }
+
+  void _setShellOffset(Offset value) {
+    if (_shellOffset.value != value) _shellOffset.value = value;
+  }
+
+  void _emitSelectionHaptic() {
+    if (_didEmitThresholdHaptic) return;
+    _didEmitThresholdHaptic = true;
+    widget.onSelectionHaptic?.call();
+    if (widget.onSelectionHaptic == null) HapticFeedback.selectionClick();
+  }
+
+  _SummaryGestureAxis? _axisFor(double dx, double dy) {
+    return switch (GestureDirectionArbiter.resolve(
+      dx: dx,
+      dy: dy,
+      touchSlop: _touchSlop,
+    )) {
+      GestureDirectionIntent.horizontal => _SummaryGestureAxis.horizontal,
+      GestureDirectionIntent.vertical => _SummaryGestureAxis.vertical,
+      null => null,
+    };
+  }
+
+  @override
+  void dispose() {
+    widget.onMotionActiveChanged?.call(false);
+    _shellReturnController.dispose();
+    _shellOffset.dispose();
+    super.dispose();
   }
 }
 
-/// The current mother remains the primary label; an open child rail adds its
-/// existing live child/context subtitle beneath it. The same bounded region
-/// consumes rail ticks, so accepted rail feedback remains paint-only and does
-/// not alter the SummaryPill's fixed geometry or either primary gesture zone.
-final class _SummaryRailFeedbackSlot extends StatelessWidget {
-  const _SummaryRailFeedbackSlot({
+final class _SummaryNavigationTextSlot extends StatelessWidget {
+  const _SummaryNavigationTextSlot({
     required this.listenable,
-    required this.navigation,
-    required this.visibleFrames,
+    required this.presentation,
     required this.motionController,
     required this.performanceCounters,
   });
 
   final Listenable listenable;
-  final DashboardNavigationController navigation;
-  final DashboardVisibleFrameStore visibleFrames;
+  final SummaryNavigationPresentation Function() presentation;
   final SummaryNavigationMotionController motionController;
   final DashboardPerformanceCounters? performanceCounters;
 
@@ -219,42 +405,28 @@ final class _SummaryRailFeedbackSlot extends StatelessWidget {
       performanceCounters?.increment(
         DashboardPerformanceMetric.summaryNavigationTextBuild,
       );
-      final state = navigation.state;
-      if (!state.isRailOpen) return const SizedBox.shrink();
-      final childLabel = _liveChildLabel(state);
-      return Semantics(
-        key: const ValueKey('dashboard-summary-open-child-feedback-semantics'),
-        label: 'Aktív finomítás: $childLabel',
-        child: ExcludeSemantics(
-          child: SummaryNavigationMotionRegion(
-            controller: motionController,
-            content: SummaryTextContent(
-              title: SummaryNavigationProjector.parentLabel(state),
-              subtitle: childLabel,
-            ),
-            axis: SummaryTransitionAxis.none,
-            direction: SummaryTransitionDirection.forward,
-            animateAxis: false,
-            compact: true,
-          ),
+      final value = presentation();
+      return SummaryNavigationMotionRegion(
+        controller: motionController,
+        content: SummaryTextContent(
+          title: value.planeTitle,
+          subtitle: value.subtitle,
         ),
+        axis: value.transitionAxis,
+        direction: value.direction,
+        animateAxis:
+            !value.isPreview &&
+            value.transitionAxis != SummaryTransitionAxis.none,
+        animateTitle:
+            !value.isPreview &&
+            value.transitionAxis != SummaryTransitionAxis.none,
+        compact:
+            value.changeReason == SummaryContentChangeReason.railOpened ||
+            value.changeReason == SummaryContentChangeReason.railClosed ||
+            value.changeReason == SummaryContentChangeReason.childSettled,
       );
     },
   );
-
-  String _liveChildLabel(DashboardNavigationState state) {
-    final visible = visibleFrames.value;
-    if (visible != null &&
-        visible.parentQueryKey == state.parentQueryKey &&
-        visible.navigationEpoch == state.navigationEpoch) {
-      return SummaryNavigationProjector.liveRailChildSubtitle(
-        plane: visible.plane,
-        visibleChildScope: visible.scope.timeScope,
-        fallback: visible.childLabel,
-      );
-    }
-    return SummaryNavigationProjector.project(state).subtitle;
-  }
 }
 
 final class _SummaryChevronSlot extends StatelessWidget {
@@ -295,8 +467,13 @@ final class _SummaryChevronSlot extends StatelessWidget {
   );
 }
 
-final class _PreparedAmountSlot extends StatelessWidget {
-  const _PreparedAmountSlot({
+/// Shared prepared amount leaf used by each SummaryPill experiment.
+///
+/// It listens only to the visible prepared-frame amount lane, preserving the
+/// established direct-preview/no-formatting hot path.
+final class SummaryPillPreparedAmountSlot extends StatelessWidget {
+  const SummaryPillPreparedAmountSlot({
+    super.key,
     required this.visibleFrames,
     required this.performanceCounters,
     required this.onMotionActiveChanged,
@@ -449,3 +626,5 @@ final class _PreparedAmountCrossfadeState
     super.dispose();
   }
 }
+
+enum _SummaryGestureAxis { horizontal, vertical }

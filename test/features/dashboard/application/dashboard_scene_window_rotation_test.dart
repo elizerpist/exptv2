@@ -13,6 +13,7 @@ import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
@@ -959,6 +960,91 @@ void main() {
       }
       await navigation;
       expect(genericPrepareCalls, greaterThanOrEqualTo(0));
+    },
+  );
+
+  test(
+    'an experimental fixed MONTH crossing activates the retained parent hotset before commit',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+
+      final active = core.railInteractionSceneWindowFor(core.navigation.state);
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      core.recordInitialSceneWindowActivation(active);
+
+      var genericPrepareCalls = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (window, {required retainViewportId}) async {
+          genericPrepareCalls += 1;
+          await cache.prepareWindow(
+            window: window,
+            retainViewportId: retainViewportId,
+            surfaceWidth: 378,
+          );
+        },
+        prepareRetained:
+            (window, {required retainedKey, required retainViewportId}) async {
+              await cache.prepareRetainedWindow(
+                retainedKey: retainedKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                surfaceWidth: 378,
+              );
+            },
+        hasRetained: cache.hasRetainedWindow,
+        activate: cache.activateWindow,
+        cancel: cache.cancelInFlightPreparation,
+        scheduleRebase: displayFrames.scheduleFrame,
+        report: cache.report,
+      );
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      displayFrames.flush();
+      await pumpEventQueue(times: 20);
+
+      final candidate = core.navigation.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: -1,
+      )!;
+      final candidateInteraction = core.railInteractionSceneWindowFor(
+        candidate,
+      );
+      expect(cache.hasRetainedWindow(candidateInteraction), isTrue);
+      final genericPrepareCallsBeforeCross = genericPrepareCalls;
+
+      core.navigateExperimentalTemporalComponentOffset(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: -1,
+      );
+
+      expect(core.navigation.state.monthCursor.month, 6);
+      for (final payload in candidateInteraction.payloads) {
+        expect(cache.railCriticalSceneFor(payload), isNotNull);
+      }
+      expect(
+        genericPrepareCalls,
+        genericPrepareCallsBeforeCross,
+        reason:
+            'A prepared experimental target is promoted from the retained '
+            'hotset rather than requesting post-selection foreground work.',
+      );
     },
   );
 

@@ -461,6 +461,66 @@ void main() {
     expect(years.parentOffsetCandidate(2), isNull);
     expect(years.parentOffsetCandidate(-2), isNull);
   });
+
+  test('direct hierarchy targets reuse the canonical day child scope', () {
+    final controller = _controller(
+      plane: TimePlane.month,
+      date: DateTime(2026, 1, 31),
+    );
+    addTearDown(controller.dispose);
+
+    final day = controller.temporalCandidate(
+      plane: TimePlane.month,
+      isRailOpen: true,
+    );
+    controller.commitTemporalCandidate(day);
+    expect(
+      controller.state.effectiveScope,
+      const DayScope(LocalDate(year: 2026, month: 1, day: 31)),
+    );
+
+    final february = controller.temporalComponentOffsetCandidate(
+      plane: TimePlane.month,
+      isRailOpen: true,
+      component: DashboardTemporalAnchorComponent.month,
+      offset: 1,
+    );
+    expect(february?.monthCursor, const YearMonth(year: 2026, month: 2));
+    expect(february?.dayCursor, 28);
+  });
+
+  test(
+    'one experimental fling stays anchored while each crossing publishes',
+    () {
+      final controller = _controller(
+        plane: TimePlane.month,
+        railOpen: true,
+        date: DateTime(2026, 7, 14),
+      );
+      addTearDown(controller.dispose);
+      final gestureOrigin = controller.state;
+
+      final first = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: gestureOrigin,
+      )!;
+      controller.commitTemporalCandidate(first);
+      expect(controller.state.dayCursor, 15);
+
+      final second = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 2,
+        base: gestureOrigin,
+      )!;
+      controller.commitTemporalCandidate(second);
+      expect(controller.state.dayCursor, 16);
+    },
+  );
 }
 
 DashboardNavigationController _controller({

@@ -3736,6 +3736,107 @@ final class DashboardCoreController {
     );
   }
 
+  /// Begins preparation at a discrete experimental selector crossing. Unlike
+  /// the withdrawn 92b primary control, this is intentionally called from
+  /// preview/selection cadence rather than an `onSelectionSettled` callback.
+  void navigateExperimentalTemporalSelection({
+    required TimePlane plane,
+    required bool isRailOpen,
+  }) {
+    _navigateExperimentalTemporalCandidate(
+      presentation.temporalCandidate(plane: plane, isRailOpen: isRailOpen),
+      reason: 'summaryExperimentLevel',
+    );
+  }
+
+  void navigateExperimentalTemporalComponentOffset({
+    required TimePlane plane,
+    required bool isRailOpen,
+    required DashboardTemporalAnchorComponent component,
+    required int offset,
+  }) {
+    if (offset == 0) return;
+    final candidate = presentation.temporalComponentOffsetCandidate(
+      plane: plane,
+      isRailOpen: isRailOpen,
+      component: component,
+      offset: offset,
+    );
+    if (candidate == null) return;
+    navigateExperimentalTemporalComponentCandidate(
+      candidate: candidate,
+      component: component,
+    );
+  }
+
+  /// Applies an already-projected experiment target. The projection can be
+  /// anchored to one gesture's initial canonical state, so an advancing
+  /// prepared DAY publication cannot make later carousel crossings skip a
+  /// calendar value.
+  void navigateExperimentalTemporalComponentCandidate({
+    required DashboardNavigationState candidate,
+    required DashboardTemporalAnchorComponent component,
+  }) {
+    if (component == DashboardTemporalAnchorComponent.day &&
+        presentation.publishPreparedExperimentalChild(candidate)) {
+      _recordNavigationSelection('summaryExperimentPreparedDayCrossed');
+      return;
+    }
+    _navigateExperimentalTemporalCandidate(
+      candidate,
+      reason: switch (component) {
+        DashboardTemporalAnchorComponent.year => 'summaryExperimentYearCrossed',
+        DashboardTemporalAnchorComponent.month =>
+          'summaryExperimentMonthCrossed',
+        DashboardTemporalAnchorComponent.day => 'summaryExperimentDayCrossed',
+      },
+    );
+  }
+
+  void _navigateExperimentalTemporalCandidate(
+    DashboardNavigationState candidate, {
+    required String reason,
+  }) {
+    final state = navigation.state;
+    if (candidate.plane == state.plane &&
+        candidate.isRailOpen == state.isRailOpen &&
+        candidate.parentQueryKey == state.parentQueryKey &&
+        candidate.temporalAnchor.visibleYear ==
+            state.temporalAnchor.visibleYear &&
+        candidate.temporalAnchor.visibleMonth ==
+            state.temporalAnchor.visibleMonth &&
+        candidate.temporalAnchor.visibleDay ==
+            state.temporalAnchor.visibleDay) {
+      return;
+    }
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
+    // This is the same parent-hotset activation used by Legacy sibling
+    // navigation. A prepared adjacent scene is made active before the
+    // canonical commit, so an experimental discrete crossing never waits for
+    // a second foreground scene preparation after its carousel has settled.
+    final interaction = railInteractionSceneWindowFor(candidate);
+    final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
+    if (retainedHit) {
+      _activateSceneWindow(interaction);
+    }
+    unawaited(
+      _commitTimeNavigationWithBudgetDistributionReadiness(
+        candidate: candidate,
+        reason: reason,
+        settledQueryKey: candidate.isRailOpen
+            ? candidate.temporalAnchor.sourceChildQueryKey
+            : candidate.parentQueryKey,
+        requiredSceneWindow: candidate.isRailOpen || retainedHit
+            ? interaction
+            : null,
+        commit: () {
+          presentation.commitTemporalCandidate(candidate);
+          _recordNavigationSelection('summaryExperimentCrossed');
+        },
+      ),
+    );
+  }
+
   Future<void> _commitTimeNavigationWithBudgetDistributionReadiness({
     required DashboardNavigationState candidate,
     required String reason,

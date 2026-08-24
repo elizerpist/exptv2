@@ -1,5 +1,11 @@
 # SummaryPill ballistic-primary-controls implementation plan
 
+> **Historical plan.** This plan delivered `92b73600`; its primary-control
+> experiment is no longer the reference implementation. Do not use its
+> settle-only publication lifecycle as an architectural template. The current
+> runtime comparison and acceptance checklist live in
+> `../specs/2026-08-24-selectable-summary-pill-experiments-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove the temporary Ledger amount and prototype vertical-axis plus horizontal-mother ballistic controls without changing the current temporal model or dashboard shell geometry.

@@ -13,6 +13,7 @@ enum DashboardTimeNavigationChangeKind {
   parentWhileRailOpen,
   rail,
   retainedChild,
+  temporalTarget,
   direction,
   query,
 }

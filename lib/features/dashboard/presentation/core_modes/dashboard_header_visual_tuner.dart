@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../summary_pill_variant.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
@@ -326,9 +327,14 @@ String _formatTapWaveControlValue(
 /// nor Budget accounting state: all changes are routed to the dashboard
 /// lifetime [DashboardHeaderVisualController].
 final class DashboardHeaderVisualTuner extends StatelessWidget {
-  const DashboardHeaderVisualTuner({super.key, required this.controller});
+  const DashboardHeaderVisualTuner({
+    super.key,
+    required this.controller,
+    this.summaryPillVariants,
+  });
 
   final DashboardHeaderVisualController controller;
+  final SummaryPillVariantController? summaryPillVariants;
 
   @override
   Widget build(
@@ -386,6 +392,10 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              if (summaryPillVariants case final variants?) ...<Widget>[
+                _SummaryPillExperimentSection(controller: variants),
+                const SizedBox(height: 14),
+              ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
                 valueListenable: controller.expandedTunerSections,
                 builder: (context, expandedSections, child) => Column(
@@ -780,6 +790,46 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
       );
     },
   );
+}
+
+/// The Header menu owns only the runtime selection chrome. The selected
+/// SummaryPill remains a presentation adapter over canonical dashboard state.
+final class _SummaryPillExperimentSection extends StatelessWidget {
+  const _SummaryPillExperimentSection({required this.controller});
+
+  final SummaryPillVariantController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<SummaryPillVariant>(
+        valueListenable: controller,
+        builder: (context, selected, _) => RadioGroup<SummaryPillVariant>(
+          groupValue: selected,
+          onChanged: (variant) {
+            if (variant != null) controller.select(variant);
+          },
+          child: _TunerSection(
+            title: 'Időnavigáció / SummaryPill',
+            children: <Widget>[
+              for (final variant in SummaryPillVariant.values)
+                Semantics(
+                  selected: selected == variant,
+                  inMutuallyExclusiveGroup: true,
+                  label: 'SummaryPill ${variant.label}',
+                  child: RadioListTile<SummaryPillVariant>(
+                    key: ValueKey<String>(
+                      'summary-pill-variant-${variant.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(variant.label),
+                    value: variant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
 }
 
 /// A top-level section keeps the bounded sheet compact without creating a

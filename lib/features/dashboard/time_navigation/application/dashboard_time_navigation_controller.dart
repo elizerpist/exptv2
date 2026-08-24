@@ -41,6 +41,11 @@ final class DashboardPlaneTargetDerivation {
 typedef DashboardPlaneTargetDerived =
     void Function(DashboardPlaneTargetDerivation derivation);
 
+/// One existing temporal-anchor coordinate addressed by an experimental
+/// presentation control. This is not another temporal model: all targets are
+/// projected back into [DashboardNavigationState]'s established Y-M-D anchor.
+enum DashboardTemporalAnchorComponent { year, month, day }
+
 /// Why the canonical rail child becomes retained.
 ///
 /// A real rail settle and a cross-axis input takeover produce the same
@@ -49,6 +54,7 @@ enum DashboardRetainedChildReason {
   railSettled,
   verticalInputTakeover,
   structuralRailExit,
+  experimentalSelection,
 }
 
 /// Owns structural time navigation and its one canonical temporal anchor.
@@ -303,6 +309,99 @@ final class DashboardNavigationController extends ChangeNotifier {
     int? coreRevision,
   }) => _candidateFor(plane: target, coreRevision: coreRevision);
 
+  /// Projects an explicit existing Y-M-D anchor into the canonical state.
+  ///
+  /// `isRailOpen` retains its current meaning: on a month parent it exposes
+  /// the existing day child query. Experimental SummaryPills may choose not
+  /// to render the physical rail, but never create a parallel DAY query.
+  DashboardNavigationState temporalCandidate({
+    required TimePlane plane,
+    required bool isRailOpen,
+    int? year,
+    int? month,
+    int? day,
+    int? coreRevision,
+    DashboardNavigationState? base,
+  }) => _candidateFor(
+    plane: plane,
+    year: year,
+    month: month,
+    day: day,
+    coreRevision: coreRevision,
+    base: base,
+  ).copyWith(isRailOpen: isRailOpen);
+
+  /// Pure, availability-aware projection for an experimental fixed hierarchy
+  /// field. The caller supplies the intended existing parent/child surface;
+  /// no preview state or query publication is created here.
+  DashboardNavigationState? temporalComponentOffsetCandidate({
+    required TimePlane plane,
+    required bool isRailOpen,
+    required DashboardTemporalAnchorComponent component,
+    required int offset,
+    int? coreRevision,
+    DashboardNavigationState? base,
+  }) {
+    final source = base ?? _state;
+    final anchor = source.temporalAnchor;
+    if (offset == 0) {
+      return temporalCandidate(
+        plane: plane,
+        isRailOpen: isRailOpen,
+        coreRevision: coreRevision,
+        base: source,
+      );
+    }
+    switch (component) {
+      case DashboardTemporalAnchorComponent.year:
+        final year = _offsetYear(anchor.visibleYear, offset);
+        if (year == null) return null;
+        final month = _reconciledMonthForYear(year, anchor.visibleMonth);
+        final day = _reconciledDayForMonth(
+          year: year,
+          month: month,
+          preferredDay: anchor.visibleDay,
+        );
+        return temporalCandidate(
+          plane: plane,
+          isRailOpen: isRailOpen,
+          year: year,
+          month: month,
+          day: day,
+          coreRevision: coreRevision,
+          base: source,
+        );
+      case DashboardTemporalAnchorComponent.month:
+        final yearMonth = _offsetMonth(anchor.visibleYearMonth, offset);
+        if (yearMonth == null) return null;
+        final day = _reconciledDayForMonth(
+          year: yearMonth.year,
+          month: yearMonth.month,
+          preferredDay: anchor.visibleDay,
+        );
+        return temporalCandidate(
+          plane: plane,
+          isRailOpen: isRailOpen,
+          year: yearMonth.year,
+          month: yearMonth.month,
+          day: day,
+          coreRevision: coreRevision,
+          base: source,
+        );
+      case DashboardTemporalAnchorComponent.day:
+        final month = anchor.visibleYearMonth;
+        final day = _offsetDay(month, anchor.visibleDay, offset);
+        if (day == null) return null;
+        return temporalCandidate(
+          plane: plane,
+          isRailOpen: isRailOpen,
+          day: day,
+          coreRevision: coreRevision,
+          base: source,
+        );
+    }
+  }
+
   DashboardNavigationState planeCursorCandidate({
     required bool finer,
     int? coreRevision,
@@ -358,6 +457,35 @@ final class DashboardNavigationController extends ChangeNotifier {
             : DashboardTimeNavigationChangeDirection.backward,
       ),
       DashboardTemporalAnchorChangeReason.planeCommitted,
+    );
+    return _state;
+  }
+
+  /// Commits a prepared explicit hierarchy target through the one canonical
+  /// navigation owner. It intentionally uses an explicit change kind so the
+  /// presentation layer can reconcile its existing semantic rail catalog.
+  DashboardNavigationState commitTemporalCandidate(
+    DashboardNavigationState candidate,
+  ) {
+    final current = _state;
+    if (candidate.plane == current.plane &&
+        candidate.isRailOpen == current.isRailOpen &&
+        candidate.parentQueryKey == current.parentQueryKey &&
+        candidate.temporalAnchor.visibleYear ==
+            current.temporalAnchor.visibleYear &&
+        candidate.temporalAnchor.visibleMonth ==
+            current.temporalAnchor.visibleMonth &&
+        candidate.temporalAnchor.visibleDay ==
+            current.temporalAnchor.visibleDay) {
+      return current;
+    }
+    _publish(
+      candidate,
+      const DashboardTimeNavigationChange(
+        kind: DashboardTimeNavigationChangeKind.temporalTarget,
+        direction: DashboardTimeNavigationChangeDirection.none,
+      ),
+      DashboardTemporalAnchorChangeReason.temporalTargetCommitted,
     );
     return _state;
   }
@@ -441,6 +569,8 @@ final class DashboardNavigationController extends ChangeNotifier {
         DashboardTemporalAnchorChangeReason.verticalInputTakeover,
       DashboardRetainedChildReason.structuralRailExit =>
         DashboardTemporalAnchorChangeReason.structuralRailExit,
+      DashboardRetainedChildReason.experimentalSelection =>
+        DashboardTemporalAnchorChangeReason.experimentalChildSelection,
     });
     return true;
   }
@@ -564,6 +694,57 @@ final class DashboardNavigationController extends ChangeNotifier {
     );
   }
 
+  int? _offsetYear(int current, int offset) {
+    final restricted = _temporalAvailability.allowedYears;
+    if (restricted != null) {
+      return _cyclicParentAdjacent(restricted, current, offset);
+    }
+    final target = current + offset;
+    return target >= 1 && target <= 9999 ? target : null;
+  }
+
+  YearMonth? _offsetMonth(YearMonth current, int offset) {
+    final restricted = _temporalAvailability.allowedYearMonths;
+    return restricted == null
+        ? _offsetYearMonth(current, offset)
+        : _cyclicParentAdjacent(restricted, current, offset);
+  }
+
+  int? _offsetDay(YearMonth month, int current, int offset) {
+    final restricted = _temporalAvailability.daysForMonth(
+      month.year,
+      month.month,
+    );
+    final values =
+        restricted ??
+        List<int>.generate(month.daysInMonth, (index) => index + 1);
+    if (values.isEmpty) return null;
+    return _cyclicParentAdjacent(values, current, offset);
+  }
+
+  int _reconciledMonthForYear(int year, int preferredMonth) {
+    final allowed = _temporalAvailability.monthsForYear(year);
+    if (allowed == null ||
+        allowed.isEmpty ||
+        allowed.contains(preferredMonth)) {
+      return preferredMonth;
+    }
+    return allowed.first;
+  }
+
+  int _reconciledDayForMonth({
+    required int year,
+    required int month,
+    required int preferredDay,
+  }) {
+    final yearMonth = YearMonth(year: year, month: month);
+    final allowed = _temporalAvailability.daysForMonth(year, month);
+    final candidate = allowed == null || allowed.isEmpty
+        ? preferredDay
+        : (allowed.contains(preferredDay) ? preferredDay : allowed.first);
+    return yearMonth.clampDay(candidate).day;
+  }
+
   ({int year, int month, int day}) _reconcileToAvailability(
     DashboardTemporalAnchor anchor,
     DashboardTemporalAvailability availability,
@@ -653,14 +834,16 @@ final class DashboardNavigationController extends ChangeNotifier {
     int? day,
     LedgerDirection? direction,
     int? coreRevision,
+    DashboardNavigationState? base,
   }) {
-    final current = _state.temporalAnchor;
+    final state = base ?? _state;
+    final current = state.temporalAnchor;
     final nextYear = year ?? current.visibleYear;
     final nextMonthValue = month ?? current.visibleMonth;
     final nextMonth = YearMonth(year: nextYear, month: nextMonthValue);
     final nextDay = nextMonth.clampDay(day ?? current.visibleDay).day;
-    final template = _state.parentQueryScope.copyWith(
-      direction: direction ?? _state.parentQueryScope.direction,
+    final template = state.parentQueryScope.copyWith(
+      direction: direction ?? state.parentQueryScope.direction,
     );
     final parentQueryScope = _parentQueryScope(
       template: template,
@@ -675,10 +858,10 @@ final class DashboardNavigationController extends ChangeNotifier {
       month: nextMonthValue,
       day: nextDay,
       revision: coreRevision ?? current.revision,
-      navigationEpoch: _state.navigationEpoch,
+      navigationEpoch: state.navigationEpoch,
       filtersRefinementsIdentity: current.filtersRefinementsIdentity,
     );
-    return _state.copyWith(
+    return state.copyWith(
       plane: plane,
       parentQueryScope: parentQueryScope,
       temporalAnchor: anchor,

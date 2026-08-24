@@ -34,6 +34,7 @@ import 'widgets/dashboard_logbox_partner_swipe.dart';
 import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
+import 'summary_pill_variant.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
@@ -41,6 +42,7 @@ import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_render_phase_probe.dart';
 import 'widgets/dashboard_summary_pill.dart';
+import 'widgets/summary_pill_experiments.dart';
 import 'widgets/fluvi_brand_lockup.dart';
 import 'widgets/summary_pill_text_transition.dart';
 import 'widgets/transaction_direction_toggle.dart';
@@ -79,6 +81,7 @@ class CoreDashboard extends StatefulWidget {
 class _CoreDashboardState extends State<CoreDashboard>
     with TickerProviderStateMixin {
   late final SummaryNavigationMotionController _summaryMotionController;
+  late final SummaryPillVariantController _summaryPillVariantController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
@@ -103,6 +106,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     super.initState();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
+    _summaryPillVariantController = SummaryPillVariantController();
     final financialLimitRepository = widget.financialLimitRepository;
     if (financialLimitRepository != null) {
       _budgetLimitEdit = DashboardBudgetLimitEditController(
@@ -334,6 +338,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
+    _summaryPillVariantController.dispose();
     _budgetDistributionDrawables.dispose();
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
@@ -457,6 +462,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                       child: _DashboardSummaryRegion(
                         bounds: geometry.summaryBounds,
                         controller: controller,
+                        summaryPillVariants: _summaryPillVariantController,
                         motionController: _summaryMotionController,
                         onMotionActiveChanged: (active) =>
                             controller.setMotionLaneActive(
@@ -472,36 +478,51 @@ class _CoreDashboardState extends State<CoreDashboard>
                     ),
                     _FramePosition(
                       bounds: geometry.railBounds,
-                      child: Opacity(
-                        opacity: frame.railReveal,
-                        child: IgnorePointer(
-                          ignoring: !geometry.isRailExpanded,
-                          child: profileRenderProbe(
-                            layoutMetric: DashboardPerformanceMetric.railLayout,
-                            paintMetric: DashboardPerformanceMetric.railPaint,
-                            layoutDurationMetric:
-                                DashboardPerformanceMetric.railLayoutMicros,
-                            paintDurationMetric:
-                                DashboardPerformanceMetric.railPaintMicros,
-                            child: TimeRefinementRail(
-                              bounds: geometry.railBounds,
-                              motion: controller.motion,
-                              onPreviewLogicalIndexChanged:
-                                  (oldIndex, newIndex) =>
-                                      _summaryMotionController.triggerRailTick(
-                                        oldLogicalIndex: oldIndex,
-                                        newLogicalIndex: newIndex,
-                                      ),
-                              onMotionBaselineEstablished:
-                                  _summaryMotionController
-                                      .resetRailTickBaseline,
-                              onMotionStarted: controller.beginRailMotion,
-                              performanceCounters:
-                                  controller.performanceCounters,
-                              motionDiagnostics: controller.railFlightRecorder,
+                      child: ValueListenableBuilder<SummaryPillVariant>(
+                        valueListenable: _summaryPillVariantController,
+                        builder: (context, variant, _) {
+                          if (variant != SummaryPillVariant.legacy) {
+                            // DAY remains the canonical month child query in
+                            // an experiment, but its legacy rail must not add
+                            // a second visible control surface.
+                            return const SizedBox.expand();
+                          }
+                          return Opacity(
+                            opacity: frame.railReveal,
+                            child: IgnorePointer(
+                              ignoring: !geometry.isRailExpanded,
+                              child: profileRenderProbe(
+                                layoutMetric:
+                                    DashboardPerformanceMetric.railLayout,
+                                paintMetric:
+                                    DashboardPerformanceMetric.railPaint,
+                                layoutDurationMetric:
+                                    DashboardPerformanceMetric.railLayoutMicros,
+                                paintDurationMetric:
+                                    DashboardPerformanceMetric.railPaintMicros,
+                                child: TimeRefinementRail(
+                                  bounds: geometry.railBounds,
+                                  motion: controller.motion,
+                                  onPreviewLogicalIndexChanged:
+                                      (oldIndex, newIndex) =>
+                                          _summaryMotionController
+                                              .triggerRailTick(
+                                                oldLogicalIndex: oldIndex,
+                                                newLogicalIndex: newIndex,
+                                              ),
+                                  onMotionBaselineEstablished:
+                                      _summaryMotionController
+                                          .resetRailTickBaseline,
+                                  onMotionStarted: controller.beginRailMotion,
+                                  performanceCounters:
+                                      controller.performanceCounters,
+                                  motionDiagnostics:
+                                      controller.railFlightRecorder,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     ),
                     Positioned(
@@ -638,6 +659,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                     ),
                     _DashboardHeaderVisualTunerOverlay(
                       controller: _headerVisualController,
+                      summaryPillVariants: _summaryPillVariantController,
                       headerBounds: geometry.headerBounds,
                     ),
                   ],
@@ -655,6 +677,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
   const _DashboardSummaryRegion({
     required this.bounds,
     required this.controller,
+    required this.summaryPillVariants,
     required this.motionController,
     required this.onMotionActiveChanged,
     required this.onAmountMotionActiveChanged,
@@ -662,12 +685,40 @@ class _DashboardSummaryRegion extends StatelessWidget {
 
   final DashboardBounds bounds;
   final DashboardCoreController controller;
+  final SummaryPillVariantController summaryPillVariants;
   final SummaryNavigationMotionController motionController;
   final ValueChanged<bool> onMotionActiveChanged;
   final ValueChanged<bool> onAmountMotionActiveChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<SummaryPillVariant>(
+        valueListenable: summaryPillVariants,
+        builder: (context, variant, _) => switch (variant) {
+          SummaryPillVariant.legacy => _legacyPill(),
+          SummaryPillVariant.segmented ||
+          SummaryPillVariant.swipeMode => SummaryPillExperiment(
+            variant: variant,
+            bounds: bounds,
+            navigation: controller.navigation,
+            visibleFrames: controller.visibleFrames,
+            performanceCounters: controller.performanceCounters,
+            onAmountMotionActiveChanged: onAmountMotionActiveChanged,
+            onLevelCrossed: (plane, isRailOpen) =>
+                controller.navigateExperimentalTemporalSelection(
+                  plane: plane,
+                  isRailOpen: isRailOpen,
+                ),
+            onComponentCrossed: (candidate, component) =>
+                controller.navigateExperimentalTemporalComponentCandidate(
+                  candidate: candidate,
+                  component: component,
+                ),
+          ),
+        },
+      );
+
+  Widget _legacyPill() {
     return DashboardSummaryPill(
       bounds: bounds,
       navigation: controller.navigation,
@@ -698,20 +749,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
           ),
         );
       },
-      onSelectPlaneTarget: (target, {required finer}) {
-        controller.navigatePlaneTarget(target, finer: finer);
-      },
-      motherLabelForOffset: _motherLabelForOffset,
-      onSelectMotherOffset: (offset) {
-        unawaited(controller.navigateParentOffset(offset));
-      },
     );
-  }
-
-  String? _motherLabelForOffset(int offset) {
-    final candidate = controller.previewParentOffset(offset);
-    if (candidate == null) return null;
-    return SummaryNavigationProjector.parentLabel(candidate);
   }
 
   SummaryTextContent? _horizontalCandidate(
@@ -755,10 +793,12 @@ class _FramePosition extends StatelessWidget {
 final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   const _DashboardHeaderVisualTunerOverlay({
     required this.controller,
+    required this.summaryPillVariants,
     required this.headerBounds,
   });
 
   final DashboardHeaderVisualController controller;
+  final SummaryPillVariantController summaryPillVariants;
   final DashboardBounds headerBounds;
 
   @override
@@ -794,7 +834,10 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                     alignment: Alignment.bottomCenter,
                     child: SizedBox(
                       height: math.min(488, placement.maxHeight),
-                      child: DashboardHeaderVisualTuner(controller: controller),
+                      child: DashboardHeaderVisualTuner(
+                        controller: controller,
+                        summaryPillVariants: summaryPillVariants,
+                      ),
                     ),
                   ),
                 ),

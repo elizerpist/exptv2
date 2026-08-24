@@ -261,6 +261,42 @@ final class DashboardPresentationController {
     );
   }
 
+  /// Canonical candidate for a fixed experimental SummaryPill hierarchy.
+  /// This stays inside the same prepared-index/catalog boundary as legacy
+  /// plane and rail navigation.
+  DashboardNavigationState temporalCandidate({
+    required TimePlane plane,
+    required bool isRailOpen,
+  }) {
+    retainVisibleRailChildForStructuralExit();
+    return _requireCanonicalCandidate(
+      navigation.temporalCandidate(
+        plane: plane,
+        isRailOpen: isRailOpen,
+        coreRevision: _index?.coreRevision,
+      ),
+    );
+  }
+
+  /// Reads one availability-aware existing Y-M-D coordinate target without
+  /// publishing it. The presentation widget uses this only at a discrete
+  /// carousel crossing, never for per-pixel animation work.
+  DashboardNavigationState? temporalComponentOffsetCandidate({
+    required TimePlane plane,
+    required bool isRailOpen,
+    required DashboardTemporalAnchorComponent component,
+    required int offset,
+  }) {
+    final candidate = navigation.temporalComponentOffsetCandidate(
+      plane: plane,
+      isRailOpen: isRailOpen,
+      component: component,
+      offset: offset,
+      coreRevision: _index?.coreRevision,
+    );
+    return candidate == null ? null : _canonicalCandidate(candidate);
+  }
+
   void commitPlaneCandidate(
     DashboardNavigationState candidate, {
     required bool finer,
@@ -275,6 +311,55 @@ final class DashboardPresentationController {
   }) {
     navigation.commitPlaneTargetCandidate(candidate, finer: finer);
     _selectStructuralTarget();
+  }
+
+  void commitTemporalCandidate(DashboardNavigationState candidate) {
+    navigation.commitTemporalCandidate(candidate);
+    _selectStructuralTarget();
+  }
+
+  /// Reuses the child rail's strict prepared-frame path for an experimental
+  /// DAY crossing inside the already-installed month catalog. No query,
+  /// scene-window preparation, text layout, or post-settle work occurs here.
+  bool publishPreparedExperimentalChild(DashboardNavigationState candidate) {
+    final installed = _index;
+    final state = navigation.state;
+    if (installed == null ||
+        !state.isRailOpen ||
+        !candidate.isRailOpen ||
+        state.plane != TimePlane.month ||
+        candidate.plane != TimePlane.month ||
+        state.parentQueryKey != candidate.parentQueryKey) {
+      return false;
+    }
+    final catalog = installed.catalogForKey(state.parentQueryKey);
+    final logicalIndex = catalog.logicalIndexForValue(candidate.dayCursor);
+    final entry = catalog.entryAtLogicalIndex(logicalIndex);
+    if (entry.queryKey != candidate.temporalAnchor.sourceChildQueryKey ||
+        !navigation.retainChild(
+          value: entry.value,
+          expectedNavigationEpoch: state.navigationEpoch,
+          childQueryKey: entry.queryKey,
+          coreRevision: installed.coreRevision,
+          reason: DashboardRetainedChildReason.experimentalSelection,
+        )) {
+      return false;
+    }
+    frameCoalescer.request(
+      DashboardVisibleFrame.fromPrepared(
+        installed.frameForKey(entry.queryKey),
+        parentQueryKey: state.parentQueryKey,
+        plane: state.plane,
+        railOpen: true,
+        semanticIndex: entry.logicalIndex,
+        childLabel: entry.label,
+        navigationEpoch: state.navigationEpoch,
+        presentationEpoch: _presentationEpoch,
+        frameGeneration: visibleFrames.nextFrameGeneration(),
+        mode: DashboardVisibleMode.committed,
+      ),
+    );
+    return true;
   }
 
   void selectDirection(LedgerDirection direction) {
