@@ -44,4 +44,14 @@
 | D-02 | Task D | resolver/CoreDashboard/tuner | all six orders centrally position three bodies; handler and Ledger follow | exhaustive resolver permutation test | DONE |
 | ARC-01 | Milestone | controller/viewport | no second vertical owner, no per-pixel query/formatting, stable committed geometry | focused inspection plus motion/visible-frame/scene-window/LogBox boundary suites | DONE |
 | DOC-01 | Task docs | selectable-experiment spec | records experimental-only changes and no business semantic change | documentation review | DONE |
-| DEL-01 | Global workflow | delivery | commit/push/CI human APK download and SHA-256 | GitHub Actions/release evidence | NOT DONE |
+| DEL-01 | Global workflow | delivery | commit/push/CI human APK download and SHA-256 | GitHub Actions/release evidence | DONE |
+
+## Delivery evidence
+
+- Production commit: `5cbea530d3f5b04ed40febcb799052c9ac6a08b2`.
+- GitHub Actions run: `32801997151`; the `build-human-diagnostic-apk` job
+  completed successfully.
+- Human APK: `fluvi_HUMAN_DIAGNOSTIC_5cbea53.apk`, downloaded to
+  `/storage/emulated/0/Download/fluvi/`.
+- SHA-256:
+  `a25e1393b4b51bd5d37b2270a6571e94853adbd132fb7137f8c3ba5bd38dae47`.
