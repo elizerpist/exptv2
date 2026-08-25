@@ -12,6 +12,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
+import '../../../core/design/dashboard_body_order.dart';
 import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
@@ -82,6 +83,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     with TickerProviderStateMixin {
   late final SummaryNavigationMotionController _summaryMotionController;
   late final SummaryPillVariantController _summaryPillVariantController;
+  late final DashboardBodyOrderController _bodyOrderController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
@@ -107,6 +109,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
     _summaryPillVariantController = SummaryPillVariantController();
+    _bodyOrderController = DashboardBodyOrderController();
+    _summaryPillVariantController.addListener(_onLayoutPresentationChanged);
+    _bodyOrderController.addListener(_onLayoutPresentationChanged);
     final financialLimitRepository = widget.financialLimitRepository;
     if (financialLimitRepository != null) {
       _budgetLimitEdit = DashboardBudgetLimitEditController(
@@ -338,7 +343,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
+    _summaryPillVariantController.removeListener(_onLayoutPresentationChanged);
+    _bodyOrderController.removeListener(_onLayoutPresentationChanged);
     _summaryPillVariantController.dispose();
+    _bodyOrderController.dispose();
     _budgetDistributionDrawables.dispose();
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
@@ -372,6 +380,9 @@ class _CoreDashboardState extends State<CoreDashboard>
       controller: controller,
       modeController: modeController,
       layoutMetrics: layoutMetrics,
+      bodyOrder: _bodyOrderController.value,
+      hasPhysicalRail:
+          _summaryPillVariantController.value == SummaryPillVariant.legacy,
       builder: (context, frame) {
         final geometry = frame.geometry;
         Widget profileRenderProbe({
@@ -402,6 +413,7 @@ class _CoreDashboardState extends State<CoreDashboard>
               padding: EdgeInsets.only(top: contentTopPadding),
               child: SizedBox.expand(
                 child: Stack(
+                  fit: StackFit.expand,
                   clipBehavior: Clip.none,
                   children: [
                     _FramePosition(
@@ -660,6 +672,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                     _DashboardHeaderVisualTunerOverlay(
                       controller: _headerVisualController,
                       summaryPillVariants: _summaryPillVariantController,
+                      bodyOrder: _bodyOrderController,
                       headerBounds: geometry.headerBounds,
                     ),
                   ],
@@ -670,6 +683,10 @@ class _CoreDashboardState extends State<CoreDashboard>
         );
       },
     );
+  }
+
+  void _onLayoutPresentationChanged() {
+    if (mounted) setState(() {});
   }
 }
 
@@ -794,58 +811,80 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   const _DashboardHeaderVisualTunerOverlay({
     required this.controller,
     required this.summaryPillVariants,
+    required this.bodyOrder,
     required this.headerBounds,
   });
 
   final DashboardHeaderVisualController controller;
   final SummaryPillVariantController summaryPillVariants;
+  final DashboardBodyOrderController bodyOrder;
   final DashboardBounds headerBounds;
 
   @override
-  Widget build(BuildContext context) => Positioned.fill(
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final safeBottom = MediaQuery.paddingOf(context).bottom;
-        final placement = DashboardHeaderVisualTunerPlacement.resolve(
-          headerBottom: headerBounds.bottom,
-          viewportHeight: constraints.maxHeight,
-          safeBottom: safeBottom,
-        );
-        return ValueListenableBuilder<bool>(
-          valueListenable: controller.tunerOpen,
-          builder: (context, isOpen, child) => Padding(
-            padding: EdgeInsets.fromLTRB(
-              12,
-              placement.top,
-              12,
-              safeBottom + 12,
-            ),
-            child: IgnorePointer(
-              ignoring: !isOpen,
-              child: AnimatedSlide(
-                offset: isOpen ? Offset.zero : const Offset(0, 1),
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                child: AnimatedOpacity(
-                  opacity: isOpen ? 1 : 0,
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: SizedBox(
-                      height: math.min(488, placement.maxHeight),
-                      child: DashboardHeaderVisualTuner(
-                        controller: controller,
-                        summaryPillVariants: summaryPillVariants,
+  Widget build(BuildContext context) {
+    final view = View.of(context);
+    final viewportHeight = view.physicalSize.height / view.devicePixelRatio;
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      // The mode host intentionally lays out its complete dashboard body,
+      // which can be taller than the physical screen. The tuner is a viewport
+      // overlay, so it uses the FlutterView instead of that scene height.
+      height: viewportHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final safeBottom = MediaQuery.paddingOf(context).bottom;
+          final reducedMotion = MediaQuery.disableAnimationsOf(context);
+          final placement = DashboardHeaderVisualTunerPlacement.resolve(
+            headerBottom: headerBounds.bottom,
+            viewportHeight: constraints.maxHeight,
+            safeBottom: safeBottom,
+          );
+          return ValueListenableBuilder<bool>(
+            valueListenable: controller.tunerOpen,
+            builder: (context, isOpen, child) => Padding(
+              padding: EdgeInsets.fromLTRB(
+                12,
+                placement.top,
+                12,
+                safeBottom + 12,
+              ),
+              child: IgnorePointer(
+                key: const ValueKey<String>(
+                  'dashboard-header-visual-tuner-input',
+                ),
+                ignoring: !isOpen,
+                child: AnimatedSlide(
+                  offset: isOpen ? Offset.zero : const Offset(0, 1),
+                  duration: reducedMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: isOpen ? 1 : 0,
+                    duration: reducedMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: SizedBox(
+                        height: math.min(488, placement.maxHeight),
+                        child: DashboardHeaderVisualTuner(
+                          controller: controller,
+                          summaryPillVariants: summaryPillVariants,
+                          bodyOrder: bodyOrder,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    ),
-  );
+          );
+        },
+      ),
+    );
+  }
 }

@@ -34,6 +34,7 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
     super.key,
     required this.presentation,
     required this.drawableFrames,
+    this.expandDonutToFit = false,
     this.rhythm,
     this.drilldown,
     this.partnerFocusCommit,
@@ -43,6 +44,7 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
   final DashboardBudgetPresentationController presentation;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
+  final bool expandDonutToFit;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 
@@ -348,6 +350,8 @@ class _BudgetPartnerDistributionCardState
           ),
       ],
       donutDiameter: widget.rhythm == null ? 150 : 104,
+      expandDonutToFit: widget.expandDonutToFit,
+      leftFooterMinimumHeight: BudgetRhythmBarChart.minimumLayoutHeight,
       leftFooter: widget.rhythm == null
           ? null
           : ValueListenableBuilder<DashboardBudgetRhythmState?>(

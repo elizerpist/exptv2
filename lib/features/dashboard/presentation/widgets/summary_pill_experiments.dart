@@ -235,24 +235,21 @@ final class _SwipeModeNavigationSurface extends StatelessWidget {
         'Időszint: ${level.semanticsLabel}. Vízszintesen húzva válthat időszintet.',
     onIncrease: () => _selectLevel(1),
     onDecrease: () => _selectLevel(-1),
-    child: Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        ExcludeSemantics(
-          child: Opacity(
-            opacity: 0,
-            child: _ModeSelector(
-              key: const ValueKey<String>('summary-pill-swipe-mode-surface'),
-              height: height,
-              direction: Axis.horizontal,
-              level: level,
-              onCrossed: onLevelCrossed,
-            ),
-          ),
-        ),
-        _FixedHierarchyTracks(
+    // The horizontal carousel owns the parent hit-test surface. Visible
+    // hierarchy carousels live inside its item, so Flutter's gesture arena
+    // receives both recognizers and resolves horizontal versus vertical
+    // intent instead of a later Stack child blocking the mode surface.
+    child: ExcludeSemantics(
+      child: _ModeSelector(
+        key: const ValueKey<String>('summary-pill-swipe-mode-surface'),
+        height: height,
+        width: width,
+        direction: Axis.horizontal,
+        level: level,
+        onCrossed: onLevelCrossed,
+        itemChildBuilder: (context, item, _) => _FixedHierarchyTracks(
           keyPrefix: 'swipe',
-          level: level,
+          level: item,
           height: height,
           width: width,
           navigation: navigation,
@@ -262,7 +259,7 @@ final class _SwipeModeNavigationSurface extends StatelessWidget {
           dayTrack: 2,
           onComponentCrossed: onComponentCrossed,
         ),
-      ],
+      ),
     ),
   );
 
@@ -433,15 +430,24 @@ final class _ModeSelector extends StatefulWidget {
   const _ModeSelector({
     super.key,
     required this.height,
+    this.width,
     required this.direction,
     required this.level,
     required this.onCrossed,
-  });
+    this.itemChildBuilder,
+  }) : assert(direction == Axis.vertical || width != null);
 
   final double height;
+  final double? width;
   final Axis direction;
   final SummaryPillExperimentLevel level;
   final _LevelCrossed onCrossed;
+  final Widget Function(
+    BuildContext context,
+    SummaryPillExperimentLevel item,
+    CenteredCarouselItemMetrics metrics,
+  )?
+  itemChildBuilder;
 
   @override
   State<_ModeSelector> createState() => _ModeSelectorState();
@@ -470,7 +476,10 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       ),
       controller: _controller,
       spec: CenteredCarouselSpec(
-        itemExtent: widget.height,
+        itemExtent: switch (widget.direction) {
+          Axis.vertical => widget.height,
+          Axis.horizontal => widget.width!,
+        },
         scrollDirection: widget.direction,
         visibleItemCount: 1,
         minScale: 1,
@@ -493,13 +502,15 @@ final class _ModeSelectorState extends State<_ModeSelector> {
           widget.onCrossed(level.plane, level.isRailOpen);
         }
       },
-      itemBuilder: (context, item, metrics) => Icon(
-        item.icon,
-        color: metrics.isSelected
-            ? FluviVisualTokens.textPrimary
-            : FluviVisualTokens.textSecondary,
-        size: FluviVisualTokens.iconSize,
-      ),
+      itemBuilder: (context, item, metrics) =>
+          widget.itemChildBuilder?.call(context, item, metrics) ??
+          Icon(
+            item.icon,
+            color: metrics.isSelected
+                ? FluviVisualTokens.textPrimary
+                : FluviVisualTokens.textSecondary,
+            size: FluviVisualTokens.iconSize,
+          ),
     ),
   );
 

@@ -71,6 +71,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     presentation: presentationController!,
                     drawableFrames: distributionDrawables!,
                     avatarRailController: avatarRailController!,
+                    expandCategoryDonutToFit: !geometry.hasPhysicalRail,
                     rhythm: rhythm,
                     drilldown: drilldown,
                   ),
@@ -90,6 +91,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     presentation: presentationController!,
                     limitEditController: limitEditController,
                     navigationController: avatarRailController,
+                    onTargetPreview: drilldown == null
+                        ? null
+                        : (state) => unawaited(
+                            drilldown!.previewBudgetTarget(state: state),
+                          ),
                     onTargetSettled: drilldown == null
                         ? null
                         : (state) => unawaited(

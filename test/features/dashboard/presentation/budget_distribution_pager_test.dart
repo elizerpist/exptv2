@@ -11,6 +11,8 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_pager.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -24,6 +26,52 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
+  testWidgets(
+    'category donut derives its useful diameter from the lower-card constraints',
+    (tester) async {
+      Future<Size> pumpCard(double height) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 378,
+                height: height,
+                child: BudgetDistributionPageSurface(
+                  heading: const SizedBox(),
+                  donut: const SizedBox(
+                    key: ValueKey<String>('constraint-driven-donut'),
+                  ),
+                  rightHeading: '',
+                  rows: const <Widget>[],
+                  listKey: const ValueKey<String>('constraint-driven-list'),
+                  emptyLabel: '',
+                  expandDonutToFit: true,
+                ),
+              ),
+            ),
+          ),
+        );
+        return tester.getSize(
+          find.byKey(const ValueKey<String>('constraint-driven-donut')),
+        );
+      }
+
+      final legacyLowerCard = await pumpCard(208);
+      final experimentalLowerCard = await pumpCard(266);
+
+      expect(legacyLowerCard, const Size(157, 157));
+      expect(experimentalLowerCard, const Size(180, 180));
+      expect(
+        experimentalLowerCard.height,
+        greaterThan(legacyLowerCard.height),
+        reason:
+            'The reclaimed lower-card space is consumed only up to the '
+            'existing padded card width; no fixed donut transform is involved.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'owns one stable infinite two-page domain while partner list keeps vertical scrolling local',
     (tester) async {
@@ -92,6 +140,7 @@ void main() {
                 presentation: presentation,
                 drawableFrames: drawables,
                 avatarRailController: rail,
+                expandCategoryDonutToFit: true,
                 rhythm: rhythm,
               ),
             ),
@@ -115,7 +164,7 @@ void main() {
       expect(pages.value, BudgetDistributionPage.category);
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('budget-distribution-donut-150')),
+        find.byKey(const ValueKey('budget-distribution-donut-157')),
         findsOneWidget,
       );
       expect(find.text('7 napos ritmus'), findsNothing);
@@ -170,11 +219,26 @@ void main() {
       expect(pages.value, BudgetDistributionPage.partner);
       expect(find.text('Partnerek eloszlása'), findsOneWidget);
       expect(find.text('Partnerek'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('budget-distribution-donut-104')),
-        findsOneWidget,
+      final partnerDonut = find.byWidgetPredicate(
+        (widget) =>
+            widget is SizedBox &&
+            (widget.key?.toString().contains('budget-distribution-donut-') ??
+                false),
       );
+      expect(partnerDonut, findsOneWidget);
+      expect(tester.getSize(partnerDonut).height, greaterThan(104));
       expect(find.text('7 napos ritmus'), findsOneWidget);
+      expect(
+        tester
+            .widget<BudgetPartnerDistributionCard>(
+              find.byType(BudgetPartnerDistributionCard),
+            )
+            .expandDonutToFit,
+        isTrue,
+        reason:
+            'The experimental lower-card constraint must reach both Budget '
+            'distribution pages, not only the category donut.',
+      );
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-card')),
         findsOneWidget,

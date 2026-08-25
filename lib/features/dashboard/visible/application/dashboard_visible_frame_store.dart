@@ -24,9 +24,11 @@ typedef DashboardVisibleFramePublishObserver =
 
 /// Sole notifier for the complete visible dashboard presentation snapshot.
 ///
-/// Every notified value already contains amount, count and LogBox data for one
-/// exact QueryKey/revision. Commit promotion changes ownership metadata only
-/// and intentionally emits no visual notification.
+/// Every [value] contains amount, count and LogBox data for one exact
+/// QueryKey/revision. The SummaryPill's amount lane may additionally receive
+/// a prepared ephemeral-focus preview before its complete LogBox scene is
+/// ready. That narrow publication never mutates [value], count or LogBox
+/// lanes, so the stable viewport retains its atomic scene boundary.
 final class DashboardVisibleFrameStore extends ChangeNotifier
     implements ValueListenable<DashboardVisibleFrame?> {
   DashboardVisibleFrame? _value;
@@ -53,6 +55,9 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   int committedPromotionCount = 0;
   int logBoxPayloadNotifyCount = 0;
   int logBoxPresentationMetaNotifyCount = 0;
+  int amountPreviewPublishCount = 0;
+  int staleAmountPreviewRejectCount = 0;
+  int _amountPreviewGeneration = 0;
 
   /// These remain explicit proof counters: neither operation belongs here.
   int logRebindCount = 0;
@@ -71,6 +76,40 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     }
     _generationCursor += 1;
     return _generationCursor;
+  }
+
+  /// Publishes a scalar SummaryPill preview from an already-derived focus
+  /// frame without rotating the complete LogBox scene. [previewGeneration]
+  /// is allocated by the Core focus owner; an older asynchronous focus result
+  /// can therefore never replace a newer avatar tick's amount.
+  bool publishPreparedAmountPreview(
+    DashboardVisibleFrame frame, {
+    required int previewGeneration,
+  }) {
+    if (previewGeneration < _amountPreviewGeneration) {
+      staleAmountPreviewRejectCount += 1;
+      return false;
+    }
+    if (previewGeneration == _amountPreviewGeneration &&
+        _amountLane.value?.amountPresentationId == frame.amountPresentationId) {
+      return false;
+    }
+    _amountPreviewGeneration = previewGeneration;
+    _amountLane.stage(frame, frame.amountPresentationId);
+    final published = _amountLane.flush();
+    if (published) amountPreviewPublishCount += 1;
+    return published;
+  }
+
+  /// Invalidates an ephemeral amount preview when its focus base becomes
+  /// invalid. The next complete frame still owns the normal amount lane.
+  void clearPreparedAmountPreview({required int previewGeneration}) {
+    if (previewGeneration < _amountPreviewGeneration) return;
+    _amountPreviewGeneration = previewGeneration;
+    final visible = _value;
+    if (visible == null) return;
+    _amountLane.stage(visible, visible.amountPresentationId);
+    _amountLane.flush();
   }
 
   bool publish(

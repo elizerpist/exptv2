@@ -35,9 +35,9 @@ at motion start, so every generated carousel offset remains absolute to that
 one gesture even if a prepared DAY crossing synchronously publishes a newer
 navigation state.
 
-Swipe mode excludes its transparent gesture carousel from the semantics tree
-but exposes exactly one actionable navigation semantic node with increase and
-decrease actions; its visible year/month/day fields retain their independent
+Swipe mode exposes exactly one actionable navigation semantic node with
+increase and decrease actions while its horizontal carousel owns the visible
+navigation surface; its visible year/month/day fields retain their independent
 vertical semantics.
 
 ## Architecture card
@@ -78,3 +78,48 @@ explicit prepared-selection bridge.
 No permanent winner, no four-axis business model, no daily Budget/Mind
 semantics, no Header redesign, no Ledger/SearchPill redesign, and no broad
 motion-engine rewrite are introduced.
+
+## 2026-08-25 follow-up: preview parity and body-order experiment
+
+The three SummaryPill variants remain comparison-only. This follow-up does not
+select a temporal model or a dashboard-body order as the product default.
+
+- A Budget avatar's discrete preview crossing now enters the existing
+  `DashboardBudgetLogboxDrilldownCoordinator` focus path immediately. At
+  `FOCUS_DERIVED_SCOPE_READY`, the existing
+  `DashboardCoreController._focusPublicationGeneration` publishes the exact
+  prepared scalar to the SummaryPill amount lane without waiting for scene
+  preparation. Count and LogBox remain a later atomic complete-frame/scene
+  publication; they use the same target query/revision and cannot receive a
+  stale focus completion. A provisional focus stores its base identity until
+  scene commit, so the next aggregate or base-query tick invalidates its
+  generation and immediately republishes the prepared base amount rather
+  than permitting an old focus scene to win late. Settlement therefore reuses
+  the current prepared target instead of restoring an aggregate amount or
+  issuing a second query.
+- Swipe Mode no longer places an invisible horizontal carousel under
+  hit-testable hierarchy tracks. Its horizontal `CenteredCarousel` now owns
+  the navigation surface and builds the vertical hierarchy tracks inside its
+  selected item, so Flutter's gesture arena resolves horizontal mode intent
+  versus vertical field intent. The single exposed semantic node keeps its
+  increase/decrease actions.
+- `Legacy` retains its real physical child rail. `Segmented` and `Swipe mode`
+  reserve no physical rail even when their canonical DAY projection uses the
+  retained legacy child-day state. The central resolver transfers exactly
+  `railHeight + railToCollapseHandleGap` into the mode-content lower card;
+  it does not consume a normal body gap, handler, Ledger header, or navigation
+  reservation. The handler remains the body/Ledger boundary.
+- Budget and Balance keep their upper card height; their lower card receives
+  the reclaimed height. Mind's unified envelope receives it. In the two
+  experimental variants, both Budget distribution donuts derive their useful
+  square from actual padded lower-card constraints (while the Partner rhythm
+  footer keeps its authored minimum height), retaining aspect ratio and
+  existing padding rather than using a hardcoded scale transform.
+- The Header tuner now owns a dashboard-lifetime, session-only ordered list of
+  `Direction`, `Summary`, and `ModeContent`. The `DashboardGeometryResolver`
+  places all six validated permutations through one component cursor. This is
+  presentation-only: it does not alter direction, time, Budget target, query,
+  viewport, or any business semantics.
+
+SearchPill remains in Ledger and the withdrawn standalone Ledger amount remains
+absent. The fixed top Header remains outside the reorderable body blocks.

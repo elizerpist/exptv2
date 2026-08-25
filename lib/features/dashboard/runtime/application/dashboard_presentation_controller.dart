@@ -362,6 +362,41 @@ final class DashboardPresentationController {
     return true;
   }
 
+  /// Sends the already-derived scalar amount for an ephemeral focus target to
+  /// the SummaryPill without waiting for the target LogBox scene window. The
+  /// complete visible frame remains scene-atomic; this is deliberately only
+  /// the prepared amount leaf used by the Budget avatar preview path.
+  bool publishPreparedFocusAmountPreview({
+    required PreparedDashboardIndex index,
+    required DashboardNavigationState state,
+    required int previewGeneration,
+  }) {
+    final catalog = index.catalogForKey(state.parentQueryKey);
+    final selectedIndex = _selectedIndex(state, catalog);
+    final selectedEntry = catalog.entryAtLogicalIndex(selectedIndex);
+    final queryKey = state.isRailOpen
+        ? selectedEntry.queryKey
+        : state.parentQueryKey;
+    final frame = DashboardVisibleFrame.fromPrepared(
+      // This is the compact prepared presentation frame assembled during the
+      // focus derivation. It does not prepare a scene or perform text layout.
+      index.materializeFrameForPreparation(queryKey),
+      parentQueryKey: state.parentQueryKey,
+      plane: state.plane,
+      railOpen: state.isRailOpen,
+      semanticIndex: selectedIndex,
+      childLabel: selectedEntry.label,
+      navigationEpoch: state.navigationEpoch,
+      presentationEpoch: _presentationEpoch,
+      frameGeneration: visibleFrames.nextFrameGeneration(),
+      mode: DashboardVisibleMode.preview,
+    );
+    return visibleFrames.publishPreparedAmountPreview(
+      frame,
+      previewGeneration: previewGeneration,
+    );
+  }
+
   void selectDirection(LedgerDirection direction) {
     if (direction == navigation.state.parentQueryScope.direction) return;
     commitDirectionCandidate(directionCandidate(direction));

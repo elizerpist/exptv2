@@ -768,6 +768,12 @@ final class DashboardCoreController {
   int? _committedReadyAheadPriorityKickEpoch;
   final Set<int> _activeVerticalPointerIntents = <int>{};
   PreparedDashboardIndex? _focusBaseIndex;
+  // A focus preview publishes its prepared amount before the complete LogBox
+  // scene is ready. Until that scene commits there is no [focus.state] yet,
+  // so retain the base identity separately: an aggregate tick or base-query
+  // change must still be able to invalidate the in-flight preview.
+  PreparedDashboardIndex? _provisionalFocusBaseIndex;
+  CurrentLedgerQueryScope? _provisionalFocusBaseScope;
   _FocusBaseSceneRetention? _focusBaseSceneRetention;
   int _focusBaseSceneRetentionGeneration = 0;
   CommittedPagingFocusSnapshot? _focusBasePagingRetention;
@@ -4016,7 +4022,13 @@ final class DashboardCoreController {
     return _requestEphemeralFocus(clearPartner: true);
   }
 
-  Future<bool> clearAllEphemeralFocus() => _restoreBaseAfterFocus();
+  Future<bool> clearAllEphemeralFocus() {
+    if (_provisionalFocusBaseIndex != null &&
+        _provisionalFocusBaseScope != null) {
+      return _cancelProvisionalFocusAndRestoreBase();
+    }
+    return _restoreBaseAfterFocus();
+  }
 
   Future<bool> _requestEphemeralFocus({
     DashboardFocusFacet? category,
@@ -4093,6 +4105,8 @@ final class DashboardCoreController {
       coreRevision: baseIndex.coreRevision,
     );
     final generation = ++_focusPublicationGeneration;
+    _provisionalFocusBaseIndex = baseIndex;
+    _provisionalFocusBaseScope = baseScope;
     final initialYear = navigation.state.yearCursor;
     final started = Stopwatch()..start();
     FluviDiagnosticLogger.log(
@@ -4187,6 +4201,26 @@ final class DashboardCoreController {
             '${derivation.currentRootProjectionMicros}',
       ),
     );
+    final amountPreviewPublished = presentation
+        .publishPreparedFocusAmountPreview(
+          index: derived,
+          state: publicationState,
+          previewGeneration: generation,
+        );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: amountPreviewPublished
+            ? 'FOCUS_PREVIEW_AMOUNT_PUBLISHED'
+            : 'FOCUS_PREVIEW_AMOUNT_REJECTED',
+        queryKey: effectiveScope.key.value,
+        direction: direction.name,
+        coreRevision: derived.coreRevision,
+        scope:
+            'category=${nextCategory?.id ?? 'none'} '
+            'partner=${nextPartner?.id ?? 'none'} generation=$generation '
+            'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
+      ),
+    );
     final published = await installPreparedIndex(
       derived,
       publicationState: publicationState,
@@ -4215,6 +4249,8 @@ final class DashboardCoreController {
       },
       afterPublish: () {
         _focusBaseIndex = baseIndex;
+        _provisionalFocusBaseIndex = null;
+        _provisionalFocusBaseScope = null;
         focus.replace(
           baseScope: baseScope,
           coreRevision: baseIndex.coreRevision,
@@ -4236,7 +4272,65 @@ final class DashboardCoreController {
       },
       isEphemeralFocusPublication: true,
     );
+    if (!published && generation == _focusPublicationGeneration) {
+      _provisionalFocusBaseIndex = null;
+      _provisionalFocusBaseScope = null;
+    }
     return published;
+  }
+
+  /// Cancels a narrowed focus which has published its prepared amount but has
+  /// not yet installed its scene. The base frame is already visible, so only
+  /// the lightweight amount lane needs to return to the aggregate target.
+  /// Incrementing the generation makes the delayed scene's [shouldPublish]
+  /// fail without rotating the committed LogBox frame.
+  Future<bool> _cancelProvisionalFocusAndRestoreBase() async {
+    final baseIndex = _provisionalFocusBaseIndex;
+    final baseScope = _provisionalFocusBaseScope;
+    if (baseIndex == null || baseScope == null) return false;
+
+    _provisionalFocusBaseIndex = null;
+    _provisionalFocusBaseScope = null;
+    final generation = ++_focusPublicationGeneration;
+    final currentBaseScope = currentQuery.scopeFor(baseScope.direction);
+    final canRestore =
+        !_disposed &&
+        baseIndex.coreRevision == coreRevision &&
+        currentBaseScope == baseScope;
+    if (!canRestore) {
+      presentation.visibleFrames.clearPreparedAmountPreview(
+        previewGeneration: generation,
+      );
+      _discardRetainedFocusBaseScene();
+      _discardRetainedFocusBasePaging();
+      return false;
+    }
+
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      baseScope.temporalFilter,
+    );
+    final publicationState = navigation.appliedQueryCandidate(
+      baseScope,
+      availability: availability,
+      coreRevision: baseIndex.coreRevision,
+    );
+    presentation.publishPreparedFocusAmountPreview(
+      index: baseIndex,
+      state: publicationState,
+      previewGeneration: generation,
+    );
+    _discardRetainedFocusBaseScene();
+    _discardRetainedFocusBasePaging();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FOCUS_PROVISIONAL_CANCELLED',
+        queryKey: baseScope.key.value,
+        direction: baseScope.direction.name,
+        coreRevision: baseIndex.coreRevision,
+        scope: 'generation=$generation reason=aggregateTarget',
+      ),
+    );
+    return true;
   }
 
   Future<bool> _restoreBaseAfterFocus() async {
@@ -4264,6 +4358,11 @@ final class DashboardCoreController {
     if (retainedPaging != null) {
       _pendingFocusBasePagingRestore = retainedPaging;
     }
+    presentation.publishPreparedFocusAmountPreview(
+      index: baseIndex,
+      state: publicationState,
+      previewGeneration: generation,
+    );
     final published = await installPreparedIndex(
       baseIndex,
       publicationState: publicationState,
@@ -4281,6 +4380,8 @@ final class DashboardCoreController {
       afterPublish: () {
         focus.clearAll();
         _focusBaseIndex = null;
+        _provisionalFocusBaseIndex = null;
+        _provisionalFocusBaseScope = null;
         _discardRetainedFocusBaseScene();
         _discardRetainedFocusBasePaging();
         FluviDiagnosticLogger.log(
@@ -4306,7 +4407,20 @@ final class DashboardCoreController {
 
   void _invalidateFocusForChangedBaseQuery() {
     final state = focus.state;
-    if (state == null) return;
+    if (state == null) {
+      final provisionalScope = _provisionalFocusBaseScope;
+      final provisionalIndex = _provisionalFocusBaseIndex;
+      if (provisionalScope == null || provisionalIndex == null) return;
+      final baseScope = currentQuery.scopeFor(provisionalScope.direction);
+      final revision =
+          dataRuntime.currentIndex?.coreRevision ?? coreRevision ?? 0;
+      if (baseScope == provisionalScope &&
+          provisionalIndex.coreRevision == revision) {
+        return;
+      }
+      _clearFocusWithoutRestoration(reason: 'baseQueryChanged');
+      return;
+    }
     final baseScope = currentQuery.scopeFor(state.anchor.direction);
     final revision =
         dataRuntime.currentIndex?.coreRevision ?? coreRevision ?? 0;
@@ -4316,7 +4430,16 @@ final class DashboardCoreController {
 
   void _invalidateFocusForIndexRevision(PreparedDashboardIndex index) {
     final state = focus.state;
-    if (state == null || state.anchor.coreRevision == index.coreRevision) {
+    if (state == null) {
+      final provisionalIndex = _provisionalFocusBaseIndex;
+      if (provisionalIndex == null ||
+          provisionalIndex.coreRevision == index.coreRevision) {
+        return;
+      }
+      _clearFocusWithoutRestoration(reason: 'coreRevisionChanged');
+      return;
+    }
+    if (state.anchor.coreRevision == index.coreRevision) {
       return;
     }
     _clearFocusWithoutRestoration(reason: 'coreRevisionChanged');
@@ -4324,18 +4447,28 @@ final class DashboardCoreController {
 
   void _clearFocusWithoutRestoration({required String reason}) {
     final state = focus.state;
-    if (state == null) return;
+    final provisionalScope = _provisionalFocusBaseScope;
+    final provisionalIndex = _provisionalFocusBaseIndex;
+    if (state == null && provisionalScope == null) return;
     _focusPublicationGeneration += 1;
+    presentation.visibleFrames.clearPreparedAmountPreview(
+      previewGeneration: _focusPublicationGeneration,
+    );
     _focusBaseIndex = null;
+    _provisionalFocusBaseIndex = null;
+    _provisionalFocusBaseScope = null;
     _discardRetainedFocusBaseScene();
     _discardRetainedFocusBasePaging();
     focus.clearAll();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FOCUS_INVALIDATED',
-        queryKey: state.anchor.baseQueryKey.value,
-        direction: state.anchor.direction.name,
-        coreRevision: state.anchor.coreRevision,
+        queryKey:
+            state?.anchor.baseQueryKey.value ?? provisionalScope!.key.value,
+        direction:
+            state?.anchor.direction.name ?? provisionalScope!.direction.name,
+        coreRevision:
+            state?.anchor.coreRevision ?? provisionalIndex?.coreRevision ?? 0,
         scope: 'reason=$reason',
       ),
     );

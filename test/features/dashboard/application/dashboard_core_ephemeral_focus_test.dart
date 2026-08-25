@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
@@ -215,6 +218,232 @@ void main() {
   });
 
   test(
+    'Budget avatar preview crossings publish the shared amount, count and Ledger lanes together',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final previewAmounts = <int>[];
+      core.visibleFrames.amountLane.addListener(() {
+        final frame = core.visibleFrames.amountLane.value;
+        if (frame != null) previewAmounts.add(frame.amount.totalMinor);
+      });
+
+      Future<void> preview(
+        DashboardFocusFacet facet,
+        int expectedAmount,
+      ) async {
+        expect(await core.requestBudgetCategoryFocus(facet), isTrue);
+        final amountFrame = core.visibleFrames.amountLane.value!;
+        final countFrame = core.visibleFrames.countLane.value!;
+        final logBoxFrame = core.visibleFrames.logBoxLane.value!;
+        expect(amountFrame.amount.totalMinor, expectedAmount);
+        expect(amountFrame.amount.queryKey, countFrame.count.queryKey);
+        expect(amountFrame.amount.queryKey, logBoxFrame.logBox.queryKey);
+        expect(core.focus.state?.category?.id, facet.id);
+      }
+
+      await preview(
+        const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        500,
+      );
+      await preview(
+        const DashboardFocusFacet(id: 'food', displayName: 'Food'),
+        700,
+      );
+      await preview(
+        const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        500,
+      );
+
+      final amountBeforeSettle = core.visibleFrames.amountLane.value!;
+      final visiblePublishCountBeforeSettle =
+          core.visibleFrames.visiblePublishCount;
+      expect(
+        await core.requestBudgetCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        ),
+        isTrue,
+      );
+      expect(core.visibleFrames.amountLane.value, same(amountBeforeSettle));
+      expect(
+        core.visibleFrames.visiblePublishCount,
+        visiblePublishCountBeforeSettle,
+        reason:
+            'Settling the already-current avatar target must reuse its preview '
+            'rather than publishing an aggregate or starting a second amount lane.',
+      );
+      expect(previewAmounts, containsAllInOrder(<int>[500, 700, 500]));
+      expect(
+        repository.prepareCalls,
+        1,
+        reason:
+            'Avatar crossings derive from the prepared membership; they do not '
+            'start a repository query per visual tick.',
+      );
+    },
+  );
+
+  test(
+    'Budget avatar preview publishes its newest prepared amount before the LogBox scene settles',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final gates = <Completer<void>>[];
+      final firstStarted = Completer<void>();
+      final secondStarted = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {
+          final gate = Completer<void>();
+          gates.add(gate);
+          if (gates.length == 1) {
+            firstStarted.complete();
+          } else if (gates.length == 2) {
+            secondStarted.complete();
+          }
+          await gate.future;
+        },
+        activate: (_) {},
+      );
+      FluviDiagnosticLogger.clear();
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+
+      final previewA = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      );
+      await firstStarted.future;
+      final previewB = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      );
+      final previewC = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'food',
+          displayName: 'Food',
+        ),
+      );
+
+      expect(
+        core.visibleFrames.amountLane.value!.amount.totalMinor,
+        700,
+        reason:
+            'The discrete C avatar tick owns the SummaryPill amount as soon '
+            'as FOCUS_DERIVED_SCOPE_READY has produced its prepared scalar, '
+            'rather than waiting for the queued scene window.',
+      );
+      expect(
+        core.visibleFrames.value!.amount.totalMinor,
+        isNot(700),
+        reason:
+            'The complete LogBox frame remains atomic and is intentionally '
+            'still waiting for its scene window at this point.',
+      );
+      expect(
+        core.visibleFrames.amountPreviewPublishCount,
+        greaterThanOrEqualTo(2),
+      );
+
+      gates.first.complete();
+      await secondStarted.future;
+      expect(
+        core.visibleFrames.amountLane.value!.amount.totalMinor,
+        700,
+        reason: 'A late A scene preparation must not overwrite C\'s amount.',
+      );
+      gates[1].complete();
+
+      expect(await previewA, isFalse);
+      expect(await previewB, isFalse);
+      expect(await previewC, isTrue);
+      expect(core.focus.state?.category?.id, 'food');
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 700);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'QUERY_APPLY_STALE_PUBLICATION_REJECTED',
+        ),
+        isTrue,
+      );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'an aggregate avatar tick cancels a provisional category amount before its scene commits',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final aggregateAmount =
+          core.visibleFrames.amountLane.value!.amount.totalMinor;
+      final sceneStarted = Completer<void>();
+      final sceneGate = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {
+          sceneStarted.complete();
+          await sceneGate.future;
+        },
+        activate: (_) {},
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+
+      final categoryPreview = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      );
+      await sceneStarted.future;
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 500);
+
+      expect(
+        await drilldown.previewBudgetTarget(
+          state: _budgetAggregatePreviewState(),
+        ),
+        isTrue,
+      );
+      expect(
+        core.visibleFrames.amountLane.value!.amount.totalMinor,
+        aggregateAmount,
+        reason:
+            'Aggregate owns the next discrete avatar tick even before the '
+            'older category scene can complete.',
+      );
+
+      sceneGate.complete();
+      expect(await categoryPreview, isFalse);
+      expect(core.focus.state, isNull);
+      expect(
+        core.visibleFrames.amountLane.value!.amount.totalMinor,
+        aggregateAmount,
+      );
+    },
+  );
+
+  test(
     'clearing focus reactivates the retained base scene without a second scene prepare',
     () async {
       final repository = _FocusSeedRepository();
@@ -361,6 +590,48 @@ void main() {
     },
   );
 }
+
+DashboardBudgetPresentationState _budgetAvatarPreviewState({
+  required String categoryId,
+  required String displayName,
+}) {
+  final target = DashboardBudgetTargetCatalog.fromCategories(
+    <DashboardBudgetCategoryVisual>[
+      DashboardBudgetCategoryVisual(
+        id: categoryId,
+        displayName: displayName,
+        colorId: 'fallback',
+        iconId: 'fallback',
+      ),
+    ],
+  ).targetAtHandle(1);
+  return DashboardBudgetPresentationState(
+    items: const <DashboardBudgetTargetPresentationItem>[],
+    selectedHandle: target.handle,
+    liveSelection: DashboardBudgetLiveSelectionState.unavailable(
+      direction: LedgerDirection.income,
+      target: target,
+      title: displayName,
+    ),
+    partition: const DashboardBudgetPartitionPresentation.unavailable(
+      direction: LedgerDirection.income,
+    ),
+  );
+}
+
+DashboardBudgetPresentationState _budgetAggregatePreviewState() =>
+    DashboardBudgetPresentationState(
+      items: const <DashboardBudgetTargetPresentationItem>[],
+      selectedHandle: 0,
+      liveSelection: DashboardBudgetLiveSelectionState.unavailable(
+        direction: LedgerDirection.income,
+        target: const DashboardBudgetTarget.aggregate(),
+        title: 'Összbevételi cél',
+      ),
+      partition: const DashboardBudgetPartitionPresentation.unavailable(
+        direction: LedgerDirection.income,
+      ),
+    );
 
 final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   final EmptyDashboardDataRuntimeRepository _empty =

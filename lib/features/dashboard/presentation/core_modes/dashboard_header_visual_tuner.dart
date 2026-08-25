@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_body_order.dart';
 import '../summary_pill_variant.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -331,10 +332,12 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     super.key,
     required this.controller,
     this.summaryPillVariants,
+    this.bodyOrder,
   });
 
   final DashboardHeaderVisualController controller;
   final SummaryPillVariantController? summaryPillVariants;
+  final DashboardBodyOrderController? bodyOrder;
 
   @override
   Widget build(
@@ -394,6 +397,10 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
               const SizedBox(height: 8),
               if (summaryPillVariants case final variants?) ...<Widget>[
                 _SummaryPillExperimentSection(controller: variants),
+                const SizedBox(height: 14),
+              ],
+              if (bodyOrder case final order?) ...<Widget>[
+                _DashboardBodyOrderSection(controller: order),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
@@ -828,6 +835,55 @@ final class _SummaryPillExperimentSection extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      );
+}
+
+/// Three deterministic slot controls avoid nested drag ownership inside the
+/// tuner sheet while maintaining one validated permutation model.
+final class _DashboardBodyOrderSection extends StatelessWidget {
+  const _DashboardBodyOrderSection({required this.controller});
+
+  final DashboardBodyOrderController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardBodyOrder>(
+        valueListenable: controller,
+        builder: (context, order, _) => _TunerSection(
+          title: 'Fejléc sorrend',
+          children: <Widget>[
+            for (var index = 0; index < order.components.length; index += 1)
+              Row(
+                key: ValueKey<String>(
+                  'dashboard-body-order-${order.components[index].name}',
+                ),
+                children: <Widget>[
+                  Text(
+                    '${index + 1}.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(order.components[index].label)),
+                  IconButton(
+                    key: ValueKey<String>('dashboard-body-order-up-$index'),
+                    tooltip: 'Fel',
+                    onPressed: index == 0
+                        ? null
+                        : () => controller.move(index, index - 1),
+                    icon: const Icon(Icons.keyboard_arrow_up_rounded),
+                  ),
+                  IconButton(
+                    key: ValueKey<String>('dashboard-body-order-down-$index'),
+                    tooltip: 'Le',
+                    onPressed: index == order.components.length - 1
+                        ? null
+                        : () => controller.move(index, index + 1),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  ),
+                ],
+              ),
+          ],
         ),
       );
 }

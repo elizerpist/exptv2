@@ -35,14 +35,14 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   final BudgetTargetAvatarRailController? navigationController;
 
   /// One semantic carousel crossing, coalesced to the next display frame.
-  /// This remains deliberately preview-driven for the Budget Header and
-  /// selected avatar chrome, but carries no committed LogBox/query work.
+  /// This remains deliberately preview-driven. Consumers may publish the
+  /// corresponding prepared visible frame, but must use their existing stale
+  /// generation gate rather than perform pixel-rate work here.
   final ValueChanged<DashboardBudgetPresentationState>? onTargetPreview;
 
   /// A committed consumer, such as the LogBox focus/query bridge. This is
-  /// intentionally separate from [onTargetPreview]: a semantic crossing may
-  /// update the Header live, but it must never synchronously derive or publish
-  /// a committed data scene while CenteredCarousel is ballistic.
+  /// intentionally separate from [onTargetPreview]: settlement promotes the
+  /// last accepted prepared target and must not manufacture a second query.
   final ValueChanged<DashboardBudgetPresentationState>? onTargetSettled;
 
   /// The selected shell is larger than the static avatar canvas. This is the
@@ -250,7 +250,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'origin=${origin.name} '
             'avatarSemanticCrossings=$_motionSemanticCrossings '
             'avatarPreviewPublishes=$_motionPreviewPublications '
-            'committedFocusRequestsDuringMotion=0 '
+            'preparedFocusRequestsAtTicks=$_motionPreviewPublications '
             'controllerIdentity=${identityHashCode(_controller)} '
             'scrollPositionIdentity=$positionIdentity '
             'physicsCreationCount=${_controller.physicsCreationCount} '

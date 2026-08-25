@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
+import 'package:fluvi/core/design/dashboard_body_order.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -9,6 +10,101 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 
 void main() {
   group('DashboardGeometryResolver', () {
+    test('experimental variants reclaim only the physical rail footprint', () {
+      const metrics = DashboardLayoutMetrics.reference;
+      final reclaimed = metrics.railHeight + metrics.railToCollapseHandleGap;
+      for (final mode in DashboardModeSpec.values) {
+        final legacy = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: mode,
+          collapseProgress: 0,
+          isRailExpanded: true,
+        );
+        final experiment = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: mode,
+          collapseProgress: 0,
+          isRailExpanded: true,
+          hasPhysicalRail: false,
+        );
+
+        expect(experiment.hasPhysicalRail, isFalse);
+        expect(experiment.railBounds.height, 0);
+        expect(
+          experiment.zone2Bounds.height,
+          legacy.zone2Bounds.height + reclaimed,
+        );
+        expect(
+          experiment.collapseHandleBounds.top,
+          legacy.collapseHandleBounds.top,
+        );
+        expect(
+          experiment.logBoxHeaderBounds.top,
+          legacy.logBoxHeaderBounds.top,
+        );
+        if (mode == DashboardModeSpec.mind) {
+          expect(
+            experiment.unifiedSubheaderBounds!.height,
+            legacy.unifiedSubheaderBounds!.height + reclaimed,
+          );
+        }
+      }
+    });
+
+    test('one central body order covers every permutation exactly once', () {
+      const metrics = DashboardLayoutMetrics.reference;
+      final orders = _permutations(DashboardBodyComponent.values);
+
+      expect(orders, hasLength(6));
+      for (final components in orders) {
+        final order = DashboardBodyOrder(components);
+        final frame = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          bodyOrder: order,
+        );
+        final boundsFor = <DashboardBodyComponent, DashboardBounds>{
+          DashboardBodyComponent.direction: frame.actionBounds,
+          DashboardBodyComponent.summary: frame.summaryBounds,
+          DashboardBodyComponent.modeContent: frame.modeContentBounds,
+        };
+
+        expect(frame.bodyOrder, order);
+        expect(order.components.toSet(), DashboardBodyComponent.values.toSet());
+        expect(
+          frame.modeContentBounds.bottom,
+          greaterThanOrEqualTo(frame.zone2IndicatorBounds.bottom),
+          reason: 'The logical mode block owns its indicator/dots too.',
+        );
+        for (var index = 0; index < order.components.length - 1; index += 1) {
+          final current = boundsFor[order.components[index]]!;
+          final next = boundsFor[order.components[index + 1]]!;
+          if (order.components[index] == DashboardBodyComponent.modeContent) {
+            expect(
+              next.top,
+              frame.zone2IndicatorBounds.bottom +
+                  metrics.zone2IndicatorVerticalPadding,
+              reason:
+                  'The existing dot-to-next relation keeps the same '
+                  'symmetric indicator padding.',
+            );
+          } else {
+            expect(next.top, current.bottom + metrics.standardGap);
+          }
+        }
+        final last = boundsFor[order.components.last]!;
+        expect(
+          frame.railBounds.top,
+          order.components.last == DashboardBodyComponent.modeContent
+              ? frame.zone2IndicatorBounds.bottom +
+                    metrics.zone2IndicatorVerticalPadding
+              : last.bottom + metrics.standardGap,
+        );
+        expect(frame.collapseHandleBounds.top, frame.railBounds.top);
+      }
+    });
     test(
       'derives the reference expanded structural order and lower anchors',
       () {
@@ -434,4 +530,17 @@ void main() {
       },
     );
   });
+}
+
+List<List<T>> _permutations<T>(List<T> values) {
+  if (values.length < 2) return <List<T>>[List<T>.of(values)];
+  final permutations = <List<T>>[];
+  for (var index = 0; index < values.length; index += 1) {
+    final head = values[index];
+    final remainder = List<T>.of(values)..removeAt(index);
+    for (final tail in _permutations(remainder)) {
+      permutations.add(<T>[head, ...tail]);
+    }
+  }
+  return permutations;
 }

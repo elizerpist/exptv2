@@ -114,7 +114,7 @@ void main() {
   );
 
   testWidgets(
-    'a user fling keeps Header preview live but withholds committed handoff until settle',
+    'a user fling keeps preview live and still reports its final settled target',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
       final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
@@ -166,7 +166,9 @@ void main() {
         committed,
         isEmpty,
         reason:
-            'A crossing updates the live Header target but cannot start the committed LogBox focus/query path.',
+            'The rail reports each discrete preview separately; the composition '
+            'bridge may publish the matching prepared frame without waiting for '
+            'this final-settle callback.',
       );
 
       await tester.pumpAndSettle();

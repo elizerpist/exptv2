@@ -12,6 +12,14 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
 
   final DashboardCoreController core;
 
+  /// Publishes one already-prepared avatar target on the same generation-safe
+  /// focus path as settlement. It is invoked only for discrete carousel
+  /// crossings; the core publishes its prepared Summary amount immediately
+  /// and rejects stale completion before the atomic Ledger scene can rotate.
+  Future<bool> previewBudgetTarget({
+    required DashboardBudgetPresentationState state,
+  }) => commitBudgetTarget(state: state, source: 'avatarPreview');
+
   Future<bool> commitBudgetTarget({
     required DashboardBudgetPresentationState state,
     required String source,

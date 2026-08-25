@@ -1,4 +1,5 @@
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import 'dashboard_body_order.dart';
 import 'dashboard_layout_frame.dart';
 import 'dashboard_layout_metrics.dart';
 import 'dashboard_mode_palette.dart';
@@ -11,6 +12,8 @@ abstract final class DashboardGeometryResolver {
     required DashboardModeSpec mode,
     required double collapseProgress,
     required bool isRailExpanded,
+    DashboardBodyOrder? bodyOrder,
+    bool hasPhysicalRail = true,
   }) {
     final progress = (collapseProgress / metrics.collapseTravel)
         .clamp(0.0, 1.0)
@@ -30,10 +33,35 @@ abstract final class DashboardGeometryResolver {
         collapsedActionTop + metrics.actionHeight + metrics.standardGap;
     final collapsedRailTop =
         collapsedSummaryTop + metrics.summaryHeight + metrics.standardGap;
-    final railTop = _lerp(metrics.railTop, collapsedRailTop, progress);
+    final order = bodyOrder ?? DashboardBodyOrder.defaultOrder();
+    final reclaimedRailFootprint = hasPhysicalRail
+        ? 0.0
+        : metrics.railHeight + metrics.railToCollapseHandleGap;
+    final modeLowerHeight = metrics.zone2CardHeight + reclaimedRailFootprint;
+    // The cursor keeps the accepted Zone2 → dot → next/rail relation, while
+    // the named envelope includes the complete painted dot. Those differ by
+    // the existing half-padding around the indicator, not a new spacing token.
+    final modeContentFlowHeight =
+        metrics.subheaderOneHeight +
+        metrics.standardGap +
+        modeLowerHeight +
+        metrics.dotGap +
+        metrics.dotHeight;
+    final modeContentEnvelopeHeight =
+        metrics.subheaderOneHeight +
+        metrics.standardGap +
+        modeLowerHeight +
+        metrics.zone2IndicatorVerticalPadding +
+        metrics.dotHeight;
+    final expandedBodies = _expandedBodyLayout(
+      metrics: metrics,
+      order: order,
+      modeContentFlowHeight: modeContentFlowHeight,
+    );
+    final railTop = _lerp(expandedBodies.railTop, collapsedRailTop, progress);
     final collapseHandleTop =
         railTop +
-        (isRailExpanded
+        (hasPhysicalRail && isRailExpanded
             ? metrics.railHeight + metrics.railToCollapseHandleGap
             : 0);
 
@@ -45,16 +73,20 @@ abstract final class DashboardGeometryResolver {
       height: height,
     );
     final subheaderOne = bounds(
-      metrics.subheaderOneTop,
+      expandedBodies.modeContentTop,
       metrics.subheaderOneHeight,
     );
-    final zone2 = bounds(metrics.zone2Top, metrics.zone2CardHeight);
-    final zone2Indicator = bounds(metrics.zone2IndicatorTop, metrics.dotHeight);
+    final zone2 = bounds(
+      subheaderOne.bottom + metrics.standardGap,
+      modeLowerHeight,
+    );
+    final zone2Indicator = bounds(
+      zone2.bottom + metrics.zone2IndicatorVerticalPadding,
+      metrics.dotHeight,
+    );
     final envelope = bounds(
-      metrics.subheaderOneTop,
-      metrics.subheaderOneHeight +
-          metrics.standardGap +
-          metrics.zone2CardHeight,
+      expandedBodies.modeContentTop,
+      metrics.subheaderOneHeight + metrics.standardGap + modeLowerHeight,
     );
     final cascade = HeaderCascadeMotion.calculate(
       masterProgress: 1 - progress,
@@ -63,14 +95,14 @@ abstract final class DashboardGeometryResolver {
             metrics.headerTop +
             metrics.headerCollapsedHeight -
             DashboardMotionTokens.upperHiddenOverlap,
-        upperExpandedTop: metrics.subheaderOneTop,
+        upperExpandedTop: subheaderOne.top,
         upperHeight: metrics.subheaderOneHeight,
         upperCollapsedInset:
             metrics.contentGutter + DashboardMotionTokens.upperNestedInset,
         upperExpandedInset: metrics.contentGutter,
         upperCollapsedScale: DashboardMotionTokens.subheaderOneCollapseScale,
         upperExpandedScale: DashboardMotionTokens.restingScale,
-        lowerExpandedTop: metrics.zone2Top,
+        lowerExpandedTop: zone2.top,
         lowerExpandedInset: metrics.contentGutter,
         lowerHiddenOverlap: DashboardMotionTokens.lowerHiddenOverlap,
         lowerNestedInset: DashboardMotionTokens.lowerNestedInset,
@@ -106,14 +138,14 @@ abstract final class DashboardGeometryResolver {
           ? envelope
           : null,
       actionBounds: bounds(
-        _lerp(metrics.actionTop, collapsedActionTop, progress),
+        _lerp(expandedBodies.actionTop, collapsedActionTop, progress),
         metrics.actionHeight,
       ),
       summaryBounds: bounds(
-        _lerp(metrics.summaryTop, collapsedSummaryTop, progress),
+        _lerp(expandedBodies.summaryTop, collapsedSummaryTop, progress),
         metrics.summaryHeight,
       ),
-      railBounds: bounds(railTop, metrics.railHeight),
+      railBounds: bounds(railTop, hasPhysicalRail ? metrics.railHeight : 0),
       collapseHandleBounds: bounds(collapseHandleTop, metrics.handleHeight),
       logBoxHeaderBounds: bounds(
         collapseHandleTop + metrics.handleHeight,
@@ -147,6 +179,44 @@ abstract final class DashboardGeometryResolver {
             ),
       lowerCardMotion: lowerCardMotion,
       isRailExpanded: isRailExpanded,
+      hasPhysicalRail: hasPhysicalRail,
+      bodyOrder: order,
+      modeContentBounds: bounds(
+        expandedBodies.modeContentTop,
+        modeContentEnvelopeHeight,
+      ),
+    );
+  }
+
+  static _ExpandedBodyLayout _expandedBodyLayout({
+    required DashboardLayoutMetrics metrics,
+    required DashboardBodyOrder order,
+    required double modeContentFlowHeight,
+  }) {
+    var cursor =
+        metrics.headerTop + metrics.headerExpandedHeight + metrics.standardGap;
+    double? actionTop;
+    double? summaryTop;
+    double? modeContentTop;
+    for (var index = 0; index < order.components.length; index += 1) {
+      switch (order.components[index]) {
+        case DashboardBodyComponent.direction:
+          actionTop = cursor;
+          cursor += metrics.actionHeight;
+        case DashboardBodyComponent.summary:
+          summaryTop = cursor;
+          cursor += metrics.summaryHeight;
+        case DashboardBodyComponent.modeContent:
+          modeContentTop = cursor;
+          cursor += modeContentFlowHeight;
+      }
+      if (index != order.components.length - 1) cursor += metrics.standardGap;
+    }
+    return _ExpandedBodyLayout(
+      actionTop: actionTop!,
+      summaryTop: summaryTop!,
+      modeContentTop: modeContentTop!,
+      railTop: cursor + metrics.standardGap,
     );
   }
 
@@ -155,4 +225,18 @@ abstract final class DashboardGeometryResolver {
 
   static double _stagedProgress(double progress, {required double start}) =>
       ((progress - start) / .62).clamp(0.0, 1.0).toDouble();
+}
+
+final class _ExpandedBodyLayout {
+  const _ExpandedBodyLayout({
+    required this.actionTop,
+    required this.summaryTop,
+    required this.modeContentTop,
+    required this.railTop,
+  });
+
+  final double actionTop;
+  final double summaryTop;
+  final double modeContentTop;
+  final double railTop;
 }

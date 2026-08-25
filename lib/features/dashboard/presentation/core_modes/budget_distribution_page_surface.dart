@@ -41,7 +41,9 @@ class BudgetDistributionPageSurface extends StatelessWidget {
     required this.listKey,
     required this.emptyLabel,
     this.donutDiameter = 150,
+    this.expandDonutToFit = false,
     this.leftFooter,
+    this.leftFooterMinimumHeight = 0,
   });
 
   final Widget heading;
@@ -54,7 +56,18 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   /// Category analysis may reserve a local footer below a smaller donut;
   /// Partner retains the original full-height donut/list geometry.
   final double donutDiameter;
+
+  /// Legacy preserves its accepted authored diameter. Experimental lower
+  /// cards opt into their real padded constraints, so their added height can
+  /// increase the useful square without an arbitrary scale transform.
+  final bool expandDonutToFit;
   final Widget? leftFooter;
+
+  /// A footer such as the existing partner rhythm chart keeps a real minimum
+  /// readable height. The constraint-driven donut consumes only the leftover
+  /// card height, rather than forcing that chart to overflow on an
+  /// intermediate dashboard geometry.
+  final double leftFooterMinimumHeight;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -67,33 +80,44 @@ class BudgetDistributionPageSurface extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 flex: 188,
-                child: leftFooter == null
-                    ? Center(
-                        child: SizedBox(
-                          key: ValueKey(
-                            'budget-distribution-donut-${donutDiameter.toInt()}',
-                          ),
-                          width: donutDiameter,
-                          height: donutDiameter,
-                          child: donut,
-                        ),
-                      )
-                    : Column(
-                        children: <Widget>[
-                          Center(
-                            child: SizedBox(
-                              key: ValueKey(
-                                'budget-distribution-donut-${donutDiameter.toInt()}',
-                              ),
-                              width: donutDiameter,
-                              height: donutDiameter,
-                              child: donut,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Expanded(child: leftFooter!),
-                        ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final footerHeight = leftFooter == null
+                        ? 0.0
+                        : leftFooterMinimumHeight + 3;
+                    final availableHeight =
+                        (constraints.maxHeight - footerHeight)
+                            .clamp(0.0, double.infinity)
+                            .toDouble();
+                    final available =
+                        ((constraints.maxWidth < availableHeight
+                                    ? constraints.maxWidth
+                                    : availableHeight) -
+                                8)
+                            .clamp(0.0, double.infinity)
+                            .toDouble();
+                    final diameter = expandDonutToFit
+                        ? available
+                        : donutDiameter.clamp(0.0, available).toDouble();
+                    final donutBox = SizedBox(
+                      key: ValueKey(
+                        'budget-distribution-donut-${diameter.toInt()}',
                       ),
+                      width: diameter,
+                      height: diameter,
+                      child: donut,
+                    );
+                    return leftFooter == null
+                        ? Center(child: donutBox)
+                        : Column(
+                            children: <Widget>[
+                              Center(child: donutBox),
+                              const SizedBox(height: 3),
+                              Expanded(child: leftFooter!),
+                            ],
+                          );
+                  },
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(

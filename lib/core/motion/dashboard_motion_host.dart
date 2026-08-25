@@ -9,6 +9,7 @@ import '../design/dashboard_core_mode_presentation.dart';
 import '../design/dashboard_geometry_resolver.dart';
 import '../design/dashboard_layout_frame.dart';
 import '../design/dashboard_layout_metrics.dart';
+import '../design/dashboard_body_order.dart';
 import '../design/dashboard_mode_palette.dart';
 
 /// Immutable visual state supplied by the motion owner to dashboard rendering.
@@ -59,6 +60,8 @@ class DashboardMotionHost extends StatefulWidget {
     required this.modeController,
     required this.builder,
     this.layoutMetrics,
+    this.bodyOrder,
+    this.hasPhysicalRail = true,
     DashboardModePaletteLookup? paletteResolver,
   }) : paletteResolver =
            paletteResolver ?? DashboardModePaletteResolver.resolve;
@@ -67,6 +70,8 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardCoreModeController modeController;
   final DashboardVisualFrameBuilder builder;
   final DashboardLayoutMetrics? layoutMetrics;
+  final DashboardBodyOrder? bodyOrder;
+  final bool hasPhysicalRail;
   final DashboardModePaletteLookup paletteResolver;
 
   @override
@@ -348,6 +353,8 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
                 widget.controller.metrics.collapseTravel *
                 viewportMetrics.collapseTravel,
             isRailExpanded: widget.controller.navigation.isRailOpen,
+            bodyOrder: widget.bodyOrder,
+            hasPhysicalRail: widget.hasPhysicalRail,
           ),
           palette: mode.mode == _committedMode.mode
               ? _palette

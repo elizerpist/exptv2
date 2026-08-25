@@ -8,6 +8,11 @@ import '../../application/dashboard_budget_rhythm_controller.dart';
 class BudgetRhythmBarChart extends StatelessWidget {
   const BudgetRhythmBarChart({super.key, required this.state});
 
+  /// The authored label/bar stack needs this much room to remain readable.
+  /// Card2 uses it to reserve the footer before a constraint-driven donut
+  /// claims the experimental reclaimed height.
+  static const double minimumLayoutHeight = 42;
+
   final DashboardBudgetRhythmState state;
 
   @override

@@ -26,12 +26,14 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
     required this.presentation,
     required this.drawableFrames,
     required this.avatarRailController,
+    this.expandDonutToFit = false,
   });
 
   final DashboardBudgetPresentationController presentation;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
+  final bool expandDonutToFit;
 
   @override
   State<BudgetCategoryDistributionCard> createState() =>
@@ -146,6 +148,7 @@ class _BudgetCategoryDistributionCardState
       ),
       rightHeading: 'Kategóriák',
       listKey: const ValueKey('budget-category-distribution-list'),
+      expandDonutToFit: widget.expandDonutToFit,
       emptyLabel: direction == LedgerDirection.income
           ? 'Nincs bevétel'
           : 'Nincs költés',
@@ -165,7 +168,6 @@ class _BudgetCategoryDistributionCardState
             ),
           ),
       ],
-      donutDiameter: 150,
     );
   }
 }

@@ -85,6 +85,7 @@ class BudgetDistributionPager extends StatefulWidget {
     required this.presentation,
     required this.drawableFrames,
     required this.avatarRailController,
+    this.expandCategoryDonutToFit = false,
     this.rhythm,
     this.drilldown,
   });
@@ -94,6 +95,7 @@ class BudgetDistributionPager extends StatefulWidget {
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
+  final bool expandCategoryDonutToFit;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 
@@ -167,6 +169,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 presentation: widget.presentation,
                 drawableFrames: widget.drawableFrames,
                 avatarRailController: widget.avatarRailController,
+                expandDonutToFit: widget.expandCategoryDonutToFit,
               ),
             ),
             BudgetDistributionPage.partner => BudgetDistributionPageCard(
@@ -174,6 +177,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
               child: BudgetPartnerDistributionCard(
                 presentation: widget.presentation,
                 drawableFrames: widget.drawableFrames,
+                expandDonutToFit: widget.expandCategoryDonutToFit,
                 rhythm: widget.rhythm,
                 drilldown: widget.drilldown,
               ),

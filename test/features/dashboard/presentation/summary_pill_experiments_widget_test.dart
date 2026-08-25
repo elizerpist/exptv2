@@ -99,8 +99,15 @@ void main() {
               bounds: _bounds,
               navigation: navigation,
               visibleFrames: visibleFrames,
-              onLevelCrossed: (plane, isRailOpen) =>
-                  crossed.add((plane, isRailOpen)),
+              onLevelCrossed: (plane, isRailOpen) {
+                crossed.add((plane, isRailOpen));
+                navigation.commitTemporalCandidate(
+                  navigation.temporalCandidate(
+                    plane: plane,
+                    isRailOpen: isRailOpen,
+                  ),
+                );
+              },
               onComponentCrossed: (_, _) {},
             ),
           ),
@@ -110,6 +117,20 @@ void main() {
       expect(
         find.byKey(const ValueKey('summary-pill-swipe-mode-surface')),
         findsOneWidget,
+      );
+      final physicalSurface = find.byKey(
+        const ValueKey('summary-pill-swipe-mode-surface'),
+      );
+      final horizontalViewport = find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.scrollDirection == Axis.horizontal,
+      );
+      expect(
+        tester.getSize(horizontalViewport).width,
+        closeTo(tester.getSize(physicalSurface).width, .01),
+        reason:
+            'The horizontal carousel must own the entire visible navigation '
+            'region, not a one-row-wide center strip.',
       );
       final swipeSemantics = tester.getSemantics(
         find.byKey(const ValueKey('summary-pill-swipe-mode-semantics')),
@@ -121,29 +142,185 @@ void main() {
       );
       expect(swipeData.hasAction(SemanticsAction.increase), isTrue);
       expect(swipeData.hasAction(SemanticsAction.decrease), isTrue);
-      swipeSemantics.owner!.performAction(
-        swipeSemantics.id,
-        SemanticsAction.increase,
+
+      // This must go through Flutter's physical hit-test path, not the
+      // semantics action above. The visible year track used to sit above the
+      // transparent mode carousel and consume this pointer sequence.
+      final surfaceRect = tester.getRect(physicalSurface);
+      await tester.dragFrom(
+        Offset(surfaceRect.right - 12, surfaceRect.center.dy),
+        const Offset(-150, 0),
       );
-      await tester.pump();
-      expect(crossed.last, (TimePlane.month, false));
-      expect(
-        find.byKey(const ValueKey('summary-pill-swipe-year-selector')),
-        findsOneWidget,
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(crossed, isNotEmpty);
+      expect(crossed.first, (TimePlane.month, false));
+      expect(crossed.last, isNot((TimePlane.year, false)));
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('Swipe Mode exposes one actionable horizontal mode semantic', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.year,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    final crossed = <(TimePlane, bool)>[];
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SummaryPillExperiment(
+            variant: SummaryPillVariant.swipeMode,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (plane, isRailOpen) =>
+                crossed.add((plane, isRailOpen)),
+            onComponentCrossed: (_, _) {},
+          ),
+        ),
+      ),
+    );
+
+    final node = tester.getSemantics(
+      find.byKey(const ValueKey('summary-pill-swipe-mode-semantics')),
+    );
+    node.owner!.performAction(node.id, SemanticsAction.increase);
+    await tester.pump();
+    expect(crossed, <(TimePlane, bool)>[(TimePlane.month, false)]);
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'Swipe Mode physical ballistic fling crosses multiple cyclic levels',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.year,
       );
-      expect(
-        find.byKey(const ValueKey('summary-pill-swipe-month-selector')),
-        findsNothing,
+      final visibleFrames = DashboardVisibleFrameStore();
+      final crossed = <(TimePlane, bool)>[];
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.swipeMode,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (plane, isRailOpen) {
+                crossed.add((plane, isRailOpen));
+                navigation.commitTemporalCandidate(
+                  navigation.temporalCandidate(
+                    plane: plane,
+                    isRailOpen: isRailOpen,
+                  ),
+                );
+              },
+              onComponentCrossed: (_, _) {},
+            ),
+          ),
+        ),
       );
 
-      await tester.fling(
-        find.byKey(const ValueKey('summary-pill-swipe-mode-surface')),
-        const Offset(-160, 0),
-        1800,
+      final surface = find.byKey(
+        const ValueKey('summary-pill-swipe-mode-surface'),
+      );
+      final rect = tester.getRect(surface);
+      await tester.flingFrom(
+        Offset(rect.right - 12, rect.center.dy),
+        const Offset(-520, 0),
+        2600,
       );
       await tester.pumpAndSettle();
-      expect(crossed, isNotEmpty);
-      semantics.dispose();
+
+      expect(crossed.length, greaterThan(1));
+      expect(crossed, contains((TimePlane.month, false)));
+      expect(
+        crossed,
+        contains((TimePlane.month, true)),
+        reason:
+            'The cyclic sequence reaches DAY through the existing child-day projection.',
+      );
+      expect(crossed, contains((TimePlane.sum, false)));
+    },
+  );
+
+  testWidgets(
+    'Swipe Mode vertical hierarchy drag does not also change its level',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      final crossedLevels = <(TimePlane, bool)>[];
+      final crossedComponents = <DashboardTemporalAnchorComponent>[];
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.swipeMode,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (plane, isRailOpen) =>
+                  crossedLevels.add((plane, isRailOpen)),
+              onComponentCrossed: (candidate, component) {
+                crossedComponents.add(component);
+                navigation.commitTemporalCandidate(candidate);
+              },
+            ),
+          ),
+        ),
+      );
+
+      final surface = find.byKey(
+        const ValueKey('summary-pill-swipe-mode-surface'),
+      );
+      final surfaceRect = tester.getRect(surface);
+      final yearSelector = find.byKey(
+        const ValueKey('summary-pill-swipe-year-selector'),
+      );
+      expect(tester.getSize(yearSelector).height, 59);
+      expect(tester.getSize(yearSelector).width, greaterThan(0));
+      expect(
+        navigation.temporalComponentOffsetCandidate(
+          plane: TimePlane.month,
+          isRailOpen: false,
+          component: DashboardTemporalAnchorComponent.year,
+          offset: 1,
+        ),
+        isNotNull,
+      );
+      // Start inside the visible first hierarchy track. A keyed carousel can
+      // also exist in an adjacent cached horizontal page, which is not the
+      // physical target the user touches.
+      final gestureStart = Offset(surfaceRect.left + 20, surfaceRect.center.dy);
+      await tester.dragFrom(gestureStart, const Offset(0, -180));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(
+        crossedComponents,
+        contains(DashboardTemporalAnchorComponent.year),
+      );
+      expect(
+        crossedComponents,
+        isNot(contains(DashboardTemporalAnchorComponent.month)),
+      );
+      expect(crossedLevels, isEmpty);
     },
   );
 

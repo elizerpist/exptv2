@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_mode_control
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
+import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../support/test_pump.dart';
 import '../../../support/dashboard_render_resources.dart';
@@ -224,6 +225,106 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'experimental SummaryPill variants transfer the physical rail footprint to Budget Card2',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      final lowerCard = find.byKey(
+        const ValueKey('dashboard-core-mode-budget-card-2'),
+      );
+      final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
+      final legacyHeight = tester.getRect(lowerCard).height;
+      final legacyHandleTop = tester.getRect(handle).top;
+      expect(legacyHeight, 217);
+      expect(legacyHandleTop, 695);
+
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<IgnorePointer>(
+              find.byKey(const ValueKey('dashboard-header-visual-tuner-input')),
+            )
+            .ignoring,
+        isFalse,
+      );
+      for (final variant in <String>['segmented', 'swipeMode']) {
+        final selector = find.byKey(
+          ValueKey<String>('summary-pill-variant-$variant'),
+        );
+        await tester.tap(selector);
+        await tester.pump();
+        expect(
+          find.byType(TimeRefinementRail),
+          findsNothing,
+          reason: '$variant keeps canonical DAY state without a physical rail.',
+        );
+        expect(tester.getRect(lowerCard).height, 275);
+        expect(tester.getRect(handle).top, 753);
+      }
+    },
+  );
+
+  for (final spec in DashboardModeSpec.values) {
+    testWidgets(
+      'Segmented keeps ${spec.mode.name} content above the Ledger boundary without a physical rail',
+      (tester) async {
+        final controller = DashboardCoreController(initialCoreRevision: 1);
+        addTearDown(controller.dispose);
+        await controller.bootstrap();
+        await pumpDashboardSurface(
+          tester,
+          CoreDashboard(
+            controller: controller,
+            modeController: _modeControllerFor(spec),
+            categoryCollection: emptyTestCategoryCollection,
+          ),
+        );
+
+        final content = find.byKey(
+          ValueKey<String>(switch (spec.mode) {
+            DashboardMode.balance => 'dashboard-core-mode-balance-card-2',
+            DashboardMode.budget => 'dashboard-core-mode-budget-card-2',
+            DashboardMode.mind => 'dashboard-core-mode-mind-body',
+          }),
+        );
+        final legacyHeight = tester.getRect(content).height;
+        await tester.tap(
+          find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(
+          find.byKey(const ValueKey('summary-pill-variant-segmented')),
+        );
+        await tester.pump();
+
+        final handle = tester.getRect(
+          find.byKey(const ValueKey('dashboard-collapse-handle')),
+        );
+        final search = tester.getRect(
+          find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        );
+        expect(find.byType(TimeRefinementRail), findsNothing);
+        expect(tester.getRect(content).height, legacyHeight + 58);
+        expect(search.top, greaterThanOrEqualTo(handle.bottom));
+      },
+    );
+  }
 
   testWidgets('keeps the native dashboard content at its reference origin', (
     tester,

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import 'dashboard_body_order.dart';
 import 'header_cascade_motion.dart';
 
 @immutable
@@ -63,6 +64,9 @@ class DashboardLayoutFrame {
     required this.zone2Scale,
     required this.lowerCardMotion,
     required this.isRailExpanded,
+    required this.hasPhysicalRail,
+    required this.bodyOrder,
+    required this.modeContentBounds,
   });
 
   final DashboardModeSpec mode;
@@ -103,4 +107,11 @@ class DashboardLayoutFrame {
   final double zone2Scale;
   final CascadedCardMotion? lowerCardMotion;
   final bool isRailExpanded;
+  final bool hasPhysicalRail;
+  final DashboardBodyOrder bodyOrder;
+
+  /// One logical envelope for the complete mode-owned content block, including
+  /// its structurally associated indicator. The order resolver moves this as
+  /// one unit while the mode renderers keep their internal composition.
+  final DashboardBounds modeContentBounds;
 }
