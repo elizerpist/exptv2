@@ -16,6 +16,7 @@ import '../summary_pill_variant.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
+import '../dashboard_summary_presentation.dart';
 import 'dashboard_summary_pill.dart';
 
 typedef SummaryPillComponentCandidateProjector =
@@ -42,6 +43,7 @@ final class SummaryPillExperiment extends StatelessWidget {
     this.performanceCounters,
     this.onAmountMotionActiveChanged,
     this.onSelectorMotionActiveChanged,
+    this.presentation = const DashboardSummaryPresentationSettings.defaults(),
   }) : assert(variant == SummaryPillVariant.segmented);
 
   final SummaryPillVariant variant;
@@ -58,6 +60,7 @@ final class SummaryPillExperiment extends StatelessWidget {
   final DashboardPerformanceCounters? performanceCounters;
   final ValueChanged<bool>? onAmountMotionActiveChanged;
   final ValueChanged<bool>? onSelectorMotionActiveChanged;
+  final DashboardSummaryPresentationSettings presentation;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -73,6 +76,59 @@ final class SummaryPillExperiment extends StatelessWidget {
       final depth = DashboardShadowStyleScope.profileOf(
         context,
       ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
+      final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
+          .borderRadiusFor(
+            DashboardCornerSurfaceFamily.summaryPill,
+            size: Size(bounds.width, bounds.height),
+          );
+      final content = LayoutBuilder(
+        builder: (context, constraints) {
+          final inset = bounds.width <= 320
+              ? 6.0
+              : FluviVisualTokens.controlHorizontalInset;
+          // Keep the pre-existing prepared-amount width contract while
+          // turning its remaining area into deterministic fixed tracks.
+          final amountWidth = constraints.maxWidth * .40;
+          final navigationWidth =
+              constraints.maxWidth - amountWidth - inset * 2;
+          return Row(
+            children: <Widget>[
+              SizedBox(width: inset),
+              SizedBox(
+                width: navigationWidth,
+                height: bounds.height,
+                child: _SegmentedNavigationSurface(
+                  level: level,
+                  height: bounds.height,
+                  width: navigationWidth,
+                  navigation: navigation,
+                  presentation: presentation,
+                  onLevelCrossed: onLevelCrossed,
+                  onComponentCrossed: onComponentCrossed,
+                  componentCandidateProjector: componentCandidateProjector,
+                  onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
+                ),
+              ),
+              SizedBox(
+                key: const ValueKey<String>(
+                  'summary-pill-experiment-amount-zone',
+                ),
+                width: amountWidth,
+                height: bounds.height,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: SummaryPillPreparedAmountSlot(
+                    visibleFrames: visibleFrames,
+                    performanceCounters: performanceCounters,
+                    onMotionActiveChanged: onAmountMotionActiveChanged,
+                  ),
+                ),
+              ),
+              SizedBox(width: inset),
+            ],
+          );
+        },
+      );
       return SizedBox(
         key: ValueKey<String>('summary-pill-experiment-${variant.name}'),
         width: bounds.width,
@@ -82,60 +138,13 @@ final class SummaryPillExperiment extends StatelessWidget {
           border: DashboardBorderScope.profileOf(
             context,
           ).borderFor(DashboardBorderSurface.summary),
-          borderRadius: DashboardCornerRoundnessScope.profileOf(context)
-              .borderRadiusFor(
-                DashboardCornerSurfaceFamily.summaryPill,
-                size: Size(bounds.width, bounds.height),
-              ),
+          borderRadius: borderRadius,
           boxShadow: depth.shadows,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final inset = bounds.width <= 320
-                  ? 6.0
-                  : FluviVisualTokens.controlHorizontalInset;
-              // Keep the pre-existing prepared-amount width contract while
-              // turning its remaining area into deterministic fixed tracks.
-              final amountWidth = constraints.maxWidth * .40;
-              final navigationWidth =
-                  constraints.maxWidth - amountWidth - inset * 2;
-              return Row(
-                children: <Widget>[
-                  SizedBox(width: inset),
-                  SizedBox(
-                    width: navigationWidth,
-                    height: bounds.height,
-                    child: _SegmentedNavigationSurface(
-                      level: level,
-                      height: bounds.height,
-                      width: navigationWidth,
-                      navigation: navigation,
-                      onLevelCrossed: onLevelCrossed,
-                      onComponentCrossed: onComponentCrossed,
-                      componentCandidateProjector: componentCandidateProjector,
-                      onSelectorMotionActiveChanged:
-                          onSelectorMotionActiveChanged,
-                    ),
-                  ),
-                  SizedBox(
-                    key: const ValueKey<String>(
-                      'summary-pill-experiment-amount-zone',
-                    ),
-                    width: amountWidth,
-                    height: bounds.height,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: SummaryPillPreparedAmountSlot(
-                        visibleFrames: visibleFrames,
-                        performanceCounters: performanceCounters,
-                        onMotionActiveChanged: onAmountMotionActiveChanged,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: inset),
-                ],
-              );
-            },
-          ),
+          child:
+              presentation.temporalFlingPresentation ==
+                  SummaryTemporalFlingPresentation.dynamicTrio
+              ? ClipRRect(borderRadius: borderRadius, child: content)
+              : content,
         ),
       );
     },
@@ -201,6 +210,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     required this.height,
     required this.width,
     required this.navigation,
+    required this.presentation,
     required this.onLevelCrossed,
     required this.onComponentCrossed,
     this.componentCandidateProjector,
@@ -211,6 +221,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final double height;
   final double width;
   final DashboardNavigationController navigation;
+  final DashboardSummaryPresentationSettings presentation;
   final _LevelCrossed onLevelCrossed;
   final _ComponentCrossed onComponentCrossed;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
@@ -223,6 +234,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     height: height,
     width: width,
     navigation: navigation,
+    presentation: presentation,
     trackCount: 4,
     modeTrack: 0,
     yearTrack: 1,
@@ -232,6 +244,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       key: const ValueKey<String>('summary-pill-segmented-mode-selector'),
       height: height,
       level: level,
+      layout: presentation.modeSelectorLayout,
       onCrossed: onLevelCrossed,
       onMotionActiveChanged: onSelectorMotionActiveChanged,
     ),
@@ -248,6 +261,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     required this.height,
     required this.width,
     required this.navigation,
+    required this.presentation,
     required this.trackCount,
     this.modeTrack,
     required this.yearTrack,
@@ -264,6 +278,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final double height;
   final double width;
   final DashboardNavigationController navigation;
+  final DashboardSummaryPresentationSettings presentation;
   final int trackCount;
   final int? modeTrack;
   final int yearTrack;
@@ -281,7 +296,9 @@ final class _FixedHierarchyTracks extends StatelessWidget {
       children: <Widget>[
         if (modeSelector case final selector?)
           _track(trackWidth, modeTrack!, selector),
-        if (modeTrack != null && level != SummaryPillExperimentLevel.sum)
+        if (presentation.showSeparators &&
+            modeTrack != null &&
+            level != SummaryPillExperimentLevel.sum)
           _separator(trackWidth, modeTrack! + 1),
         if (level != SummaryPillExperimentLevel.sum)
           _track(
@@ -314,11 +331,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 DashboardTemporalAnchorComponent.year,
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
+              presentation: presentation.temporalFlingPresentation,
             ),
           ),
         if ((level == SummaryPillExperimentLevel.month ||
                 level == SummaryPillExperimentLevel.day) &&
-            monthTrack > yearTrack)
+            monthTrack > yearTrack &&
+            presentation.showSeparators)
           _separator(trackWidth, monthTrack),
         if (level == SummaryPillExperimentLevel.month ||
             level == SummaryPillExperimentLevel.day)
@@ -352,6 +371,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 DashboardTemporalAnchorComponent.month,
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
+              presentation: presentation.temporalFlingPresentation,
             ),
           ),
         if (level == SummaryPillExperimentLevel.day)
@@ -385,9 +405,12 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 DashboardTemporalAnchorComponent.day,
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
+              presentation: presentation.temporalFlingPresentation,
             ),
           ),
-        if (level == SummaryPillExperimentLevel.day && dayTrack > monthTrack)
+        if (presentation.showSeparators &&
+            level == SummaryPillExperimentLevel.day &&
+            dayTrack > monthTrack)
           _separator(trackWidth, dayTrack),
       ],
     );
@@ -427,12 +450,14 @@ final class _ModeSelector extends StatefulWidget {
     super.key,
     required this.height,
     required this.level,
+    required this.layout,
     required this.onCrossed,
     this.onMotionActiveChanged,
   });
 
   final double height;
   final SummaryPillExperimentLevel level;
+  final SummaryModeSelectorLayout layout;
   final _LevelCrossed onCrossed;
   final ValueChanged<bool>? onMotionActiveChanged;
 
@@ -489,19 +514,7 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       },
       onMotionIdle: (_) => widget.onMotionActiveChanged?.call(false),
       itemBuilder: (context, item, _) => ExcludeSemantics(
-        child: Container(
-          key: ValueKey<String>(
-            'summary-pill-segmented-mode-badge-${item.name}',
-          ),
-          width: 25,
-          height: 25,
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1EFFF),
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Icon(item.icon, color: const Color(0xFF7564F5), size: 15),
-        ),
+        child: _ModeBadge(item: item, layout: widget.layout),
       ),
     ),
   );
@@ -510,6 +523,52 @@ final class _ModeSelectorState extends State<_ModeSelector> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+}
+
+final class _ModeBadge extends StatelessWidget {
+  const _ModeBadge({required this.item, required this.layout});
+
+  final SummaryPillExperimentLevel item;
+  final SummaryModeSelectorLayout layout;
+
+  @override
+  Widget build(BuildContext context) {
+    final large = layout == SummaryModeSelectorLayout.largeIcon;
+    final badgeSize = large ? DashboardLogBoxTokens.avatarSize : 25.0;
+    final badge = Container(
+      key: ValueKey<String>('summary-pill-segmented-mode-badge-${item.name}'),
+      width: badgeSize,
+      height: badgeSize,
+      padding: EdgeInsets.all(large ? 7 : 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1EFFF),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(
+        item.icon,
+        color: const Color(0xFF7564F5),
+        size: large ? 20 : 15,
+      ),
+    );
+    if (layout != SummaryModeSelectorLayout.iconWithLabel) return badge;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        badge,
+        const SizedBox(height: 2),
+        Text(
+          item.shortLabel,
+          maxLines: 1,
+          style: const TextStyle(
+            fontSize: 8,
+            height: 1,
+            fontWeight: FontWeight.w700,
+            color: FluviVisualTokens.textSecondary,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -522,6 +581,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
     required this.candidateForOffset,
     required this.labelForCandidate,
     required this.onCrossed,
+    required this.presentation,
     this.onMotionActiveChanged,
   });
 
@@ -535,6 +595,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
   candidateForOffset;
   final String Function(DashboardNavigationState candidate) labelForCandidate;
   final ValueChanged<DashboardNavigationState> onCrossed;
+  final SummaryTemporalFlingPresentation presentation;
   final ValueChanged<bool>? onMotionActiveChanged;
 
   @override
@@ -551,52 +612,78 @@ final class _HierarchyValueSelectorState
   @override
   Widget build(BuildContext context) => Semantics(
     label: widget.semanticsLabel,
-    child: CenteredCarousel<int>(
-      dataSource: GeneratedCarouselDataSource<int>((index) => index),
-      controller: _controller,
-      spec: CenteredCarouselSpec(
-        itemExtent: widget.height,
-        scrollDirection: Axis.vertical,
-        visibleItemCount: 1,
-        minScale: 1,
-        neighborScale: 1,
-        outerScale: 1,
-        minOpacity: 1,
-        neighborOpacity: 1,
-        outerOpacity: 1,
-        enableHaptics: true,
-      ),
-      height: widget.height,
-      viewportKey: ValueKey<String>('${widget.key}-viewport'),
-      onMotionStarted: (_) {
-        _motionOrigin = widget.navigation.state;
-        widget.onMotionActiveChanged?.call(true);
-      },
-      onSelectedChanged: (offset) {
-        if (offset == 0) return;
-        final origin = _motionOrigin ?? widget.navigation.state;
-        final candidate = widget.candidateForOffset(origin, offset);
-        if (candidate != null) widget.onCrossed(candidate);
-      },
-      onMotionIdle: (_) {
-        _motionOrigin = null;
-        _controller.jumpToIndexSilently(0);
-        widget.onMotionActiveChanged?.call(false);
-      },
-      itemBuilder: (context, offset, metrics) {
-        final origin = _motionOrigin ?? widget.navigation.state;
-        final candidate = widget.candidateForOffset(origin, offset) ?? origin;
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            widget.labelForCandidate(candidate),
-            maxLines: 1,
-            style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
-              color: FluviVisualTokens.textSecondary,
+    child: Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        CenteredCarousel<int>(
+          dataSource: GeneratedCarouselDataSource<int>((index) => index),
+          controller: _controller,
+          spec: CenteredCarouselSpec(
+            itemExtent: widget.height,
+            scrollDirection: Axis.vertical,
+            visibleItemCount: 1,
+            minScale: 1,
+            neighborScale: 1,
+            outerScale: 1,
+            minOpacity: 1,
+            neighborOpacity: 1,
+            outerOpacity: 1,
+            enableHaptics: true,
+          ),
+          height: widget.height,
+          viewportKey: ValueKey<String>('${widget.key}-viewport'),
+          onMotionStarted: (_) {
+            _motionOrigin = widget.navigation.state;
+            widget.onMotionActiveChanged?.call(true);
+          },
+          onSelectedChanged: (offset) {
+            if (offset == 0) return;
+            final origin = _motionOrigin ?? widget.navigation.state;
+            final candidate = widget.candidateForOffset(origin, offset);
+            if (candidate != null) widget.onCrossed(candidate);
+          },
+          onMotionIdle: (_) {
+            _motionOrigin = null;
+            _controller.jumpToIndexSilently(0);
+            widget.onMotionActiveChanged?.call(false);
+          },
+          itemBuilder: (context, offset, metrics) {
+            final origin = _motionOrigin ?? widget.navigation.state;
+            final candidate =
+                widget.candidateForOffset(origin, offset) ?? origin;
+            if (widget.presentation ==
+                SummaryTemporalFlingPresentation.dynamicTrio) {
+              return const SizedBox.shrink();
+            }
+            return FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.labelForCandidate(candidate),
+                maxLines: 1,
+                style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
+                  color: FluviVisualTokens.textSecondary,
+                ),
+              ),
+            );
+          },
+        ),
+        if (widget.presentation == SummaryTemporalFlingPresentation.dynamicTrio)
+          ExcludeSemantics(
+            child: IgnorePointer(
+              child: ListenableBuilder(
+                listenable: _controller,
+                builder: (context, _) => _DynamicTrioValues(
+                  height: widget.height,
+                  rawIndex: _controller.rawCenteredLogicalIndex,
+                  isMoving: _controller.hasActiveScrollActivity,
+                  origin: _motionOrigin ?? widget.navigation.state,
+                  candidateForOffset: widget.candidateForOffset,
+                  labelForCandidate: widget.labelForCandidate,
+                ),
+              ),
             ),
           ),
-        );
-      },
+      ],
     ),
   );
 
@@ -604,6 +691,74 @@ final class _HierarchyValueSelectorState
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+}
+
+extension on SummaryPillExperimentLevel {
+  String get shortLabel => switch (this) {
+    SummaryPillExperimentLevel.sum => 'ÖSSZ',
+    SummaryPillExperimentLevel.year => 'ÉV',
+    SummaryPillExperimentLevel.month => 'HÓ',
+    SummaryPillExperimentLevel.day => 'NAP',
+  };
+}
+
+final class _DynamicTrioValues extends StatelessWidget {
+  const _DynamicTrioValues({
+    required this.height,
+    required this.rawIndex,
+    required this.isMoving,
+    required this.origin,
+    required this.candidateForOffset,
+    required this.labelForCandidate,
+  });
+
+  final double height;
+  final double rawIndex;
+  final bool isMoving;
+  final DashboardNavigationState origin;
+  final DashboardNavigationState? Function(DashboardNavigationState, int)
+  candidateForOffset;
+  final String Function(DashboardNavigationState) labelForCandidate;
+
+  @override
+  Widget build(BuildContext context) {
+    final offsets = SummaryDynamicTrioGeometry.offsetsFor(
+      rawIndex: rawIndex,
+      isMoving: isMoving,
+    );
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: <Widget>[for (final offset in offsets) _item(offset)],
+    );
+  }
+
+  Widget _item(int offset) {
+    final candidate = candidateForOffset(origin, offset) ?? origin;
+    final geometry = SummaryDynamicTrioGeometry.itemFor(
+      height: height,
+      offset: offset,
+      rawIndex: rawIndex,
+    );
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: geometry.centerY - 10,
+      height: 20,
+      child: Transform.scale(
+        scale: geometry.scale,
+        child: Center(
+          child: Text(
+            key: ValueKey<String>('summary-pill-dynamic-trio-$offset'),
+            labelForCandidate(candidate),
+            maxLines: 1,
+            style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
+              color: FluviVisualTokens.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

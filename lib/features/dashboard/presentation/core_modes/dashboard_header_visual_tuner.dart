@@ -9,12 +9,14 @@ import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../../core/design/dashboard_shadow_profile.dart';
 import '../budget_content_card_style.dart';
+import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_border_style.dart';
 import '../dashboard_logbox_height.dart';
 import '../dashboard_logbox_amount_palette.dart';
 import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
+import '../dashboard_summary_presentation.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
@@ -348,6 +350,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.summaryPillVariants,
     this.bodyOrder,
     this.budgetContentCardStyle,
+    this.budgetSectionOrder,
+    this.summaryPresentation,
     this.cornerRoundness,
     this.shadowStyle,
     this.border,
@@ -359,6 +363,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final SummaryPillVariantController? summaryPillVariants;
   final DashboardBodyOrderController? bodyOrder;
   final BudgetContentCardStyleController? budgetContentCardStyle;
+  final BudgetSectionOrderController? budgetSectionOrder;
+  final DashboardSummaryPresentationController? summaryPresentation;
   final DashboardCornerRoundnessController? cornerRoundness;
   final DashboardShadowStyleController? shadowStyle;
   final DashboardBorderController? border;
@@ -425,12 +431,20 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 _SummaryPillExperimentSection(controller: variants),
                 const SizedBox(height: 14),
               ],
+              if (summaryPresentation case final summary?) ...<Widget>[
+                _DashboardSummaryPresentationSection(controller: summary),
+                const SizedBox(height: 14),
+              ],
               if (bodyOrder case final order?) ...<Widget>[
                 _DashboardBodyOrderSection(controller: order),
                 const SizedBox(height: 14),
               ],
               if (budgetContentCardStyle case final cardStyle?) ...<Widget>[
                 _BudgetContentCardStyleSection(controller: cardStyle),
+                const SizedBox(height: 14),
+              ],
+              if (budgetSectionOrder case final order?) ...<Widget>[
+                _BudgetSectionOrderSection(controller: order),
                 const SizedBox(height: 14),
               ],
               if (shadowStyle case final shadows?) ...<Widget>[
@@ -893,6 +907,118 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
       );
     },
   );
+}
+
+final class _DashboardSummaryPresentationSection extends StatelessWidget {
+  const _DashboardSummaryPresentationSection({required this.controller});
+
+  final DashboardSummaryPresentationController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardSummaryPresentationSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'Summary megjelenés',
+          children: <Widget>[
+            SwitchListTile(
+              key: const ValueKey('dashboard-summary-separators'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Elválasztók'),
+              value: settings.showSeparators,
+              onChanged: controller.setSeparatorsVisible,
+            ),
+            _SummaryRadioGroup<SummaryModeSelectorLayout>(
+              label: 'Módválasztó',
+              value: settings.modeSelectorLayout,
+              values: SummaryModeSelectorLayout.values,
+              itemLabel: (value) => value.label,
+              onChanged: controller.selectModeSelectorLayout,
+              keyPrefix: 'dashboard-summary-mode-layout',
+            ),
+            _SummaryRadioGroup<SummaryTemporalFlingPresentation>(
+              label: 'Idő-fling látvány',
+              value: settings.temporalFlingPresentation,
+              values: SummaryTemporalFlingPresentation.values,
+              itemLabel: (value) => value.label,
+              onChanged: controller.selectTemporalFlingPresentation,
+              keyPrefix: 'dashboard-summary-fling-presentation',
+            ),
+          ],
+        ),
+      );
+}
+
+final class _SummaryRadioGroup<T> extends StatelessWidget {
+  const _SummaryRadioGroup({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.itemLabel,
+    required this.onChanged,
+    required this.keyPrefix,
+  });
+
+  final String label;
+  final T value;
+  final List<T> values;
+  final String Function(T) itemLabel;
+  final ValueChanged<T> onChanged;
+  final String keyPrefix;
+
+  @override
+  Widget build(BuildContext context) => RadioGroup<T>(
+    groupValue: value,
+    onChanged: (next) {
+      if (next != null) onChanged(next);
+    },
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label),
+        for (final item in values)
+          RadioListTile<T>(
+            key: ValueKey('$keyPrefix-$item'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(itemLabel(item)),
+            value: item,
+          ),
+      ],
+    ),
+  );
+}
+
+final class _BudgetSectionOrderSection extends StatelessWidget {
+  const _BudgetSectionOrderSection({required this.controller});
+
+  final BudgetSectionOrderController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<BudgetSectionOrder>(
+        valueListenable: controller,
+        builder: (context, selected, _) => RadioGroup<BudgetSectionOrder>(
+          groupValue: selected,
+          onChanged: (order) {
+            if (order != null) controller.select(order);
+          },
+          child: _TunerSection(
+            title: 'Budget szekciósorrend',
+            children: <Widget>[
+              for (final order in BudgetSectionOrder.values)
+                RadioListTile<BudgetSectionOrder>(
+                  key: ValueKey('dashboard-budget-section-order-${order.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(order.label),
+                  value: order,
+                ),
+            ],
+          ),
+        ),
+      );
 }
 
 /// The Header menu owns only the runtime selection chrome. The selected

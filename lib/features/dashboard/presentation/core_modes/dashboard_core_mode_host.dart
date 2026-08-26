@@ -19,6 +19,7 @@ import 'dashboard_header_visual_engine.dart';
 import 'dashboard_header_visual_tuner.dart';
 import 'mind_dashboard_core_surface.dart';
 import '../budget_content_card_style.dart';
+import '../budget_section_order.dart';
 
 typedef DashboardCoreModePresentationLookup =
     DashboardCoreModePresentation Function(DashboardModeSpec mode);
@@ -40,6 +41,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetAvatarRailController,
     this.budgetDistributionPageController,
     this.budgetContentCardStyle,
+    this.budgetSectionOrder,
     this.budgetRhythm,
     this.budgetDrilldown,
     this.onBudgetAvatarMotionActiveChanged,
@@ -61,6 +63,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final BudgetTargetAvatarRailController? budgetAvatarRailController;
   final BudgetDistributionPageController? budgetDistributionPageController;
   final ValueListenable<BudgetContentLayout>? budgetContentCardStyle;
+  final ValueListenable<BudgetSectionOrder>? budgetSectionOrder;
   final ValueListenable<DashboardBudgetRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
   final ValueChanged<bool>? onBudgetAvatarMotionActiveChanged;
@@ -231,6 +234,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         avatarRailController: widget.budgetAvatarRailController,
         distributionPageController: widget.budgetDistributionPageController,
         contentCardStyle: widget.budgetContentCardStyle,
+        sectionOrder: widget.budgetSectionOrder,
         rhythm: widget.budgetRhythm,
         drilldown: widget.budgetDrilldown,
         onAvatarMotionActiveChanged: widget.onBudgetAvatarMotionActiveChanged,

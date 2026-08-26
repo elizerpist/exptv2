@@ -37,12 +37,14 @@ import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
 import 'budget_content_card_style.dart';
+import 'budget_section_order.dart';
 import 'dashboard_corner_roundness.dart';
 import 'dashboard_border_style.dart';
 import 'dashboard_logbox_height.dart';
 import 'dashboard_logbox_amount_palette.dart';
 import 'dashboard_shadow_style.dart';
 import 'summary_pill_variant.dart';
+import 'dashboard_summary_presentation.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
@@ -92,6 +94,9 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final SummaryPillVariantController _summaryPillVariantController;
   late final DashboardBodyOrderController _bodyOrderController;
   late final BudgetContentCardStyleController _budgetContentCardStyle;
+  late final BudgetSectionOrderController _budgetSectionOrderController;
+  late final DashboardSummaryPresentationController
+  _summaryPresentationController;
   late final DashboardCornerRoundnessController _cornerRoundnessController;
   late final DashboardShadowStyleController _shadowStyleController;
   late final DashboardBorderController _borderController;
@@ -125,6 +130,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryPillVariantController = SummaryPillVariantController();
     _bodyOrderController = DashboardBodyOrderController();
     _budgetContentCardStyle = BudgetContentCardStyleController();
+    _budgetSectionOrderController = BudgetSectionOrderController();
+    _summaryPresentationController = DashboardSummaryPresentationController();
     _cornerRoundnessController = DashboardCornerRoundnessController();
     _shadowStyleController = DashboardShadowStyleController();
     _borderController = DashboardBorderController();
@@ -133,6 +140,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _logBoxHeightController.addListener(_onLogBoxHeightChanged);
     _summaryPillVariantController.addListener(_onLayoutPresentationChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
+    _budgetSectionOrderController.addListener(_onLayoutPresentationChanged);
     final financialLimitRepository = widget.financialLimitRepository;
     if (financialLimitRepository != null) {
       _budgetLimitEdit = DashboardBudgetLimitEditController(
@@ -219,6 +227,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                 .defaultMaxContiguousUiSliceMicros,
             yieldToBackground: _yieldScenePreparationToScheduler,
           ),
+      stageFromActiveResources: (window, {required retainViewportId}) =>
+          _preparedSceneCache.stageWindowFromActiveResources(window),
+      discardStagedActiveResources:
+          _preparedSceneCache.discardStagedActiveResourceWindow,
       prepareCandidate:
           (window, {required candidateKey, required retainViewportId}) =>
               _preparedSceneCache.prepareCandidateWindow(
@@ -307,7 +319,6 @@ class _CoreDashboardState extends State<CoreDashboard>
   }
 
   void _onBudgetDistributionVisibleFrame() {
-    if (controller.foregroundInputMotion.value) return;
     final frame = controller.visibleFrames.value;
     final snapshot =
         controller.activePreparedRevisionBundle?.budgetLimitSnapshot;
@@ -327,6 +338,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     )) {
       return;
     }
+    // A cache miss remains cooperative maintenance, but an already-prepared
+    // chart must bind in the same interaction tick as the matching visible
+    // LogBox frame. Do not let a physical fling suppress that O(1) hit.
+    if (controller.foregroundInputMotion.value) return;
     unawaited(
       _budgetDistributionDrawables.publishWhenPreparedForTimeScope(
         scope,
@@ -365,9 +380,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryMotionController.dispose();
     _summaryPillVariantController.removeListener(_onLayoutPresentationChanged);
     _bodyOrderController.removeListener(_onLayoutPresentationChanged);
+    _budgetSectionOrderController.removeListener(_onLayoutPresentationChanged);
     _summaryPillVariantController.dispose();
     _bodyOrderController.dispose();
     _budgetContentCardStyle.dispose();
+    _budgetSectionOrderController.dispose();
+    _summaryPresentationController.dispose();
     _cornerRoundnessController.dispose();
     _shadowStyleController.dispose();
     _borderController.dispose();
@@ -411,6 +429,12 @@ class _CoreDashboardState extends State<CoreDashboard>
       bodyOrder: _bodyOrderController.value,
       hasPhysicalRail:
           _summaryPillVariantController.value == SummaryPillVariant.legacy,
+      modeContentExtraHeight:
+          modeController.committedMode == DashboardModeSpec.budget &&
+              _budgetSectionOrderController.value ==
+                  BudgetSectionOrder.chartThenAvatars
+          ? BudgetSectionOrder.chartThenAvatarsExtraModeContentHeight
+          : 0,
       builder: (context, frame) {
         final geometry = frame.geometry;
         Widget profileRenderProbe({
@@ -477,6 +501,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                 budgetDistributionPageController:
                                     _budgetDistributionPageController,
                                 budgetContentCardStyle: _budgetContentCardStyle,
+                                budgetSectionOrder:
+                                    _budgetSectionOrderController,
                                 budgetRhythm: _budgetRhythm,
                                 budgetDrilldown: _budgetDrilldown,
                                 onBudgetAvatarMotionActiveChanged: (active) {
@@ -531,6 +557,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                   controller: controller,
                                   summaryPillVariants:
                                       _summaryPillVariantController,
+                                  summaryPresentation:
+                                      _summaryPresentationController,
                                   motionController: _summaryMotionController,
                                   onMotionActiveChanged: (active) =>
                                       controller.setMotionLaneActive(
@@ -751,6 +779,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                                     _summaryPillVariantController,
                                 bodyOrder: _bodyOrderController,
                                 budgetContentCardStyle: _budgetContentCardStyle,
+                                budgetSectionOrder:
+                                    _budgetSectionOrderController,
+                                summaryPresentation:
+                                    _summaryPresentationController,
                                 cornerRoundness: _cornerRoundnessController,
                                 shadowStyle: _shadowStyleController,
                                 border: _borderController,
@@ -783,6 +815,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.bounds,
     required this.controller,
     required this.summaryPillVariants,
+    required this.summaryPresentation,
     required this.motionController,
     required this.onMotionActiveChanged,
     required this.onAmountMotionActiveChanged,
@@ -791,6 +824,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
   final DashboardBounds bounds;
   final DashboardCoreController controller;
   final SummaryPillVariantController summaryPillVariants;
+  final DashboardSummaryPresentationController summaryPresentation;
   final SummaryNavigationMotionController motionController;
   final ValueChanged<bool> onMotionActiveChanged;
   final ValueChanged<bool> onAmountMotionActiveChanged;
@@ -799,48 +833,54 @@ class _DashboardSummaryRegion extends StatelessWidget {
   Widget build(BuildContext context) =>
       ValueListenableBuilder<SummaryPillVariant>(
         valueListenable: summaryPillVariants,
-        builder: (context, variant, _) => switch (variant) {
-          SummaryPillVariant.legacy => _legacyPill(),
-          SummaryPillVariant.segmented => SummaryPillExperiment(
-            variant: variant,
-            bounds: bounds,
-            navigation: controller.navigation,
-            visibleFrames: controller.visibleFrames,
-            performanceCounters: controller.performanceCounters,
-            onAmountMotionActiveChanged: onAmountMotionActiveChanged,
-            onSelectorMotionActiveChanged: (active) {
-              if (active) {
-                controller.beginSegmentedSummaryMotion();
-              } else {
-                controller.endSegmentedSummaryMotion();
-              }
-            },
-            componentCandidateProjector:
-                ({
-                  required base,
-                  required plane,
-                  required isRailOpen,
-                  required component,
-                  required offset,
-                }) => controller.experimentalTemporalComponentOffsetCandidate(
-                  plane: plane,
-                  isRailOpen: isRailOpen,
-                  component: component,
-                  offset: offset,
-                  base: base,
+        builder: (context, variant, _) =>
+            ValueListenableBuilder<DashboardSummaryPresentationSettings>(
+              valueListenable: summaryPresentation,
+              builder: (context, presentation, _) => switch (variant) {
+                SummaryPillVariant.legacy => _legacyPill(),
+                SummaryPillVariant.segmented => SummaryPillExperiment(
+                  variant: variant,
+                  bounds: bounds,
+                  navigation: controller.navigation,
+                  visibleFrames: controller.visibleFrames,
+                  performanceCounters: controller.performanceCounters,
+                  onAmountMotionActiveChanged: onAmountMotionActiveChanged,
+                  presentation: presentation,
+                  onSelectorMotionActiveChanged: (active) {
+                    if (active) {
+                      controller.beginSegmentedSummaryMotion();
+                    } else {
+                      controller.endSegmentedSummaryMotion();
+                    }
+                  },
+                  componentCandidateProjector:
+                      ({
+                        required base,
+                        required plane,
+                        required isRailOpen,
+                        required component,
+                        required offset,
+                      }) => controller
+                          .experimentalTemporalComponentOffsetCandidate(
+                            plane: plane,
+                            isRailOpen: isRailOpen,
+                            component: component,
+                            offset: offset,
+                            base: base,
+                          ),
+                  onLevelCrossed: (plane, isRailOpen) =>
+                      controller.navigateExperimentalTemporalSelection(
+                        plane: plane,
+                        isRailOpen: isRailOpen,
+                      ),
+                  onComponentCrossed: (candidate, component) =>
+                      controller.navigateExperimentalTemporalComponentCandidate(
+                        candidate: candidate,
+                        component: component,
+                      ),
                 ),
-            onLevelCrossed: (plane, isRailOpen) =>
-                controller.navigateExperimentalTemporalSelection(
-                  plane: plane,
-                  isRailOpen: isRailOpen,
-                ),
-            onComponentCrossed: (candidate, component) =>
-                controller.navigateExperimentalTemporalComponentCandidate(
-                  candidate: candidate,
-                  component: component,
-                ),
-          ),
-        },
+              },
+            ),
       );
 
   Widget _legacyPill() {
@@ -921,6 +961,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     required this.summaryPillVariants,
     required this.bodyOrder,
     required this.budgetContentCardStyle,
+    required this.budgetSectionOrder,
+    required this.summaryPresentation,
     required this.cornerRoundness,
     required this.shadowStyle,
     required this.border,
@@ -933,6 +975,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   final SummaryPillVariantController summaryPillVariants;
   final DashboardBodyOrderController bodyOrder;
   final BudgetContentCardStyleController budgetContentCardStyle;
+  final BudgetSectionOrderController budgetSectionOrder;
+  final DashboardSummaryPresentationController summaryPresentation;
   final DashboardCornerRoundnessController cornerRoundness;
   final DashboardShadowStyleController shadowStyle;
   final DashboardBorderController border;
@@ -996,6 +1040,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                           summaryPillVariants: summaryPillVariants,
                           bodyOrder: bodyOrder,
                           budgetContentCardStyle: budgetContentCardStyle,
+                          budgetSectionOrder: budgetSectionOrder,
+                          summaryPresentation: summaryPresentation,
                           cornerRoundness: cornerRoundness,
                           shadowStyle: shadowStyle,
                           border: border,

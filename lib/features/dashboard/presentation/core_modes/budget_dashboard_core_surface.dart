@@ -7,6 +7,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
@@ -15,6 +16,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../budget_content_card_style.dart';
+import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
@@ -38,6 +40,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.avatarRailController,
     this.distributionPageController,
     this.contentCardStyle,
+    this.sectionOrder,
     this.rhythm,
     this.drilldown,
     this.onAvatarMotionActiveChanged,
@@ -53,6 +56,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final BudgetTargetAvatarRailController? avatarRailController;
   final BudgetDistributionPageController? distributionPageController;
   final ValueListenable<BudgetContentLayout>? contentCardStyle;
+  final ValueListenable<BudgetSectionOrder>? sectionOrder;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final ValueChanged<bool>? onAvatarMotionActiveChanged;
@@ -62,215 +66,238 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final geometry = presentation.geometry;
-    return KeyedSubtree(
-      key: const ValueKey('dashboard-core-mode-budget'),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Preserve the original StackFill sizing contract. The optional
-          // unified shell is a positioned dashboard surface when enabled and
-          // a zero-size leaf when Split is selected; it must not become the
-          // only non-positioned child and collapse the Budget stack.
-          const SizedBox.expand(),
-          _BudgetUnifiedContentCard(
-            geometry: geometry,
-            contentLayout: contentCardStyle,
-          ),
-          DashboardCoreModeCascadeCard(
-            bounds: geometry.zone2Bounds,
-            motion: geometry.lowerCardMotion!,
-            semanticKey: const ValueKey('dashboard-core-mode-budget-card-2'),
-            showPlaceholderSurface: false,
-            content:
-                presentationController == null ||
-                    distributionDrawables == null ||
-                    avatarRailController == null ||
-                    distributionPageController == null
-                ? const SizedBox.shrink()
-                : BudgetDistributionPager(
-                    controller: distributionPageController!,
-                    presentation: presentationController!,
-                    drawableFrames: distributionDrawables!,
-                    avatarRailController: avatarRailController!,
-                    expandCategoryDonutToFit: !geometry.hasPhysicalRail,
-                    contentCardStyle: contentCardStyle,
-                    rhythm: rhythm,
-                    drilldown: drilldown,
+    return ValueListenableBuilder<BudgetSectionOrder>(
+      valueListenable: sectionOrder ?? _alwaysAvatarsThenChart,
+      builder: (context, order, _) {
+        final section = _BudgetSectionLayout.resolve(geometry, order);
+        return KeyedSubtree(
+          key: const ValueKey('dashboard-core-mode-budget'),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Preserve the original StackFill sizing contract. The optional
+              // unified shell is a positioned dashboard surface when enabled and
+              // a zero-size leaf when Split is selected; it must not become the
+              // only non-positioned child and collapse the Budget stack.
+              const SizedBox.expand(),
+              _BudgetUnifiedContentCard(
+                geometry: geometry,
+                contentLayout: contentCardStyle,
+              ),
+              DashboardCoreModeCascadeCard(
+                bounds: section.chartBounds,
+                motion: section.motionFor(
+                  geometry.lowerCardMotion!,
+                  from: geometry.zone2Bounds,
+                  to: section.chartBounds,
+                ),
+                semanticKey: const ValueKey(
+                  'dashboard-core-mode-budget-card-2',
+                ),
+                showPlaceholderSurface: false,
+                content:
+                    presentationController == null ||
+                        distributionDrawables == null ||
+                        avatarRailController == null ||
+                        distributionPageController == null
+                    ? const SizedBox.shrink()
+                    : BudgetDistributionPager(
+                        controller: distributionPageController!,
+                        presentation: presentationController!,
+                        drawableFrames: distributionDrawables!,
+                        avatarRailController: avatarRailController!,
+                        expandCategoryDonutToFit: !geometry.hasPhysicalRail,
+                        contentCardStyle: contentCardStyle,
+                        rhythm: rhythm,
+                        drilldown: drilldown,
+                      ),
+              ),
+              ValueListenableBuilder<BudgetContentLayout>(
+                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+                builder: (context, layout, _) => DashboardCoreModeCascadeCard(
+                  bounds: section.avatarBounds,
+                  motion: section.motionFor(
+                    geometry.upperCardMotion!,
+                    from: geometry.subheaderOneBounds,
+                    to: section.avatarBounds,
                   ),
-          ),
-          ValueListenableBuilder<BudgetContentLayout>(
-            valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
-            builder: (context, layout, _) => DashboardCoreModeCascadeCard(
-              bounds: geometry.subheaderOneBounds,
-              motion: geometry.upperCardMotion!,
-              semanticKey: const ValueKey('dashboard-core-mode-budget-card-1'),
-              showPlaceholderSurface: false,
-              contentVerticalInputOverflow:
-                  BudgetTargetAvatarRail.selectedInputVerticalOverflow,
-              // The shared card starts at the authored mode-content top.
-              // Moving this full input parent down exactly one existing
-              // overflow clears the selected 112px chrome without changing
-              // Split's baseline rail position, hit bounds or carousel state.
-              contentVerticalOffset: layout == BudgetContentLayout.unifiedCard
-                  ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
-                  : 0,
-              content: presentationController == null
-                  ? const SizedBox(
-                      key: ValueKey<String>('budget-target-avatar-rail'),
-                    )
-                  : BudgetTargetAvatarRail(
-                      presentation: presentationController!,
-                      limitEditController: limitEditController,
-                      navigationController: avatarRailController,
-                      onTargetPreview: drilldown == null
-                          ? null
-                          : (state) => unawaited(
-                              drilldown!.previewBudgetTarget(state: state),
-                            ),
-                      onTargetSettled: drilldown == null
-                          ? null
-                          : (state) => unawaited(
-                              drilldown!.commitBudgetTarget(
-                                state: state,
-                                source: 'avatarSettled',
-                              ),
-                            ),
-                      onMotionActiveChanged: onAvatarMotionActiveChanged,
-                    ),
-            ),
-          ),
-          DashboardCoreModeOpacityPosition(
-            bounds: geometry.zone2IndicatorBounds,
-            opacity: geometry.zone2Opacity,
-            offset: Offset(0, geometry.zone2Shift),
-            child: distributionPageController == null
-                ? DashboardPlaceholderDots(
-                    bounds: geometry.zone2IndicatorBounds,
-                    semanticKey: const ValueKey(
-                      'dashboard-core-mode-budget-dots',
-                    ),
-                  )
-                : SizedBox(
-                    key: const ValueKey('dashboard-core-mode-budget-dots'),
-                    width: geometry.zone2IndicatorBounds.width,
-                    height: geometry.zone2IndicatorBounds.height,
-                    child: BudgetDistributionPageDots(
-                      controller: distributionPageController!,
-                    ),
+                  semanticKey: const ValueKey(
+                    'dashboard-core-mode-budget-card-1',
                   ),
-          ),
-          DashboardCoreModeHeaderScaffold(
-            bounds: geometry.headerBounds,
-            surfaceColor: presentation.palette.upcomingHeaderTone,
-            headerKey: const ValueKey('dashboard-core-mode-budget-header'),
-            labelKey: const ValueKey('dashboard-core-mode-label-budget'),
-            label: 'budget',
-            visualController: headerVisualController,
-            visualFrameListenable: headerVisualFrame,
-            detailTop: 4,
-            detailRight: headerVisualController == null ? 16 : 60,
-            detailBottom: 4,
-            detail: presentationController == null
-                ? null
-                : ValueListenableBuilder<DashboardBudgetPresentationState>(
-                    valueListenable: presentationController!,
-                    builder: (context, state, child) {
-                      final header = state.header;
-                      final amount = header.isAvailable
-                          ? '${DashboardPreparedFormatter.amountMinor(header.actualScaled100!)} / '
-                                '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
-                          : '— / —';
-                      final partition = state.partition;
-                      final expansion = geometry.headerExpansionProgress;
-                      return LayoutBuilder(
-                        builder: (context, constraints) {
-                          // The lower lane consumes only the room made by the
-                          // existing header expansion. This preserves the
-                          // title/value anchor at every intermediate height
-                          // without a feature-local layout threshold or
-                          // animation owner.
-                          const titleAndValueHeight = 34.0;
-                          const partitionHeight = 20.0;
-                          final roomReveal =
-                              ((constraints.maxHeight - titleAndValueHeight) /
-                                      partitionHeight)
-                                  .clamp(0.0, 1.0)
-                                  .toDouble();
-                          final partitionReveal = expansion < roomReveal
-                              ? expansion
-                              : roomReveal;
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Row(
+                  showPlaceholderSurface: false,
+                  contentVerticalInputOverflow:
+                      BudgetTargetAvatarRail.selectedInputVerticalOverflow,
+                  // The shared card starts at the authored mode-content top.
+                  // Moving this full input parent down exactly one existing
+                  // overflow clears the selected 112px chrome without changing
+                  // Split's baseline rail position, hit bounds or carousel state.
+                  contentVerticalOffset:
+                      layout == BudgetContentLayout.unifiedCard ||
+                          order == BudgetSectionOrder.chartThenAvatars
+                      ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
+                      : 0,
+                  content: presentationController == null
+                      ? const SizedBox(
+                          key: ValueKey<String>('budget-target-avatar-rail'),
+                        )
+                      : BudgetTargetAvatarRail(
+                          presentation: presentationController!,
+                          limitEditController: limitEditController,
+                          navigationController: avatarRailController,
+                          onTargetPreview: drilldown == null
+                              ? null
+                              : (state) => unawaited(
+                                  drilldown!.previewBudgetTarget(state: state),
+                                ),
+                          onTargetSettled: drilldown == null
+                              ? null
+                              : (state) => unawaited(
+                                  drilldown!.commitBudgetTarget(
+                                    state: state,
+                                    source: 'avatarSettled',
+                                  ),
+                                ),
+                          onMotionActiveChanged: onAvatarMotionActiveChanged,
+                        ),
+                ),
+              ),
+              DashboardCoreModeOpacityPosition(
+                bounds: section.indicatorBounds,
+                opacity: geometry.zone2Opacity,
+                offset: Offset(0, geometry.zone2Shift),
+                child: distributionPageController == null
+                    ? DashboardPlaceholderDots(
+                        bounds: section.indicatorBounds,
+                        semanticKey: const ValueKey(
+                          'dashboard-core-mode-budget-dots',
+                        ),
+                      )
+                    : SizedBox(
+                        key: const ValueKey('dashboard-core-mode-budget-dots'),
+                        width: section.indicatorBounds.width,
+                        height: section.indicatorBounds.height,
+                        child: BudgetDistributionPageDots(
+                          controller: distributionPageController!,
+                        ),
+                      ),
+              ),
+              DashboardCoreModeHeaderScaffold(
+                bounds: geometry.headerBounds,
+                surfaceColor: presentation.palette.upcomingHeaderTone,
+                headerKey: const ValueKey('dashboard-core-mode-budget-header'),
+                labelKey: const ValueKey('dashboard-core-mode-label-budget'),
+                label: 'budget',
+                visualController: headerVisualController,
+                visualFrameListenable: headerVisualFrame,
+                detailTop: 4,
+                detailRight: headerVisualController == null ? 16 : 60,
+                detailBottom: 4,
+                detail: presentationController == null
+                    ? null
+                    : ValueListenableBuilder<DashboardBudgetPresentationState>(
+                        valueListenable: presentationController!,
+                        builder: (context, state, child) {
+                          final header = state.header;
+                          final amount = header.isAvailable
+                              ? '${DashboardPreparedFormatter.amountMinor(header.actualScaled100!)} / '
+                                    '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
+                              : '— / —';
+                          final partition = state.partition;
+                          final expansion = geometry.headerExpansionProgress;
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              // The lower lane consumes only the room made by the
+                              // existing header expansion. This preserves the
+                              // title/value anchor at every intermediate height
+                              // without a feature-local layout threshold or
+                              // animation owner.
+                              const titleAndValueHeight = 34.0;
+                              const partitionHeight = 20.0;
+                              final roomReveal =
+                                  ((constraints.maxHeight -
+                                              titleAndValueHeight) /
+                                          partitionHeight)
+                                      .clamp(0.0, 1.0)
+                                      .toDouble();
+                              final partitionReveal = expansion < roomReveal
+                                  ? expansion
+                                  : roomReveal;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Expanded(
-                                    child: Text(
-                                      header.title,
-                                      key: const ValueKey(
-                                        'budget-header-target-title',
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: Text(
+                                          header.title,
+                                          key: const ValueKey(
+                                            'budget-header-target-title',
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color:
+                                                FluviVisualTokens.textPrimary,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: FluviVisualTokens.textPrimary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        header.analysisScopeLabel,
+                                        key: const ValueKey(
+                                          'budget-header-analysis-scope',
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color:
+                                              FluviVisualTokens.textSecondary,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
+                                    ],
+                                  ),
+                                  Text(
+                                    amount,
+                                    key: const ValueKey(
+                                      'budget-header-actual-limit',
+                                    ),
+                                    style: const TextStyle(
+                                      color: FluviVisualTokens.textPrimary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    header.analysisScopeLabel,
-                                    key: const ValueKey(
-                                      'budget-header-analysis-scope',
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: FluviVisualTokens.textSecondary,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
+                                  const Spacer(),
+                                  ClipRect(
+                                    child: Align(
+                                      alignment: Alignment.bottomCenter,
+                                      heightFactor: partitionReveal,
+                                      child: Opacity(
+                                        key: const ValueKey(
+                                          'budget-header-partition-reveal',
+                                        ),
+                                        opacity: partitionReveal,
+                                        child: _BudgetHeaderAllocationDetail(
+                                          partition: partition,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
-                              ),
-                              Text(
-                                amount,
-                                key: const ValueKey(
-                                  'budget-header-actual-limit',
-                                ),
-                                style: const TextStyle(
-                                  color: FluviVisualTokens.textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const Spacer(),
-                              ClipRect(
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  heightFactor: partitionReveal,
-                                  child: Opacity(
-                                    key: const ValueKey(
-                                      'budget-header-partition-reveal',
-                                    ),
-                                    opacity: partitionReveal,
-                                    child: _BudgetHeaderAllocationDetail(
-                                      partition: partition,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -329,6 +356,78 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
 
 final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =
     ValueNotifier<BudgetContentLayout>(BudgetContentLayout.split);
+final ValueListenable<BudgetSectionOrder> _alwaysAvatarsThenChart =
+    ValueNotifier<BudgetSectionOrder>(BudgetSectionOrder.avatarsThenChart);
+
+@immutable
+final class _BudgetSectionLayout {
+  const _BudgetSectionLayout({
+    required this.avatarBounds,
+    required this.chartBounds,
+    required this.indicatorBounds,
+  });
+
+  final DashboardBounds avatarBounds;
+  final DashboardBounds chartBounds;
+  final DashboardBounds indicatorBounds;
+
+  static _BudgetSectionLayout resolve(
+    DashboardLayoutFrame geometry,
+    BudgetSectionOrder order,
+  ) {
+    if (order == BudgetSectionOrder.avatarsThenChart) {
+      return _BudgetSectionLayout(
+        avatarBounds: geometry.subheaderOneBounds,
+        chartBounds: geometry.zone2Bounds,
+        indicatorBounds: geometry.zone2IndicatorBounds,
+      );
+    }
+    final gap = geometry.zone2Bounds.top - geometry.subheaderOneBounds.bottom;
+    final chart = DashboardBounds(
+      left: geometry.zone2Bounds.left,
+      top: geometry.subheaderOneBounds.top,
+      width: geometry.zone2Bounds.width,
+      height: geometry.zone2Bounds.height,
+    );
+    final avatars = DashboardBounds(
+      left: geometry.subheaderOneBounds.left,
+      top: chart.bottom + gap,
+      width: geometry.subheaderOneBounds.width,
+      height: geometry.subheaderOneBounds.height,
+    );
+    final indicatorGap =
+        geometry.zone2IndicatorBounds.top - geometry.zone2Bounds.bottom;
+    final selectedShellFootprint =
+        BudgetTargetAvatarRail.selectedInputVerticalOverflow;
+    return _BudgetSectionLayout(
+      avatarBounds: avatars,
+      chartBounds: chart,
+      indicatorBounds: DashboardBounds(
+        left: geometry.zone2IndicatorBounds.left,
+        // The selected input shell is deliberately 40px taller than this
+        // structural rail. Chart-first puts it below the chart, so dots must
+        // follow the whole physical shell rather than slice through its lower
+        // ring/shadow. The central geometry reserves the same 40px tail.
+        top: avatars.bottom + selectedShellFootprint * 2 + indicatorGap,
+        width: geometry.zone2IndicatorBounds.width,
+        height: geometry.zone2IndicatorBounds.height,
+      ),
+    );
+  }
+
+  CascadedCardMotion motionFor(
+    CascadedCardMotion motion, {
+    required DashboardBounds from,
+    required DashboardBounds to,
+  }) => CascadedCardMotion(
+    top: motion.top + to.top - from.top,
+    left: motion.left,
+    right: motion.right,
+    opacity: motion.opacity,
+    scale: motion.scale,
+    progress: motion.progress,
+  );
+}
 
 final class _BudgetHeaderAllocationDetail extends StatelessWidget {
   const _BudgetHeaderAllocationDetail({required this.partition});

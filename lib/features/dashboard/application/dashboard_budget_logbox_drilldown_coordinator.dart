@@ -18,11 +18,16 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
   /// and rejects stale completion before the atomic Ledger scene can rotate.
   Future<bool> previewBudgetTarget({
     required DashboardBudgetPresentationState state,
-  }) => commitBudgetTarget(state: state, source: 'avatarPreview');
+  }) => commitBudgetTarget(
+    state: state,
+    source: 'avatarPreview',
+    publishDuringMotion: true,
+  );
 
   Future<bool> commitBudgetTarget({
     required DashboardBudgetPresentationState state,
     required String source,
+    bool publishDuringMotion = false,
   }) {
     final target = state.liveSelection.target;
     _record(
@@ -31,7 +36,9 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       categoryId: target.category?.id,
     );
     if (target.isAggregate) {
-      return core.clearAllEphemeralFocus(deferSceneInstallation: true);
+      return core.clearAllEphemeralFocus(
+        deferSceneInstallation: !publishDuringMotion,
+      );
     }
     final category = target.category!;
     return core.requestBudgetCategoryFocus(
@@ -41,6 +48,7 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
         colorId: category.colorId,
         iconId: category.iconId,
       ),
+      publishDuringMotion: publishDuringMotion,
     );
   }
 

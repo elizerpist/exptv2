@@ -122,6 +122,54 @@ void main() {
     },
   );
 
+  testWidgets(
+    'SearchPill header has no clipping envelope around its own physical surface',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      addTearDown(fixture.dispose);
+
+      final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
+      final searchBottom = tester.getRect(search).bottom;
+      final clips = find
+          .descendant(
+            of: find.byKey(const ValueKey('dashboard-logbox-viewport')),
+            matching: find.byType(ClipRect),
+          )
+          .evaluate();
+      expect(
+        clips.every(
+          (element) =>
+              (element.renderObject! as RenderBox)
+                  .localToGlobal(Offset.zero)
+                  .dy >=
+              searchBottom,
+        ),
+        isTrue,
+        reason:
+            'Outside the SearchPill RRect, pixels must be normal dashboard '
+            'background (apart from the pill\'s own outer depth), never a '
+            'larger clipped header envelope.',
+      );
+    },
+  );
+
+  test('a constrained LogBox header clips before its structural slot', () {
+    expect(
+      dashboardLogBoxHeaderNeedsStructuralClip(
+        visibleHeaderHeight: 60,
+        headerExtent: 90.5,
+      ),
+      isTrue,
+    );
+    expect(
+      dashboardLogBoxHeaderNeedsStructuralClip(
+        visibleHeaderHeight: 90.5,
+        headerExtent: 90.5,
+      ),
+      isFalse,
+    );
+  });
+
   testWidgets('Ledger count tracks one committed frame across query states', (
     tester,
   ) async {

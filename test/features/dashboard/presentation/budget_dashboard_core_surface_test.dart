@@ -11,8 +11,10 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_lane.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
+import 'package:fluvi/features/dashboard/presentation/budget_section_order.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -223,6 +225,123 @@ void main() {
       expect(
         unifiedRail.bottom,
         lessThanOrEqualTo(geometry.modeContentBounds.top + 116),
+      );
+    },
+  );
+
+  testWidgets(
+    'Budget section order covers Split and Unified without adding a second common shell',
+    (tester) async {
+      final composition = BudgetContentCardStyleController();
+      final order = BudgetSectionOrderController();
+      addTearDown(composition.dispose);
+      addTearDown(order.dispose);
+
+      Future<void> pumpSurface() {
+        final chartFirst = order.value == BudgetSectionOrder.chartThenAvatars;
+        final geometry = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+          modeContentExtraHeight: chartFirst
+              ? BudgetSectionOrder.chartThenAvatarsExtraModeContentHeight
+              : 0,
+        );
+        return tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Stack(
+                children: <Widget>[
+                  BudgetDashboardCoreSurface(
+                    presentation: DashboardCoreModePresentation(
+                      geometry: geometry,
+                      palette: DashboardModePaletteResolver.resolve(
+                        DashboardModeSpec.budget,
+                      ),
+                    ),
+                    contentCardStyle: composition,
+                    sectionOrder: order,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      await pumpSurface();
+      final avatar = find.byKey(
+        const ValueKey('dashboard-core-mode-budget-card-1'),
+      );
+      final chart = find.byKey(
+        const ValueKey('dashboard-core-mode-budget-card-2'),
+      );
+      expect(tester.getRect(avatar).top, lessThan(tester.getRect(chart).top));
+      expect(
+        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        findsNothing,
+      );
+
+      order.select(BudgetSectionOrder.chartThenAvatars);
+      await pumpSurface();
+      expect(tester.getRect(chart).top, lessThan(tester.getRect(avatar).top));
+      expect(
+        tester.getRect(avatar).bottom,
+        lessThanOrEqualTo(
+          tester
+              .getRect(
+                find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
+              )
+              .top,
+        ),
+      );
+
+      composition.select(BudgetContentLayout.unifiedCard);
+      await pumpSurface();
+      expect(
+        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        findsOneWidget,
+      );
+      expect(tester.getRect(chart).top, lessThan(tester.getRect(avatar).top));
+      final unified = tester.getRect(
+        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+      );
+      final selectedAvatarInput = tester.getRect(
+        find.byKey(const ValueKey('budget-target-avatar-rail')),
+      );
+      expect(selectedAvatarInput.top, greaterThan(unified.top));
+      expect(selectedAvatarInput.bottom, lessThan(unified.bottom));
+      expect(tester.getRect(chart).bottom, lessThan(selectedAvatarInput.top));
+
+      order.select(BudgetSectionOrder.avatarsThenChart);
+      await pumpSurface();
+      expect(
+        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        findsOneWidget,
+      );
+      expect(tester.getRect(avatar).top, lessThan(tester.getRect(chart).top));
+      final avatarsFirstUnified = tester.getRect(
+        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+      );
+      final avatarsFirstInput = tester.getRect(
+        find.byKey(const ValueKey('budget-target-avatar-rail')),
+      );
+      expect(
+        avatarsFirstInput.top,
+        greaterThanOrEqualTo(avatarsFirstUnified.top),
+      );
+      expect(avatarsFirstInput.bottom, lessThan(avatarsFirstUnified.bottom));
+      expect(
+        avatarsFirstInput.bottom,
+        lessThan(
+          tester.getRect(chart).top +
+              BudgetDistributionPageSurface.firstChartVisualOffset,
+        ),
+        reason:
+            'The selected avatar chrome clears the actual donut/list region; '
+            'the preceding padded heading lane is intentionally shared.',
       );
     },
   );

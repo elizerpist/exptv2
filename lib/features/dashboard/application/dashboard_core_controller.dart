@@ -736,6 +736,9 @@ final class DashboardCoreController {
   int _verticalScrollExtentMismatchCount = 0;
   int _verticalCommittedScopeResetCount = 0;
   DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
+  DashboardLogBoxActiveResourceSceneStager? _activeResourceSceneStager;
+  DashboardLogBoxActiveResourceSceneStagerDiscarder?
+  _activeResourceSceneStagerDiscarder;
   DashboardLogBoxCandidateSceneWindowPreparer? _candidateSceneWindowPreparer;
   DashboardLogBoxCandidateSceneWindowDiscarder? _candidateSceneWindowDiscarder;
   DashboardLogBoxCandidateSceneWindowLookup? _candidateSceneWindowLookup;
@@ -881,6 +884,9 @@ final class DashboardCoreController {
   void attachLogBoxSceneWindowCoordinator({
     required DashboardLogBoxSceneWindowPreparer prepare,
     required DashboardLogBoxSceneWindowActivator activate,
+    DashboardLogBoxActiveResourceSceneStager? stageFromActiveResources,
+    DashboardLogBoxActiveResourceSceneStagerDiscarder?
+    discardStagedActiveResources,
     DashboardLogBoxCandidateSceneWindowPreparer? prepareCandidate,
     DashboardLogBoxCandidateSceneWindowDiscarder? discardCandidate,
     DashboardLogBoxCandidateSceneWindowLookup? hasCandidate,
@@ -897,6 +903,8 @@ final class DashboardCoreController {
   }) {
     if (_disposed) throw StateError('Dashboard core has been disposed.');
     _sceneWindowPreparer = prepare;
+    _activeResourceSceneStager = stageFromActiveResources;
+    _activeResourceSceneStagerDiscarder = discardStagedActiveResources;
     _candidateSceneWindowPreparer = prepareCandidate;
     _candidateSceneWindowDiscarder = discardCandidate;
     _candidateSceneWindowLookup = hasCandidate;
@@ -954,6 +962,8 @@ final class DashboardCoreController {
 
   void detachLogBoxSceneWindowCoordinator() {
     _sceneWindowPreparer = null;
+    _activeResourceSceneStager = null;
+    _activeResourceSceneStagerDiscarder = null;
     _candidateSceneWindowPreparer = null;
     _candidateSceneWindowDiscarder = null;
     _candidateSceneWindowLookup = null;
@@ -1241,8 +1251,32 @@ final class DashboardCoreController {
     _sceneWindowPreparing.value = true;
     _lastSceneWindowError = null;
     var published = false;
+    var stagedFromActiveResources = false;
+    void discardStaleActiveResourceStage() {
+      if (!stagedFromActiveResources) return;
+      _activeResourceSceneStagerDiscarder?.call(targetWindow);
+      stagedFromActiveResources = false;
+    }
+
     try {
-      if (!retainedTargetWindow) {
+      stagedFromActiveResources =
+          !retainedTargetWindow &&
+          isEphemeralFocusPublication &&
+          (_activeResourceSceneStager?.call(
+                targetWindow,
+                retainViewportId: visibleFrames.value?.logBox.viewportId,
+              ) ??
+              false);
+      if (stagedFromActiveResources) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'FOCUS_LOGBOX_PREVIEW_ACTIVE_RESOURCE_HIT',
+            queryKey: targetWindow.identity,
+            coreRevision: index.coreRevision,
+            entryCount: targetWindow.previewRowCount,
+          ),
+        );
+      } else if (!retainedTargetWindow) {
         await prepare(
           targetWindow,
           retainViewportId: visibleFrames.value?.logBox.viewportId,
@@ -1258,6 +1292,7 @@ final class DashboardCoreController {
         );
       }
       if (_disposed || !(shouldPublish?.call() ?? true)) {
+        discardStaleActiveResourceStage();
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_APPLY_STALE_PUBLICATION_REJECTED',
@@ -1269,8 +1304,10 @@ final class DashboardCoreController {
         return false;
       }
       _activateSceneWindow(targetWindow, activate: activate);
+      stagedFromActiveResources = false;
       beforePublish?.call();
       if (!(shouldPublish?.call() ?? true)) {
+        discardStaleActiveResourceStage();
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
             stage: 'QUERY_APPLY_STALE_PUBLICATION_REJECTED',
@@ -1299,6 +1336,7 @@ final class DashboardCoreController {
         ),
       );
     } on Object catch (error) {
+      discardStaleActiveResourceStage();
       _lastSceneWindowError = '$error';
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -4162,12 +4200,19 @@ final class DashboardCoreController {
   /// Partner must not survive into a different Category as a transient
   /// two-step LogBox publication. The existing focus pipeline still performs
   /// the single atomic prepared-index publication.
-  Future<bool> requestBudgetCategoryFocus(DashboardFocusFacet facet) =>
-      _requestEphemeralFocus(
-        category: facet,
-        clearPartner: true,
-        deferSceneInstallation: true,
-      );
+  Future<bool> requestBudgetCategoryFocus(
+    DashboardFocusFacet facet, {
+    bool publishDuringMotion = false,
+  }) => _requestEphemeralFocus(
+    category: facet,
+    clearPartner: true,
+    // A discrete avatar crossing is a foreground presentation target, not a
+    // settle-only bookkeeping event.  It may start the bounded scene install
+    // during the physical fling; normal programmatic/settled focus keeps the
+    // established coalesced policy.
+    deferSceneInstallation: !publishDuringMotion,
+    publishDuringMotion: publishDuringMotion,
+  );
 
   /// Requests a transient partner narrowing after the viewport-owned swipe
   /// arbiter has committed one intentional leftward gesture.
@@ -4202,6 +4247,7 @@ final class DashboardCoreController {
     bool clearCategory = false,
     bool clearPartner = false,
     bool deferSceneInstallation = false,
+    bool publishDuringMotion = false,
   }) async {
     if (_disposed || queryComposer.isOpen) return false;
     final direction = navigation.state.parentQueryScope.direction;
@@ -4390,13 +4436,15 @@ final class DashboardCoreController {
             'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
       ),
     );
-    // The amount lane above is already a prepared, synchronous preview. The
-    // atomic focused LogBox scene is deliberately coalesced behind physical
-    // avatar motion: an async function starts executing until its first await,
-    // including bounded scene work.
+    // The amount lane above is an O(1) prepared preview. A physical avatar
+    // crossing now also attempts the matching atomic LogBox publication in
+    // this same foreground turn: hot rows can stage from the active immutable
+    // bank synchronously, while a miss keeps the existing bounded async scene
+    // preparation and stale-generation guard.
     return _scheduleFocusedSceneInstall(
       generation: generation,
       deferUntilIdle: deferSceneInstallation,
+      publishDuringMotion: publishDuringMotion,
       install: () async {
         final published = await installPreparedIndex(
           derived,
@@ -4462,6 +4510,7 @@ final class DashboardCoreController {
   Future<bool> _scheduleFocusedSceneInstall({
     required int generation,
     bool deferUntilIdle = false,
+    bool publishDuringMotion = false,
     required Future<bool> Function() install,
   }) {
     // Preserve the established direct focus path for an idle tap. Only a
@@ -4469,7 +4518,7 @@ final class DashboardCoreController {
     // a timer to every ordinary focus request races existing retained-scene
     // restoration and is not part of the foreground-input contract.
     if (!deferUntilIdle &&
-        !_committedPagingSafetyMotionActive &&
+        (publishDuringMotion || !_committedPagingSafetyMotionActive) &&
         _deferredFocusSceneInstall == null &&
         !_focusSceneInstallDrainScheduled) {
       return install();

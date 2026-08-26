@@ -197,6 +197,26 @@ typedef DashboardLogBoxSceneWindowPreparer =
       required int? retainViewportId,
     });
 
+/// Attempts a no-TextPainter scene assembly using rows and paragraphs that are
+/// already owned by the active immutable bank. Returning `true` means the
+/// exact window is staged and can be activated synchronously; `false` leaves
+/// the normal bounded preparation owner responsible for the miss.
+///
+/// This is intentionally a render-cache capability rather than a second
+/// LogBox publication system. It is used for interaction previews whose row
+/// layouts are already hot, notably Budget category crossings.
+typedef DashboardLogBoxActiveResourceSceneStager =
+    bool Function(
+      DashboardLogBoxSceneWindow window, {
+      required int? retainViewportId,
+    });
+
+/// Releases an exact active-resource stage whose controller generation went
+/// stale before the atomic scene activation. The implementation must leave a
+/// newer target's stage untouched.
+typedef DashboardLogBoxActiveResourceSceneStagerDiscarder =
+    void Function(DashboardLogBoxSceneWindow window);
+
 /// Stages a small, immutable Query candidate window in the existing scene
 /// cache without replacing the currently active renderer bank.  Candidate
 /// keys are controller-owned and revision-scoped; this is a cache capability,

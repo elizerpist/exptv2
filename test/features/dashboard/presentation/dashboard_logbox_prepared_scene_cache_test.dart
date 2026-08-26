@@ -1271,6 +1271,98 @@ void main() {
     },
   );
 
+  test(
+    'a focused subset can stage from active prepared resources without TextPainter work',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final basePayload = _payload(month: 7, rowCount: 3);
+      final focusedPayload = _payload(month: 7, rowCount: 1);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'active-base-income-july',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      final focused = DashboardLogBoxSceneWindow(
+        identity: 'active-resource-focused-income-july',
+        payloads: <DashboardLogViewportState>[focusedPayload],
+      );
+
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+      final preparationEpoch = cache.completedPreparationEpoch;
+      final newLayouts = cache.rowLayoutNewCount;
+
+      expect(cache.stageWindowFromActiveResources(focused), isTrue);
+      expect(cache.stagedWindowIdentity, focused.identity);
+      expect(cache.completedPreparationEpoch, preparationEpoch);
+      expect(cache.rowLayoutNewCount, newLayouts);
+      cache.activateWindow(focused);
+
+      expect(cache.activeWindowIdentity, focused.identity);
+      expect(cache.sceneFor(focusedPayload), isNotNull);
+      expect(cache.textLayoutMissCount, 0);
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+    },
+  );
+
+  test(
+    'a compact focused payload defers to the cooperative scene owner',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final basePayload = _deferredPayload(month: 7, rowCount: 3);
+      final focusedPayload = _deferredPayload(month: 7, rowCount: 3);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'active-compact-base-income-july',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      final focused = DashboardLogBoxSceneWindow(
+        identity: 'active-compact-focused-income-july',
+        payloads: <DashboardLogViewportState>[focusedPayload],
+      );
+
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+      final newLayouts = cache.rowLayoutNewCount;
+      expect(focusedPayload.isRichProjected, isFalse);
+
+      expect(cache.stageWindowFromActiveResources(focused), isFalse);
+      expect(focusedPayload.isRichProjected, isFalse);
+      expect(cache.rowLayoutNewCount, newLayouts);
+      expect(cache.textLayoutMissCount, 0);
+      expect(cache.stagedWindowIdentity, isNull);
+    },
+  );
+
+  test(
+    'discarding a stale active-resource stage releases only its exact bank',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final basePayload = _payload(month: 7, rowCount: 3);
+      final focusedPayload = _payload(month: 7, rowCount: 1);
+      final base = DashboardLogBoxSceneWindow(
+        identity: 'active-base-for-stale-stage',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      final focused = DashboardLogBoxSceneWindow(
+        identity: 'stale-active-resource-focused',
+        payloads: <DashboardLogViewportState>[focusedPayload],
+      );
+
+      await cache.prepareWindow(window: base, surfaceWidth: 378);
+      cache.activateWindow(base);
+      expect(cache.stageWindowFromActiveResources(focused), isTrue);
+      expect(cache.stagedWindowIdentity, focused.identity);
+
+      cache.discardStagedActiveResourceWindow(focused);
+
+      expect(cache.stagedWindowIdentity, isNull);
+      expect(cache.stageWindowFromActiveResources(focused), isTrue);
+      expect(cache.report()['preparedResourceLeaseUnderflows'], 0);
+    },
+  );
+
   test('retained candidate memory counts shared layouts once', () async {
     final cache = DashboardLogBoxPreparedSceneCache(
       maximumRetainedCandidateBanks: 3,

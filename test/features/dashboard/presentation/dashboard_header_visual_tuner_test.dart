@@ -4,11 +4,13 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
+import 'package:fluvi/features/dashboard/presentation/budget_section_order.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_height.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_amount_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -208,6 +210,75 @@ void main() {
     controller.dispose();
     borders.dispose();
     palettes.dispose();
+  });
+
+  testWidgets('Summary and Budget order presentation controls are live', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final summary = DashboardSummaryPresentationController();
+    final budgetOrder = BudgetSectionOrderController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            summaryPresentation: summary,
+            budgetSectionOrder: budgetOrder,
+          ),
+        ),
+      ),
+    );
+
+    final separators = find.byKey(
+      const ValueKey<String>('dashboard-summary-separators'),
+    );
+    await tester.ensureVisible(separators);
+    await tester.tap(separators);
+    await tester.pump();
+    expect(summary.value.showSeparators, isFalse);
+
+    final largeMode = find.byKey(
+      ValueKey<String>(
+        'dashboard-summary-mode-layout-${SummaryModeSelectorLayout.largeIcon}',
+      ),
+    );
+    await tester.ensureVisible(largeMode);
+    await tester.tap(largeMode);
+    await tester.pump();
+    expect(
+      summary.value.modeSelectorLayout,
+      SummaryModeSelectorLayout.largeIcon,
+    );
+
+    final dynamicTrio = find.byKey(
+      ValueKey<String>(
+        'dashboard-summary-fling-presentation-'
+        '${SummaryTemporalFlingPresentation.dynamicTrio}',
+      ),
+    );
+    await tester.ensureVisible(dynamicTrio);
+    await tester.tap(dynamicTrio);
+    await tester.pump();
+    expect(
+      summary.value.temporalFlingPresentation,
+      SummaryTemporalFlingPresentation.dynamicTrio,
+    );
+
+    final chartFirst = find.byKey(
+      const ValueKey<String>('dashboard-budget-section-order-chartThenAvatars'),
+    );
+    await tester.ensureVisible(chartFirst);
+    await tester.tap(chartFirst);
+    await tester.pump();
+    expect(budgetOrder.value, BudgetSectionOrder.chartThenAvatars);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    summary.dispose();
+    budgetOrder.dispose();
   });
 
   test('tuner placement always reserves the live Header plus its gap', () {

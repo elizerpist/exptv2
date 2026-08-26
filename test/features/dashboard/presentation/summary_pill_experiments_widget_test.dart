@@ -6,6 +6,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
@@ -425,6 +426,230 @@ void main() {
       );
       expect(tester.getTopLeft(year).dx, lessThan(tester.getTopLeft(month).dx));
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('downward mode crossing means finer Summary hierarchy', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+    final levels = <({TimePlane plane, bool railOpen})>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          onLevelCrossed: (plane, railOpen) =>
+              levels.add((plane: plane, railOpen: railOpen)),
+          onComponentCrossed: (_, _) {},
+        ),
+      ),
+    );
+
+    await tester.fling(
+      find.byKey(const ValueKey('summary-pill-segmented-mode-selector')),
+      const Offset(0, 40),
+      600,
+    );
+    await tester.pumpAndSettle();
+
+    expect(levels, isNotEmpty);
+    expect(levels.first, (plane: TimePlane.year, railOpen: false));
+  });
+
+  testWidgets('Summary separator visibility is paint-only', (tester) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+    const presentation = DashboardSummaryPresentationSettings(
+      showSeparators: false,
+      modeSelectorLayout: SummaryModeSelectorLayout.current,
+      temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          presentation: presentation,
+          onLevelCrossed: (_, _) {},
+          onComponentCrossed: (_, _) {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('summary-pill-segmented-separator-1')),
+      findsNothing,
+    );
+    final hiddenSeparatorYearX = tester
+        .getTopLeft(
+          find.byKey(const ValueKey('summary-pill-segmented-year-selector')),
+        )
+        .dx;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          presentation: const DashboardSummaryPresentationSettings.defaults(),
+          onLevelCrossed: (_, _) {},
+          onComponentCrossed: (_, _) {},
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('summary-pill-segmented-separator-1')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('summary-pill-segmented-year-selector')),
+          )
+          .dx,
+      hiddenSeparatorYearX,
+    );
+  });
+
+  testWidgets('large mode icon is at least the current LogBox avatar metric', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+    const presentation = DashboardSummaryPresentationSettings(
+      showSeparators: true,
+      modeSelectorLayout: SummaryModeSelectorLayout.largeIcon,
+      temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          presentation: presentation,
+          onLevelCrossed: (_, _) {},
+          onComponentCrossed: (_, _) {},
+        ),
+      ),
+    );
+    final badge = find.byKey(
+      const ValueKey('summary-pill-segmented-mode-badge-month'),
+    );
+    expect(tester.getSize(badge).width, greaterThanOrEqualTo(34));
+    expect(find.text('HÓ'), findsNothing);
+  });
+
+  testWidgets('icon plus label preserves the current badge metric', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+    const presentation = DashboardSummaryPresentationSettings(
+      showSeparators: true,
+      modeSelectorLayout: SummaryModeSelectorLayout.iconWithLabel,
+      temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          presentation: presentation,
+          onLevelCrossed: (_, _) {},
+          onComponentCrossed: (_, _) {},
+        ),
+      ),
+    );
+
+    final badge = find.byKey(
+      const ValueKey('summary-pill-segmented-mode-badge-month'),
+    );
+    expect(tester.getSize(badge), const Size(25, 25));
+    expect(find.text('HÓ'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Dynamic Trio has one idle value and three continuous motion values',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      const presentation = DashboardSummaryPresentationSettings(
+        showSeparators: true,
+        modeSelectorLayout: SummaryModeSelectorLayout.current,
+        temporalFlingPresentation: SummaryTemporalFlingPresentation.dynamicTrio,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            presentation: presentation,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+          ),
+        ),
+      );
+
+      final target = find.byKey(
+        const ValueKey('summary-pill-segmented-month-selector'),
+      );
+      final trioValues = find.descendant(
+        of: target,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.key is ValueKey<String> &&
+              (widget.key as ValueKey<String>).value.startsWith(
+                'summary-pill-dynamic-trio-',
+              ),
+        ),
+      );
+      expect(trioValues, findsOneWidget);
+      expect(find.byType(ClipRRect), findsOneWidget);
+
+      await tester.fling(target, const Offset(0, -120), 1500);
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(trioValues, findsNWidgets(3));
     },
   );
 }

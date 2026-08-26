@@ -114,12 +114,19 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   /// intermediate dashboard geometry.
   final double leftFooterMinimumHeight;
 
+  /// The first donut/list visual region begins only after this authored
+  /// padding-and-heading lane. Budget's selected avatar shell may occupy the
+  /// preceding shared-card overlap without colliding with the actual chart.
+  static const double outerPadding = 10;
+  static const double headingHeight = 23;
+  static const double firstChartVisualOffset = outerPadding + headingHeight;
+
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(10),
+    padding: const EdgeInsets.all(outerPadding),
     child: Column(
       children: <Widget>[
-        SizedBox(height: 23, child: heading),
+        SizedBox(height: headingHeight, child: heading),
         Expanded(
           child: Row(
             children: <Widget>[

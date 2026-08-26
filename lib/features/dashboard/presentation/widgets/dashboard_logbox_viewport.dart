@@ -33,6 +33,12 @@ import 'dashboard_logbox_partner_swipe.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 import 'dashboard_vertical_scroll_observer.dart';
 
+@visibleForTesting
+bool dashboardLogBoxHeaderNeedsStructuralClip({
+  required double visibleHeaderHeight,
+  required double headerExtent,
+}) => visibleHeaderHeight < headerExtent;
+
 /// Stable LogBox viewport. Its State, ScrollController, sliver hierarchy and
 /// render surface survive every frame; only one immutable bounded payload
 /// reference changes.
@@ -536,38 +542,53 @@ final class _DashboardLogBoxViewportState
               0.0,
               remainingHeight - visibleFacetGap,
             );
+            final header = OverflowBox(
+              alignment: Alignment.topCenter,
+              minWidth: widget.bounds.width,
+              maxWidth: widget.bounds.width,
+              minHeight: headerExtent,
+              maxHeight: headerExtent,
+              child: DashboardLogBoxHeader(
+                bounds: DashboardBounds(
+                  left: 0,
+                  top: 0,
+                  width: widget.bounds.width,
+                  height: widget.bounds.height,
+                ),
+                visibleFrames: widget.visibleFrames,
+                performanceCounters: widget.performanceCounters,
+                currentQuery: widget.currentQuery,
+                onRemoveCategory: widget.onRemoveQueryCategory,
+                onRemovePartner: widget.onRemoveQueryPartner,
+                onClear: widget.onClearQuery,
+                focus: widget.focus,
+                onClearFocusCategory: widget.onClearFocusCategory,
+                onClearFocusPartner: widget.onClearFocusPartner,
+                onClearFocus: widget.onClearFocus,
+              ),
+            );
             return Column(
               key: const ValueKey('dashboard-logbox-viewport'),
               children: [
-                ClipRect(
-                  child: SizedBox(
-                    height: visibleHeaderHeight,
-                    child: OverflowBox(
-                      alignment: Alignment.topCenter,
-                      minWidth: widget.bounds.width,
-                      maxWidth: widget.bounds.width,
-                      minHeight: headerExtent,
-                      maxHeight: headerExtent,
-                      child: DashboardLogBoxHeader(
-                        bounds: DashboardBounds(
-                          left: 0,
-                          top: 0,
-                          width: widget.bounds.width,
-                          height: widget.bounds.height,
-                        ),
-                        visibleFrames: widget.visibleFrames,
-                        performanceCounters: widget.performanceCounters,
-                        currentQuery: widget.currentQuery,
-                        onRemoveCategory: widget.onRemoveQueryCategory,
-                        onRemovePartner: widget.onRemoveQueryPartner,
-                        onClear: widget.onClearQuery,
-                        focus: widget.focus,
-                        onClearFocusCategory: widget.onClearFocusCategory,
-                        onClearFocusPartner: widget.onClearFocusPartner,
-                        onClearFocus: widget.onClearFocus,
-                      ),
-                    ),
-                  ),
+                SizedBox(
+                  height: visibleHeaderHeight,
+                  // At normal dashboard height the SearchPill's own depth is
+                  // allowed to meet the page background directly. A genuinely
+                  // constrained header still clips the *whole* header before
+                  // the scroll slot, preventing its larger OverflowBox from
+                  // painting over the transaction lane.
+                  child:
+                      dashboardLogBoxHeaderNeedsStructuralClip(
+                        visibleHeaderHeight: visibleHeaderHeight,
+                        headerExtent: headerExtent,
+                      )
+                      ? ClipRect(
+                          key: const ValueKey(
+                            'dashboard-logbox-constrained-header-clip',
+                          ),
+                          child: header,
+                        )
+                      : header,
                 ),
                 if (visibleFacetGap > 0)
                   SizedBox(

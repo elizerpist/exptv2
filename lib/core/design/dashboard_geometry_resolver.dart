@@ -14,7 +14,9 @@ abstract final class DashboardGeometryResolver {
     required bool isRailExpanded,
     DashboardBodyOrder? bodyOrder,
     bool hasPhysicalRail = true,
+    double modeContentExtraHeight = 0,
   }) {
+    assert(modeContentExtraHeight >= 0);
     final progress = (collapseProgress / metrics.collapseTravel)
         .clamp(0.0, 1.0)
         .toDouble();
@@ -46,13 +48,15 @@ abstract final class DashboardGeometryResolver {
         metrics.standardGap +
         modeLowerHeight +
         metrics.dotGap +
-        metrics.dotHeight;
+        metrics.dotHeight +
+        modeContentExtraHeight;
     final modeContentEnvelopeHeight =
         metrics.subheaderOneHeight +
         metrics.standardGap +
         modeLowerHeight +
         metrics.zone2IndicatorVerticalPadding +
-        metrics.dotHeight;
+        metrics.dotHeight +
+        modeContentExtraHeight;
     final expandedBodies = _expandedBodyLayout(
       metrics: metrics,
       order: order,

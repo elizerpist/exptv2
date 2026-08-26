@@ -535,6 +535,42 @@ void main() {
     });
 
     test(
+      'reserves the selected Budget avatar tail only for chart-first order',
+      () {
+        final base = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+        );
+        final chartFirst = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+          modeContentExtraHeight: 40,
+        );
+
+        expect(chartFirst.zone2Bounds, base.zone2Bounds);
+        expect(chartFirst.subheaderOneBounds, base.subheaderOneBounds);
+        expect(
+          chartFirst.modeContentBounds.height - base.modeContentBounds.height,
+          40,
+        );
+        expect(
+          chartFirst.collapseHandleBounds.top - base.collapseHandleBounds.top,
+          40,
+        );
+        expect(
+          chartFirst.logBoxHeaderBounds.top - base.logBoxHeaderBounds.top,
+          40,
+        );
+      },
+    );
+
+    test(
       'derives one header expansion reveal from the existing collapse owner',
       () {
         final dynamic expanded = DashboardGeometryResolver.resolve(

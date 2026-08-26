@@ -62,6 +62,7 @@ class DashboardMotionHost extends StatefulWidget {
     this.layoutMetrics,
     this.bodyOrder,
     this.hasPhysicalRail = true,
+    this.modeContentExtraHeight = 0,
     DashboardModePaletteLookup? paletteResolver,
   }) : paletteResolver =
            paletteResolver ?? DashboardModePaletteResolver.resolve;
@@ -72,6 +73,7 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardLayoutMetrics? layoutMetrics;
   final DashboardBodyOrder? bodyOrder;
   final bool hasPhysicalRail;
+  final double modeContentExtraHeight;
   final DashboardModePaletteLookup paletteResolver;
 
   @override
@@ -181,6 +183,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
       _resetVisualStateForReplacementController();
       _updateMotionActivity();
     }
+    assert(widget.modeContentExtraHeight >= 0);
   }
 
   void _attachController(DashboardCoreController controller) {
@@ -355,6 +358,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
             isRailExpanded: widget.controller.navigation.isRailOpen,
             bodyOrder: widget.bodyOrder,
             hasPhysicalRail: widget.hasPhysicalRail,
+            modeContentExtraHeight: widget.modeContentExtraHeight,
           ),
           palette: mode.mode == _committedMode.mode
               ? _palette

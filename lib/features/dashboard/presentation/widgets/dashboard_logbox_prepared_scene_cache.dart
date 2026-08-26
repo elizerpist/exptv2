@@ -248,6 +248,142 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   DashboardLogBoxSceneWindowManifest? get stagedWindowManifest =>
       _stagedBank?.manifest;
 
+  /// Stages [window] only when its rich payloads and every exact row
+  /// layout/header already belong to the active immutable bank. This is the
+  /// synchronous cache-hit half of the existing scene owner: it never shapes
+  /// text, materializes compact projections, performs repository work or
+  /// creates a new row resource.
+  ///
+  /// Budget-avatar crossings use it to keep the visible category LogBox in
+  /// the same interaction tick as the already-prepared chart target. A miss
+  /// deliberately falls through to [prepareWindow]'s bounded async path.
+  bool stageWindowFromActiveResources(DashboardLogBoxSceneWindow window) {
+    _ensureUsable();
+    final activeWindow = _activeWindow;
+    final width = _surfaceWidth;
+    final devicePixelRatio = _devicePixelRatio;
+    final empty = _empty;
+    if (activeWindow == null ||
+        width == null ||
+        devicePixelRatio == null ||
+        empty == null ||
+        _activePreparation != null ||
+        _stagedBank != null) {
+      return false;
+    }
+
+    final scenes = <String, DashboardPreparedLogBoxScene>{};
+    final emptyQueryKeys = <String>{};
+    final rowLayouts = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
+    final dayHeaders = <String, TextPainter>{};
+    DashboardPreparedLogBoxScene? emptyScene;
+
+    for (final payload in window.payloads) {
+      // The compact-to-rich transition is deliberately owned by cooperative
+      // scene preparation. A fling crossing must never force it synchronously
+      // merely because matching text resources happen to be active.
+      if (!payload.isRichProjected) return false;
+      if (payload.flatItems.isEmpty) {
+        emptyQueryKeys.add(payload.queryKey.value);
+        emptyScene ??= DashboardPreparedLogBoxScene._(
+          payload: payload,
+          surfaceWidth: width,
+          devicePixelRatio: devicePixelRatio,
+          rowLayouts: const <String, DashboardPreparedLogBoxRowTextLayout>{},
+          dayHeaders: const <String, TextPainter>{},
+          empty: empty,
+          universalEmpty: true,
+        );
+        continue;
+      }
+      final sceneRows = <String, DashboardPreparedLogBoxRowTextLayout>{};
+      final sceneHeaders = <String, TextPainter>{};
+      for (final item in payload.flatItems) {
+        final key = _RowLayoutKey.fromRow(item.row);
+        final layout = _rowLayouts[key];
+        if (layout == null) return false;
+        rowLayouts[key] = layout;
+        sceneRows[item.row.entryId] = layout;
+        if (item.dayLabel case final String label) {
+          final header = _dayHeaders[label];
+          if (header == null) return false;
+          dayHeaders[label] = header;
+          sceneHeaders[label] = header;
+        }
+      }
+      scenes[payload.queryKey.value] = DashboardPreparedLogBoxScene._(
+        payload: payload,
+        surfaceWidth: width,
+        devicePixelRatio: devicePixelRatio,
+        rowLayouts: sceneRows,
+        dayHeaders: sceneHeaders,
+        empty: empty,
+      );
+    }
+    if (window.sceneCount > maximumRetainedScenes) return false;
+    final requiredTextLayoutCount =
+        rowLayouts.length +
+        dayHeaders.length +
+        (emptyQueryKeys.isEmpty ? 0 : 1);
+    final manifest = DashboardLogBoxSceneWindowManifest(
+      requiredSceneCount: window.sceneCount,
+      completeSceneCount: scenes.length + emptyQueryKeys.length,
+      requiredTextLayoutCount: requiredTextLayoutCount,
+      completeTextLayoutCount: requiredTextLayoutCount,
+      generation: _generation + 1,
+      coreRevision:
+          window.coverageIdentity?.coreRevision ??
+          (window.payloads.isEmpty ? 0 : window.payloads.first.revision ?? 0),
+      surfaceWidth: width,
+      devicePixelRatio: devicePixelRatio,
+    );
+    if (!manifest.isComplete) return false;
+    final staged = _DashboardLogBoxStagedSceneBank(
+      window: window,
+      scenes: scenes,
+      emptyQueryKeys: emptyQueryKeys,
+      emptyScene: emptyScene,
+      rowLayouts: rowLayouts,
+      dayHeaders: dayHeaders,
+      empty: empty,
+      surfaceWidth: width,
+      devicePixelRatio: devicePixelRatio,
+      manifest: manifest,
+    );
+    _resourceLeases.retainBank(staged);
+    _stagedBank = staged;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SCENE_WINDOW_ACTIVE_RESOURCE_HIT',
+        queryKey: window.identity,
+        entryCount: window.previewRowCount,
+        scope:
+            'rows=${rowLayouts.length} headers=${dayHeaders.length} '
+            'textPainterCreates=0',
+      ),
+    );
+    return true;
+  }
+
+  /// Releases one exact active-resource stage that lost its controller
+  /// generation before activation. It cannot discard another target's staged
+  /// bank, so a newer foreground crossing retains its atomic hand-off.
+  void discardStagedActiveResourceWindow(DashboardLogBoxSceneWindow window) {
+    _ensureUsable();
+    final staged = _stagedBank;
+    if (staged == null ||
+        staged.window.identity != window.identity ||
+        staged.window.payloads.length != window.payloads.length ||
+        !staged.window.payloads.every(
+          (payload) => window.payloads.any(
+            (required) => required.queryKey == payload.queryKey,
+          ),
+        )) {
+      return;
+    }
+    _discardStagedBank();
+  }
+
   /// Prepares one exact Query candidate scene bank without displacing another
   /// completed candidate. The active bank remains the renderer's only source
   /// until [activateWindow] swaps this exact bank in atomically.

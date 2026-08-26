@@ -329,11 +329,11 @@ void main() {
       );
       expect(
         firstStarted.isCompleted,
-        isFalse,
+        isTrue,
         reason:
-            'The discrete avatar crossing publishes its prepared amount now, '
-            'then yields before any LogBox scene preparation can consume the '
-            'gesture stack.',
+            'The discrete avatar crossing is foreground interaction: it '
+            'starts the matching LogBox scene path immediately instead of '
+            'waiting for the carousel to settle.',
       );
       await firstStarted.future;
       final previewB = drilldown.previewBudgetTarget(
@@ -394,7 +394,7 @@ void main() {
   );
 
   test(
-    'Budget avatar motion defers focused LogBox scene installation until idle',
+    'Budget avatar crossing starts focused LogBox publication while motion is active',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -426,18 +426,110 @@ void main() {
       expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 500);
       expect(
         scenePrepareCalls,
-        0,
+        greaterThan(0),
         reason:
-            'The direct prepared amount lane remains immediate, but focused '
-            'scene geometry cannot consume a ballistic avatar frame.',
+            'One accepted avatar crossing is foreground interaction. Its '
+            'focused LogBox presentation may prepare and publish while the '
+            'physical carousel is still moving; it must not wait for idle.',
       );
 
       core.endBudgetAvatarMotion();
       await pumpEventQueue();
 
-      expect(scenePrepareCalls, greaterThan(0));
       await preview;
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'Budget avatar active-resource scene hit publishes the focused LogBox in the crossing epoch',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var genericPrepareCalls = 0;
+      var activeResourceHits = 0;
+      var activated = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {
+          genericPrepareCalls += 1;
+        },
+        stageFromActiveResources: (_, {required retainViewportId}) {
+          activeResourceHits += 1;
+          return true;
+        },
+        activate: (_) => activated += 1,
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+
+      core.beginBudgetAvatarMotion();
+      final published = await drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      );
+
+      expect(published, isTrue);
+      expect(activeResourceHits, 1);
+      expect(genericPrepareCalls, 0);
+      expect(activated, 1);
+      expect(core.focus.state?.category?.id, 'utilities');
+      expect(core.visibleFrames.value!.amount.totalMinor, 500);
+      expect(
+        core.visibleFrames.amountLane.value!.amount.totalMinor,
+        500,
+        reason:
+            'The complete Ledger and the Summary amount have the same '
+            'accepted focused target before the avatar motion ends.',
+      );
+      core.endBudgetAvatarMotion();
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'a stale active-resource scene stage is discarded before the next foreground target',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var stages = 0;
+      var discards = 0;
+      var activations = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        stageFromActiveResources: (_, {required retainViewportId}) {
+          stages += 1;
+          return true;
+        },
+        discardStagedActiveResources: (_) => discards += 1,
+        activate: (_) => activations += 1,
+      );
+      var publicationChecks = 0;
+
+      final published = await core.installPreparedIndex(
+        core.preparedIndex!,
+        isEphemeralFocusPublication: true,
+        shouldPublish: () => publicationChecks++ == 0,
+      );
+
+      expect(published, isFalse);
+      expect(stages, 1);
+      expect(discards, 1);
+      expect(activations, 0);
     },
   );
 
