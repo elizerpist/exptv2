@@ -4,12 +4,14 @@ import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/app_control_metrics.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/transaction_direction_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 
 /// Input-only renderer for the two transaction directions.
 class TransactionDirectionToggle extends StatelessWidget {
@@ -139,7 +141,11 @@ class _DirectionButton extends StatelessWidget {
               ? null
               : (depth.surfaceColor ?? FluviVisualTokens.surface),
           gradient: selected ? activeGradient : null,
-          border: depth.border,
+          border: DashboardBorderScope.profileOf(context).borderFor(
+            direction == TransactionDirection.income
+                ? DashboardBorderSurface.incomeDirection
+                : DashboardBorderSurface.expenseDirection,
+          ),
           borderRadius: borderRadius,
           boxShadow: depth.shadows,
           child: FittedBox(

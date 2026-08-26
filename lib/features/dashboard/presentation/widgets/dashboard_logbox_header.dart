@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -14,6 +15,7 @@ import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_query_facet_chips.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 
 /// Stable Ledger chrome above the sole LogBox scroll surface.
 ///
@@ -193,7 +195,9 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
       child: ExcludeSemantics(
         child: FluviRoundedBox(
           color: depth.surfaceColor ?? FluviVisualTokens.surface,
-          border: depth.border ?? Border.all(color: FluviVisualTokens.border),
+          border: DashboardBorderScope.profileOf(
+            context,
+          ).borderFor(DashboardBorderSurface.searchPill),
           borderRadius: DashboardCornerRoundnessScope.profileOf(context)
               .borderRadiusFor(
                 DashboardCornerSurfaceFamily.searchPill,

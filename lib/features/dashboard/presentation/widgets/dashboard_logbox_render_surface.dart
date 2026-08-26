@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_logbox_layout_profile.dart';
@@ -29,7 +30,9 @@ import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_partner_swipe.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_border_style.dart';
 import '../dashboard_logbox_height.dart';
+import '../dashboard_logbox_amount_palette.dart';
 import '../dashboard_shadow_style.dart';
 
 typedef DashboardLogBoxWarmupTaskCallback = void Function(int viewportId);
@@ -75,6 +78,8 @@ final class DashboardLogBoxPaintIdentity {
     this.groupShadows = const <BoxShadow>[],
     this.groupInnerShadows = const <BoxShadow>[],
     this.groupBorder,
+    this.incomeAmountColor = FluviVisualTokens.logBoxIncomeAmount,
+    this.expenseAmountColor = FluviVisualTokens.logBoxExpenseAmount,
   });
 
   final int? payloadViewportId;
@@ -88,6 +93,8 @@ final class DashboardLogBoxPaintIdentity {
   final List<BoxShadow> groupShadows;
   final List<BoxShadow> groupInnerShadows;
   final BoxBorder? groupBorder;
+  final Color incomeAmountColor;
+  final Color expenseAmountColor;
 
   bool requiresRepaintFrom(DashboardLogBoxPaintIdentity previous) =>
       payloadViewportId != previous.payloadViewportId ||
@@ -100,6 +107,8 @@ final class DashboardLogBoxPaintIdentity {
       !identical(groupShadows, previous.groupShadows) ||
       !identical(groupInnerShadows, previous.groupInnerShadows) ||
       groupBorder != previous.groupBorder ||
+      incomeAmountColor != previous.incomeAmountColor ||
+      expenseAmountColor != previous.expenseAmountColor ||
       !identical(rasterIdentity, previous.rasterIdentity);
 }
 
@@ -291,6 +300,9 @@ final class _DashboardLogBoxRenderSurfaceState
               final logBoxDepth = shadowProfile.depthFor(
                 DashboardCornerSurfaceFamily.logBoxGroup,
               );
+              final amountPalette = DashboardLogBoxAmountPaletteScope.profileOf(
+                context,
+              );
               final payload = frame?.logBox;
               if (_ownsCommittedViewport &&
                   frame != null &&
@@ -401,7 +413,11 @@ final class _DashboardLogBoxRenderSurfaceState
                 groupRadius: resolvedGroupRadius,
                 groupShadows: logBoxDepth.outerShadows,
                 groupInnerShadows: logBoxDepth.innerShadows,
-                groupBorder: logBoxDepth.border,
+                groupBorder: DashboardBorderScope.profileOf(
+                  context,
+                ).borderFor(DashboardBorderSurface.logBoxGroup),
+                incomeAmountColor: amountPalette.income,
+                expenseAmountColor: amountPalette.expense,
                 layoutProfile: layoutProfile,
               );
               _latestPainter = painter;
@@ -1110,17 +1126,21 @@ final class _DashboardLogBoxCanonicalPaintStack extends StatelessWidget {
 final class _DashboardLogBoxActiveCanonicalSegmentPresentation {
   const _DashboardLogBoxActiveCanonicalSegmentPresentation({
     required this.segmentRect,
+    required this.paintBounds,
     required this.paint,
     required this.onRasterPaint,
     required this.measureDuration,
-    required this.shadowBottomExtent,
   });
 
   final Rect segmentRect;
+
+  /// The complete physical material slice leased from the static painter.
+  /// It is wider/taller than the row when a contour or inner depth reaches
+  /// just outside the source row bounds.
+  final Rect paintBounds;
   final void Function(Canvas canvas) paint;
   final ValueChanged<int> onRasterPaint;
   final bool measureDuration;
-  final double shadowBottomExtent;
 }
 
 /// The one active row is isolated behind a repaint boundary and moves by a
@@ -1138,13 +1158,12 @@ final class _DashboardLogBoxActiveCanonicalSegmentLayer
 
   @override
   Widget build(BuildContext context) {
-    final segment = presentation.segmentRect;
-    final shadowHeight = presentation.shadowBottomExtent;
+    final paintBounds = presentation.paintBounds;
     return Positioned(
-      left: segment.left,
-      top: segment.top,
-      width: segment.width,
-      height: segment.height + shadowHeight,
+      left: paintBounds.left,
+      top: paintBounds.top,
+      width: paintBounds.width,
+      height: paintBounds.height,
       child: ValueListenableBuilder<double>(
         valueListenable: translation,
         child: RepaintBoundary(
@@ -1261,6 +1280,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.groupShadows,
     required this.groupInnerShadows,
     required this.groupBorder,
+    required this.incomeAmountColor,
+    required this.expenseAmountColor,
     required this.layoutProfile,
     this.partnerSwipe,
   }) : super(
@@ -1290,6 +1311,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final List<BoxShadow> groupShadows;
   final List<BoxShadow> groupInnerShadows;
   final BoxBorder? groupBorder;
+  final Color incomeAmountColor;
+  final Color expenseAmountColor;
   final DashboardLogBoxLayoutProfile layoutProfile;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   bool _reportedTextLayoutMiss = false;
@@ -1309,6 +1332,43 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     ),
   );
 
+  /// Material is not limited to the fill rectangle: an inner highlight with
+  /// a positive y offset can render its lower lip directly below a leased
+  /// row.  The static canvas must therefore exclude this complete lease, then
+  /// the translated retained layer paints precisely the same lease.
+  Rect _materialLeaseRect(Rect segmentRect) {
+    var left = 0.0;
+    var top = 0.0;
+    var right = 0.0;
+    var bottom = 0.0;
+
+    final borderExtent = (groupBorder?.dimensions ?? EdgeInsets.zero).resolve(
+      TextDirection.ltr,
+    );
+    left = math.max(left, borderExtent.left);
+    top = math.max(top, borderExtent.top);
+    right = math.max(right, borderExtent.right);
+    bottom = math.max(bottom, borderExtent.bottom);
+
+    for (final shadow in groupInnerShadows) {
+      // This deliberately over-approximates a BlurStyle.inner raster. A
+      // small harmless lease is correct; leaving even one white-foot pixel in
+      // the static layer would split the translating physical object.
+      final feather = math.max(0.0, shadow.blurRadius + shadow.spreadRadius);
+      left = math.max(left, math.max(0.0, -shadow.offset.dx) + feather);
+      top = math.max(top, math.max(0.0, -shadow.offset.dy) + feather);
+      right = math.max(right, math.max(0.0, shadow.offset.dx) + feather);
+      bottom = math.max(bottom, math.max(0.0, shadow.offset.dy) + feather);
+    }
+
+    return Rect.fromLTRB(
+      segmentRect.left - left,
+      segmentRect.top - top,
+      segmentRect.right + right,
+      segmentRect.bottom + bottom,
+    );
+  }
+
   late final DashboardLogBoxPaintIdentity paintIdentity =
       DashboardLogBoxPaintIdentity(
         payloadViewportId: payload?.viewportId,
@@ -1322,6 +1382,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         groupShadows: groupShadows,
         groupInnerShadows: groupInnerShadows,
         groupBorder: groupBorder,
+        incomeAmountColor: incomeAmountColor,
+        expenseAmountColor: expenseAmountColor,
       );
 
   // Shadow styles are presentation inputs, but a scroll repaint must not
@@ -1606,7 +1668,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       rasters.glyph(row.categoryIconHandle),
       iconRect,
     );
-    preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
+    preparedText.paint(
+      canvas,
+      rowTop,
+      rowHeight: rowHeight,
+      amountForeground: _amountForegroundFor(row),
+    );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
   }
 
@@ -1741,12 +1808,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   void _paintGroupMaterialExceptSegment(
     Canvas canvas, {
     required Rect groupRect,
-    required Rect segmentRect,
+    required Rect materialLeaseRect,
   }) {
     if (!_hasGroupMaterial) return;
     canvas.save();
     canvas.clipRect(
-      segmentRect,
+      materialLeaseRect,
       clipOp: ui.ClipOp.difference,
       doAntiAlias: false,
     );
@@ -1764,11 +1831,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   void _paintGroupMaterialForActiveSegment(
     Canvas canvas, {
     required Rect groupRect,
-    required Rect segmentRect,
+    required Rect materialLeaseRect,
   }) {
     if (!_hasGroupMaterial) return;
     canvas.save();
-    canvas.clipRect(segmentRect, doAntiAlias: false);
+    canvas.clipRect(materialLeaseRect, doAntiAlias: false);
     _paintCompleteGroupMaterial(
       canvas,
       groupRect,
@@ -1816,7 +1883,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _paintGroupMaterialExceptSegment(
       canvas,
       groupRect: groupRect,
-      segmentRect: segmentRect,
+      materialLeaseRect: _materialLeaseRect(segmentRect),
     );
   }
 
@@ -1907,14 +1974,24 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       segmentRect.width,
       group.rowCount * rowHeight,
     );
+    final materialLeaseRect = _materialLeaseRect(segmentRect);
+    final paintBounds = Rect.fromLTRB(
+      materialLeaseRect.left,
+      materialLeaseRect.top,
+      materialLeaseRect.right,
+      math.max(
+        materialLeaseRect.bottom,
+        segmentRect.bottom + shadowBottomExtent,
+      ),
+    );
     return _DashboardLogBoxActiveCanonicalSegmentPresentation(
       segmentRect: segmentRect,
+      paintBounds: paintBounds,
       measureDuration: performanceCounters?.measuresDurations ?? false,
       onRasterPaint: partnerSwipe?.recordActiveSegmentRasterPaint ?? (_) {},
-      shadowBottomExtent: shadowBottomExtent,
       paint: (canvas) {
         canvas.save();
-        canvas.translate(-segmentRect.left, -segmentRect.top);
+        canvas.translate(-paintBounds.left, -paintBounds.top);
         _paintCanonicalActiveSegment(
           canvas,
           width: surfaceWidth,
@@ -1924,6 +2001,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           swipe: swipe,
           segmentRect: segmentRect,
           groupRect: groupRect,
+          materialLeaseRect: materialLeaseRect,
         );
         canvas.restore();
       },
@@ -1939,6 +2017,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required DashboardLogBoxPartnerSwipeState swipe,
     required Rect segmentRect,
     required Rect groupRect,
+    required Rect materialLeaseRect,
   }) {
     final body = swipe.target.blockSegmentRole.bodyFor(
       segmentRect,
@@ -1951,7 +2030,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _paintGroupMaterialForActiveSegment(
       canvas,
       groupRect: groupRect,
-      segmentRect: segmentRect,
+      materialLeaseRect: materialLeaseRect,
     );
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     _paintRowContent(
@@ -2029,12 +2108,22 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         height: DashboardLogBoxTokens.avatarIconSize,
       ),
     );
-    preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
+    preparedText.paint(
+      canvas,
+      rowTop,
+      rowHeight: rowHeight,
+      amountForeground: _amountForegroundFor(row),
+    );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
   }
 
   bool _isActiveSwipeItem(DashboardLogViewportItemViewModel item) =>
       partnerSwipe?.activeEntryId == item.row.entryId;
+
+  Color _amountForegroundFor(DashboardLogRowViewModel row) =>
+      row.amountStyle == LogAmountStyle.expense
+      ? expenseAmountColor
+      : incomeAmountColor;
 
   DashboardLogViewportItemViewModel? _activeItemInGroup(
     DashboardLogViewportState state,
@@ -2108,7 +2197,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       iconRect,
     );
 
-    preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
+    preparedText.paint(
+      canvas,
+      rowTop,
+      rowHeight: rowHeight,
+      amountForeground: _amountForegroundFor(row),
+    );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
     return true;
   }

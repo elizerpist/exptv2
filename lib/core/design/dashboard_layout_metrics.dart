@@ -75,9 +75,21 @@ class DashboardLayoutMetrics {
   /// geometry graph.
   static const referenceLogBoxCountHeaderHeight = 24.0;
 
+  /// The handle-to-count gap was 11px in the accepted customization baseline.
+  /// Halving only this structural gap returns exactly 5.5px to the scrollable
+  /// Ledger viewport; it does not alter row-density geometry.
+  static const previousLedgerHandleToCountGap = referenceStandardGap;
+  static const referenceLedgerHandleToCountGap =
+      previousLedgerHandleToCountGap / 2;
+
   /// The fixed Ledger chrome height shared by resolver bounds and its render
-  /// surface: top gap, committed count, SearchPill, and list gap.
-  static const referenceLogBoxHeaderHeight = 96.0;
+  /// surface: handle/count gap, committed count, SearchPill, and list gap.
+  static const referenceLogBoxHeaderHeight =
+      referenceLedgerHandleToCountGap +
+      17.0 +
+      referenceStandardGap +
+      46.0 +
+      referenceStandardGap;
   static const previousLogBoxHeaderHeight = 28.0;
 
   /// Space recovered below an open TimeRefinementRail. It is transferred

@@ -286,12 +286,14 @@ final class DashboardPresentationController {
     required bool isRailOpen,
     required DashboardTemporalAnchorComponent component,
     required int offset,
+    DashboardNavigationState? base,
   }) {
     final candidate = navigation.temporalComponentOffsetCandidate(
       plane: plane,
       isRailOpen: isRailOpen,
       component: component,
       offset: offset,
+      base: base,
       coreRevision: _index?.coreRevision,
     );
     return candidate == null ? null : _canonicalCandidate(candidate);

@@ -28,22 +28,27 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.navigationController,
     this.onTargetPreview,
     this.onTargetSettled,
+    this.onMotionActiveChanged,
   });
 
   final DashboardBudgetPresentationController presentation;
   final DashboardBudgetLimitEditController? limitEditController;
   final BudgetTargetAvatarRailController? navigationController;
 
-  /// One semantic carousel crossing, coalesced to the next display frame.
-  /// This remains deliberately preview-driven. Consumers may publish the
-  /// corresponding prepared visible frame, but must use their existing stale
-  /// generation gate rather than perform pixel-rate work here.
+  /// One semantic carousel crossing on its direct prepared preview lane.
+  /// Consumers may publish the corresponding prepared visible frame, but must
+  /// use their existing stale generation gate rather than perform pixel-rate
+  /// data work here.
   final ValueChanged<DashboardBudgetPresentationState>? onTargetPreview;
 
   /// A committed consumer, such as the LogBox focus/query bridge. This is
   /// intentionally separate from [onTargetPreview]: settlement promotes the
   /// last accepted prepared target and must not manufacture a second query.
   final ValueChanged<DashboardBudgetPresentationState>? onTargetSettled;
+
+  /// The one Core-owned foreground work gate for physical avatar motion.
+  /// The rail remains the only gesture/carousel owner.
+  final ValueChanged<bool>? onMotionActiveChanged;
 
   /// The selected shell is larger than the static avatar canvas. This is the
   /// rail's vertical input/layout surface; horizontal slots remain [_itemExtent].
@@ -68,7 +73,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       const <_PreparedBudgetTargetAvatar>[];
   int? _lastProgressIdentityMismatchSignature;
   BudgetLimitQuickEditGestureController? _quickEdit;
-  late final BudgetTargetAvatarPreviewCoalescer _previewCoalescer;
+  late final BudgetTargetAvatarPreviewPublisher _previewPublisher;
   CenteredCarouselMotionOrigin? _activeMotionOrigin;
   int _motionSemanticCrossings = 0;
   int _motionPreviewPublications = 0;
@@ -80,7 +85,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
     );
-    _previewCoalescer = BudgetTargetAvatarPreviewCoalescer(
+    _previewPublisher = BudgetTargetAvatarPreviewPublisher(
       onPublish: _publishPreviewTargetHandle,
     );
     _quickEdit = _createQuickEditController();
@@ -112,10 +117,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   @override
   void dispose() {
+    if (_activeMotionOrigin != null) widget.onMotionActiveChanged?.call(false);
     widget.presentation.removeListener(_onPresentationChanged);
     widget.navigationController?.detach(this);
     _quickEdit?.dispose();
-    _previewCoalescer.dispose();
+    _previewPublisher.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -202,7 +208,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _onPreviewChanged(int logicalIndex) {
     if (_items.isEmpty) return;
     if (_activeMotionOrigin != null) _motionSemanticCrossings += 1;
-    _previewCoalescer.submit(
+    _previewPublisher.submit(
       _items[_modulo(logicalIndex, _items.length)].targetHandle,
     );
   }
@@ -218,15 +224,16 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _activeMotionOrigin = origin;
     _motionSemanticCrossings = 0;
     _motionPreviewPublications = 0;
+    widget.onMotionActiveChanged?.call(true);
   }
 
   // The final visual target is flushed at settlement. Only a user-owned
   // settled motion may enter a committed data bridge; programmatic target
   // intents retain their existing explicit command seam.
   void _onSelectionSettled(int logicalIndex) {
-    _previewCoalescer.flushNow();
     final origin = _activeMotionOrigin;
     _activeMotionOrigin = null;
+    if (origin != null) widget.onMotionActiveChanged?.call(false);
     if (origin != null) _recordMotionSummary(origin);
     // A direct avatar tap is programmatic physical motion but still a user
     // semantic intent, so it commits after settle. Pie/list commands are
@@ -254,7 +261,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'controllerIdentity=${identityHashCode(_controller)} '
             'scrollPositionIdentity=$positionIdentity '
             'physicsCreationCount=${_controller.physicsCreationCount} '
-            'headerPalettePath=displayFrameCoalesced '
+            'headerPalettePath=discretePreparedPreview '
             'source=preparedCatalog',
       ),
     );

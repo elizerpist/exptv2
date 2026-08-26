@@ -9,20 +9,18 @@ enum DashboardShadowStyle { none, current, soft, reference3d }
 
 /// Complete material-depth input for one dashboard surface family.
 ///
-/// Most styles need only outer shadows. The reference-material endpoint also
-/// owns an authored contour, an inner highlight, and (where source-defined)
-/// an opaque surface colour. Callers retain their own fill unless that source
-/// explicitly defines a material colour for the family.
+/// Most styles need only outer shadows. The reference-material endpoint owns
+/// an inner highlight and (where source-defined) an opaque surface colour.
+/// Its contour is intentionally resolved by [DashboardBorderProfile] so
+/// depth and user-selectable borders remain orthogonal.
 @immutable
 final class DashboardSurfaceDepth {
   const DashboardSurfaceDepth({
-    this.border,
     this.surfaceColor,
     this.outerShadows = const <BoxShadow>[],
     this.innerShadows = const <BoxShadow>[],
   });
 
-  final BoxBorder? border;
   final Color? surfaceColor;
   final List<BoxShadow> outerShadows;
   final List<BoxShadow> innerShadows;
@@ -68,11 +66,6 @@ final class DashboardShadowProfile {
   List<BoxShadow> shadowsFor(DashboardCornerSurfaceFamily family) =>
       depthFor(family).shadows;
 
-  BoxBorder? borderFor(
-    DashboardCornerSurfaceFamily family, {
-    BoxBorder? fallback,
-  }) => depthFor(family).border ?? fallback;
-
   Color surfaceColorFor(
     DashboardCornerSurfaceFamily family, {
     required Color fallback,
@@ -104,7 +97,6 @@ final class DashboardShadowProfile {
   // reference visual specification. The inner white layer is intentionally a
   // distinct highlight rather than an approximation of the Soft endpoint.
   static const _referenceSummaryDepth = DashboardSurfaceDepth(
-    border: Border.fromBorderSide(BorderSide(color: Color(0x1A666FAB))),
     surfaceColor: Color(0xFFFEFEFF),
     outerShadows: <BoxShadow>[
       BoxShadow(color: Color(0x14524B93), offset: Offset(0, 8), blurRadius: 17),
@@ -122,7 +114,6 @@ final class DashboardShadowProfile {
   // Balance reference Search material. Its source has a deliberately lighter
   // contour and shallower outer depth than the Summary surface.
   static const _referenceSearchDepth = DashboardSurfaceDepth(
-    border: Border.fromBorderSide(BorderSide(color: Color(0x17666FAB))),
     surfaceColor: Color(0xF0FFFFFF),
     outerShadows: <BoxShadow>[
       BoxShadow(color: Color(0x12524B93), offset: Offset(0, 7), blurRadius: 15),
@@ -138,9 +129,9 @@ final class DashboardShadowProfile {
   );
 
   // Every non-Search outer dashboard family shares the complete Summary
-  // contour/depth construction while retaining that component's own fill.
+  // depth construction while retaining that component's own fill. Contours
+  // are supplied separately by the DashboardBorder profile.
   static const _referenceSurfaceDepth = DashboardSurfaceDepth(
-    border: Border.fromBorderSide(BorderSide(color: Color(0x1A666FAB))),
     outerShadows: <BoxShadow>[
       BoxShadow(color: Color(0x14524B93), offset: Offset(0, 8), blurRadius: 17),
     ],

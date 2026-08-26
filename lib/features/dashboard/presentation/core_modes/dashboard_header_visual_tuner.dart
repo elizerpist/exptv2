@@ -3,13 +3,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_body_order.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../../core/design/dashboard_shadow_profile.dart';
 import '../budget_content_card_style.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_border_style.dart';
 import '../dashboard_logbox_height.dart';
+import '../dashboard_logbox_amount_palette.dart';
 import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
 import 'dashboard_header_portal_material_field.dart';
@@ -347,7 +350,9 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.budgetContentCardStyle,
     this.cornerRoundness,
     this.shadowStyle,
+    this.border,
     this.logBoxHeight,
+    this.amountPalette,
   });
 
   final DashboardHeaderVisualController controller;
@@ -356,7 +361,9 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final BudgetContentCardStyleController? budgetContentCardStyle;
   final DashboardCornerRoundnessController? cornerRoundness;
   final DashboardShadowStyleController? shadowStyle;
+  final DashboardBorderController? border;
   final DashboardLogBoxHeightController? logBoxHeight;
+  final DashboardLogBoxAmountPaletteController? amountPalette;
 
   @override
   Widget build(
@@ -438,6 +445,44 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 valueListenable: controller.expandedTunerSections,
                 builder: (context, expandedSections, child) => Column(
                   children: <Widget>[
+                    if (border case final borders?) ...<Widget>[
+                      _CollapsibleTunerSection(
+                        key: const ValueKey<String>(
+                          'dashboard-header-tuner-section-borders',
+                        ),
+                        title: 'Körvonalak',
+                        expanded: expandedSections.contains(
+                          DashboardHeaderTunerSection.borders,
+                        ),
+                        onToggle: () => controller.toggleTunerSection(
+                          DashboardHeaderTunerSection.borders,
+                        ),
+                        children: <Widget>[
+                          _DashboardBorderSection(controller: borders),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (amountPalette case final palettes?) ...<Widget>[
+                      _CollapsibleTunerSection(
+                        key: const ValueKey<String>(
+                          'dashboard-header-tuner-section-logbox-amount-colours',
+                        ),
+                        title: 'LogBox összegszínek',
+                        expanded: expandedSections.contains(
+                          DashboardHeaderTunerSection.logBoxAmountColours,
+                        ),
+                        onToggle: () => controller.toggleTunerSection(
+                          DashboardHeaderTunerSection.logBoxAmountColours,
+                        ),
+                        children: <Widget>[
+                          _DashboardLogBoxAmountPaletteSection(
+                            controller: palettes,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     if (cornerRoundness case final roundness?) ...<Widget>[
                       _CollapsibleTunerSection(
                         key: const ValueKey<String>(
@@ -1000,6 +1045,182 @@ final class _DashboardLogBoxHeightSection extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// One switch per independently rendered outer dashboard component. The
+/// controller owns all state; switches only collect intent and never change
+/// geometry, query or row semantics.
+final class _DashboardBorderSection extends StatelessWidget {
+  const _DashboardBorderSection({required this.controller});
+
+  final DashboardBorderController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardBorderSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'Körvonalak',
+          children: <Widget>[
+            for (final surface in DashboardBorderSurface.values)
+              SwitchListTile.adaptive(
+                key: ValueKey<String>('dashboard-border-${surface.name}'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(_borderLabel(surface)),
+                value: settings.isEnabled(surface),
+                onChanged: (enabled) => controller.setEnabled(surface, enabled),
+              ),
+          ],
+        ),
+      );
+
+  static String _borderLabel(DashboardBorderSurface surface) =>
+      switch (surface) {
+        DashboardBorderSurface.header => 'Header',
+        DashboardBorderSurface.incomeDirection => 'Bevétel',
+        DashboardBorderSurface.expenseDirection => 'Kiadás',
+        DashboardBorderSurface.summary => 'Summary',
+        DashboardBorderSurface.searchPill => 'Search',
+        DashboardBorderSurface.balanceContent => 'Balance kártyák',
+        DashboardBorderSurface.mindContent => 'Mind kártya',
+        DashboardBorderSurface.budgetContent => 'Budget kártya',
+        DashboardBorderSurface.logBoxGroup => 'LogBox',
+      };
+}
+
+/// Compact source-palette selectors. The swatch is a visual preview only; the
+/// resolved foreground is consumed once by the custom-paint surface binding.
+final class _DashboardLogBoxAmountPaletteSection extends StatelessWidget {
+  const _DashboardLogBoxAmountPaletteSection({required this.controller});
+
+  final DashboardLogBoxAmountPaletteController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardLogBoxAmountPaletteSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) {
+          final profile = DashboardLogBoxAmountPaletteProfile(settings);
+          return _TunerSection(
+            title: 'LogBox összegszínek',
+            children: <Widget>[
+              _AmountPaletteDropdown<DashboardLogBoxIncomePalette>(
+                key: const ValueKey<String>('dashboard-logbox-income-palette'),
+                label: 'Bevétel árnyalat',
+                value: settings.income,
+                color: profile.income,
+                items: DashboardLogBoxIncomePalette.values,
+                labelFor: _incomeLabel,
+                colorFor: (value) => DashboardLogBoxAmountPaletteProfile(
+                  settings.copyWith(income: value),
+                ).income,
+                onChanged: controller.selectIncome,
+              ),
+              const SizedBox(height: 8),
+              _AmountPaletteDropdown<DashboardLogBoxExpensePalette>(
+                key: const ValueKey<String>('dashboard-logbox-expense-palette'),
+                label: 'Kiadás piros / pink',
+                value: settings.expense,
+                color: profile.expense,
+                items: DashboardLogBoxExpensePalette.values,
+                labelFor: _expenseLabel,
+                colorFor: (value) => DashboardLogBoxAmountPaletteProfile(
+                  settings.copyWith(expense: value),
+                ).expense,
+                onChanged: controller.selectExpense,
+              ),
+            ],
+          );
+        },
+      );
+
+  static String _incomeLabel(
+    DashboardLogBoxIncomePalette value,
+  ) => switch (value) {
+    DashboardLogBoxIncomePalette.current => 'Jelenlegi',
+    DashboardLogBoxIncomePalette.fluviCategoryGreen07 => 'Fluvi kategória 07',
+    DashboardLogBoxIncomePalette.fluviCategoryGreen08 => 'Fluvi kategória 08',
+    DashboardLogBoxIncomePalette.fluviCategoryGreen09 => 'Fluvi kategória 09',
+    DashboardLogBoxIncomePalette.fluviCategoryGreen10 => 'Fluvi kategória 10',
+    DashboardLogBoxIncomePalette.budgetReference => 'Budget referencia',
+    DashboardLogBoxIncomePalette.balanceReference => 'Balance referencia',
+  };
+
+  static String _expenseLabel(
+    DashboardLogBoxExpensePalette value,
+  ) => switch (value) {
+    DashboardLogBoxExpensePalette.current => 'Jelenlegi',
+    DashboardLogBoxExpensePalette.fluviCategoryRed01 => 'Fluvi kategória 01',
+    DashboardLogBoxExpensePalette.fluviCategoryPink20 => 'Fluvi kategória 20',
+    DashboardLogBoxExpensePalette.fluviCategoryPink21 => 'Fluvi kategória 21',
+    DashboardLogBoxExpensePalette.budgetReference => 'Budget referencia',
+    DashboardLogBoxExpensePalette.balanceReference => 'Balance referencia',
+  };
+}
+
+final class _AmountPaletteDropdown<T> extends StatelessWidget {
+  const _AmountPaletteDropdown({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.items,
+    required this.labelFor,
+    required this.colorFor,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final Color color;
+  final List<T> items;
+  final String Function(T value) labelFor;
+  final Color Function(T value) colorFor;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '$label: ${labelFor(value)}',
+    child: Row(
+      children: <Widget>[
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(label)),
+        DropdownButton<T>(
+          value: value,
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
+          items: <DropdownMenuItem<T>>[
+            for (final item in items)
+              DropdownMenuItem<T>(
+                value: item,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: colorFor(item),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(labelFor(item)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 /// Each semantic surface family owns a normalized position. The central

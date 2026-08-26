@@ -237,8 +237,10 @@ abstract final class DashboardLogBoxTokens {
 
   /// The fixed top-of-Ledger structure is metric-owned rather than painted
   /// with offsets. Its reference values sum to [summaryHeaderHeight].
+  static const handleToCountGapBeforeRefinement =
+      DashboardLayoutMetrics.previousLedgerHandleToCountGap;
   static const ledgerHeaderTopInset =
-      DashboardLayoutMetrics.referenceStandardGap;
+      DashboardLayoutMetrics.referenceLedgerHandleToCountGap;
   static const ledgerCountHeight = 17.0;
   static const ledgerCountToSearchGap =
       DashboardLayoutMetrics.referenceStandardGap;

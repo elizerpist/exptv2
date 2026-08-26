@@ -6,6 +6,8 @@ import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_height.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_amount_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:flutter/material.dart';
@@ -147,6 +149,65 @@ void main() {
     controller.dispose();
     shadow.dispose();
     height.dispose();
+  });
+
+  testWidgets('border and amount-palette controls remain independent', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final borders = DashboardBorderController();
+    final palettes = DashboardLogBoxAmountPaletteController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            border: borders,
+            amountPalette: palettes,
+          ),
+        ),
+      ),
+    );
+
+    controller.toggleTunerSection(DashboardHeaderTunerSection.borders);
+    await tester.pump();
+    final incomeBorder = find.byKey(
+      const ValueKey<String>('dashboard-border-incomeDirection'),
+    );
+    await tester.ensureVisible(incomeBorder);
+    await tester.tap(incomeBorder);
+    await tester.pump();
+    expect(borders.value.incomeDirection, isTrue);
+    expect(borders.value.expenseDirection, isFalse);
+
+    controller.toggleTunerSection(
+      DashboardHeaderTunerSection.logBoxAmountColours,
+    );
+    await tester.pump();
+    final incomePalette = find.byKey(
+      const ValueKey<String>('dashboard-logbox-income-palette'),
+    );
+    await tester.ensureVisible(incomePalette);
+    final dropdown = tester
+        .widget<DropdownButton<DashboardLogBoxIncomePalette>>(
+          find.descendant(
+            of: incomePalette,
+            matching: find.byType(DropdownButton<DashboardLogBoxIncomePalette>),
+          ),
+        );
+    dropdown.onChanged!(DashboardLogBoxIncomePalette.balanceReference);
+    await tester.pump();
+    expect(
+      palettes.value.income,
+      DashboardLogBoxIncomePalette.balanceReference,
+    );
+    expect(palettes.value.expense, DashboardLogBoxExpensePalette.current);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    borders.dispose();
+    palettes.dispose();
   });
 
   test('tuner placement always reserves the live Header plus its gap', () {

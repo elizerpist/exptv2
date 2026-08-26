@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_allocation_partition_lane.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -172,6 +173,56 @@ void main() {
       expect(
         find.byKey(const ValueKey('budget-distribution-page-card-surface')),
         findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'Unified Budget can translate the full selected-avatar input into its common-card envelope while Split keeps the baseline rail origin',
+    (tester) async {
+      final geometry = DashboardGeometryResolver.resolve(
+        metrics: DashboardLayoutMetrics.reference,
+        mode: DashboardModeSpec.budget,
+        collapseProgress: 0,
+        isRailExpanded: false,
+        hasPhysicalRail: false,
+      );
+      Future<Rect> pumpRail(double contentVerticalOffset) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Stack(
+                children: <Widget>[
+                  DashboardCoreModeCascadeCard(
+                    bounds: geometry.subheaderOneBounds,
+                    motion: geometry.upperCardMotion!,
+                    semanticKey: const ValueKey('budget-test-avatar-rail'),
+                    showPlaceholderSurface: false,
+                    contentVerticalInputOverflow: 20,
+                    contentVerticalOffset: contentVerticalOffset,
+                    content: const SizedBox.expand(
+                      key: ValueKey('budget-test-avatar-rail-content'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        return tester.getRect(
+          find.byKey(const ValueKey('budget-test-avatar-rail-content')),
+        );
+      }
+
+      final splitRail = await pumpRail(0);
+      expect(splitRail.top, geometry.modeContentBounds.top - 20);
+
+      final unifiedRail = await pumpRail(20);
+      expect(unifiedRail.top, geometry.modeContentBounds.top);
+      expect(
+        unifiedRail.bottom,
+        lessThanOrEqualTo(geometry.modeContentBounds.top + 116),
       );
     },
   );

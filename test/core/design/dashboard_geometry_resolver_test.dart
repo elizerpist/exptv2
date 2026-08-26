@@ -141,7 +141,7 @@ void main() {
         );
         expect(
           frame.logBoxHeaderBounds,
-          const DashboardBounds(left: 17, top: 715, width: 378, height: 96),
+          const DashboardBounds(left: 17, top: 715, width: 378, height: 90.5),
         );
       },
     );
@@ -251,7 +251,11 @@ void main() {
           openRail.collapseHandleBounds.top - openRail.railBounds.bottom,
           6,
         );
-        expect(openRail.logBoxHeaderBounds.height, 96);
+        // The Ledger keeps the same outer envelope, but half of the old
+        // handle-to-count gap is returned to its transaction viewport.
+        expect(DashboardLogBoxTokens.handleToCountGapBeforeRefinement, 11);
+        expect(DashboardLogBoxTokens.ledgerHeaderTopInset, 5.5);
+        expect(openRail.logBoxHeaderBounds.height, 90.5);
         expect(
           DashboardLogBoxTokens.summaryHeaderHeight,
           metrics.logBoxHeaderHeight,
@@ -267,7 +271,28 @@ void main() {
         // The resolver keeps the Ledger origin at 773; the expanded fixed
         // chrome occupies its own viewport height before date groups begin.
         expect(openRail.logBoxHeaderBounds.top, 773);
-        expect(openRail.logBoxHeaderBounds.bottom, 869);
+        expect(openRail.logBoxHeaderBounds.bottom, 863.5);
+
+        // CoreDashboard pins the LogBox viewport from this stable header top
+        // through the same bottom terminal. Reducing only the header extent
+        // must return the entire 5.5px to the actual scrollable envelope.
+        const terminalBottom = 1200.0;
+        const previousHeaderExtent =
+            DashboardLayoutMetrics.previousLedgerHandleToCountGap +
+            DashboardLogBoxTokens.ledgerCountHeight +
+            DashboardLogBoxTokens.ledgerCountToSearchGap +
+            DashboardLogBoxTokens.ledgerSearchPillHeight +
+            DashboardLogBoxTokens.ledgerSearchToListGap;
+        final oldViewportHeight =
+            terminalBottom -
+            (openRail.logBoxHeaderBounds.top + previousHeaderExtent);
+        final newViewportHeight =
+            terminalBottom - openRail.logBoxHeaderBounds.bottom;
+        expect(
+          newViewportHeight - oldViewportHeight,
+          DashboardLayoutMetrics.previousLedgerHandleToCountGap -
+              DashboardLayoutMetrics.referenceLedgerHandleToCountGap,
+        );
 
         expect(balance.zone2Bounds.height, metrics.zone2CardHeight);
         expect(openRail.zone2Bounds.height, metrics.zone2CardHeight);
@@ -304,7 +329,7 @@ void main() {
       expect(halfViewportFrame.subheaderOneBounds.top, 187);
       expect(halfViewportFrame.zone2Bounds.top, 228.5);
       expect(halfViewportFrame.railBounds.top, 347.5);
-      expect(halfViewportFrame.logBoxHeaderBounds.height, 48);
+      expect(halfViewportFrame.logBoxHeaderBounds.height, 45.25);
     });
 
     test('derives web content-origin metrics without changing spacing', () {
@@ -317,7 +342,7 @@ void main() {
       expect(metrics.subheaderOneTop, 322);
       expect(metrics.zone2Top, 405);
       expect(metrics.railTop, 643);
-      expect(metrics.logBoxHeaderHeight, 96);
+      expect(metrics.logBoxHeaderHeight, 90.5);
     });
 
     test('uses one subheader envelope for split and unified modes', () {

@@ -381,6 +381,35 @@ void main() {
   );
 
   test(
+    'experimental component projection validates a frozen selector origin through the installed canonical catalog',
+    () {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2026, 7, 14),
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(revision: 7),
+        publishImmediately: true,
+      );
+      final origin = controller.navigation.state;
+
+      final candidate = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: -1,
+        base: origin,
+      );
+
+      expect(candidate, isNotNull);
+      expect(candidate!.monthCursor.month, 6);
+      expect(candidate.parentQueryKey.value, isNotEmpty);
+    },
+  );
+
+  test(
     'separate display frames expose intermediate values on the first fling',
     () {
       final scheduler = _DisplayFrameScheduler();

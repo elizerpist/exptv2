@@ -53,7 +53,14 @@ import 'dashboard_rail_flight_recorder.dart';
 import 'dashboard_render_readiness_diagnostics.dart';
 import 'transaction_direction_controller.dart';
 
-enum DashboardMotionLane { rail, visualHost, summaryShell, summaryText, amount }
+enum DashboardMotionLane {
+  rail,
+  visualHost,
+  summaryShell,
+  summaryText,
+  amount,
+  budgetAvatar,
+}
 
 /// A presentation-owned resource capability. Dashboard navigation owns the
 /// semantic commit, while this callback proves that its Card2 period is
@@ -92,6 +99,30 @@ enum _SceneCoveredNavigationOwner { structural, railVisibility }
 enum _CommittedReadyAheadPriorityOrigin {
   querySheetRoute,
   directQueryPublication,
+}
+
+final class _DeferredBudgetDistributionWarmup {
+  const _DeferredBudgetDistributionWarmup({
+    required this.prepare,
+    required this.candidate,
+    required this.generation,
+  });
+
+  final DashboardBudgetDistributionTimePublicationPreparer prepare;
+  final DashboardNavigationState candidate;
+  final int generation;
+}
+
+final class _DeferredFocusSceneInstall {
+  const _DeferredFocusSceneInstall({
+    required this.generation,
+    required this.install,
+    required this.completion,
+  });
+
+  final int generation;
+  final Future<bool> Function() install;
+  final Completer<bool> completion;
 }
 
 /// Immutable identity for a Query publication before its new committed paging
@@ -682,6 +713,7 @@ final class DashboardCoreController {
   late final DashboardRenderReadinessDiagnostics renderReadinessDiagnostics;
   late final DashboardPresentationController presentation;
   late final DashboardDataRuntime dataRuntime;
+  final ValueNotifier<bool> foregroundInputMotion = ValueNotifier<bool>(false);
   late final CurrentQueryController currentQuery;
   late final QueryComposerController queryComposer;
   final DashboardEphemeralFocusController focus =
@@ -728,6 +760,8 @@ final class DashboardCoreController {
   DashboardBudgetDistributionTimePublicationHotsetWarmer?
   _budgetDistributionTimePublicationHotsetWarmer;
   int _budgetDistributionTimeNavigationGeneration = 0;
+  _DeferredBudgetDistributionWarmup? _deferredBudgetDistributionWarmup;
+  bool _budgetDistributionWarmupDrainScheduled = false;
   DashboardPreparedRevisionBundle? _activePreparedRevisionBundle;
   DashboardLogBoxSceneWindow? _activeSceneWindow;
   DashboardRailCriticalSceneBankIdentity? _activeRailCriticalBankIdentity;
@@ -785,6 +819,8 @@ final class DashboardCoreController {
   CommittedPagingFocusSnapshot? _focusBasePagingRetention;
   CommittedPagingFocusSnapshot? _pendingFocusBasePagingRestore;
   int _focusPublicationGeneration = 0;
+  _DeferredFocusSceneInstall? _deferredFocusSceneInstall;
+  bool _focusSceneInstallDrainScheduled = false;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
   // records exact demand while the paging owner defers new repository and page
@@ -913,6 +949,7 @@ final class DashboardCoreController {
     _budgetDistributionTimePublicationPreparer = null;
     _budgetDistributionTimePublicationHotsetWarmer = null;
     _budgetDistributionTimeNavigationGeneration += 1;
+    _deferredBudgetDistributionWarmup = null;
   }
 
   void detachLogBoxSceneWindowCoordinator() {
@@ -3803,6 +3840,52 @@ final class DashboardCoreController {
     );
   }
 
+  /// The Segmented selector is allowed to freeze its gesture origin, but it
+  /// must project that origin through the same installed-index canonical
+  /// boundary used by Legacy navigation before it can request publication.
+  DashboardNavigationState? experimentalTemporalComponentOffsetCandidate({
+    required TimePlane plane,
+    required bool isRailOpen,
+    required DashboardTemporalAnchorComponent component,
+    required int offset,
+    required DashboardNavigationState base,
+  }) => presentation.temporalComponentOffsetCandidate(
+    plane: plane,
+    isRailOpen: isRailOpen,
+    component: component,
+    offset: offset,
+    base: base,
+  );
+
+  void beginSegmentedSummaryMotion() {
+    _cancelSceneWindowMaintenanceForInput();
+    _setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+    diagnostics.record(
+      DashboardInteractionEvent.motionGestureStarted,
+      context: _diagnosticContext(),
+      source: 'segmentedSummaryGesture',
+    );
+  }
+
+  void endSegmentedSummaryMotion() =>
+      _setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+
+  /// Budget avatar crossings are another direct prepared-data producer. They
+  /// receive the same foreground-preemption boundary as Summary motion while
+  /// keeping their distinct focus semantics out of the temporal rail lane.
+  void beginBudgetAvatarMotion() {
+    _cancelSceneWindowMaintenanceForInput();
+    _setMotionLaneActive(DashboardMotionLane.budgetAvatar, true);
+    diagnostics.record(
+      DashboardInteractionEvent.motionGestureStarted,
+      context: _diagnosticContext(),
+      source: 'budgetAvatarGesture',
+    );
+  }
+
+  void endBudgetAvatarMotion() =>
+      _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
+
   /// Applies an already-projected experiment target. The projection can be
   /// anchored to one gesture's initial canonical state, so an advancing
   /// prepared DAY publication cannot make later carousel crossings skip a
@@ -3853,22 +3936,32 @@ final class DashboardCoreController {
     if (retainedHit) {
       _activateSceneWindow(interaction);
     }
-    unawaited(
-      _commitTimeNavigationWithBudgetDistributionReadiness(
-        candidate: candidate,
-        reason: reason,
-        settledQueryKey: candidate.isRailOpen
-            ? candidate.temporalAnchor.sourceChildQueryKey
-            : candidate.parentQueryKey,
-        requiredSceneWindow: candidate.isRailOpen || retainedHit
-            ? interaction
-            : null,
-        commit: () {
-          presentation.commitTemporalCandidate(candidate);
-          _recordNavigationSelection('summaryExperimentCrossed');
-        },
-      ),
-    );
+    Future<void> commitCandidate() =>
+        _commitTimeNavigationWithBudgetDistributionReadiness(
+          candidate: candidate,
+          reason: reason,
+          settledQueryKey: candidate.isRailOpen
+              ? candidate.temporalAnchor.sourceChildQueryKey
+              : candidate.parentQueryKey,
+          requiredSceneWindow: candidate.isRailOpen || retainedHit
+              ? interaction
+              : null,
+          commit: () {
+            presentation.commitTemporalCandidate(candidate);
+            _recordNavigationSelection('summaryExperimentCrossed');
+          },
+        );
+    if (retainedHit) {
+      // A prepared target keeps Legacy's immediate cache-hit publication.
+      unawaited(commitCandidate());
+    } else {
+      // A legitimate miss remains the scene owner's asynchronous work. Yield
+      // before it can enter a synchronous preparation slice so a ballistic
+      // Segmented selector never waits for data at its crossing boundary.
+      unawaited(
+        Future<void>.delayed(Duration.zero).then((_) => commitCandidate()),
+      );
+    }
   }
 
   Future<void> _commitTimeNavigationWithBudgetDistributionReadiness({
@@ -3879,31 +3972,70 @@ final class DashboardCoreController {
     required VoidCallback commit,
   }) {
     final prepare = _budgetDistributionTimePublicationPreparer;
-    if (prepare == null) {
-      return _commitNavigationWithSceneCoverage(
+    if (prepare != null) {
+      final generation = ++_budgetDistributionTimeNavigationGeneration;
+      // A chart drawable is a presentation consumer, not the authority that
+      // permits temporal navigation.  In particular, its cache-miss Canvas
+      // projection must never run synchronously in a Segmented crossing.
+      // The committed visible-frame path publishes a cached drawable directly
+      // when one exists and otherwise owns its ordinary asynchronous fallback.
+      _scheduleBudgetDistributionWarmup(
+        prepare: prepare,
         candidate: candidate,
-        reason: reason,
-        settledQueryKey: settledQueryKey,
-        requiredSceneWindow: requiredSceneWindow,
-        commit: commit,
+        generation: generation,
       );
     }
-    final generation = ++_budgetDistributionTimeNavigationGeneration;
-    return () async {
-      final drawableReady = await prepare(candidate);
-      if (_disposed ||
-          generation != _budgetDistributionTimeNavigationGeneration ||
-          !drawableReady) {
-        return;
-      }
-      await _commitNavigationWithSceneCoverage(
-        candidate: candidate,
-        reason: reason,
-        settledQueryKey: settledQueryKey,
-        requiredSceneWindow: requiredSceneWindow,
-        commit: commit,
-      );
-    }();
+    return _commitNavigationWithSceneCoverage(
+      candidate: candidate,
+      reason: reason,
+      settledQueryKey: settledQueryKey,
+      requiredSceneWindow: requiredSceneWindow,
+      commit: commit,
+    );
+  }
+
+  void _scheduleBudgetDistributionWarmup({
+    required DashboardBudgetDistributionTimePublicationPreparer prepare,
+    required DashboardNavigationState candidate,
+    required int generation,
+  }) {
+    // Card2 projection is a coalesced presentation consumer. The latest
+    // candidate wins, but no cache-miss Canvas bank may start while a direct
+    // physical producer still owns the foreground motion lane.
+    _deferredBudgetDistributionWarmup = _DeferredBudgetDistributionWarmup(
+      prepare: prepare,
+      candidate: candidate,
+      generation: generation,
+    );
+    _drainDeferredBudgetDistributionWarmup();
+  }
+
+  void _drainDeferredBudgetDistributionWarmup() {
+    if (_disposed ||
+        _committedPagingSafetyMotionActive ||
+        _budgetDistributionWarmupDrainScheduled ||
+        _deferredBudgetDistributionWarmup == null) {
+      return;
+    }
+    _budgetDistributionWarmupDrainScheduled = true;
+    unawaited(
+      Future<void>.delayed(Duration.zero).then((_) async {
+        _budgetDistributionWarmupDrainScheduled = false;
+        if (_disposed || _committedPagingSafetyMotionActive) return;
+        final request = _deferredBudgetDistributionWarmup;
+        if (request == null) return;
+        _deferredBudgetDistributionWarmup = null;
+        final ready = await request.prepare(request.candidate);
+        if (_disposed ||
+            request.generation != _budgetDistributionTimeNavigationGeneration ||
+            !ready) {
+          return;
+        }
+        // A newer crossing received while this idle-only projection was
+        // finishing remains coalesced as exactly one later idle request.
+        _drainDeferredBudgetDistributionWarmup();
+      }),
+    );
   }
 
   void selectDirection(TransactionDirection direction) {
@@ -4031,7 +4163,11 @@ final class DashboardCoreController {
   /// two-step LogBox publication. The existing focus pipeline still performs
   /// the single atomic prepared-index publication.
   Future<bool> requestBudgetCategoryFocus(DashboardFocusFacet facet) =>
-      _requestEphemeralFocus(category: facet, clearPartner: true);
+      _requestEphemeralFocus(
+        category: facet,
+        clearPartner: true,
+        deferSceneInstallation: true,
+      );
 
   /// Requests a transient partner narrowing after the viewport-owned swipe
   /// arbiter has committed one intentional leftward gesture.
@@ -4050,12 +4186,14 @@ final class DashboardCoreController {
     return _requestEphemeralFocus(clearPartner: true);
   }
 
-  Future<bool> clearAllEphemeralFocus() {
+  Future<bool> clearAllEphemeralFocus({bool deferSceneInstallation = false}) {
     if (_provisionalFocusBaseIndex != null &&
         _provisionalFocusBaseScope != null) {
       return _cancelProvisionalFocusAndRestoreBase();
     }
-    return _restoreBaseAfterFocus();
+    return _restoreBaseAfterFocus(
+      deferSceneInstallation: deferSceneInstallation,
+    );
   }
 
   Future<bool> _requestEphemeralFocus({
@@ -4063,6 +4201,7 @@ final class DashboardCoreController {
     DashboardFocusFacet? partner,
     bool clearCategory = false,
     bool clearPartner = false,
+    bool deferSceneInstallation = false,
   }) async {
     if (_disposed || queryComposer.isOpen) return false;
     final direction = navigation.state.parentQueryScope.direction;
@@ -4092,7 +4231,9 @@ final class DashboardCoreController {
         ? null
         : partner ?? (priorIsValid ? prior.partner : null);
     if (nextCategory == null && nextPartner == null) {
-      return _restoreBaseAfterFocus();
+      return _restoreBaseAfterFocus(
+        deferSceneInstallation: deferSceneInstallation,
+      );
     }
     if (priorIsValid &&
         prior.category?.id == nextCategory?.id &&
@@ -4249,62 +4390,126 @@ final class DashboardCoreController {
             'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
       ),
     );
-    final published = await installPreparedIndex(
-      derived,
-      publicationState: publicationState,
-      shouldPublish: () =>
-          !_disposed &&
-          generation == _focusPublicationGeneration &&
-          currentQuery.scopeFor(direction) == baseScope,
-      beforePublish: () {
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'FOCUS_PUBLICATION_STARTED',
-            queryKey: effectiveScope.key.value,
-            direction: direction.name,
-            coreRevision: derived.coreRevision,
-          ),
+    // The amount lane above is already a prepared, synchronous preview. The
+    // atomic focused LogBox scene is deliberately coalesced behind physical
+    // avatar motion: an async function starts executing until its first await,
+    // including bounded scene work.
+    return _scheduleFocusedSceneInstall(
+      generation: generation,
+      deferUntilIdle: deferSceneInstallation,
+      install: () async {
+        final published = await installPreparedIndex(
+          derived,
+          publicationState: publicationState,
+          shouldPublish: () =>
+              !_disposed &&
+              generation == _focusPublicationGeneration &&
+              currentQuery.scopeFor(direction) == baseScope,
+          beforePublish: () {
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'FOCUS_PUBLICATION_STARTED',
+                queryKey: effectiveScope.key.value,
+                direction: direction.name,
+                coreRevision: derived.coreRevision,
+              ),
+            );
+            // Keep the one bounded base page hotset under its existing paging
+            // owner until the focused scope becomes authoritative. Capturing
+            // it here avoids exposing an unbound cache while focus scenes
+            // prepare.
+            _retainFocusBasePagingIfNeeded(baseIndex);
+            navigation.replaceAppliedQuery(
+              effectiveScope,
+              availability: availability,
+              coreRevision: derived.coreRevision,
+            );
+          },
+          afterPublish: () {
+            _focusBaseIndex = baseIndex;
+            _provisionalFocusBaseIndex = null;
+            _provisionalFocusBaseScope = null;
+            focus.replace(
+              baseScope: baseScope,
+              coreRevision: baseIndex.coreRevision,
+              category: nextCategory,
+              partner: nextPartner,
+            );
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'FOCUS_PUBLICATION_COMPLETED',
+                queryKey: effectiveScope.key.value,
+                direction: direction.name,
+                coreRevision: derived.coreRevision,
+                entryCount: derived
+                    .frameFor(navigation.state.parentQueryScope)
+                    .entryCount,
+                durationMs: started.elapsedMilliseconds,
+              ),
+            );
+          },
+          isEphemeralFocusPublication: true,
         );
-        // Keep the one bounded base page hotset under its existing paging
-        // owner until the focused scope becomes authoritative. Capturing it
-        // here avoids exposing an unbound cache while focus scenes prepare.
-        _retainFocusBasePagingIfNeeded(baseIndex);
-        navigation.replaceAppliedQuery(
-          effectiveScope,
-          availability: availability,
-          coreRevision: derived.coreRevision,
-        );
+        if (!published && generation == _focusPublicationGeneration) {
+          _provisionalFocusBaseIndex = null;
+          _provisionalFocusBaseScope = null;
+        }
+        return published;
       },
-      afterPublish: () {
-        _focusBaseIndex = baseIndex;
-        _provisionalFocusBaseIndex = null;
-        _provisionalFocusBaseScope = null;
-        focus.replace(
-          baseScope: baseScope,
-          coreRevision: baseIndex.coreRevision,
-          category: nextCategory,
-          partner: nextPartner,
-        );
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'FOCUS_PUBLICATION_COMPLETED',
-            queryKey: effectiveScope.key.value,
-            direction: direction.name,
-            coreRevision: derived.coreRevision,
-            entryCount: derived
-                .frameFor(navigation.state.parentQueryScope)
-                .entryCount,
-            durationMs: started.elapsedMilliseconds,
-          ),
-        );
-      },
-      isEphemeralFocusPublication: true,
     );
-    if (!published && generation == _focusPublicationGeneration) {
-      _provisionalFocusBaseIndex = null;
-      _provisionalFocusBaseScope = null;
+  }
+
+  Future<bool> _scheduleFocusedSceneInstall({
+    required int generation,
+    bool deferUntilIdle = false,
+    required Future<bool> Function() install,
+  }) {
+    // Preserve the established direct focus path for an idle tap. Only a
+    // physical Summary/BudgetAvatar producer needs the idle coalescer; adding
+    // a timer to every ordinary focus request races existing retained-scene
+    // restoration and is not part of the foreground-input contract.
+    if (!deferUntilIdle &&
+        !_committedPagingSafetyMotionActive &&
+        _deferredFocusSceneInstall == null &&
+        !_focusSceneInstallDrainScheduled) {
+      return install();
     }
-    return published;
+    final completion = Completer<bool>();
+    final previous = _deferredFocusSceneInstall;
+    if (previous != null && !previous.completion.isCompleted) {
+      previous.completion.complete(false);
+    }
+    _deferredFocusSceneInstall = _DeferredFocusSceneInstall(
+      generation: generation,
+      install: install,
+      completion: completion,
+    );
+    _drainDeferredFocusedSceneInstall();
+    return completion.future;
+  }
+
+  void _drainDeferredFocusedSceneInstall() {
+    if (_disposed ||
+        _committedPagingSafetyMotionActive ||
+        _focusSceneInstallDrainScheduled ||
+        _deferredFocusSceneInstall == null) {
+      return;
+    }
+    _focusSceneInstallDrainScheduled = true;
+    unawaited(
+      Future<void>.delayed(Duration.zero).then((_) async {
+        _focusSceneInstallDrainScheduled = false;
+        if (_disposed || _committedPagingSafetyMotionActive) return;
+        final request = _deferredFocusSceneInstall;
+        if (request == null) return;
+        _deferredFocusSceneInstall = null;
+        final published = await request.install();
+        if (!request.completion.isCompleted) {
+          request.completion.complete(published);
+        }
+        _drainDeferredFocusedSceneInstall();
+      }),
+    );
   }
 
   /// Cancels a narrowed focus which has published its prepared amount but has
@@ -4320,6 +4525,7 @@ final class DashboardCoreController {
     _provisionalFocusBaseIndex = null;
     _provisionalFocusBaseScope = null;
     final generation = ++_focusPublicationGeneration;
+    _cancelDeferredFocusedSceneInstall();
     final currentBaseScope = currentQuery.scopeFor(baseScope.direction);
     final canRestore =
         !_disposed &&
@@ -4361,7 +4567,9 @@ final class DashboardCoreController {
     return true;
   }
 
-  Future<bool> _restoreBaseAfterFocus() async {
+  Future<bool> _restoreBaseAfterFocus({
+    bool deferSceneInstallation = false,
+  }) async {
     final state = focus.state;
     final baseIndex = _focusBaseIndex;
     if (state == null || baseIndex == null) return false;
@@ -4374,6 +4582,7 @@ final class DashboardCoreController {
       return false;
     }
     final generation = ++_focusPublicationGeneration;
+    _cancelDeferredFocusedSceneInstall();
     final availability = DashboardTemporalAvailability.fromTemporalFilter(
       baseScope.temporalFilter,
     );
@@ -4391,46 +4600,52 @@ final class DashboardCoreController {
       state: publicationState,
       previewGeneration: generation,
     );
-    final published = await installPreparedIndex(
-      baseIndex,
-      publicationState: publicationState,
-      shouldPublish: () =>
-          !_disposed &&
-          generation == _focusPublicationGeneration &&
-          currentQuery.scopeFor(state.anchor.direction) == baseScope,
-      beforePublish: () {
-        navigation.replaceAppliedQuery(
-          baseScope,
-          availability: availability,
-          coreRevision: baseIndex.coreRevision,
+    return _scheduleFocusedSceneInstall(
+      generation: generation,
+      deferUntilIdle: deferSceneInstallation,
+      install: () async {
+        final published = await installPreparedIndex(
+          baseIndex,
+          publicationState: publicationState,
+          shouldPublish: () =>
+              !_disposed &&
+              generation == _focusPublicationGeneration &&
+              currentQuery.scopeFor(state.anchor.direction) == baseScope,
+          beforePublish: () {
+            navigation.replaceAppliedQuery(
+              baseScope,
+              availability: availability,
+              coreRevision: baseIndex.coreRevision,
+            );
+          },
+          afterPublish: () {
+            focus.clearAll();
+            _focusBaseIndex = null;
+            _provisionalFocusBaseIndex = null;
+            _provisionalFocusBaseScope = null;
+            _discardRetainedFocusBaseScene();
+            _discardRetainedFocusBasePaging();
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'FOCUS_BASE_RESTORED',
+                queryKey: baseScope.key.value,
+                direction: baseScope.direction.name,
+                coreRevision: baseIndex.coreRevision,
+              ),
+            );
+          },
+          isEphemeralFocusPublication: true,
         );
+        if (!published && _focusBaseIndex == null) {
+          _discardRetainedFocusBaseScene();
+        }
+        if (!published &&
+            identical(_pendingFocusBasePagingRestore, retainedPaging)) {
+          _pendingFocusBasePagingRestore = null;
+        }
+        return published;
       },
-      afterPublish: () {
-        focus.clearAll();
-        _focusBaseIndex = null;
-        _provisionalFocusBaseIndex = null;
-        _provisionalFocusBaseScope = null;
-        _discardRetainedFocusBaseScene();
-        _discardRetainedFocusBasePaging();
-        FluviDiagnosticLogger.log(
-          FluviDiagnosticEvent(
-            stage: 'FOCUS_BASE_RESTORED',
-            queryKey: baseScope.key.value,
-            direction: baseScope.direction.name,
-            coreRevision: baseIndex.coreRevision,
-          ),
-        );
-      },
-      isEphemeralFocusPublication: true,
     );
-    if (!published && _focusBaseIndex == null) {
-      _discardRetainedFocusBaseScene();
-    }
-    if (!published &&
-        identical(_pendingFocusBasePagingRestore, retainedPaging)) {
-      _pendingFocusBasePagingRestore = null;
-    }
-    return published;
   }
 
   void _invalidateFocusForChangedBaseQuery() {
@@ -4479,6 +4694,7 @@ final class DashboardCoreController {
     final provisionalIndex = _provisionalFocusBaseIndex;
     if (state == null && provisionalScope == null) return;
     _focusPublicationGeneration += 1;
+    _cancelDeferredFocusedSceneInstall();
     presentation.visibleFrames.clearPreparedAmountPreview(
       previewGeneration: _focusPublicationGeneration,
     );
@@ -4500,6 +4716,14 @@ final class DashboardCoreController {
         scope: 'reason=$reason',
       ),
     );
+  }
+
+  void _cancelDeferredFocusedSceneInstall() {
+    final deferred = _deferredFocusSceneInstall;
+    _deferredFocusSceneInstall = null;
+    if (deferred != null && !deferred.completion.isCompleted) {
+      deferred.completion.complete(false);
+    }
   }
 
   void _retainFocusBaseSceneIfNeeded(PreparedDashboardIndex baseIndex) {
@@ -6352,10 +6576,15 @@ final class DashboardCoreController {
     if (!changed) return;
     final anyActive = _activeMotionLanes.isNotEmpty;
     final pagingMotionIsActive = _committedPagingSafetyMotionActive;
+    if (foregroundInputMotion.value != pagingMotionIsActive) {
+      foregroundInputMotion.value = pagingMotionIsActive;
+    }
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
     if (!anyActive) {
       _resumeCommittedPagingAtSafetyBoundary(reason: 'motionIdle');
+      _drainDeferredBudgetDistributionWarmup();
+      _drainDeferredFocusedSceneInstall();
       if (_verticalPointerIntentActive || _verticalInteractionActive) return;
       _drainRequiredSceneCoverageDemand();
       if (_requiredSceneCoverageDemand == null) {
@@ -6372,6 +6601,8 @@ final class DashboardCoreController {
       _resumeCommittedPagingAtSafetyBoundary(
         reason: 'committedPagingMotionIdle',
       );
+      _drainDeferredBudgetDistributionWarmup();
+      _drainDeferredFocusedSceneInstall();
     }
   }
 
@@ -6381,7 +6612,8 @@ final class DashboardCoreController {
   bool get _committedPagingSafetyMotionActive =>
       _activeMotionLanes.contains(DashboardMotionLane.rail) ||
       _activeMotionLanes.contains(DashboardMotionLane.visualHost) ||
-      _activeMotionLanes.contains(DashboardMotionLane.summaryShell);
+      _activeMotionLanes.contains(DashboardMotionLane.summaryShell) ||
+      _activeMotionLanes.contains(DashboardMotionLane.budgetAvatar);
 
   /// Raw contact remains the strict boundary. After it ends, a live
   /// committed-viewport target may drain through the existing serial owner
@@ -6581,6 +6813,8 @@ final class DashboardCoreController {
     _cancelActiveComposerApply(reason: 'disposed');
     _supersedeQueryChipPrewarm();
     _cancelBackgroundSceneWarmup();
+    _deferredBudgetDistributionWarmup = null;
+    _cancelDeferredFocusedSceneInstall();
     _discardRetainedFocusBaseScene();
     _discardRetainedFocusBasePaging();
     _disposed = true;
@@ -6589,6 +6823,7 @@ final class DashboardCoreController {
     }
     _sceneRebaseCompletions.clear();
     _sceneWindowPreparing.dispose();
+    foregroundInputMotion.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();
     railFlightRecorder?.dispose();

@@ -327,6 +327,14 @@ void main() {
           displayName: 'Utilities',
         ),
       );
+      expect(
+        firstStarted.isCompleted,
+        isFalse,
+        reason:
+            'The discrete avatar crossing publishes its prepared amount now, '
+            'then yields before any LogBox scene preparation can consume the '
+            'gesture stack.',
+      );
       await firstStarted.future;
       final previewB = drilldown.previewBudgetTarget(
         state: _budgetAvatarPreviewState(
@@ -381,6 +389,54 @@ void main() {
         ),
         isTrue,
       );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'Budget avatar motion defers focused LogBox scene installation until idle',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      var scenePrepareCalls = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {
+          scenePrepareCalls += 1;
+        },
+        activate: (_) {},
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+
+      core.beginBudgetAvatarMotion();
+      final preview = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 500);
+      expect(
+        scenePrepareCalls,
+        0,
+        reason:
+            'The direct prepared amount lane remains immediate, but focused '
+            'scene geometry cannot consume a ballistic avatar frame.',
+      );
+
+      core.endBudgetAvatarMotion();
+      await pumpEventQueue();
+
+      expect(scenePrepareCalls, greaterThan(0));
+      await preview;
       expect(repository.prepareCalls, 1);
     },
   );

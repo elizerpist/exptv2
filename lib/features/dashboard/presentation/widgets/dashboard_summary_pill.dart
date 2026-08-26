@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
@@ -17,6 +18,7 @@ import '../../visible/domain/dashboard_visible_frame.dart';
 import '../dashboard_amount_update_policy.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 import '../summary_navigation_motion_controller.dart';
 import 'summary_navigation_motion_region.dart';
 import 'summary_pill_text_transition.dart';
@@ -182,7 +184,9 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
     final shell = FluviRoundedBox(
       color: depth.surfaceColor ?? FluviVisualTokens.surface,
-      border: depth.border,
+      border: DashboardBorderScope.profileOf(
+        context,
+      ).borderFor(DashboardBorderSurface.summary),
       borderRadius: borderRadius,
       boxShadow: depth.shadows,
       child: Row(

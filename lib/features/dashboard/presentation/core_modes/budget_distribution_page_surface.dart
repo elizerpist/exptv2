@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 import '../budget_content_card_style.dart';
 
 /// The one physical Card2 surface used by both lazily built page items. It is
@@ -45,9 +47,9 @@ class BudgetDistributionPageCard extends StatelessWidget {
                         'budget-distribution-page-card-surface',
                       ),
                       color: depth.surfaceColor ?? FluviVisualTokens.surface,
-                      border:
-                          depth.border ??
-                          Border.all(color: FluviVisualTokens.border),
+                      border: DashboardBorderScope.profileOf(
+                        context,
+                      ).borderFor(DashboardBorderSurface.budgetContent),
                       borderRadius:
                           DashboardCornerRoundnessScope.profileOf(
                             context,

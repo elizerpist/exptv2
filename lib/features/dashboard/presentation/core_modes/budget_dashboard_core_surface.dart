@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
@@ -16,6 +17,7 @@ import '../widgets/dashboard_placeholder_card.dart';
 import '../budget_content_card_style.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 import 'budget_category_avatar_rail.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -38,6 +40,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.contentCardStyle,
     this.rhythm,
     this.drilldown,
+    this.onAvatarMotionActiveChanged,
     this.headerVisualController,
     this.headerVisualFrame,
   });
@@ -52,6 +55,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final ValueListenable<BudgetContentLayout>? contentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
+  final ValueChanged<bool>? onAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
@@ -94,35 +98,46 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     drilldown: drilldown,
                   ),
           ),
-          DashboardCoreModeCascadeCard(
-            bounds: geometry.subheaderOneBounds,
-            motion: geometry.upperCardMotion!,
-            semanticKey: const ValueKey('dashboard-core-mode-budget-card-1'),
-            showPlaceholderSurface: false,
-            contentVerticalInputOverflow:
-                BudgetTargetAvatarRail.selectedInputVerticalOverflow,
-            content: presentationController == null
-                ? const SizedBox(
-                    key: ValueKey<String>('budget-target-avatar-rail'),
-                  )
-                : BudgetTargetAvatarRail(
-                    presentation: presentationController!,
-                    limitEditController: limitEditController,
-                    navigationController: avatarRailController,
-                    onTargetPreview: drilldown == null
-                        ? null
-                        : (state) => unawaited(
-                            drilldown!.previewBudgetTarget(state: state),
-                          ),
-                    onTargetSettled: drilldown == null
-                        ? null
-                        : (state) => unawaited(
-                            drilldown!.commitBudgetTarget(
-                              state: state,
-                              source: 'avatarSettled',
+          ValueListenableBuilder<BudgetContentLayout>(
+            valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+            builder: (context, layout, _) => DashboardCoreModeCascadeCard(
+              bounds: geometry.subheaderOneBounds,
+              motion: geometry.upperCardMotion!,
+              semanticKey: const ValueKey('dashboard-core-mode-budget-card-1'),
+              showPlaceholderSurface: false,
+              contentVerticalInputOverflow:
+                  BudgetTargetAvatarRail.selectedInputVerticalOverflow,
+              // The shared card starts at the authored mode-content top.
+              // Moving this full input parent down exactly one existing
+              // overflow clears the selected 112px chrome without changing
+              // Split's baseline rail position, hit bounds or carousel state.
+              contentVerticalOffset: layout == BudgetContentLayout.unifiedCard
+                  ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
+                  : 0,
+              content: presentationController == null
+                  ? const SizedBox(
+                      key: ValueKey<String>('budget-target-avatar-rail'),
+                    )
+                  : BudgetTargetAvatarRail(
+                      presentation: presentationController!,
+                      limitEditController: limitEditController,
+                      navigationController: avatarRailController,
+                      onTargetPreview: drilldown == null
+                          ? null
+                          : (state) => unawaited(
+                              drilldown!.previewBudgetTarget(state: state),
                             ),
-                          ),
-                  ),
+                      onTargetSettled: drilldown == null
+                          ? null
+                          : (state) => unawaited(
+                              drilldown!.commitBudgetTarget(
+                                state: state,
+                                source: 'avatarSettled',
+                              ),
+                            ),
+                      onMotionActiveChanged: onAvatarMotionActiveChanged,
+                    ),
+            ),
           ),
           DashboardCoreModeOpacityPosition(
             bounds: geometry.zone2IndicatorBounds,
@@ -273,40 +288,43 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
   final ValueListenable<BudgetContentLayout>? contentLayout;
 
   @override
-  Widget build(
-    BuildContext context,
-  ) => ValueListenableBuilder<BudgetContentLayout>(
-    valueListenable: contentLayout ?? _alwaysSplitBudgetContent,
-    builder: (context, layout, _) {
-      if (layout != BudgetContentLayout.unifiedCard) {
-        return const SizedBox.shrink();
-      }
-      final bounds = geometry.modeContentBounds;
-      final depth = DashboardShadowStyleScope.profileOf(
-        context,
-      ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
-      return DashboardCoreModeOpacityPosition(
-        bounds: bounds,
-        opacity: geometry.zone2Opacity,
-        offset: Offset(0, geometry.zone2Shift),
-        scale: geometry.zone2Scale,
-        child: LayoutBuilder(
-          builder: (context, constraints) => FluviRoundedBox(
-            key: const ValueKey<String>('budget-unified-content-card-surface'),
-            color: depth.surfaceColor ?? FluviVisualTokens.surface,
-            border: depth.border ?? Border.all(color: FluviVisualTokens.border),
-            borderRadius: DashboardCornerRoundnessScope.profileOf(context)
-                .borderRadiusFor(
-                  DashboardCornerSurfaceFamily.budgetDistributionCard,
-                  size: constraints.biggest,
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<BudgetContentLayout>(
+        valueListenable: contentLayout ?? _alwaysSplitBudgetContent,
+        builder: (context, layout, _) {
+          if (layout != BudgetContentLayout.unifiedCard) {
+            return const SizedBox.shrink();
+          }
+          final bounds = geometry.modeContentBounds;
+          final depth = DashboardShadowStyleScope.profileOf(
+            context,
+          ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
+          return DashboardCoreModeOpacityPosition(
+            bounds: bounds,
+            opacity: geometry.zone2Opacity,
+            offset: Offset(0, geometry.zone2Shift),
+            scale: geometry.zone2Scale,
+            child: LayoutBuilder(
+              builder: (context, constraints) => FluviRoundedBox(
+                key: const ValueKey<String>(
+                  'budget-unified-content-card-surface',
                 ),
-            boxShadow: depth.shadows,
-            child: const SizedBox.expand(),
-          ),
-        ),
+                color: depth.surfaceColor ?? FluviVisualTokens.surface,
+                border: DashboardBorderScope.profileOf(
+                  context,
+                ).borderFor(DashboardBorderSurface.budgetContent),
+                borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+                    .borderRadiusFor(
+                      DashboardCornerSurfaceFamily.budgetDistributionCard,
+                      size: constraints.biggest,
+                    ),
+                boxShadow: depth.shadows,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          );
+        },
       );
-    },
-  );
 }
 
 final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =

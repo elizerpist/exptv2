@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
@@ -9,6 +12,7 @@ import '../../../../core/design/header_cascade_motion.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 import 'dashboard_header_visual_engine.dart';
 
 class DashboardCoreModeFramePosition extends StatelessWidget {
@@ -40,6 +44,8 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
     this.content,
     this.showPlaceholderSurface = true,
     this.contentVerticalInputOverflow = 0,
+    this.contentVerticalOffset = 0,
+    this.borderSurface = DashboardBorderSurface.balanceContent,
   });
 
   final DashboardBounds bounds;
@@ -49,9 +55,17 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
   final bool showPlaceholderSurface;
   final double contentVerticalInputOverflow;
 
+  /// An authored composition offset for a visual/input surface that is
+  /// intentionally taller than its structural subheader. The enclosing
+  /// positioned/hit-test parent moves with its content; callers must not use
+  /// a paint-only transform for interactive rails.
+  final double contentVerticalOffset;
+  final DashboardBorderSurface borderSurface;
+
   @override
   Widget build(BuildContext context) {
     assert(contentVerticalInputOverflow >= 0);
+    assert(contentVerticalOffset >= 0);
     final overflow = contentVerticalInputOverflow;
     final expandedInputSurface = !showPlaceholderSurface && overflow > 0;
     return Positioned(
@@ -60,7 +74,10 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
       // The scaled top adjustment keeps the visual 72px card/avatars at the
       // exact existing coordinates while the input parent covers their 112px
       // selected-shell composition.
-      top: motion.top - overflow * motion.scale,
+      top:
+          motion.top -
+          overflow * motion.scale +
+          contentVerticalOffset * motion.scale,
       height: bounds.height + overflow * 2,
       child: IgnorePointer(
         ignoring: motion.progress < .98,
@@ -95,6 +112,7 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
                         bounds: bounds,
                         fillParent: true,
                         semanticKey: semanticKey,
+                        borderSurface: borderSurface,
                       ),
                       ?content,
                     ],
@@ -242,6 +260,9 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     final depth = DashboardShadowStyleScope.profileOf(
       context,
     ).depthFor(DashboardCornerSurfaceFamily.header);
+    final border = DashboardBorderScope.profileOf(
+      context,
+    ).borderFor(DashboardBorderSurface.header);
     if (visualController == null || frames == null) {
       return DashboardPlaceholderCard(
         bounds: bounds,
@@ -281,34 +302,75 @@ final class _HeaderPhysicalShell extends StatelessWidget {
               ),
             ),
           ),
-          // The reference material's inner highlight must sit above the
-          // animated colour layer, while its outer depth remains outside the
-          // physical clip in Layer 1.
+          // The Reference3D white source inner shadow cannot be placed as a
+          // full DecoratedBox over a coloured animated Header: that washes out
+          // the palette. This painter keeps the source highlight as an
+          // edge-only ring; the animated layer remains the sole fill owner.
           if (depth.innerShadows.isNotEmpty)
             IgnorePointer(
-              child: DecoratedBox(
+              child: CustomPaint(
                 key: const ValueKey<String>('dashboard-header-depth-highlight'),
-                decoration: BoxDecoration(
+                painter: _HeaderDepthHighlightPainter(
                   borderRadius: borderRadius,
-                  boxShadow: depth.innerShadows,
+                  shadows: depth.innerShadows,
                 ),
               ),
             ),
           // Keep the physical card border above dynamically-painted pixels.
-          IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border:
-                    depth.border ??
-                    Border.fromBorderSide(
-                      BorderSide(color: FluviVisualTokens.border),
-                    ),
-                borderRadius: borderRadius,
+          if (border != null)
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: border,
+                  borderRadius: borderRadius,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
+}
+
+/// An edge-masked rendition of the source-defined inner highlight for coloured
+/// Header palettes. It keeps each source [BoxShadow]'s paint, blur style,
+/// spread and offset, while the mask prevents an opaque white reference
+/// surface from taking ownership of Fluvi's animated Header fill.
+final class _HeaderDepthHighlightPainter extends CustomPainter {
+  const _HeaderDepthHighlightPainter({
+    required this.borderRadius,
+    required this.shadows,
+  });
+
+  final BorderRadius borderRadius;
+  final List<BoxShadow> shadows;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rect = Offset.zero & size;
+    canvas.save();
+    canvas.clipRRect(borderRadius.toRRect(rect), doAntiAlias: true);
+    for (final shadow in shadows) {
+      final sourceBounds = rect
+          .shift(shadow.offset)
+          .inflate(shadow.spreadRadius);
+      final outer = borderRadius.toRRect(sourceBounds);
+      // A zero-blur reference inner shadow still has one physical edge pixel;
+      // nonzero blur/spread retain their authored footprint instead of being
+      // normalized to a hard-coded stroke width.
+      final edgeWidth = math.max(
+        1.0,
+        math.max(shadow.spreadRadius.abs(), shadow.blurRadius / 2),
+      );
+      final inner = outer.deflate(edgeWidth);
+      canvas.drawDRRect(outer, inner, shadow.toPaint());
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_HeaderDepthHighlightPainter oldDelegate) =>
+      oldDelegate.borderRadius != borderRadius ||
+      oldDelegate.shadows != shadows;
 }

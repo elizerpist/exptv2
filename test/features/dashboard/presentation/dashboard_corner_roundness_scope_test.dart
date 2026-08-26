@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
@@ -16,6 +20,7 @@ void main() {
   testWidgets('reference Header depth keeps inner material above the clip', (
     tester,
   ) async {
+    final boundary = GlobalKey();
     final visual = DashboardHeaderVisualController(vsync: tester);
     final frame = ValueNotifier<DashboardHeaderVisualFrame>(
       DashboardHeaderVisualFrame.staticTone(Colors.blue),
@@ -27,23 +32,32 @@ void main() {
         home: Scaffold(
           body: DashboardShadowStyleScope(
             controller: shadows,
-            child: Stack(
-              children: <Widget>[
-                DashboardCoreModeHeaderScaffold(
-                  bounds: const DashboardBounds(
-                    left: 0,
-                    top: 0,
-                    width: 320,
-                    height: 104,
-                  ),
-                  surfaceColor: Colors.blue,
-                  headerKey: const ValueKey<String>('reference-depth-header'),
-                  labelKey: const ValueKey<String>('reference-depth-label'),
-                  label: 'mode',
-                  visualController: visual,
-                  visualFrameListenable: frame,
+            child: RepaintBoundary(
+              key: boundary,
+              child: SizedBox(
+                width: 320,
+                height: 104,
+                child: Stack(
+                  children: <Widget>[
+                    DashboardCoreModeHeaderScaffold(
+                      bounds: const DashboardBounds(
+                        left: 0,
+                        top: 0,
+                        width: 320,
+                        height: 104,
+                      ),
+                      surfaceColor: Colors.blue,
+                      headerKey: const ValueKey<String>(
+                        'reference-depth-header',
+                      ),
+                      labelKey: const ValueKey<String>('reference-depth-label'),
+                      label: 'mode',
+                      visualController: visual,
+                      visualFrameListenable: frame,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -66,6 +80,25 @@ void main() {
         DashboardShadowStyle.reference3d,
       ).depthFor(DashboardCornerSurfaceFamily.header).outerShadows,
     );
+    final rendered =
+        boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    final image = (await tester.runAsync(() => rendered.toImage()))!;
+    try {
+      final bytes = await tester.runAsync(
+        () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+      );
+      expect(bytes, isNotNull);
+      final center = _pixelAt(bytes!, width: 320, x: 160, y: 52);
+      expect(
+        center.toARGB32(),
+        Colors.blue.toARGB32(),
+        reason:
+            'Reference3D may add edge depth but the animated Header palette '
+            'remains the only interior fill owner.',
+      );
+    } finally {
+      image.dispose();
+    }
     await tester.pumpWidget(const SizedBox.shrink());
     visual.dispose();
     frame.dispose();
@@ -185,5 +218,20 @@ void main() {
       frame.dispose();
       cardStyle.dispose();
     },
+  );
+}
+
+Color _pixelAt(
+  ByteData bytes, {
+  required int width,
+  required int x,
+  required int y,
+}) {
+  final offset = (y * width + x) * 4;
+  return Color.fromARGB(
+    bytes.getUint8(offset + 3),
+    bytes.getUint8(offset),
+    bytes.getUint8(offset + 1),
+    bytes.getUint8(offset + 2),
   );
 }

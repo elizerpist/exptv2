@@ -20,44 +20,48 @@ void main() {
     );
   });
 
-  test('the fourth depth profile pins the Balance reference material', () {
-    const profile = DashboardShadowProfile(DashboardShadowStyle.reference3d);
-    final summary = profile.depthFor(DashboardCornerSurfaceFamily.summaryPill);
-    final search = profile.depthFor(DashboardCornerSurfaceFamily.searchPill);
+  test(
+    'the fourth depth profile pins the Balance reference material without owning its contour',
+    () {
+      const profile = DashboardShadowProfile(DashboardShadowStyle.reference3d);
+      final summary = profile.depthFor(
+        DashboardCornerSurfaceFamily.summaryPill,
+      );
+      final search = profile.depthFor(DashboardCornerSurfaceFamily.searchPill);
 
-    expect(
-      summary.border,
-      const Border.fromBorderSide(BorderSide(color: Color(0x1A666FAB))),
-    );
-    expect(summary.shadows, const <BoxShadow>[
-      BoxShadow(color: Color(0x14524B93), offset: Offset(0, 8), blurRadius: 17),
-      BoxShadow(
-        color: Color(0xF0FFFFFF),
-        offset: Offset(0, 1),
-        blurRadius: 0,
-        blurStyle: BlurStyle.inner,
-      ),
-    ]);
-    expect(
-      search.border,
-      const Border.fromBorderSide(BorderSide(color: Color(0x17666FAB))),
-    );
-    expect(search.shadows, const <BoxShadow>[
-      BoxShadow(color: Color(0x12524B93), offset: Offset(0, 7), blurRadius: 15),
-      BoxShadow(
-        color: Color(0xF0FFFFFF),
-        offset: Offset(0, 1),
-        blurRadius: 0,
-        blurStyle: BlurStyle.inner,
-      ),
-    ]);
-  });
+      expect(summary.shadows, const <BoxShadow>[
+        BoxShadow(
+          color: Color(0x14524B93),
+          offset: Offset(0, 8),
+          blurRadius: 17,
+        ),
+        BoxShadow(
+          color: Color(0xF0FFFFFF),
+          offset: Offset(0, 1),
+          blurRadius: 0,
+          blurStyle: BlurStyle.inner,
+        ),
+      ]);
+      expect(search.shadows, const <BoxShadow>[
+        BoxShadow(
+          color: Color(0x12524B93),
+          offset: Offset(0, 7),
+          blurRadius: 15,
+        ),
+        BoxShadow(
+          color: Color(0xF0FFFFFF),
+          offset: Offset(0, 1),
+          blurRadius: 0,
+          blurStyle: BlurStyle.inner,
+        ),
+      ]);
+    },
+  );
 
   test('the fourth depth profile reaches every semantic surface family', () {
     const profile = DashboardShadowProfile(DashboardShadowStyle.reference3d);
     for (final family in DashboardCornerSurfaceFamily.values) {
       final depth = profile.depthFor(family);
-      expect(depth.border, isNotNull, reason: family.name);
       expect(depth.outerShadows, isNotEmpty, reason: family.name);
       expect(depth.innerShadows, isNotEmpty, reason: family.name);
     }

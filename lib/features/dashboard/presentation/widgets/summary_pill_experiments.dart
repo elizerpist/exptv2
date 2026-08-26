@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
@@ -14,7 +15,17 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../summary_pill_variant.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
+import '../dashboard_border_style.dart';
 import 'dashboard_summary_pill.dart';
+
+typedef SummaryPillComponentCandidateProjector =
+    DashboardNavigationState? Function({
+      required DashboardNavigationState base,
+      required TimePlane plane,
+      required bool isRailOpen,
+      required DashboardTemporalAnchorComponent component,
+      required int offset,
+    });
 
 /// Fixed-height presentation experiments over the existing dashboard time
 /// state. They intentionally contain no query or temporal state of their own.
@@ -27,8 +38,10 @@ final class SummaryPillExperiment extends StatelessWidget {
     required this.visibleFrames,
     required this.onLevelCrossed,
     required this.onComponentCrossed,
+    this.componentCandidateProjector,
     this.performanceCounters,
     this.onAmountMotionActiveChanged,
+    this.onSelectorMotionActiveChanged,
   }) : assert(variant == SummaryPillVariant.segmented);
 
   final SummaryPillVariant variant;
@@ -41,8 +54,10 @@ final class SummaryPillExperiment extends StatelessWidget {
     DashboardTemporalAnchorComponent component,
   )
   onComponentCrossed;
+  final SummaryPillComponentCandidateProjector? componentCandidateProjector;
   final DashboardPerformanceCounters? performanceCounters;
   final ValueChanged<bool>? onAmountMotionActiveChanged;
+  final ValueChanged<bool>? onSelectorMotionActiveChanged;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -64,7 +79,9 @@ final class SummaryPillExperiment extends StatelessWidget {
         height: bounds.height,
         child: FluviRoundedBox(
           color: depth.surfaceColor ?? FluviVisualTokens.surface,
-          border: depth.border,
+          border: DashboardBorderScope.profileOf(
+            context,
+          ).borderFor(DashboardBorderSurface.summary),
           borderRadius: DashboardCornerRoundnessScope.profileOf(context)
               .borderRadiusFor(
                 DashboardCornerSurfaceFamily.summaryPill,
@@ -94,6 +111,9 @@ final class SummaryPillExperiment extends StatelessWidget {
                       navigation: navigation,
                       onLevelCrossed: onLevelCrossed,
                       onComponentCrossed: onComponentCrossed,
+                      componentCandidateProjector: componentCandidateProjector,
+                      onSelectorMotionActiveChanged:
+                          onSelectorMotionActiveChanged,
                     ),
                   ),
                   SizedBox(
@@ -183,6 +203,8 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     required this.navigation,
     required this.onLevelCrossed,
     required this.onComponentCrossed,
+    this.componentCandidateProjector,
+    this.onSelectorMotionActiveChanged,
   });
 
   final SummaryPillExperimentLevel level;
@@ -191,6 +213,8 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final DashboardNavigationController navigation;
   final _LevelCrossed onLevelCrossed;
   final _ComponentCrossed onComponentCrossed;
+  final SummaryPillComponentCandidateProjector? componentCandidateProjector;
+  final ValueChanged<bool>? onSelectorMotionActiveChanged;
 
   @override
   Widget build(BuildContext context) => _FixedHierarchyTracks(
@@ -209,8 +233,11 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       height: height,
       level: level,
       onCrossed: onLevelCrossed,
+      onMotionActiveChanged: onSelectorMotionActiveChanged,
     ),
     onComponentCrossed: onComponentCrossed,
+    componentCandidateProjector: componentCandidateProjector,
+    onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
   );
 }
 
@@ -228,6 +255,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     required this.dayTrack,
     this.modeSelector,
     required this.onComponentCrossed,
+    this.componentCandidateProjector,
+    this.onSelectorMotionActiveChanged,
   });
 
   final String keyPrefix;
@@ -242,6 +271,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final int dayTrack;
   final Widget? modeSelector;
   final _ComponentCrossed onComponentCrossed;
+  final SummaryPillComponentCandidateProjector? componentCandidateProjector;
+  final ValueChanged<bool>? onSelectorMotionActiveChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +294,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               semanticsLabel:
                   'Év: ${navigation.state.yearCursor}. Függőlegesen húzva módosítható.',
               candidateForOffset: (origin, offset) =>
+                  componentCandidateProjector?.call(
+                    base: origin,
+                    plane: level.plane,
+                    isRailOpen: level.isRailOpen,
+                    component: DashboardTemporalAnchorComponent.year,
+                    offset: offset,
+                  ) ??
                   navigation.temporalComponentOffsetCandidate(
                     plane: level.plane,
                     isRailOpen: level.isRailOpen,
@@ -275,6 +313,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.year,
               ),
+              onMotionActiveChanged: onSelectorMotionActiveChanged,
             ),
           ),
         if ((level == SummaryPillExperimentLevel.month ||
@@ -293,6 +332,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               semanticsLabel:
                   'Hónap: ${DashboardTimeLabelFormatter.monthName(navigation.state.monthCursor.month)}. Függőlegesen húzva módosítható.',
               candidateForOffset: (origin, offset) =>
+                  componentCandidateProjector?.call(
+                    base: origin,
+                    plane: level.plane,
+                    isRailOpen: level.isRailOpen,
+                    component: DashboardTemporalAnchorComponent.month,
+                    offset: offset,
+                  ) ??
                   navigation.temporalComponentOffsetCandidate(
                     plane: level.plane,
                     isRailOpen: level.isRailOpen,
@@ -305,6 +351,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.month,
               ),
+              onMotionActiveChanged: onSelectorMotionActiveChanged,
             ),
           ),
         if (level == SummaryPillExperimentLevel.day)
@@ -318,6 +365,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               semanticsLabel:
                   'Nap: ${navigation.state.dayCursor}. Függőlegesen húzva módosítható.',
               candidateForOffset: (origin, offset) =>
+                  componentCandidateProjector?.call(
+                    base: origin,
+                    plane: level.plane,
+                    isRailOpen: level.isRailOpen,
+                    component: DashboardTemporalAnchorComponent.day,
+                    offset: offset,
+                  ) ??
                   navigation.temporalComponentOffsetCandidate(
                     plane: level.plane,
                     isRailOpen: level.isRailOpen,
@@ -330,6 +384,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.day,
               ),
+              onMotionActiveChanged: onSelectorMotionActiveChanged,
             ),
           ),
         if (level == SummaryPillExperimentLevel.day && dayTrack > monthTrack)
@@ -373,11 +428,13 @@ final class _ModeSelector extends StatefulWidget {
     required this.height,
     required this.level,
     required this.onCrossed,
+    this.onMotionActiveChanged,
   });
 
   final double height;
   final SummaryPillExperimentLevel level;
   final _LevelCrossed onCrossed;
+  final ValueChanged<bool>? onMotionActiveChanged;
 
   @override
   State<_ModeSelector> createState() => _ModeSelectorState();
@@ -419,6 +476,7 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       ),
       height: widget.height,
       viewportKey: ValueKey<String>('${widget.key}-viewport'),
+      onMotionStarted: (_) => widget.onMotionActiveChanged?.call(true),
       onSelectedChanged: (index) {
         final level =
             SummaryPillExperimentLevel.values[_positiveModulo(
@@ -429,6 +487,7 @@ final class _ModeSelectorState extends State<_ModeSelector> {
           widget.onCrossed(level.plane, level.isRailOpen);
         }
       },
+      onMotionIdle: (_) => widget.onMotionActiveChanged?.call(false),
       itemBuilder: (context, item, _) => ExcludeSemantics(
         child: Container(
           key: ValueKey<String>(
@@ -463,6 +522,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
     required this.candidateForOffset,
     required this.labelForCandidate,
     required this.onCrossed,
+    this.onMotionActiveChanged,
   });
 
   final double height;
@@ -475,6 +535,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
   candidateForOffset;
   final String Function(DashboardNavigationState candidate) labelForCandidate;
   final ValueChanged<DashboardNavigationState> onCrossed;
+  final ValueChanged<bool>? onMotionActiveChanged;
 
   @override
   State<_HierarchyValueSelector> createState() =>
@@ -507,7 +568,10 @@ final class _HierarchyValueSelectorState
       ),
       height: widget.height,
       viewportKey: ValueKey<String>('${widget.key}-viewport'),
-      onMotionStarted: (_) => _motionOrigin = widget.navigation.state,
+      onMotionStarted: (_) {
+        _motionOrigin = widget.navigation.state;
+        widget.onMotionActiveChanged?.call(true);
+      },
       onSelectedChanged: (offset) {
         if (offset == 0) return;
         final origin = _motionOrigin ?? widget.navigation.state;
@@ -517,6 +581,7 @@ final class _HierarchyValueSelectorState
       onMotionIdle: (_) {
         _motionOrigin = null;
         _controller.jumpToIndexSilently(0);
+        widget.onMotionActiveChanged?.call(false);
       },
       itemBuilder: (context, offset, metrics) {
         final origin = _motionOrigin ?? widget.navigation.state;

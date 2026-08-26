@@ -30,7 +30,9 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       targetHandle: target.handle,
       categoryId: target.category?.id,
     );
-    if (target.isAggregate) return core.clearAllEphemeralFocus();
+    if (target.isAggregate) {
+      return core.clearAllEphemeralFocus(deferSceneInstallation: true);
+    }
     final category = target.category!;
     return core.requestBudgetCategoryFocus(
       DashboardFocusFacet(

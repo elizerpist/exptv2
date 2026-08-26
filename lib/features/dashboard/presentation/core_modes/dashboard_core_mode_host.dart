@@ -42,6 +42,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetContentCardStyle,
     this.budgetRhythm,
     this.budgetDrilldown,
+    this.onBudgetAvatarMotionActiveChanged,
     this.headerVisualController,
     this.balanceHeaderVisualFrame,
     this.budgetHeaderVisualFrame,
@@ -62,6 +63,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<BudgetContentLayout>? budgetContentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
+  final ValueChanged<bool>? onBudgetAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? budgetHeaderVisualFrame;
@@ -231,6 +233,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         contentCardStyle: widget.budgetContentCardStyle,
         rhythm: widget.budgetRhythm,
         drilldown: widget.budgetDrilldown,
+        onAvatarMotionActiveChanged: widget.onBudgetAvatarMotionActiveChanged,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.budgetHeaderVisualFrame,
       ),

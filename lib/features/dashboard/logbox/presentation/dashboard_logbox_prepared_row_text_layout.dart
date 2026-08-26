@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -20,6 +21,7 @@ final class DashboardPreparedLogBoxRowTextLayout {
     required this.secondary,
     required this.amount,
     required this.time,
+    required this.defaultAmountColor,
   });
 
   factory DashboardPreparedLogBoxRowTextLayout.prepare({
@@ -99,8 +101,23 @@ final class DashboardPreparedLogBoxRowTextLayout {
   final TextPainter secondary;
   final TextPainter amount;
   final TextPainter time;
+  final Color defaultAmountColor;
+  final Map<int, ui.Picture> _tintedAmountPictures = <int, ui.Picture>{};
 
-  void paint(Canvas canvas, double rowTop, {required double rowHeight}) {
+  /// A palette recolour records at most one retained tiny picture per colour.
+  /// The normal paint path neither builds an offscreen layer nor re-lays out
+  /// a paragraph for each visible transaction.
+  int get amountTintPictureBuildCount => _tintedAmountPictures.length;
+
+  /// The foreground is a presentation-only compositing input. It paints a
+  /// prepared paragraph without re-layout, so palette changes retain text and
+  /// scene cache without creating a [TextPainter] in the paint hot path.
+  void paint(
+    Canvas canvas,
+    double rowTop, {
+    required double rowHeight,
+    required Color amountForeground,
+  }) {
     final leftHeight = title.height + secondary.height;
     final leftTop = rowTop + (rowHeight - leftHeight) / 2;
     title.paint(canvas, Offset(contentLeft, leftTop));
@@ -108,7 +125,19 @@ final class DashboardPreparedLogBoxRowTextLayout {
 
     final rightHeight = amount.height + time.height;
     final rightTop = rowTop + (rowHeight - rightHeight) / 2;
-    amount.paint(canvas, Offset(rightEdge - amount.width, rightTop));
+    final amountOffset = Offset(rightEdge - amount.width, rightTop);
+    if (amountForeground == defaultAmountColor) {
+      amount.paint(canvas, amountOffset);
+    } else {
+      final picture = _tintedAmountPictures.putIfAbsent(
+        amountForeground.toARGB32(),
+        () => _recordTintedAmountPicture(amountForeground),
+      );
+      canvas.save();
+      canvas.translate(amountOffset.dx, amountOffset.dy);
+      canvas.drawPicture(picture);
+      canvas.restore();
+    }
     time.paint(
       canvas,
       Offset(rightEdge - time.width, rightTop + amount.height),
@@ -120,6 +149,23 @@ final class DashboardPreparedLogBoxRowTextLayout {
     secondary.dispose();
     amount.dispose();
     time.dispose();
+    for (final picture in _tintedAmountPictures.values) {
+      picture.dispose();
+    }
+    _tintedAmountPictures.clear();
+  }
+
+  ui.Picture _recordTintedAmountPicture(Color foreground) {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final bounds = Offset.zero & Size(amount.width, amount.height);
+    canvas.saveLayer(
+      bounds,
+      Paint()..colorFilter = ColorFilter.mode(foreground, BlendMode.srcIn),
+    );
+    amount.paint(canvas, Offset.zero);
+    canvas.restore();
+    return recorder.endRecording();
   }
 }
 
@@ -148,6 +194,10 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
   TextPainter? _title;
   TextPainter? _secondary;
 
+  Color get _defaultAmountColor => row.amountStyle == LogAmountStyle.expense
+      ? FluviVisualTokens.logBoxExpenseAmount
+      : FluviVisualTokens.logBoxIncomeAmount;
+
   double get _rightColumnMaxWidth =>
       math.max(0.0, (rightEdge - contentLeft) * .44);
 
@@ -166,12 +216,11 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
 
   void prepareAmount() {
     assert(_amount == null);
-    final amountColor = row.amountStyle == LogAmountStyle.expense
-        ? FluviVisualTokens.logBoxExpenseAmount
-        : FluviVisualTokens.logBoxIncomeAmount;
     _amount = prepareDashboardLogBoxTextPainter(
       row.formattedAmount,
-      FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(color: amountColor),
+      FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(
+        color: _defaultAmountColor,
+      ),
       _rightColumnMaxWidth,
       textAlign: TextAlign.right,
     );
@@ -221,6 +270,7 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
       secondary: secondary,
       amount: amount,
       time: time,
+      defaultAmountColor: _defaultAmountColor,
     );
   }
 

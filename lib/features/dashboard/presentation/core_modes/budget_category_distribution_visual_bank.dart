@@ -153,6 +153,7 @@ final class DashboardBudgetDistributionDrawableController
     partnerSnapshotForCurrentFrame,
     Iterable<LedgerTimeScope> Function(DashboardNavigationState state)?
     directChildScopesFor,
+    bool Function()? isForegroundInputActive,
     this.maximumFrames = 40,
   }) : assert(snapshot != null || snapshotForCurrentFrame != null),
        assert(maximumFrames > 0),
@@ -160,6 +161,7 @@ final class DashboardBudgetDistributionDrawableController
        _snapshotForCurrentFrame = snapshotForCurrentFrame ?? (() => snapshot),
        _partnerSnapshotForCurrentFrame = partnerSnapshotForCurrentFrame,
        _directChildScopesFor = directChildScopesFor,
+       _isForegroundInputActive = isForegroundInputActive,
        super(null) {
     _categories.addListener(_invalidateForCategoryMetadata);
   }
@@ -170,6 +172,7 @@ final class DashboardBudgetDistributionDrawableController
   _partnerSnapshotForCurrentFrame;
   final Iterable<LedgerTimeScope> Function(DashboardNavigationState state)?
   _directChildScopesFor;
+  final bool Function()? _isForegroundInputActive;
   final int maximumFrames;
   final DashboardBudgetCategoryDistributionBundleCache _categoryCache =
       DashboardBudgetCategoryDistributionBundleCache(maximumBundles: 40);
@@ -336,6 +339,11 @@ final class DashboardBudgetDistributionDrawableController
   }
 
   Future<void> warmHotsetFor(DashboardNavigationState state) async {
+    // This cache is an idle-only visual convenience. It has no authority over
+    // direct Summary or BudgetAvatar input and it must re-check after yielding
+    // because each projection can synchronously build Canvas paths.
+    await Future<void>.delayed(Duration.zero);
+    if (_isForegroundInputActive?.call() ?? false) return;
     final scopes = <String, LedgerTimeScope>{};
     void add(LedgerTimeScope scope) => scopes[scope.canonicalKey] = scope;
     add(state.parentScope);
@@ -359,6 +367,7 @@ final class DashboardBudgetDistributionDrawableController
       ),
     );
     for (final scope in scopes.values) {
+      if (_isForegroundInputActive?.call() ?? false) return;
       try {
         await _prepareForScope(
           scope,
@@ -405,6 +414,11 @@ final class DashboardBudgetDistributionDrawableController
     String? partnerId,
   }) async {
     try {
+      // Keep cache-miss Canvas projection out of the visible-frame listener
+      // that is invoked by a physical Summary/Avatar crossing. A cache hit is
+      // already handled synchronously by [publishIfReadyForTimeScope].
+      await Future<void>.delayed(Duration.zero);
+      if (_isForegroundInputActive?.call() ?? false) return;
       final frame = await prepareForScope(scope);
       final snapshot = _snapshotForCurrentFrame();
       if (snapshot != null &&

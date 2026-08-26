@@ -53,10 +53,7 @@ void main() {
       ),
     );
     expect(shell.decoration.color, const Color(0xFFFEFEFF));
-    expect(
-      shell.decoration.border,
-      const Border.fromBorderSide(BorderSide(color: Color(0x1A666FAB))),
-    );
+    expect(shell.decoration.border, isNull);
   });
 
   testWidgets('segmented shell resolves the global SummaryPill family', (

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../../../core/design/dashboard_border_profile.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -37,6 +38,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
               bounds: bodyBounds,
               fillParent: true,
               semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
+              borderSurface: DashboardBorderSurface.mindContent,
             ),
           ),
           DashboardCoreModeOpacityPosition(

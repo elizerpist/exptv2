@@ -145,6 +145,27 @@ void main() {
         reason: 'The translated canonical row must carry its source-group '
             'contour and inner material instead of becoming a fill-only gap.',
       );
+      expect(
+        staticBackgrounds,
+        contains('materialLeaseRect: _materialLeaseRect(segmentRect)'),
+        reason:
+            'The static painter must exclude the white inner-foot/border '
+            'outsets, not only the exact fill rectangle.',
+      );
+      expect(
+        activeSegment,
+        contains('materialLeaseRect: materialLeaseRect'),
+        reason:
+            'The translated retained layer receives the exact same physical '
+            'material lease as the stationary exclusion.',
+      );
+      expect(
+        renderer,
+        contains('paintBounds: paintBounds'),
+        reason:
+            'The translating widget bounds include its complete material '
+            'lease, so a Reference3D white foot cannot remain at x=0.',
+      );
     },
   );
 

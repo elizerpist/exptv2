@@ -105,6 +105,38 @@ void main() {
     expect(next.requiresRepaintFrom(previous), isTrue);
   });
 
+  test('amount palette changes are paint-only LogBox identity inputs', () {
+    final rasterIdentity = Object();
+    final previous = DashboardLogBoxPaintIdentity(
+      payloadViewportId: 77,
+      presentationEpoch: 4,
+      sceneGeneration: 12,
+      committedGeneration: 9,
+      renderDomain: DashboardLogBoxRenderDomain.railPreview,
+      rasterIdentity: rasterIdentity,
+      rowHeight: 55,
+      incomeAmountColor: const Color(0xFF0F766E),
+      expenseAmountColor: const Color(0xFFB42318),
+    );
+    final next = DashboardLogBoxPaintIdentity(
+      payloadViewportId: previous.payloadViewportId,
+      presentationEpoch: previous.presentationEpoch,
+      sceneGeneration: previous.sceneGeneration,
+      committedGeneration: previous.committedGeneration,
+      renderDomain: previous.renderDomain,
+      rasterIdentity: rasterIdentity,
+      rowHeight: previous.rowHeight,
+      incomeAmountColor: const Color(0xFF22C55E),
+      expenseAmountColor: const Color(0xFFFF3E73),
+    );
+
+    expect(next.requiresRepaintFrom(previous), isTrue);
+    expect(next.rowHeight, previous.rowHeight);
+    expect(next.payloadViewportId, previous.payloadViewportId);
+    expect(next.sceneGeneration, previous.sceneGeneration);
+    expect(next.committedGeneration, previous.committedGeneration);
+  });
+
   testWidgets(
     'roundness repaints the stable LogBox surface without replacing scroll or data state',
     (tester) async {

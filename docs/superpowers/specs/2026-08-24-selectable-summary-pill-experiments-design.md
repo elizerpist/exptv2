@@ -174,6 +174,62 @@ follow-up does not alter canonical time, query or Budget semantics.
 All controls stay in the existing Header tuner, are session-only, and remain
 comparison/presentation controls rather than a selected permanent design.
 
+## 2026-08-26 corrective follow-up: depth composition, borders and input parity
+
+This corrective pass preserves both active Summary variants, Split/Unified
+Budget composition, independent radius controls, LogBox height, and the
+prepared LogBox architecture.
+
+- Reference3D depth no longer owns a Header fill. `DashboardHeaderVisualFrame`
+  remains the only Header palette/gradient source; the direct Spendee white
+  inner highlight is rendered through an edge mask which retains the source
+  `BoxShadow` paint, `BlurStyle.inner`, offset, spread and blur while it cannot
+  wash the coloured Header white. The source-locked dark outer and white lower
+  depth layers remain depth-only.
+- Surface contour is now independent of shadow. `DashboardBorderProfile`
+  centralizes the current SearchPill `Border.all(#E2E8F0, 1)` contract. The
+  session defaults are Header/Search/Balance/Mind/Budget on and
+  Income/Expense/Summary/LogBox off, reproducing the previous default look.
+  Reference3D with border off retains its lower depth; with border on exactly
+  one SearchPill-style contour is painted.
+- A leased, horizontally swiped LogBox row now owns an expanded material lease
+  for border and inner-depth outsets. The static painter excludes that exact
+  lease and the retained translating layer paints it from the same shifted
+  geometry, so the white 3D foot cannot remain at the original x position.
+- Unified Budget moves its full selected-avatar input envelope down 20px: the
+  common card top now aligns to the 112px input shell while Split retains its
+  original `-20px` overflow origin. The available 116px upper content envelope
+  remains the lower-collision boundary.
+- The handle-to-count gap changed exactly from 11px to 5.5px. The Ledger
+  header changes from 96px to 90.5px, returning exactly 5.5px to the LogBox
+  viewport without affecting rows or the dashboard envelope.
+- Income/expense amount colours are independent paint-only source palettes:
+  current Fluvi `#0F766E/#B42318`; Fluvi category middle swatches
+  `#5BD265/#24C889/#12B980/#19C0AA` and `#FF5268/#D932C9/#F04AB6`; Spendee
+  generic Budget `#22C55E/#EF4444` from `spendee_test_dashboard.dart` and
+  `AppColors`; active Balance uses `#FF3E73` in
+  `spendee_balance_transaction_log.dart`. Balance does not define a separate
+  income branch, so its `Spendee Balance` option uses that same exact
+  unconditional `#FF3E73` source value in either selector rather than
+  inventing or relabelling a green. The Fluvi category options resolve their
+  `middleColor` directly from `CategoryColorCatalog`; palette tinting retains
+  the prepared paragraph and records at most one tiny picture per non-default
+  foreground, never one offscreen layer per row per paint.
+- Segmented candidates now preserve their frozen carousel origin but project
+  through `DashboardPresentationController`'s installed canonical catalog;
+  their summary-shell motion also receives foreground priority. The Legacy
+  control path reads a prepared frame directly through
+  `DashboardPresentationController._onSemanticCrossed`. Previously Segmented
+  YEAR/MONTH awaited Budget Card2 drawable preparation before this canonical
+  scene transition, while Avatar preview coalesced crossings to a frame and
+  then synchronously entered focused-scene preparation. Segmented Card2
+  projections, focused LogBox scene installation and the Budget drawable
+  listener now coalesce the latest target until the physical Summary/Avatar
+  lane is idle; no cache-miss Canvas/scene work can run between ballistic
+  crossings. Avatar still publishes every discrete prepared amount immediately.
+  Complete LogBox scene publication remains atomic and stale-generation
+  guarded. No target waits for carousel settlement or a repository read.
+
 ## 2026-08-26 follow-up: reference 3D depth, LogBox pencil and Summary hierarchy
 
 The active runtime Summary comparison remains exactly `Legacy` and
@@ -194,11 +250,12 @@ LogBox row-height geometry.
     the Balance Summary and uses Search's own `0xF0FFFFFF` fill,
     `0x17666FAB` contour, `0x12524B93 @ (0,7), blur 15` outer layer, and the
     same inner highlight.
-  `DashboardShadowProfile` carries border, outer depth and inner highlight as
-  one material input. Summary and Search use their respective direct surface
-  source; coloured Header/action fills remain their own material beneath the
-  same depth construction. The custom-painted grouped LogBox applies the
-  same contour/depth without becoming a widget-card list.
+  `DashboardShadowProfile` carries the source outer and inner depth inputs;
+  the later `DashboardBorderProfile` owns the independently selectable
+  SearchPill-derived contour. Summary and Search use their respective direct
+  surface source; coloured Header/action fills remain their own material
+  beneath the same depth construction. The custom-painted grouped LogBox
+  applies the same contour/depth without becoming a widget-card list.
 - Every LogBox transaction row now paints a non-interactive decorative pencil
   through the bounded prepared-vector atlas. The port comes from
   `spendee_balance_transaction_log.dart`'s
