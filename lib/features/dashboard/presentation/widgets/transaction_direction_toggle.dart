@@ -9,6 +9,7 @@ import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/transaction_direction_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
 
 /// Input-only renderer for the two transaction directions.
 class TransactionDirectionToggle extends StatelessWidget {
@@ -134,6 +135,9 @@ class _DirectionButton extends StatelessWidget {
           color: selected ? null : FluviVisualTokens.surface,
           gradient: selected ? activeGradient : null,
           borderRadius: borderRadius,
+          boxShadow: DashboardShadowStyleScope.profileOf(
+            context,
+          ).shadowsFor(DashboardCornerSurfaceFamily.directionControl),
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(

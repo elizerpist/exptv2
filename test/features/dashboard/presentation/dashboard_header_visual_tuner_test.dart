@@ -1,13 +1,18 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
+import 'package:fluvi/core/design/dashboard_corner_profile.dart';
+import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_height.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
+import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('Budget Card2 surface switch is session-owned and live', (
+  testWidgets('Budget content composition is session-owned and live', (
     tester,
   ) async {
     final controller = DashboardHeaderVisualController(vsync: tester);
@@ -26,21 +31,23 @@ void main() {
     );
 
     final control = find.byKey(
-      const ValueKey<String>('dashboard-budget-content-card-surface-switch'),
+      const ValueKey<String>('dashboard-budget-content-unifiedCard'),
     );
     await tester.ensureVisible(control);
     expect(control, findsOneWidget);
-    expect(cardStyle.showCardSurface, isTrue);
+    expect(cardStyle.value, BudgetContentLayout.split);
 
-    tester.widget<SwitchListTile>(control).onChanged!(false);
+    await tester.tap(control);
     await tester.pump();
-    expect(cardStyle.showCardSurface, isFalse);
+    expect(cardStyle.value, BudgetContentLayout.unifiedCard);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
     cardStyle.dispose();
   });
 
-  testWidgets('global corner scale is session-owned and live', (tester) async {
+  testWidgets('independent corner scale is session-owned and live', (
+    tester,
+  ) async {
     final controller = DashboardHeaderVisualController(vsync: tester);
     final roundness = DashboardCornerRoundnessController();
     await tester.pumpWidget(
@@ -56,21 +63,82 @@ void main() {
       ),
     );
 
+    controller.toggleTunerSection(DashboardHeaderTunerSection.cornerRoundness);
+    await tester.pump();
     final control = find.byKey(
-      const ValueKey<String>('dashboard-corner-roundness-slider'),
+      const ValueKey<String>('dashboard-corner-searchPill-slider'),
     );
     await tester.ensureVisible(control);
-    expect(roundness.value.position, 0);
+    expect(
+      roundness.value.positionFor(DashboardCornerSurfaceFamily.searchPill),
+      0,
+    );
     tester
         .widget<Slider>(
           find.descendant(of: control, matching: find.byType(Slider)),
         )
         .onChanged!(1);
     await tester.pump();
-    expect(roundness.value.position, 1);
+    expect(
+      roundness.value.positionFor(DashboardCornerSurfaceFamily.searchPill),
+      1,
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
     roundness.dispose();
+  });
+
+  testWidgets('shadow style and stepped LogBox height controls are live', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final shadow = DashboardShadowStyleController();
+    final height = DashboardLogBoxHeightController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            shadowStyle: shadow,
+            logBoxHeight: height,
+          ),
+        ),
+      ),
+    );
+
+    expect(shadow.value, DashboardShadowStyle.current);
+    final soft = find.byKey(
+      const ValueKey<String>('dashboard-shadow-style-soft'),
+    );
+    await tester.ensureVisible(soft);
+    await tester.tap(soft);
+    await tester.pump();
+    expect(shadow.value, DashboardShadowStyle.soft);
+
+    final slider = find.byKey(
+      const ValueKey<String>('dashboard-logbox-height-slider'),
+    );
+    await tester.ensureVisible(slider);
+    tester
+        .widget<Slider>(
+          find.descendant(of: slider, matching: find.byType(Slider)),
+        )
+        .onChanged!(.5);
+    await tester.pump();
+    expect(height.value, DashboardLogBoxHeight(.5));
+    final heightSemantics = find
+        .descendant(of: slider, matching: find.byType(Semantics))
+        .first;
+    expect(
+      tester.widget<Semantics>(heightSemantics).properties.label,
+      contains('LogBox magasság 50%'),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    shadow.dispose();
+    height.dispose();
   });
 
   test('tuner placement always reserves the live Header plus its gap', () {

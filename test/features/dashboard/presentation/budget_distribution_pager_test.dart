@@ -192,7 +192,7 @@ void main() {
         categorySurface.border,
         Border.all(color: FluviVisualTokens.border),
       );
-      expect(categorySurface.boxShadow, isNull);
+      expect(categorySurface.boxShadow, FluviVisualTokens.cardSurfaceShadows);
       expect(
         categorySurface.decoration.boxShadow,
         FluviVisualTokens.cardSurfaceShadows,
@@ -206,12 +206,12 @@ void main() {
         FluviVisualTokens.roundedBoxRadius,
       );
 
-      cardStyle.setShowCardSurface(false);
+      cardStyle.select(BudgetContentLayout.unifiedCard);
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-page-card-surface')),
         findsNothing,
-        reason: 'Cardless Card2 keeps its geometry but paints no shell.',
+        reason: 'Unified composition suppresses the nested Card2 shell.',
       );
       expect(
         tester.getRect(
@@ -230,7 +230,7 @@ void main() {
         reason: 'Changing Card2 chrome must retain the PageController.',
       );
 
-      cardStyle.setShowCardSurface(true);
+      cardStyle.select(BudgetContentLayout.split);
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-page-card-surface')),
@@ -286,12 +286,12 @@ void main() {
       final partnerCardBounds = tester.getRect(
         find.byKey(const ValueKey('budget-partner-distribution-card')),
       );
-      cardStyle.setShowCardSurface(false);
+      cardStyle.select(BudgetContentLayout.unifiedCard);
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-page-card-surface')),
         findsNothing,
-        reason: 'The same Card2 preference applies to the Partner page.',
+        reason: 'Unified composition suppresses both nested page shells.',
       );
       expect(
         tester.getRect(
@@ -299,7 +299,7 @@ void main() {
         ),
         partnerCardBounds,
       );
-      cardStyle.setShowCardSurface(true);
+      cardStyle.select(BudgetContentLayout.split);
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-row-partner-0')),

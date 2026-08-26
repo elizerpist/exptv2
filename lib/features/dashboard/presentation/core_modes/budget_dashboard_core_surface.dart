@@ -4,12 +4,18 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
+import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../budget_content_card_style.dart';
+import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
 import 'budget_category_avatar_rail.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -43,7 +49,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   distributionDrawables;
   final BudgetTargetAvatarRailController? avatarRailController;
   final BudgetDistributionPageController? distributionPageController;
-  final ValueListenable<bool>? contentCardStyle;
+  final ValueListenable<BudgetContentLayout>? contentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardHeaderVisualController? headerVisualController;
@@ -57,6 +63,15 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Preserve the original StackFill sizing contract. The optional
+          // unified shell is a positioned dashboard surface when enabled and
+          // a zero-size leaf when Split is selected; it must not become the
+          // only non-positioned child and collapse the Budget stack.
+          const SizedBox.expand(),
+          _BudgetUnifiedContentCard(
+            geometry: geometry,
+            contentLayout: contentCardStyle,
+          ),
           DashboardCoreModeCascadeCard(
             bounds: geometry.zone2Bounds,
             motion: geometry.lowerCardMotion!,
@@ -244,6 +259,57 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     );
   }
 }
+
+/// One purely presentational common shell over the central mode-content
+/// envelope. The avatar rail, pager and dots stay mounted in their existing
+/// cascade slots above it, preserving their controller and gesture ownership.
+final class _BudgetUnifiedContentCard extends StatelessWidget {
+  const _BudgetUnifiedContentCard({
+    required this.geometry,
+    required this.contentLayout,
+  });
+
+  final DashboardLayoutFrame geometry;
+  final ValueListenable<BudgetContentLayout>? contentLayout;
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<BudgetContentLayout>(
+    valueListenable: contentLayout ?? _alwaysSplitBudgetContent,
+    builder: (context, layout, _) {
+      if (layout != BudgetContentLayout.unifiedCard) {
+        return const SizedBox.shrink();
+      }
+      final bounds = geometry.modeContentBounds;
+      return DashboardCoreModeOpacityPosition(
+        bounds: bounds,
+        opacity: geometry.zone2Opacity,
+        offset: Offset(0, geometry.zone2Shift),
+        scale: geometry.zone2Scale,
+        child: LayoutBuilder(
+          builder: (context, constraints) => FluviRoundedBox(
+            key: const ValueKey<String>('budget-unified-content-card-surface'),
+            color: FluviVisualTokens.surface,
+            border: Border.all(color: FluviVisualTokens.border),
+            borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+                .borderRadiusFor(
+                  DashboardCornerSurfaceFamily.budgetDistributionCard,
+                  size: constraints.biggest,
+                ),
+            boxShadow: DashboardShadowStyleScope.profileOf(
+              context,
+            ).shadowsFor(DashboardCornerSurfaceFamily.budgetDistributionCard),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =
+    ValueNotifier<BudgetContentLayout>(BudgetContentLayout.split);
 
 final class _BudgetHeaderAllocationDetail extends StatelessWidget {
   const _BudgetHeaderAllocationDetail({required this.partition});

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
 
 /// Compact, UI-neutral aggregate for one exact filtered ledger day.
@@ -71,6 +72,7 @@ final class CommittedVerticalGeometryManifest {
     required this.coreRevision,
     required this.pageSize,
     required this.totalEntryCount,
+    required this.layoutProfile,
     required List<CommittedVerticalGeometryDayBucket> dayBuckets,
     required List<CommittedVerticalPageGeometry> pages,
   }) : dayBuckets = List<CommittedVerticalGeometryDayBucket>.unmodifiable(
@@ -104,6 +106,8 @@ final class CommittedVerticalGeometryManifest {
     required int pageSize,
     required int totalEntryCount,
     required List<CommittedVerticalGeometryDayBucket> dayBuckets,
+    DashboardLogBoxLayoutProfile layoutProfile =
+        DashboardLogBoxLayoutProfile.baseline,
   }) {
     if (coreRevision <= 0 || pageSize <= 0 || totalEntryCount < 0) {
       throw ArgumentError('Committed vertical manifest input is invalid.');
@@ -134,7 +138,11 @@ final class CommittedVerticalGeometryManifest {
 
     void finishPage() {
       if (pageRows == 0) return;
-      final extent = _pageExtent(pageRows, pageGroups);
+      final extent = _pageExtent(
+        pageRows,
+        pageGroups,
+        rowHeight: layoutProfile.rowHeight,
+      );
       pages.add(
         CommittedVerticalPageGeometry(
           ordinal: pages.length,
@@ -171,6 +179,7 @@ final class CommittedVerticalGeometryManifest {
       coreRevision: coreRevision,
       pageSize: pageSize,
       totalEntryCount: totalEntryCount,
+      layoutProfile: layoutProfile,
       dayBuckets: dayBuckets,
       pages: pages,
     );
@@ -180,6 +189,7 @@ final class CommittedVerticalGeometryManifest {
   final int coreRevision;
   final int pageSize;
   final int totalEntryCount;
+  final DashboardLogBoxLayoutProfile layoutProfile;
   final List<CommittedVerticalGeometryDayBucket> dayBuckets;
   final List<CommittedVerticalPageGeometry> pages;
   final double totalExtent;
@@ -191,7 +201,7 @@ final class CommittedVerticalGeometryManifest {
     return page == null ? 0 : page.rowStart + page.rowCount;
   }
 
-  int get estimatedBytes => dayBuckets.length * 16 + pages.length * 48 + 64;
+  int get estimatedBytes => dayBuckets.length * 16 + pages.length * 48 + 80;
 
   CommittedVerticalPageGeometry? pageForOrdinal(int ordinal) =>
       ordinal >= 0 && ordinal < pages.length ? pages[ordinal] : null;
@@ -213,8 +223,12 @@ final class CommittedVerticalGeometryManifest {
     return low;
   }
 
-  static double _pageExtent(int rowCount, int groupCount) =>
-      rowCount * DashboardLogBoxTokens.rowHeight +
+  static double _pageExtent(
+    int rowCount,
+    int groupCount, {
+    required double rowHeight,
+  }) =>
+      rowCount * rowHeight +
       groupCount * DashboardLogBoxTokens.dayHeaderHeight +
       (groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
@@ -120,6 +121,36 @@ void main() {
       expect(cache.renderGeneration, greaterThan(rootRenderGeneration));
     },
   );
+
+  test('a new committed scope clears an obsolete row-height transition', () {
+    final cache = CommittedLogViewportCache(pageSize: 24);
+    addTearDown(cache.dispose);
+    final baseline = _manifest(scope, total: 48);
+    cache.seed(
+      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 1,
+      geometryManifest: baseline,
+    );
+    final taller = CommittedVerticalGeometryManifest.compile(
+      queryKey: baseline.queryKey,
+      coreRevision: baseline.coreRevision,
+      pageSize: baseline.pageSize,
+      totalEntryCount: baseline.totalEntryCount,
+      dayBuckets: baseline.dayBuckets,
+      layoutProfile: const DashboardLogBoxLayoutProfile(
+        DashboardLogBoxHeight.one,
+      ),
+    );
+    expect(cache.replaceGeometryManifest(taller), isTrue);
+    expect(cache.lastGeometryTransition, isNotNull);
+
+    cache.seed(
+      _page(scope, ordinal: 0, total: 48, nextCursor: _cursor(0)),
+      generation: 2,
+      geometryManifest: baseline,
+    );
+    expect(cache.lastGeometryTransition, isNull);
+  });
 
   testWidgets(
     'idle ready-ahead commit has complete text resources before publication',

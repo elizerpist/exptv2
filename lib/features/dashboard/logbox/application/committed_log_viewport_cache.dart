@@ -224,7 +224,9 @@ final class CommittedLogViewportFocusSnapshot {
       this.geometryManifest.queryKey == geometryManifest.queryKey &&
       this.geometryManifest.coreRevision == geometryManifest.coreRevision &&
       this.geometryManifest.totalExtent == geometryManifest.totalExtent &&
-      this.geometryManifest.totalEntryCount == geometryManifest.totalEntryCount;
+      this.geometryManifest.totalEntryCount ==
+          geometryManifest.totalEntryCount &&
+      this.geometryManifest.layoutProfile == geometryManifest.layoutProfile;
 
   CommittedLogViewportFocusTransfer take() {
     if (_transferred) {
@@ -248,6 +250,20 @@ final class CommittedLogViewportFocusSnapshot {
     _pages.clear();
     _cursorAnchors.clear();
   }
+}
+
+/// Atomically published geometry-only presentation transition. Page payloads
+/// and prepared paragraphs deliberately do not participate: their exact
+/// identity is still valid at the same width and typography.
+@immutable
+final class CommittedLogViewportGeometryTransition {
+  const CommittedLogViewportGeometryTransition({
+    required this.previous,
+    required this.current,
+  });
+
+  final CommittedVerticalGeometryManifest previous;
+  final CommittedVerticalGeometryManifest current;
 }
 
 final class CommittedLogViewportFocusTransfer {
@@ -320,6 +336,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   // content dimensions.
   CommittedVerticalGeometryManifest? _geometryManifest;
   int _geometryGeneration = 0;
+  CommittedLogViewportGeometryTransition? _lastGeometryTransition;
   int _renderGeneration = 0;
   final ChangeNotifier _resourceChanges = ChangeNotifier();
 
@@ -400,6 +417,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _geometryManifest?.pageForOrdinal(_highestCommittedOrdinal)?.bottom ?? 0;
   double get drawableExtent => _geometryManifest?.totalExtent ?? 0;
   int get geometryGeneration => _geometryGeneration;
+  CommittedLogViewportGeometryTransition? get lastGeometryTransition =>
+      _lastGeometryTransition;
   int get renderGeneration => _renderGeneration;
   Listenable get resourceChanges => _resourceChanges;
   bool get rootPagePresent => _rootPage != null;
@@ -464,6 +483,53 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _largestPagePreparationUiSliceMicros;
   int get pagePreparationYieldCount => _pagePreparationYieldCount;
   bool get isPagePreparationActive => _pagePreparationActive;
+
+  /// Replaces a complete immutable manifest for the same committed scope.
+  ///
+  /// This is the only row-height presentation mutation: it validates every
+  /// already-retained page against the new full-world geometry, then changes
+  /// the manifest in one notification. It neither queries data nor recreates
+  /// paragraph resources or a Flutter scroll owner.
+  bool replaceGeometryManifest(CommittedVerticalGeometryManifest manifest) {
+    _ensureUsable();
+    final previous = _geometryManifest;
+    if (previous == null ||
+        _queryKey != manifest.queryKey ||
+        _coreRevision != manifest.coreRevision ||
+        _totalEntryCount != manifest.totalEntryCount ||
+        manifest.pageSize != pageSize) {
+      return false;
+    }
+    if (previous.layoutProfile == manifest.layoutProfile) return true;
+    final root = _rootPage;
+    if (root != null && !_matchesManifestPage(root, manifest)) return false;
+    for (final page in _pages.values) {
+      if (!_matchesManifestPage(page, manifest)) return false;
+    }
+    _geometryManifest = manifest;
+    _lastGeometryTransition = CommittedLogViewportGeometryTransition(
+      previous: previous,
+      current: manifest,
+    );
+    _geometryGeneration += 1;
+    _renderGeneration += 1;
+    _presentationGeneration += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'VERTICAL_GEOMETRY_PRESENTATION_RECONCILED',
+        queryKey: manifest.queryKey.value,
+        coreRevision: manifest.coreRevision,
+        entryCount: manifest.totalEntryCount,
+        message:
+            'rowHeight=${previous.layoutProfile.rowHeight.toStringAsFixed(1)}'
+            '→${manifest.layoutProfile.rowHeight.toStringAsFixed(1)} '
+            'geometryGeneration=$_geometryGeneration',
+      ),
+    );
+    notifyListeners();
+    _notifyResourceChanges();
+    return true;
+  }
 
   /// Begins a new viewport-owned diagnostic window. This has no resource or
   /// scheduling side effect and deliberately does not reset the committed
@@ -875,6 +941,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _retentionHotset = <int>{};
     _rootPage = null;
     _geometryManifest = null;
+    _lastGeometryTransition = null;
     _queryKey = null;
     _coreRevision = null;
     _generation = null;
@@ -935,6 +1002,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _generation = snapshot.generation;
     _totalEntryCount = snapshot.totalEntryCount;
     _geometryManifest = snapshot.geometryManifest;
+    _lastGeometryTransition = null;
     _geometryGeneration += 1;
     _highestCommittedOrdinal = snapshot.highestCommittedOrdinal;
     _initialPreviewOrdinal = snapshot.initialPreviewOrdinal;
@@ -1008,6 +1076,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _generation = generation;
     _totalEntryCount = page.payload.entryCount;
     _geometryManifest = geometryManifest;
+    _lastGeometryTransition = null;
     _geometryGeneration += 1;
     _renderGeneration += 1;
     _highestCommittedOrdinal = page.ordinal;
@@ -2370,6 +2439,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     _disposePreparedPages();
     _invalidatePrearmedPreviewRoot();
     _geometryManifest = null;
+    _lastGeometryTransition = null;
     _nextCursor = null;
     _activePagePreparationInteractionMetrics = null;
     _resourceChanges.dispose();

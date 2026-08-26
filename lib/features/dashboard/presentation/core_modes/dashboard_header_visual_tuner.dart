@@ -5,8 +5,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_body_order.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
+import '../../../../core/design/dashboard_logbox_layout_profile.dart';
+import '../../../../core/design/dashboard_shadow_profile.dart';
 import '../budget_content_card_style.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_logbox_height.dart';
+import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -284,23 +288,27 @@ final class _TunerSlider extends StatelessWidget {
   final ValueChanged<double>? onChanged;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      Row(
-        children: <Widget>[
-          Expanded(child: Text(label)),
-          Text(valueLabel, style: Theme.of(context).textTheme.labelMedium),
-        ],
-      ),
-      Slider(
-        min: min,
-        max: max,
-        divisions: divisions,
-        value: value.clamp(min, max).toDouble(),
-        onChanged: onChanged,
-      ),
-    ],
+  Widget build(BuildContext context) => Semantics(
+    label: '$label $valueLabel',
+    slider: true,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(child: Text(label)),
+            Text(valueLabel, style: Theme.of(context).textTheme.labelMedium),
+          ],
+        ),
+        Slider(
+          min: min,
+          max: max,
+          divisions: divisions,
+          value: value.clamp(min, max).toDouble(),
+          onChanged: onChanged,
+        ),
+      ],
+    ),
   );
 }
 
@@ -338,6 +346,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.bodyOrder,
     this.budgetContentCardStyle,
     this.cornerRoundness,
+    this.shadowStyle,
+    this.logBoxHeight,
   });
 
   final DashboardHeaderVisualController controller;
@@ -345,6 +355,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final DashboardBodyOrderController? bodyOrder;
   final BudgetContentCardStyleController? budgetContentCardStyle;
   final DashboardCornerRoundnessController? cornerRoundness;
+  final DashboardShadowStyleController? shadowStyle;
+  final DashboardLogBoxHeightController? logBoxHeight;
 
   @override
   Widget build(
@@ -414,14 +426,38 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 _BudgetContentCardStyleSection(controller: cardStyle),
                 const SizedBox(height: 14),
               ],
-              if (cornerRoundness case final roundness?) ...<Widget>[
-                _DashboardCornerRoundnessSection(controller: roundness),
+              if (shadowStyle case final shadows?) ...<Widget>[
+                _DashboardShadowStyleSection(controller: shadows),
+                const SizedBox(height: 14),
+              ],
+              if (logBoxHeight case final height?) ...<Widget>[
+                _DashboardLogBoxHeightSection(controller: height),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
                 valueListenable: controller.expandedTunerSections,
                 builder: (context, expandedSections, child) => Column(
                   children: <Widget>[
+                    if (cornerRoundness case final roundness?) ...<Widget>[
+                      _CollapsibleTunerSection(
+                        key: const ValueKey<String>(
+                          'dashboard-header-tuner-section-corner-roundness',
+                        ),
+                        title: 'Sarokkerekítés',
+                        expanded: expandedSections.contains(
+                          DashboardHeaderTunerSection.cornerRoundness,
+                        ),
+                        onToggle: () => controller.toggleTunerSection(
+                          DashboardHeaderTunerSection.cornerRoundness,
+                        ),
+                        children: <Widget>[
+                          _DashboardCornerRoundnessSection(
+                            controller: roundness,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     _CollapsibleTunerSection(
                       key: const ValueKey<String>(
                         'dashboard-header-tuner-section-animation',
@@ -862,27 +898,111 @@ final class _BudgetContentCardStyleSection extends StatelessWidget {
   final BudgetContentCardStyleController controller;
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
-    valueListenable: controller,
-    builder: (context, showCardSurface, _) => _TunerSection(
-      title: 'Budget megjelenés',
-      children: <Widget>[
-        SwitchListTile(
-          key: const ValueKey<String>(
-            'dashboard-budget-content-card-surface-switch',
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<BudgetContentLayout>(
+        valueListenable: controller,
+        builder: (context, selected, _) => RadioGroup<BudgetContentLayout>(
+          groupValue: selected,
+          onChanged: (layout) {
+            if (layout != null) controller.select(layout);
+          },
+          child: _TunerSection(
+            title: 'Budget megjelenés',
+            children: <Widget>[
+              for (final layout in BudgetContentLayout.values)
+                Semantics(
+                  selected: selected == layout,
+                  inMutuallyExclusiveGroup: true,
+                  label: 'Budget tartalom ${layout.label}',
+                  child: RadioListTile<BudgetContentLayout>(
+                    key: ValueKey<String>(
+                      'dashboard-budget-content-${layout.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(layout.label),
+                    value: layout,
+                  ),
+                ),
+            ],
           ),
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Diagram kártyában'),
-          value: showCardSurface,
-          onChanged: controller.setShowCardSurface,
         ),
-      ],
-    ),
-  );
+      );
 }
 
-/// One normalized control maps through the central profile; individual
-/// surfaces never own their own roundness state.
+final class _DashboardShadowStyleSection extends StatelessWidget {
+  const _DashboardShadowStyleSection({required this.controller});
+
+  final DashboardShadowStyleController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardShadowStyle>(
+        valueListenable: controller,
+        builder: (context, selected, _) => RadioGroup<DashboardShadowStyle>(
+          groupValue: selected,
+          onChanged: (style) {
+            if (style != null) controller.select(style);
+          },
+          child: _TunerSection(
+            title: 'Árnyék',
+            children: <Widget>[
+              for (final style in DashboardShadowStyle.values)
+                Semantics(
+                  selected: selected == style,
+                  inMutuallyExclusiveGroup: true,
+                  label: 'Árnyék ${_shadowLabel(style)}',
+                  child: RadioListTile<DashboardShadowStyle>(
+                    key: ValueKey<String>(
+                      'dashboard-shadow-style-${style.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_shadowLabel(style)),
+                    value: style,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+
+  static String _shadowLabel(DashboardShadowStyle style) => switch (style) {
+    DashboardShadowStyle.none => 'Nincs',
+    DashboardShadowStyle.current => 'Jelenlegi',
+    DashboardShadowStyle.soft => 'Finom',
+  };
+}
+
+final class _DashboardLogBoxHeightSection extends StatelessWidget {
+  const _DashboardLogBoxHeightSection({required this.controller});
+
+  final DashboardLogBoxHeightController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardLogBoxHeight>(
+        valueListenable: controller,
+        builder: (context, height, _) => _TunerSection(
+          title: 'LogBox',
+          children: <Widget>[
+            _TunerSlider(
+              key: const ValueKey<String>('dashboard-logbox-height-slider'),
+              label: 'LogBox magasság',
+              valueLabel: '${(height.position * 100).round()}%',
+              min: 0,
+              max: 1,
+              divisions: DashboardLogBoxHeight.divisions,
+              value: height.position,
+              onChanged: controller.setPosition,
+            ),
+          ],
+        ),
+      );
+}
+
+/// Each semantic surface family owns a normalized position. The central
+/// profile remains responsible for family endpoints and geometry safety.
 final class _DashboardCornerRoundnessSection extends StatelessWidget {
   const _DashboardCornerRoundnessSection({required this.controller});
 
@@ -890,24 +1010,37 @@ final class _DashboardCornerRoundnessSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      ValueListenableBuilder<DashboardCornerRoundness>(
+      ValueListenableBuilder<DashboardCornerSettings>(
         valueListenable: controller,
-        builder: (context, roundness, _) => _TunerSection(
-          title: 'Forma',
+        builder: (context, settings, _) => _TunerSection(
+          title: 'Sarokkerekítés',
           children: <Widget>[
-            _TunerSlider(
-              key: const ValueKey<String>('dashboard-corner-roundness-slider'),
-              label: 'Sarokkerekítés',
-              valueLabel: '${(roundness.position * 100).round()}%',
-              min: 0,
-              max: 1,
-              divisions: 10,
-              value: roundness.position,
-              onChanged: controller.setPosition,
-            ),
+            for (final family in DashboardCornerSurfaceFamily.values)
+              _TunerSlider(
+                key: ValueKey<String>('dashboard-corner-${family.name}-slider'),
+                label: _cornerLabel(family),
+                valueLabel: '${(settings.positionFor(family) * 100).round()}%',
+                min: 0,
+                max: 1,
+                divisions: 10,
+                value: settings.positionFor(family),
+                onChanged: (position) =>
+                    controller.setPosition(family, position),
+              ),
           ],
         ),
       );
+
+  static String _cornerLabel(DashboardCornerSurfaceFamily family) =>
+      switch (family) {
+        DashboardCornerSurfaceFamily.header => 'Header',
+        DashboardCornerSurfaceFamily.contentCard => 'Mód content',
+        DashboardCornerSurfaceFamily.directionControl => 'Bevétel / Kiadás',
+        DashboardCornerSurfaceFamily.summaryPill => 'Summary',
+        DashboardCornerSurfaceFamily.searchPill => 'Search',
+        DashboardCornerSurfaceFamily.logBoxGroup => 'LogBox',
+        DashboardCornerSurfaceFamily.budgetDistributionCard => 'Budget content',
+      };
 }
 
 /// Three deterministic slot controls avoid nested drag ownership inside the

@@ -2,16 +2,16 @@ import 'package:flutter/widgets.dart';
 
 import '../../../core/design/dashboard_corner_profile.dart';
 
-/// Dashboard-lifetime, session-only owner for the global shape comparison.
-/// It owns no layout, data or query state.
+/// Dashboard-lifetime, session-only owner for independently tunable dashboard
+/// corner families. It owns no layout, data or query state.
 final class DashboardCornerRoundnessController
-    extends ValueNotifier<DashboardCornerRoundness> {
+    extends ValueNotifier<DashboardCornerSettings> {
   DashboardCornerRoundnessController()
-    : super(DashboardCornerRoundness.minimum);
+    : super(DashboardCornerSettings.defaults);
 
-  void setPosition(double position) {
-    final next = DashboardCornerRoundness(position);
-    if (next.position != value.position) value = next;
+  void setPosition(DashboardCornerSurfaceFamily family, double position) {
+    final next = value.withPosition(family, position);
+    if (next != value) value = next;
   }
 }
 
@@ -29,7 +29,7 @@ final class DashboardCornerRoundnessScope
     final scope = context
         .dependOnInheritedWidgetOfExactType<DashboardCornerRoundnessScope>();
     return DashboardCornerProfile(
-      scope?.notifier?.value ?? DashboardCornerRoundness.minimum,
+      scope?.notifier?.value ?? DashboardCornerSettings.defaults,
     );
   }
 }

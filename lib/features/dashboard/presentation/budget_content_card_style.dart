@@ -1,15 +1,28 @@
 import 'package:flutter/foundation.dart';
 
-/// Dashboard-lifetime, session-only presentation choice for Budget Card2.
+/// The two intentionally comparable Budget content compositions.
 ///
-/// This intentionally owns only Card2 chrome. Budget selection, PageView,
-/// query and LogBox state all remain in their existing controllers.
-final class BudgetContentCardStyleController extends ValueNotifier<bool> {
-  BudgetContentCardStyleController() : super(true);
+/// This is presentation only: avatar selection, page selection, query state
+/// and LogBox focus remain owned by their existing controllers.
+enum BudgetContentLayout {
+  split('Szétválasztva'),
+  unifiedCard('Közös kártya');
 
-  bool get showCardSurface => value;
+  const BudgetContentLayout(this.label);
 
-  void setShowCardSurface(bool showCardSurface) {
-    if (value != showCardSurface) value = showCardSurface;
+  final String label;
+}
+
+/// Dashboard-lifetime, session-only owner for Budget content composition.
+///
+/// The historical boolean allowed a cardless diagram. That is deliberately no
+/// longer representable: [split] keeps Card2 and [unifiedCard] moves both
+/// authored content regions inside one common outer surface.
+final class BudgetContentCardStyleController
+    extends ValueNotifier<BudgetContentLayout> {
+  BudgetContentCardStyleController() : super(BudgetContentLayout.split);
+
+  void select(BudgetContentLayout layout) {
+    if (value != layout) value = layout;
   }
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -80,6 +81,30 @@ void main() {
     expect(next.requiresRepaintFrom(previous), isTrue);
   });
 
+  test('row-height geometry changes repaint the LogBox paint identity', () {
+    final rasterIdentity = Object();
+    final previous = DashboardLogBoxPaintIdentity(
+      payloadViewportId: 77,
+      presentationEpoch: 4,
+      sceneGeneration: 12,
+      committedGeneration: 9,
+      renderDomain: DashboardLogBoxRenderDomain.railPreview,
+      rasterIdentity: rasterIdentity,
+      rowHeight: 55,
+    );
+    final next = DashboardLogBoxPaintIdentity(
+      payloadViewportId: 77,
+      presentationEpoch: 4,
+      sceneGeneration: 12,
+      committedGeneration: 9,
+      renderDomain: DashboardLogBoxRenderDomain.railPreview,
+      rasterIdentity: rasterIdentity,
+      rowHeight: 82.5,
+    );
+
+    expect(next.requiresRepaintFrom(previous), isTrue);
+  });
+
   testWidgets(
     'roundness repaints the stable LogBox surface without replacing scroll or data state',
     (tester) async {
@@ -146,7 +171,7 @@ void main() {
       final cacheGeneration = cache.renderGeneration;
       final extent = position.maxScrollExtent;
 
-      roundness.setPosition(1);
+      roundness.setPosition(DashboardCornerSurfaceFamily.logBoxGroup, 1);
       await tester.pump();
 
       expect(identical(scrollController.position, position), isTrue);

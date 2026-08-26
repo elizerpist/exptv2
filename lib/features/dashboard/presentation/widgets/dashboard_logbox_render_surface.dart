@@ -10,6 +10,7 @@ import 'package:flutter/semantics.dart';
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
+import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
@@ -27,6 +28,8 @@ import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_partner_swipe.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_logbox_height.dart';
+import '../dashboard_shadow_style.dart';
 
 typedef DashboardLogBoxWarmupTaskCallback = void Function(int viewportId);
 typedef DashboardLogBoxWarmupErrorCallback =
@@ -66,7 +69,9 @@ final class DashboardLogBoxPaintIdentity {
     required this.committedGeneration,
     required this.renderDomain,
     required this.rasterIdentity,
+    this.rowHeight = DashboardLogBoxTokens.rowHeight,
     this.groupRadius = FluviVisualTokens.logBoxGroupRadius,
+    this.groupShadows = const <BoxShadow>[],
   });
 
   final int? payloadViewportId;
@@ -75,7 +80,9 @@ final class DashboardLogBoxPaintIdentity {
   final int committedGeneration;
   final DashboardLogBoxRenderDomain renderDomain;
   final Object rasterIdentity;
+  final double rowHeight;
   final BorderRadius groupRadius;
+  final List<BoxShadow> groupShadows;
 
   bool requiresRepaintFrom(DashboardLogBoxPaintIdentity previous) =>
       payloadViewportId != previous.payloadViewportId ||
@@ -83,7 +90,9 @@ final class DashboardLogBoxPaintIdentity {
       sceneGeneration != previous.sceneGeneration ||
       committedGeneration != previous.committedGeneration ||
       renderDomain != previous.renderDomain ||
+      rowHeight != previous.rowHeight ||
       groupRadius != previous.groupRadius ||
+      !identical(groupShadows, previous.groupShadows) ||
       !identical(rasterIdentity, previous.rasterIdentity);
 }
 
@@ -219,7 +228,7 @@ final class _DashboardLogBoxRenderSurfaceState
       surfaceGlobalOrigin: renderObject.localToGlobal(Offset.zero),
       surfaceWidth: renderObject.size.width,
       rowTop: hit.rowTop,
-      rowHeight: DashboardLogBoxTokens.rowHeight,
+      rowHeight: _latestPainter?.rowHeight ?? DashboardLogBoxTokens.rowHeight,
       contentGutter: DashboardLogBoxTokens.horizontalGutter,
     );
     final avatarTopLeft = renderObject.localToGlobal(hit.avatarBounds.topLeft);
@@ -266,12 +275,22 @@ final class _DashboardLogBoxRenderSurfaceState
               widget.performanceCounters?.increment(
                 DashboardPerformanceMetric.logBoxBuild,
               );
+              final layoutProfile = DashboardLogBoxLayoutScope.profileOf(
+                context,
+              );
+              final shadowProfile = DashboardShadowStyleScope.profileOf(
+                context,
+              );
               final payload = frame?.logBox;
               if (_ownsCommittedViewport &&
                   frame != null &&
                   presentation?.mode == DashboardVisibleMode.committed &&
                   payload != null) {
-                _seedStandaloneCommittedViewport(frame.asCommitted(), payload);
+                _seedStandaloneCommittedViewport(
+                  frame.asCommitted(),
+                  payload,
+                  layoutProfile: layoutProfile,
+                );
               }
               final hasExactGeometry = hasExactCommittedLogBoxGeometry(
                 payload: payload,
@@ -324,12 +343,14 @@ final class _DashboardLogBoxRenderSurfaceState
                 widget.minimumHeight,
                 committedViewport: _committedViewport,
                 useCommittedViewport: false,
+                layoutProfile: layoutProfile,
               );
               final committedSurfaceHeight = _contentHeight(
                 payload,
                 widget.minimumHeight,
                 committedViewport: _committedViewport,
                 useCommittedViewport: hasExactGeometry,
+                layoutProfile: layoutProfile,
               );
               final binding = _DashboardLogBoxRenderBinding(
                 payloadFrame: frame,
@@ -345,15 +366,12 @@ final class _DashboardLogBoxRenderSurfaceState
                     ? committedSurfaceHeight
                     : previewSurfaceHeight,
               );
-              final groupRadius =
+              final resolvedGroupRadius =
                   DashboardCornerRoundnessScope.profileOf(
                     context,
                   ).borderRadiusFor(
                     DashboardCornerSurfaceFamily.logBoxGroup,
-                    size: const Size(
-                      double.infinity,
-                      DashboardLogBoxTokens.rowHeight,
-                    ),
+                    size: Size(double.infinity, layoutProfile.rowHeight),
                   );
               final painter = _DashboardLogBoxSurfacePainter(
                 payload: binding.payload,
@@ -370,7 +388,11 @@ final class _DashboardLogBoxRenderSurfaceState
                 performanceCounters: widget.performanceCounters,
                 renderDiagnostics: widget.renderDiagnostics,
                 partnerSwipe: widget.partnerSwipe,
-                groupRadius: groupRadius,
+                groupRadius: resolvedGroupRadius,
+                groupShadows: shadowProfile.shadowsFor(
+                  DashboardCornerSurfaceFamily.logBoxGroup,
+                ),
+                layoutProfile: layoutProfile,
               );
               _latestPainter = painter;
               _bindHitTestController();
@@ -872,15 +894,33 @@ final class _DashboardLogBoxRenderSurfaceState
 
   void _seedStandaloneCommittedViewport(
     DashboardVisibleFrame frame,
-    DashboardLogViewportState payload,
-  ) {
+    DashboardLogViewportState payload, {
+    required DashboardLogBoxLayoutProfile layoutProfile,
+  }) {
     final existing = _committedViewport.pageForOrdinal(0);
     if (_committedViewport.queryKey == frame.queryKey &&
         _committedViewport.coreRevision == frame.coreRevision &&
         existing?.payload.viewportId == payload.viewportId) {
+      // The owned fallback cache has no Core controller to receive the tuner
+      // callback. Preserve its exact data/text identity, but still replace the
+      // complete geometry manifest when a stepped height changes.
+      if (_committedViewport.geometryManifest?.layoutProfile != layoutProfile) {
+        final replacement = _standaloneGeometryManifest(
+          frame,
+          payload,
+          layoutProfile: layoutProfile,
+        );
+        if (replacement != null) {
+          _committedViewport.replaceGeometryManifest(replacement);
+        }
+      }
       return;
     }
-    final geometryManifest = _standaloneGeometryManifest(frame, payload);
+    final geometryManifest = _standaloneGeometryManifest(
+      frame,
+      payload,
+      layoutProfile: layoutProfile,
+    );
     if (geometryManifest == null) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -910,8 +950,9 @@ final class _DashboardLogBoxRenderSurfaceState
 
   CommittedVerticalGeometryManifest? _standaloneGeometryManifest(
     DashboardVisibleFrame frame,
-    DashboardLogViewportState payload,
-  ) {
+    DashboardLogViewportState payload, {
+    required DashboardLogBoxLayoutProfile layoutProfile,
+  }) {
     // The production path always receives the exact manifest from the
     // PreparedDashboardIndex through DashboardCoreController. This owned-cache
     // fallback is deliberately fail-closed: a bounded preview cannot invent a
@@ -936,6 +977,7 @@ final class _DashboardLogBoxRenderSurfaceState
         pageSize: _committedViewport.pageSize,
         totalEntryCount: payload.entryCount,
         dayBuckets: buckets,
+        layoutProfile: layoutProfile,
       );
     } on ArgumentError {
       return null;
@@ -947,6 +989,7 @@ final class _DashboardLogBoxRenderSurfaceState
     double minimumHeight, {
     required CommittedLogViewportCache committedViewport,
     required bool useCommittedViewport,
+    required DashboardLogBoxLayoutProfile layoutProfile,
   }) {
     if (useCommittedViewport && committedViewport.hasVirtualGeometry) {
       // A committed nonempty scope has exactly one scroll world: the immutable
@@ -963,7 +1006,7 @@ final class _DashboardLogBoxRenderSurfaceState
     final groupDecorationHeight =
         payload.groupCount * DashboardLogBoxTokens.dayHeaderHeight +
         math.max(0, payload.groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
-    final rowHeight = payload.previewRowCount * DashboardLogBoxTokens.rowHeight;
+    final rowHeight = payload.previewRowCount * layoutProfile.rowHeight;
     return math.max(minimumHeight, groupDecorationHeight + rowHeight);
   }
 }
@@ -1052,12 +1095,14 @@ final class _DashboardLogBoxActiveCanonicalSegmentPresentation {
     required this.paint,
     required this.onRasterPaint,
     required this.measureDuration,
+    required this.shadowBottomExtent,
   });
 
   final Rect segmentRect;
   final void Function(Canvas canvas) paint;
   final ValueChanged<int> onRasterPaint;
   final bool measureDuration;
+  final double shadowBottomExtent;
 }
 
 /// The one active row is isolated behind a repaint boundary and moves by a
@@ -1076,11 +1121,7 @@ final class _DashboardLogBoxActiveCanonicalSegmentLayer
   @override
   Widget build(BuildContext context) {
     final segment = presentation.segmentRect;
-    // Reserve the tiny local card-depth lip for the two roles that need it.
-    // For top/middle it remains transparent and has no presentation cost.
-    final shadowHeight = math
-        .max(0, FluviVisualTokens.cardFootShadow.offset.dy)
-        .toDouble();
+    final shadowHeight = presentation.shadowBottomExtent;
     return Positioned(
       left: segment.left,
       top: segment.top,
@@ -1129,14 +1170,25 @@ final class _DashboardLogBoxActiveCanonicalSegmentPainter
 final class _DashboardLogBoxPaintResources {
   _DashboardLogBoxPaintResources()
     : divider = Paint()..color = FluviVisualTokens.border,
-      groupSurface = Paint()..color = FluviVisualTokens.surface,
-      groupDepth = Paint()..color = FluviVisualTokens.cardFootShadow.color;
+      groupSurface = Paint()..color = FluviVisualTokens.surface;
 
   final Paint divider;
   final Paint groupSurface;
-  final Paint groupDepth;
 
   void dispose() {}
+}
+
+/// Immutable paint resources for one resolved dashboard shadow profile.
+/// The custom painter owns these so a vertical repaint never resolves a
+/// BoxShadow into a fresh Paint for every day group.
+final class _DashboardLogBoxResolvedShadow {
+  const _DashboardLogBoxResolvedShadow({
+    required this.offset,
+    required this.paint,
+  });
+
+  final Offset offset;
+  final Paint paint;
 }
 
 @immutable
@@ -1185,6 +1237,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.performanceCounters,
     required this.renderDiagnostics,
     required this.groupRadius,
+    required this.groupShadows,
+    required this.layoutProfile,
     this.partnerSwipe,
   }) : super(
          repaint: Listenable.merge(<Listenable>[
@@ -1210,6 +1264,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final BorderRadius groupRadius;
+  final List<BoxShadow> groupShadows;
+  final DashboardLogBoxLayoutProfile layoutProfile;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   bool _reportedTextLayoutMiss = false;
   bool _reportedVerticalCacheMiss = false;
@@ -1218,6 +1274,15 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   int get lastDrawableRowCount => _lastDrawableRowCount;
   int get lastPaintedRowCount => _lastPaintedRowCount;
+  double get rowHeight => layoutProfile.rowHeight;
+
+  double get shadowBottomExtent => groupShadows.fold<double>(
+    0,
+    (extent, shadow) => math.max(
+      extent,
+      math.max(0, shadow.offset.dy) + shadow.blurRadius + shadow.spreadRadius,
+    ),
+  );
 
   late final DashboardLogBoxPaintIdentity paintIdentity =
       DashboardLogBoxPaintIdentity(
@@ -1227,8 +1292,23 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         committedGeneration: committedGeneration,
         renderDomain: renderDomain,
         rasterIdentity: rasters,
+        rowHeight: rowHeight,
         groupRadius: groupRadius,
+        groupShadows: groupShadows,
       );
+
+  // Shadow styles are presentation inputs, but a scroll repaint must not
+  // manufacture Paint objects for every grouped segment. Resolve once per
+  // immutable painter generation; radius/height/profile changes install a
+  // fresh painter through the existing paint identity instead.
+  late final List<_DashboardLogBoxResolvedShadow> _resolvedGroupShadows =
+      <_DashboardLogBoxResolvedShadow>[
+        for (final shadow in groupShadows)
+          _DashboardLogBoxResolvedShadow(
+            offset: shadow.offset,
+            paint: shadow.toPaint(),
+          ),
+      ];
 
   @override
   void paint(Canvas canvas, Size size) => _paintSurface(canvas, size);
@@ -1290,7 +1370,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       final item = state.flatItems[index];
       final rowTop = _rowTop(item);
       if (rowTop > visibleWindow.bottom) break;
-      if (rowTop + DashboardLogBoxTokens.rowHeight < visibleWindow.top) {
+      if (rowTop + rowHeight < visibleWindow.top) {
         continue;
       }
       if (_paintItem(canvas, size.width, item, rowTop, scene)) {
@@ -1366,7 +1446,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       for (final item in page.payload.flatItems) {
         final rowTop = pageTop + _rowTop(item);
         if (rowTop > visibleBottom) break;
-        if (rowTop + DashboardLogBoxTokens.rowHeight < visibleTop) continue;
+        if (rowTop + rowHeight < visibleTop) continue;
         if (prepared != null) {
           _paintCommittedItem(
             canvas,
@@ -1409,7 +1489,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       final group = state.groupLayouts[index];
       if (group.rowCount == 0) continue;
       final top = pageTop + _groupRowTop(group);
-      final height = group.rowCount * DashboardLogBoxTokens.rowHeight;
+      final height = group.rowCount * rowHeight;
       if (top > visibleBottom) break;
       if (top + height < visibleTop) continue;
       final rect = Rect.fromLTWH(
@@ -1429,7 +1509,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
             rect.left,
             pageTop + _rowTop(activeItem),
             rect.width,
-            DashboardLogBoxTokens.rowHeight,
+            rowHeight,
           ),
         );
       }
@@ -1468,9 +1548,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     final row = item.row;
     final badgeTop =
-        rowTop +
-        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
-            2;
+        rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
       DashboardLogBoxTokens.rowHorizontalInset,
       badgeTop,
@@ -1492,7 +1570,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       rasters.glyph(row.categoryIconHandle),
       iconRect,
     );
-    preparedText.paint(canvas, rowTop);
+    preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
   }
 
   void _recordVerticalCacheMiss(DashboardLogViewportState state, int ordinal) {
@@ -1549,7 +1627,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       final group = state.groupLayouts[index];
       if (group.rowCount == 0) continue;
       final top = _groupRowTop(group);
-      final height = group.rowCount * DashboardLogBoxTokens.rowHeight;
+      final height = group.rowCount * rowHeight;
       if (top > visibleBottom) break;
       if (top + height < visibleTop) continue;
       final rect = Rect.fromLTWH(
@@ -1569,7 +1647,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
             rect.left,
             _rowTop(activeItem),
             rect.width,
-            DashboardLogBoxTokens.rowHeight,
+            rowHeight,
           ),
         );
       }
@@ -1583,11 +1661,18 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   void _paintGroupSurface(Canvas canvas, Rect rect) {
     if (rect.isEmpty) return;
     final body = groupRadius.toRRect(rect);
-    final foot = body.shift(FluviVisualTokens.cardFootShadow.offset);
-    if (!_debugDisableLogBoxCardDepth) {
-      canvas.drawRRect(foot, resources.groupDepth);
-    }
+    _paintGroupShadows(canvas, body);
     canvas.drawRRect(body, resources.groupSurface);
+  }
+
+  /// Keeps custom-paint LogBox depth inside the existing renderer. Current
+  /// preserves its authored hard foot, None paints no depth, and Soft draws
+  /// only central blurred reference-derived shadows.
+  void _paintGroupShadows(Canvas canvas, RRect body) {
+    if (_debugDisableLogBoxCardDepth) return;
+    for (final shadow in _resolvedGroupShadows) {
+      canvas.drawRRect(body.shift(shadow.offset), shadow.paint);
+    }
   }
 
   /// Paints every unchanged part of a canonical day group while leaving the
@@ -1649,12 +1734,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       ),
       (false, false) => RRect.fromRectAndRadius(rect, Radius.zero),
     };
-    if (roundBottom && !_debugDisableLogBoxCardDepth) {
-      canvas.drawRRect(
-        body.shift(FluviVisualTokens.cardFootShadow.offset),
-        resources.groupDepth,
-      );
-    }
+    if (roundBottom) _paintGroupShadows(canvas, body);
     canvas.drawRRect(body, resources.groupSurface);
   }
 
@@ -1698,12 +1778,13 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxTokens.horizontalGutter,
       rowTop,
       math.max(0, surfaceWidth - DashboardLogBoxTokens.horizontalGutter * 2),
-      DashboardLogBoxTokens.rowHeight,
+      rowHeight,
     );
     return _DashboardLogBoxActiveCanonicalSegmentPresentation(
       segmentRect: segmentRect,
       measureDuration: performanceCounters?.measuresDurations ?? false,
       onRasterPaint: partnerSwipe?.recordActiveSegmentRasterPaint ?? (_) {},
+      shadowBottomExtent: shadowBottomExtent,
       paint: (canvas) {
         canvas.save();
         canvas.translate(-segmentRect.left, -segmentRect.top);
@@ -1734,12 +1815,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       segmentRect,
       groupRadius: groupRadius,
     );
-    if (swipe.target.blockSegmentRole.ownsBottomShadow &&
-        !_debugDisableLogBoxCardDepth) {
-      canvas.drawRRect(
-        body.shift(FluviVisualTokens.cardFootShadow.offset),
-        resources.groupDepth,
-      );
+    if (swipe.target.blockSegmentRole.ownsBottomShadow) {
+      _paintGroupShadows(canvas, body);
     }
     canvas.drawRRect(body, resources.groupSurface);
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
@@ -1795,9 +1872,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   }) {
     final row = item.row;
     final badgeTop =
-        rowTop +
-        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
-            2;
+        rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
       DashboardLogBoxTokens.rowHorizontalInset,
       badgeTop,
@@ -1818,7 +1893,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         height: DashboardLogBoxTokens.avatarIconSize,
       ),
     );
-    preparedText.paint(canvas, rowTop);
+    preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
   }
 
   bool _isActiveSwipeItem(DashboardLogViewportItemViewModel item) =>
@@ -1873,9 +1948,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
     final row = item.row;
     final badgeTop =
-        rowTop +
-        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
-            2;
+        rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
       DashboardLogBoxTokens.rowHorizontalInset,
       badgeTop,
@@ -1898,7 +1971,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       iconRect,
     );
 
-    preparedText.paint(canvas, rowTop);
+    preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
     return true;
   }
 
@@ -1971,8 +2044,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (index >= state.flatItems.length) return null;
     final item = state.flatItems[index];
     final top = _rowTop(item);
-    if (position.dy < top ||
-        position.dy > top + DashboardLogBoxTokens.rowHeight) {
+    if (position.dy < top || position.dy > top + rowHeight) {
       return null;
     }
     return _DashboardLogBoxHitTarget(
@@ -2005,8 +2077,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (index >= page.payload.flatItems.length) return null;
     final item = page.payload.flatItems[index];
     final top = _rowTop(item);
-    if (localOffset < top ||
-        localOffset > top + DashboardLogBoxTokens.rowHeight) {
+    if (localOffset < top || localOffset > top + rowHeight) {
       return null;
     }
     final absoluteTop = committedViewport.pageTopForOrdinal(ordinal) + top;
@@ -2035,11 +2106,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     return DashboardLogBoxBlockSegmentRole.middle;
   }
 
-  static Rect _avatarBounds(double rowTop) => Rect.fromLTWH(
+  Rect _avatarBounds(double rowTop) => Rect.fromLTWH(
     DashboardLogBoxTokens.rowHorizontalInset,
-    rowTop +
-        (DashboardLogBoxTokens.rowHeight - DashboardLogBoxTokens.avatarSize) /
-            2,
+    rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2,
     DashboardLogBoxTokens.avatarSize,
     DashboardLogBoxTokens.avatarSize,
   );
@@ -2128,12 +2197,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           if (top > viewportBottom) break;
           result.add(
             CustomPainterSemantics(
-              rect: Rect.fromLTWH(
-                0,
-                top,
-                size.width,
-                DashboardLogBoxTokens.rowHeight,
-              ),
+              rect: Rect.fromLTWH(0, top, size.width, rowHeight),
               properties: SemanticsProperties(
                 label: item.row.semanticLabel,
                 textDirection: TextDirection.ltr,
@@ -2164,12 +2228,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       if (top > viewportBottom) break;
       result.add(
         CustomPainterSemantics(
-          rect: Rect.fromLTWH(
-            0,
-            top,
-            size.width,
-            DashboardLogBoxTokens.rowHeight,
-          ),
+          rect: Rect.fromLTWH(0, top, size.width, rowHeight),
           properties: SemanticsProperties(
             label: item.row.semanticLabel,
             textDirection: TextDirection.ltr,
@@ -2198,9 +2257,10 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       presentationEpoch != oldDelegate.presentationEpoch ||
       committedGeneration != oldDelegate.committedGeneration ||
       renderDomain != oldDelegate.renderDomain ||
+      layoutProfile != oldDelegate.layoutProfile ||
       onEntryTap != oldDelegate.onEntryTap;
 
-  static int _firstPossiblyVisibleItem(
+  int _firstPossiblyVisibleItem(
     List<DashboardLogViewportItemViewModel> items,
     double minimumBottom,
   ) {
@@ -2209,7 +2269,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     while (low < high) {
       final middle = low + ((high - low) >> 1);
       final item = items[middle];
-      final bottom = _rowTop(item) + DashboardLogBoxTokens.rowHeight;
+      final bottom = _rowTop(item) + rowHeight;
       if (bottom < minimumBottom) {
         low = middle + 1;
       } else {
@@ -2219,7 +2279,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     return low;
   }
 
-  static int _firstPossiblyVisibleGroup(
+  int _firstPossiblyVisibleGroup(
     List<DashboardLogGroupLayoutViewModel> groups,
     double minimumBottom,
   ) {
@@ -2228,9 +2288,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     while (low < high) {
       final middle = low + ((high - low) >> 1);
       final group = groups[middle];
-      final bottom =
-          _groupRowTop(group) +
-          group.rowCount * DashboardLogBoxTokens.rowHeight;
+      final bottom = _groupRowTop(group) + group.rowCount * rowHeight;
       if (bottom < minimumBottom) {
         low = middle + 1;
       } else {
@@ -2240,16 +2298,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     return low;
   }
 
-  static double _groupHeaderTop(int groupIndex, int precedingRowCount) =>
+  double _groupHeaderTop(int groupIndex, int precedingRowCount) =>
       groupIndex * DashboardLogBoxTokens.dayHeaderHeight +
       groupIndex * DashboardLogBoxTokens.dayGroupGap +
-      precedingRowCount * DashboardLogBoxTokens.rowHeight;
+      precedingRowCount * rowHeight;
 
-  static double _rowTop(DashboardLogViewportItemViewModel item) =>
+  double _rowTop(DashboardLogViewportItemViewModel item) =>
       _groupHeaderTop(item.groupIndex, item.flatRowIndex) +
       DashboardLogBoxTokens.dayHeaderHeight;
 
-  static double _groupRowTop(DashboardLogGroupLayoutViewModel group) =>
+  double _groupRowTop(DashboardLogGroupLayoutViewModel group) =>
       _groupHeaderTop(group.groupIndex, group.precedingRowCount) +
       DashboardLogBoxTokens.dayHeaderHeight;
 }

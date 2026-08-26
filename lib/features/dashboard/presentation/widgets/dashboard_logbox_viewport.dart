@@ -130,6 +130,10 @@ final class _DashboardLogBoxViewportState
   DashboardLogBoxVisibleScopeIdentity? _lastVisibleScope;
   DashboardLogBoxPresentationBinding? _lastVisibleBinding;
   DashboardLogBoxVisibleScopeIdentity? _scopeAwaitingPayloadPaint;
+  CommittedLogViewportCache? _observedCommittedViewport;
+  int _observedGeometryGeneration = -1;
+  CommittedLogViewportGeometryTransition? _pendingGeometryTransition;
+  bool _geometryReconciliationScheduled = false;
   late final _VerticalInteractionSessionOwner _verticalSession;
   late final DashboardLogBoxSurfaceHitTestController _surfaceHitTest;
   late final _DashboardLogBoxPointerArbitrationOwner _pointerArbitration;
@@ -153,6 +157,7 @@ final class _DashboardLogBoxViewportState
     widget.visibleFrames.logBoxLane.addListener(_onLogBoxPayloadChanged);
     widget.currentQuery?.addListener(_onAppliedQueryChanged);
     widget.focus?.addListener(_onFocusChanged);
+    _bindCommittedViewport(widget.committedViewport);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _armVisiblePreviewRootIfPossible();
     });
@@ -161,6 +166,9 @@ final class _DashboardLogBoxViewportState
   @override
   void didUpdateWidget(covariant DashboardLogBoxViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.committedViewport != widget.committedViewport) {
+      _bindCommittedViewport(widget.committedViewport);
+    }
     if (oldWidget.currentQuery != widget.currentQuery) {
       oldWidget.currentQuery?.removeListener(_onAppliedQueryChanged);
       widget.currentQuery?.addListener(_onAppliedQueryChanged);
@@ -197,6 +205,9 @@ final class _DashboardLogBoxViewportState
     widget.visibleFrames.logBoxLane.removeListener(_onLogBoxPayloadChanged);
     widget.currentQuery?.removeListener(_onAppliedQueryChanged);
     widget.focus?.removeListener(_onFocusChanged);
+    _observedCommittedViewport?.removeListener(
+      _onCommittedViewportGeometryChanged,
+    );
     _scrollController.dispose();
     super.dispose();
   }
@@ -207,6 +218,87 @@ final class _DashboardLogBoxViewportState
 
   void _onFocusChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// A row-height preference produces a fully compiled replacement manifest.
+  /// The stable ScrollPosition remains owned here; after the sliver observes
+  /// that atomic generation, project its local page fraction into the matching
+  /// page of the new geometry instead of leaving the user at an unrelated row.
+  void _bindCommittedViewport(CommittedLogViewportCache? viewport) {
+    if (identical(_observedCommittedViewport, viewport)) return;
+    _observedCommittedViewport?.removeListener(
+      _onCommittedViewportGeometryChanged,
+    );
+    _observedCommittedViewport = viewport;
+    _observedGeometryGeneration = viewport?.geometryGeneration ?? -1;
+    _pendingGeometryTransition = null;
+    viewport?.addListener(_onCommittedViewportGeometryChanged);
+  }
+
+  void _onCommittedViewportGeometryChanged() {
+    final viewport = _observedCommittedViewport;
+    if (viewport == null ||
+        viewport.geometryGeneration == _observedGeometryGeneration) {
+      return;
+    }
+    _observedGeometryGeneration = viewport.geometryGeneration;
+    final transition = viewport.lastGeometryTransition;
+    if (transition == null) return;
+    // A partner swipe retains a concrete row rectangle. It cannot survive a
+    // different row-height generation, so cancel only that presentation
+    // gesture before its old target can be painted against new geometry.
+    widget.partnerSwipe?.cancel();
+    final pending = _pendingGeometryTransition;
+    _pendingGeometryTransition = pending == null
+        ? transition
+        : CommittedLogViewportGeometryTransition(
+            previous: pending.previous,
+            current: transition.current,
+          );
+    if (_geometryReconciliationScheduled) return;
+    _geometryReconciliationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _geometryReconciliationScheduled = false;
+      final pendingTransition = _pendingGeometryTransition;
+      _pendingGeometryTransition = null;
+      if (mounted && pendingTransition != null) {
+        _reconcileGeometryTransition(pendingTransition);
+      }
+    });
+  }
+
+  void _reconcileGeometryTransition(
+    CommittedLogViewportGeometryTransition transition,
+  ) {
+    if (!_scrollController.hasClients ||
+        _observedCommittedViewport?.geometryManifest != transition.current) {
+      return;
+    }
+    final position = _scrollController.position;
+    final previous = transition.previous;
+    final current = transition.current;
+    if (previous.pages.isEmpty || current.pages.isEmpty) return;
+    final oldContentOffset = (position.pixels - position.minScrollExtent)
+        .clamp(0.0, previous.totalExtent)
+        .toDouble();
+    final ordinal = previous.pageOrdinalForOffset(oldContentOffset);
+    final previousPage = previous.pageForOrdinal(ordinal)!;
+    final currentPage = current.pageForOrdinal(ordinal) ?? current.pages.last;
+    final localFraction = previousPage.extent == 0
+        ? 0.0
+        : ((oldContentOffset - previousPage.top) / previousPage.extent)
+              .clamp(0.0, 1.0)
+              .toDouble();
+    final targetContentOffset =
+        currentPage.top + currentPage.extent * localFraction;
+    final target = (position.minScrollExtent + targetContentOffset)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if ((target - position.pixels).abs() < .5) return;
+    // `jumpTo` retains this exact controller/position identity while ending a
+    // now-invalid ballistic. A slider geometry generation is therefore one
+    // deterministic presentation transition, never a second scroll owner.
+    _scrollController.jumpTo(target);
   }
 
   void _onBallisticObserved(DashboardVerticalBallisticObservation observation) {

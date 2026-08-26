@@ -4,10 +4,13 @@ import 'package:fluvi/core/categories/data/empty_category_repository.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
@@ -165,7 +168,29 @@ void main() {
           categoryCollection: emptyTestCategoryCollection,
         ),
       );
+      await tester.pump();
 
+      expect(
+        find.byKey(const ValueKey<String>('budget-distribution-pager')),
+        findsOneWidget,
+      );
+      expect(find.byType(BudgetDistributionPageCard), findsOneWidget);
+      expect(
+        tester
+            .widget<BudgetDistributionPageCard>(
+              find.byType(BudgetDistributionPageCard),
+            )
+            .contentCardStyle
+            ?.value,
+        BudgetContentLayout.split,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BudgetDistributionPageCard),
+          matching: find.byType(FluviRoundedBox),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('dashboard-summary-shell-transform')),
         findsOneWidget,
@@ -274,6 +299,33 @@ void main() {
       );
       expect(tester.getRect(lowerCard).height, 275);
       expect(tester.getRect(handle).top, 753);
+    },
+  );
+
+  testWidgets(
+    'Budget starts in the accepted Split composition with its one Card2 shell',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        findsNothing,
+      );
     },
   );
 

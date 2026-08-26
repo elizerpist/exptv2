@@ -14,7 +14,10 @@ void main() {
   testWidgets(
     'one roundness scope keeps Header shell and animated clip exactly aligned',
     (tester) async {
-      final roundness = DashboardCornerRoundnessController()..setPosition(1);
+      final roundness = DashboardCornerRoundnessController();
+      for (final family in DashboardCornerSurfaceFamily.values) {
+        roundness.setPosition(family, 1);
+      }
       final visual = DashboardHeaderVisualController(vsync: tester);
       final frame = ValueNotifier<DashboardHeaderVisualFrame>(
         DashboardHeaderVisualFrame.staticTone(Colors.blue),
@@ -70,7 +73,11 @@ void main() {
         ),
       );
 
-      const profile = DashboardCornerProfile(DashboardCornerRoundness(1));
+      var settings = DashboardCornerSettings.defaults;
+      for (final family in DashboardCornerSurfaceFamily.values) {
+        settings = settings.withPosition(family, 1);
+      }
+      final profile = DashboardCornerProfile(settings);
       final expectedHeader = profile.borderRadiusFor(
         DashboardCornerSurfaceFamily.header,
         size: const Size(320, 104),

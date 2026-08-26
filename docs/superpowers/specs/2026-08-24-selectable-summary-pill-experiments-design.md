@@ -139,3 +139,37 @@ is a discarded historical experiment, not a third product option.
 
 These remain comparison controls. No permanent corner value, Card2-surface
 choice, temporal model or dashboard layout winner is selected.
+
+## 2026-08-26 follow-up: composition, depth, height and independent corners
+
+The SummaryPill comparison remains exactly `Legacy` and `Segmented`; this
+follow-up does not alter canonical time, query or Budget semantics.
+
+- The former `Diagram kártyában` ON/OFF state is superseded. Budget has two
+  session-only compositions: `Split` keeps the avatar rail on the dashboard
+  background and the distribution in Card2; `Közös kártya` uses the existing
+  central `modeContentBounds` envelope for one shared outer Budget surface.
+  Its nested Category/Partner Card2 shell is suppressed, while avatar, pager,
+  dots, query and focus owners remain mounted in their original slots. A
+  cardless diagram is no longer an active state.
+- A dashboard-wide presentation-only shadow style is `Nincs`, `Jelenlegi`, or
+  `Finom`. `Jelenlegi` is the exact current Fluvi foot/elevation treatment.
+  `Finom` is sourced from the read-only Spendee source: hero
+  `0x3DC359B8 @ y16/blur34` plus `0x1F50459C @ y6/blur14`; large cards
+  `0x14524B93 @ y9/blur19`; compact controls use the Spendee-style blurred
+  `black 10% @ y5/blur12` family. None of the soft profiles has a hard foot.
+- LogBox height is a stepped session-only geometry preference from the current
+  55px baseline to 1.5x. A step compiles and atomically publishes a complete
+  `CommittedVerticalGeometryManifest`; no Query/index/text-data owner is
+  recreated. The stable viewport keeps its controller/position and projects
+  the same logical page-local fraction into the new manifest before clamping.
+  Partner swipe presentation is cancelled during that geometry generation so
+  no old-height row target can paint after publication.
+- The old one-global corner scalar is superseded by independent normalized
+  settings for Header, mode content, direction controls, SummaryPill,
+  SearchPill, LogBox groups and the active Budget content card. Existing
+  family endpoints and safety clamping remain centralized in
+  `DashboardCornerProfile`; every `0%` remains the current authored baseline.
+
+All controls stay in the existing Header tuner, are session-only, and remain
+comparison/presentation controls rather than a selected permanent design.

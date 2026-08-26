@@ -1,5 +1,19 @@
 # Milestone commits
 
+## 2026-08-26 — Dynamic LogBox geometry generation candidate
+
+- The dashboard permits a stepped presentation row-height preference without
+  weakening the committed-geometry contract: every change compiles and
+  atomically replaces a complete manifest for the same query/revision.
+- The stable Flutter vertical `ScrollController` and `ScrollPosition` remain
+  the only scroll owner. The viewport reprojects the same logical page-local
+  fraction into the replacement geometry and clamps it; data, query and
+  prepared text ownership do not reset.
+- LogBox corner/shadow changes remain paint-style inputs; they do not mutate
+  the vertical manifest. This is an implementation invariant, not a selected
+  height or cosmetic product default.
+- Status: **MILESTONE CANDIDATE — AWAITING HUMAN PHYSICAL ANDROID VALIDATION.**
+
 ## 2026-08-23 — Seamless continuous Header palette material milestone
 
 - Behavioural milestone: `5187d0e199e586a4bf292a9a9ea39851b8b01e5a` —

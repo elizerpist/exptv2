@@ -16,6 +16,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import '../dashboard_amount_update_policy.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
 import '../summary_navigation_motion_controller.dart';
 import 'summary_navigation_motion_region.dart';
 import 'summary_pill_text_transition.dart';
@@ -179,6 +180,9 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     final shell = FluviRoundedBox(
       color: FluviVisualTokens.surface,
       borderRadius: borderRadius,
+      boxShadow: DashboardShadowStyleScope.profileOf(
+        context,
+      ).shadowsFor(DashboardCornerSurfaceFamily.summaryPill),
       child: Row(
         children: [
           SizedBox(width: horizontalInset),

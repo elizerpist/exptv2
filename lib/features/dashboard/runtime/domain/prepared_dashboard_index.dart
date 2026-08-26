@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import 'dashboard_focus_membership_seed.dart';
@@ -655,6 +656,8 @@ final class PreparedDashboardDirectionalPartition {
     required int pageSize,
     required int totalEntryCount,
     required int coreRevision,
+    DashboardLogBoxLayoutProfile layoutProfile =
+        DashboardLogBoxLayoutProfile.baseline,
   }) {
     if (scope.direction != direction || coreRevision != this.coreRevision) {
       throw StateError('A geometry manifest requires its exact partition.');
@@ -679,6 +682,7 @@ final class PreparedDashboardDirectionalPartition {
       pageSize: pageSize,
       totalEntryCount: totalEntryCount,
       dayBuckets: buckets,
+      layoutProfile: layoutProfile,
     );
   }
 
@@ -1304,8 +1308,10 @@ final class PreparedDashboardIndex {
   /// that already owns the frame's filtered aggregate universe. The result is
   /// intentionally independent from the bounded page/resource hotset.
   CommittedVerticalGeometryManifest committedVerticalGeometryFor(
-    CurrentLedgerQueryScope scope,
-  ) {
+    CurrentLedgerQueryScope scope, {
+    DashboardLogBoxLayoutProfile layoutProfile =
+        DashboardLogBoxLayoutProfile.baseline,
+  }) {
     _requireScopeIdentity(scope);
     final overlay = _focusedOverlayFor(scope);
     if (overlay != null) {
@@ -1316,6 +1322,7 @@ final class PreparedDashboardIndex {
         pageSize: pageSize,
         totalEntryCount: frame.count.entryCount,
         dayBuckets: overlay.geometrySeedFor(scope),
+        layoutProfile: layoutProfile,
       );
     }
     final frame = frameFor(scope);
@@ -1331,20 +1338,26 @@ final class PreparedDashboardIndex {
       // is a test-only immutable full-world stand-in, never a production
       // fallback: production decoding leaves [isSynthetic] false and fails
       // closed above instead.
-      return _syntheticCommittedVerticalGeometryFor(scope, frame);
+      return _syntheticCommittedVerticalGeometryFor(
+        scope,
+        frame,
+        layoutProfile: layoutProfile,
+      );
     }
     return partition.committedVerticalGeometryFor(
       scope,
       pageSize: pageSize,
       totalEntryCount: frame.count.entryCount,
       coreRevision: coreRevision,
+      layoutProfile: layoutProfile,
     );
   }
 
   CommittedVerticalGeometryManifest _syntheticCommittedVerticalGeometryFor(
     CurrentLedgerQueryScope scope,
-    DashboardPreparedFrame frame,
-  ) {
+    DashboardPreparedFrame frame, {
+    required DashboardLogBoxLayoutProfile layoutProfile,
+  }) {
     var remaining = frame.count.entryCount;
     var day = 2_000_000_000;
     final buckets = <CommittedVerticalGeometryDayBucket>[];
@@ -1377,6 +1390,7 @@ final class PreparedDashboardIndex {
       pageSize: pageSize,
       totalEntryCount: frame.count.entryCount,
       dayBuckets: buckets,
+      layoutProfile: layoutProfile,
     );
   }
 

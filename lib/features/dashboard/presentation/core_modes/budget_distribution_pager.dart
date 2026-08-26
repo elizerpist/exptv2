@@ -12,6 +12,7 @@ import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
+import '../budget_content_card_style.dart';
 
 enum BudgetDistributionPage { category, partner }
 
@@ -97,7 +98,7 @@ class BudgetDistributionPager extends StatefulWidget {
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
   final bool expandCategoryDonutToFit;
-  final ValueListenable<bool>? contentCardStyle;
+  final ValueListenable<BudgetContentLayout>? contentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 

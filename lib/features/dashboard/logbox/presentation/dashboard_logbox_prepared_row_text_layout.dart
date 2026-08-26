@@ -100,15 +100,14 @@ final class DashboardPreparedLogBoxRowTextLayout {
   final TextPainter amount;
   final TextPainter time;
 
-  void paint(Canvas canvas, double rowTop) {
+  void paint(Canvas canvas, double rowTop, {required double rowHeight}) {
     final leftHeight = title.height + secondary.height;
-    final leftTop = rowTop + (DashboardLogBoxTokens.rowHeight - leftHeight) / 2;
+    final leftTop = rowTop + (rowHeight - leftHeight) / 2;
     title.paint(canvas, Offset(contentLeft, leftTop));
     secondary.paint(canvas, Offset(contentLeft, leftTop + title.height));
 
     final rightHeight = amount.height + time.height;
-    final rightTop =
-        rowTop + (DashboardLogBoxTokens.rowHeight - rightHeight) / 2;
+    final rightTop = rowTop + (rowHeight - rightHeight) / 2;
     amount.paint(canvas, Offset(rightEdge - amount.width, rightTop));
     time.paint(
       canvas,

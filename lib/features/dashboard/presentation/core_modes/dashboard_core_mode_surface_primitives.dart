@@ -8,6 +8,7 @@ import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
 import 'dashboard_header_visual_engine.dart';
 
 class DashboardCoreModeFramePosition extends StatelessWidget {
@@ -256,6 +257,9 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           FluviRoundedBox(
             color: Colors.transparent,
             borderRadius: borderRadius,
+            boxShadow: DashboardShadowStyleScope.profileOf(
+              context,
+            ).shadowsFor(DashboardCornerSurfaceFamily.header),
             child: const SizedBox.expand(),
           ),
           // Layer 2: only this clipped painter listens to the shared ticker.

@@ -1,6 +1,12 @@
 # Summary experiment and surface-customization acceptance checklist
 
 Baseline: `separated-core-modes` at `70589bf32e1c7849eebbafcacdc2c65200ce1a91`.
+
+> Historical acceptance record. Its completed Card2 `Diagram kártyában`
+> ON/OFF comparison was superseded by the later Split / Unified Card
+> composition; the current active control is documented in
+> `2026-08-24-selectable-summary-pill-experiments-design.md` and the newer
+> surface-composition checklist.
 Source inputs: current Fluvi source/tests, `MILESTONE_COMMITS.md`, Fluvi Logs
 Drive revision `AIroW34nIJy1wCZ3BJSyKifmBnRgD2j88pFYc0CSogqG2oMe-ELTN5F6-texkowLLHnp9wtW-ghrXcWcOn1QCg`, and the read-only `spendeetest`
 worktree at `144d78c30dc4cc5e9f230903fd6274c98e62e118`.

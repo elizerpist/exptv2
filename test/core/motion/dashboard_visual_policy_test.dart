@@ -265,7 +265,10 @@ void main() {
   testWidgets('direction buttons resolve the global control family', (
     tester,
   ) async {
-    final roundness = DashboardCornerRoundnessController()..setPosition(1);
+    final roundness = DashboardCornerRoundnessController();
+    for (final family in DashboardCornerSurfaceFamily.values) {
+      roundness.setPosition(family, 1);
+    }
     addTearDown(roundness.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -290,7 +293,12 @@ void main() {
     );
     expect(
       income.decoration.borderRadius,
-      const DashboardCornerProfile(DashboardCornerRoundness(1)).borderRadiusFor(
+      DashboardCornerProfile(
+        DashboardCornerSettings.defaults.withPosition(
+          DashboardCornerSurfaceFamily.directionControl,
+          1,
+        ),
+      ).borderRadiusFor(
         DashboardCornerSurfaceFamily.directionControl,
         size: const Size(185, 44.4),
       ),

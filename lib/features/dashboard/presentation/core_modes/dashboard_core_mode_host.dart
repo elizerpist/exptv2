@@ -18,6 +18,7 @@ import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_header_visual_engine.dart';
 import 'dashboard_header_visual_tuner.dart';
 import 'mind_dashboard_core_surface.dart';
+import '../budget_content_card_style.dart';
 
 typedef DashboardCoreModePresentationLookup =
     DashboardCoreModePresentation Function(DashboardModeSpec mode);
@@ -58,7 +59,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   budgetDistributionDrawables;
   final BudgetTargetAvatarRailController? budgetAvatarRailController;
   final BudgetDistributionPageController? budgetDistributionPageController;
-  final ValueListenable<bool>? budgetContentCardStyle;
+  final ValueListenable<BudgetContentLayout>? budgetContentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
   final DashboardHeaderVisualController? headerVisualController;

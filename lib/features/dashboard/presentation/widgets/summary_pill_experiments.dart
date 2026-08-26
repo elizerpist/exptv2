@@ -13,6 +13,7 @@ import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../summary_pill_variant.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
 import 'dashboard_summary_pill.dart';
 
 /// Fixed-height presentation experiments over the existing dashboard time
@@ -65,6 +66,9 @@ final class SummaryPillExperiment extends StatelessWidget {
                 DashboardCornerSurfaceFamily.summaryPill,
                 size: Size(bounds.width, bounds.height),
               ),
+          boxShadow: DashboardShadowStyleScope.profileOf(
+            context,
+          ).shadowsFor(DashboardCornerSurfaceFamily.summaryPill),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final inset = bounds.width <= 320

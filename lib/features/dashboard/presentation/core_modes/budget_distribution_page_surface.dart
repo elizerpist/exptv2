@@ -5,6 +5,8 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
+import '../budget_content_card_style.dart';
 
 /// The one physical Card2 surface used by both lazily built page items. It is
 /// deliberately inside the PageView so radius and shadow travel with the
@@ -20,7 +22,7 @@ class BudgetDistributionPageCard extends StatelessWidget {
 
   final Key cardKey;
   final Widget child;
-  final ValueListenable<bool>? contentCardStyle;
+  final ValueListenable<BudgetContentLayout>? contentCardStyle;
 
   @override
   Widget build(BuildContext context) => SizedBox.expand(
@@ -29,9 +31,9 @@ class BudgetDistributionPageCard extends StatelessWidget {
       fit: StackFit.expand,
       clipBehavior: Clip.none,
       children: <Widget>[
-        ValueListenableBuilder<bool>(
-          valueListenable: contentCardStyle ?? _alwaysShowCardSurface,
-          builder: (context, showCardSurface, _) => showCardSurface
+        ValueListenableBuilder<BudgetContentLayout>(
+          valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+          builder: (context, layout, _) => layout == BudgetContentLayout.split
               ? LayoutBuilder(
                   builder: (context, constraints) => FluviRoundedBox(
                     key: const ValueKey(
@@ -46,6 +48,10 @@ class BudgetDistributionPageCard extends StatelessWidget {
                           DashboardCornerSurfaceFamily.budgetDistributionCard,
                           size: constraints.biggest,
                         ),
+                    boxShadow: DashboardShadowStyleScope.profileOf(context)
+                        .shadowsFor(
+                          DashboardCornerSurfaceFamily.budgetDistributionCard,
+                        ),
                     child: const SizedBox.expand(),
                   ),
                 )
@@ -57,7 +63,8 @@ class BudgetDistributionPageCard extends StatelessWidget {
   );
 }
 
-final ValueListenable<bool> _alwaysShowCardSurface = ValueNotifier<bool>(true);
+final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =
+    ValueNotifier<BudgetContentLayout>(BudgetContentLayout.split);
 
 /// Shared Card2 page geometry. Category and Partner supply only their exact
 /// prepared donut, heading and rows; padding, flexes, list ownership and row

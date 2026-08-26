@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
@@ -41,7 +42,8 @@ void main() {
 
   testWidgets('SearchPill resolves the global Search family', (tester) async {
     final store = DashboardVisibleFrameStore();
-    final roundness = DashboardCornerRoundnessController()..setPosition(1);
+    final roundness = DashboardCornerRoundnessController()
+      ..setPosition(DashboardCornerSurfaceFamily.logBoxGroup, 1);
     addTearDown(store.dispose);
     addTearDown(roundness.dispose);
     await tester.pumpWidget(
@@ -74,7 +76,12 @@ void main() {
           )
           .decoration
           .borderRadius,
-      const DashboardCornerProfile(DashboardCornerRoundness(1)).borderRadiusFor(
+      DashboardCornerProfile(
+        DashboardCornerSettings.defaults.withPosition(
+          DashboardCornerSurfaceFamily.logBoxGroup,
+          1,
+        ),
+      ).borderRadiusFor(
         DashboardCornerSurfaceFamily.searchPill,
         size: const Size(378, DashboardLogBoxTokens.ledgerSearchPillHeight),
       ),
@@ -1111,6 +1118,53 @@ void main() {
           .single;
       expect(summary.message, contains('contentDimensionChangeCount=0'));
       expect(summary.message, contains('goBallisticInvocationCount=1'));
+    },
+  );
+
+  testWidgets(
+    'RED: a row-height geometry generation keeps the same logical page anchor and scroll owner',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 192);
+      addTearDown(fixture.dispose);
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final position = scrollable.position;
+      final controller = scrollable.widget.controller;
+      final oldManifest = fixture.cache.geometryManifest!;
+      const ordinal = 3;
+      final oldPage = oldManifest.pageForOrdinal(ordinal)!;
+      const localFraction = .4;
+      position.jumpTo(oldPage.top + oldPage.extent * localFraction);
+      await tester.pump();
+
+      final nextManifest = CommittedVerticalGeometryManifest.compile(
+        queryKey: oldManifest.queryKey,
+        coreRevision: oldManifest.coreRevision,
+        pageSize: oldManifest.pageSize,
+        totalEntryCount: oldManifest.totalEntryCount,
+        dayBuckets: oldManifest.dayBuckets,
+        layoutProfile: const DashboardLogBoxLayoutProfile(
+          DashboardLogBoxHeight.one,
+        ),
+      );
+      expect(fixture.cache.replaceGeometryManifest(nextManifest), isTrue);
+      await tester.pump();
+
+      final after = tester.state<ScrollableState>(find.byType(Scrollable));
+      final nextPage = nextManifest.pageForOrdinal(ordinal)!;
+      expect(identical(after.position, position), isTrue);
+      expect(identical(after.widget.controller, controller), isTrue);
+      expect(
+        after.position.pixels,
+        closeTo(nextPage.top + nextPage.extent * localFraction, 1),
+      );
+      expect(
+        after.position.pixels,
+        inInclusiveRange(
+          after.position.minScrollExtent,
+          after.position.maxScrollExtent,
+        ),
+      );
+      expect(controller!.positions, hasLength(1));
     },
   );
 

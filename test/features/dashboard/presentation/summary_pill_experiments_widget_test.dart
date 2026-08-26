@@ -16,7 +16,8 @@ void main() {
   testWidgets('segmented shell resolves the global SummaryPill family', (
     tester,
   ) async {
-    final roundness = DashboardCornerRoundnessController()..setPosition(1);
+    final roundness = DashboardCornerRoundnessController()
+      ..setPosition(DashboardCornerSurfaceFamily.summaryPill, 1);
     final navigation = DashboardNavigationController(
       initialDate: DateTime(2026, 7, 22),
       initialPlane: TimePlane.month,
@@ -51,7 +52,12 @@ void main() {
           )
           .decoration
           .borderRadius,
-      const DashboardCornerProfile(DashboardCornerRoundness(1)).borderRadiusFor(
+      DashboardCornerProfile(
+        DashboardCornerSettings.defaults.withPosition(
+          DashboardCornerSurfaceFamily.summaryPill,
+          1,
+        ),
+      ).borderRadiusFor(
         DashboardCornerSurfaceFamily.summaryPill,
         size: const Size(378, 59),
       ),

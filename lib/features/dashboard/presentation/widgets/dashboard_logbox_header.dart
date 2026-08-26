@@ -13,6 +13,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_query_facet_chips.dart';
 import '../dashboard_corner_roundness.dart';
+import '../dashboard_shadow_style.dart';
 
 /// Stable Ledger chrome above the sole LogBox scroll surface.
 ///
@@ -198,6 +199,9 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
                   DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
                 ),
               ),
+          boxShadow: DashboardShadowStyleScope.profileOf(
+            context,
+          ).shadowsFor(DashboardCornerSurfaceFamily.searchPill),
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: FluviVisualTokens.controlHorizontalInset * scale,

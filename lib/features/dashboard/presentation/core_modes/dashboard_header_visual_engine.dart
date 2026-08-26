@@ -58,7 +58,7 @@ extension DashboardHeaderAnimationFamilyPresentation
 }
 
 /// The dashboard-lifetime Header tuner owns only this compact UI chrome state.
-enum DashboardHeaderTunerSection { animation }
+enum DashboardHeaderTunerSection { animation, cornerRoundness }
 
 @immutable
 final class DashboardHeaderEffectSpec {

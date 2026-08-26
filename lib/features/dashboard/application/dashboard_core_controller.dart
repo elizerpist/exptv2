@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_metrics.dart';
+import '../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -417,7 +418,10 @@ final class DashboardCoreController {
             'A committed frame cannot publish before its prepared index.',
           );
         }
-        final geometry = index.committedVerticalGeometryFor(frame.scope);
+        final geometry = index.committedVerticalGeometryFor(
+          frame.scope,
+          layoutProfile: _logBoxLayoutProfile,
+        );
         final retainedFocusBase = _pendingFocusBasePagingRestore;
         if (retainedFocusBase != null) {
           _pendingFocusBasePagingRestore = null;
@@ -695,6 +699,8 @@ final class DashboardCoreController {
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
   DashboardLogBoxRenderExtentSnapshot? _lastLogBoxRenderExtent;
+  DashboardLogBoxLayoutProfile _logBoxLayoutProfile =
+      DashboardLogBoxLayoutProfile.baseline;
   int _verticalScrollExtentMismatchCount = 0;
   int _verticalCommittedScopeResetCount = 0;
   DashboardLogBoxSceneWindowPreparer? _sceneWindowPreparer;
@@ -3497,6 +3503,28 @@ final class DashboardCoreController {
     }
     _seedReadyCompleter?.complete();
     _seedReadyCompleter = null;
+  }
+
+  /// Atomically replaces only the committed vertical geometry profile.
+  ///
+  /// The prepared index remains authoritative for data and text resources;
+  /// changing a row-height step never starts a Query or index build.
+  void updateLogBoxLayoutProfile(DashboardLogBoxLayoutProfile profile) {
+    if (_logBoxLayoutProfile == profile) return;
+    _logBoxLayoutProfile = profile;
+    final frame = visibleFrames.value;
+    final index = presentation.index ?? _activePreparedRevisionBundle?.index;
+    if (frame == null || index == null || _disposed) return;
+    try {
+      final geometry = index.committedVerticalGeometryFor(
+        frame.scope,
+        layoutProfile: profile,
+      );
+      committedLogViewport.replaceGeometryManifest(geometry);
+    } on StateError {
+      // Startup/preview lanes may not own a committed vertical scope yet. The
+      // profile is retained and the next exact committed publication uses it.
+    }
   }
 
   void beginRailMotion(CenteredCarouselMotionOrigin origin) {

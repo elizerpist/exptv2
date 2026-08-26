@@ -1,5 +1,10 @@
 # Summary Surface Customization Implementation Plan
 
+> Historical implementation plan. The `bool showCardSurface`/cardless diagram
+> work described below was delivered in this plan and is subsequently
+> superseded by the current Split / Unified Card composition; do not treat it
+> as the active Budget presentation catalog.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Narrow the SummaryPill comparison to Legacy and Segmented, make Segmented hierarchy fields independently cyclic, and add live presentation-only Card2 and roundness controls.
