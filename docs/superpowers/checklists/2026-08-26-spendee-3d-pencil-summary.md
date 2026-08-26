@@ -19,7 +19,7 @@ Authoritative visual source: read-only `spendeetest` at
 | SM-03 | visual hierarchy | Segmented selector text | Year/month/day selected values use semantic secondary grey; amount remains primary. | widget style test | DONE |
 | REG-01 | Milestones | all existing owners | Query/preview, rail, row-height, controllers, body order, SearchPill and geometry remain unchanged. | protected suites and diff audit | DONE — excluding two separately reproduced baseline-only harness failures below. |
 | DOC-01 | Task documentation | active customization docs | Documents direct source port and non-interactive placeholder; no permanent-style claim. | doc review | DONE |
-| DEL-01 | delivery | GitHub Actions / human APK | Pushed production SHA has successful human APK downloaded locally and SHA-256 checked. | CI/artifact evidence | NOT DONE |
+| DEL-01 | delivery | GitHub Actions / human APK | Pushed production SHA `6bbd4cee51e9760f9ac548ad0f40bfb05add8e8f` has successful human APK downloaded locally and SHA-256 checked: `fluvi_HUMAN_DIAGNOSTIC_6bbd4ce.apk`, `8056fdaa8e69243edcb8307fa7af75343d56ace3ba939ff1740dcfa0a6b16ad1`. | GitHub Actions run `32971134825`, human diagnostic APK job | DONE |
 | PHYS-01 | User physical acceptance section | Android device | Compare the 3D material, Search/Summary, pencil, Summary hierarchy and protected interactions against the reference screen. | Manual device validation | PENDING USER VALIDATION |
 
 ## Architecture card
