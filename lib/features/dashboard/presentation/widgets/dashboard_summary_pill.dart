@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_highlight.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
@@ -14,6 +15,7 @@ import '../../time_navigation/presentation/summary_navigation_presentation.dart'
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import '../dashboard_amount_update_policy.dart';
+import '../dashboard_corner_roundness.dart';
 import '../summary_navigation_motion_controller.dart';
 import 'summary_navigation_motion_region.dart';
 import 'summary_pill_text_transition.dart';
@@ -169,8 +171,14 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     final horizontalInset = widget.bounds.width <= 320
         ? 6.0
         : FluviVisualTokens.controlHorizontalInset;
+    final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.summaryPill,
+          size: Size(widget.bounds.width, widget.bounds.height),
+        );
     final shell = FluviRoundedBox(
       color: FluviVisualTokens.surface,
+      borderRadius: borderRadius,
       child: Row(
         children: [
           SizedBox(width: horizontalInset),

@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../dashboard_corner_roundness.dart';
 
 /// The one physical Card2 surface used by both lazily built page items. It is
 /// deliberately inside the PageView so radius and shadow travel with the
@@ -12,21 +15,49 @@ class BudgetDistributionPageCard extends StatelessWidget {
     super.key,
     required this.cardKey,
     required this.child,
+    this.contentCardStyle,
   });
 
   final Key cardKey;
   final Widget child;
+  final ValueListenable<bool>? contentCardStyle;
 
   @override
   Widget build(BuildContext context) => SizedBox.expand(
     key: cardKey,
-    child: FluviRoundedBox(
-      color: FluviVisualTokens.surface,
-      border: Border.all(color: FluviVisualTokens.border),
-      child: child,
+    child: Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        ValueListenableBuilder<bool>(
+          valueListenable: contentCardStyle ?? _alwaysShowCardSurface,
+          builder: (context, showCardSurface, _) => showCardSurface
+              ? LayoutBuilder(
+                  builder: (context, constraints) => FluviRoundedBox(
+                    key: const ValueKey(
+                      'budget-distribution-page-card-surface',
+                    ),
+                    color: FluviVisualTokens.surface,
+                    border: Border.all(color: FluviVisualTokens.border),
+                    borderRadius:
+                        DashboardCornerRoundnessScope.profileOf(
+                          context,
+                        ).borderRadiusFor(
+                          DashboardCornerSurfaceFamily.budgetDistributionCard,
+                          size: constraints.biggest,
+                        ),
+                    child: const SizedBox.expand(),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+        Positioned.fill(child: child),
+      ],
     ),
   );
 }
+
+final ValueListenable<bool> _alwaysShowCardSurface = ValueNotifier<bool>(true);
 
 /// Shared Card2 page geometry. Category and Partner supply only their exact
 /// prepared donut, heading and rows; padding, flexes, list ownership and row

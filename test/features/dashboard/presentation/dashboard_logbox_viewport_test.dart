@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -15,6 +16,7 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_g
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_header.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_partner_swipe.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
@@ -36,6 +38,48 @@ import '../../../support/dashboard_render_resources.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
+
+  testWidgets('SearchPill resolves the global Search family', (tester) async {
+    final store = DashboardVisibleFrameStore();
+    final roundness = DashboardCornerRoundnessController()..setPosition(1);
+    addTearDown(store.dispose);
+    addTearDown(roundness.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardCornerRoundnessScope(
+          controller: roundness,
+          child: SizedBox(
+            width: 378,
+            child: DashboardLogBoxHeader(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+              ),
+              visibleFrames: store,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester
+          .widget<FluviRoundedBox>(
+            find.descendant(
+              of: find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+              matching: find.byType(FluviRoundedBox),
+            ),
+          )
+          .decoration
+          .borderRadius,
+      const DashboardCornerProfile(DashboardCornerRoundness(1)).borderRadiusFor(
+        DashboardCornerSurfaceFamily.searchPill,
+        size: const Size(378, DashboardLogBoxTokens.ledgerSearchPillHeight),
+      ),
+    );
+  });
 
   testWidgets(
     'Ledger chrome orders count, SearchPill, and scroll lane without a result amount',

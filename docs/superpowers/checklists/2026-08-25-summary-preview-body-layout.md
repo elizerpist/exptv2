@@ -1,5 +1,10 @@
 # Summary preview and body-layout follow-up checklist
 
+> Historical delivery record. As of the 2026-08-26 follow-up, Swipe Mode is
+> discarded from the active runtime catalog; only Legacy and Segmented remain
+> selectable. The retained rail-reclaim/body-order evidence below describes
+> the implementation state at the time of this delivery.
+
 ## Architecture card
 
 ### Scope and sources

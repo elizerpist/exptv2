@@ -1,11 +1,14 @@
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/transaction_direction_toggle.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -258,6 +261,41 @@ void main() {
       expect(selectedDecoration.gradient, _togglePalette.expenseGradient);
     },
   );
+
+  testWidgets('direction buttons resolve the global control family', (
+    tester,
+  ) async {
+    final roundness = DashboardCornerRoundnessController()..setPosition(1);
+    addTearDown(roundness.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardCornerRoundnessScope(
+          controller: roundness,
+          child: Scaffold(
+            body: TransactionDirectionToggle(
+              bounds: _bounds,
+              palette: _togglePalette,
+              selectedDirection: TransactionDirection.income,
+              incomeIconScale: 1,
+              expenseIconScale: 1,
+              onSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final income = tester.widget<FluviRoundedBox>(
+      find.byKey(const ValueKey('fluvi-income-button')),
+    );
+    expect(
+      income.decoration.borderRadius,
+      const DashboardCornerProfile(DashboardCornerRoundness(1)).borderRadiusFor(
+        DashboardCornerSurfaceFamily.directionControl,
+        size: const Size(185, 44.4),
+      ),
+    );
+  });
 
   testWidgets('motion host runs the exact selected-direction pulse policy', (
     tester,

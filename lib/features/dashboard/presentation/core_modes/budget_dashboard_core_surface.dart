@@ -29,6 +29,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.distributionDrawables,
     this.avatarRailController,
     this.distributionPageController,
+    this.contentCardStyle,
     this.rhythm,
     this.drilldown,
     this.headerVisualController,
@@ -42,6 +43,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   distributionDrawables;
   final BudgetTargetAvatarRailController? avatarRailController;
   final BudgetDistributionPageController? distributionPageController;
+  final ValueListenable<bool>? contentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardHeaderVisualController? headerVisualController;
@@ -72,6 +74,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     drawableFrames: distributionDrawables!,
                     avatarRailController: avatarRailController!,
                     expandCategoryDonutToFit: !geometry.hasPhysicalRail,
+                    contentCardStyle: contentCardStyle,
                     rhythm: rhythm,
                     drilldown: drilldown,
                   ),

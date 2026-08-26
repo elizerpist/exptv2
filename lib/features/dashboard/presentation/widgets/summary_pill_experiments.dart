@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
@@ -11,6 +12,7 @@ import '../../time_navigation/domain/time_plane.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../summary_pill_variant.dart';
+import '../dashboard_corner_roundness.dart';
 import 'dashboard_summary_pill.dart';
 
 /// Fixed-height presentation experiments over the existing dashboard time
@@ -26,7 +28,7 @@ final class SummaryPillExperiment extends StatelessWidget {
     required this.onComponentCrossed,
     this.performanceCounters,
     this.onAmountMotionActiveChanged,
-  }) : assert(variant != SummaryPillVariant.legacy);
+  }) : assert(variant == SummaryPillVariant.segmented);
 
   final SummaryPillVariant variant;
   final DashboardBounds bounds;
@@ -58,6 +60,11 @@ final class SummaryPillExperiment extends StatelessWidget {
         height: bounds.height,
         child: FluviRoundedBox(
           color: FluviVisualTokens.surface,
+          borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+              .borderRadiusFor(
+                DashboardCornerSurfaceFamily.summaryPill,
+                size: Size(bounds.width, bounds.height),
+              ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final inset = bounds.width <= 320
@@ -74,23 +81,14 @@ final class SummaryPillExperiment extends StatelessWidget {
                   SizedBox(
                     width: navigationWidth,
                     height: bounds.height,
-                    child: variant == SummaryPillVariant.segmented
-                        ? _SegmentedNavigationSurface(
-                            level: level,
-                            height: bounds.height,
-                            width: navigationWidth,
-                            navigation: navigation,
-                            onLevelCrossed: onLevelCrossed,
-                            onComponentCrossed: onComponentCrossed,
-                          )
-                        : _SwipeModeNavigationSurface(
-                            level: level,
-                            height: bounds.height,
-                            width: navigationWidth,
-                            navigation: navigation,
-                            onLevelCrossed: onLevelCrossed,
-                            onComponentCrossed: onComponentCrossed,
-                          ),
+                    child: _SegmentedNavigationSurface(
+                      level: level,
+                      height: bounds.height,
+                      width: navigationWidth,
+                      navigation: navigation,
+                      onLevelCrossed: onLevelCrossed,
+                      onComponentCrossed: onComponentCrossed,
+                    ),
                   ),
                   SizedBox(
                     key: const ValueKey<String>(
@@ -203,74 +201,11 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     modeSelector: _ModeSelector(
       key: const ValueKey<String>('summary-pill-segmented-mode-selector'),
       height: height,
-      direction: Axis.vertical,
       level: level,
       onCrossed: onLevelCrossed,
     ),
     onComponentCrossed: onComponentCrossed,
   );
-}
-
-final class _SwipeModeNavigationSurface extends StatelessWidget {
-  const _SwipeModeNavigationSurface({
-    required this.level,
-    required this.height,
-    required this.width,
-    required this.navigation,
-    required this.onLevelCrossed,
-    required this.onComponentCrossed,
-  });
-
-  final SummaryPillExperimentLevel level;
-  final double height;
-  final double width;
-  final DashboardNavigationController navigation;
-  final _LevelCrossed onLevelCrossed;
-  final _ComponentCrossed onComponentCrossed;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    key: const ValueKey<String>('summary-pill-swipe-mode-semantics'),
-    label:
-        'Időszint: ${level.semanticsLabel}. Vízszintesen húzva válthat időszintet.',
-    onIncrease: () => _selectLevel(1),
-    onDecrease: () => _selectLevel(-1),
-    // The horizontal carousel owns the parent hit-test surface. Visible
-    // hierarchy carousels live inside its item, so Flutter's gesture arena
-    // receives both recognizers and resolves horizontal versus vertical
-    // intent instead of a later Stack child blocking the mode surface.
-    child: ExcludeSemantics(
-      child: _ModeSelector(
-        key: const ValueKey<String>('summary-pill-swipe-mode-surface'),
-        height: height,
-        width: width,
-        direction: Axis.horizontal,
-        level: level,
-        onCrossed: onLevelCrossed,
-        itemChildBuilder: (context, item, _) => _FixedHierarchyTracks(
-          keyPrefix: 'swipe',
-          level: item,
-          height: height,
-          width: width,
-          navigation: navigation,
-          trackCount: 3,
-          yearTrack: 0,
-          monthTrack: 1,
-          dayTrack: 2,
-          onComponentCrossed: onComponentCrossed,
-        ),
-      ),
-    ),
-  );
-
-  void _selectLevel(int delta) {
-    final target =
-        SummaryPillExperimentLevel.values[_positiveModulo(
-          level.index + delta,
-          SummaryPillExperimentLevel.values.length,
-        )];
-    onLevelCrossed(target.plane, target.isRailOpen);
-  }
 }
 
 final class _FixedHierarchyTracks extends StatelessWidget {
@@ -430,24 +365,13 @@ final class _ModeSelector extends StatefulWidget {
   const _ModeSelector({
     super.key,
     required this.height,
-    this.width,
-    required this.direction,
     required this.level,
     required this.onCrossed,
-    this.itemChildBuilder,
-  }) : assert(direction == Axis.vertical || width != null);
+  });
 
   final double height;
-  final double? width;
-  final Axis direction;
   final SummaryPillExperimentLevel level;
   final _LevelCrossed onCrossed;
-  final Widget Function(
-    BuildContext context,
-    SummaryPillExperimentLevel item,
-    CenteredCarouselItemMetrics metrics,
-  )?
-  itemChildBuilder;
 
   @override
   State<_ModeSelector> createState() => _ModeSelectorState();
@@ -469,18 +393,15 @@ final class _ModeSelectorState extends State<_ModeSelector> {
   @override
   Widget build(BuildContext context) => Semantics(
     label:
-        'Időszint: ${widget.level.semanticsLabel}. ${widget.direction == Axis.vertical ? 'Függőlegesen' : 'Vízszintesen'} húzva válthat.',
+        'Időszint: ${widget.level.semanticsLabel}. Függőlegesen húzva válthat.',
     child: CenteredCarousel<SummaryPillExperimentLevel>(
       dataSource: const CyclicCarouselDataSource<SummaryPillExperimentLevel>(
         SummaryPillExperimentLevel.values,
       ),
       controller: _controller,
       spec: CenteredCarouselSpec(
-        itemExtent: switch (widget.direction) {
-          Axis.vertical => widget.height,
-          Axis.horizontal => widget.width!,
-        },
-        scrollDirection: widget.direction,
+        itemExtent: widget.height,
+        scrollDirection: Axis.vertical,
         visibleItemCount: 1,
         minScale: 1,
         neighborScale: 1,
@@ -502,15 +423,13 @@ final class _ModeSelectorState extends State<_ModeSelector> {
           widget.onCrossed(level.plane, level.isRailOpen);
         }
       },
-      itemBuilder: (context, item, metrics) =>
-          widget.itemChildBuilder?.call(context, item, metrics) ??
-          Icon(
-            item.icon,
-            color: metrics.isSelected
-                ? FluviVisualTokens.textPrimary
-                : FluviVisualTokens.textSecondary,
-            size: FluviVisualTokens.iconSize,
-          ),
+      itemBuilder: (context, item, metrics) => Icon(
+        item.icon,
+        color: metrics.isSelected
+            ? FluviVisualTokens.textPrimary
+            : FluviVisualTokens.textSecondary,
+        size: FluviVisualTokens.iconSize,
+      ),
     ),
   );
 

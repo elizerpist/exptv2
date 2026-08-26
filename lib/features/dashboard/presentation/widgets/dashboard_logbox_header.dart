@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_ephemeral_focus_controller.dart';
@@ -11,6 +12,7 @@ import '../../query/application/current_query_controller.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_query_facet_chips.dart';
+import '../dashboard_corner_roundness.dart';
 
 /// Stable Ledger chrome above the sole LogBox scroll surface.
 ///
@@ -146,7 +148,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
               SizedBox(
                 height: DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
                 width: double.infinity,
-                child: _DashboardLogBoxSearchPill(scale: scale),
+                child: _DashboardLogBoxSearchPill(scale: scale, bounds: bounds),
               ),
               SizedBox(
                 height: DashboardLogBoxTokens.ledgerSearchToListGap * scale,
@@ -172,9 +174,10 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
 /// Query Menu search edits a different draft-note field and must not be wired
 /// into the committed Ledger pipeline here.
 final class _DashboardLogBoxSearchPill extends StatelessWidget {
-  const _DashboardLogBoxSearchPill({required this.scale});
+  const _DashboardLogBoxSearchPill({required this.scale, required this.bounds});
 
   final double scale;
+  final DashboardBounds bounds;
 
   @override
   Widget build(BuildContext context) {
@@ -187,6 +190,14 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
         child: FluviRoundedBox(
           color: FluviVisualTokens.surface,
           border: Border.all(color: FluviVisualTokens.border),
+          borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+              .borderRadiusFor(
+                DashboardCornerSurfaceFamily.searchPill,
+                size: Size(
+                  bounds.width,
+                  DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
+                ),
+              ),
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: FluviVisualTokens.controlHorizontalInset * scale,

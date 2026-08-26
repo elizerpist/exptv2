@@ -21,24 +21,26 @@ extension DashboardLogBoxBlockSegmentRoleGeometry
       this == DashboardLogBoxBlockSegmentRole.singleton ||
       this == DashboardLogBoxBlockSegmentRole.bottom;
 
-  RRect bodyFor(Rect rect) => switch (this) {
-    DashboardLogBoxBlockSegmentRole.singleton =>
-      FluviVisualTokens.logBoxGroupRadius.toRRect(rect),
-    DashboardLogBoxBlockSegmentRole.top => RRect.fromRectAndCorners(
-      rect,
-      topLeft: FluviVisualTokens.logBoxGroupRadius.topLeft,
-      topRight: FluviVisualTokens.logBoxGroupRadius.topRight,
-    ),
-    DashboardLogBoxBlockSegmentRole.middle => RRect.fromRectAndRadius(
-      rect,
-      Radius.zero,
-    ),
-    DashboardLogBoxBlockSegmentRole.bottom => RRect.fromRectAndCorners(
-      rect,
-      bottomLeft: FluviVisualTokens.logBoxGroupRadius.bottomLeft,
-      bottomRight: FluviVisualTokens.logBoxGroupRadius.bottomRight,
-    ),
-  };
+  RRect bodyFor(Rect rect, {BorderRadius? groupRadius}) {
+    final radius = groupRadius ?? FluviVisualTokens.logBoxGroupRadius;
+    return switch (this) {
+      DashboardLogBoxBlockSegmentRole.singleton => radius.toRRect(rect),
+      DashboardLogBoxBlockSegmentRole.top => RRect.fromRectAndCorners(
+        rect,
+        topLeft: radius.topLeft,
+        topRight: radius.topRight,
+      ),
+      DashboardLogBoxBlockSegmentRole.middle => RRect.fromRectAndRadius(
+        rect,
+        Radius.zero,
+      ),
+      DashboardLogBoxBlockSegmentRole.bottom => RRect.fromRectAndCorners(
+        rect,
+        bottomLeft: radius.bottomLeft,
+        bottomRight: radius.bottomRight,
+      ),
+    };
+  }
 }
 
 /// One exact visible row hit, expressed in the dashboard coordinate space.

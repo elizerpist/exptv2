@@ -3,9 +3,10 @@
 ## Scope and source evidence
 
 The user-approved task makes the pre-`92b73600` SummaryPill the runtime
-control (`Legacy`), alongside two non-final experiments (`Segmented` and
-`Swipe mode`). SearchPill remains and the withdrawn Ledger amount does not
-return. `MILESTONE_COMMITS.md` protects the single vertical Scrollable,
+control (`Legacy`), alongside the one active non-final experiment
+(`Segmented`). `Swipe mode` existed in the earlier three-way comparison but is
+now discarded and no longer selectable. SearchPill remains and the withdrawn
+Ledger amount does not return. `MILESTONE_COMMITS.md` protects the single vertical Scrollable,
 prepared-index/scene-window pipeline, immutable committed geometry, and child
 rail interaction.
 
@@ -35,10 +36,9 @@ at motion start, so every generated carousel offset remains absolute to that
 one gesture even if a prepared DAY crossing synchronously publishes a newer
 navigation state.
 
-Swipe mode exposes exactly one actionable navigation semantic node with
-increase and decrease actions while its horizontal carousel owns the visible
-navigation surface; its visible year/month/day fields retain their independent
-vertical semantics.
+The discarded Swipe Mode implementation is not part of the active runtime
+comparison or acceptance surface. Its historical record remains in Git rather
+than being presented as current architecture.
 
 ## Architecture card
 
@@ -64,9 +64,8 @@ explicit prepared-selection bridge.
 | ID | Source | Area | Acceptance | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
 | LGC-01 | User / c5 baseline | Legacy renderer | pre-92b73600 gesture, mother/child rail and amount contract restored | baseline contract/widget tests and three-mode goldens | DONE |
-| VAR-01 | User | host/menu | three selectable variants share canonical query state without resets | menu widget test and host ownership inspection | DONE |
+| VAR-01 | User | host/menu | exactly Legacy and Segmented are selectable and share canonical query state without resets | menu widget test and host ownership inspection | DONE |
 | SEG-01 | User | segmented renderer | fixed zones, visibility and four levels, no child rail | widget, semantics, and narrow/text-scale tests | DONE |
-| SWP-01 | User | swipe renderer | horizontal cyclic mode plus vertical sections, no mode column | widget/gesture and actionable semantics tests | DONE |
 | DAY-01 | User | temporal adapter | DAY is the existing legacy child-day query, with valid calendar projection | controller and prepared-frame tests | DONE |
 | PRP-01 | User / child rail | candidate bridge | discrete candidate preparation/promotion matches child-rail architecture; bounded and stale-safe | prepared-child and retained-parent-hotset tests | DONE |
 | ARC-01 | MILESTONE | dashboard ownership | vertical owner, viewport and geometry identities remain stable | boundary/viewport/scene-window tests | DONE |
@@ -81,7 +80,7 @@ motion-engine rewrite are introduced.
 
 ## 2026-08-25 follow-up: preview parity and body-order experiment
 
-The three SummaryPill variants remain comparison-only. This follow-up does not
+The active Legacy/Segmented comparison remains comparison-only. This follow-up does not
 select a temporal model or a dashboard-body order as the product default.
 
 - A Budget avatar's discrete preview crossing now enters the existing
@@ -97,14 +96,8 @@ select a temporal model or a dashboard-body order as the product default.
   than permitting an old focus scene to win late. Settlement therefore reuses
   the current prepared target instead of restoring an aggregate amount or
   issuing a second query.
-- Swipe Mode no longer places an invisible horizontal carousel under
-  hit-testable hierarchy tracks. Its horizontal `CenteredCarousel` now owns
-  the navigation surface and builds the vertical hierarchy tracks inside its
-  selected item, so Flutter's gesture arena resolves horizontal mode intent
-  versus vertical field intent. The single exposed semantic node keeps its
-  increase/decrease actions.
-- `Legacy` retains its real physical child rail. `Segmented` and `Swipe mode`
-  reserve no physical rail even when their canonical DAY projection uses the
+- `Legacy` retains its real physical child rail. `Segmented` reserves no
+  physical rail even when its canonical DAY projection uses the
   retained legacy child-day state. The central resolver transfers exactly
   `railHeight + railToCollapseHandleGap` into the mode-content lower card;
   it does not consume a normal body gap, handler, Ledger header, or navigation
@@ -123,3 +116,26 @@ select a temporal model or a dashboard-body order as the product default.
 
 SearchPill remains in Ledger and the withdrawn standalone Ledger amount remains
 absent. The fixed top Header remains outside the reorderable body blocks.
+
+## 2026-08-26 follow-up: active comparison and presentation controls
+
+The active runtime catalog is now exactly `Legacy` and `Segmented`. Swipe Mode
+is a discarded historical experiment, not a third product option.
+
+- Segmented YEAR, MONTH and DAY fields are independent cyclic domains. MONTH
+  wraps inside the current available year and DAY wraps inside the current
+  available year/month; neither carries into a neighbouring field. A date is
+  only reconciled across fields when calendar validity requires it (for
+  example, January 31 to February), never as arithmetic carry/borrow.
+- The Header tuner owns a session-only `Diagram kártyában` control for Budget
+  Card2. It changes only the shared Category/Partner page shell chrome; pager,
+  padding, constraints, selection, query and Ledger state remain unchanged.
+- The tuner also owns one session-only normalized corner-roundness scale.
+  `0%` maps exactly to Fluvi's current authored radii. A central profile maps
+  that one scalar to Header, content-card, direction-control, SummaryPill,
+  SearchPill, LogBox group and Budget Card2 surface families. The read-only
+  Spendee reference informed only the softer family endpoints; no Spendee
+  layout, colour, typography or Ledger model is imported.
+
+These remain comparison controls. No permanent corner value, Card2-surface
+choice, temporal model or dashboard layout winner is selected.

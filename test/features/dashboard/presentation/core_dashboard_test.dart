@@ -263,20 +263,17 @@ void main() {
             .ignoring,
         isFalse,
       );
-      for (final variant in <String>['segmented', 'swipeMode']) {
-        final selector = find.byKey(
-          ValueKey<String>('summary-pill-variant-$variant'),
-        );
-        await tester.tap(selector);
-        await tester.pump();
-        expect(
-          find.byType(TimeRefinementRail),
-          findsNothing,
-          reason: '$variant keeps canonical DAY state without a physical rail.',
-        );
-        expect(tester.getRect(lowerCard).height, 275);
-        expect(tester.getRect(handle).top, 753);
-      }
+      await tester.tap(
+        find.byKey(const ValueKey<String>('summary-pill-variant-segmented')),
+      );
+      await tester.pump();
+      expect(
+        find.byType(TimeRefinementRail),
+        findsNothing,
+        reason: 'Segmented keeps canonical DAY state without a physical rail.',
+      );
+      expect(tester.getRect(lowerCard).height, 275);
+      expect(tester.getRect(handle).top, 753);
     },
   );
 

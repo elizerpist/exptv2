@@ -704,10 +704,14 @@ final class DashboardNavigationController extends ChangeNotifier {
   }
 
   YearMonth? _offsetMonth(YearMonth current, int offset) {
-    final restricted = _temporalAvailability.allowedYearMonths;
-    return restricted == null
-        ? _offsetYearMonth(current, offset)
-        : _cyclicParentAdjacent(restricted, current, offset);
+    // Fixed Segmented hierarchy fields own one coordinate each. Month keeps
+    // the year fixed and cycles only across that year's available months; the
+    // legacy parent path below intentionally retains its YearMonth carry.
+    final values =
+        _temporalAvailability.monthsForYear(current.year) ??
+        List<int>.generate(12, (index) => index + 1);
+    final month = _cyclicParentAdjacent(values, current.month, offset);
+    return month == null ? null : YearMonth(year: current.year, month: month);
   }
 
   int? _offsetDay(YearMonth month, int current, int offset) {

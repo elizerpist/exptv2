@@ -6,11 +6,17 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 
 void main() {
-  test('SummaryPill experiment variants have stable runtime labels', () {
-    expect(SummaryPillVariant.legacy.label, 'Klasszikus');
-    expect(SummaryPillVariant.segmented.label, 'Szekciós');
-    expect(SummaryPillVariant.swipeMode.label, 'Swipe mód');
-  });
+  test(
+    'SummaryPill active experiment catalog is Legacy and Segmented only',
+    () {
+      expect(SummaryPillVariant.values, <SummaryPillVariant>[
+        SummaryPillVariant.legacy,
+        SummaryPillVariant.segmented,
+      ]);
+      expect(SummaryPillVariant.legacy.label, 'Klasszikus');
+      expect(SummaryPillVariant.segmented.label, 'Szekciós');
+    },
+  );
 
   test('the experiment controller defaults to the legacy control group', () {
     final controller = SummaryPillVariantController();
@@ -35,7 +41,7 @@ void main() {
   });
 
   testWidgets(
-    'the existing Header menu selects all three SummaryPill variants',
+    'the existing Header menu selects only the active SummaryPill variants',
     (tester) async {
       final headerController = DashboardHeaderVisualController(vsync: tester);
       final variants = SummaryPillVariantController();
@@ -60,11 +66,15 @@ void main() {
           findsOneWidget,
         );
       }
-      await tester.tap(
+      expect(
         find.byKey(const ValueKey<String>('summary-pill-variant-swipeMode')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('summary-pill-variant-segmented')),
       );
       await tester.pump();
-      expect(variants.value, SummaryPillVariant.swipeMode);
+      expect(variants.value, SummaryPillVariant.segmented);
       await tester.pumpWidget(const SizedBox.shrink());
       headerController.dispose();
     },

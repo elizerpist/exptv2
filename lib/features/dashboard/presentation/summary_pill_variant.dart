@@ -4,13 +4,12 @@ import 'package:flutter/foundation.dart';
 ///
 /// This deliberately owns no temporal, query, or Ledger state. The selected
 /// implementation projects the one canonical dashboard navigation state.
-enum SummaryPillVariant { legacy, segmented, swipeMode }
+enum SummaryPillVariant { legacy, segmented }
 
 extension SummaryPillVariantPresentation on SummaryPillVariant {
   String get label => switch (this) {
     SummaryPillVariant.legacy => 'Klasszikus',
     SummaryPillVariant.segmented => 'Szekciós',
-    SummaryPillVariant.swipeMode => 'Swipe mód',
   };
 }
 

@@ -490,6 +490,134 @@ void main() {
   });
 
   test(
+    'segmented month offsets wrap within the selected year without carry',
+    () {
+      final controller = _controller(
+        plane: TimePlane.month,
+        date: DateTime(2026, 12, 31),
+      );
+      addTearDown(controller.dispose);
+
+      final january = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: 1,
+      );
+      expect(january?.yearCursor, 2026);
+      expect(january?.monthCursor, const YearMonth(year: 2026, month: 1));
+
+      final novemberOrigin = controller.temporalCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        month: 11,
+      );
+      final february = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: 15,
+        base: novemberOrigin,
+      );
+      expect(february?.yearCursor, 2026);
+      expect(february?.monthCursor, const YearMonth(year: 2026, month: 2));
+    },
+  );
+
+  test('segmented day offsets wrap within the selected calendar month', () {
+    for (final fixture in <({DateTime date, int expectedPreviousDay})>[
+      (date: DateTime(2026, 1, 31), expectedPreviousDay: 31),
+      (date: DateTime(2026, 4, 30), expectedPreviousDay: 30),
+      (date: DateTime(2026, 2, 28), expectedPreviousDay: 28),
+      (date: DateTime(2024, 2, 29), expectedPreviousDay: 29),
+    ]) {
+      final controller = _controller(
+        plane: TimePlane.month,
+        railOpen: true,
+        date: fixture.date,
+      );
+      addTearDown(controller.dispose);
+
+      final first = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+      );
+      expect(first?.yearCursor, fixture.date.year);
+      expect(
+        first?.monthCursor,
+        YearMonth(year: fixture.date.year, month: fixture.date.month),
+      );
+      expect(first?.dayCursor, 1);
+
+      final last = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: -1,
+        base: first,
+      );
+      expect(last?.yearCursor, fixture.date.year);
+      expect(
+        last?.monthCursor,
+        YearMonth(year: fixture.date.year, month: fixture.date.month),
+      );
+      expect(last?.dayCursor, fixture.expectedPreviousDay);
+    }
+  });
+
+  test('segmented field cycles respect restricted local availability', () {
+    final controller = _controller(
+      plane: TimePlane.month,
+      railOpen: true,
+      date: DateTime(2026, 2, 28),
+    );
+    addTearDown(controller.dispose);
+    final filter = QueryTemporalFilter.periods(<QueryPeriodSelection>{
+      QueryPeriodSelection.day(2026, 2, 3),
+      QueryPeriodSelection.day(2026, 2, 28),
+      QueryPeriodSelection.day(2026, 11, 7),
+    });
+    controller.replaceAppliedQuery(
+      CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+        temporalFilter: filter,
+      ),
+      availability: DashboardTemporalAvailability.fromTemporalFilter(filter),
+    );
+
+    final november = controller.temporalComponentOffsetCandidate(
+      plane: TimePlane.month,
+      isRailOpen: true,
+      component: DashboardTemporalAnchorComponent.month,
+      offset: 1,
+    );
+    expect(november?.yearCursor, 2026);
+    expect(november?.monthCursor, const YearMonth(year: 2026, month: 11));
+
+    final february = controller.temporalComponentOffsetCandidate(
+      plane: TimePlane.month,
+      isRailOpen: true,
+      component: DashboardTemporalAnchorComponent.month,
+      offset: -1,
+    );
+    expect(february?.yearCursor, 2026);
+    expect(february?.monthCursor, const YearMonth(year: 2026, month: 11));
+
+    final firstAllowedDay = controller.temporalComponentOffsetCandidate(
+      plane: TimePlane.month,
+      isRailOpen: true,
+      component: DashboardTemporalAnchorComponent.day,
+      offset: 1,
+    );
+    expect(firstAllowedDay?.yearCursor, 2026);
+    expect(firstAllowedDay?.monthCursor, const YearMonth(year: 2026, month: 2));
+    expect(firstAllowedDay?.dayCursor, 3);
+  });
+
+  test(
     'one experimental fling stays anchored while each crossing publishes',
     () {
       final controller = _controller(

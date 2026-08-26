@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../dashboard_corner_roundness.dart';
 
 /// Neutral, bounds-driven placeholder surface for the data-free dashboard.
 class DashboardPlaceholderCard extends StatelessWidget {
@@ -12,18 +14,23 @@ class DashboardPlaceholderCard extends StatelessWidget {
     required this.semanticKey,
     this.surfaceColor = FluviVisualTokens.surface,
     this.fillParent = false,
+    this.cornerFamily = DashboardCornerSurfaceFamily.contentCard,
   });
 
   final DashboardBounds bounds;
   final Key semanticKey;
   final Color surfaceColor;
   final bool fillParent;
+  final DashboardCornerSurfaceFamily cornerFamily;
 
   @override
   Widget build(BuildContext context) {
     final card = FluviRoundedBox(
       color: surfaceColor,
       border: Border.all(color: FluviVisualTokens.border),
+      borderRadius: DashboardCornerRoundnessScope.profileOf(
+        context,
+      ).borderRadiusFor(cornerFamily, size: Size(bounds.width, bounds.height)),
       child: const SizedBox.expand(),
     );
 

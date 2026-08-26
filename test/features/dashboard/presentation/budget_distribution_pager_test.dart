@@ -15,6 +15,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribu
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -119,6 +120,7 @@ void main() {
       final rail = BudgetTargetAvatarRailController()
         ..attach(_FakeRailDelegate(targetCount: 3));
       final pages = BudgetDistributionPageController();
+      final cardStyle = BudgetContentCardStyleController();
       final rhythm = ValueNotifier<DashboardBudgetRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
@@ -127,6 +129,7 @@ void main() {
       addTearDown(drawables.dispose);
       addTearDown(rail.dispose);
       addTearDown(pages.dispose);
+      addTearDown(cardStyle.dispose);
       addTearDown(rhythm.dispose);
 
       await tester.pumpWidget(
@@ -141,6 +144,7 @@ void main() {
                 drawableFrames: drawables,
                 avatarRailController: rail,
                 expandCategoryDonutToFit: true,
+                contentCardStyle: cardStyle,
                 rhythm: rhythm,
               ),
             ),
@@ -153,6 +157,9 @@ void main() {
         find.byKey(const ValueKey('budget-distribution-pager')),
       );
       final stablePageController = pageView.controller;
+      final categoryCardBounds = tester.getRect(
+        find.byKey(const ValueKey('budget-category-distribution-card')),
+      );
       expect(
         pageView.clipBehavior,
         Clip.none,
@@ -197,6 +204,37 @@ void main() {
       expect(
         categorySurface.decoration.borderRadius,
         FluviVisualTokens.roundedBoxRadius,
+      );
+
+      cardStyle.setShowCardSurface(false);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        findsNothing,
+        reason: 'Cardless Card2 keeps its geometry but paints no shell.',
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('budget-category-distribution-card')),
+        ),
+        categoryCardBounds,
+        reason: 'The presentation switch must not change Card2 bounds.',
+      );
+      expect(
+        tester
+            .widget<PageView>(
+              find.byKey(const ValueKey('budget-distribution-pager')),
+            )
+            .controller,
+        same(stablePageController),
+        reason: 'Changing Card2 chrome must retain the PageController.',
+      );
+
+      cardStyle.setShowCardSurface(true);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        findsOneWidget,
       );
 
       presentation.setTargetHandle(1);
@@ -245,6 +283,24 @@ void main() {
         reason:
             'The Partner physical surface must travel with its PageView page.',
       );
+      final partnerCardBounds = tester.getRect(
+        find.byKey(const ValueKey('budget-partner-distribution-card')),
+      );
+      cardStyle.setShowCardSurface(false);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        findsNothing,
+        reason: 'The same Card2 preference applies to the Partner page.',
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('budget-partner-distribution-card')),
+        ),
+        partnerCardBounds,
+      );
+      cardStyle.setShowCardSurface(true);
+      await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-row-partner-0')),
         findsOneWidget,

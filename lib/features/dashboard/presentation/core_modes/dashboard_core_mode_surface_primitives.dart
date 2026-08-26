@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../dashboard_corner_roundness.dart';
 import 'dashboard_header_visual_engine.dart';
 
 class DashboardCoreModeFramePosition extends StatelessWidget {
@@ -171,40 +173,48 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final double? detailBottom;
 
   @override
-  Widget build(BuildContext context) => DashboardCoreModeFramePosition(
-    bounds: bounds,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        _HeaderPhysicalShell(
-          bounds: bounds,
-          semanticKey: headerKey,
-          surfaceColor: surfaceColor,
-          controller: visualController,
-          visualFrameListenable: visualFrameListenable,
-        ),
-        Positioned(
-          top: 12,
-          right: visualController == null ? 14 : 62,
-          child: Text(
-            label,
-            key: labelKey,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: FluviVisualTokens.textSecondary,
+  Widget build(BuildContext context) {
+    final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.header,
+          size: Size(bounds.width, bounds.height),
+        );
+    return DashboardCoreModeFramePosition(
+      bounds: bounds,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _HeaderPhysicalShell(
+            bounds: bounds,
+            semanticKey: headerKey,
+            surfaceColor: surfaceColor,
+            controller: visualController,
+            visualFrameListenable: visualFrameListenable,
+            borderRadius: borderRadius,
+          ),
+          Positioned(
+            top: 12,
+            right: visualController == null ? 14 : 62,
+            child: Text(
+              label,
+              key: labelKey,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: FluviVisualTokens.textSecondary,
+              ),
             ),
           ),
-        ),
-        if (detail case final detail?)
-          Positioned(
-            left: detailLeft,
-            right: detailRight,
-            top: detailTop,
-            bottom: detailBottom,
-            child: detail,
-          ),
-      ],
-    ),
-  );
+          if (detail case final detail?)
+            Positioned(
+              left: detailLeft,
+              right: detailRight,
+              top: detailTop,
+              bottom: detailBottom,
+              child: detail,
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 final class _HeaderPhysicalShell extends StatelessWidget {
@@ -214,6 +224,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     required this.surfaceColor,
     required this.controller,
     required this.visualFrameListenable,
+    required this.borderRadius,
   });
 
   final DashboardBounds bounds;
@@ -221,6 +232,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   final Color surfaceColor;
   final DashboardHeaderVisualController? controller;
   final ValueListenable<DashboardHeaderVisualFrame>? visualFrameListenable;
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -232,6 +244,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
         fillParent: true,
         semanticKey: semanticKey,
         surfaceColor: surfaceColor,
+        cornerFamily: DashboardCornerSurfaceFamily.header,
       );
     }
     return SizedBox.expand(
@@ -240,16 +253,17 @@ final class _HeaderPhysicalShell extends StatelessWidget {
         fit: StackFit.expand,
         children: <Widget>[
           // Layer 1: card shadow and border keep their existing geometry.
-          const FluviRoundedBox(
+          FluviRoundedBox(
             color: Colors.transparent,
-            child: SizedBox.expand(),
+            borderRadius: borderRadius,
+            child: const SizedBox.expand(),
           ),
           // Layer 2: only this clipped painter listens to the shared ticker.
           Positioned.fill(
             child: Padding(
               padding: const EdgeInsets.all(1),
               child: ClipRRect(
-                borderRadius: FluviVisualTokens.roundedBoxRadius,
+                borderRadius: borderRadius,
                 child: ValueListenableBuilder<DashboardHeaderVisualFrame>(
                   valueListenable: frames,
                   builder: (context, frame, child) =>
@@ -263,13 +277,13 @@ final class _HeaderPhysicalShell extends StatelessWidget {
             ),
           ),
           // Keep the physical card border above dynamically-painted pixels.
-          const IgnorePointer(
+          IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border.fromBorderSide(
                   BorderSide(color: FluviVisualTokens.border),
                 ),
-                borderRadius: FluviVisualTokens.roundedBoxRadius,
+                borderRadius: borderRadius,
               ),
             ),
           ),

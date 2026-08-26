@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/app_control_metrics.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/transaction_direction_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
+import '../dashboard_corner_roundness.dart';
 
 /// Input-only renderer for the two transaction directions.
 class TransactionDirectionToggle extends StatelessWidget {
@@ -34,6 +36,12 @@ class TransactionDirectionToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final assetAtlas = PreparedVectorAssetAtlas.instance;
+    final controlWidth = (bounds.width - FluviVisualTokens.controlInnerGap) / 2;
+    final controlRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.directionControl,
+          size: Size(controlWidth, AppSelectorMetrics.directionControlHeight),
+        );
     return SizedBox(
       width: bounds.width,
       height: bounds.height,
@@ -56,6 +64,7 @@ class TransactionDirectionToggle extends StatelessWidget {
                   : null,
               onTap: onSelected,
               performanceCounters: performanceCounters,
+              borderRadius: controlRadius,
             ),
           ),
           const SizedBox(width: FluviVisualTokens.controlInnerGap),
@@ -76,6 +85,7 @@ class TransactionDirectionToggle extends StatelessWidget {
                   : null,
               onTap: onSelected,
               performanceCounters: performanceCounters,
+              borderRadius: controlRadius,
             ),
           ),
         ],
@@ -96,6 +106,7 @@ class _DirectionButton extends StatelessWidget {
     required this.iconScaleAnimation,
     required this.onTap,
     required this.performanceCounters,
+    required this.borderRadius,
   });
 
   final TransactionDirection direction;
@@ -108,6 +119,7 @@ class _DirectionButton extends StatelessWidget {
   final Animation<double>? iconScaleAnimation;
   final ValueChanged<TransactionDirection> onTap;
   final DashboardPerformanceCounters? performanceCounters;
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -121,9 +133,7 @@ class _DirectionButton extends StatelessWidget {
               : const ValueKey('fluvi-expense-button'),
           color: selected ? null : FluviVisualTokens.surface,
           gradient: selected ? activeGradient : null,
-          borderRadius: BorderRadius.circular(
-            AppSelectorMetrics.compactTileRadius,
-          ),
+          borderRadius: borderRadius,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(

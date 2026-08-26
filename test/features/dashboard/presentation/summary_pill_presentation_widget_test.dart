@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_corner_profile.dart';
+import 'package:fluvi/core/design/fluvi_rounded_box.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
@@ -19,6 +22,46 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
+  testWidgets('legacy shell resolves the same global SummaryPill family', (
+    tester,
+  ) async {
+    final roundness = DashboardCornerRoundnessController()..setPosition(1);
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 14),
+      initialPlane: TimePlane.month,
+    );
+    final visible = DashboardVisibleFrameStore();
+    final motion = SummaryNavigationMotionController();
+    addTearDown(roundness.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(visible.dispose);
+    addTearDown(motion.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardCornerRoundnessScope(
+          controller: roundness,
+          child: Scaffold(body: _pill(navigation, visible, motion)),
+        ),
+      ),
+    );
+
+    expect(
+      tester
+          .widget<FluviRoundedBox>(
+            find.descendant(
+              of: find.byType(DashboardSummaryPill),
+              matching: find.byType(FluviRoundedBox),
+            ),
+          )
+          .decoration
+          .borderRadius,
+      const DashboardCornerProfile(DashboardCornerRoundness(1)).borderRadiusFor(
+        DashboardCornerSurfaceFamily.summaryPill,
+        size: const Size(378, 59),
+      ),
+    );
+  });
+
   testWidgets('preview swaps prepared amount and child label directly', (
     tester,
   ) async {

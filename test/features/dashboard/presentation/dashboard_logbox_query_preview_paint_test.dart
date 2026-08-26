@@ -14,6 +14,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_sce
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_render_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
@@ -52,6 +53,106 @@ void main() {
       );
 
       expect(next.requiresRepaintFrom(previous), isTrue);
+    },
+  );
+
+  test('roundness changes repaint only the LogBox paint identity', () {
+    final rasterIdentity = Object();
+    final previous = DashboardLogBoxPaintIdentity(
+      payloadViewportId: 77,
+      presentationEpoch: 4,
+      sceneGeneration: 12,
+      committedGeneration: 9,
+      renderDomain: DashboardLogBoxRenderDomain.railPreview,
+      rasterIdentity: rasterIdentity,
+      groupRadius: BorderRadius.circular(18),
+    );
+    final next = DashboardLogBoxPaintIdentity(
+      payloadViewportId: 77,
+      presentationEpoch: 4,
+      sceneGeneration: 12,
+      committedGeneration: 9,
+      renderDomain: DashboardLogBoxRenderDomain.railPreview,
+      rasterIdentity: rasterIdentity,
+      groupRadius: BorderRadius.circular(25),
+    );
+
+    expect(next.requiresRepaintFrom(previous), isTrue);
+  });
+
+  testWidgets(
+    'roundness repaints the stable LogBox surface without replacing scroll or data state',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final roundness = DashboardCornerRoundnessController();
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+      addTearDown(roundness.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 1,
+        entryCountOverride: 24,
+        previewRowCount: 24,
+      );
+      final frame = _previewFrame(prepared, presentationEpoch: 1);
+      await _prepareAndActivatePreviewScene(sceneCache, prepared.logBox);
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DashboardCornerRoundnessScope(
+            controller: roundness,
+            child: SizedBox(
+              width: 378,
+              height: 320,
+              child: Stack(
+                children: <Widget>[
+                  CustomScrollView(
+                    controller: scrollController,
+                    slivers: const <Widget>[
+                      SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                    ],
+                  ),
+                  Positioned.fill(
+                    child: DashboardLogBoxRenderSurface(
+                      visibleFrames: store,
+                      scrollController: scrollController,
+                      minimumHeight: 320,
+                      preparedRasters: PreparedVectorAssetAtlas.instance
+                          .logBoxRastersFor(3),
+                      committedViewport: cache,
+                      preparedSceneCache: sceneCache,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final position = scrollController.position;
+      final frameBefore = store.value;
+      final cacheGeneration = cache.renderGeneration;
+      final extent = position.maxScrollExtent;
+
+      roundness.setPosition(1);
+      await tester.pump();
+
+      expect(identical(scrollController.position, position), isTrue);
+      expect(store.value, same(frameBefore));
+      expect(cache.renderGeneration, cacheGeneration);
+      expect(position.maxScrollExtent, extent);
     },
   );
 

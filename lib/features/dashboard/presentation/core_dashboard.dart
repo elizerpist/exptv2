@@ -35,6 +35,8 @@ import 'widgets/dashboard_logbox_partner_swipe.dart';
 import 'widgets/dashboard_logbox_render_surface.dart';
 import '../application/transaction_direction_controller.dart';
 import 'summary_navigation_motion_controller.dart';
+import 'budget_content_card_style.dart';
+import 'dashboard_corner_roundness.dart';
 import 'summary_pill_variant.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
@@ -84,6 +86,8 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final SummaryNavigationMotionController _summaryMotionController;
   late final SummaryPillVariantController _summaryPillVariantController;
   late final DashboardBodyOrderController _bodyOrderController;
+  late final BudgetContentCardStyleController _budgetContentCardStyle;
+  late final DashboardCornerRoundnessController _cornerRoundnessController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
@@ -110,6 +114,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
     _summaryPillVariantController = SummaryPillVariantController();
     _bodyOrderController = DashboardBodyOrderController();
+    _budgetContentCardStyle = BudgetContentCardStyleController();
+    _cornerRoundnessController = DashboardCornerRoundnessController();
     _summaryPillVariantController.addListener(_onLayoutPresentationChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
     final financialLimitRepository = widget.financialLimitRepository;
@@ -347,6 +353,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     _bodyOrderController.removeListener(_onLayoutPresentationChanged);
     _summaryPillVariantController.dispose();
     _bodyOrderController.dispose();
+    _budgetContentCardStyle.dispose();
+    _cornerRoundnessController.dispose();
     _budgetDistributionDrawables.dispose();
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
@@ -403,279 +411,290 @@ class _CoreDashboardState extends State<CoreDashboard>
           );
         }
 
-        return DashboardRenderPhaseProbe(
-          counters: controller.performanceCounters,
-          child: ColoredBox(
-            key: const ValueKey('core-dashboard'),
-            color: frame.palette.pageBackground,
-            child: Padding(
-              key: const ValueKey('dashboard-content-inset'),
-              padding: EdgeInsets.only(top: contentTopPadding),
-              child: SizedBox.expand(
-                child: Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
-                  children: [
-                    _FramePosition(
-                      bounds: geometry.brandLockupBounds,
-                      child: FluviBrandLockup(
+        return DashboardCornerRoundnessScope(
+          controller: _cornerRoundnessController,
+          child: DashboardRenderPhaseProbe(
+            counters: controller.performanceCounters,
+            child: ColoredBox(
+              key: const ValueKey('core-dashboard'),
+              color: frame.palette.pageBackground,
+              child: Padding(
+                key: const ValueKey('dashboard-content-inset'),
+                padding: EdgeInsets.only(top: contentTopPadding),
+                child: SizedBox.expand(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    clipBehavior: Clip.none,
+                    children: [
+                      _FramePosition(
                         bounds: geometry.brandLockupBounds,
-                      ),
-                    ),
-                    DashboardCoreModeHost(
-                      controller: modeController,
-                      headerVisualController: _headerVisualController,
-                      balanceHeaderVisualFrame: _balanceHeaderColorPolicy,
-                      budgetHeaderVisualFrame: _budgetHeaderColorPolicy,
-                      mindHeaderVisualFrame: _mindHeaderColorPolicy,
-                      budgetPresentation: _budgetPresentation,
-                      budgetLimitEditController: _budgetLimitEdit,
-                      budgetDistributionDrawables: _budgetDistributionDrawables,
-                      budgetAvatarRailController: _budgetAvatarRailController,
-                      budgetDistributionPageController:
-                          _budgetDistributionPageController,
-                      budgetRhythm: _budgetRhythm,
-                      budgetDrilldown: _budgetDrilldown,
-                      presentationFor: frame.presentationFor,
-                      onVerticalExpansionStart: controller.expansion.beginDrag,
-                      onVerticalExpansionDragBy: (viewportDelta) =>
-                          controller.expansion.dragBy(
-                            geometry.mapViewportVerticalDragToController(
-                              viewportDelta,
-                            ),
-                          ),
-                      onVerticalExpansionEnd: controller.expansion.endDrag,
-                    ),
-                    _FramePosition(
-                      bounds: geometry.actionBounds,
-                      child: Semantics(
-                        key: const ValueKey('dashboard-action-row'),
-                        label:
-                            frame.selectedDirection ==
-                                TransactionDirection.income
-                            ? 'Bevétel'
-                            : 'Kiadás',
-                        child: TransactionDirectionToggle(
-                          bounds: geometry.actionBounds,
-                          palette: frame.palette,
-                          selectedDirection: frame.selectedDirection,
-                          incomeIconScale: frame.incomeIconScale,
-                          expenseIconScale: frame.expenseIconScale,
-                          selectedIconScaleAnimation: frame.directionPulseScale,
-                          performanceCounters: controller.performanceCounters,
-                          onSelected: (direction) {
-                            controller.selectDirection(direction);
-                          },
+                        child: FluviBrandLockup(
+                          bounds: geometry.brandLockupBounds,
                         ),
                       ),
-                    ),
-                    _FramePosition(
-                      bounds: geometry.summaryBounds,
-                      child: _DashboardSummaryRegion(
-                        bounds: geometry.summaryBounds,
-                        controller: controller,
-                        summaryPillVariants: _summaryPillVariantController,
-                        motionController: _summaryMotionController,
-                        onMotionActiveChanged: (active) =>
-                            controller.setMotionLaneActive(
-                              DashboardMotionLane.summaryShell,
-                              active,
-                            ),
-                        onAmountMotionActiveChanged: (active) =>
-                            controller.setMotionLaneActive(
-                              DashboardMotionLane.amount,
-                              active,
-                            ),
-                      ),
-                    ),
-                    _FramePosition(
-                      bounds: geometry.railBounds,
-                      child: ValueListenableBuilder<SummaryPillVariant>(
-                        valueListenable: _summaryPillVariantController,
-                        builder: (context, variant, _) {
-                          if (variant != SummaryPillVariant.legacy) {
-                            // DAY remains the canonical month child query in
-                            // an experiment, but its legacy rail must not add
-                            // a second visible control surface.
-                            return const SizedBox.expand();
-                          }
-                          return Opacity(
-                            opacity: frame.railReveal,
-                            child: IgnorePointer(
-                              ignoring: !geometry.isRailExpanded,
-                              child: profileRenderProbe(
-                                layoutMetric:
-                                    DashboardPerformanceMetric.railLayout,
-                                paintMetric:
-                                    DashboardPerformanceMetric.railPaint,
-                                layoutDurationMetric:
-                                    DashboardPerformanceMetric.railLayoutMicros,
-                                paintDurationMetric:
-                                    DashboardPerformanceMetric.railPaintMicros,
-                                child: TimeRefinementRail(
-                                  bounds: geometry.railBounds,
-                                  motion: controller.motion,
-                                  onPreviewLogicalIndexChanged:
-                                      (oldIndex, newIndex) =>
-                                          _summaryMotionController
-                                              .triggerRailTick(
-                                                oldLogicalIndex: oldIndex,
-                                                newLogicalIndex: newIndex,
-                                              ),
-                                  onMotionBaselineEstablished:
-                                      _summaryMotionController
-                                          .resetRailTickBaseline,
-                                  onMotionStarted: controller.beginRailMotion,
-                                  performanceCounters:
-                                      controller.performanceCounters,
-                                  motionDiagnostics:
-                                      controller.railFlightRecorder,
-                                ),
+                      DashboardCoreModeHost(
+                        controller: modeController,
+                        headerVisualController: _headerVisualController,
+                        balanceHeaderVisualFrame: _balanceHeaderColorPolicy,
+                        budgetHeaderVisualFrame: _budgetHeaderColorPolicy,
+                        mindHeaderVisualFrame: _mindHeaderColorPolicy,
+                        budgetPresentation: _budgetPresentation,
+                        budgetLimitEditController: _budgetLimitEdit,
+                        budgetDistributionDrawables:
+                            _budgetDistributionDrawables,
+                        budgetAvatarRailController: _budgetAvatarRailController,
+                        budgetDistributionPageController:
+                            _budgetDistributionPageController,
+                        budgetContentCardStyle: _budgetContentCardStyle,
+                        budgetRhythm: _budgetRhythm,
+                        budgetDrilldown: _budgetDrilldown,
+                        presentationFor: frame.presentationFor,
+                        onVerticalExpansionStart:
+                            controller.expansion.beginDrag,
+                        onVerticalExpansionDragBy: (viewportDelta) =>
+                            controller.expansion.dragBy(
+                              geometry.mapViewportVerticalDragToController(
+                                viewportDelta,
                               ),
                             ),
-                          );
-                        },
+                        onVerticalExpansionEnd: controller.expansion.endDrag,
                       ),
-                    ),
-                    Positioned(
-                      left: geometry.logBoxHeaderBounds.left,
-                      top: geometry.logBoxHeaderBounds.top,
-                      width: geometry.logBoxHeaderBounds.width,
-                      bottom: 0,
-                      child: profileRenderProbe(
-                        layoutMetric: DashboardPerformanceMetric.logLayout,
-                        paintMetric: DashboardPerformanceMetric.logPaint,
-                        layoutDurationMetric:
-                            DashboardPerformanceMetric.logLayoutMicros,
-                        paintDurationMetric:
-                            DashboardPerformanceMetric.logPaintMicros,
-                        child: DashboardLogBoxViewport(
-                          bounds: geometry.logBoxHeaderBounds,
-                          visibleFrames: controller.visibleFrames,
-                          preparedRasters: logBoxRasters,
-                          committedViewport: controller.committedLogViewport,
-                          renderCriticalPayloads:
-                              controller.renderCriticalLogBoxPayloads,
-                          sceneWindowProvider:
-                              controller.renderCriticalLogBoxSceneWindow,
-                          preparedSceneCache: _preparedSceneCache,
-                          onLoadNextPage: (desiredLastReadyOrdinal) {
-                            unawaited(
-                              controller.requestForwardPageDemand(
-                                desiredLastReadyOrdinal,
+                      _FramePosition(
+                        bounds: geometry.actionBounds,
+                        child: Semantics(
+                          key: const ValueKey('dashboard-action-row'),
+                          label:
+                              frame.selectedDirection ==
+                                  TransactionDirection.income
+                              ? 'Bevétel'
+                              : 'Kiadás',
+                          child: TransactionDirectionToggle(
+                            bounds: geometry.actionBounds,
+                            palette: frame.palette,
+                            selectedDirection: frame.selectedDirection,
+                            incomeIconScale: frame.incomeIconScale,
+                            expenseIconScale: frame.expenseIconScale,
+                            selectedIconScaleAnimation:
+                                frame.directionPulseScale,
+                            performanceCounters: controller.performanceCounters,
+                            onSelected: (direction) {
+                              controller.selectDirection(direction);
+                            },
+                          ),
+                        ),
+                      ),
+                      _FramePosition(
+                        bounds: geometry.summaryBounds,
+                        child: _DashboardSummaryRegion(
+                          bounds: geometry.summaryBounds,
+                          controller: controller,
+                          summaryPillVariants: _summaryPillVariantController,
+                          motionController: _summaryMotionController,
+                          onMotionActiveChanged: (active) =>
+                              controller.setMotionLaneActive(
+                                DashboardMotionLane.summaryShell,
+                                active,
+                              ),
+                          onAmountMotionActiveChanged: (active) =>
+                              controller.setMotionLaneActive(
+                                DashboardMotionLane.amount,
+                                active,
+                              ),
+                        ),
+                      ),
+                      _FramePosition(
+                        bounds: geometry.railBounds,
+                        child: ValueListenableBuilder<SummaryPillVariant>(
+                          valueListenable: _summaryPillVariantController,
+                          builder: (context, variant, _) {
+                            if (variant != SummaryPillVariant.legacy) {
+                              // DAY remains the canonical month child query in
+                              // an experiment, but its legacy rail must not add
+                              // a second visible control surface.
+                              return const SizedBox.expand();
+                            }
+                            return Opacity(
+                              opacity: frame.railReveal,
+                              child: IgnorePointer(
+                                ignoring: !geometry.isRailExpanded,
+                                child: profileRenderProbe(
+                                  layoutMetric:
+                                      DashboardPerformanceMetric.railLayout,
+                                  paintMetric:
+                                      DashboardPerformanceMetric.railPaint,
+                                  layoutDurationMetric:
+                                      DashboardPerformanceMetric
+                                          .railLayoutMicros,
+                                  paintDurationMetric:
+                                      DashboardPerformanceMetric
+                                          .railPaintMicros,
+                                  child: TimeRefinementRail(
+                                    bounds: geometry.railBounds,
+                                    motion: controller.motion,
+                                    onPreviewLogicalIndexChanged:
+                                        (oldIndex, newIndex) =>
+                                            _summaryMotionController
+                                                .triggerRailTick(
+                                                  oldLogicalIndex: oldIndex,
+                                                  newLogicalIndex: newIndex,
+                                                ),
+                                    onMotionBaselineEstablished:
+                                        _summaryMotionController
+                                            .resetRailTickBaseline,
+                                    onMotionStarted: controller.beginRailMotion,
+                                    performanceCounters:
+                                        controller.performanceCounters,
+                                    motionDiagnostics:
+                                        controller.railFlightRecorder,
+                                  ),
+                                ),
                               ),
                             );
                           },
-                          onLoadPreviousPage: () {
-                            unawaited(controller.loadPreviousPage());
-                          },
-                          onVerticalPointerDown:
-                              controller.noteVerticalPointerDown,
-                          onVerticalPointerIntentStarted:
-                              controller.noteVerticalPointerIntentStarted,
-                          onVerticalPointerIntentEnded:
-                              controller.noteVerticalPointerIntentEnded,
-                          onVerticalScrollStarted:
-                              controller.beginVerticalInteraction,
-                          onVerticalScrollEnded: controller
-                              .resumeSceneWindowMaintenanceAfterVerticalInput,
-                          verticalBackgroundWork: () =>
-                              controller.verticalBackgroundWork,
-                          performanceCounters: controller.performanceCounters,
-                          renderDiagnostics:
-                              controller.renderReadinessDiagnostics,
-                          renderDiagnosticContextProvider: () =>
-                              controller.renderDiagnosticContext,
-                          onExtentPublished:
-                              controller.recordLogBoxRenderExtent,
-                          onCommittedScopeReset:
-                              controller.recordVerticalCommittedScopeReset,
-                          currentQuery: controller.currentQuery,
-                          onRemoveQueryCategory:
-                              controller.removeAppliedQueryCategory,
-                          onRemoveQueryPartner:
-                              controller.removeAppliedQueryPartner,
-                          onClearQuery: controller.clearAppliedQuery,
-                          focus: controller.focus,
-                          onClearFocusCategory: () {
-                            unawaited(controller.clearCategoryFocus());
-                          },
-                          onClearFocusPartner: () {
-                            unawaited(controller.clearPartnerFocus());
-                          },
-                          onClearFocus: () {
-                            unawaited(controller.clearAllEphemeralFocus());
-                          },
-                          onAvatarTap: (row) {
-                            if (row.categoryId.isEmpty) return;
-                            unawaited(
-                              controller.requestCategoryFocus(
+                        ),
+                      ),
+                      Positioned(
+                        left: geometry.logBoxHeaderBounds.left,
+                        top: geometry.logBoxHeaderBounds.top,
+                        width: geometry.logBoxHeaderBounds.width,
+                        bottom: 0,
+                        child: profileRenderProbe(
+                          layoutMetric: DashboardPerformanceMetric.logLayout,
+                          paintMetric: DashboardPerformanceMetric.logPaint,
+                          layoutDurationMetric:
+                              DashboardPerformanceMetric.logLayoutMicros,
+                          paintDurationMetric:
+                              DashboardPerformanceMetric.logPaintMicros,
+                          child: DashboardLogBoxViewport(
+                            bounds: geometry.logBoxHeaderBounds,
+                            visibleFrames: controller.visibleFrames,
+                            preparedRasters: logBoxRasters,
+                            committedViewport: controller.committedLogViewport,
+                            renderCriticalPayloads:
+                                controller.renderCriticalLogBoxPayloads,
+                            sceneWindowProvider:
+                                controller.renderCriticalLogBoxSceneWindow,
+                            preparedSceneCache: _preparedSceneCache,
+                            onLoadNextPage: (desiredLastReadyOrdinal) {
+                              unawaited(
+                                controller.requestForwardPageDemand(
+                                  desiredLastReadyOrdinal,
+                                ),
+                              );
+                            },
+                            onLoadPreviousPage: () {
+                              unawaited(controller.loadPreviousPage());
+                            },
+                            onVerticalPointerDown:
+                                controller.noteVerticalPointerDown,
+                            onVerticalPointerIntentStarted:
+                                controller.noteVerticalPointerIntentStarted,
+                            onVerticalPointerIntentEnded:
+                                controller.noteVerticalPointerIntentEnded,
+                            onVerticalScrollStarted:
+                                controller.beginVerticalInteraction,
+                            onVerticalScrollEnded: controller
+                                .resumeSceneWindowMaintenanceAfterVerticalInput,
+                            verticalBackgroundWork: () =>
+                                controller.verticalBackgroundWork,
+                            performanceCounters: controller.performanceCounters,
+                            renderDiagnostics:
+                                controller.renderReadinessDiagnostics,
+                            renderDiagnosticContextProvider: () =>
+                                controller.renderDiagnosticContext,
+                            onExtentPublished:
+                                controller.recordLogBoxRenderExtent,
+                            onCommittedScopeReset:
+                                controller.recordVerticalCommittedScopeReset,
+                            currentQuery: controller.currentQuery,
+                            onRemoveQueryCategory:
+                                controller.removeAppliedQueryCategory,
+                            onRemoveQueryPartner:
+                                controller.removeAppliedQueryPartner,
+                            onClearQuery: controller.clearAppliedQuery,
+                            focus: controller.focus,
+                            onClearFocusCategory: () {
+                              unawaited(controller.clearCategoryFocus());
+                            },
+                            onClearFocusPartner: () {
+                              unawaited(controller.clearPartnerFocus());
+                            },
+                            onClearFocus: () {
+                              unawaited(controller.clearAllEphemeralFocus());
+                            },
+                            onAvatarTap: (row) {
+                              if (row.categoryId.isEmpty) return;
+                              unawaited(
+                                controller.requestCategoryFocus(
+                                  DashboardFocusFacet(
+                                    id: row.categoryId,
+                                    displayName: row.categoryDisplayName,
+                                    colorId: row.categoryColorId,
+                                    iconId: row.categoryIconId,
+                                  ),
+                                ),
+                              );
+                            },
+                            partnerSwipe: _partnerSwipe,
+                            onPartnerFocus: (row) {
+                              if (row.partnerId.isEmpty) {
+                                return Future<bool>.value(false);
+                              }
+                              return controller.requestPartnerFocus(
                                 DashboardFocusFacet(
-                                  id: row.categoryId,
-                                  displayName: row.categoryDisplayName,
+                                  id: row.partnerId,
+                                  displayName: row.partnerDisplayName,
                                   colorId: row.categoryColorId,
                                   iconId: row.categoryIconId,
                                 ),
-                              ),
-                            );
-                          },
-                          partnerSwipe: _partnerSwipe,
-                          onPartnerFocus: (row) {
-                            if (row.partnerId.isEmpty) {
-                              return Future<bool>.value(false);
-                            }
-                            return controller.requestPartnerFocus(
-                              DashboardFocusFacet(
-                                id: row.partnerId,
-                                displayName: row.partnerDisplayName,
-                                colorId: row.categoryColorId,
-                                iconId: row.categoryIconId,
-                              ),
-                            );
-                          },
-                          onWarmupSurfaceAttached:
-                              widget.onLogBoxWarmupSurfaceAttached,
-                          onWarmupSurfaceLaidOut:
-                              widget.onLogBoxWarmupSurfaceLaidOut,
-                          onWarmupTextLayoutsPrepared: (viewportId) {
-                            controller.recordInitialSceneWindowActivation(
-                              controller.renderCriticalLogBoxSceneWindow(),
-                            );
-                            widget.onLogBoxWarmupTextLayoutsPrepared?.call(
-                              viewportId,
-                            );
-                          },
-                          onWarmupError: widget.onLogBoxWarmupError,
-                          onTextLayoutsPrepared:
-                              controller.recordLogBoxTextLayoutCache,
+                              );
+                            },
+                            onWarmupSurfaceAttached:
+                                widget.onLogBoxWarmupSurfaceAttached,
+                            onWarmupSurfaceLaidOut:
+                                widget.onLogBoxWarmupSurfaceLaidOut,
+                            onWarmupTextLayoutsPrepared: (viewportId) {
+                              controller.recordInitialSceneWindowActivation(
+                                controller.renderCriticalLogBoxSceneWindow(),
+                              );
+                              widget.onLogBoxWarmupTextLayoutsPrepared?.call(
+                                viewportId,
+                              );
+                            },
+                            onWarmupError: widget.onLogBoxWarmupError,
+                            onTextLayoutsPrepared:
+                                controller.recordLogBoxTextLayoutCache,
+                          ),
                         ),
                       ),
-                    ),
-                    _FramePosition(
-                      bounds: geometry.collapseHandleBounds,
-                      child: DashboardCollapseHandle(
+                      _FramePosition(
                         bounds: geometry.collapseHandleBounds,
-                        isDragging: frame.isExpansionDragging,
-                        onTap: controller.expansion.toggle,
-                        onVerticalDragStart: (_) =>
-                            controller.expansion.beginDrag(),
-                        onVerticalDragUpdate: (details) =>
-                            controller.expansion.dragBy(
-                              geometry.mapViewportVerticalDragToController(
-                                details.delta.dy,
+                        child: DashboardCollapseHandle(
+                          bounds: geometry.collapseHandleBounds,
+                          isDragging: frame.isExpansionDragging,
+                          onTap: controller.expansion.toggle,
+                          onVerticalDragStart: (_) =>
+                              controller.expansion.beginDrag(),
+                          onVerticalDragUpdate: (details) =>
+                              controller.expansion.dragBy(
+                                geometry.mapViewportVerticalDragToController(
+                                  details.delta.dy,
+                                ),
                               ),
-                            ),
-                        onVerticalDragEnd: (_) =>
-                            controller.expansion.endDrag(),
+                          onVerticalDragEnd: (_) =>
+                              controller.expansion.endDrag(),
+                        ),
                       ),
-                    ),
-                    _DashboardHeaderVisualTunerOverlay(
-                      controller: _headerVisualController,
-                      summaryPillVariants: _summaryPillVariantController,
-                      bodyOrder: _bodyOrderController,
-                      headerBounds: geometry.headerBounds,
-                    ),
-                  ],
+                      _DashboardHeaderVisualTunerOverlay(
+                        controller: _headerVisualController,
+                        summaryPillVariants: _summaryPillVariantController,
+                        bodyOrder: _bodyOrderController,
+                        budgetContentCardStyle: _budgetContentCardStyle,
+                        cornerRoundness: _cornerRoundnessController,
+                        headerBounds: geometry.headerBounds,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -713,8 +732,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
         valueListenable: summaryPillVariants,
         builder: (context, variant, _) => switch (variant) {
           SummaryPillVariant.legacy => _legacyPill(),
-          SummaryPillVariant.segmented ||
-          SummaryPillVariant.swipeMode => SummaryPillExperiment(
+          SummaryPillVariant.segmented => SummaryPillExperiment(
             variant: variant,
             bounds: bounds,
             navigation: controller.navigation,
@@ -812,12 +830,16 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     required this.controller,
     required this.summaryPillVariants,
     required this.bodyOrder,
+    required this.budgetContentCardStyle,
+    required this.cornerRoundness,
     required this.headerBounds,
   });
 
   final DashboardHeaderVisualController controller;
   final SummaryPillVariantController summaryPillVariants;
   final DashboardBodyOrderController bodyOrder;
+  final BudgetContentCardStyleController budgetContentCardStyle;
+  final DashboardCornerRoundnessController cornerRoundness;
   final DashboardBounds headerBounds;
 
   @override
@@ -875,6 +897,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                           controller: controller,
                           summaryPillVariants: summaryPillVariants,
                           bodyOrder: bodyOrder,
+                          budgetContentCardStyle: budgetContentCardStyle,
+                          cornerRoundness: cornerRoundness,
                         ),
                       ),
                     ),

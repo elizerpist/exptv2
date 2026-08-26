@@ -1,10 +1,78 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
+import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('Budget Card2 surface switch is session-owned and live', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final cardStyle = BudgetContentCardStyleController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            budgetContentCardStyle: cardStyle,
+          ),
+        ),
+      ),
+    );
+
+    final control = find.byKey(
+      const ValueKey<String>('dashboard-budget-content-card-surface-switch'),
+    );
+    await tester.ensureVisible(control);
+    expect(control, findsOneWidget);
+    expect(cardStyle.showCardSurface, isTrue);
+
+    tester.widget<SwitchListTile>(control).onChanged!(false);
+    await tester.pump();
+    expect(cardStyle.showCardSurface, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    cardStyle.dispose();
+  });
+
+  testWidgets('global corner scale is session-owned and live', (tester) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final roundness = DashboardCornerRoundnessController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            cornerRoundness: roundness,
+          ),
+        ),
+      ),
+    );
+
+    final control = find.byKey(
+      const ValueKey<String>('dashboard-corner-roundness-slider'),
+    );
+    await tester.ensureVisible(control);
+    expect(roundness.value.position, 0);
+    tester
+        .widget<Slider>(
+          find.descendant(of: control, matching: find.byType(Slider)),
+        )
+        .onChanged!(1);
+    await tester.pump();
+    expect(roundness.value.position, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    roundness.dispose();
+  });
+
   test('tuner placement always reserves the live Header plus its gap', () {
     const gap = 12.0;
     for (final headerBottom in <double>[124, 214, 346]) {

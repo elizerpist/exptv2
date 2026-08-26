@@ -9,6 +9,7 @@ import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
@@ -25,6 +26,7 @@ import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
 import 'dashboard_logbox_partner_swipe.dart';
 import 'dashboard_logbox_text_layout_cache.dart';
+import '../dashboard_corner_roundness.dart';
 
 typedef DashboardLogBoxWarmupTaskCallback = void Function(int viewportId);
 typedef DashboardLogBoxWarmupErrorCallback =
@@ -64,6 +66,7 @@ final class DashboardLogBoxPaintIdentity {
     required this.committedGeneration,
     required this.renderDomain,
     required this.rasterIdentity,
+    this.groupRadius = FluviVisualTokens.logBoxGroupRadius,
   });
 
   final int? payloadViewportId;
@@ -72,6 +75,7 @@ final class DashboardLogBoxPaintIdentity {
   final int committedGeneration;
   final DashboardLogBoxRenderDomain renderDomain;
   final Object rasterIdentity;
+  final BorderRadius groupRadius;
 
   bool requiresRepaintFrom(DashboardLogBoxPaintIdentity previous) =>
       payloadViewportId != previous.payloadViewportId ||
@@ -79,6 +83,7 @@ final class DashboardLogBoxPaintIdentity {
       sceneGeneration != previous.sceneGeneration ||
       committedGeneration != previous.committedGeneration ||
       renderDomain != previous.renderDomain ||
+      groupRadius != previous.groupRadius ||
       !identical(rasterIdentity, previous.rasterIdentity);
 }
 
@@ -340,6 +345,16 @@ final class _DashboardLogBoxRenderSurfaceState
                     ? committedSurfaceHeight
                     : previewSurfaceHeight,
               );
+              final groupRadius =
+                  DashboardCornerRoundnessScope.profileOf(
+                    context,
+                  ).borderRadiusFor(
+                    DashboardCornerSurfaceFamily.logBoxGroup,
+                    size: const Size(
+                      double.infinity,
+                      DashboardLogBoxTokens.rowHeight,
+                    ),
+                  );
               final painter = _DashboardLogBoxSurfacePainter(
                 payload: binding.payload,
                 presentationEpoch: binding.presentation?.presentationEpoch,
@@ -355,6 +370,7 @@ final class _DashboardLogBoxRenderSurfaceState
                 performanceCounters: widget.performanceCounters,
                 renderDiagnostics: widget.renderDiagnostics,
                 partnerSwipe: widget.partnerSwipe,
+                groupRadius: groupRadius,
               );
               _latestPainter = painter;
               _bindHitTestController();
@@ -1168,6 +1184,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.onEntryTap,
     required this.performanceCounters,
     required this.renderDiagnostics,
+    required this.groupRadius,
     this.partnerSwipe,
   }) : super(
          repaint: Listenable.merge(<Listenable>[
@@ -1192,6 +1209,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
+  final BorderRadius groupRadius;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   bool _reportedTextLayoutMiss = false;
   bool _reportedVerticalCacheMiss = false;
@@ -1209,6 +1227,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         committedGeneration: committedGeneration,
         renderDomain: renderDomain,
         rasterIdentity: rasters,
+        groupRadius: groupRadius,
       );
 
   @override
@@ -1563,7 +1582,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   /// group gap and the shell-painted gutter visually clean.
   void _paintGroupSurface(Canvas canvas, Rect rect) {
     if (rect.isEmpty) return;
-    final body = FluviVisualTokens.logBoxGroupRadius.toRRect(rect);
+    final body = groupRadius.toRRect(rect);
     final foot = body.shift(FluviVisualTokens.cardFootShadow.offset);
     if (!_debugDisableLogBoxCardDepth) {
       canvas.drawRRect(foot, resources.groupDepth);
@@ -1617,16 +1636,16 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   }) {
     if (rect.isEmpty) return;
     final body = switch ((roundTop, roundBottom)) {
-      (true, true) => FluviVisualTokens.logBoxGroupRadius.toRRect(rect),
+      (true, true) => groupRadius.toRRect(rect),
       (true, false) => RRect.fromRectAndCorners(
         rect,
-        topLeft: FluviVisualTokens.logBoxGroupRadius.topLeft,
-        topRight: FluviVisualTokens.logBoxGroupRadius.topRight,
+        topLeft: groupRadius.topLeft,
+        topRight: groupRadius.topRight,
       ),
       (false, true) => RRect.fromRectAndCorners(
         rect,
-        bottomLeft: FluviVisualTokens.logBoxGroupRadius.bottomLeft,
-        bottomRight: FluviVisualTokens.logBoxGroupRadius.bottomRight,
+        bottomLeft: groupRadius.bottomLeft,
+        bottomRight: groupRadius.bottomRight,
       ),
       (false, false) => RRect.fromRectAndRadius(rect, Radius.zero),
     };
@@ -1711,7 +1730,10 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required DashboardLogBoxPartnerSwipeState swipe,
     required Rect segmentRect,
   }) {
-    final body = swipe.target.blockSegmentRole.bodyFor(segmentRect);
+    final body = swipe.target.blockSegmentRole.bodyFor(
+      segmentRect,
+      groupRadius: groupRadius,
+    );
     if (swipe.target.blockSegmentRole.ownsBottomShadow &&
         !_debugDisableLogBoxCardDepth) {
       canvas.drawRRect(

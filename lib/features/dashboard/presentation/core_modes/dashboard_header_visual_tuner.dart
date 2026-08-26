@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_body_order.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
+import '../budget_content_card_style.dart';
+import '../dashboard_corner_roundness.dart';
 import '../summary_pill_variant.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -333,11 +336,15 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     required this.controller,
     this.summaryPillVariants,
     this.bodyOrder,
+    this.budgetContentCardStyle,
+    this.cornerRoundness,
   });
 
   final DashboardHeaderVisualController controller;
   final SummaryPillVariantController? summaryPillVariants;
   final DashboardBodyOrderController? bodyOrder;
+  final BudgetContentCardStyleController? budgetContentCardStyle;
+  final DashboardCornerRoundnessController? cornerRoundness;
 
   @override
   Widget build(
@@ -401,6 +408,14 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
               ],
               if (bodyOrder case final order?) ...<Widget>[
                 _DashboardBodyOrderSection(controller: order),
+                const SizedBox(height: 14),
+              ],
+              if (budgetContentCardStyle case final cardStyle?) ...<Widget>[
+                _BudgetContentCardStyleSection(controller: cardStyle),
+                const SizedBox(height: 14),
+              ],
+              if (cornerRoundness case final roundness?) ...<Widget>[
+                _DashboardCornerRoundnessSection(controller: roundness),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
@@ -835,6 +850,62 @@ final class _SummaryPillExperimentSection extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      );
+}
+
+/// A shell-only Budget preference. The pager and its presentation/query
+/// owners stay mounted underneath this tuner control.
+final class _BudgetContentCardStyleSection extends StatelessWidget {
+  const _BudgetContentCardStyleSection({required this.controller});
+
+  final BudgetContentCardStyleController controller;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: controller,
+    builder: (context, showCardSurface, _) => _TunerSection(
+      title: 'Budget megjelenés',
+      children: <Widget>[
+        SwitchListTile(
+          key: const ValueKey<String>(
+            'dashboard-budget-content-card-surface-switch',
+          ),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Diagram kártyában'),
+          value: showCardSurface,
+          onChanged: controller.setShowCardSurface,
+        ),
+      ],
+    ),
+  );
+}
+
+/// One normalized control maps through the central profile; individual
+/// surfaces never own their own roundness state.
+final class _DashboardCornerRoundnessSection extends StatelessWidget {
+  const _DashboardCornerRoundnessSection({required this.controller});
+
+  final DashboardCornerRoundnessController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardCornerRoundness>(
+        valueListenable: controller,
+        builder: (context, roundness, _) => _TunerSection(
+          title: 'Forma',
+          children: <Widget>[
+            _TunerSlider(
+              key: const ValueKey<String>('dashboard-corner-roundness-slider'),
+              label: 'Sarokkerekítés',
+              valueLabel: '${(roundness.position * 100).round()}%',
+              min: 0,
+              max: 1,
+              divisions: 10,
+              value: roundness.position,
+              onChanged: controller.setPosition,
+            ),
+          ],
         ),
       );
 }
