@@ -118,12 +118,12 @@ void main() {
     expect(shadow.value, DashboardShadowStyle.soft);
 
     final referenceDepth = find.byKey(
-      const ValueKey<String>('dashboard-shadow-style-spendee3d'),
+      const ValueKey<String>('dashboard-shadow-style-reference3d'),
     );
     await tester.ensureVisible(referenceDepth);
     await tester.tap(referenceDepth);
     await tester.pump();
-    expect(shadow.value, DashboardShadowStyle.spendee3d);
+    expect(shadow.value, DashboardShadowStyle.reference3d);
 
     final slider = find.byKey(
       const ValueKey<String>('dashboard-logbox-height-slider'),

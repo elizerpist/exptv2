@@ -5,7 +5,7 @@ import 'dashboard_mode_palette.dart';
 
 /// Global dashboard depth treatment. It changes only outer decoration, never
 /// bounds, clipping or semantic surface ownership.
-enum DashboardShadowStyle { none, current, soft, spendee3d }
+enum DashboardShadowStyle { none, current, soft, reference3d }
 
 /// Complete material-depth input for one dashboard surface family.
 ///
@@ -58,7 +58,7 @@ final class DashboardShadowProfile {
           DashboardCornerSurfaceFamily.logBoxGroup ||
           DashboardCornerSurfaceFamily.budgetDistributionCard => _softCardDepth,
         },
-        DashboardShadowStyle.spendee3d => switch (family) {
+        DashboardShadowStyle.reference3d => switch (family) {
           DashboardCornerSurfaceFamily.searchPill => _referenceSearchDepth,
           DashboardCornerSurfaceFamily.summaryPill => _referenceSummaryDepth,
           _ => _referenceSurfaceDepth,

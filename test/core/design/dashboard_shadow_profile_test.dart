@@ -10,7 +10,7 @@ void main() {
       DashboardShadowStyle.none,
       DashboardShadowStyle.current,
       DashboardShadowStyle.soft,
-      DashboardShadowStyle.spendee3d,
+      DashboardShadowStyle.reference3d,
     ]);
     expect(
       const DashboardShadowProfile(
@@ -21,7 +21,7 @@ void main() {
   });
 
   test('the fourth depth profile pins the Balance reference material', () {
-    const profile = DashboardShadowProfile(DashboardShadowStyle.spendee3d);
+    const profile = DashboardShadowProfile(DashboardShadowStyle.reference3d);
     final summary = profile.depthFor(DashboardCornerSurfaceFamily.summaryPill);
     final search = profile.depthFor(DashboardCornerSurfaceFamily.searchPill);
 
@@ -54,7 +54,7 @@ void main() {
   });
 
   test('the fourth depth profile reaches every semantic surface family', () {
-    const profile = DashboardShadowProfile(DashboardShadowStyle.spendee3d);
+    const profile = DashboardShadowProfile(DashboardShadowStyle.reference3d);
     for (final family in DashboardCornerSurfaceFamily.values) {
       final depth = profile.depthFor(family);
       expect(depth.border, isNotNull, reason: family.name);

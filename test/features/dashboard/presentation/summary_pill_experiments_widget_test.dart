@@ -20,7 +20,7 @@ void main() {
     tester,
   ) async {
     final shadows = DashboardShadowStyleController()
-      ..select(DashboardShadowStyle.spendee3d);
+      ..select(DashboardShadowStyle.reference3d);
     final navigation = DashboardNavigationController(
       initialDate: DateTime(2026, 7, 22),
       initialPlane: TimePlane.month,

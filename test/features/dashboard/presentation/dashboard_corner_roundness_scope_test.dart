@@ -21,7 +21,7 @@ void main() {
       DashboardHeaderVisualFrame.staticTone(Colors.blue),
     );
     final shadows = DashboardShadowStyleController()
-      ..select(DashboardShadowStyle.spendee3d);
+      ..select(DashboardShadowStyle.reference3d);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -63,7 +63,7 @@ void main() {
     expect(
       physicalShell.decoration.boxShadow,
       DashboardShadowProfile(
-        DashboardShadowStyle.spendee3d,
+        DashboardShadowStyle.reference3d,
       ).depthFor(DashboardCornerSurfaceFamily.header).outerShadows,
     );
     await tester.pumpWidget(const SizedBox.shrink());
