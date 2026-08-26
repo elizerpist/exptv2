@@ -20,4 +20,5 @@ compile_directory assets/logbox_category_icons
 compile_directory assets/fluvi/actions
 compile_directory assets/fluvi/brand
 compile_directory assets/fluvi/budget
+compile_directory assets/icons/lucide
 "$python_executable" tool/generate_category_catalog.py

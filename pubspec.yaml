@@ -30,6 +30,7 @@ flutter:
     - assets/fluvi/actions/
     - assets/fluvi/brand/
     - assets/fluvi/budget/
+    - assets/icons/lucide/
     - assets/category_catalog/
     - assets/category_icons/
     - assets/logbox_category_icons/

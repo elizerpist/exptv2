@@ -35,25 +35,30 @@ class BudgetDistributionPageCard extends StatelessWidget {
           valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
           builder: (context, layout, _) => layout == BudgetContentLayout.split
               ? LayoutBuilder(
-                  builder: (context, constraints) => FluviRoundedBox(
-                    key: const ValueKey(
-                      'budget-distribution-page-card-surface',
-                    ),
-                    color: FluviVisualTokens.surface,
-                    border: Border.all(color: FluviVisualTokens.border),
-                    borderRadius:
-                        DashboardCornerRoundnessScope.profileOf(
-                          context,
-                        ).borderRadiusFor(
+                  builder: (context, constraints) {
+                    final depth = DashboardShadowStyleScope.profileOf(context)
+                        .depthFor(
                           DashboardCornerSurfaceFamily.budgetDistributionCard,
-                          size: constraints.biggest,
-                        ),
-                    boxShadow: DashboardShadowStyleScope.profileOf(context)
-                        .shadowsFor(
-                          DashboardCornerSurfaceFamily.budgetDistributionCard,
-                        ),
-                    child: const SizedBox.expand(),
-                  ),
+                        );
+                    return FluviRoundedBox(
+                      key: const ValueKey(
+                        'budget-distribution-page-card-surface',
+                      ),
+                      color: depth.surfaceColor ?? FluviVisualTokens.surface,
+                      border:
+                          depth.border ??
+                          Border.all(color: FluviVisualTokens.border),
+                      borderRadius:
+                          DashboardCornerRoundnessScope.profileOf(
+                            context,
+                          ).borderRadiusFor(
+                            DashboardCornerSurfaceFamily.budgetDistributionCard,
+                            size: constraints.biggest,
+                          ),
+                      boxShadow: depth.shadows,
+                      child: const SizedBox.expand(),
+                    );
+                  },
                 )
               : const SizedBox.shrink(),
         ),

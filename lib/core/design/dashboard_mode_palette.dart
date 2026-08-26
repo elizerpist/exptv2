@@ -199,9 +199,9 @@ abstract final class FluviVisualTokens {
   );
   static const summaryAmountTextStyle = TextStyle(
     color: textPrimary,
-    fontSize: bodyFontSize,
-    fontWeight: FontWeight.w700,
-    height: 1.2,
+    fontSize: 14,
+    fontWeight: FontWeight.w800,
+    height: 1.28,
   );
   static const railTextStyle = TextStyle(
     color: textPrimary,
@@ -263,6 +263,32 @@ abstract final class DashboardLogBoxTokens {
   static const rowGap = 10.0;
   static const avatarSize = 34.0;
   static const avatarIconSize = 18.0;
+  // Source-locked decorative edit placeholder. Its outer shape intentionally
+  // remains independent from the dashboard's configurable surface radii.
+  static const editPlaceholderSize = 24.0;
+  static const editPlaceholderBackground = Color(0x1A7D8798);
+  static const editPlaceholderRadius = 8.0;
+  static const editPlaceholderAssetPath = 'assets/icons/lucide/pencil.svg';
+  static const editPlaceholderGlyphSize = 13.0;
+  static const editPlaceholderGlyphColor = Color(0xFF7D8798);
+
+  /// Source-authored trailing structure: value/time, 10px gap, then the
+  /// fixed edit affordance inside the 12px row inset.
+  static double textTrailingEdge({required double surfaceWidth}) =>
+      surfaceWidth - rowHorizontalInset - editPlaceholderSize - rowGap;
+
+  /// The placeholder is vertically centred in the authored row geometry; a
+  /// taller user-selected row adds breathing room without scaling this asset.
+  static Rect editPlaceholderBounds({
+    required double surfaceWidth,
+    required double rowTop,
+    required double rowHeight,
+  }) => Rect.fromLTWH(
+    surfaceWidth - rowHorizontalInset - editPlaceholderSize,
+    rowTop + (rowHeight - editPlaceholderSize) / 2,
+    editPlaceholderSize,
+    editPlaceholderSize,
+  );
   static const dividerHeight = 1.0;
   static const cacheExtent = 360.0;
 }

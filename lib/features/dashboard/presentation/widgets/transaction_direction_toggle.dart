@@ -124,6 +124,9 @@ class _DirectionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.directionControl);
     return GestureDetector(
       onTap: () => onTap(direction),
       child: SizedBox(
@@ -132,12 +135,13 @@ class _DirectionButton extends StatelessWidget {
           key: assetKey == const ValueKey('fluvi-income-wallet')
               ? const ValueKey('fluvi-income-button')
               : const ValueKey('fluvi-expense-button'),
-          color: selected ? null : FluviVisualTokens.surface,
+          color: selected
+              ? null
+              : (depth.surfaceColor ?? FluviVisualTokens.surface),
           gradient: selected ? activeGradient : null,
+          border: depth.border,
           borderRadius: borderRadius,
-          boxShadow: DashboardShadowStyleScope.profileOf(
-            context,
-          ).shadowsFor(DashboardCornerSurfaceFamily.directionControl),
+          boxShadow: depth.shadows,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(

@@ -6,6 +6,7 @@ import 'package:vector_graphics/vector_graphics.dart';
 
 import '../categories/catalog/category_color_catalog.dart';
 import '../categories/catalog/category_icon_catalog.dart';
+import '../design/dashboard_mode_palette.dart';
 
 /// A process-retained, already decoded vector picture.
 ///
@@ -76,6 +77,7 @@ final class PreparedLogBoxRasterSet {
     required this.logicalIconSize,
     required this.badges,
     required this.glyphs,
+    required this.editPlaceholderGlyph,
     required this.estimatedBytes,
   });
 
@@ -84,6 +86,7 @@ final class PreparedLogBoxRasterSet {
   final double logicalIconSize;
   final List<PreparedLogBoxVectorBadge> badges;
   final List<PreparedLogBoxVectorGlyph> glyphs;
+  final PreparedLogBoxVectorGlyph editPlaceholderGlyph;
   final int estimatedBytes;
 
   int get badgeCount => badges.length;
@@ -149,7 +152,7 @@ final class PreparedVectorAssetAtlas {
 
   /// All unique normal and dedicated LogBox-white source pictures are decoded
   /// once by this single atlas owner.
-  static const int uniqueAssetCount = 104;
+  static const int uniqueAssetCount = 105;
   static const double logBoxBadgeLogicalSize = 34;
   static const double logBoxIconLogicalSize = 18;
 
@@ -169,6 +172,10 @@ final class PreparedVectorAssetAtlas {
     path: 'assets/fluvi/budget/banknote.svg.vec',
     loader: AssetBytesLoader('assets/fluvi/budget/banknote.svg.vec'),
   );
+  static const _VectorAssetSpec _logBoxEditPlaceholder = _VectorAssetSpec(
+    path: 'assets/icons/lucide/pencil.svg.vec',
+    loader: AssetBytesLoader('assets/icons/lucide/pencil.svg.vec'),
+  );
 
   final int _maximumConcurrentDecodes;
   List<PreparedVectorPicture>? _pictures;
@@ -178,6 +185,7 @@ final class PreparedVectorAssetAtlas {
   PreparedLogBoxRasterSet? _logBoxRasters;
   List<PreparedLogBoxVectorBadge>? _logBoxBadges;
   List<PreparedLogBoxVectorGlyph>? _logBoxGlyphs;
+  PreparedLogBoxVectorGlyph? _logBoxEditPlaceholderGlyph;
   int _pictureDecodeCount = 0;
   int _prepareDurationMicros = 0;
   int _logBoxRasterBuildCount = 0;
@@ -190,7 +198,8 @@ final class PreparedVectorAssetAtlas {
       _pictures != null &&
       _categoryGradients != null &&
       _logBoxBadges != null &&
-      _logBoxGlyphs != null;
+      _logBoxGlyphs != null &&
+      _logBoxEditPlaceholderGlyph != null;
   int get pictureCount => _pictures?.length ?? 0;
   int get logBoxGlyphCount => _logBoxGlyphs?.length ?? 0;
   int get pictureDecodeCount => _pictureDecodeCount;
@@ -320,6 +329,7 @@ final class PreparedVectorAssetAtlas {
     final allSpecs = <_VectorAssetSpec>[
       ...normalPictureSpecs,
       ...logBoxGlyphSpecs,
+      _logBoxEditPlaceholder,
     ];
 
     final uniqueSpecs = <String, _VectorAssetSpec>{};
@@ -402,6 +412,16 @@ final class PreparedVectorAssetAtlas {
         createdBadges,
       );
       _logBoxGlyphs = List<PreparedLogBoxVectorGlyph>.unmodifiable(glyphs);
+      final editPlaceholderInfo = decodedInfo(_logBoxEditPlaceholder);
+      if (editPlaceholderInfo.size.isEmpty) {
+        throw StateError('The prepared LogBox edit placeholder is empty.');
+      }
+      _logBoxEditPlaceholderGlyph = _recordTintedLogBoxGlyph(
+        editPlaceholderInfo.picture,
+        logicalSize: editPlaceholderInfo.size,
+        color: DashboardLogBoxTokens.editPlaceholderGlyphColor,
+      );
+      editPlaceholderInfo.picture.dispose();
       _logBoxBadgeBuildCount += 1;
       _logBoxGlyphBuildCount += 1;
       prepareTimer.stop();
@@ -424,7 +444,8 @@ final class PreparedVectorAssetAtlas {
     try {
       final badges = _logBoxBadges;
       final glyphs = _logBoxGlyphs;
-      if (badges == null || glyphs == null) {
+      final editPlaceholderGlyph = _logBoxEditPlaceholderGlyph;
+      if (badges == null || glyphs == null || editPlaceholderGlyph == null) {
         throw StateError('Prepared LogBox vector avatars are not ready.');
       }
       if (_disposed) {
@@ -436,6 +457,7 @@ final class PreparedVectorAssetAtlas {
         logicalIconSize: logBoxIconLogicalSize,
         badges: badges,
         glyphs: glyphs,
+        editPlaceholderGlyph: editPlaceholderGlyph,
         estimatedBytes:
             badges.fold<int>(
               0,
@@ -444,7 +466,8 @@ final class PreparedVectorAssetAtlas {
             glyphs.fold<int>(
               0,
               (total, glyph) => total + glyph.picture.approximateBytesUsed,
-            ),
+            ) +
+            editPlaceholderGlyph.picture.approximateBytesUsed,
       );
       final previous = _logBoxRasters;
       _logBoxRasters = result;
@@ -475,6 +498,26 @@ final class PreparedVectorAssetAtlas {
     );
   }
 
+  static PreparedLogBoxVectorGlyph _recordTintedLogBoxGlyph(
+    ui.Picture source, {
+    required Size logicalSize,
+    required Color color,
+  }) {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final rect = Offset.zero & logicalSize;
+    canvas.saveLayer(
+      rect,
+      Paint()..colorFilter = ColorFilter.mode(color, BlendMode.srcIn),
+    );
+    canvas.drawPicture(source);
+    canvas.restore();
+    return PreparedLogBoxVectorGlyph._(
+      picture: recorder.endRecording(),
+      logicalSize: logicalSize,
+    );
+  }
+
   void dispose() {
     if (_disposed) return;
     if (_inFlight != null || _logBoxRasterInFlight != null) {
@@ -499,6 +542,12 @@ final class PreparedVectorAssetAtlas {
       if (disposedPictures.add(glyph.picture)) glyph.dispose();
     }
     _logBoxGlyphs = null;
+    final editPlaceholderGlyph = _logBoxEditPlaceholderGlyph;
+    if (editPlaceholderGlyph != null &&
+        disposedPictures.add(editPlaceholderGlyph.picture)) {
+      editPlaceholderGlyph.dispose();
+    }
+    _logBoxEditPlaceholderGlyph = null;
     _prepareDurationMicros = 0;
     _logBoxRasterPrepareDurationMicros = 0;
   }

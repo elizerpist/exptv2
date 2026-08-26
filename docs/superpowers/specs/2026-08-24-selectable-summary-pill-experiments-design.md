@@ -173,3 +173,51 @@ follow-up does not alter canonical time, query or Budget semantics.
 
 All controls stay in the existing Header tuner, are session-only, and remain
 comparison/presentation controls rather than a selected permanent design.
+
+## 2026-08-26 follow-up: reference 3D depth, LogBox pencil and Summary hierarchy
+
+The active runtime Summary comparison remains exactly `Legacy` and
+`Segmented`. This follow-up does not alter temporal candidates, prepared-query
+publication, Budget preview ownership, physical rail policy, body order, or
+LogBox row-height geometry.
+
+- The existing shadow selector now has four presentation-only choices:
+  `Nincs`, `Jelenlegi`, `Finom`, and `3D`. `Jelenlegi` remains the default and
+  retains the authored Fluvi foot/elevation pixels; `Finom` is unchanged. The
+  new `3D` option is a direct port of the read-only `spendeetest` Balance
+  material source, not an approximation of `Finom`:
+  - `lib/features/transactions/widgets/experimental/balance/spendee_balance_visual_spec.dart`
+    defines Summary colour `0xFFFEFEFF`, border `0x1A666FAB`, outer shadow
+    `0x14524B93 @ (0,8), blur 17`, and the inner `0xF0FFFFFF @ (0,1), blur 0`
+    highlight;
+  - `spendee_balance_post_content.dart` applies that complete decoration to
+    the Balance Summary and uses Search's own `0xF0FFFFFF` fill,
+    `0x17666FAB` contour, `0x12524B93 @ (0,7), blur 15` outer layer, and the
+    same inner highlight.
+  `DashboardShadowProfile` carries border, outer depth and inner highlight as
+  one material input. Summary and Search use their respective direct surface
+  source; coloured Header/action fills remain their own material beneath the
+  same depth construction. The custom-painted grouped LogBox applies the
+  same contour/depth without becoming a widget-card list.
+- Every LogBox transaction row now paints a non-interactive decorative pencil
+  through the bounded prepared-vector atlas. The port comes from
+  `spendee_balance_transaction_log.dart`'s
+  `_BalanceTransactionEditButton` and `transactionRowPadding`: source asset
+  `assets/icons/lucide/pencil.svg`, button `24x24`, background
+  `0x1A7D8798`, radius `8`, glyph `13x13`, glyph colour `0xFF7D8798`, with a
+  10px gap after the amount/time column and the source 12px trailing inset.
+  The placeholder has no semantics action, hit action, haptic, editor or
+  transaction mutation. It remains 24px and vertically centres when the
+  existing LogBox height setting adds breathing room.
+- `SummaryPillPreparedAmountSlot` remains the shared prepared-text consumer
+  for Legacy and Segmented, but its one-line right-aligned amount typography
+  is stronger. Segmented YEAR/MONTH/DAY values use the existing secondary
+  grey. Its existing semantic SUM/YEAR/MONTH/DAY glyphs now move inside the
+  direct source Summary badge treatment: `25x25`, padding `5`, radius `9`,
+  background `0xFFF1EFFF`, foreground `0xFF7564F5`. The carousel remains the
+  sole gesture/motion owner.
+
+`3D`, pencil scaffolding and the Summary typography/badge treatment are
+runtime presentation comparisons, not final product selections. Physical
+Android comparison with the read-only Balance source remains required before
+claiming visual parity.

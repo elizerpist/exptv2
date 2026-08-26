@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +73,8 @@ final class DashboardLogBoxPaintIdentity {
     this.rowHeight = DashboardLogBoxTokens.rowHeight,
     this.groupRadius = FluviVisualTokens.logBoxGroupRadius,
     this.groupShadows = const <BoxShadow>[],
+    this.groupInnerShadows = const <BoxShadow>[],
+    this.groupBorder,
   });
 
   final int? payloadViewportId;
@@ -83,6 +86,8 @@ final class DashboardLogBoxPaintIdentity {
   final double rowHeight;
   final BorderRadius groupRadius;
   final List<BoxShadow> groupShadows;
+  final List<BoxShadow> groupInnerShadows;
+  final BoxBorder? groupBorder;
 
   bool requiresRepaintFrom(DashboardLogBoxPaintIdentity previous) =>
       payloadViewportId != previous.payloadViewportId ||
@@ -93,6 +98,8 @@ final class DashboardLogBoxPaintIdentity {
       rowHeight != previous.rowHeight ||
       groupRadius != previous.groupRadius ||
       !identical(groupShadows, previous.groupShadows) ||
+      !identical(groupInnerShadows, previous.groupInnerShadows) ||
+      groupBorder != previous.groupBorder ||
       !identical(rasterIdentity, previous.rasterIdentity);
 }
 
@@ -281,6 +288,9 @@ final class _DashboardLogBoxRenderSurfaceState
               final shadowProfile = DashboardShadowStyleScope.profileOf(
                 context,
               );
+              final logBoxDepth = shadowProfile.depthFor(
+                DashboardCornerSurfaceFamily.logBoxGroup,
+              );
               final payload = frame?.logBox;
               if (_ownsCommittedViewport &&
                   frame != null &&
@@ -389,9 +399,9 @@ final class _DashboardLogBoxRenderSurfaceState
                 renderDiagnostics: widget.renderDiagnostics,
                 partnerSwipe: widget.partnerSwipe,
                 groupRadius: resolvedGroupRadius,
-                groupShadows: shadowProfile.shadowsFor(
-                  DashboardCornerSurfaceFamily.logBoxGroup,
-                ),
+                groupShadows: logBoxDepth.outerShadows,
+                groupInnerShadows: logBoxDepth.innerShadows,
+                groupBorder: logBoxDepth.border,
                 layoutProfile: layoutProfile,
               );
               _latestPainter = painter;
@@ -452,6 +462,14 @@ final class _DashboardLogBoxRenderSurfaceState
                           details.localPosition,
                         );
                         if (hit == null) return;
+                        if (_latestPainter?.isDecorativeEditHit(
+                              details.localPosition,
+                              surfaceWidth: constraints.maxWidth,
+                              rowTop: hit.rowTop,
+                            ) ??
+                            false) {
+                          return;
+                        }
                         if (hit.avatarBounds.contains(details.localPosition)) {
                           widget.onAvatarTap?.call(hit.item.row);
                           return;
@@ -1170,10 +1188,13 @@ final class _DashboardLogBoxActiveCanonicalSegmentPainter
 final class _DashboardLogBoxPaintResources {
   _DashboardLogBoxPaintResources()
     : divider = Paint()..color = FluviVisualTokens.border,
-      groupSurface = Paint()..color = FluviVisualTokens.surface;
+      groupSurface = Paint()..color = FluviVisualTokens.surface,
+      editPlaceholder = Paint()
+        ..color = DashboardLogBoxTokens.editPlaceholderBackground;
 
   final Paint divider;
   final Paint groupSurface;
+  final Paint editPlaceholder;
 
   void dispose() {}
 }
@@ -1238,6 +1259,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.renderDiagnostics,
     required this.groupRadius,
     required this.groupShadows,
+    required this.groupInnerShadows,
+    required this.groupBorder,
     required this.layoutProfile,
     this.partnerSwipe,
   }) : super(
@@ -1265,6 +1288,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final BorderRadius groupRadius;
   final List<BoxShadow> groupShadows;
+  final List<BoxShadow> groupInnerShadows;
+  final BoxBorder? groupBorder;
   final DashboardLogBoxLayoutProfile layoutProfile;
   final DashboardLogBoxPartnerSwipeController? partnerSwipe;
   bool _reportedTextLayoutMiss = false;
@@ -1295,6 +1320,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         rowHeight: rowHeight,
         groupRadius: groupRadius,
         groupShadows: groupShadows,
+        groupInnerShadows: groupInnerShadows,
+        groupBorder: groupBorder,
       );
 
   // Shadow styles are presentation inputs, but a scroll repaint must not
@@ -1304,6 +1331,15 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   late final List<_DashboardLogBoxResolvedShadow> _resolvedGroupShadows =
       <_DashboardLogBoxResolvedShadow>[
         for (final shadow in groupShadows)
+          _DashboardLogBoxResolvedShadow(
+            offset: shadow.offset,
+            paint: shadow.toPaint(),
+          ),
+      ];
+
+  late final List<_DashboardLogBoxResolvedShadow> _resolvedGroupInnerShadows =
+      <_DashboardLogBoxResolvedShadow>[
+        for (final shadow in groupInnerShadows)
           _DashboardLogBoxResolvedShadow(
             offset: shadow.offset,
             paint: shadow.toPaint(),
@@ -1571,6 +1607,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       iconRect,
     );
     preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
+    _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
   }
 
   void _recordVerticalCacheMiss(DashboardLogViewportState state, int ordinal) {
@@ -1663,6 +1700,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final body = groupRadius.toRRect(rect);
     _paintGroupShadows(canvas, body);
     canvas.drawRRect(body, resources.groupSurface);
+    _paintCompleteGroupMaterial(canvas, rect, body);
   }
 
   /// Keeps custom-paint LogBox depth inside the existing renderer. Current
@@ -1673,6 +1711,70 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     for (final shadow in _resolvedGroupShadows) {
       canvas.drawRRect(body.shift(shadow.offset), shadow.paint);
     }
+  }
+
+  void _paintGroupInnerShadows(Canvas canvas, RRect body) {
+    for (final shadow in _resolvedGroupInnerShadows) {
+      canvas.drawRRect(body.shift(shadow.offset), shadow.paint);
+    }
+  }
+
+  void _paintGroupBorder(Canvas canvas, Rect rect) {
+    groupBorder?.paint(canvas, rect, borderRadius: groupRadius);
+  }
+
+  /// Paints the source-defined contour and inner highlight exactly once for a
+  /// complete canonical day group. Split and leased paint paths clip this
+  /// same operation rather than approximating the material on individual
+  /// rows, so no synthetic separator contour appears between grouped rows.
+  void _paintCompleteGroupMaterial(Canvas canvas, Rect rect, RRect body) {
+    _paintGroupInnerShadows(canvas, body);
+    _paintGroupBorder(canvas, rect);
+  }
+
+  bool get _hasGroupMaterial =>
+      _resolvedGroupInnerShadows.isNotEmpty || groupBorder != null;
+
+  /// Retains the complete group contour outside the canonical source slot
+  /// leased by a partner swipe. At rest this composes exactly to the normal
+  /// group material with [_paintGroupMaterialForActiveSegment].
+  void _paintGroupMaterialExceptSegment(
+    Canvas canvas, {
+    required Rect groupRect,
+    required Rect segmentRect,
+  }) {
+    if (!_hasGroupMaterial) return;
+    canvas.save();
+    canvas.clipRect(
+      segmentRect,
+      clipOp: ui.ClipOp.difference,
+      doAntiAlias: false,
+    );
+    _paintCompleteGroupMaterial(
+      canvas,
+      groupRect,
+      groupRadius.toRRect(groupRect),
+    );
+    canvas.restore();
+  }
+
+  /// Carries the exact clipped slice of the original group material with the
+  /// retained active row. This preserves the source contour and inner layer
+  /// during translation without making middle rows into separate cards.
+  void _paintGroupMaterialForActiveSegment(
+    Canvas canvas, {
+    required Rect groupRect,
+    required Rect segmentRect,
+  }) {
+    if (!_hasGroupMaterial) return;
+    canvas.save();
+    canvas.clipRect(segmentRect, doAntiAlias: false);
+    _paintCompleteGroupMaterial(
+      canvas,
+      groupRect,
+      groupRadius.toRRect(groupRect),
+    );
+    canvas.restore();
   }
 
   /// Paints every unchanged part of a canonical day group while leaving the
@@ -1711,6 +1813,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         roundBottom: true,
       );
     }
+    _paintGroupMaterialExceptSegment(
+      canvas,
+      groupRect: groupRect,
+      segmentRect: segmentRect,
+    );
   }
 
   void _paintGroupPiece(
@@ -1750,6 +1857,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
     DashboardLogViewportItemViewModel? item;
     DashboardPreparedLogBoxRowTextLayout? preparedText;
+    var groupLayouts = state.groupLayouts;
     var rowTop = swipe.target.localRowTop;
     if (renderDomain == DashboardLogBoxRenderDomain.railPreview) {
       item = _itemForEntryId(state.flatItems, swipe.target.row.entryId);
@@ -1763,6 +1871,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           ? null
           : _itemForEntryId(page.payload.flatItems, swipe.target.row.entryId);
       if (item != null) {
+        groupLayouts = page!.payload.groupLayouts;
         final prepared = committedViewport.preparedPageForOrdinal(ordinal);
         preparedText = prepared?.rowFor(item);
         if (preparedText == null && ordinal == 0) {
@@ -1773,12 +1882,30 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       }
     }
     if (item == null || preparedText == null) return null;
+    final activeItem = item;
+    final activePreparedText = preparedText;
+    if (activeItem.groupIndex < 0 ||
+        activeItem.groupIndex >= groupLayouts.length) {
+      return null;
+    }
+    final group = groupLayouts[activeItem.groupIndex];
+    final localGroupRowIndex =
+        activeItem.flatRowIndex - group.precedingRowCount;
+    if (localGroupRowIndex < 0 || localGroupRowIndex >= group.rowCount) {
+      return null;
+    }
 
     final segmentRect = Rect.fromLTWH(
       DashboardLogBoxTokens.horizontalGutter,
       rowTop,
       math.max(0, surfaceWidth - DashboardLogBoxTokens.horizontalGutter * 2),
       rowHeight,
+    );
+    final groupRect = Rect.fromLTWH(
+      segmentRect.left,
+      rowTop - localGroupRowIndex * rowHeight,
+      segmentRect.width,
+      group.rowCount * rowHeight,
     );
     return _DashboardLogBoxActiveCanonicalSegmentPresentation(
       segmentRect: segmentRect,
@@ -1791,11 +1918,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         _paintCanonicalActiveSegment(
           canvas,
           width: surfaceWidth,
-          item: item!,
+          item: activeItem,
           rowTop: rowTop,
-          preparedText: preparedText!,
+          preparedText: activePreparedText,
           swipe: swipe,
           segmentRect: segmentRect,
+          groupRect: groupRect,
         );
         canvas.restore();
       },
@@ -1810,6 +1938,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required DashboardPreparedLogBoxRowTextLayout preparedText,
     required DashboardLogBoxPartnerSwipeState swipe,
     required Rect segmentRect,
+    required Rect groupRect,
   }) {
     final body = swipe.target.blockSegmentRole.bodyFor(
       segmentRect,
@@ -1819,9 +1948,15 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       _paintGroupShadows(canvas, body);
     }
     canvas.drawRRect(body, resources.groupSurface);
+    _paintGroupMaterialForActiveSegment(
+      canvas,
+      groupRect: groupRect,
+      segmentRect: segmentRect,
+    );
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     _paintRowContent(
       canvas,
+      width: width,
       item: item,
       rowTop: rowTop,
       preparedText: preparedText,
@@ -1866,6 +2001,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   void _paintRowContent(
     Canvas canvas, {
+    required double width,
     required DashboardLogViewportItemViewModel item,
     required double rowTop,
     required DashboardPreparedLogBoxRowTextLayout preparedText,
@@ -1894,6 +2030,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       ),
     );
     preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
+    _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
   }
 
   bool _isActiveSwipeItem(DashboardLogViewportItemViewModel item) =>
@@ -1972,8 +2109,47 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
 
     preparedText.paint(canvas, rowTop, rowHeight: rowHeight);
+    _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
     return true;
   }
+
+  void _paintEditPlaceholder(
+    Canvas canvas, {
+    required double width,
+    required double rowTop,
+  }) {
+    final bounds = DashboardLogBoxTokens.editPlaceholderBounds(
+      surfaceWidth: width,
+      rowTop: rowTop,
+      rowHeight: rowHeight,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        bounds,
+        const Radius.circular(DashboardLogBoxTokens.editPlaceholderRadius),
+      ),
+      resources.editPlaceholder,
+    );
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.editPlaceholderGlyph,
+      Rect.fromCenter(
+        center: bounds.center,
+        width: DashboardLogBoxTokens.editPlaceholderGlyphSize,
+        height: DashboardLogBoxTokens.editPlaceholderGlyphSize,
+      ),
+    );
+  }
+
+  bool isDecorativeEditHit(
+    Offset position, {
+    required double surfaceWidth,
+    required double rowTop,
+  }) => DashboardLogBoxTokens.editPlaceholderBounds(
+    surfaceWidth: surfaceWidth,
+    rowTop: rowTop,
+    rowHeight: rowHeight,
+  ).contains(position);
 
   void _recordTextLayoutMiss([DashboardLogRowViewModel? row]) {
     if (_reportedTextLayoutMiss) return;

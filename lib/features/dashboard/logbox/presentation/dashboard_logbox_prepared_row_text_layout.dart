@@ -135,7 +135,9 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
            DashboardLogBoxTokens.rowHorizontalInset +
            DashboardLogBoxTokens.avatarSize +
            DashboardLogBoxTokens.rowGap,
-       rightEdge = surfaceWidth - DashboardLogBoxTokens.rowHorizontalInset;
+       rightEdge = DashboardLogBoxTokens.textTrailingEdge(
+         surfaceWidth: surfaceWidth,
+       );
 
   final DashboardLogRowViewModel row;
   final int contentIdentity;

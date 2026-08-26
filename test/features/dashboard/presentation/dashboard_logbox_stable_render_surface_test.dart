@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -295,6 +296,60 @@ void main() {
         counters.value(DashboardPerformanceMetric.logVisibleSlotPaint),
         greaterThanOrEqualTo(2),
       );
+    },
+  );
+
+  testWidgets(
+    'decorative edit placeholder is painted in the source trailing slot',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final repaintBoundaryKey = GlobalKey();
+      String? tapped;
+      addTearDown(store.dispose);
+      store.publish(_visible(groups: _groups(1), epoch: 1));
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: DashboardPerformanceCounters(),
+        repaintBoundaryKey: repaintBoundaryKey,
+        onEntryTap: (entryId) => tapped = entryId,
+      );
+      for (var frame = 0; frame < 8; frame += 1) {
+        await tester.pump();
+      }
+
+      final surface = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final boundary =
+          repaintBoundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final surfaceBox = tester.renderObject<RenderBox>(surface);
+      final surfaceOrigin = surfaceBox.localToGlobal(
+        Offset.zero,
+        ancestor: boundary,
+      );
+      final localBounds = DashboardLogBoxTokens.editPlaceholderBounds(
+        surfaceWidth: surfaceBox.size.width,
+        rowTop: DashboardLogBoxTokens.dayHeaderHeight,
+        rowHeight: DashboardLogBoxTokens.rowHeight,
+      );
+      final image = (await tester.runAsync(
+        () => boundary.toImage(pixelRatio: 1),
+      ))!;
+      addTearDown(image.dispose);
+      final pixels = (await tester.runAsync(
+        () => _StableSurfacePixels.read(image),
+      ))!;
+      expect(
+        pixels.nonWhiteCount(localBounds.shift(surfaceOrigin)),
+        greaterThan(80),
+      );
+
+      await tester.tapAt(surfaceBox.localToGlobal(localBounds.center));
+      await tester.pump();
+      expect(tapped, isNull);
     },
   );
 
@@ -606,6 +661,7 @@ Future<void> _pumpViewport(
   DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut,
   DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared,
   ValueChanged<DashboardLogRowViewModel>? onAvatarTap,
+  ValueChanged<String>? onEntryTap,
   GlobalKey? repaintBoundaryKey,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -628,6 +684,7 @@ Future<void> _pumpViewport(
               preparedRasters ??
               PreparedVectorAssetAtlas.instance.logBoxRastersFor(3),
           renderCriticalPayloads: renderCriticalPayloads,
+          onEntryTap: onEntryTap,
           onAvatarTap: onAvatarTap,
           onWarmupSurfaceAttached: onWarmupSurfaceAttached,
           onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,

@@ -26,15 +26,16 @@ class DashboardPlaceholderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(cornerFamily);
     final card = FluviRoundedBox(
-      color: surfaceColor,
-      border: Border.all(color: FluviVisualTokens.border),
+      color: depth.surfaceColor ?? surfaceColor,
+      border: depth.border ?? Border.all(color: FluviVisualTokens.border),
       borderRadius: DashboardCornerRoundnessScope.profileOf(
         context,
       ).borderRadiusFor(cornerFamily, size: Size(bounds.width, bounds.height)),
-      boxShadow: DashboardShadowStyleScope.profileOf(
-        context,
-      ).shadowsFor(cornerFamily),
+      boxShadow: depth.shadows,
       child: const SizedBox.expand(),
     );
 

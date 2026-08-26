@@ -55,20 +55,22 @@ final class SummaryPillExperiment extends StatelessWidget {
         DashboardPerformanceMetric.summaryPillBuild,
       );
       final level = SummaryPillExperimentLevel.fromNavigation(navigation);
+      final depth = DashboardShadowStyleScope.profileOf(
+        context,
+      ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
       return SizedBox(
         key: ValueKey<String>('summary-pill-experiment-${variant.name}'),
         width: bounds.width,
         height: bounds.height,
         child: FluviRoundedBox(
-          color: FluviVisualTokens.surface,
+          color: depth.surfaceColor ?? FluviVisualTokens.surface,
+          border: depth.border,
           borderRadius: DashboardCornerRoundnessScope.profileOf(context)
               .borderRadiusFor(
                 DashboardCornerSurfaceFamily.summaryPill,
                 size: Size(bounds.width, bounds.height),
               ),
-          boxShadow: DashboardShadowStyleScope.profileOf(
-            context,
-          ).shadowsFor(DashboardCornerSurfaceFamily.summaryPill),
+          boxShadow: depth.shadows,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final inset = bounds.width <= 320
@@ -427,12 +429,20 @@ final class _ModeSelectorState extends State<_ModeSelector> {
           widget.onCrossed(level.plane, level.isRailOpen);
         }
       },
-      itemBuilder: (context, item, metrics) => Icon(
-        item.icon,
-        color: metrics.isSelected
-            ? FluviVisualTokens.textPrimary
-            : FluviVisualTokens.textSecondary,
-        size: FluviVisualTokens.iconSize,
+      itemBuilder: (context, item, _) => ExcludeSemantics(
+        child: Container(
+          key: ValueKey<String>(
+            'summary-pill-segmented-mode-badge-${item.name}',
+          ),
+          width: 25,
+          height: 25,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1EFFF),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(item.icon, color: const Color(0xFF7564F5), size: 15),
+        ),
       ),
     ),
   );
@@ -516,7 +526,9 @@ final class _HierarchyValueSelectorState
           child: Text(
             widget.labelForCandidate(candidate),
             maxLines: 1,
-            style: FluviVisualTokens.summaryTitleTextStyle,
+            style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
+              color: FluviVisualTokens.textSecondary,
+            ),
           ),
         );
       },

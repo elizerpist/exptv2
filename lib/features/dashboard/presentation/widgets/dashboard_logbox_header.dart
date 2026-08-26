@@ -182,6 +182,9 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.searchPill);
     return Semantics(
       key: const ValueKey('dashboard-logbox-search-pill'),
       button: true,
@@ -189,8 +192,8 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
       label: 'Keresés a tranzakciókban. A keresés hamarosan elérhető.',
       child: ExcludeSemantics(
         child: FluviRoundedBox(
-          color: FluviVisualTokens.surface,
-          border: Border.all(color: FluviVisualTokens.border),
+          color: depth.surfaceColor ?? FluviVisualTokens.surface,
+          border: depth.border ?? Border.all(color: FluviVisualTokens.border),
           borderRadius: DashboardCornerRoundnessScope.profileOf(context)
               .borderRadiusFor(
                 DashboardCornerSurfaceFamily.searchPill,
@@ -199,9 +202,7 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
                   DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
                 ),
               ),
-          boxShadow: DashboardShadowStyleScope.profileOf(
-            context,
-          ).shadowsFor(DashboardCornerSurfaceFamily.searchPill),
+          boxShadow: depth.shadows,
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: FluviVisualTokens.controlHorizontalInset * scale,

@@ -246,6 +246,10 @@ void main() {
       expect(glyph.logicalSize, const Size.square(24));
       expect(glyph.picture, isA<ui.Picture>());
       expect(glyph.picture.debugDisposed, isFalse);
+      final editPlaceholder = rasters.editPlaceholderGlyph;
+      expect(editPlaceholder.logicalSize, const Size.square(24));
+      expect(editPlaceholder.picture, isA<ui.Picture>());
+      expect(editPlaceholder.picture.debugDisposed, isFalse);
       expect(atlas.pictureDecodeCount, decodeCount);
       expect(atlas.logBoxBadgeBuildCount, 1);
       expect(atlas.logBoxGlyphBuildCount, 1);

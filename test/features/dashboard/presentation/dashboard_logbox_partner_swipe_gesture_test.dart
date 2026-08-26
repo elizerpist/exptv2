@@ -109,6 +109,46 @@ void main() {
   );
 
   test(
+    'reference 3D group material remains complete while a partner row is leased',
+    () {
+      final renderer = File(
+        'lib/features/dashboard/presentation/widgets/'
+        'dashboard_logbox_render_surface.dart',
+      ).readAsStringSync();
+      final staticBackgroundStart = renderer.indexOf(
+        '  void _paintGroupSurfaceExceptSegment(',
+      );
+      final staticBackgrounds = renderer.substring(
+        staticBackgroundStart,
+        renderer.indexOf('  void _paintGroupPiece(', staticBackgroundStart),
+      );
+      final activeSegmentStart = renderer.indexOf(
+        '  void _paintCanonicalActiveSegment(',
+      );
+      final activeSegment = renderer.substring(
+        activeSegmentStart,
+        renderer.indexOf(
+          '  static DashboardLogViewportItemViewModel?',
+          activeSegmentStart,
+        ),
+      );
+
+      expect(
+        staticBackgrounds,
+        contains('_paintGroupMaterialExceptSegment('),
+        reason: 'The stationary remainder must retain the group contour and '
+            'inner material outside the leased row.',
+      );
+      expect(
+        activeSegment,
+        contains('_paintGroupMaterialForActiveSegment('),
+        reason: 'The translated canonical row must carry its source-group '
+            'contour and inner material instead of becoming a fill-only gap.',
+      );
+    },
+  );
+
+  test(
     'canonical active segment reaches screen x=0 then continues toward its physical offscreen cap',
     () {
       final bounds = DashboardLogBoxPartnerSwipeKinematics.rowBounds(

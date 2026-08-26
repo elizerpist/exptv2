@@ -282,6 +282,9 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
         return const SizedBox.shrink();
       }
       final bounds = geometry.modeContentBounds;
+      final depth = DashboardShadowStyleScope.profileOf(
+        context,
+      ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
       return DashboardCoreModeOpacityPosition(
         bounds: bounds,
         opacity: geometry.zone2Opacity,
@@ -290,16 +293,14 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) => FluviRoundedBox(
             key: const ValueKey<String>('budget-unified-content-card-surface'),
-            color: FluviVisualTokens.surface,
-            border: Border.all(color: FluviVisualTokens.border),
+            color: depth.surfaceColor ?? FluviVisualTokens.surface,
+            border: depth.border ?? Border.all(color: FluviVisualTokens.border),
             borderRadius: DashboardCornerRoundnessScope.profileOf(context)
                 .borderRadiusFor(
                   DashboardCornerSurfaceFamily.budgetDistributionCard,
                   size: constraints.biggest,
                 ),
-            boxShadow: DashboardShadowStyleScope.profileOf(
-              context,
-            ).shadowsFor(DashboardCornerSurfaceFamily.budgetDistributionCard),
+            boxShadow: depth.shadows,
             child: const SizedBox.expand(),
           ),
         ),

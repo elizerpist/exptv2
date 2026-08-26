@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
+import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
@@ -13,6 +16,49 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
+  testWidgets('segmented Summary ports the selected reference material', (
+    tester,
+  ) async {
+    final shadows = DashboardShadowStyleController()
+      ..select(DashboardShadowStyle.spendee3d);
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(shadows.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DashboardShadowStyleScope(
+          controller: shadows,
+          child: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+          ),
+        ),
+      ),
+    );
+
+    final shell = tester.widget<FluviRoundedBox>(
+      find.descendant(
+        of: find.byType(SummaryPillExperiment),
+        matching: find.byType(FluviRoundedBox),
+      ),
+    );
+    expect(shell.decoration.color, const Color(0xFFFEFEFF));
+    expect(
+      shell.decoration.border,
+      const Border.fromBorderSide(BorderSide(color: Color(0x1A666FAB))),
+    );
+  });
+
   testWidgets('segmented shell resolves the global SummaryPill family', (
     tester,
   ) async {
@@ -129,6 +175,76 @@ void main() {
       findsOneWidget,
     );
     semantics.dispose();
+  });
+
+  testWidgets('segmented hierarchy values defer visually to the amount', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          onLevelCrossed: (_, _) {},
+          onComponentCrossed: (_, _) {},
+        ),
+      ),
+    );
+
+    final yearTexts = tester.widgetList<Text>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('summary-pill-segmented-year-selector'),
+        ),
+        matching: find.byType(Text),
+      ),
+    );
+    final monthTexts = tester.widgetList<Text>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('summary-pill-segmented-month-selector'),
+        ),
+        matching: find.byType(Text),
+      ),
+    );
+    expect(yearTexts, isNotEmpty);
+    expect(monthTexts, isNotEmpty);
+    expect(
+      yearTexts.map((text) => text.style?.color),
+      everyElement(FluviVisualTokens.textSecondary),
+    );
+    expect(
+      monthTexts.map((text) => text.style?.color),
+      everyElement(FluviVisualTokens.textSecondary),
+    );
+
+    final badge = find.byKey(
+      const ValueKey<String>('summary-pill-segmented-mode-badge-month'),
+    );
+    expect(badge, findsOneWidget);
+    expect(tester.getSize(badge), const Size(25, 25));
+    final badgeWidget = tester.widget<Container>(badge);
+    expect(badgeWidget.padding, const EdgeInsets.all(5));
+    expect(
+      badgeWidget.decoration,
+      const BoxDecoration(
+        color: Color(0xFFF1EFFF),
+        borderRadius: BorderRadius.all(Radius.circular(9)),
+      ),
+    );
+    final badgeIcon = tester.widget<Icon>(
+      find.descendant(of: badge, matching: find.byType(Icon)),
+    );
+    expect(badgeIcon.color, const Color(0xFF7564F5));
   });
 
   testWidgets(

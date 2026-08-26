@@ -971,6 +971,7 @@ final class _DashboardShadowStyleSection extends StatelessWidget {
     DashboardShadowStyle.none => 'Nincs',
     DashboardShadowStyle.current => 'Jelenlegi',
     DashboardShadowStyle.soft => 'Finom',
+    DashboardShadowStyle.spendee3d => '3D',
   };
 }
 

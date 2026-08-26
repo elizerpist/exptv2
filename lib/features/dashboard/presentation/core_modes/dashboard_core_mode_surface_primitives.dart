@@ -239,6 +239,9 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final visualController = controller;
     final frames = visualFrameListenable;
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.header);
     if (visualController == null || frames == null) {
       return DashboardPlaceholderCard(
         bounds: bounds,
@@ -257,9 +260,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           FluviRoundedBox(
             color: Colors.transparent,
             borderRadius: borderRadius,
-            boxShadow: DashboardShadowStyleScope.profileOf(
-              context,
-            ).shadowsFor(DashboardCornerSurfaceFamily.header),
+            boxShadow: depth.outerShadows,
             child: const SizedBox.expand(),
           ),
           // Layer 2: only this clipped painter listens to the shared ticker.
@@ -280,13 +281,28 @@ final class _HeaderPhysicalShell extends StatelessWidget {
               ),
             ),
           ),
+          // The reference material's inner highlight must sit above the
+          // animated colour layer, while its outer depth remains outside the
+          // physical clip in Layer 1.
+          if (depth.innerShadows.isNotEmpty)
+            IgnorePointer(
+              child: DecoratedBox(
+                key: const ValueKey<String>('dashboard-header-depth-highlight'),
+                decoration: BoxDecoration(
+                  borderRadius: borderRadius,
+                  boxShadow: depth.innerShadows,
+                ),
+              ),
+            ),
           // Keep the physical card border above dynamically-painted pixels.
           IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                border: Border.fromBorderSide(
-                  BorderSide(color: FluviVisualTokens.border),
-                ),
+                border:
+                    depth.border ??
+                    Border.fromBorderSide(
+                      BorderSide(color: FluviVisualTokens.border),
+                    ),
                 borderRadius: borderRadius,
               ),
             ),

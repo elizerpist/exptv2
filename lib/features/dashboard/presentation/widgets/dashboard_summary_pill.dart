@@ -177,12 +177,14 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
           DashboardCornerSurfaceFamily.summaryPill,
           size: Size(widget.bounds.width, widget.bounds.height),
         );
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
     final shell = FluviRoundedBox(
-      color: FluviVisualTokens.surface,
+      color: depth.surfaceColor ?? FluviVisualTokens.surface,
+      border: depth.border,
       borderRadius: borderRadius,
-      boxShadow: DashboardShadowStyleScope.profileOf(
-        context,
-      ).shadowsFor(DashboardCornerSurfaceFamily.summaryPill),
+      boxShadow: depth.shadows,
       child: Row(
         children: [
           SizedBox(width: horizontalInset),
@@ -624,11 +626,14 @@ final class _PreparedAmountCrossfadeState
     return result;
   }
 
-  Widget _amountText(String value) => Text(
-    value,
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    style: FluviVisualTokens.summaryAmountTextStyle,
+  Widget _amountText(String value) => FittedBox(
+    alignment: Alignment.centerRight,
+    fit: BoxFit.scaleDown,
+    child: Text(
+      value,
+      maxLines: 1,
+      style: FluviVisualTokens.summaryAmountTextStyle,
+    ),
   );
 
   @override
