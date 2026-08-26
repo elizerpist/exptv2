@@ -18,4 +18,14 @@
 | NAV-03 | User Task G | Miss/stale behavior | Rapid A→B→C→D remains free-running, bounded/coalesced and stale-safe across years/months/days. | Segmented widget fling, scene-window, coalescer and stale-generation regression tests | DONE |
 | REG-01 | User protected boundaries | Dashboard | Summary variants, body order, rail policies, corners, shadow styles, row-height behavior, SearchPill and Budget preview parity remain intact. | 330-test relevant dashboard/motion regression run | DONE |
 | DOC-01 | User Documentation | Active docs/checklist | Root causes, source values, defaults, geometry deltas and trace evidence are recorded without declaring cosmetic winners. | Plan/spec/checklist review | DONE |
-| DEL-01 | User delivery + AGENTS | GitHub/action APK | One focused app commit is pushed; exact human diagnostic Android APK is downloaded and SHA-256 verified. | Git/Actions/download evidence | NOT DONE |
+| DEL-01 | User delivery + AGENTS | GitHub/action APK | One focused app commit is pushed; exact human diagnostic Android APK is downloaded and SHA-256 verified. | GitHub Actions run `32989014770`, release asset and local SHA-256 | DONE |
+
+## Delivery evidence
+
+- Production commit: `29b49b7b1568f4abf0eb6b856060ab2f50c292cc`.
+- GitHub Actions: `32989014770` completed successfully, including the Android
+  core/bridge, A–J dashboard-profile and human diagnostic APK jobs.
+- Human APK:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_29b49b7.apk`
+  (`79,254,729` bytes), SHA-256
+  `38d0977350fe35d40a4890d55618786c1bbee04b403993b9d9c4d80194027139`.
