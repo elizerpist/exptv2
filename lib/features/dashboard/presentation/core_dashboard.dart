@@ -159,6 +159,14 @@ class _CoreDashboardState extends State<CoreDashboard>
       _budgetLimitEdit = DashboardBudgetLimitEditController(
         repository: financialLimitRepository,
         isKeyCurrent: (key) => _budgetPresentation.value.header.limitKey == key,
+        isYearContextCurrent: (context) {
+          final current = _budgetPresentation.value.header.editContext;
+          return current is DashboardBudgetYearLimitEditContext &&
+              current.direction == context.direction &&
+              current.target == context.target &&
+              current.year == context.year &&
+              current.coreRevision == context.coreRevision;
+        },
       );
     }
     _budgetPresentation = DashboardBudgetPresentationController(

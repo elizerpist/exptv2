@@ -218,21 +218,18 @@ class SeedFluviDemoDatasetUseCase internal constructor(
     )
 
     /**
-     * Every prepared Budget target/period receives a deterministic fixture
-     * limit. The relation cycle deliberately supplies under/equal/over
-     * examples for both directions and all period classes while retaining a
-     * positive, realistic fallback for an otherwise zero actual.
+     * Every prepared Budget target receives one base monthly value plus
+     * deterministic concrete-month overrides. Annual and SUM records are not
+     * seeded because they are derived presentation scopes, never storage.
      */
     private fun demoFinancialLimits(
         entries: List<FluviLedgerEntryEntity>,
         years: IntRange,
     ): List<FluviFinancialLimit> {
         val now = clock.nowUtcMs()
-        val periods = buildList<FluviFinancialLimitPeriod> {
-            add(FluviFinancialLimitPeriod.Sum)
-            years.forEach { year -> add(FluviFinancialLimitPeriod.Year(year)) }
+        val overrides = buildList<FluviFinancialLimitPeriod> {
             years.forEach { year ->
-                for (month in 1..12) add(FluviFinancialLimitPeriod.Month(year, month))
+                for (month in 1..12) add(FluviFinancialLimitPeriod.MonthOverride(year, month))
             }
         }
         return buildList {
@@ -242,34 +239,52 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                     .map { it.categoryId }
                     .distinct()
                     .toList()
-                periods.forEachIndexed { periodIndex, period ->
-                    var positiveTargetOrdinal = 0
-                    targetIds.forEachIndexed { targetIndex, categoryId ->
-                        val target = categoryId?.let(FluviFinancialLimitTarget::Category)
-                            ?: FluviFinancialLimitTarget.Aggregate
+                var positiveTargetOrdinal = 0
+                targetIds.forEachIndexed { targetIndex, categoryId ->
+                    val target = categoryId?.let(FluviFinancialLimitTarget::Category)
+                        ?: FluviFinancialLimitTarget.Aggregate
+                    val totalActual = entries.asSequence()
+                        .filter { entry ->
+                            entry.direction == direction &&
+                                (categoryId == null || entry.categoryId == categoryId)
+                        }
+                        .sumOf { it.amountScaled100 }
+                    val relation = if (totalActual > 0L) {
+                        positiveTargetOrdinal++ % 3
+                    } else {
+                        targetIndex % 3
+                    }
+                    add(
+                        FluviFinancialLimit(
+                            key = FluviFinancialLimitKey(
+                                direction,
+                                target,
+                                FluviFinancialLimitPeriod.BaseMonthly,
+                            ),
+                            amountScaled100 = demoLimitFor(
+                                totalActual / years.count().coerceAtLeast(1),
+                                relation,
+                                targetIndex,
+                                0,
+                            ),
+                            createdAtUtcMs = now,
+                            updatedAtUtcMs = now,
+                        ),
+                    )
+                    overrides.forEachIndexed { periodIndex, period ->
                         val actual = entries.asSequence()
                             .filter { entry ->
                                 entry.direction == direction &&
                                     (categoryId == null || entry.categoryId == categoryId) &&
-                                    matches(entry.bookedLocalEpochDay, period)
+                                    matchesOverride(entry.bookedLocalEpochDay, period)
                             }
                             .sumOf { it.amountScaled100 }
-                        // Relation assignment is based only on targets with a
-                        // real actual. This makes the deterministic fixture
-                        // guarantee under/equal/over examples in every
-                        // populated direction/period domain rather than
-                        // accidentally spending an equality slot on a zero
-                        // actual target such as Uncategorized.
-                        val relation = if (actual > 0L) {
-                            positiveTargetOrdinal++ % 3
-                        } else {
-                            (targetIndex + periodIndex) % 3
-                        }
-                        val amount = demoLimitFor(actual, relation, targetIndex, periodIndex)
-                        add(
+                        // Sparse overrides exercise inheritance without
+                        // turning every month into an independent stored row.
+                        if ((periodIndex + targetIndex) % 3 == 0) add(
                             FluviFinancialLimit(
                                 key = FluviFinancialLimitKey(direction, target, period),
-                                amountScaled100 = amount,
+                                amountScaled100 = demoLimitFor(actual, relation, targetIndex, periodIndex),
                                 createdAtUtcMs = now,
                                 updatedAtUtcMs = now,
                             ),
@@ -280,12 +295,12 @@ class SeedFluviDemoDatasetUseCase internal constructor(
         }
     }
 
-    private fun matches(epochDay: Long, period: FluviFinancialLimitPeriod): Boolean {
+    private fun matchesOverride(epochDay: Long, period: FluviFinancialLimitPeriod): Boolean {
         val date = LocalDate.ofEpochDay(epochDay)
         return when (period) {
-            FluviFinancialLimitPeriod.Sum -> true
-            is FluviFinancialLimitPeriod.Year -> date.year == period.year
-            is FluviFinancialLimitPeriod.Month -> date.year == period.year && date.monthValue == period.month
+            FluviFinancialLimitPeriod.BaseMonthly -> false
+            is FluviFinancialLimitPeriod.MonthOverride ->
+                date.year == period.year && date.monthValue == period.month
         }
     }
 

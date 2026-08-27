@@ -9,10 +9,11 @@ import '../../features/dashboard/presentation/dashboard_shell_presentation.dart'
 
 enum Bnb03Item { home, search, shop, cart, profile }
 
-/// The one physical BottomNav path owner. It keeps the center FAB arc and the
+/// The one physical BottomNav path owner. It keeps the centre FAB arc and the
 /// selected outer top-edge termination in one coordinate system, so fill and
-/// the optional border cannot disagree or cut through the FAB as a rectangular
-/// `Border(top:)` would.
+/// optional contour are necessarily identical. The 84px visible FAB ring sits
+/// inside a 96px white shell: that six-pixel shell is the symmetric clearance
+/// from the ring to this 48px physical contour circle.
 @immutable
 final class Bnb03BottomNavigationContour {
   const Bnb03BottomNavigationContour({
@@ -58,35 +59,43 @@ final class Bnb03BottomNavigationContour {
     final leftArc = fabCenterX - arcHalfWidth;
     path.lineTo(leftArc, 0);
     if (arcHalfWidth > 0) {
-      // Two 60° circle-derived cubic arcs: begin/end at the bar top and
-      // crest at the original FAB top (centerY - radius). This deliberately
-      // avoids an implicit `arcTo` connector, whose tangent can differ from
-      // the fill path and make the thin contour appear to notch too deeply.
-      final cubicFactor = 4 / 3 * math.tan(math.pi / 12);
-      final tangent = fabRadius * cubicFactor;
-      final crestY = fabCenterY - fabRadius;
-      final leftControlX = leftArc + tangent * .5;
-      final crestLeftControlX = fabCenterX - tangent;
-      final crestRightControlX = fabCenterX + tangent;
-      final rightArc = fabCenterX + arcHalfWidth;
-      final rightControlX = rightArc - tangent * .5;
-      final controlY = -tangent * math.sqrt(3) / 2;
+      // Two adjacent cubic segments are the exact same circle construction:
+      // the right controls are mirrors of the left controls. Splitting at the
+      // crest keeps the tiny stroke raster stable while remaining one
+      // concentric physical arc rather than two hand-authored shapes.
+      final startAngle = math.pi + math.asin(verticalDistance / fabRadius);
+      final crestAngle = math.pi * 1.5;
+      final endAngle = math.pi * 2 - math.asin(verticalDistance / fabRadius);
+      final segmentFactor = 4 / 3 * math.tan((crestAngle - startAngle) / 4);
+      Offset point(double angle) => Offset(
+        fabCenterX + fabRadius * math.cos(angle),
+        fabCenterY + fabRadius * math.sin(angle),
+      );
+      Offset tangent(double angle) =>
+          Offset(-math.sin(angle) * fabRadius, math.cos(angle) * fabRadius);
+      final start = point(startAngle);
+      final crest = point(crestAngle);
+      final end = point(endAngle);
+      final startControl = start + tangent(startAngle) * segmentFactor;
+      final crestLeftControl = crest - tangent(crestAngle) * segmentFactor;
+      final crestRightControl = crest + tangent(crestAngle) * segmentFactor;
+      final endControl = end - tangent(endAngle) * segmentFactor;
       path
         ..cubicTo(
-          leftControlX,
-          controlY,
-          crestLeftControlX,
-          crestY,
-          fabCenterX,
-          crestY,
+          startControl.dx,
+          startControl.dy,
+          crestLeftControl.dx,
+          crestLeftControl.dy,
+          crest.dx,
+          crest.dy,
         )
         ..cubicTo(
-          crestRightControlX,
-          crestY,
-          rightControlX,
-          controlY,
-          rightArc,
-          0,
+          crestRightControl.dx,
+          crestRightControl.dy,
+          endControl.dx,
+          endControl.dy,
+          end.dx,
+          end.dy,
         );
     }
     path.lineTo(size.width - radius, 0);
@@ -95,6 +104,24 @@ final class Bnb03BottomNavigationContour {
     }
     return path;
   }
+
+  /// y-coordinate on the central physical circle (or the horizontal top
+  /// edge). It is deliberately derived from the same equation as [topContour]
+  /// so symmetry and clearance can be tested without relying on a raster.
+  double topEdgeYAt(double x) {
+    final dx = (x - fabCenterX).abs();
+    final verticalDistance = fabCenterY.abs();
+    final arcHalfWidth = verticalDistance >= fabRadius
+        ? 0.0
+        : math.sqrt(
+            fabRadius * fabRadius - verticalDistance * verticalDistance,
+          );
+    if (dx > arcHalfWidth) return 0;
+    return fabCenterY - math.sqrt(fabRadius * fabRadius - dx * dx);
+  }
+
+  Offset mirroredTopPoint(Offset leftPoint) =>
+      Offset(fabCenterX * 2 - leftPoint.dx, leftPoint.dy);
 }
 
 class _Bnb03BarSurfacePainter extends CustomPainter {
@@ -193,7 +220,7 @@ class _Bnb03FabRingPainter extends CustomPainter {
 /// Figma base geometry:
 /// - bar: 428 x 75
 /// - top corner radius: 32
-/// - center button: 96 x 96 at x=169.5, y=-24
+/// - centre button: 96 x 96, centred on the bar, y=-24
 /// - inner purple circle: 84 x 84
 /// - icons: 24 x 24
 /// - labels: 12 px, 14 px line box
@@ -343,11 +370,11 @@ class Bnb03BottomNavigation extends StatelessWidget {
                 ),
               ),
 
-              // Exact Figma placement: x=169.5, y=-24 relative to the 75px bar.
-              // The wrapper starts 24px above the bar, so its local y is 0 here.
+              // The outer 96px FAB shell and physical contour share their
+              // exact centre. The wrapper begins 24px above the 75px bar.
               Positioned(
                 key: const ValueKey('bnb03-fab-layer'),
-                left: s(169.5),
+                left: actualWidth / 2 - s(48),
                 top: 0,
                 width: s(96),
                 height: s(96),

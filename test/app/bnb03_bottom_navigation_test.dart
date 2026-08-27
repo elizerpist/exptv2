@@ -48,6 +48,23 @@ void main() {
     expect(rounded.getBounds().center.dx, straight.getBounds().center.dx);
   });
 
+  test('central contour is mirrored by construction', () {
+    final physical = contour(DashboardBottomNavEdgeShape.rounded);
+    for (final dx in const <double>[0, 4, 12, 24, 36, 41]) {
+      final leftX = physical.fabCenterX - dx;
+      final rightX = physical.fabCenterX + dx;
+      expect(physical.topEdgeYAt(leftX), physical.topEdgeYAt(rightX));
+      expect(
+        physical.mirroredTopPoint(Offset(leftX, physical.topEdgeYAt(leftX))),
+        Offset(rightX, physical.topEdgeYAt(rightX)),
+      );
+    }
+    // The actual purple ring is 84px across inside the 96px shell. The
+    // physical contour owns the outer 48px radius, yielding a 6px symmetric
+    // clearance at every matching radial angle.
+    expect(physical.fabRadius - 42, 6);
+  });
+
   testWidgets('shape and border controls preserve the authored FAB rect', (
     tester,
   ) async {
@@ -88,6 +105,33 @@ void main() {
       DashboardBottomNavTopBorder.thinGrey,
     );
     expect(straightOn, roundedOff);
+  });
+
+  testWidgets('FAB and physical BottomNav share the exact centre line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: Bnb03BottomNavigation(
+              width: 428,
+              selected: Bnb03Item.home,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('bnb03-physical-bar-surface')),
+    );
+    final fab = tester.getRect(
+      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+    );
+    expect(fab.center.dx, bar.center.dx);
   });
 
   testWidgets(

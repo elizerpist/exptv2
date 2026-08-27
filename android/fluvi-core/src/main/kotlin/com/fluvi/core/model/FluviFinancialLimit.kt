@@ -11,17 +11,14 @@ sealed interface FluviFinancialLimitTarget {
     }
 }
 
-/** The three typed financial-limit periods supported by the dashboard. */
+/**
+ * The two canonical persisted limit scopes. YEAR, DAY and SUM are analytical
+ * projections over these rows; they can never become competing stored truth.
+ */
 sealed interface FluviFinancialLimitPeriod {
-    data object Sum : FluviFinancialLimitPeriod
+    data object BaseMonthly : FluviFinancialLimitPeriod
 
-    data class Year(val year: Int) : FluviFinancialLimitPeriod {
-        init {
-            require(year in 1..9999)
-        }
-    }
-
-    data class Month(val year: Int, val month: Int) : FluviFinancialLimitPeriod {
+    data class MonthOverride(val year: Int, val month: Int) : FluviFinancialLimitPeriod {
         init {
             require(year in 1..9999)
             require(month in 1..12)
@@ -51,32 +48,29 @@ data class FluviFinancialLimitKey(
 
     val periodKind: FluviFinancialLimitPeriodKind
         get() = when (period) {
-            FluviFinancialLimitPeriod.Sum -> FluviFinancialLimitPeriodKind.sum
-            is FluviFinancialLimitPeriod.Year -> FluviFinancialLimitPeriodKind.year
-            is FluviFinancialLimitPeriod.Month -> FluviFinancialLimitPeriodKind.month
+            FluviFinancialLimitPeriod.BaseMonthly -> FluviFinancialLimitPeriodKind.base
+            is FluviFinancialLimitPeriod.MonthOverride -> FluviFinancialLimitPeriodKind.month
         }
 
     val canonicalPeriodKey: String
         get() = when (period) {
-            FluviFinancialLimitPeriod.Sum -> "sum"
-            is FluviFinancialLimitPeriod.Year -> "year:${period.year}"
-            is FluviFinancialLimitPeriod.Month -> "month:${period.year}-${period.month}"
+            FluviFinancialLimitPeriod.BaseMonthly -> "base"
+            is FluviFinancialLimitPeriod.MonthOverride -> "month:${period.year}-${period.month}"
         }
 
     val year: Int?
         get() = when (period) {
-            FluviFinancialLimitPeriod.Sum -> null
-            is FluviFinancialLimitPeriod.Year -> period.year
-            is FluviFinancialLimitPeriod.Month -> period.year
+            FluviFinancialLimitPeriod.BaseMonthly -> null
+            is FluviFinancialLimitPeriod.MonthOverride -> period.year
         }
 
     val month: Int?
-        get() = (period as? FluviFinancialLimitPeriod.Month)?.month
+        get() = (period as? FluviFinancialLimitPeriod.MonthOverride)?.month
 }
 
 enum class FluviFinancialLimitTargetKind { aggregate, category }
 
-enum class FluviFinancialLimitPeriodKind { sum, year, month }
+enum class FluviFinancialLimitPeriodKind { base, month }
 
 data class FluviFinancialLimit(
     val key: FluviFinancialLimitKey,

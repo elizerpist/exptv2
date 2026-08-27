@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
@@ -119,6 +120,10 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
             partition.optimisticAllocationDeltaScaled100 ||
         !identical(old.bank, partition.bank) ||
         !identical(old.catalog, partition.catalog) ||
+        !mapEquals(
+          old.effectiveLimitByTargetHandle,
+          partition.effectiveLimitByTargetHandle,
+        ) ||
         !identical(old.categoryOverlay, partition.categoryOverlay);
   }
 }

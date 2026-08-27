@@ -138,7 +138,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     return BudgetLimitQuickEditGestureController(
       edits: edits,
       contextForCurrentSelection: () {
-        final context = widget.presentation.value.header.limitEditContext;
+        final context = widget.presentation.value.header.editContext;
         if (context == null) {
           throw StateError('A prepared Budget header is required to edit.');
         }
@@ -314,8 +314,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                   onLongPressStart:
                       metrics.isSelected &&
                           _quickEdit != null &&
-                          widget.presentation.value.header.limitEditContext !=
-                              null
+                          widget.presentation.value.header.editContext != null
                       ? (details) => _quickEdit?.longPressStarted(
                           globalY: details.globalPosition.dy,
                         )
@@ -323,8 +322,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                   onLongPressMoveUpdate:
                       metrics.isSelected &&
                           _quickEdit != null &&
-                          widget.presentation.value.header.limitEditContext !=
-                              null
+                          widget.presentation.value.header.editContext != null
                       ? (details) => _quickEdit?.longPressMoved(
                           globalY: details.globalPosition.dy,
                         )
@@ -332,8 +330,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                   onLongPressEnd:
                       metrics.isSelected &&
                           _quickEdit != null &&
-                          widget.presentation.value.header.limitEditContext !=
-                              null
+                          widget.presentation.value.header.editContext != null
                       ? (_) => unawaited(
                           _quickEdit?.longPressEnded() ?? Future<void>.value(),
                         )
@@ -341,8 +338,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                   onLongPressCancel:
                       metrics.isSelected &&
                           _quickEdit != null &&
-                          widget.presentation.value.header.limitEditContext !=
-                              null
+                          widget.presentation.value.header.editContext != null
                       ? () => unawaited(
                           _quickEdit?.longPressEnded() ?? Future<void>.value(),
                         )

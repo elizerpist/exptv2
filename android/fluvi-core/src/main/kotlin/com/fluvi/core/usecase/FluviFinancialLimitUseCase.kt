@@ -39,6 +39,40 @@ class FluviFinancialLimitUseCase internal constructor(
         }
     }
 
+    /** One YEAR interaction mutates a complete twelve-month override vector
+     * atomically. The returned values reflect one revision advance, never a
+     * sequence of externally observable partial years. */
+    suspend fun upsertBatch(values: List<Pair<FluviFinancialLimitKey, Long>>): List<FluviFinancialLimit> {
+        require(values.isNotEmpty())
+        require(values.map { it.first }.toSet().size == values.size) {
+            "A financial-limit batch cannot contain duplicate keys."
+        }
+        require(values.all { it.second >= 0L })
+        return database.withTransaction {
+            val now = clock.nowUtcMs()
+            val previousByKey = values.associate { (key, _) ->
+                key to repository.find(key)
+            }
+            val limits = values.map { (key, amount) ->
+                val previous = previousByKey.getValue(key)
+                FluviFinancialLimit(
+                    key = key,
+                    amountScaled100 = amount,
+                    createdAtUtcMs = previous?.createdAtUtcMs ?: now,
+                    updatedAtUtcMs = now,
+                )
+            }
+            val changed = limits.filter { limit ->
+                previousByKey.getValue(limit.key)?.amountScaled100 != limit.amountScaled100
+            }
+            if (changed.isNotEmpty()) {
+                repository.upsertAll(changed)
+                revisionRepository.advance(now)
+            }
+            limits
+        }
+    }
+
     suspend fun delete(key: FluviFinancialLimitKey): Boolean = database.withTransaction {
         val deleted = repository.delete(key)
         if (deleted) revisionRepository.advance(clock.nowUtcMs())

@@ -7,34 +7,48 @@ import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
+import 'dashboard_budget_scope_analysis.dart';
 
 /// Semantic source of a single limit increment. Raw pointer tracking belongs
 /// to the presentation input shell; this controller only owns scalar draft and
 /// persistence state.
 enum DashboardBudgetLimitEditSource { drag, auto }
 
+/// Shared input boundary for the one existing long-press/vertical-swipe
+/// gesture. It intentionally has scalar and derived-YEAR variants rather than
+/// inventing a persisted annual FinancialLimit key.
+sealed class DashboardBudgetEditContext {
+  const DashboardBudgetEditContext();
+}
+
+abstract interface class DashboardBudgetEditableSession {}
+
 /// Exact immutable state captured when a quick edit begins. The current
 /// prepared header has already resolved this from RAM, so an editor never needs
 /// a repository read to start.
 @immutable
-final class DashboardBudgetLimitEditContext {
+final class DashboardBudgetLimitEditContext extends DashboardBudgetEditContext {
   const DashboardBudgetLimitEditContext({
     required this.key,
     required this.coreRevision,
     required this.targetHandle,
     required this.actualScaled100,
     required this.confirmedLimitScaled100,
-  });
+  }) : super();
 
   final FinancialLimitKey key;
   final int coreRevision;
   final int targetHandle;
-  final int actualScaled100;
+
+  /// Canonical accounting actual, intentionally nullable for a SUM base-limit
+  /// edit whose presentation numerator is a typical-month statistic.
+  final int? actualScaled100;
   final int? confirmedLimitScaled100;
 }
 
 @immutable
-final class DashboardBudgetLimitEditSession {
+final class DashboardBudgetLimitEditSession
+    implements DashboardBudgetEditableSession {
   const DashboardBudgetLimitEditSession._({
     required this.generation,
     required this.context,
@@ -54,6 +68,84 @@ final class DashboardBudgetLimitEditSession {
     context: context,
     baseLimitScaled100: baseLimitScaled100,
     effectiveLimitScaled100: effectiveLimitScaled100,
+  );
+}
+
+/// A derived annual edit is represented by the twelve concrete override keys
+/// it will atomically write. No independent YEAR row can be formed from this
+/// context.
+@immutable
+final class DashboardBudgetYearLimitEditContext
+    extends DashboardBudgetEditContext {
+  DashboardBudgetYearLimitEditContext({
+    required this.direction,
+    required this.target,
+    required this.coreRevision,
+    required this.targetHandle,
+    required this.year,
+    required List<FinancialLimitKey> monthOverrideKeys,
+    required List<int> confirmedMonthlyLimitsScaled100,
+    required this.canonicalAnnualActualScaled100,
+  }) : monthOverrideKeys = List<FinancialLimitKey>.unmodifiable(
+         monthOverrideKeys,
+       ),
+       confirmedMonthlyLimitsScaled100 = List<int>.unmodifiable(
+         confirmedMonthlyLimitsScaled100,
+       ),
+       super() {
+    if (this.monthOverrideKeys.length != 12 ||
+        this.confirmedMonthlyLimitsScaled100.length != 12) {
+      throw ArgumentError('A YEAR edit requires exactly twelve month cells.');
+    }
+    for (var index = 0; index < 12; index += 1) {
+      final period = this.monthOverrideKeys[index].period;
+      if (period is! FinancialLimitMonthOverridePeriod ||
+          period.year != year ||
+          period.month != index + 1) {
+        throw ArgumentError('YEAR edits must own Jan–Dec month overrides.');
+      }
+    }
+  }
+
+  final FinancialLimitDirection direction;
+  final FinancialLimitTarget target;
+  final int coreRevision;
+  final int targetHandle;
+  final int year;
+  final List<FinancialLimitKey> monthOverrideKeys;
+  final List<int> confirmedMonthlyLimitsScaled100;
+  final int canonicalAnnualActualScaled100;
+
+  int get confirmedAnnualLimitScaled100 =>
+      confirmedMonthlyLimitsScaled100.fold<int>(0, (sum, value) => sum + value);
+}
+
+final class DashboardBudgetYearLimitEditSession
+    implements DashboardBudgetEditableSession {
+  DashboardBudgetYearLimitEditSession._({
+    required this.generation,
+    required this.context,
+    required this.baseMonthlyLimitsScaled100,
+    required this.effectiveMonthlyLimitsScaled100,
+  });
+
+  final int generation;
+  final DashboardBudgetYearLimitEditContext context;
+  final List<int> baseMonthlyLimitsScaled100;
+  final List<int> effectiveMonthlyLimitsScaled100;
+
+  int get effectiveAnnualLimitScaled100 =>
+      effectiveMonthlyLimitsScaled100.fold<int>(0, (sum, value) => sum + value);
+
+  DashboardBudgetYearLimitEditSession copyWith({
+    required List<int> effectiveMonthlyLimitsScaled100,
+  }) => DashboardBudgetYearLimitEditSession._(
+    generation: generation,
+    context: context,
+    baseMonthlyLimitsScaled100: baseMonthlyLimitsScaled100,
+    effectiveMonthlyLimitsScaled100: List<int>.unmodifiable(
+      effectiveMonthlyLimitsScaled100,
+    ),
   );
 }
 
@@ -115,6 +207,40 @@ final class _PendingBudgetLimitMutation {
   final int baseCoreRevision;
   final int intendedLimitScaled100;
   final int? confirmedLimitScaled100;
+}
+
+final class _BudgetYearEditIdentity {
+  const _BudgetYearEditIdentity({
+    required this.direction,
+    required this.target,
+    required this.year,
+  });
+
+  final FinancialLimitDirection direction;
+  final FinancialLimitTarget target;
+  final int year;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _BudgetYearEditIdentity &&
+      other.direction == direction &&
+      other.target == target &&
+      other.year == year;
+
+  @override
+  int get hashCode => Object.hash(direction, target, year);
+}
+
+final class _PendingBudgetYearMutation {
+  const _PendingBudgetYearMutation({
+    required this.generation,
+    required this.baseCoreRevision,
+    required this.intendedMonthlyLimitsScaled100,
+  });
+
+  final int generation;
+  final int baseCoreRevision;
+  final List<int> intendedMonthlyLimitsScaled100;
 }
 
 final class _BudgetCategoryAllocationScope {
@@ -222,16 +348,26 @@ final class DashboardBudgetLimitEditController
   DashboardBudgetLimitEditController({
     required FinancialLimitRepository repository,
     required bool Function(FinancialLimitKey key) isKeyCurrent,
+    bool Function(DashboardBudgetYearLimitEditContext context)?
+    isYearContextCurrent,
   }) : _repository = repository,
        _isKeyCurrent = isKeyCurrent,
+       _isYearContextCurrent = isYearContextCurrent ?? _neverCurrentYear,
        super(null);
 
   final FinancialLimitRepository _repository;
   final bool Function(FinancialLimitKey key) _isKeyCurrent;
+  final bool Function(DashboardBudgetYearLimitEditContext context)
+  _isYearContextCurrent;
   final Map<FinancialLimitKey, _PendingBudgetLimitMutation> _pendingByKey =
       <FinancialLimitKey, _PendingBudgetLimitMutation>{};
   final Map<FinancialLimitKey, Future<void>> _writeTailByKey =
       <FinancialLimitKey, Future<void>>{};
+  final Map<_BudgetYearEditIdentity, _PendingBudgetYearMutation>
+  _pendingYearByIdentity =
+      <_BudgetYearEditIdentity, _PendingBudgetYearMutation>{};
+  final Map<_BudgetYearEditIdentity, Future<void>> _yearWriteTailByIdentity =
+      <_BudgetYearEditIdentity, Future<void>>{};
   final Map<_BudgetCategoryAllocationScope, _BudgetCategoryAllocationBucket>
   _categoryAllocationByScope =
       <_BudgetCategoryAllocationScope, _BudgetCategoryAllocationBucket>{};
@@ -240,8 +376,11 @@ final class DashboardBudgetLimitEditController
       <_BudgetCategoryAllocationScope, int>{};
 
   DashboardBudgetLimitEditSession? _active;
+  DashboardBudgetYearLimitEditSession? _activeYear;
   int _nextGeneration = 0;
   bool _disposed = false;
+
+  static bool _neverCurrentYear(DashboardBudgetYearLimitEditContext _) => false;
 
   DashboardBudgetLimitEditSession? startEdit(
     DashboardBudgetLimitEditContext context,
@@ -252,6 +391,7 @@ final class DashboardBudgetLimitEditController
     final priorActive = _active;
     if (priorActive != null) _restoreOverlayAfterActiveDrop(priorActive);
     _active = null;
+    _activeYear = null;
     final pending = _pendingByKey[context.key];
     final base =
         pending?.intendedLimitScaled100 ?? context.confirmedLimitScaled100;
@@ -264,6 +404,43 @@ final class DashboardBudgetLimitEditController
     _active = session;
     _publishActive(session);
     _diagnose('BUDGET_LIMIT_EDIT_STARTED', session);
+    return session;
+  }
+
+  /// Starts either the existing scalar editor or a derived annual vector
+  /// editor. The gesture layer stays neutral: it owns pixels/haptics, while
+  /// this owner decides the persistence semantics.
+  DashboardBudgetEditableSession? startContext(
+    DashboardBudgetEditContext context,
+  ) => switch (context) {
+    DashboardBudgetLimitEditContext() => startEdit(context),
+    DashboardBudgetYearLimitEditContext() => _startYearEdit(context),
+  };
+
+  DashboardBudgetYearLimitEditSession? _startYearEdit(
+    DashboardBudgetYearLimitEditContext context,
+  ) {
+    if (_disposed || !_isYearContextCurrent(context)) return null;
+    final priorScalar = _active;
+    if (priorScalar != null) _restoreOverlayAfterActiveDrop(priorScalar);
+    _active = null;
+    _activeYear = null;
+    final identity = _yearIdentityFor(context);
+    final pending = _pendingYearByIdentity[identity];
+    final base =
+        pending?.intendedMonthlyLimitsScaled100 ??
+        context.confirmedMonthlyLimitsScaled100;
+    final session = DashboardBudgetYearLimitEditSession._(
+      generation: ++_nextGeneration,
+      context: context,
+      baseMonthlyLimitsScaled100: List<int>.unmodifiable(base),
+      effectiveMonthlyLimitsScaled100: List<int>.unmodifiable(base),
+    );
+    _activeYear = session;
+    // A Year edit has no scalar presentation payload. Still notify the
+    // selected Budget controller synchronously so all twelve ring segments and
+    // the Header denominator update in the same interaction turn.
+    notifyListeners();
     return session;
   }
 
@@ -305,6 +482,59 @@ final class DashboardBudgetLimitEditController
           'source=${source.name} stepScaled100=$amountStepScaled100 '
           'coalescedTickCount=$tickCount effectiveLimitScaled100=$next',
     );
+    return true;
+  }
+
+  bool applyContextSemanticTick(
+    DashboardBudgetEditableSession session, {
+    required int direction,
+    required int amountStepScaled100,
+    required int tickCount,
+    required DashboardBudgetLimitEditSource source,
+  }) => switch (session) {
+    DashboardBudgetLimitEditSession() => applySemanticTick(
+      session,
+      direction: direction,
+      amountStepScaled100: amountStepScaled100,
+      tickCount: tickCount,
+      source: source,
+    ),
+    DashboardBudgetYearLimitEditSession() => _applyYearSemanticTick(
+      session,
+      direction: direction,
+      amountStepScaled100: amountStepScaled100,
+      tickCount: tickCount,
+      source: source,
+    ),
+    _ => throw ArgumentError.value(session, 'session'),
+  };
+
+  bool _applyYearSemanticTick(
+    DashboardBudgetYearLimitEditSession session, {
+    required int direction,
+    required int amountStepScaled100,
+    required int tickCount,
+    required DashboardBudgetLimitEditSource source,
+  }) {
+    if (_activeYear?.generation != session.generation ||
+        direction == 0 ||
+        tickCount < 1) {
+      return false;
+    }
+    final currentAnnual = _activeYear!.effectiveAnnualLimitScaled100;
+    final nextAnnual =
+        (currentAnnual + direction * amountStepScaled100 * tickCount)
+            .clamp(0, 0x7fffffffffffffff)
+            .toInt();
+    if (nextAnnual == currentAnnual) return false;
+    final allocated = DashboardBudgetYearLimitAllocator.allocate(
+      currentMonthlyLimitsScaled100: session.baseMonthlyLimitsScaled100,
+      requestedAnnualLimitScaled100: nextAnnual,
+    );
+    _activeYear = session.copyWith(
+      effectiveMonthlyLimitsScaled100: allocated.monthlyLimitsScaled100,
+    );
+    notifyListeners();
     return true;
   }
 
@@ -353,6 +583,95 @@ final class DashboardBudgetLimitEditController
     );
   }
 
+  Future<void> finishContext(DashboardBudgetEditableSession session) =>
+      switch (session) {
+        DashboardBudgetLimitEditSession() => finishEdit(session),
+        DashboardBudgetYearLimitEditSession() => _finishYearEdit(session),
+        _ => Future<void>.error(ArgumentError.value(session, 'session')),
+      };
+
+  Future<void> _finishYearEdit(DashboardBudgetYearLimitEditSession session) {
+    if (_activeYear?.generation != session.generation) {
+      return Future<void>.value();
+    }
+    if (_disposed || !_isYearContextCurrent(session.context)) {
+      _activeYear = null;
+      notifyListeners();
+      return Future<void>.value();
+    }
+    final current = _activeYear!;
+    _activeYear = null;
+    if (listEquals(
+      current.baseMonthlyLimitsScaled100,
+      current.effectiveMonthlyLimitsScaled100,
+    )) {
+      notifyListeners();
+      return Future<void>.value();
+    }
+    final identity = _yearIdentityFor(current.context);
+    final pending = _PendingBudgetYearMutation(
+      generation: current.generation,
+      baseCoreRevision: current.context.coreRevision,
+      intendedMonthlyLimitsScaled100: current.effectiveMonthlyLimitsScaled100,
+    );
+    _pendingYearByIdentity[identity] = pending;
+    notifyListeners();
+    return _enqueueYearBatch(
+      identity: identity,
+      session: current,
+      pending: pending,
+      mutations: <FinancialLimitMutation>[
+        for (var index = 0; index < 12; index += 1)
+          FinancialLimitMutation(
+            key: current.context.monthOverrideKeys[index],
+            amountScaled100: current.effectiveMonthlyLimitsScaled100[index],
+          ),
+      ],
+    );
+  }
+
+  /// A complete YEAR vector is one semantic write, but successive releases of
+  /// the same target/year still need scalar-style write ordering. Without this
+  /// tail an older batch could finish last and overwrite a newer annual edit.
+  Future<void> _enqueueYearBatch({
+    required _BudgetYearEditIdentity identity,
+    required DashboardBudgetYearLimitEditSession session,
+    required _PendingBudgetYearMutation pending,
+    required List<FinancialLimitMutation> mutations,
+  }) {
+    Future<void> run() async {
+      _diagnoseYear('BUDGET_YEAR_LIMIT_EDIT_PERSIST_STARTED', session);
+      try {
+        await _repository.upsertBatch(mutations);
+        _diagnoseYear('BUDGET_YEAR_LIMIT_EDIT_PERSIST_COMPLETED', session);
+      } on Object catch (error) {
+        if (_pendingYearByIdentity[identity] == pending) {
+          _pendingYearByIdentity.remove(identity);
+          notifyListeners();
+        }
+        _diagnoseYear(
+          'BUDGET_YEAR_LIMIT_EDIT_PERSIST_FAILED',
+          session,
+          error: error.toString(),
+        );
+      }
+    }
+
+    final previous = _yearWriteTailByIdentity[identity];
+    final future = previous == null
+        ? run()
+        : previous.catchError((_) {}).then<void>((_) => run());
+    _yearWriteTailByIdentity[identity] = future;
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_yearWriteTailByIdentity[identity], future)) {
+          _yearWriteTailByIdentity.remove(identity);
+        }
+      }),
+    );
+    return future;
+  }
+
   /// Direct O(1) overlay lookup for the presentation controller. It neither
   /// reads storage nor rebuilds a prepared vector/catalog.
   int? effectiveLimitFor(FinancialLimitKey key, int? confirmedLimitScaled100) {
@@ -368,6 +687,53 @@ final class DashboardBudgetLimitEditController
 
   bool hasOverlayFor(FinancialLimitKey key) =>
       (_active?.context.key == key) || _pendingByKey.containsKey(key);
+
+  /// Lets a prepared presentation owner skip all overlay-only traversal on
+  /// ordinary temporal ticks. This is deliberately a boolean capability, not
+  /// an exposed mutable draft map.
+  bool get hasScalarOverlay => _active != null || _pendingByKey.isNotEmpty;
+
+  /// Returns the active/pending full YEAR vector without scanning a catalog or
+  /// touching storage. A new prepared revision clears this semantic overlay
+  /// only when all twelve resolved cells confirm it together.
+  List<int> effectiveYearLimitsFor(
+    DashboardBudgetYearLimitEditContext context,
+  ) {
+    final identity = _yearIdentityFor(context);
+    final active = _activeYear;
+    if (active != null && _yearIdentityFor(active.context) == identity) {
+      return active.effectiveMonthlyLimitsScaled100;
+    }
+    return _pendingYearByIdentity[identity]?.intendedMonthlyLimitsScaled100 ??
+        context.confirmedMonthlyLimitsScaled100;
+  }
+
+  bool hasYearOverlayFor(DashboardBudgetYearLimitEditContext context) {
+    final identity = _yearIdentityFor(context);
+    return (_activeYear != null &&
+            _yearIdentityFor(_activeYear!.context) == identity) ||
+        _pendingYearByIdentity.containsKey(identity);
+  }
+
+  bool get hasYearOverlay =>
+      _activeYear != null || _pendingYearByIdentity.isNotEmpty;
+
+  void observePreparedYearLimits(
+    DashboardBudgetYearLimitEditContext context, {
+    required List<int> confirmedMonthlyLimitsScaled100,
+    required int coreRevision,
+  }) {
+    final identity = _yearIdentityFor(context);
+    final pending = _pendingYearByIdentity[identity];
+    if (pending == null || coreRevision <= pending.baseCoreRevision) return;
+    if (listEquals(
+      pending.intendedMonthlyLimitsScaled100,
+      confirmedMonthlyLimitsScaled100,
+    )) {
+      _pendingYearByIdentity.remove(identity);
+      notifyListeners();
+    }
+  }
 
   /// O(1) category-limit delta and effective overrides for the existing
   /// prepared bank's exact direction/period. This does not traverse categories
@@ -469,6 +835,23 @@ final class DashboardBudgetLimitEditController
     _publishForCurrentOverlay();
   }
 
+  /// YEAR has no scalar [FinancialLimitKey]. Its transient twelve-month draft
+  /// must therefore be invalidated by the same semantic-context ownership
+  /// rule when target, year, direction or scope changes under a gesture.
+  void invalidateYearIfContextChanged(
+    DashboardBudgetYearLimitEditContext? currentContext,
+  ) {
+    final active = _activeYear;
+    if (active == null) return;
+    if (currentContext != null &&
+        _yearIdentityFor(active.context) == _yearIdentityFor(currentContext) &&
+        active.context.coreRevision == currentContext.coreRevision) {
+      return;
+    }
+    _activeYear = null;
+    notifyListeners();
+  }
+
   /// Lifecycle disposal is not a user release. Drop only the transient active
   /// session so its captured key can never be written after the owner is gone.
   void abortEdit(DashboardBudgetLimitEditSession session) {
@@ -477,6 +860,27 @@ final class DashboardBudgetLimitEditController
     _restoreOverlayAfterActiveDrop(session);
     _publishForCurrentOverlay();
   }
+
+  void abortContext(DashboardBudgetEditableSession session) {
+    switch (session) {
+      case DashboardBudgetLimitEditSession():
+        abortEdit(session);
+      case DashboardBudgetYearLimitEditSession():
+        if (_activeYear?.generation != session.generation) return;
+        _activeYear = null;
+        notifyListeners();
+      case _:
+        throw ArgumentError.value(session, 'session');
+    }
+  }
+
+  _BudgetYearEditIdentity _yearIdentityFor(
+    DashboardBudgetYearLimitEditContext context,
+  ) => _BudgetYearEditIdentity(
+    direction: context.direction,
+    target: context.target,
+    year: context.year,
+  );
 
   bool _owns(DashboardBudgetLimitEditSession session) =>
       !_disposed &&
@@ -552,7 +956,7 @@ final class DashboardBudgetLimitEditController
       key: session.context.key,
       coreRevision: session.context.coreRevision,
       targetHandle: session.context.targetHandle,
-      actualScaled100: session.context.actualScaled100,
+      actualScaled100: session.context.actualScaled100 ?? 0,
       effectiveLimitScaled100: session.effectiveLimitScaled100,
       generation: session.generation,
     );
@@ -670,9 +1074,8 @@ final class DashboardBudgetLimitEditController
       FinancialLimitCategoryTarget(:final categoryId) => 'category:$categoryId',
     };
     final period = switch (key.period) {
-      FinancialLimitSumPeriod() => 'sum',
-      FinancialLimitYearPeriod(:final year) => 'year:$year',
-      FinancialLimitMonthPeriod(:final year, :final month) =>
+      FinancialLimitBaseMonthlyPeriod() => 'base',
+      FinancialLimitMonthOverridePeriod(:final year, :final month) =>
         'month:$year-$month',
     };
     FluviDiagnosticLogger.log(
@@ -690,12 +1093,35 @@ final class DashboardBudgetLimitEditController
     );
   }
 
+  void _diagnoseYear(
+    String stage,
+    DashboardBudgetYearLimitEditSession session, {
+    String? error,
+  }) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        coreRevision: session.context.coreRevision,
+        direction: session.context.direction.name,
+        totalMinor: session.effectiveAnnualLimitScaled100,
+        scope:
+            'targetHandle=${session.context.targetHandle} '
+            'year=${session.context.year} generation=${session.generation} '
+            'monthCount=12',
+        error: error,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _disposed = true;
     final active = _active;
     _active = null;
     if (active != null) _restoreOverlayAfterActiveDrop(active);
+    _activeYear = null;
+    _pendingYearByIdentity.clear();
+    _yearWriteTailByIdentity.clear();
     super.dispose();
   }
 }

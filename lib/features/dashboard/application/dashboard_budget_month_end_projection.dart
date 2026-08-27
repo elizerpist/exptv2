@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/categories/domain/budget_progress_health.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/domain/local_date.dart';
 
@@ -207,15 +208,16 @@ final class DashboardBudgetMonthEndProjection {
   static DashboardBudgetProjectionHealthBand _healthFor({
     required DashboardBudgetMonthEndProjectionAvailability availability,
     required double rawRatio,
-  }) {
-    if (availability ==
-        DashboardBudgetMonthEndProjectionAvailability.unavailable) {
-      return DashboardBudgetProjectionHealthBand.unavailable;
-    }
-    if (!rawRatio.isFinite || rawRatio < .75) {
-      return DashboardBudgetProjectionHealthBand.targetAccent;
-    }
-    if (rawRatio <= .90) return DashboardBudgetProjectionHealthBand.warning;
-    return DashboardBudgetProjectionHealthBand.danger;
-  }
+  }) => switch (BudgetProgressHealthResolver.resolve(
+    isAvailable:
+        availability == DashboardBudgetMonthEndProjectionAvailability.available,
+    rawRatio: rawRatio,
+  )) {
+    BudgetProgressHealth.unavailable =>
+      DashboardBudgetProjectionHealthBand.unavailable,
+    BudgetProgressHealth.targetAccent =>
+      DashboardBudgetProjectionHealthBand.targetAccent,
+    BudgetProgressHealth.warning => DashboardBudgetProjectionHealthBand.warning,
+    BudgetProgressHealth.danger => DashboardBudgetProjectionHealthBand.danger,
+  };
 }

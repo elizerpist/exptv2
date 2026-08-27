@@ -63,7 +63,7 @@ import com.fluvi.core.model.FluviSystemIds
         FluviLedgerSyncWorkspaceEntity::class,
         FluviLedgerBackupCheckpointEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(FluviRoomConverters::class)
@@ -282,6 +282,93 @@ internal abstract class FluviDatabase : RoomDatabase() {
                     "CREATE INDEX index_fluvi_financial_limits_direction_period_kind_year_month " +
                         "ON fluvi_financial_limits(direction, period_kind, year, month)",
                 )
+                createLegacyFinancialLimitIntegrityTriggers(db)
+            }
+        }
+
+        /**
+         * Retires independently writable SUM/YEAR rows. Month records win;
+         * SUM becomes the base monthly fallback, and a legacy YEAR row seeds
+         * only unresolved months by an exact deterministic even allocation.
+         * The old table is replaced atomically by SQLite's migration
+         * transaction, so subsequent launches can never read legacy truth.
+         */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE fluvi_financial_limits_v6 (" +
+                        "direction TEXT NOT NULL, target_kind TEXT NOT NULL, target_key TEXT NOT NULL, " +
+                        "category_id TEXT, period_kind TEXT NOT NULL, period_key TEXT NOT NULL, " +
+                        "year INTEGER, month INTEGER, limit_amount_scaled_100 INTEGER NOT NULL, " +
+                        "created_at_utc_ms INTEGER NOT NULL, updated_at_utc_ms INTEGER NOT NULL, " +
+                        "PRIMARY KEY(direction, target_key, period_key), " +
+                        "FOREIGN KEY(category_id) REFERENCES fluvi_categories(id) ON DELETE CASCADE, " +
+                        "CHECK(limit_amount_scaled_100 >= 0), " +
+                        "CHECK((target_kind = 'aggregate' AND target_key = 'aggregate' AND category_id IS NULL) " +
+                        "OR (target_kind = 'category' AND category_id IS NOT NULL AND target_key = category_id)), " +
+                        "CHECK((period_kind = 'base' AND period_key = 'base' AND year IS NULL AND month IS NULL) " +
+                        "OR (period_kind = 'month' AND year IS NOT NULL AND month BETWEEN 1 AND 12 " +
+                        "AND period_key = ('month:' || year || '-' || month))))",
+                )
+                // Explicit legacy MONTH values are the highest-authority
+                // source and are inserted before any derived values.
+                db.execSQL(
+                    "INSERT INTO fluvi_financial_limits_v6 " +
+                        "SELECT direction, target_kind, target_key, category_id, 'month', " +
+                        "('month:' || year || '-' || month), year, month, limit_amount_scaled_100, " +
+                        "created_at_utc_ms, updated_at_utc_ms FROM fluvi_financial_limits " +
+                        "WHERE period_kind = 'month'",
+                )
+                // A legacy SUM has the one compatible meaning: base monthly.
+                db.execSQL(
+                    "INSERT INTO fluvi_financial_limits_v6 " +
+                        "SELECT direction, target_kind, target_key, category_id, 'base', 'base', " +
+                        "NULL, NULL, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms " +
+                        "FROM fluvi_financial_limits WHERE period_kind = 'sum'",
+                )
+                // Legacy yearly values seed only months lacking an explicit
+                // record. Residual scaled units go to earliest unresolved
+                // calendar months, making the migration deterministic and
+                // exact without mutating an explicit month.
+                db.execSQL(
+                    "WITH RECURSIVE months(month) AS (VALUES(1) UNION ALL " +
+                        "SELECT month + 1 FROM months WHERE month < 12), annual AS (" +
+                        "SELECT y.*, COALESCE((SELECT SUM(m.limit_amount_scaled_100) " +
+                        "FROM fluvi_financial_limits m WHERE m.direction = y.direction " +
+                        "AND m.target_key = y.target_key AND m.period_kind = 'month' " +
+                        "AND m.year = y.year), 0) AS explicit_sum, " +
+                        "(SELECT COUNT(*) FROM months n WHERE NOT EXISTS (SELECT 1 " +
+                        "FROM fluvi_financial_limits m WHERE m.direction = y.direction " +
+                        "AND m.target_key = y.target_key AND m.period_kind = 'month' " +
+                        "AND m.year = y.year AND m.month = n.month)) AS missing_count " +
+                        "FROM fluvi_financial_limits y WHERE y.period_kind = 'year') " +
+                        "INSERT OR IGNORE INTO fluvi_financial_limits_v6 " +
+                        "(direction,target_kind,target_key,category_id,period_kind,period_key,year,month," +
+                        "limit_amount_scaled_100,created_at_utc_ms,updated_at_utc_ms) " +
+                        "SELECT a.direction,a.target_kind,a.target_key,a.category_id,'month'," +
+                        "('month:' || a.year || '-' || n.month),a.year,n.month, " +
+                        "((a.limit_amount_scaled_100 - a.explicit_sum) / a.missing_count) + " +
+                        "CASE WHEN (SELECT COUNT(*) FROM months p WHERE p.month <= n.month " +
+                        "AND NOT EXISTS (SELECT 1 FROM fluvi_financial_limits e " +
+                        "WHERE e.direction=a.direction AND e.target_key=a.target_key " +
+                        "AND e.period_kind='month' AND e.year=a.year AND e.month=p.month)) " +
+                        "<= ((a.limit_amount_scaled_100 - a.explicit_sum) % a.missing_count) THEN 1 ELSE 0 END, " +
+                        "a.created_at_utc_ms,a.updated_at_utc_ms FROM annual a CROSS JOIN months n " +
+                        "WHERE a.limit_amount_scaled_100 > a.explicit_sum AND a.missing_count > 0 " +
+                        "AND NOT EXISTS (SELECT 1 FROM fluvi_financial_limits e " +
+                        "WHERE e.direction=a.direction AND e.target_key=a.target_key " +
+                        "AND e.period_kind='month' AND e.year=a.year AND e.month=n.month)",
+                )
+                db.execSQL("DROP TABLE fluvi_financial_limits")
+                db.execSQL("ALTER TABLE fluvi_financial_limits_v6 RENAME TO fluvi_financial_limits")
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_financial_limits_category_id " +
+                        "ON fluvi_financial_limits(category_id)",
+                )
+                db.execSQL(
+                    "CREATE INDEX index_fluvi_financial_limits_direction_period_kind_year_month " +
+                        "ON fluvi_financial_limits(direction, period_kind, year, month)",
+                )
                 createFinancialLimitIntegrityTriggers(db)
             }
         }
@@ -381,6 +468,39 @@ internal abstract class FluviDatabase : RoomDatabase() {
                     FOR EACH ROW
                     WHEN NEW.limit_amount_scaled_100 < 0
                         OR NEW.target_kind NOT IN ('aggregate', 'category')
+                        OR NEW.period_kind NOT IN ('base', 'month')
+                        OR (NEW.target_kind = 'aggregate' AND
+                            (NEW.target_key != 'aggregate' OR NEW.category_id IS NOT NULL))
+                        OR (NEW.target_kind = 'category' AND
+                            (NEW.category_id IS NULL OR NEW.target_key != NEW.category_id))
+                        OR (NEW.period_kind = 'base' AND
+                            (NEW.period_key != 'base' OR NEW.year IS NOT NULL OR NEW.month IS NOT NULL))
+                        OR (NEW.period_kind = 'month' AND
+                            (NEW.year IS NULL OR NEW.month NOT BETWEEN 1 AND 12 OR
+                             NEW.period_key != ('month:' || NEW.year || '-' || NEW.month)))
+                    BEGIN
+                        SELECT RAISE(ABORT, 'Invalid Fluvi financial limit.');
+                    END
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /**
+         * Version 5 was allowed to contain legacy SUM/YEAR/MONTH rows. Keep
+         * its historical integrity contract valid for an in-place 4 → 5 → 6
+         * upgrade; migration 5 → 6 replaces the table and installs the
+         * canonical base/month-only triggers above.
+         */
+        private fun createLegacyFinancialLimitIntegrityTriggers(db: SupportSQLiteDatabase) {
+            for (operation in listOf("INSERT", "UPDATE")) {
+                db.execSQL(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS fluvi_financial_limits_validate_${operation.lowercase()}
+                    BEFORE $operation ON fluvi_financial_limits
+                    FOR EACH ROW
+                    WHEN NEW.limit_amount_scaled_100 < 0
+                        OR NEW.target_kind NOT IN ('aggregate', 'category')
                         OR NEW.period_kind NOT IN ('sum', 'year', 'month')
                         OR (NEW.target_kind = 'aggregate' AND
                             (NEW.target_key != 'aggregate' OR NEW.category_id IS NOT NULL))
@@ -395,7 +515,7 @@ internal abstract class FluviDatabase : RoomDatabase() {
                             (NEW.year IS NULL OR NEW.month NOT BETWEEN 1 AND 12 OR
                              NEW.period_key != ('month:' || NEW.year || '-' || NEW.month)))
                     BEGIN
-                        SELECT RAISE(ABORT, 'Invalid Fluvi financial limit.');
+                        SELECT RAISE(ABORT, 'Invalid legacy Fluvi financial limit.');
                     END
                     """.trimIndent(),
                 )

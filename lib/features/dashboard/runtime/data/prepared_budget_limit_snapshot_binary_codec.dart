@@ -25,7 +25,7 @@ final class IsolateDashboardPreparedBudgetLimitSnapshotDecodeWorker {
 /// Compact versioned transport for query-independent dense Budget values.
 abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int magic = 0x464c424c;
-  static const int version = 3;
+  static const int version = 4;
   static const int missingLimitSentinel = -1;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumCategoryCount = 512;
@@ -137,14 +137,28 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     if (limitCount != actualCount) {
       throw FormatException('Budget actual/limit dense vector mismatch.');
     }
+    final limits = List<int>.generate(limitCount, (_) => reader.readInt64());
+    final sourceCount = reader.readInt32();
+    if (sourceCount != limitCount) {
+      throw FormatException('Budget limit/source dense vector mismatch.');
+    }
+    final sources = List<PreparedBudgetLimitSource>.generate(sourceCount, (_) {
+      return switch (reader.readUint8()) {
+        0 => PreparedBudgetLimitSource.unavailable,
+        1 => PreparedBudgetLimitSource.base,
+        2 => PreparedBudgetLimitSource.override,
+        _ => throw FormatException('Invalid Budget limit provenance.'),
+      };
+    }, growable: false);
     final cells = List<PreparedBudgetLimitCell>.generate(limitCount, (index) {
-      final value = reader.readInt64();
+      final value = limits[index];
       if (value < missingLimitSentinel) {
         throw FormatException('Invalid persisted Budget limit sentinel.');
       }
       return PreparedBudgetLimitCell(
         actualScaled100: actuals[index],
         limitScaled100: value == missingLimitSentinel ? null : value,
+        limitSource: sources[index],
       );
     }, growable: false);
     return PreparedBudgetLimitDirectionBank(
@@ -175,6 +189,11 @@ final class _BudgetBinaryReader {
     final value = _data.getInt64(_offset, Endian.big);
     _offset += 8;
     return value;
+  }
+
+  int readUint8() {
+    _require(1);
+    return _data.getUint8(_offset++);
   }
 
   String readUtf8() {

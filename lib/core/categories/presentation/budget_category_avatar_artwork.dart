@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../assets/prepared_vector_asset_atlas.dart';
 import '../../design/dashboard_mode_palette.dart';
 import '../../financial_limits/domain/financial_limit.dart';
+import '../domain/budget_progress_health.dart';
 import 'category_icon_view.dart';
 
 /// The sole visual-geometry contract for the Budget category avatar.
@@ -100,16 +101,118 @@ abstract final class BudgetLimitProgressToneResolver {
   static Color resolve({
     required double rawProgress,
     required Color targetAccent,
-  }) {
-    if (!rawProgress.isFinite || rawProgress < .75) return targetAccent;
-    if (rawProgress <= .90) return FluviVisualTokens.budgetProgressWarning;
-    return FluviVisualTokens.budgetProgressDanger;
-  }
+  }) => switch (BudgetProgressHealthResolver.resolve(
+    isAvailable: rawProgress.isFinite,
+    rawRatio: rawProgress,
+  )) {
+    BudgetProgressHealth.unavailable ||
+    BudgetProgressHealth.targetAccent => targetAccent,
+    BudgetProgressHealth.warning => FluviVisualTokens.budgetProgressWarning,
+    BudgetProgressHealth.danger => FluviVisualTokens.budgetProgressDanger,
+  };
 }
 
-/// The selected avatar keeps one chrome envelope but DAY presents a derived
-/// month-end forecast as a vertical gauge instead of the monthly ring.
-enum BudgetLimitProgressChromeGeometry { circular, verticalProjection }
+/// One source/material authority for every Budget scope ring strategy.
+///
+/// These are the existing Fluvi selected-avatar source values;
+/// no scope owns a second SVG, radius, stroke or active-cap language.
+final class BudgetProgressRingGeometry {
+  const BudgetProgressRingGeometry._({
+    required this.id,
+    required this.viewport,
+    required this.center,
+    required this.faceRadius,
+    required this.trackRadius,
+    required this.trackWidth,
+    required this.trackShadowColor,
+    required this.trackGradientColors,
+    required this.trackGradientStops,
+    required this.trackGlossColor,
+    required this.trackGlossFraction,
+    required this.faceShadowOffset,
+    required this.groundShadowOffset,
+    required this.groundShadowSize,
+  });
+
+  /// The single source consumed by the actual painter—not merely a test ID.
+  static const source = BudgetProgressRingGeometry._(
+    id: 'fluvi-selected-budget-ring-v1',
+    viewport: Size.square(308),
+    center: Offset(154, 154),
+    faceRadius: 122,
+    trackRadius: 107.52,
+    trackWidth: 24,
+    trackShadowColor: Color(0x73CFC7DF),
+    trackGradientColors: <Color>[
+      Color(0xFFF8F4FF),
+      Color(0xFFECE8F8),
+      Color(0xFFDCD6EC),
+    ],
+    trackGradientStops: <double>[0, .48, 1],
+    trackGlossColor: Color(0x85FFFFFF),
+    trackGlossFraction: .24,
+    faceShadowOffset: Offset(0, 12),
+    groundShadowOffset: Offset(0, 112),
+    groundShadowSize: Size(252, 68),
+  );
+
+  static const sourceId = 'fluvi-selected-budget-ring-v1';
+  static const sourceViewport = 308.0;
+  static const sourceCenter = Offset(154, 154);
+  static const sourceFaceRadius = 122.0;
+  static const sourceTrackRadius = 107.52;
+  static const sourceTrackWidth = 24.0;
+  static const roundedCapRadius = 12.0;
+
+  final String id;
+  final Size viewport;
+  final Offset center;
+  final double faceRadius;
+  final double trackRadius;
+  final double trackWidth;
+  final Color trackShadowColor;
+  final List<Color> trackGradientColors;
+  final List<double> trackGradientStops;
+  final Color trackGlossColor;
+  final double trackGlossFraction;
+  final Offset faceShadowOffset;
+  final Offset groundShadowOffset;
+  final Size groundShadowSize;
+
+  double get capRadius => trackWidth / 2;
+}
+
+/// Fill strategies over the one [BudgetProgressRingGeometry]. The DAY strategy
+/// remains a bottom-to-top analytical reveal, but it is no longer a separate
+/// rectangular gauge asset.
+enum BudgetLimitProgressChromeGeometry {
+  circular,
+  verticalProjection,
+  annualSegments,
+  typicalMarker,
+}
+
+/// One bounded annual section source. The painter resolves its colour from
+/// [rawProgress] through the same common Budget health resolver as MONTH.
+@immutable
+final class BudgetProgressRingAnnualSegment {
+  const BudgetProgressRingAnnualSegment({
+    required this.rawProgress,
+    required this.isFuture,
+  }) : assert(rawProgress >= 0);
+
+  final double rawProgress;
+  final bool isFuture;
+
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetProgressRingAnnualSegment &&
+      other.rawProgress == rawProgress &&
+      other.isFuture == isFuture;
+
+  @override
+  int get hashCode => Object.hash(rawProgress, isFuture);
+}
 
 /// One atomic Budget selection value. It carries both the exact semantic
 /// target and the visual arc inputs, so an old target's scalar cannot become a
@@ -126,6 +229,8 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     required this.visualProgress,
     required this.chromeGeometry,
     required this.breakEvenGaugeRatio,
+    required this.annualSegments,
+    required this.typicalMarkerPosition,
   });
 
   factory BudgetCategoryAvatarSelectedLimitVisualState.unavailable({
@@ -140,15 +245,20 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     visualProgress: 0,
     chromeGeometry: BudgetLimitProgressChromeGeometry.circular,
     breakEvenGaugeRatio: null,
+    annualSegments: const <BudgetProgressRingAnnualSegment>[],
+    typicalMarkerPosition: null,
   );
 
   factory BudgetCategoryAvatarSelectedLimitVisualState.available({
     required int targetHandle,
-    required FinancialLimitKey limitKey,
+    required FinancialLimitKey? limitKey,
     required int displayNumeratorScaled100,
     required int? effectiveLimitScaled100,
     BudgetLimitProgressChromeGeometry chromeGeometry =
         BudgetLimitProgressChromeGeometry.circular,
+    List<BudgetProgressRingAnnualSegment> annualSegments =
+        const <BudgetProgressRingAnnualSegment>[],
+    double? typicalMarkerPosition,
   }) {
     final hasPositiveLimit =
         effectiveLimitScaled100 != null && effectiveLimitScaled100 > 0;
@@ -173,6 +283,10 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
           chromeGeometry == BudgetLimitProgressChromeGeometry.verticalProjection
           ? .75
           : null,
+      annualSegments: List<BudgetProgressRingAnnualSegment>.unmodifiable(
+        annualSegments,
+      ),
+      typicalMarkerPosition: typicalMarkerPosition,
     );
   }
 
@@ -185,8 +299,11 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
   final double visualProgress;
   final BudgetLimitProgressChromeGeometry chromeGeometry;
   final double? breakEvenGaugeRatio;
+  final List<BudgetProgressRingAnnualSegment> annualSegments;
+  final double? typicalMarkerPosition;
 
   bool get paintsProgressChrome => hasPositiveLimit;
+  String get sourceGeometryId => BudgetProgressRingGeometry.sourceId;
 
   bool sameVisualAs(BudgetCategoryAvatarSelectedLimitVisualState other) =>
       targetHandle == other.targetHandle &&
@@ -197,7 +314,9 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
       rawProgress == other.rawProgress &&
       visualProgress == other.visualProgress &&
       chromeGeometry == other.chromeGeometry &&
-      breakEvenGaugeRatio == other.breakEvenGaugeRatio;
+      breakEvenGaugeRatio == other.breakEvenGaugeRatio &&
+      listEquals(annualSegments, other.annualSegments) &&
+      typicalMarkerPosition == other.typicalMarkerPosition;
 }
 
 /// The approved avatar-artwork compositions in the Budget rail.
@@ -495,6 +614,8 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
           sourceProgress: visual.visualProgress,
           geometry: visual.chromeGeometry,
           breakEvenGaugeRatio: visual.breakEvenGaugeRatio,
+          annualSegments: visual.annualSegments,
+          typicalMarkerPosition: visual.typicalMarkerPosition,
         ),
       );
     }
@@ -567,6 +688,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
     this.sourceProgress = 0,
     this.geometry = BudgetLimitProgressChromeGeometry.circular,
     this.breakEvenGaugeRatio,
+    this.annualSegments = const <BudgetProgressRingAnnualSegment>[],
+    this.typicalMarkerPosition,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
@@ -575,6 +698,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   final double sourceProgress;
   final BudgetLimitProgressChromeGeometry geometry;
   final double? breakEvenGaugeRatio;
+  final List<BudgetProgressRingAnnualSegment> annualSegments;
+  final double? typicalMarkerPosition;
   final Color faceColor;
 
   /// Exposed as a small visual contract so the shell and authored SVG floor
@@ -605,6 +730,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
           ),
           painter: _SelectionChromePainter(
+            ringGeometry: BudgetProgressRingGeometry.source,
+            targetAccent: categoryColor,
             startColor: gradient.start,
             middleColor: gradient.middle,
             endColor: gradient.end,
@@ -613,6 +740,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             sourceProgress: sourceProgress,
             geometry: geometry,
             breakEvenGaugeRatio: breakEvenGaugeRatio,
+            annualSegments: annualSegments,
+            typicalMarkerPosition: typicalMarkerPosition,
           ),
         ),
       ),
@@ -651,6 +780,8 @@ final class _SelectionArcGradient {
 /// authored depth and floor blob stay inside [BudgetCategoryAvatarSvg].
 final class _SelectionChromePainter extends CustomPainter {
   const _SelectionChromePainter({
+    required this.ringGeometry,
+    required this.targetAccent,
     required this.startColor,
     required this.middleColor,
     required this.endColor,
@@ -659,19 +790,12 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.sourceProgress,
     required this.geometry,
     required this.breakEvenGaugeRatio,
+    required this.annualSegments,
+    required this.typicalMarkerPosition,
   });
 
-  static const _sourceViewport = Size.square(
-    BudgetCategoryAvatarGeometry.selectionSourceViewport,
-  );
-  static const _sourceCenter = Offset(154, 154);
-  static const _sourceFaceRadius = 122.0;
-  static const _sourceTrackRadius =
-      BudgetCategoryAvatarGeometry.selectionTrackRadius;
-  static const _sourceTrackWidth =
-      BudgetCategoryAvatarGeometry.selectionTrackWidth;
-  static const _sourceGlossFraction = .24;
-
+  final BudgetProgressRingGeometry ringGeometry;
+  final Color targetAccent;
   final Color startColor;
   final Color middleColor;
   final Color endColor;
@@ -680,16 +804,18 @@ final class _SelectionChromePainter extends CustomPainter {
   final double sourceProgress;
   final BudgetLimitProgressChromeGeometry geometry;
   final double? breakEvenGaugeRatio;
+  final List<BudgetProgressRingAnnualSegment> annualSegments;
+  final double? typicalMarkerPosition;
 
   @override
   void paint(Canvas canvas, Size size) {
     final scale = math.min(
-      size.width / _sourceViewport.width,
-      size.height / _sourceViewport.height,
+      size.width / ringGeometry.viewport.width,
+      size.height / ringGeometry.viewport.height,
     );
     final offset = Offset(
-      (size.width - _sourceViewport.width * scale) / 2,
-      (size.height - _sourceViewport.height * scale) / 2,
+      (size.width - ringGeometry.viewport.width * scale) / 2,
+      (size.height - ringGeometry.viewport.height * scale) / 2,
     );
     canvas
       ..save()
@@ -697,8 +823,8 @@ final class _SelectionChromePainter extends CustomPainter {
       ..scale(scale);
 
     final trackRect = Rect.fromCircle(
-      center: _sourceCenter,
-      radius: _sourceTrackRadius,
+      center: ringGeometry.center,
+      radius: ringGeometry.trackRadius,
     );
     const startAngle = -math.pi / 2;
     final sweep =
@@ -707,25 +833,29 @@ final class _SelectionChromePainter extends CustomPainter {
         );
 
     canvas.drawOval(
-      Rect.fromCenter(center: const Offset(154, 266), width: 252, height: 68),
+      Rect.fromCenter(
+        center: ringGeometry.center + ringGeometry.groundShadowOffset,
+        width: ringGeometry.groundShadowSize.width,
+        height: ringGeometry.groundShadowSize.height,
+      ),
       Paint()
         ..color = shadowColor.withValues(alpha: .10)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
     canvas.drawCircle(
-      const Offset(154, 166),
-      _sourceFaceRadius,
+      ringGeometry.center + ringGeometry.faceShadowOffset,
+      ringGeometry.faceRadius,
       Paint()
         ..color = shadowColor.withValues(alpha: .20)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
     final faceRect = Rect.fromCircle(
-      center: _sourceCenter,
-      radius: _sourceFaceRadius,
+      center: ringGeometry.center,
+      radius: ringGeometry.faceRadius,
     );
     canvas.drawCircle(
-      _sourceCenter,
-      _sourceFaceRadius,
+      ringGeometry.center,
+      ringGeometry.faceRadius,
       Paint()
         ..shader = RadialGradient(
           center: const Alignment(-.32, -.44),
@@ -739,8 +869,8 @@ final class _SelectionChromePainter extends CustomPainter {
         ).createShader(faceRect),
     );
     canvas.drawCircle(
-      _sourceCenter,
-      _sourceFaceRadius,
+      ringGeometry.center,
+      ringGeometry.faceRadius,
       Paint()
         ..color = const Color(0xB8FFFFFF)
         ..style = PaintingStyle.stroke
@@ -760,139 +890,144 @@ final class _SelectionChromePainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4),
     );
 
-    if (geometry == BudgetLimitProgressChromeGeometry.circular) {
-      _paintCircularProgress(canvas, trackRect, startAngle, sweep);
-    } else {
-      _paintVerticalProjection(canvas);
+    _paintRingTrack(canvas, trackRect, startAngle);
+    switch (geometry) {
+      case BudgetLimitProgressChromeGeometry.circular:
+        _paintActiveArc(canvas, trackRect, startAngle, sweep);
+      case BudgetLimitProgressChromeGeometry.verticalProjection:
+        _paintVerticalProjectionRing(canvas, trackRect);
+      case BudgetLimitProgressChromeGeometry.annualSegments:
+        _paintAnnualSegments(canvas, trackRect, startAngle);
+      case BudgetLimitProgressChromeGeometry.typicalMarker:
+        _paintTypicalMarker(canvas, trackRect, startAngle);
     }
     canvas.restore();
   }
 
-  void _paintCircularProgress(
+  void _paintRingTrack(Canvas canvas, Rect trackRect, double startAngle) {
+    canvas.drawArc(
+      trackRect,
+      startAngle,
+      math.pi * 2,
+      false,
+      Paint()
+        ..color = ringGeometry.trackShadowColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = ringGeometry.trackWidth + 4
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawArc(
+      trackRect,
+      startAngle,
+      math.pi * 2,
+      false,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: ringGeometry.trackGradientColors,
+          stops: ringGeometry.trackGradientStops,
+        ).createShader(trackRect)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = ringGeometry.trackWidth
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawArc(
+      trackRect,
+      startAngle,
+      math.pi * 2 * ringGeometry.trackGlossFraction,
+      false,
+      Paint()
+        ..color = ringGeometry.trackGlossColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  void _paintActiveArc(
     Canvas canvas,
     Rect trackRect,
     double startAngle,
     double sweep,
   ) {
-    canvas.drawArc(
+    _paintActiveArcWithColors(
+      canvas,
       trackRect,
       startAngle,
-      math.pi * 2,
+      sweep,
+      startColor,
+      middleColor,
+      endColor,
+    );
+  }
+
+  void _paintActiveArcWithColors(
+    Canvas canvas,
+    Rect trackRect,
+    double startAngle,
+    double sweep,
+    Color arcStart,
+    Color arcMiddle,
+    Color arcEnd,
+  ) {
+    if (sweep <= 0) return;
+    canvas.drawArc(
+      trackRect.shift(const Offset(0, 5)),
+      startAngle,
+      sweep,
       false,
       Paint()
-        ..color = const Color(0x73CFC7DF)
+        ..color = arcEnd.withValues(alpha: .30)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = _sourceTrackWidth + 4
-        ..strokeCap = StrokeCap.round,
+        ..strokeWidth = ringGeometry.trackWidth
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
     );
     canvas.drawArc(
       trackRect,
       startAngle,
-      math.pi * 2,
+      sweep,
       false,
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[
-            Color(0xFFF8F4FF),
-            Color(0xFFECE8F8),
-            Color(0xFFDCD6EC),
-          ],
-          stops: <double>[0, .48, 1],
+          colors: <Color>[arcStart, arcMiddle, arcEnd],
+          stops: const <double>[0, .45, 1],
         ).createShader(trackRect)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = _sourceTrackWidth
+        ..strokeWidth = ringGeometry.trackWidth
         ..strokeCap = StrokeCap.round,
     );
     canvas.drawArc(
       trackRect,
       startAngle,
-      math.pi * 2 * _sourceGlossFraction,
+      sweep,
       false,
       Paint()
-        ..color = const Color(0x85FFFFFF)
+        ..color = const Color(0x3DFFFFFF)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 5
         ..strokeCap = StrokeCap.round,
     );
-    if (sweep > 0) {
-      canvas.drawArc(
-        trackRect.shift(const Offset(0, 5)),
-        startAngle,
-        sweep,
-        false,
-        Paint()
-          ..color = endColor.withValues(alpha: .30)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _sourceTrackWidth
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.5),
-      );
-      canvas.drawArc(
-        trackRect,
-        startAngle,
-        sweep,
-        false,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[startColor, middleColor, endColor],
-            stops: const <double>[0, .45, 1],
-          ).createShader(trackRect)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _sourceTrackWidth
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawArc(
-        trackRect,
-        startAngle,
-        sweep,
-        false,
-        Paint()
-          ..color = const Color(0x3DFFFFFF)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 5
-          ..strokeCap = StrokeCap.round,
-      );
-    }
   }
 
-  void _paintVerticalProjection(Canvas canvas) {
-    final gauge = RRect.fromRectAndRadius(
-      Rect.fromLTWH(264, 58, 24, 192),
-      Radius.circular(12),
-    );
-    canvas.drawRRect(gauge, Paint()..color = const Color(0x73CFC7DF));
-    final fillHeight = gauge.height * sourceProgress;
-    if (fillHeight > 0) {
-      final fill = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          gauge.left,
-          gauge.bottom - fillHeight,
-          gauge.width,
-          fillHeight,
-        ),
-        const Radius.circular(12),
-      );
-      canvas.drawRRect(
-        fill,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-            colors: <Color>[endColor, middleColor, startColor],
-            stops: const <double>[0, .55, 1],
-          ).createShader(gauge.outerRect),
-      );
-    }
+  void _paintVerticalProjectionRing(Canvas canvas, Rect trackRect) {
+    // Mapping a bottom-to-top gauge height to the lower circular arc preserves
+    // the approved ring track, its gradient and rounded active endpoint. At
+    // 50% the lower semicircle is filled; at 100% the identical ring is full.
+    final fill = sourceProgress.clamp(0.0, 1.0).toDouble();
+    final cutoff = 1 - fill * 2;
+    final startAngle = math.asin(cutoff.clamp(-1.0, 1.0).toDouble());
+    final sweep = math.pi - 2 * startAngle;
+    _paintActiveArc(canvas, trackRect, startAngle, sweep);
     final markerRatio = breakEvenGaugeRatio;
     if (markerRatio != null) {
-      final markerY = gauge.bottom - gauge.height * markerRatio;
+      final markerY = trackRect.bottom - trackRect.height * markerRatio;
       canvas.drawLine(
-        Offset(gauge.left - 5, markerY),
-        Offset(gauge.right + 5, markerY),
+        Offset(trackRect.left - 5, markerY),
+        Offset(trackRect.right + 5, markerY),
         Paint()
           ..color = const Color(0xFF8D849F)
           ..strokeWidth = 3
@@ -901,8 +1036,46 @@ final class _SelectionChromePainter extends CustomPainter {
     }
   }
 
+  void _paintAnnualSegments(Canvas canvas, Rect trackRect, double startAngle) {
+    if (annualSegments.length != 12) return;
+    const sectionSweep = math.pi * 2 / 12;
+    const sectionGap = .018;
+    for (var index = 0; index < annualSegments.length; index += 1) {
+      final segment = annualSegments[index];
+      if (segment.isFuture || segment.rawProgress <= 0) continue;
+      final activeSweep =
+          (sectionSweep - sectionGap) * segment.rawProgress.clamp(0.0, 1.0);
+      final sectionStart = startAngle + sectionSweep * index + sectionGap / 2;
+      final tone = BudgetLimitProgressToneResolver.resolve(
+        rawProgress: segment.rawProgress,
+        targetAccent: targetAccent,
+      );
+      final gradient = _SelectionArcGradient.fromCategoryColor(tone);
+      _paintActiveArcWithColors(
+        canvas,
+        trackRect,
+        sectionStart,
+        activeSweep,
+        gradient.start,
+        gradient.middle,
+        gradient.end,
+      );
+    }
+  }
+
+  void _paintTypicalMarker(Canvas canvas, Rect trackRect, double startAngle) {
+    final rawPosition = typicalMarkerPosition;
+    if (rawPosition == null) return;
+    const markerSweep = math.pi * 2 * .055;
+    final position = rawPosition.clamp(0.0, 1.0).toDouble();
+    final markerStart = startAngle + position * (math.pi * 2 - markerSweep);
+    _paintActiveArc(canvas, trackRect, markerStart, markerSweep);
+  }
+
   @override
   bool shouldRepaint(covariant _SelectionChromePainter oldDelegate) =>
+      oldDelegate.ringGeometry != ringGeometry ||
+      oldDelegate.targetAccent != targetAccent ||
       oldDelegate.startColor != startColor ||
       oldDelegate.middleColor != middleColor ||
       oldDelegate.endColor != endColor ||
@@ -910,7 +1083,9 @@ final class _SelectionChromePainter extends CustomPainter {
       oldDelegate.shadowColor != shadowColor ||
       oldDelegate.sourceProgress != sourceProgress ||
       oldDelegate.geometry != geometry ||
-      oldDelegate.breakEvenGaugeRatio != breakEvenGaugeRatio;
+      oldDelegate.breakEvenGaugeRatio != breakEvenGaugeRatio ||
+      !listEquals(oldDelegate.annualSegments, annualSegments) ||
+      oldDelegate.typicalMarkerPosition != typicalMarkerPosition;
 }
 
 /// Literal source vector contract from the local visual reference.

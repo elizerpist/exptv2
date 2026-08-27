@@ -298,6 +298,7 @@ class DashboardBinaryCodecTest {
             orderedCategoryIds = listOf(categoryId),
             actualScaled100 = cells,
             limitScaled100 = limits,
+            limitSource = ByteArray(28) { 1 },
         )
     }
 
@@ -315,6 +316,9 @@ class DashboardBinaryCodecTest {
         assertEquals(28, input.readInt())
         val limits = LongArray(28) { input.readLong() }
         assertEquals(limit, limits[5])
+        assertEquals(28, input.readInt())
+        assertEquals(1, input.readUnsignedByte())
+        input.skipBytes(27)
     }
 
     private fun rhythmBank(value: Long): FluviPreparedBudgetRhythmDirectionBank =

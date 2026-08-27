@@ -16,6 +16,7 @@ import 'dashboard_budget_target.dart';
 import 'dashboard_budget_limit_edit_controller.dart';
 import 'dashboard_budget_month_end_projection.dart';
 import 'dashboard_budget_period.dart';
+import 'dashboard_budget_scope_analysis.dart';
 import 'transaction_direction_controller.dart';
 
 /// Immutable, presentation-only target input for the Budget rail. Aggregate
@@ -51,7 +52,12 @@ final class DashboardBudgetTargetPresentationItem {
 
 /// Distinguishes canonical utilization from the DAY-only derived forecast.
 /// This is presentation analysis mode, not another persisted Budget period.
-enum DashboardBudgetAnalysisMode { actualUtilization, projectedMonthEnd }
+enum DashboardBudgetAnalysisMode {
+  actualUtilization,
+  projectedMonthEnd,
+  annualSegments,
+  typicalMarker,
+}
 
 @immutable
 final class DashboardBudgetLiveSelectionState {
@@ -63,9 +69,11 @@ final class DashboardBudgetLiveSelectionState {
     required this.canonicalActualScaled100ForLimitEdit,
     required this.limitScaled100,
     required this.limitKey,
+    required this.editContext,
     required this.coreRevision,
     required this.analysisScopeLabel,
     required this.analysisMode,
+    required this.scopeAnalysis,
     required this.monthEndProjection,
     required this.visual,
   });
@@ -74,6 +82,7 @@ final class DashboardBudgetLiveSelectionState {
     required LedgerDirection direction,
     required DashboardBudgetTarget target,
     required String title,
+    String analysisScopeLabel = '—',
   }) => DashboardBudgetLiveSelectionState._(
     direction: direction,
     target: target,
@@ -82,9 +91,11 @@ final class DashboardBudgetLiveSelectionState {
     canonicalActualScaled100ForLimitEdit: null,
     limitScaled100: null,
     limitKey: null,
+    editContext: null,
     coreRevision: null,
-    analysisScopeLabel: '—',
+    analysisScopeLabel: analysisScopeLabel,
     analysisMode: DashboardBudgetAnalysisMode.actualUtilization,
+    scopeAnalysis: null,
     monthEndProjection: null,
     visual: BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
       targetHandle: target.handle,
@@ -95,35 +106,48 @@ final class DashboardBudgetLiveSelectionState {
     required LedgerDirection direction,
     required DashboardBudgetTarget target,
     required String title,
-    required int displayNumeratorScaled100,
-    required int canonicalActualScaled100ForLimitEdit,
-    required int? limitScaled100,
-    required FinancialLimitKey limitKey,
+    required DashboardBudgetScopeAnalysis scopeAnalysis,
+    required FinancialLimitKey? limitKey,
+    required DashboardBudgetEditContext? editContext,
     required int coreRevision,
     required String analysisScopeLabel,
     required DashboardBudgetAnalysisMode analysisMode,
+    List<BudgetProgressRingAnnualSegment> annualSegments =
+        const <BudgetProgressRingAnnualSegment>[],
+    double? typicalMarkerPosition,
     DashboardBudgetMonthEndProjection? monthEndProjection,
   }) => DashboardBudgetLiveSelectionState._(
     direction: direction,
     target: target,
     title: title,
-    displayNumeratorScaled100: displayNumeratorScaled100,
-    canonicalActualScaled100ForLimitEdit: canonicalActualScaled100ForLimitEdit,
-    limitScaled100: limitScaled100,
+    displayNumeratorScaled100: scopeAnalysis.displayNumeratorScaled100,
+    canonicalActualScaled100ForLimitEdit:
+        scopeAnalysis.canonicalActualScaled100ForLimitEdit,
+    limitScaled100: scopeAnalysis.denominatorScaled100,
     limitKey: limitKey,
+    editContext: editContext,
     coreRevision: coreRevision,
     analysisScopeLabel: analysisScopeLabel,
     analysisMode: analysisMode,
+    scopeAnalysis: scopeAnalysis,
     monthEndProjection: monthEndProjection,
     visual: BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: target.handle,
       limitKey: limitKey,
-      displayNumeratorScaled100: displayNumeratorScaled100,
-      effectiveLimitScaled100: limitScaled100,
-      chromeGeometry:
-          analysisMode == DashboardBudgetAnalysisMode.projectedMonthEnd
-          ? BudgetLimitProgressChromeGeometry.verticalProjection
-          : BudgetLimitProgressChromeGeometry.circular,
+      displayNumeratorScaled100: scopeAnalysis.displayNumeratorScaled100!,
+      effectiveLimitScaled100: scopeAnalysis.denominatorScaled100,
+      chromeGeometry: switch (analysisMode) {
+        DashboardBudgetAnalysisMode.actualUtilization =>
+          BudgetLimitProgressChromeGeometry.circular,
+        DashboardBudgetAnalysisMode.projectedMonthEnd =>
+          BudgetLimitProgressChromeGeometry.verticalProjection,
+        DashboardBudgetAnalysisMode.annualSegments =>
+          BudgetLimitProgressChromeGeometry.annualSegments,
+        DashboardBudgetAnalysisMode.typicalMarker =>
+          BudgetLimitProgressChromeGeometry.typicalMarker,
+      },
+      annualSegments: annualSegments,
+      typicalMarkerPosition: typicalMarkerPosition,
     ),
   );
 
@@ -140,9 +164,11 @@ final class DashboardBudgetLiveSelectionState {
   final int? canonicalActualScaled100ForLimitEdit;
   final int? limitScaled100;
   final FinancialLimitKey? limitKey;
+  final DashboardBudgetEditContext? editContext;
   final int? coreRevision;
   final String analysisScopeLabel;
   final DashboardBudgetAnalysisMode analysisMode;
+  final DashboardBudgetScopeAnalysis? scopeAnalysis;
   final DashboardBudgetMonthEndProjection? monthEndProjection;
   final BudgetCategoryAvatarSelectedLimitVisualState visual;
 
@@ -150,15 +176,9 @@ final class DashboardBudgetLiveSelectionState {
   bool get hasLimit => limitScaled100 != null;
 
   DashboardBudgetLimitEditContext? get limitEditContext =>
-      !isAvailable || limitKey == null || coreRevision == null
-      ? null
-      : DashboardBudgetLimitEditContext(
-          key: limitKey!,
-          coreRevision: coreRevision!,
-          targetHandle: target.handle,
-          actualScaled100: canonicalActualScaled100ForLimitEdit!,
-          confirmedLimitScaled100: limitScaled100,
-        );
+      editContext is DashboardBudgetLimitEditContext
+      ? editContext as DashboardBudgetLimitEditContext
+      : null;
 }
 
 /// Rendering adapter for the header. It owns no independent data: all values
@@ -176,8 +196,10 @@ final class DashboardBudgetHeaderPresentation {
       _selection.canonicalActualScaled100ForLimitEdit;
   DashboardBudgetMonthEndProjection? get monthEndProjection =>
       _selection.monthEndProjection;
+  DashboardBudgetScopeAnalysis? get scopeAnalysis => _selection.scopeAnalysis;
   int? get limitScaled100 => _selection.limitScaled100;
   FinancialLimitKey? get limitKey => _selection.limitKey;
+  DashboardBudgetEditContext? get editContext => _selection.editContext;
   int? get coreRevision => _selection.coreRevision;
   String get analysisScopeLabel => _selection.analysisScopeLabel;
   bool get isAvailable => _selection.isAvailable;
@@ -223,6 +245,7 @@ final class DashboardBudgetPartitionPresentation {
     required this.effectiveAggregateLimitScaled100,
     required this.preparedAllocatedTotalScaled100,
     required this.optimisticAllocationDeltaScaled100,
+    required this.effectiveLimitByTargetHandle,
     required this.categoryOverlay,
   });
 
@@ -237,6 +260,7 @@ final class DashboardBudgetPartitionPresentation {
        effectiveAggregateLimitScaled100 = null,
        preparedAllocatedTotalScaled100 = 0,
        optimisticAllocationDeltaScaled100 = 0,
+       effectiveLimitByTargetHandle = const <int, int>{},
        categoryOverlay = DashboardBudgetCategoryAllocationOverlay.empty;
 
   final LedgerDirection direction;
@@ -249,6 +273,11 @@ final class DashboardBudgetPartitionPresentation {
   final int? effectiveAggregateLimitScaled100;
   final int preparedAllocatedTotalScaled100;
   final int optimisticAllocationDeltaScaled100;
+
+  /// Sparse optimistic corrections over the immutable prepared dense bank.
+  /// It is populated only while a base or YEAR vector mutation is active or
+  /// pending; ordinary temporal ticks keep using the prepared cells directly.
+  final Map<int, int> effectiveLimitByTargetHandle;
   final DashboardBudgetCategoryAllocationOverlay categoryOverlay;
 
   bool get isAvailable =>
@@ -285,6 +314,8 @@ final class DashboardBudgetPartitionPresentation {
     final target = targetCatalog.targetAtHandle(handle);
     final categoryId = target.category?.id;
     if (categoryId == null) return null;
+    final optimisticLimit = effectiveLimitByTargetHandle[handle];
+    if (optimisticLimit != null) return optimisticLimit;
     return categoryOverlay.hasOverrideForCategoryId(categoryId)
         ? categoryOverlay.effectiveLimitForCategoryId(categoryId)
         : directionBank
@@ -337,6 +368,45 @@ final class DashboardBudgetPresentationState {
       DashboardBudgetHeaderPresentation(liveSelection);
   BudgetCategoryAvatarSelectedLimitVisualState get selectedLimitVisual =>
       liveSelection.visual;
+}
+
+/// Bounded per-prepared-revision SUM source cache. The average is independent
+/// of a base-limit edit, so only the small denominator adapter is rebuilt
+/// during an optimistic SUM gesture; an avatar carousel tick never walks the
+/// history window again.
+@immutable
+final class _TypicalMonthAverageCacheKey {
+  const _TypicalMonthAverageCacheKey({
+    required this.coreRevision,
+    required this.direction,
+    required this.targetHandle,
+    required this.yearWindowStart,
+    required this.yearWindowEndInclusive,
+  });
+
+  final int coreRevision;
+  final LedgerDirection direction;
+  final int targetHandle;
+  final int yearWindowStart;
+  final int yearWindowEndInclusive;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _TypicalMonthAverageCacheKey &&
+      other.coreRevision == coreRevision &&
+      other.direction == direction &&
+      other.targetHandle == targetHandle &&
+      other.yearWindowStart == yearWindowStart &&
+      other.yearWindowEndInclusive == yearWindowEndInclusive;
+
+  @override
+  int get hashCode => Object.hash(
+    coreRevision,
+    direction,
+    targetHandle,
+    yearWindowStart,
+    yearWindowEndInclusive,
+  );
 }
 
 /// Headless, CoreDashboard-lifetime binding between immutable target visuals,
@@ -403,6 +473,10 @@ final class DashboardBudgetPresentationController
   int? _lastPartitionDiagnosticSignature;
   int? _lastMonthEndProjectionDiagnosticSignature;
   int? _lastDirectionDomainDiagnosticSignature;
+  PreparedBudgetLimitSnapshot? _typicalAverageCacheSnapshot;
+  final Map<_TypicalMonthAverageCacheKey, DashboardBudgetTypicalMonthAverage>
+  _typicalAverageByPreparedTarget =
+      <_TypicalMonthAverageCacheKey, DashboardBudgetTypicalMonthAverage>{};
 
   /// Called by the shared carousel only on semantic selection changes, never
   /// for a pixel or animation tick.
@@ -467,6 +541,7 @@ final class DashboardBudgetPresentationController
         .identity;
     _catalog = catalog;
     _snapshotUsedForCatalog = _snapshotForCurrentFrame();
+    _evictTypicalAverageCacheFor(_snapshotUsedForCatalog);
     _publishCatalog(catalog: catalog, selectedHandle: selectedHandle);
     _recordDirectionDomain(catalog, _snapshotUsedForCatalog);
     if (notifyCategoryInput &&
@@ -627,6 +702,7 @@ final class DashboardBudgetPresentationController
         snapshot.coreRevision != frame.coreRevision ||
         target.handle >= snapshot.targetCountFor(_direction)) {
       _limitEditController?.invalidateIfContextChanged(null);
+      _limitEditController?.invalidateYearIfContextChanged(null);
       return DashboardBudgetLiveSelectionState.unavailable(
         direction: _direction,
         target: target,
@@ -634,16 +710,16 @@ final class DashboardBudgetPresentationController
       );
     }
     final visibleScope = frame.scope.timeScope;
-    final persistedLimitPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
+    final preparedBudgetPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
       visibleScope,
     );
-    final key = _financialLimitKeyFor(target, period: persistedLimitPeriod);
+    final key = _financialLimitKeyFor(target, period: preparedBudgetPeriod);
     _limitEditController?.invalidateIfContextChanged(key);
     late final PreparedBudgetLimitCell cell;
     try {
       cell = snapshot.cellAt(
         direction: _direction,
-        period: persistedLimitPeriod,
+        period: preparedBudgetPeriod,
         targetHandle: target.handle,
       );
     } on RangeError {
@@ -653,18 +729,15 @@ final class DashboardBudgetPresentationController
         direction: _direction,
         target: target,
         title: title,
+        analysisScopeLabel: _analysisScopeLabel(visibleScope),
       );
     }
-    _limitEditController?.observePreparedLimit(
-      key: key,
-      coreRevision: snapshot.coreRevision,
-      confirmedLimitScaled100: cell.limitScaled100,
+    final effectiveLimitScaled100 = _effectiveLimitForPreparedCell(
+      snapshot: snapshot,
+      target: target,
+      period: preparedBudgetPeriod,
+      cell: cell,
     );
-    // [effectiveLimitFor] already resolves the complete overlay contract and
-    // must not be coalesced back to a stale prepared cell.
-    final effectiveLimitScaled100 = _limitEditController == null
-        ? cell.limitScaled100
-        : _limitEditController.effectiveLimitFor(key, cell.limitScaled100);
     final monthEndProjection = _monthEndProjectionFor(
       snapshot: snapshot,
       direction: _direction,
@@ -673,24 +746,322 @@ final class DashboardBudgetPresentationController
       canonicalMonthlyActualScaled100: cell.actualScaled100,
       effectiveMonthlyLimitScaled100: effectiveLimitScaled100,
     );
-    final analysisMode = monthEndProjection == null
-        ? DashboardBudgetAnalysisMode.actualUtilization
-        : DashboardBudgetAnalysisMode.projectedMonthEnd;
-    final displayNumeratorScaled100 =
-        monthEndProjection?.projectedMonthEndScaled100 ?? cell.actualScaled100;
+    final scopeAnalysis = switch (visibleScope) {
+      DayScope() => DashboardBudgetDayProjectionAnalysis(
+        projection: monthEndProjection!,
+        canonicalMonthlyActualScaled100: cell.actualScaled100,
+      ),
+      MonthScope() => DashboardBudgetMonthAnalysis(
+        monthlyActualScaled100: cell.actualScaled100,
+        resolvedMonthlyLimitScaled100: effectiveLimitScaled100,
+      ),
+      YearScope(:final year) => _yearAnalysisFor(
+        snapshot: snapshot,
+        target: target,
+        year: year,
+        annualActualScaled100: cell.actualScaled100,
+      ),
+      AllTimeScope() => _typicalMonthAnalysisFor(
+        snapshot: snapshot,
+        target: target,
+        baseMonthlyLimitScaled100: effectiveLimitScaled100,
+      ),
+    };
+    if (scopeAnalysis.displayNumeratorScaled100 == null) {
+      return DashboardBudgetLiveSelectionState.unavailable(
+        direction: _direction,
+        target: target,
+        title: title,
+        analysisScopeLabel: _analysisScopeLabel(visibleScope),
+      );
+    }
+    final analysisMode = switch (scopeAnalysis) {
+      DashboardBudgetDayProjectionAnalysis() =>
+        DashboardBudgetAnalysisMode.projectedMonthEnd,
+      DashboardBudgetYearAnalysis() =>
+        DashboardBudgetAnalysisMode.annualSegments,
+      DashboardBudgetTypicalMonthAnalysis() =>
+        DashboardBudgetAnalysisMode.typicalMarker,
+      DashboardBudgetMonthAnalysis() =>
+        DashboardBudgetAnalysisMode.actualUtilization,
+    };
+    final annualSegments = scopeAnalysis is DashboardBudgetYearAnalysis
+        ? _annualSegmentsFor(
+            scopeAnalysis,
+            year: (visibleScope as YearScope).year,
+          )
+        : const <BudgetProgressRingAnnualSegment>[];
+    final editContext = _editContextFor(
+      target: target,
+      visibleScope: visibleScope,
+      scopeAnalysis: scopeAnalysis,
+      scalarKey: key,
+      coreRevision: snapshot.coreRevision,
+    );
+    _limitEditController?.invalidateYearIfContextChanged(
+      editContext is DashboardBudgetYearLimitEditContext ? editContext : null,
+    );
     return DashboardBudgetLiveSelectionState.available(
       direction: _direction,
       target: target,
       title: title,
-      displayNumeratorScaled100: displayNumeratorScaled100,
-      canonicalActualScaled100ForLimitEdit: cell.actualScaled100,
-      limitScaled100: effectiveLimitScaled100,
+      scopeAnalysis: scopeAnalysis,
       limitKey: key,
+      editContext: editContext,
       coreRevision: snapshot.coreRevision,
       analysisScopeLabel: _analysisScopeLabel(visibleScope),
       analysisMode: analysisMode,
+      annualSegments: annualSegments,
+      typicalMarkerPosition:
+          scopeAnalysis is DashboardBudgetTypicalMonthAnalysis
+          ? scopeAnalysis.rawRatio
+          : null,
       monthEndProjection: monthEndProjection,
     );
+  }
+
+  DashboardBudgetEditContext? _editContextFor({
+    required DashboardBudgetTarget target,
+    required LedgerTimeScope visibleScope,
+    required DashboardBudgetScopeAnalysis scopeAnalysis,
+    required FinancialLimitKey? scalarKey,
+    required int coreRevision,
+  }) {
+    if (visibleScope is YearScope &&
+        scopeAnalysis is DashboardBudgetYearAnalysis) {
+      return DashboardBudgetYearLimitEditContext(
+        direction: _financialLimitDirection,
+        target: _financialLimitTargetFor(target),
+        coreRevision: coreRevision,
+        targetHandle: target.handle,
+        year: visibleScope.year,
+        monthOverrideKeys: <FinancialLimitKey>[
+          for (var month = 1; month <= 12; month += 1)
+            _financialLimitKeyFor(
+              target,
+              period: BudgetLimitPeriod.month(visibleScope.year, month),
+            )!,
+        ],
+        confirmedMonthlyLimitsScaled100: <int>[
+          for (final limit in scopeAnalysis.monthlyResolvedLimitsScaled100)
+            limit ?? 0,
+        ],
+        canonicalAnnualActualScaled100:
+            scopeAnalysis.canonicalActualScaled100ForLimitEdit ?? 0,
+      );
+    }
+    if (scalarKey == null) return null;
+    return DashboardBudgetLimitEditContext(
+      key: scalarKey,
+      coreRevision: coreRevision,
+      targetHandle: target.handle,
+      actualScaled100: scopeAnalysis.canonicalActualScaled100ForLimitEdit,
+      confirmedLimitScaled100: scopeAnalysis.denominatorScaled100,
+    );
+  }
+
+  /// Resolves an optimistic edit without allowing a pending base mutation to
+  /// overwrite an explicit month override. Provenance arrives with the dense
+  /// prepared bank, so this is O(1) and never falls back to a repository read.
+  int? _effectiveLimitForPreparedCell({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required DashboardBudgetTarget target,
+    required BudgetLimitPeriod period,
+    required PreparedBudgetLimitCell cell,
+  }) {
+    final edits = _limitEditController;
+    if (edits == null) return cell.limitScaled100;
+    final directKey = _financialLimitKeyFor(target, period: period);
+    if (directKey != null) {
+      edits.observePreparedLimit(
+        key: directKey,
+        coreRevision: snapshot.coreRevision,
+        confirmedLimitScaled100: cell.limitScaled100,
+      );
+      if (edits.hasOverlayFor(directKey)) {
+        return edits.effectiveLimitFor(directKey, cell.limitScaled100);
+      }
+    }
+    if (period is! BudgetLimitMonthPeriod ||
+        cell.limitSource != PreparedBudgetLimitSource.base) {
+      return cell.limitScaled100;
+    }
+    final baseKey = _baseMonthlyLimitKeyFor(target);
+    final baseCell = snapshot.cellAt(
+      direction: _direction,
+      period: const BudgetLimitPeriod.sum(),
+      targetHandle: target.handle,
+    );
+    edits.observePreparedLimit(
+      key: baseKey,
+      coreRevision: snapshot.coreRevision,
+      confirmedLimitScaled100: baseCell.limitScaled100,
+    );
+    return edits.effectiveLimitFor(baseKey, cell.limitScaled100);
+  }
+
+  DashboardBudgetYearAnalysis _yearAnalysisFor({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required DashboardBudgetTarget target,
+    required int year,
+    required int annualActualScaled100,
+  }) {
+    final limits = <int?>[];
+    final actuals = <int>[];
+    for (var month = 1; month <= 12; month += 1) {
+      final period = BudgetLimitPeriod.month(year, month);
+      final cell = snapshot.cellAt(
+        direction: _direction,
+        period: period,
+        targetHandle: target.handle,
+      );
+      limits.add(
+        _effectiveLimitForPreparedCell(
+          snapshot: snapshot,
+          target: target,
+          period: period,
+          cell: cell,
+        ),
+      );
+      actuals.add(cell.actualScaled100);
+    }
+    final yearContext = DashboardBudgetYearLimitEditContext(
+      direction: _financialLimitDirection,
+      target: _financialLimitTargetFor(target),
+      coreRevision: snapshot.coreRevision,
+      targetHandle: target.handle,
+      year: year,
+      monthOverrideKeys: <FinancialLimitKey>[
+        for (var month = 1; month <= 12; month += 1)
+          _financialLimitKeyFor(
+            target,
+            period: BudgetLimitPeriod.month(year, month),
+          )!,
+      ],
+      confirmedMonthlyLimitsScaled100: <int>[
+        for (final limit in limits) limit ?? 0,
+      ],
+      canonicalAnnualActualScaled100: annualActualScaled100,
+    );
+    final edits = _limitEditController;
+    if (edits != null) {
+      edits.observePreparedYearLimits(
+        yearContext,
+        confirmedMonthlyLimitsScaled100:
+            yearContext.confirmedMonthlyLimitsScaled100,
+        coreRevision: snapshot.coreRevision,
+      );
+      if (edits.hasYearOverlayFor(yearContext)) {
+        final effective = edits.effectiveYearLimitsFor(yearContext);
+        for (var index = 0; index < 12; index += 1) {
+          limits[index] = effective[index];
+        }
+      }
+    }
+    return DashboardBudgetYearAnalysis(
+      annualActualScaled100: annualActualScaled100,
+      annualResolvedLimitScaled100: limits.any((limit) => limit == null)
+          ? null
+          : limits.whereType<int>().fold<int>(0, (sum, limit) => sum + limit),
+      monthlyActualsScaled100: List<int>.unmodifiable(actuals),
+      monthlyResolvedLimitsScaled100: List<int?>.unmodifiable(limits),
+    );
+  }
+
+  List<BudgetProgressRingAnnualSegment> _annualSegmentsFor(
+    DashboardBudgetYearAnalysis analysis, {
+    required int year,
+  }) => List<BudgetProgressRingAnnualSegment>.unmodifiable([
+    for (var index = 0; index < 12; index += 1)
+      BudgetProgressRingAnnualSegment(
+        rawProgress:
+            analysis.monthlyResolvedLimitsScaled100[index] == null ||
+                analysis.monthlyResolvedLimitsScaled100[index]! <= 0
+            ? 0
+            : analysis.monthlyActualsScaled100[index] /
+                  analysis.monthlyResolvedLimitsScaled100[index]!,
+        isFuture:
+            year > _logicalAsOfDate.year ||
+            (year == _logicalAsOfDate.year &&
+                index + 1 > _logicalAsOfDate.month),
+      ),
+  ]);
+
+  DashboardBudgetTypicalMonthAnalysis _typicalMonthAnalysisFor({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required DashboardBudgetTarget target,
+    required int? baseMonthlyLimitScaled100,
+  }) {
+    final cacheKey = _TypicalMonthAverageCacheKey(
+      coreRevision: snapshot.coreRevision,
+      direction: _direction,
+      targetHandle: target.handle,
+      yearWindowStart: snapshot.yearWindowStart,
+      yearWindowEndInclusive: snapshot.yearWindowEndInclusive,
+    );
+    final average = _typicalAverageByPreparedTarget.putIfAbsent(
+      cacheKey,
+      () => _computeTypicalMonthAverage(snapshot: snapshot, target: target),
+    );
+    return DashboardBudgetTypicalMonthAnalysis(
+      average: average,
+      baseMonthlyLimitScaled100: baseMonthlyLimitScaled100,
+    );
+  }
+
+  DashboardBudgetTypicalMonthAverage _computeTypicalMonthAverage({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required DashboardBudgetTarget target,
+  }) {
+    final lastCompleted = _lastCompletedMonthInWindow(snapshot);
+    if (lastCompleted == null) {
+      return const DashboardBudgetTypicalMonthAverage.unavailable();
+    }
+    var firstHistoryMonthLinear = -1;
+    var total = 0;
+    var count = 0;
+    for (
+      var linear = snapshot.yearWindowStart * 12;
+      linear <= lastCompleted;
+      linear += 1
+    ) {
+      final year = linear ~/ 12;
+      final month = linear % 12 + 1;
+      if (year < snapshot.yearWindowStart) continue;
+      final actual = snapshot
+          .cellAt(
+            direction: _direction,
+            period: BudgetLimitPeriod.month(year, month),
+            targetHandle: target.handle,
+          )
+          .actualScaled100;
+      if (firstHistoryMonthLinear < 0 && actual > 0) {
+        firstHistoryMonthLinear = linear;
+      }
+      if (firstHistoryMonthLinear >= 0) {
+        total += actual;
+        count += 1;
+      }
+    }
+    return DashboardBudgetTypicalMonthAverage.resolve(
+      completedMonthSpendScaled100: total,
+      completedMonthCount: count,
+    );
+  }
+
+  void _evictTypicalAverageCacheFor(PreparedBudgetLimitSnapshot? snapshot) {
+    if (identical(_typicalAverageCacheSnapshot, snapshot)) return;
+    _typicalAverageCacheSnapshot = snapshot;
+    _typicalAverageByPreparedTarget.clear();
+  }
+
+  int? _lastCompletedMonthInWindow(PreparedBudgetLimitSnapshot snapshot) {
+    final logicalLinear =
+        _logicalAsOfDate.year * 12 + _logicalAsOfDate.month - 1;
+    final latest = logicalLinear - 1;
+    final windowStart = snapshot.yearWindowStart * 12;
+    final windowEnd = snapshot.yearWindowEndInclusive * 12 + 11;
+    return latest < windowStart ? null : latest.clamp(windowStart, windowEnd);
   }
 
   DashboardBudgetPartitionPresentation _partitionFor({
@@ -722,39 +1093,84 @@ final class DashboardBudgetPresentationController
       );
     }
     final edits = _limitEditController;
-    if (edits != null && edits.hasOverlayFor(aggregateKey)) {
-      edits.observePreparedLimit(
-        key: aggregateKey,
-        coreRevision: snapshot.coreRevision,
-        confirmedLimitScaled100: aggregateCell.limitScaled100,
-      );
-    }
-    final effectiveAggregateLimitScaled100 = edits == null
-        ? aggregateCell.limitScaled100
-        : edits.effectiveLimitFor(aggregateKey, aggregateCell.limitScaled100);
+    final effectiveAggregateLimitScaled100 = switch (period) {
+      BudgetLimitYearPeriod(:final year) => _yearAnalysisFor(
+        snapshot: snapshot,
+        target: aggregate,
+        year: year,
+        annualActualScaled100: aggregateCell.actualScaled100,
+      ).denominatorScaled100,
+      _ => _effectiveLimitForPreparedCell(
+        snapshot: snapshot,
+        target: aggregate,
+        period: period,
+        cell: aggregateCell,
+      ),
+    };
     final financialDirection = switch (_direction) {
       LedgerDirection.income => FinancialLimitDirection.income,
       LedgerDirection.expense => FinancialLimitDirection.expense,
     };
-    edits?.observePreparedCategoryAllocationScope(
-      direction: financialDirection,
-      period: aggregateKey.period,
-      coreRevision: snapshot.coreRevision,
-      confirmedLimitForCategoryId: (categoryId) {
-        final handle = catalog.handleForCategoryId(categoryId);
-        return handle == null
-            ? null
-            : bank
-                  .cellAt(periodSliceIndex: slice, targetHandle: handle)
-                  .limitScaled100;
-      },
-    );
-    final categoryOverlay =
-        edits?.categoryAllocationOverlayFor(
-          direction: financialDirection,
-          period: aggregateKey.period,
-        ) ??
-        DashboardBudgetCategoryAllocationOverlay.empty;
+    if (aggregateKey != null) {
+      edits?.observePreparedCategoryAllocationScope(
+        direction: financialDirection,
+        period: aggregateKey.period,
+        coreRevision: snapshot.coreRevision,
+        confirmedLimitForCategoryId: (categoryId) {
+          final handle = catalog.handleForCategoryId(categoryId);
+          return handle == null
+              ? null
+              : bank
+                    .cellAt(periodSliceIndex: slice, targetHandle: handle)
+                    .limitScaled100;
+        },
+      );
+    }
+    final categoryOverlay = aggregateKey == null
+        ? DashboardBudgetCategoryAllocationOverlay.empty
+        : edits?.categoryAllocationOverlayFor(
+                direction: financialDirection,
+                period: aggregateKey.period,
+              ) ??
+              DashboardBudgetCategoryAllocationOverlay.empty;
+    final effectiveLimitByTargetHandle = <int, int>{};
+    var inheritedOrYearAllocationDeltaScaled100 = 0;
+    if (edits?.hasScalarOverlay == true && period is BudgetLimitMonthPeriod) {
+      // A base edit changes every inherited month immediately. Walk only the
+      // retained category handles while an overlay exists; normal time ticks
+      // retain the O(1) prepared-bank path.
+      for (var handle = 1; handle < bank.targetCount; handle += 1) {
+        final cell = bank.cellAt(periodSliceIndex: slice, targetHandle: handle);
+        if (cell.limitSource != PreparedBudgetLimitSource.base) continue;
+        final target = catalog.targetAtHandle(handle);
+        final baseKey = _baseMonthlyLimitKeyFor(target);
+        if (!edits!.hasOverlayFor(baseKey)) continue;
+        final effective = edits.effectiveLimitFor(baseKey, cell.limitScaled100);
+        if (effective == null || effective == cell.limitScaled100) continue;
+        effectiveLimitByTargetHandle[handle] = effective;
+        inheritedOrYearAllocationDeltaScaled100 +=
+            _positiveLimit(effective) - _positiveLimit(cell.limitScaled100);
+      }
+    }
+    if (edits?.hasYearOverlay == true && period is BudgetLimitYearPeriod) {
+      // A derived YEAR edit owns exactly twelve overrides. Resolve each
+      // category's bounded vector here only while that one semantic mutation
+      // is live, so the allocation lane cannot disagree with Header/ring.
+      for (var handle = 1; handle < bank.targetCount; handle += 1) {
+        final target = catalog.targetAtHandle(handle);
+        final cell = bank.cellAt(periodSliceIndex: slice, targetHandle: handle);
+        final effective = _yearAnalysisFor(
+          snapshot: snapshot,
+          target: target,
+          year: period.year,
+          annualActualScaled100: cell.actualScaled100,
+        ).denominatorScaled100;
+        if (effective == null || effective == cell.limitScaled100) continue;
+        effectiveLimitByTargetHandle[handle] = effective;
+        inheritedOrYearAllocationDeltaScaled100 +=
+            _positiveLimit(effective) - _positiveLimit(cell.limitScaled100);
+      }
+    }
     return DashboardBudgetPartitionPresentation._(
       direction: _direction,
       period: period,
@@ -769,7 +1185,11 @@ final class DashboardBudgetPresentationController
       preparedAllocatedTotalScaled100:
           bank.allocatedCategoryLimitTotalScaled100ByPeriodSlice[slice],
       optimisticAllocationDeltaScaled100:
-          categoryOverlay.allocationDeltaScaled100,
+          categoryOverlay.allocationDeltaScaled100 +
+          inheritedOrYearAllocationDeltaScaled100,
+      effectiveLimitByTargetHandle: Map<int, int>.unmodifiable(
+        effectiveLimitByTargetHandle,
+      ),
       categoryOverlay: categoryOverlay,
     );
   }
@@ -823,24 +1243,44 @@ final class DashboardBudgetPresentationController
       ? DashboardBudgetAggregateVisual.forDirection(_direction).title
       : target.category!.displayName;
 
-  FinancialLimitKey _financialLimitKeyFor(
+  FinancialLimitKey? _financialLimitKeyFor(
     DashboardBudgetTarget target, {
     required BudgetLimitPeriod period,
-  }) => FinancialLimitKey(
-    direction: switch (_direction) {
-      LedgerDirection.income => FinancialLimitDirection.income,
-      LedgerDirection.expense => FinancialLimitDirection.expense,
-    },
-    target: target.isAggregate
-        ? const FinancialLimitAggregateTarget()
-        : FinancialLimitCategoryTarget(target.category!.id),
-    period: switch (period) {
-      BudgetLimitSumPeriod() => const FinancialLimitSumPeriod(),
-      BudgetLimitYearPeriod(:final year) => FinancialLimitYearPeriod(year),
+  }) {
+    final storedPeriod = switch (period) {
+      BudgetLimitSumPeriod() => const FinancialLimitBaseMonthlyPeriod(),
+      // A YEAR limit is a derived twelve-month vector, not one stored key.
+      BudgetLimitYearPeriod() => null,
       BudgetLimitMonthPeriod(:final year, :final month) =>
-        FinancialLimitMonthPeriod(year, month),
-    },
-  );
+        FinancialLimitMonthOverridePeriod(year, month),
+    };
+    if (storedPeriod == null) return null;
+    return FinancialLimitKey(
+      direction: _financialLimitDirection,
+      target: _financialLimitTargetFor(target),
+      period: storedPeriod,
+    );
+  }
+
+  FinancialLimitKey _baseMonthlyLimitKeyFor(DashboardBudgetTarget target) =>
+      FinancialLimitKey(
+        direction: _financialLimitDirection,
+        target: _financialLimitTargetFor(target),
+        period: const FinancialLimitBaseMonthlyPeriod(),
+      );
+
+  FinancialLimitDirection get _financialLimitDirection => switch (_direction) {
+    LedgerDirection.income => FinancialLimitDirection.income,
+    LedgerDirection.expense => FinancialLimitDirection.expense,
+  };
+
+  static int _positiveLimit(int? value) =>
+      value != null && value > 0 ? value : 0;
+
+  FinancialLimitTarget _financialLimitTargetFor(DashboardBudgetTarget target) =>
+      target.isAggregate
+      ? const FinancialLimitAggregateTarget()
+      : FinancialLimitCategoryTarget(target.category!.id);
 
   void _recordHeaderBinding(DashboardBudgetLiveSelectionState header) {
     final frame = _visibleFrame.value;
@@ -1006,6 +1446,11 @@ final class DashboardBudgetPresentationController
       partition.optimisticAllocationDeltaScaled100,
       partition.liveAllocatedTotalScaled100,
       selectedHandle,
+      Object.hashAll(
+        partition.effectiveLimitByTargetHandle.entries.map(
+          (entry) => Object.hash(entry.key, entry.value),
+        ),
+      ),
       partition.categoryOverlay,
     );
     if (_lastPartitionDiagnosticSignature == signature) return;

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
@@ -28,28 +30,120 @@ typedef SummaryPillComponentCandidateProjector =
       required int offset,
     });
 
-/// One geometry authority for Segmented Summary's compact visual cluster.
+/// Stable authored content requirements for the segmented Summary.
 ///
-/// Semantic selector tracks retain their original quarter-width, nonoverlap
-/// hit rectangles. Only the labels/badges are compacted, so the amount zone
-/// and touch affordance are unchanged while every adjacent active visual pitch
-/// becomes exactly half of the previous quarter-track pitch.
+/// This measurement runs once, not in a carousel item builder, so a fling
+/// cannot introduce `TextPainter` work in the rendering hot path. The widest
+/// localized month label is reserved before the first layout.
+@immutable
+final class SummarySegmentedContentMetrics {
+  const SummarySegmentedContentMetrics._({
+    required this.modeVisualSize,
+    required this.yearWidth,
+    required this.monthWidth,
+    required this.dayWidth,
+  });
+
+  static final SummarySegmentedContentMetrics authored =
+      SummarySegmentedContentMetrics._(
+        modeVisualSize: DashboardLogBoxTokens.avatarSize,
+        yearWidth: _textWidth('2026'),
+        monthWidth: List<double>.generate(
+          12,
+          (index) => _textWidth(_monthLabelFor(index + 1)),
+        ).reduce(math.max),
+        dayWidth: _textWidth('31'),
+      );
+
+  /// The pre-regression product used the compact 25px mode badge. It is
+  /// evidence only: the final product always renders [authored]'s large badge.
+  /// Keeping this separate makes the requested half-gap compare actual old
+  /// content bounds instead of accidentally measuring the new large icon.
+  static final SummarySegmentedContentMetrics preRegression =
+      SummarySegmentedContentMetrics._(
+        modeVisualSize: 25,
+        yearWidth: _textWidth('2026'),
+        monthWidth: List<double>.generate(
+          12,
+          (index) => _textWidth(_monthLabelFor(index + 1)),
+        ).reduce(math.max),
+        dayWidth: _textWidth('31'),
+      );
+
+  final double modeVisualSize;
+  final double yearWidth;
+  final double monthWidth;
+  final double dayWidth;
+
+  double widthForTrack(int track) => switch (track) {
+    0 => modeVisualSize,
+    1 => yearWidth,
+    2 => monthWidth,
+    3 => dayWidth,
+    _ => throw ArgumentError.value(track, 'track', 'Unknown Summary track.'),
+  };
+
+  static double _textWidth(String value) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: value,
+        style: FluviVisualTokens.summaryTitleTextStyle,
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    // Two safety pixels retain anti-aliased glyph edges inside their owner
+    // Rect without changing authored typography.
+    return painter.width.ceilToDouble() + 2;
+  }
+
+  static String _monthLabelFor(int month) =>
+      DashboardTimeLabelFormatter.monthName(
+        month,
+      ).substring(0, 3).toUpperCase();
+}
+
+/// One actual Rect authority for each active segmented Summary component.
+///
+/// The same section Rect owns painting, clipping, semantics and carousel hit
+/// testing. There are no hidden quarter-width gesture tracks and no translated
+/// visual contents.
 @immutable
 final class SummarySegmentedTrackGeometry {
   const SummarySegmentedTrackGeometry._({
     required this.width,
+    required this.height,
     required this.activeTrackIndices,
-    required this.baselineVisualPitch,
-    required this.visualPitch,
-  });
+    required this.contentMetrics,
+    required this.preRegressionContentEdgeGap,
+    required this.segmentedSectionGap,
+    required Map<int, Rect> sectionRects,
+    required Map<int, Rect> visualContentRects,
+  }) : _sectionRects = sectionRects,
+       _visualContentRects = visualContentRects;
+
+  /// The old unshifted four-track layout is the comparison baseline. Its mode
+  /// and year content bounds yield one concrete empty content-edge distance.
+  static double preRegressionContentEdgeGapFor({
+    required double preRegressionNavigationWidth,
+    SummarySegmentedContentMetrics? contentMetrics,
+  }) {
+    final metrics =
+        contentMetrics ?? SummarySegmentedContentMetrics.preRegression;
+    return preRegressionNavigationWidth / 4 -
+        (metrics.modeVisualSize + metrics.yearWidth) / 2;
+  }
 
   factory SummarySegmentedTrackGeometry.resolve({
     required double width,
     required List<int> activeTrackIndices,
+    double height = 59,
+    SummarySegmentedContentMetrics? contentMetrics,
+    double? preRegressionNavigationWidth,
   }) {
-    if (width <= 0 || activeTrackIndices.isEmpty) {
+    if (width <= 0 || height <= 0 || activeTrackIndices.isEmpty) {
       throw ArgumentError(
-        'Segmented track geometry needs active positive width.',
+        'Segmented track geometry needs active positive width and height.',
       );
     }
     var previous = -1;
@@ -59,36 +153,104 @@ final class SummarySegmentedTrackGeometry {
       }
       previous = track;
     }
-    final baseline = width / 4;
+    final metrics = contentMetrics ?? SummarySegmentedContentMetrics.authored;
+    final baselineWidth = preRegressionNavigationWidth ?? width;
+    final baselineGap = preRegressionContentEdgeGapFor(
+      preRegressionNavigationWidth: baselineWidth,
+    );
+    if (baselineGap < 0) {
+      throw ArgumentError.value(
+        width,
+        'width',
+        'Segmented Summary cannot fit its authored content.',
+      );
+    }
+    final gap = baselineGap / 2;
+    // The component Rect is the hit, semantics and clipping owner. It has a
+    // reasonable touch envelope while the authored content remains centred
+    // within it. Expand toward 44dp only as far as actual neighbour Rects
+    // remain disjoint; this never reintroduces hidden quarter-width lanes.
+    var touchWidth = 44.0;
+    for (var index = 0; index < activeTrackIndices.length - 1; index += 1) {
+      final firstWidth = metrics.widthForTrack(activeTrackIndices[index]);
+      final secondWidth = metrics.widthForTrack(activeTrackIndices[index + 1]);
+      final smaller = math.min(firstWidth, secondWidth);
+      final larger = math.max(firstWidth, secondWidth);
+      final maximumWithoutOverlap = smaller + gap * 2 <= larger
+          ? smaller + gap * 2
+          : (firstWidth + secondWidth) / 2 + gap;
+      touchWidth = math.min(touchWidth, maximumWithoutOverlap);
+    }
+    final sectionRects = <int, Rect>{};
+    final visualContentRects = <int, Rect>{};
+    // The large mode visual itself—not the padded gesture owner—uses the same
+    // left inset as its top inset.
+    var nextVisualLeft = (height - metrics.modeVisualSize) / 2;
+    for (final track in activeTrackIndices) {
+      final contentWidth = metrics.widthForTrack(track);
+      final sectionWidth = math.max(contentWidth, touchWidth);
+      final visualLeft = nextVisualLeft;
+      final ownerLeft = visualLeft - (sectionWidth - contentWidth) / 2;
+      sectionRects[track] = Rect.fromLTWH(ownerLeft, 0, sectionWidth, height);
+      visualContentRects[track] = Rect.fromLTWH(
+        visualLeft,
+        (height - metrics.modeVisualSize) / 2,
+        contentWidth,
+        metrics.modeVisualSize,
+      );
+      nextVisualLeft += contentWidth + gap;
+    }
+    final exceedsBounds = sectionRects.values.any(
+      (rect) => rect.left < 0 || rect.right > width,
+    );
+    final overlaps = activeTrackIndices.indexed.any(
+      (entry) =>
+          entry.$1 > 0 &&
+          sectionRects[activeTrackIndices[entry.$1 - 1]]!.overlaps(
+            sectionRects[entry.$2]!,
+          ),
+    );
+    if (exceedsBounds || overlaps) {
+      throw ArgumentError.value(
+        width,
+        'width',
+        'Segmented Summary cannot fit active authored sections.',
+      );
+    }
     return SummarySegmentedTrackGeometry._(
       width: width,
+      height: height,
       activeTrackIndices: List<int>.unmodifiable(activeTrackIndices),
-      baselineVisualPitch: baseline,
-      visualPitch: baseline * .5,
+      contentMetrics: metrics,
+      preRegressionContentEdgeGap: baselineGap,
+      segmentedSectionGap: gap,
+      sectionRects: Map<int, Rect>.unmodifiable(sectionRects),
+      visualContentRects: Map<int, Rect>.unmodifiable(visualContentRects),
     );
   }
 
   final double width;
+  final double height;
   final List<int> activeTrackIndices;
-  final double baselineVisualPitch;
-  final double visualPitch;
+  final SummarySegmentedContentMetrics contentMetrics;
+  final double preRegressionContentEdgeGap;
+  final double segmentedSectionGap;
+  final Map<int, Rect> _sectionRects;
+  final Map<int, Rect> _visualContentRects;
 
-  Rect semanticRectForTrack(int track) =>
-      Rect.fromLTWH(track * baselineVisualPitch, 0, baselineVisualPitch, 0);
+  Rect semanticRectForTrack(int track) => _rectForTrack(track);
 
-  double semanticCenterForTrack(int track) =>
-      semanticRectForTrack(track).center.dx;
+  double semanticCenterForTrack(int track) => _rectForTrack(track).center.dx;
 
-  double visualCenterForTrack(int track) {
-    final activeIndex = activeTrackIndices.indexOf(track);
-    if (activeIndex < 0) {
-      throw ArgumentError.value(track, 'track', 'Track is not active.');
-    }
-    return baselineVisualPitch * .5 + activeIndex * visualPitch;
-  }
+  /// The painted content is centred within the exact same owning interaction
+  /// Rect; this catches any future return of a visual-only translation.
+  double visualCenterForTrack(int track) =>
+      visualContentRectForTrack(track).center.dx;
 
-  double visualOffsetForTrack(int track) =>
-      visualCenterForTrack(track) - semanticCenterForTrack(track);
+  /// Authored glyph/badge bounds within the one owning semantic Rect.
+  Rect visualContentRectForTrack(int track) =>
+      _visualContentRects[track] ??
+      (throw ArgumentError.value(track, 'track', 'Inactive Summary track.'));
 
   double separatorCenterAfterTrack(int leadingTrack) {
     final leadingIndex = activeTrackIndices.indexOf(leadingTrack);
@@ -99,9 +261,19 @@ final class SummarySegmentedTrackGeometry {
         'A separator needs a following active track.',
       );
     }
-    return (visualCenterForTrack(leadingTrack) +
-            visualCenterForTrack(activeTrackIndices[leadingIndex + 1])) /
-        2;
+    final leading = visualContentRectForTrack(leadingTrack);
+    final following = visualContentRectForTrack(
+      activeTrackIndices[leadingIndex + 1],
+    );
+    return (leading.right + following.left) / 2;
+  }
+
+  Rect _rectForTrack(int track) {
+    final rect = _sectionRects[track];
+    if (rect == null) {
+      throw ArgumentError.value(track, 'track', 'Track is not active.');
+    }
+    return rect;
   }
 }
 
@@ -166,11 +338,17 @@ final class SummaryPillExperiment extends StatelessWidget {
           // Keep the pre-existing prepared-amount width contract while
           // turning its remaining area into deterministic fixed tracks.
           final amountWidth = constraints.maxWidth * .40;
-          final navigationWidth =
+          // This is the original quarter-track navigation footprint. It is
+          // retained only as the measured pre-regression content-edge baseline
+          // for the requested 50% gap—not as a visual or gesture lane.
+          final preRegressionNavigationWidth =
               constraints.maxWidth - amountWidth - inset * 2;
+          // The amount zone preserves its existing right edge and start. The
+          // navigation surface begins at the Summary's actual left edge so
+          // the mode badge can use the same left and top visual inset.
+          final navigationWidth = constraints.maxWidth - amountWidth - inset;
           return Row(
             children: <Widget>[
-              SizedBox(width: inset),
               SizedBox(
                 width: navigationWidth,
                 height: bounds.height,
@@ -178,6 +356,7 @@ final class SummaryPillExperiment extends StatelessWidget {
                   level: level,
                   height: bounds.height,
                   width: navigationWidth,
+                  preRegressionNavigationWidth: preRegressionNavigationWidth,
                   navigation: navigation,
                   presentation: presentation,
                   onLevelCrossed: onLevelCrossed,
@@ -286,6 +465,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     required this.level,
     required this.height,
     required this.width,
+    required this.preRegressionNavigationWidth,
     required this.navigation,
     required this.presentation,
     required this.onLevelCrossed,
@@ -297,6 +477,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final SummaryPillExperimentLevel level;
   final double height;
   final double width;
+  final double preRegressionNavigationWidth;
   final DashboardNavigationController navigation;
   final DashboardSummaryPresentationSettings presentation;
   final _LevelCrossed onLevelCrossed;
@@ -310,6 +491,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     level: level,
     height: height,
     width: width,
+    preRegressionNavigationWidth: preRegressionNavigationWidth,
     navigation: navigation,
     presentation: presentation,
     trackCount: 4,
@@ -321,8 +503,6 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       key: const ValueKey<String>('summary-pill-segmented-mode-selector'),
       height: height,
       level: level,
-      layout: presentation.modeSelectorLayout,
-      visualContentOffsetX: 0,
       onCrossed: onLevelCrossed,
       onMotionActiveChanged: onSelectorMotionActiveChanged,
     ),
@@ -338,6 +518,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     required this.level,
     required this.height,
     required this.width,
+    required this.preRegressionNavigationWidth,
     required this.navigation,
     required this.presentation,
     required this.trackCount,
@@ -355,6 +536,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final SummaryPillExperimentLevel level;
   final double height;
   final double width;
+  final double preRegressionNavigationWidth;
   final DashboardNavigationController navigation;
   final DashboardSummaryPresentationSettings presentation;
   final int trackCount;
@@ -380,19 +562,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     ];
     final geometry = SummarySegmentedTrackGeometry.resolve(
       width: width,
+      height: height,
       activeTrackIndices: activeTracks,
+      preRegressionNavigationWidth: preRegressionNavigationWidth,
     );
-    final trackWidth = geometry.baselineVisualPitch;
     return Stack(
       children: <Widget>[
-        _track(
-          trackWidth,
-          modeTrack,
-          _withVisualOffset(
-            modeSelector,
-            geometry.visualOffsetForTrack(modeTrack),
-          ),
-        ),
+        _track(geometry.semanticRectForTrack(modeTrack), modeSelector),
         if (presentation.showSeparators &&
             level != SummaryPillExperimentLevel.sum)
           _separator(
@@ -402,8 +578,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
           ),
         if (level != SummaryPillExperimentLevel.sum)
           _track(
-            trackWidth,
-            yearTrack,
+            geometry.semanticRectForTrack(yearTrack),
             _HierarchyValueSelector(
               key: ValueKey<String>('summary-pill-$keyPrefix-year-selector'),
               height: height,
@@ -432,7 +607,6 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
               presentation: presentation.temporalFlingPresentation,
-              visualContentOffsetX: geometry.visualOffsetForTrack(yearTrack),
             ),
           ),
         if ((level == SummaryPillExperimentLevel.month ||
@@ -443,8 +617,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
         if (level == SummaryPillExperimentLevel.month ||
             level == SummaryPillExperimentLevel.day)
           _track(
-            trackWidth,
-            monthTrack,
+            geometry.semanticRectForTrack(monthTrack),
             _HierarchyValueSelector(
               key: ValueKey<String>('summary-pill-$keyPrefix-month-selector'),
               height: height,
@@ -473,13 +646,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
               presentation: presentation.temporalFlingPresentation,
-              visualContentOffsetX: geometry.visualOffsetForTrack(monthTrack),
             ),
           ),
         if (level == SummaryPillExperimentLevel.day)
           _track(
-            trackWidth,
-            dayTrack,
+            geometry.semanticRectForTrack(dayTrack),
             _HierarchyValueSelector(
               key: ValueKey<String>('summary-pill-$keyPrefix-day-selector'),
               height: height,
@@ -508,7 +679,6 @@ final class _FixedHierarchyTracks extends StatelessWidget {
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
               presentation: presentation.temporalFlingPresentation,
-              visualContentOffsetX: geometry.visualOffsetForTrack(dayTrack),
             ),
           ),
         if (presentation.showSeparators &&
@@ -519,26 +689,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     );
   }
 
-  Widget _track(double trackWidth, int index, Widget child) => Positioned(
-    left: trackWidth * index,
-    width: trackWidth,
-    top: 0,
-    bottom: 0,
-    child: child,
-  );
-
-  Widget _withVisualOffset(Widget child, double offset) =>
-      child is _ModeSelector
-      ? _ModeSelector(
-          key: child.key,
-          height: child.height,
-          level: child.level,
-          layout: child.layout,
-          onCrossed: child.onCrossed,
-          onMotionActiveChanged: child.onMotionActiveChanged,
-          visualContentOffsetX: offset,
-        )
-      : child;
+  Widget _track(Rect rect, Widget child) =>
+      Positioned.fromRect(rect: rect, child: child);
 
   Widget _separator(
     SummarySegmentedTrackGeometry geometry, {
@@ -570,16 +722,12 @@ final class _ModeSelector extends StatefulWidget {
     super.key,
     required this.height,
     required this.level,
-    required this.layout,
-    this.visualContentOffsetX = 0,
     required this.onCrossed,
     this.onMotionActiveChanged,
   });
 
   final double height;
   final SummaryPillExperimentLevel level;
-  final SummaryModeSelectorLayout layout;
-  final double visualContentOffsetX;
   final _LevelCrossed onCrossed;
   final ValueChanged<bool>? onMotionActiveChanged;
 
@@ -635,12 +783,8 @@ final class _ModeSelectorState extends State<_ModeSelector> {
         }
       },
       onMotionIdle: (_) => widget.onMotionActiveChanged?.call(false),
-      itemBuilder: (context, item, _) => ExcludeSemantics(
-        child: Transform.translate(
-          offset: Offset(widget.visualContentOffsetX, 0),
-          child: _ModeBadge(item: item, layout: widget.layout),
-        ),
-      ),
+      itemBuilder: (context, item, _) =>
+          ExcludeSemantics(child: _ModeBadge(item: item)),
     ),
   );
 
@@ -652,48 +796,25 @@ final class _ModeSelectorState extends State<_ModeSelector> {
 }
 
 final class _ModeBadge extends StatelessWidget {
-  const _ModeBadge({required this.item, required this.layout});
+  const _ModeBadge({required this.item});
 
   final SummaryPillExperimentLevel item;
-  final SummaryModeSelectorLayout layout;
 
   @override
   Widget build(BuildContext context) {
-    final large = layout == SummaryModeSelectorLayout.largeIcon;
-    final badgeSize = large ? DashboardLogBoxTokens.avatarSize : 25.0;
+    const badgeSize = DashboardLogBoxTokens.avatarSize;
     final badge = Container(
       key: ValueKey<String>('summary-pill-segmented-mode-badge-${item.name}'),
       width: badgeSize,
       height: badgeSize,
-      padding: EdgeInsets.all(large ? 7 : 5),
+      padding: const EdgeInsets.all(7),
       decoration: BoxDecoration(
         color: const Color(0xFFF1EFFF),
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Icon(
-        item.icon,
-        color: const Color(0xFF7564F5),
-        size: large ? 20 : 15,
-      ),
+      child: Icon(item.icon, color: const Color(0xFF7564F5), size: 20),
     );
-    if (layout != SummaryModeSelectorLayout.iconWithLabel) return badge;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        badge,
-        const SizedBox(height: 2),
-        Text(
-          item.shortLabel,
-          maxLines: 1,
-          style: const TextStyle(
-            fontSize: 8,
-            height: 1,
-            fontWeight: FontWeight.w700,
-            color: FluviVisualTokens.textSecondary,
-          ),
-        ),
-      ],
-    );
+    return badge;
   }
 }
 
@@ -707,7 +828,6 @@ final class _HierarchyValueSelector extends StatefulWidget {
     required this.labelForCandidate,
     required this.onCrossed,
     required this.presentation,
-    this.visualContentOffsetX = 0,
     this.onMotionActiveChanged,
   });
 
@@ -722,7 +842,6 @@ final class _HierarchyValueSelector extends StatefulWidget {
   final String Function(DashboardNavigationState candidate) labelForCandidate;
   final ValueChanged<DashboardNavigationState> onCrossed;
   final SummaryTemporalFlingPresentation presentation;
-  final double visualContentOffsetX;
   final ValueChanged<bool>? onMotionActiveChanged;
 
   @override
@@ -782,16 +901,13 @@ final class _HierarchyValueSelectorState
                 SummaryTemporalFlingPresentation.dynamicTrio) {
               return const SizedBox.shrink();
             }
-            return Transform.translate(
-              offset: Offset(widget.visualContentOffsetX, 0),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  widget.labelForCandidate(candidate),
-                  maxLines: 1,
-                  style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
-                    color: FluviVisualTokens.textSecondary,
-                  ),
+            return FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                widget.labelForCandidate(candidate),
+                maxLines: 1,
+                style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
+                  color: FluviVisualTokens.textSecondary,
                 ),
               ),
             );
@@ -806,7 +922,6 @@ final class _HierarchyValueSelectorState
                   height: widget.height,
                   rawIndex: _controller.rawCenteredLogicalIndex,
                   isMoving: _controller.hasActiveScrollActivity,
-                  visualContentOffsetX: widget.visualContentOffsetX,
                   origin: _motionOrigin ?? widget.navigation.state,
                   candidateForOffset: widget.candidateForOffset,
                   labelForCandidate: widget.labelForCandidate,
@@ -825,21 +940,11 @@ final class _HierarchyValueSelectorState
   }
 }
 
-extension on SummaryPillExperimentLevel {
-  String get shortLabel => switch (this) {
-    SummaryPillExperimentLevel.sum => 'ÖSSZ',
-    SummaryPillExperimentLevel.year => 'ÉV',
-    SummaryPillExperimentLevel.month => 'HÓ',
-    SummaryPillExperimentLevel.day => 'NAP',
-  };
-}
-
 final class _DynamicTrioValues extends StatelessWidget {
   const _DynamicTrioValues({
     required this.height,
     required this.rawIndex,
     required this.isMoving,
-    required this.visualContentOffsetX,
     required this.origin,
     required this.candidateForOffset,
     required this.labelForCandidate,
@@ -848,7 +953,6 @@ final class _DynamicTrioValues extends StatelessWidget {
   final double height;
   final double rawIndex;
   final bool isMoving;
-  final double visualContentOffsetX;
   final DashboardNavigationState origin;
   final DashboardNavigationState? Function(DashboardNavigationState, int)
   candidateForOffset;
@@ -878,18 +982,15 @@ final class _DynamicTrioValues extends StatelessWidget {
       right: 0,
       top: geometry.centerY - 10,
       height: 20,
-      child: Transform.translate(
-        offset: Offset(visualContentOffsetX, 0),
-        child: Transform.scale(
-          scale: geometry.scale,
-          child: Center(
-            child: Text(
-              key: ValueKey<String>('summary-pill-dynamic-trio-$offset'),
-              labelForCandidate(candidate),
-              maxLines: 1,
-              style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
-                color: FluviVisualTokens.textSecondary,
-              ),
+      child: Transform.scale(
+        scale: geometry.scale,
+        child: Center(
+          child: Text(
+            key: ValueKey<String>('summary-pill-dynamic-trio-$offset'),
+            labelForCandidate(candidate),
+            maxLines: 1,
+            style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
+              color: FluviVisualTokens.textSecondary,
             ),
           ),
         ),

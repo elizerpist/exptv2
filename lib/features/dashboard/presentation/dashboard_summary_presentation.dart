@@ -1,16 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-/// Presentation-only Summary controls. Temporal state, query keys and
-/// carousel crossing ownership remain outside this dashboard-lifetime model.
-enum SummaryModeSelectorLayout {
-  current('Jelenlegi'),
-  iconWithLabel('Ikon + címke'),
-  largeIcon('Nagy ikon');
-
-  const SummaryModeSelectorLayout(this.label);
-  final String label;
-}
-
 enum SummaryTemporalFlingPresentation {
   current('Jelenlegi'),
   dynamicTrio('Dinamikus hármas');
@@ -23,26 +12,21 @@ enum SummaryTemporalFlingPresentation {
 final class DashboardSummaryPresentationSettings {
   const DashboardSummaryPresentationSettings({
     required this.showSeparators,
-    required this.modeSelectorLayout,
     required this.temporalFlingPresentation,
   });
 
   const DashboardSummaryPresentationSettings.defaults()
     : showSeparators = true,
-      modeSelectorLayout = SummaryModeSelectorLayout.current,
       temporalFlingPresentation = SummaryTemporalFlingPresentation.current;
 
   final bool showSeparators;
-  final SummaryModeSelectorLayout modeSelectorLayout;
   final SummaryTemporalFlingPresentation temporalFlingPresentation;
 
   DashboardSummaryPresentationSettings copyWith({
     bool? showSeparators,
-    SummaryModeSelectorLayout? modeSelectorLayout,
     SummaryTemporalFlingPresentation? temporalFlingPresentation,
   }) => DashboardSummaryPresentationSettings(
     showSeparators: showSeparators ?? this.showSeparators,
-    modeSelectorLayout: modeSelectorLayout ?? this.modeSelectorLayout,
     temporalFlingPresentation:
         temporalFlingPresentation ?? this.temporalFlingPresentation,
   );
@@ -51,15 +35,10 @@ final class DashboardSummaryPresentationSettings {
   bool operator ==(Object other) =>
       other is DashboardSummaryPresentationSettings &&
       other.showSeparators == showSeparators &&
-      other.modeSelectorLayout == modeSelectorLayout &&
       other.temporalFlingPresentation == temporalFlingPresentation;
 
   @override
-  int get hashCode => Object.hash(
-    showSeparators,
-    modeSelectorLayout,
-    temporalFlingPresentation,
-  );
+  int get hashCode => Object.hash(showSeparators, temporalFlingPresentation);
 }
 
 final class DashboardSummaryPresentationController
@@ -69,9 +48,6 @@ final class DashboardSummaryPresentationController
 
   void setSeparatorsVisible(bool visible) =>
       _set(value.copyWith(showSeparators: visible));
-
-  void selectModeSelectorLayout(SummaryModeSelectorLayout layout) =>
-      _set(value.copyWith(modeSelectorLayout: layout));
 
   void selectTemporalFlingPresentation(
     SummaryTemporalFlingPresentation presentation,

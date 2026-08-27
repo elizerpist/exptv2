@@ -38,14 +38,21 @@ final class PreparedBudgetLimitCell {
   const PreparedBudgetLimitCell({
     required this.actualScaled100,
     required this.limitScaled100,
+    this.limitSource = PreparedBudgetLimitSource.unavailable,
   }) : assert(actualScaled100 >= 0),
        assert(limitScaled100 == null || limitScaled100 >= 0);
 
   final int actualScaled100;
   final int? limitScaled100;
+  final PreparedBudgetLimitSource limitSource;
 
   bool get hasLimit => limitScaled100 != null;
 }
+
+/// Native prepared provenance for a resolved monthly denominator. This lets a
+/// pending base edit update inherited months immediately without touching an
+/// explicit monthly override.
+enum PreparedBudgetLimitSource { unavailable, base, override }
 
 /// Immutable dense limit/actual bank for one exact core revision and prepared
 /// dashboard direction. Handle zero is aggregate; all other handles are local

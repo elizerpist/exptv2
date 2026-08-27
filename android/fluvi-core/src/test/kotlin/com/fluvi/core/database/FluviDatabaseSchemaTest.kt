@@ -133,8 +133,8 @@ class FluviDatabaseSchemaTest {
                     targetKind = FluviFinancialLimitTargetKind.aggregate,
                     targetKey = "aggregate",
                     categoryId = null,
-                    periodKind = FluviFinancialLimitPeriodKind.sum,
-                    periodKey = "sum",
+                    periodKind = FluviFinancialLimitPeriodKind.base,
+                    periodKey = "base",
                     year = null,
                     month = null,
                     limitAmountScaled100 = 0L,
@@ -166,7 +166,7 @@ class FluviDatabaseSchemaTest {
                         "INSERT INTO fluvi_financial_limits " +
                             "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
                             "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
-                            "VALUES ('income', 'aggregate', 'aggregate', 'uncategorized', 'sum', 'sum', " +
+                            "VALUES ('income', 'aggregate', 'aggregate', 'uncategorized', 'base', 'base', " +
                             "NULL, NULL, 1, 1, 1)",
                     )
                 }
@@ -175,8 +175,8 @@ class FluviDatabaseSchemaTest {
                         "INSERT INTO fluvi_financial_limits " +
                             "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
                             "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
-                            "VALUES ('income', 'category', 'category-a', NULL, 'year', 'year:2026', " +
-                            "2026, NULL, 1, 1, 1)",
+                            "VALUES ('income', 'category', 'category-a', NULL, 'base', 'base', " +
+                            "NULL, NULL, 1, 1, 1)",
                     )
                 }
                 assertThrows(SQLiteConstraintException::class.java) {
@@ -184,8 +184,8 @@ class FluviDatabaseSchemaTest {
                         "INSERT INTO fluvi_financial_limits " +
                             "(direction, target_kind, target_key, category_id, period_kind, period_key, " +
                             "year, month, limit_amount_scaled_100, created_at_utc_ms, updated_at_utc_ms) " +
-                            "VALUES ('income', 'aggregate', 'aggregate', NULL, 'year', 'year:not-2026', " +
-                            "2026, NULL, 1, 1, 1)",
+                            "VALUES ('income', 'aggregate', 'aggregate', NULL, 'month', 'month:not-2026', " +
+                            "2026, 1, 1, 1, 1)",
                     )
                 }
             } finally {

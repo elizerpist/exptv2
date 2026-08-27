@@ -17,25 +17,64 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
-  test('segmented visual tracks halve their current quarter-track spacing', () {
+  test('segmented visual and gesture centres are identical', () {
     final geometry = SummarySegmentedTrackGeometry.resolve(
-      width: 344,
+      width: 218.8,
+      preRegressionNavigationWidth: 210.8,
       activeTrackIndices: const <int>[0, 1, 2, 3],
     );
 
-    expect(geometry.baselineVisualPitch, 86);
-    expect(geometry.visualPitch, 43);
+    for (final track in const <int>[0, 1, 2, 3]) {
+      expect(
+        geometry.visualCenterForTrack(track),
+        closeTo(geometry.semanticCenterForTrack(track), .000001),
+        reason:
+            'The visible $track selector must use the same centre as its '
+            'gesture owner.',
+      );
+    }
+    final mode = geometry.semanticRectForTrack(0);
+    final year = geometry.semanticRectForTrack(1);
+    final month = geometry.semanticRectForTrack(2);
+    final day = geometry.semanticRectForTrack(3);
+    expect(mode.overlaps(year), isFalse);
+    expect(year.overlaps(month), isFalse);
+    expect(month.overlaps(day), isFalse);
+    final modeVisual = geometry.visualContentRectForTrack(0);
+    final yearVisual = geometry.visualContentRectForTrack(1);
+    final monthVisual = geometry.visualContentRectForTrack(2);
+    final dayVisual = geometry.visualContentRectForTrack(3);
     expect(
-      geometry.visualCenterForTrack(1) - geometry.visualCenterForTrack(0),
-      43,
+      yearVisual.left - modeVisual.right,
+      closeTo(geometry.segmentedSectionGap, .000001),
     );
     expect(
-      geometry.visualCenterForTrack(2) - geometry.visualCenterForTrack(1),
-      43,
+      monthVisual.left - yearVisual.right,
+      closeTo(geometry.segmentedSectionGap, .000001),
     );
-    expect(geometry.separatorCenterAfterTrack(1), 107.5);
-    expect(geometry.semanticRectForTrack(0).right, 86);
-    expect(geometry.semanticRectForTrack(1).left, 86);
+    expect(
+      dayVisual.left - monthVisual.right,
+      closeTo(geometry.segmentedSectionGap, .000001),
+    );
+    expect(
+      geometry.segmentedSectionGap,
+      geometry.preRegressionContentEdgeGap / 2,
+    );
+    expect(
+      modeVisual.left,
+      (geometry.height - geometry.contentMetrics.modeVisualSize) / 2,
+      reason: 'large mode visual left inset must equal its top inset',
+    );
+    expect(
+      geometry.preRegressionContentEdgeGap,
+      SummarySegmentedTrackGeometry.preRegressionContentEdgeGapFor(
+        preRegressionNavigationWidth: 210.8,
+      ),
+      reason: 'the half-gap must come from old width and old 25px badge',
+    );
+    for (final rect in <Rect>[mode, year, month, day]) {
+      expect(rect.width, greaterThanOrEqualTo(40));
+    }
   });
 
   testWidgets('segmented Summary ports the selected reference material', (
@@ -208,13 +247,16 @@ void main() {
     addTearDown(visibleFrames.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        home: SummaryPillExperiment(
-          variant: SummaryPillVariant.segmented,
-          bounds: _bounds,
-          navigation: navigation,
-          visibleFrames: visibleFrames,
-          onLevelCrossed: (_, _) {},
-          onComponentCrossed: (_, _) {},
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+          ),
         ),
       ),
     );
@@ -250,9 +292,9 @@ void main() {
       const ValueKey<String>('summary-pill-segmented-mode-badge-month'),
     );
     expect(badge, findsOneWidget);
-    expect(tester.getSize(badge), const Size(25, 25));
+    expect(tester.getSize(badge), const Size(34, 34));
     final badgeWidget = tester.widget<Container>(badge);
-    expect(badgeWidget.padding, const EdgeInsets.all(5));
+    expect(badgeWidget.padding, const EdgeInsets.all(7));
     expect(
       badgeWidget.decoration,
       const BoxDecoration(
@@ -495,7 +537,6 @@ void main() {
     addTearDown(visibleFrames.dispose);
     const presentation = DashboardSummaryPresentationSettings(
       showSeparators: false,
-      modeSelectorLayout: SummaryModeSelectorLayout.current,
       temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
     );
     await tester.pumpWidget(
@@ -550,7 +591,7 @@ void main() {
     );
   });
 
-  testWidgets('large mode icon is at least the current LogBox avatar metric', (
+  testWidgets('mode selector is always the current LogBox avatar metric', (
     tester,
   ) async {
     final navigation = DashboardNavigationController(
@@ -562,7 +603,6 @@ void main() {
     addTearDown(visibleFrames.dispose);
     const presentation = DashboardSummaryPresentationSettings(
       showSeparators: true,
-      modeSelectorLayout: SummaryModeSelectorLayout.largeIcon,
       temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
     );
     await tester.pumpWidget(
@@ -585,7 +625,7 @@ void main() {
     expect(find.text('HÓ'), findsNothing);
   });
 
-  testWidgets('icon plus label preserves the current badge metric', (
+  testWidgets('large mode visual left and top padding are equal', (
     tester,
   ) async {
     final navigation = DashboardNavigationController(
@@ -595,11 +635,61 @@ void main() {
     final visibleFrames = DashboardVisibleFrameStore();
     addTearDown(navigation.dispose);
     addTearDown(visibleFrames.dispose);
-    const presentation = DashboardSummaryPresentationSettings(
-      showSeparators: true,
-      modeSelectorLayout: SummaryModeSelectorLayout.iconWithLabel,
-      temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+          ),
+        ),
+      ),
     );
+    // CenteredCarousel applies its initial physical recenter after the first
+    // layout. Verify the settled visual owner rather than an off-center
+    // bootstrap list child.
+    await tester.pump();
+    final shell = tester.getRect(
+      find.byKey(const ValueKey('summary-pill-experiment-segmented')),
+    );
+    // A cyclic carousel can retain a non-clipped bootstrap copy above or
+    // below its viewport. Choose the badge whose real visual rect is inside
+    // the Summary shell, not the first matching offscreen child.
+    final badgeFinder = find.byKey(
+      const ValueKey('summary-pill-segmented-mode-badge-month'),
+    );
+    final badge = badgeFinder
+        .evaluate()
+        .map((element) {
+          final box = element.renderObject! as RenderBox;
+          return box.localToGlobal(Offset.zero) & box.size;
+        })
+        .singleWhere(
+          (rect) =>
+              rect.top >= shell.top &&
+              rect.bottom <= shell.bottom &&
+              rect.left >= shell.left &&
+              rect.right <= shell.right,
+        );
+    expect(badge.left - shell.left, badge.top - shell.top);
+  });
+
+  testWidgets('rendered hierarchy and hit rects are the one layout geometry', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+      initialRailOpen: true,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: SummaryPillExperiment(
@@ -607,18 +697,39 @@ void main() {
           bounds: _bounds,
           navigation: navigation,
           visibleFrames: visibleFrames,
-          presentation: presentation,
           onLevelCrossed: (_, _) {},
           onComponentCrossed: (_, _) {},
         ),
       ),
     );
 
-    final badge = find.byKey(
-      const ValueKey('summary-pill-segmented-mode-badge-month'),
+    final shell = tester.getRect(
+      find.byKey(const ValueKey('summary-pill-experiment-segmented')),
     );
-    expect(tester.getSize(badge), const Size(25, 25));
-    expect(find.text('HÓ'), findsOneWidget);
+    final amount = tester.getRect(
+      find.byKey(const ValueKey('summary-pill-experiment-amount-zone')),
+    );
+    final finalInset = shell.width <= 320
+        ? 6.0
+        : FluviVisualTokens.controlHorizontalInset;
+    final geometry = SummarySegmentedTrackGeometry.resolve(
+      width: shell.width - amount.width - finalInset,
+      height: amount.height,
+      activeTrackIndices: const <int>[0, 1, 2, 3],
+      preRegressionNavigationWidth: shell.width - amount.width - finalInset * 2,
+    );
+    final selectors = <int, Finder>{
+      1: find.byKey(const ValueKey('summary-pill-segmented-year-selector')),
+      2: find.byKey(const ValueKey('summary-pill-segmented-month-selector')),
+      3: find.byKey(const ValueKey('summary-pill-segmented-day-selector')),
+    };
+    for (final entry in selectors.entries) {
+      final actual = tester.getRect(entry.value);
+      final expected = geometry
+          .semanticRectForTrack(entry.key)
+          .shift(Offset(shell.left, amount.top));
+      expect(actual, expected);
+    }
   });
 
   testWidgets(
@@ -633,7 +744,6 @@ void main() {
       addTearDown(visibleFrames.dispose);
       const presentation = DashboardSummaryPresentationSettings(
         showSeparators: true,
-        modeSelectorLayout: SummaryModeSelectorLayout.current,
         temporalFlingPresentation: SummaryTemporalFlingPresentation.dynamicTrio,
       );
       await tester.pumpWidget(
@@ -704,7 +814,6 @@ void main() {
       addTearDown(visibleFrames.dispose);
       const presentation = DashboardSummaryPresentationSettings(
         showSeparators: true,
-        modeSelectorLayout: SummaryModeSelectorLayout.current,
         temporalFlingPresentation: SummaryTemporalFlingPresentation.dynamicTrio,
       );
       await tester.pumpWidget(

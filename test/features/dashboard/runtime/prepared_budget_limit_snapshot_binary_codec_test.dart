@@ -193,6 +193,15 @@ Uint8List _encode({
                 .missingLimitSentinel,
       );
     }
+    int32(cells.length);
+    bytes.add(<int>[
+      for (final cell in cells)
+        switch (cell.limitSource) {
+          PreparedBudgetLimitSource.unavailable => 0,
+          PreparedBudgetLimitSource.base => 1,
+          PreparedBudgetLimitSource.override => 2,
+        },
+    ]);
   }
 
   bank(incomeCategoryIds, incomeCells);

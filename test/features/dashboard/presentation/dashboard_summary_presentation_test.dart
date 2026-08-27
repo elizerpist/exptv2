@@ -11,10 +11,6 @@ void main() {
 
       expect(controller.value.showSeparators, isTrue);
       expect(
-        controller.value.modeSelectorLayout,
-        SummaryModeSelectorLayout.current,
-      );
-      expect(
         controller.value.temporalFlingPresentation,
         SummaryTemporalFlingPresentation.current,
       );
@@ -29,17 +25,12 @@ void main() {
 
     summary
       ..setSeparatorsVisible(false)
-      ..selectModeSelectorLayout(SummaryModeSelectorLayout.largeIcon)
       ..selectTemporalFlingPresentation(
         SummaryTemporalFlingPresentation.dynamicTrio,
       );
     order.select(BudgetSectionOrder.chartThenAvatars);
 
     expect(summary.value.showSeparators, isFalse);
-    expect(
-      summary.value.modeSelectorLayout,
-      SummaryModeSelectorLayout.largeIcon,
-    );
     expect(
       summary.value.temporalFlingPresentation,
       SummaryTemporalFlingPresentation.dynamicTrio,

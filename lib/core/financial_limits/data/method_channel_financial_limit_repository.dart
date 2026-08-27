@@ -46,6 +46,28 @@ final class MethodChannelFinancialLimitRepository
   }
 
   @override
+  Future<List<FinancialLimit>> upsertBatch(
+    List<FinancialLimitMutation> values,
+  ) async {
+    if (values.isEmpty) return const <FinancialLimit>[];
+    final raw = await _channel.invokeMethod<List<Object?>>(
+      'upsertFinancialLimitsBatch',
+      <String, Object?>{
+        'values': <Map<String, Object?>>[
+          for (final value in values)
+            <String, Object?>{
+              ..._key(value.key),
+              'amountScaled100': value.amountScaled100,
+            },
+        ],
+      },
+    );
+    return List<FinancialLimit>.unmodifiable([
+      for (final value in raw ?? const <Object?>[]) _decode(_map(value)),
+    ]);
+  }
+
+  @override
   Future<bool> delete(FinancialLimitKey key) async =>
       await _channel.invokeMethod<bool>('deleteFinancialLimit', _key(key)) ??
       false;
@@ -60,12 +82,9 @@ final class MethodChannelFinancialLimitRepository
         result['categoryId'] = categoryId;
     }
     switch (key.period) {
-      case FinancialLimitSumPeriod():
-        result['periodKind'] = 'sum';
-      case FinancialLimitYearPeriod(:final year):
-        result['periodKind'] = 'year';
-        result['year'] = year;
-      case FinancialLimitMonthPeriod(:final year, :final month):
+      case FinancialLimitBaseMonthlyPeriod():
+        result['periodKind'] = 'base';
+      case FinancialLimitMonthOverridePeriod(:final year, :final month):
         result['periodKind'] = 'month';
         result['year'] = year;
         result['month'] = month;
@@ -83,9 +102,8 @@ final class MethodChannelFinancialLimitRepository
       _ => throw const FormatException('Invalid financial limit target.'),
     };
     final period = switch (_string(raw, 'periodKind')) {
-      'sum' => const FinancialLimitSumPeriod(),
-      'year' => FinancialLimitYearPeriod(_int(raw, 'year')),
-      'month' => FinancialLimitMonthPeriod(
+      'base' => const FinancialLimitBaseMonthlyPeriod(),
+      'month' => FinancialLimitMonthOverridePeriod(
         _int(raw, 'year'),
         _int(raw, 'month'),
       ),

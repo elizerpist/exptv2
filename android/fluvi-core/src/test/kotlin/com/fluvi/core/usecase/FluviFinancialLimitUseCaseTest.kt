@@ -53,7 +53,7 @@ class FluviFinancialLimitUseCaseTest {
         val key = FluviFinancialLimitKey(
             direction = LedgerDirection.expense,
             target = FluviFinancialLimitTarget.Aggregate,
-            period = FluviFinancialLimitPeriod.Sum,
+            period = FluviFinancialLimitPeriod.BaseMonthly,
         )
         val initialRevision = revisions.current()
 
@@ -89,12 +89,12 @@ class FluviFinancialLimitUseCaseTest {
         val aggregate = FluviFinancialLimitKey(
             direction = LedgerDirection.expense,
             target = FluviFinancialLimitTarget.Aggregate,
-            period = FluviFinancialLimitPeriod.Month(2026, 7),
+            period = FluviFinancialLimitPeriod.MonthOverride(2026, 7),
         )
         val categoryKey = FluviFinancialLimitKey(
             direction = LedgerDirection.expense,
             target = FluviFinancialLimitTarget.Category(category.id),
-            period = FluviFinancialLimitPeriod.Month(2026, 7),
+            period = FluviFinancialLimitPeriod.MonthOverride(2026, 7),
         )
         limits.upsert(aggregate, 100L)
         limits.upsert(categoryKey, 200L)
@@ -103,5 +103,28 @@ class FluviFinancialLimitUseCaseTest {
 
         assertEquals(100L, limits.get(aggregate)?.amountScaled100)
         assertNull(limits.get(categoryKey))
+    }
+
+    @Test
+    fun annualDerivedEditPersistsOneAtomicMonthOverrideBatchAndOneRevision() = runBlocking {
+        val revisionBefore = revisions.current()
+        val mutations = (1..12).map { month ->
+            FluviFinancialLimitKey(
+                direction = LedgerDirection.expense,
+                target = FluviFinancialLimitTarget.Aggregate,
+                period = FluviFinancialLimitPeriod.MonthOverride(2026, month),
+            ) to (100L + month)
+        }
+
+        val written = limits.upsertBatch(mutations)
+
+        assertEquals(12, written.size)
+        assertEquals(revisionBefore + 1L, revisions.current())
+        assertEquals(
+            mutations.map { it.second }.sum(),
+            limits.list().filter {
+                it.key.period is FluviFinancialLimitPeriod.MonthOverride
+            }.sumOf { it.amountScaled100 },
+        )
     }
 }

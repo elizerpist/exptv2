@@ -10,6 +10,8 @@ data class FluviPreparedBudgetDirectionBank(
     val actualScaled100: LongArray,
     /** -1 means no persisted limit; zero remains a valid real limit. */
     val limitScaled100: LongArray,
+    /** 0 unavailable, 1 inherited base, 2 concrete month override. */
+    val limitSource: ByteArray,
 ) {
     val targetCount: Int get() = orderedCategoryIds.size + 1
 
@@ -18,7 +20,9 @@ data class FluviPreparedBudgetDirectionBank(
         val expected = periodSliceCount * targetCount
         require(actualScaled100.size == expected)
         require(limitScaled100.size == expected)
+        require(limitSource.size == expected)
         require(limitScaled100.all { it >= -1L })
+        require(limitSource.all { it.toInt() in 0..2 })
     }
 }
 

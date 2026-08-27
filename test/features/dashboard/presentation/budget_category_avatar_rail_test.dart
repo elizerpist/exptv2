@@ -35,6 +35,54 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 void main() {
   setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
 
+  test('all scope strategies retain the one Fluvi ring geometry authority', () {
+    final states = <BudgetCategoryAvatarSelectedLimitVisualState>[
+      BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 1,
+        limitKey: null,
+        displayNumeratorScaled100: 50,
+        effectiveLimitScaled100: 100,
+      ),
+      BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 1,
+        limitKey: null,
+        displayNumeratorScaled100: 100,
+        effectiveLimitScaled100: 100,
+        chromeGeometry: BudgetLimitProgressChromeGeometry.verticalProjection,
+      ),
+      BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 1,
+        limitKey: null,
+        displayNumeratorScaled100: 100,
+        effectiveLimitScaled100: 100,
+        chromeGeometry: BudgetLimitProgressChromeGeometry.annualSegments,
+        annualSegments: List<BudgetProgressRingAnnualSegment>.filled(
+          12,
+          const BudgetProgressRingAnnualSegment(
+            rawProgress: .5,
+            isFuture: false,
+          ),
+        ),
+      ),
+      BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 1,
+        limitKey: null,
+        displayNumeratorScaled100: 50,
+        effectiveLimitScaled100: 100,
+        chromeGeometry: BudgetLimitProgressChromeGeometry.typicalMarker,
+        typicalMarkerPosition: .5,
+      ),
+    ];
+
+    expect(states.map((state) => state.sourceGeometryId).toSet(), <String>{
+      BudgetProgressRingGeometry.sourceId,
+    });
+    expect(BudgetProgressRingGeometry.sourceTrackRadius, isNonZero);
+    expect(BudgetProgressRingGeometry.sourceTrackWidth, isNonZero);
+    expect(states[1].visualProgress, .75);
+    expect(states[2].annualSegments, hasLength(12));
+  });
+
   testWidgets(
     'a distribution route uses the existing rail preview for every cyclic crossing',
     (tester) async {
@@ -483,7 +531,7 @@ void main() {
       const key = FinancialLimitKey(
         direction: FinancialLimitDirection.expense,
         target: FinancialLimitCategoryTarget('groceries'),
-        period: FinancialLimitMonthPeriod(2026, 1),
+        period: FinancialLimitMonthOverridePeriod(2026, 1),
       );
       final visual = ValueNotifier(
         BudgetCategoryAvatarSelectedLimitVisualState.available(
@@ -522,7 +570,7 @@ void main() {
       const key = FinancialLimitKey(
         direction: FinancialLimitDirection.expense,
         target: FinancialLimitCategoryTarget('groceries'),
-        period: FinancialLimitMonthPeriod(2026, 1),
+        period: FinancialLimitMonthOverridePeriod(2026, 1),
       );
       final visual = ValueNotifier(
         BudgetCategoryAvatarSelectedLimitVisualState.available(
@@ -678,7 +726,7 @@ void main() {
       const key = FinancialLimitKey(
         direction: FinancialLimitDirection.expense,
         target: FinancialLimitCategoryTarget('groceries'),
-        period: FinancialLimitMonthPeriod(2026, 1),
+        period: FinancialLimitMonthOverridePeriod(2026, 1),
       );
       final visual = ValueNotifier(
         BudgetCategoryAvatarSelectedLimitVisualState.available(
@@ -1441,6 +1489,13 @@ final class _NoOpFinancialLimitRepository implements FinancialLimitRepository {
     createdAtUtcMs: 1,
     updatedAtUtcMs: 1,
   );
+
+  @override
+  Future<List<FinancialLimit>> upsertBatch(
+    List<FinancialLimitMutation> values,
+  ) async => [
+    for (final value in values) await upsert(value.key, value.amountScaled100),
+  ];
 }
 
 final class _CountingFinancialLimitRepository
@@ -1473,4 +1528,11 @@ final class _CountingFinancialLimitRepository
       updatedAtUtcMs: 1,
     );
   }
+
+  @override
+  Future<List<FinancialLimit>> upsertBatch(
+    List<FinancialLimitMutation> values,
+  ) async => [
+    for (final value in values) await upsert(value.key, value.amountScaled100),
+  ];
 }

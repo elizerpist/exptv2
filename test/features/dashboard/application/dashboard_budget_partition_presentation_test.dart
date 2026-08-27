@@ -209,6 +209,40 @@ void main() {
     });
 
     test(
+      'a pending base-month edit updates an inherited month header and partition together',
+      () async {
+        final harness = _Harness(
+          snapshot: _snapshot(
+            budgetLimitScaled100: 10000000,
+            budgetActualScaled100: 100,
+            inheritedJanuaryLimits: true,
+          ),
+          initialScope: const AllTimeScope(),
+          logicalAsOfDate: const LocalDate(year: 2027, month: 1, day: 10),
+        );
+        addTearDown(harness.dispose);
+
+        final session = harness.edits.startEdit(
+          harness.presentation.value.header.limitEditContext!,
+        )!;
+        harness.edits.applySemanticTick(
+          session,
+          direction: 1,
+          amountStepScaled100: 10000000,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.drag,
+        );
+        await harness.edits.finishEdit(session);
+
+        harness.visible.value = _visibleFrame();
+        final dynamic state = harness.presentation.value;
+        final dynamic partition = state.partition;
+        expect(state.header.limitScaled100, 20000000);
+        expect(partition.effectiveAggregateLimitScaled100, 20000000);
+      },
+    );
+
+    test(
       'pending category allocation stays live through a stale snapshot and reconciles once',
       () async {
         final harness = _Harness(
@@ -371,13 +405,19 @@ final class _Harness {
   _Harness({
     required PreparedBudgetLimitSnapshot snapshot,
     _CountingRepository? repository,
+    LedgerTimeScope initialScope = const MonthScope(
+      YearMonth(year: 2026, month: 1),
+    ),
+    LocalDate logicalAsOfDate = const LocalDate(year: 2026, month: 1, day: 10),
   }) : _snapshot = snapshot,
        repository = repository ?? _CountingRepository(),
        categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
          _category('food', 'Food', 'color_01'),
          _category('health', 'Health', 'color_06'),
        ]),
-       visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame()),
+       visible = ValueNotifier<DashboardVisibleFrame?>(
+         _visibleFrame(scope: initialScope),
+       ),
        direction = TransactionDirectionController(
          initialDirection: TransactionDirection.expense,
        ) {
@@ -391,7 +431,7 @@ final class _Harness {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => _snapshot,
-      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      logicalAsOfDate: logicalAsOfDate,
       limitEditController: edits,
     );
     this.presentation = presentation;
@@ -427,6 +467,7 @@ PreparedBudgetLimitSnapshot _snapshot({
   int foodActualScaled100 = 0,
   int? healthLimitScaled100,
   int healthActualScaled100 = 0,
+  bool inheritedJanuaryLimits = false,
 }) {
   final cells = List<PreparedBudgetLimitCell>.filled(
     42,
@@ -434,16 +475,68 @@ PreparedBudgetLimitSnapshot _snapshot({
   );
   const targetCount = 3;
   const januarySlice = 2;
-  void set(int handle, int actual, int? limit) {
-    cells[januarySlice * targetCount + handle] = PreparedBudgetLimitCell(
+  void set(
+    int slice,
+    int handle,
+    int actual,
+    int? limit, {
+    PreparedBudgetLimitSource limitSource =
+        PreparedBudgetLimitSource.unavailable,
+  }) {
+    cells[slice * targetCount + handle] = PreparedBudgetLimitCell(
       actualScaled100: actual,
       limitScaled100: limit,
+      limitSource: limitSource,
     );
   }
 
-  set(0, budgetActualScaled100, budgetLimitScaled100);
-  set(1, foodActualScaled100, foodLimitScaled100);
-  set(2, healthActualScaled100, healthLimitScaled100);
+  final januaryLimitSource = inheritedJanuaryLimits
+      ? PreparedBudgetLimitSource.base
+      : PreparedBudgetLimitSource.override;
+  set(
+    januarySlice,
+    0,
+    budgetActualScaled100,
+    budgetLimitScaled100,
+    limitSource: januaryLimitSource,
+  );
+  set(
+    januarySlice,
+    1,
+    foodActualScaled100,
+    foodLimitScaled100,
+    limitSource: januaryLimitSource,
+  );
+  set(
+    januarySlice,
+    2,
+    healthActualScaled100,
+    healthLimitScaled100,
+    limitSource: januaryLimitSource,
+  );
+  if (inheritedJanuaryLimits) {
+    set(
+      0,
+      0,
+      budgetActualScaled100,
+      budgetLimitScaled100,
+      limitSource: PreparedBudgetLimitSource.base,
+    );
+    set(
+      0,
+      1,
+      foodActualScaled100,
+      foodLimitScaled100,
+      limitSource: PreparedBudgetLimitSource.base,
+    );
+    set(
+      0,
+      2,
+      healthActualScaled100,
+      healthLimitScaled100,
+      limitSource: PreparedBudgetLimitSource.base,
+    );
+  }
   PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
     orderedCategoryIds: const <String>['food', 'health'],
     cells: cells,
@@ -468,8 +561,10 @@ FluviCategory _category(String id, String name, String colorId) =>
       updatedAtUtcMs: 1,
     );
 
-DashboardVisibleFrame _visibleFrame({int coreRevision = 7}) {
-  const scope = MonthScope(YearMonth(year: 2026, month: 1));
+DashboardVisibleFrame _visibleFrame({
+  int coreRevision = 7,
+  LedgerTimeScope scope = const MonthScope(YearMonth(year: 2026, month: 1)),
+}) {
   final queryScope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
     timeScope: scope,
@@ -495,7 +590,12 @@ DashboardVisibleFrame _visibleFrame({int coreRevision = 7}) {
   return DashboardVisibleFrame.fromPrepared(
     prepared,
     parentQueryKey: prepared.parentQueryKey,
-    plane: TimePlane.month,
+    plane: switch (scope) {
+      AllTimeScope() => TimePlane.sum,
+      YearScope() => TimePlane.year,
+      MonthScope() => TimePlane.month,
+      DayScope() => TimePlane.month,
+    },
     railOpen: false,
     semanticIndex: 0,
     childLabel: 'January',
@@ -536,4 +636,11 @@ final class _CountingRepository implements FinancialLimitRepository {
       ),
     );
   }
+
+  @override
+  Future<List<FinancialLimit>> upsertBatch(
+    List<FinancialLimitMutation> values,
+  ) async => [
+    for (final value in values) await upsert(value.key, value.amountScaled100),
+  ];
 }

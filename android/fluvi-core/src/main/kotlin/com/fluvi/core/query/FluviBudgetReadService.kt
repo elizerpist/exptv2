@@ -212,6 +212,15 @@ class FluviBudgetReadService internal constructor(
             }
         }
 
+        // Persisted truth is base-month plus concrete override only. The
+        // prepared YEAR/SUM cells below are derived cache values, never rows
+        // that can be independently read or edited.
+        val baseByDirectionHandle = LedgerDirection.entries.associateWith {
+            hashMapOf<Int, Long>()
+        }
+        val overridesByDirectionHandleMonth = LedgerDirection.entries.associateWith {
+            hashMapOf<Triple<Int, Int, Int>, Long>()
+        }
         financialLimits.forPreparedYearWindow(yearWindow.startYear, yearWindow.endYearInclusive)
             .also { sqlCalls += 1 }
             .forEach { limit ->
@@ -221,9 +230,55 @@ class FluviBudgetReadService internal constructor(
                     is FluviFinancialLimitTarget.Category ->
                         bank.handleByCategoryId[target.categoryId] ?: return@forEach
                 }
-                val slice = sliceIndex(limit.key.period, yearWindow, yearCount)
-                bank.limitScaled100[cellIndex(bank.targetCount, slice, handle)] = limit.amountScaled100
+                when (val period = limit.key.period) {
+                    FluviFinancialLimitPeriod.BaseMonthly ->
+                        baseByDirectionHandle.getValue(limit.key.direction)[handle] =
+                            limit.amountScaled100
+                    is FluviFinancialLimitPeriod.MonthOverride ->
+                        overridesByDirectionHandleMonth.getValue(limit.key.direction)[
+                            Triple(handle, period.year, period.month)
+                        ] = limit.amountScaled100
+                }
             }
+        LedgerDirection.entries.forEach { direction ->
+            val bank = banks.getValue(direction)
+            val bases = baseByDirectionHandle.getValue(direction)
+            val overrides = overridesByDirectionHandleMonth.getValue(direction)
+            (0 until bank.targetCount).forEach { handle ->
+                val base = bases[handle]
+                bank.limitScaled100[cellIndex(bank.targetCount, 0, handle)] = base ?: -1L
+                bank.limitSource[cellIndex(bank.targetCount, 0, handle)] =
+                    if (base == null) 0 else 1
+                (0 until yearCount).forEach { yearOffset ->
+                    val year = yearWindow.startYear + yearOffset
+                    var annual = 0L
+                    var allMonthsResolved = true
+                    (1..12).forEach { month ->
+                        val overrideKey = Triple(handle, year, month)
+                        val override = overrides[overrideKey]
+                        val resolved = override ?: base
+                        val monthSlice = 1 + yearCount + yearOffset * 12 + month - 1
+                        val resolvedCellIndex = cellIndex(bank.targetCount, monthSlice, handle)
+                        bank.limitScaled100[resolvedCellIndex] = resolved ?: -1L
+                        bank.limitSource[resolvedCellIndex] = when {
+                            override != null -> 2
+                            base != null -> 1
+                            else -> 0
+                        }
+                        if (resolved != null) {
+                            annual += resolved
+                        } else {
+                            allMonthsResolved = false
+                        }
+                    }
+                    val yearSlice = 1 + yearOffset
+                    bank.limitScaled100[cellIndex(bank.targetCount, yearSlice, handle)] =
+                        if (allMonthsResolved) annual else -1L
+                    bank.limitSource[cellIndex(bank.targetCount, yearSlice, handle)] =
+                        if (allMonthsResolved) 1 else 0
+                }
+            }
+        }
 
         val finalRevision = revisionRepository.current().also { sqlCalls += 1 }
         require(finalRevision == revision) {
@@ -259,21 +314,6 @@ class FluviBudgetReadService internal constructor(
         slice: Int,
         handle: Int,
     ): Int = slice * targetCount + handle
-
-    private fun sliceIndex(
-        period: FluviFinancialLimitPeriod,
-        window: FluviPreparedYearWindow,
-        yearCount: Int,
-    ): Int = when (period) {
-        FluviFinancialLimitPeriod.Sum -> 0
-        is FluviFinancialLimitPeriod.Year -> 1 + (period.year - window.startYear)
-        is FluviFinancialLimitPeriod.Month ->
-            1 + yearCount + (period.year - window.startYear) * 12 + period.month - 1
-    }.also { index ->
-        require(index in 0 until (1 + yearCount + yearCount * 12)) {
-            "Financial limit period lies outside prepared Budget window."
-        }
-    }
 
     private data class BudgetLedgerDayRow(
         val direction: LedgerDirection,
@@ -462,6 +502,7 @@ class FluviBudgetReadService internal constructor(
             .associate { (index, id) -> id to index + 1 },
         val actualScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)),
         val limitScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)) { -1L },
+        val limitSource: ByteArray = ByteArray(periodSliceCount * (orderedCategoryIds.size + 1)),
         val dailyActualByTarget: MutableMap<Int, MutableMap<Long, Long>> = hashMapOf(),
     ) {
         val targetCount: Int get() = orderedCategoryIds.size + 1
@@ -470,6 +511,7 @@ class FluviBudgetReadService internal constructor(
             orderedCategoryIds = orderedCategoryIds,
             actualScaled100 = actualScaled100,
             limitScaled100 = limitScaled100,
+            limitSource = limitSource,
         )
 
         fun addRhythm(targetHandle: Int, epochDay: Long, amount: Long) {

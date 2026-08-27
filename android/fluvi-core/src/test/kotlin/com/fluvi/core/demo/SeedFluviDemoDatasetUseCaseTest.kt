@@ -99,13 +99,16 @@ class SeedFluviDemoDatasetUseCaseTest {
         val limits = core.financialLimits.list()
         // The visible target domain is aggregate plus ledger-represented
         // categories for its own direction: 2 Income + 8 Expense categories.
-        // SUM + one YEAR + twelve MONTH cells remain deterministic.
-        assertEquals(12 * 14, limits.size)
+        // One base plus four sparse explicit month overrides per target keeps
+        // inheritance exercised without recreating annual/SUM rows.
+        val baseCount = limits.count {
+            it.key.period == FluviFinancialLimitPeriod.BaseMonthly
+        }
+        assertEquals(baseCount * 5, limits.size)
         assertTrue(limits.all { limit ->
             when (val period = limit.key.period) {
-                FluviFinancialLimitPeriod.Sum -> true
-                is FluviFinancialLimitPeriod.Year -> period.year == 2024
-                is FluviFinancialLimitPeriod.Month -> period.year == 2024
+                FluviFinancialLimitPeriod.BaseMonthly -> true
+                is FluviFinancialLimitPeriod.MonthOverride -> period.year == 2024
             }
         })
         assertTrue(limits.all { it.amountScaled100 > 0L })

@@ -6,6 +6,7 @@ import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_scope_analysis.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -231,7 +232,7 @@ void main() {
       expect(presentation.value.header.limitScaled100, 1000);
       expect(
         presentation.value.header.limitKey!.period,
-        const FinancialLimitMonthPeriod(2026, 1),
+        const FinancialLimitMonthOverridePeriod(2026, 1),
       );
     },
   );
@@ -278,7 +279,7 @@ void main() {
       expect(day.limitEditContext!.actualScaled100, 999);
       expect(
         day.limitEditContext!.key.period,
-        const FinancialLimitMonthPeriod(2026, 1),
+        const FinancialLimitMonthOverridePeriod(2026, 1),
       );
 
       visible.value = _visibleFrame(
@@ -368,7 +369,7 @@ void main() {
     const key = FinancialLimitKey(
       direction: FinancialLimitDirection.expense,
       target: FinancialLimitCategoryTarget('food'),
-      period: FinancialLimitMonthPeriod(2026, 1),
+      period: FinancialLimitMonthOverridePeriod(2026, 1),
     );
     final state = BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: 1,
@@ -386,7 +387,7 @@ void main() {
     const key = FinancialLimitKey(
       direction: FinancialLimitDirection.expense,
       target: FinancialLimitCategoryTarget('food'),
-      period: FinancialLimitMonthPeriod(2026, 1),
+      period: FinancialLimitMonthOverridePeriod(2026, 1),
     );
     final state = BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: 1,
@@ -469,9 +470,97 @@ void main() {
       visible.value = _visibleFrame(scope: const AllTimeScope());
       expect(
         presentation.value.header.displayNumeratorScaled100,
-        290,
-      ); // sum/food
+        isNull,
+      ); // no completed calendar month exists before the logical as-of date
       expect(identical(presentation.value.items, items), isTrue);
+    },
+  );
+
+  test('YEAR is a twelve-month resolved analysis with no annual limit key', () {
+    final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+      _category('food'),
+    ]);
+    final direction = TransactionDirectionController(
+      initialDirection: TransactionDirection.expense,
+    );
+    final visible = ValueNotifier<DashboardVisibleFrame?>(
+      _visibleFrame(scope: const YearScope(2026)),
+    );
+    final presentation = DashboardBudgetPresentationController(
+      categoryCollection: categories,
+      visibleFrame: visible,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: _yearScopeSnapshot,
+      logicalAsOfDate: _defaultAsOfDate,
+    );
+    addTearDown(presentation.dispose);
+    addTearDown(categories.dispose);
+    addTearDown(direction.dispose);
+    addTearDown(visible.dispose);
+
+    presentation.setTargetHandle(1);
+    final selection = presentation.value.liveSelection;
+    final analysis = selection.scopeAnalysis! as DashboardBudgetYearAnalysis;
+
+    expect(selection.limitKey, isNull);
+    expect(presentation.value.header.limitScaled100, 1200);
+    expect(presentation.value.header.displayNumeratorScaled100, 780);
+    expect(analysis.monthlyActualsScaled100, hasLength(12));
+    expect(analysis.monthlyResolvedLimitsScaled100, hasLength(12));
+    expect(
+      selection.visual.chromeGeometry,
+      BudgetLimitProgressChromeGeometry.annualSegments,
+    );
+    expect(selection.visual.annualSegments, hasLength(12));
+    expect(selection.visual.annualSegments[0].rawProgress, .1);
+    expect(selection.visual.annualSegments[1].isFuture, isTrue);
+    expect(
+      presentation.value.header.editContext,
+      isA<DashboardBudgetYearLimitEditContext>(),
+    );
+  });
+
+  test(
+    'SUM is a completed-month average over the persisted base denominator',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(scope: const AllTimeScope()),
+      );
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _typicalMonthSnapshot,
+        logicalAsOfDate: _defaultAsOfDate,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      presentation.setTargetHandle(1);
+      final selection = presentation.value.liveSelection;
+      final analysis =
+          selection.scopeAnalysis! as DashboardBudgetTypicalMonthAnalysis;
+
+      expect(presentation.value.header.displayNumeratorScaled100, 25);
+      expect(presentation.value.header.limitScaled100, 200);
+      expect(analysis.canonicalActualScaled100ForLimitEdit, isNull);
+      expect(
+        selection.limitKey!.period,
+        const FinancialLimitBaseMonthlyPeriod(),
+      );
+      expect(
+        selection.visual.chromeGeometry,
+        BudgetLimitProgressChromeGeometry.typicalMarker,
+      );
+      expect(selection.visual.typicalMarkerPosition, .125);
     },
   );
 
@@ -723,6 +812,11 @@ final class _NoReadFinancialLimitRepository
   @override
   Future<FinancialLimit> upsert(FinancialLimitKey key, int amountScaled100) =>
       Future<FinancialLimit>.error(StateError('not used'));
+
+  @override
+  Future<List<FinancialLimit>> upsertBatch(
+    List<FinancialLimitMutation> values,
+  ) => Future<List<FinancialLimit>>.error(StateError('not used'));
 }
 
 FluviCategory _category(String id) => FluviCategory(
@@ -758,6 +852,83 @@ PreparedBudgetLimitSnapshot _snapshot() => _snapshotFromLegacy(
     ),
   ),
 );
+
+PreparedBudgetLimitSnapshot _yearScopeSnapshot() {
+  // One year × two handles: slice 0 is SUM, 1 is YEAR, then Jan–Dec.
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  var annualActual = 0;
+  for (var month = 1; month <= 12; month += 1) {
+    final actual = month * 10;
+    annualActual += actual;
+    final slice = 2 + month - 1;
+    cells[slice * 2 + 1] = PreparedBudgetLimitCell(
+      actualScaled100: actual,
+      limitScaled100: 100,
+    );
+  }
+  cells[1 * 2 + 1] = PreparedBudgetLimitCell(
+    actualScaled100: annualActual,
+    limitScaled100: 1200,
+  );
+  cells[1] = const PreparedBudgetLimitCell(
+    actualScaled100: 0,
+    limitScaled100: 100,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['food'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
+PreparedBudgetLimitSnapshot _typicalMonthSnapshot() {
+  // Two years × two handles: SUM, two YEAR cells, then 24 MONTH cells.
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    54,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // SUM holds the base monthly limit. The 2025 January–December bank has
+  // 100 + 0 + 200 and then zero months, so the historical average is 25.
+  cells[1] = const PreparedBudgetLimitCell(
+    actualScaled100: 300,
+    limitScaled100: 200,
+    limitSource: PreparedBudgetLimitSource.base,
+  );
+  cells[1 * 2 + 1] = const PreparedBudgetLimitCell(
+    actualScaled100: 300,
+    limitScaled100: 2400,
+  );
+  cells[3 * 2 + 1] = const PreparedBudgetLimitCell(
+    actualScaled100: 100,
+    limitScaled100: 200,
+    limitSource: PreparedBudgetLimitSource.base,
+  );
+  cells[5 * 2 + 1] = const PreparedBudgetLimitCell(
+    actualScaled100: 200,
+    limitScaled100: 200,
+    limitSource: PreparedBudgetLimitSource.base,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['food'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2025,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
 
 PreparedBudgetLimitSnapshot _dayAwareSnapshot() {
   final cells = List<PreparedBudgetLimitCell>.filled(

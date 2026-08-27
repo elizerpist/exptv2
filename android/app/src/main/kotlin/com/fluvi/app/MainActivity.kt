@@ -346,25 +346,35 @@ class MainActivity : FlutterActivity() {
             fluviCore.financialLimits.upsert(financialLimitKey(call), amount)
                 .let(::financialLimitMap)
         }
+        "upsertFinancialLimitsBatch" -> {
+            val values = requireArgument<List<Map<String, Any?>>>(call, "values")
+            require(values.isNotEmpty())
+            fluviCore.financialLimits.upsertBatch(values.map { value ->
+                financialLimitKey(value) to requireAmountScaled100(value)
+            }).map(::financialLimitMap)
+        }
         "deleteFinancialLimit" -> fluviCore.financialLimits.delete(financialLimitKey(call))
         else -> throw IllegalArgumentException("Unknown financial limit method: ${call.method}")
     }
 
     private fun financialLimitKey(call: MethodCall): FluviFinancialLimitKey {
-        val direction = LedgerDirection.valueOf(requireArgument<String>(call, "direction"))
-        val target = when (requireArgument<String>(call, "targetKind")) {
+        return financialLimitKey(requireNotNull(call.arguments as? Map<String, Any?>))
+    }
+
+    private fun financialLimitKey(arguments: Map<String, Any?>): FluviFinancialLimitKey {
+        val direction = LedgerDirection.valueOf(requireMapArgument<String>(arguments, "direction"))
+        val target = when (requireMapArgument<String>(arguments, "targetKind")) {
             "aggregate" -> FluviFinancialLimitTarget.Aggregate
             "category" -> FluviFinancialLimitTarget.Category(
-                requireArgument(call, "categoryId"),
+                requireMapArgument(arguments, "categoryId"),
             )
             else -> throw IllegalArgumentException("Unknown financial-limit target kind.")
         }
-        val period = when (requireArgument<String>(call, "periodKind")) {
-            "sum" -> FluviFinancialLimitPeriod.Sum
-            "year" -> FluviFinancialLimitPeriod.Year(requireArgument(call, "year"))
-            "month" -> FluviFinancialLimitPeriod.Month(
-                requireArgument(call, "year"),
-                requireArgument(call, "month"),
+        val period = when (requireMapArgument<String>(arguments, "periodKind")) {
+            "base" -> FluviFinancialLimitPeriod.BaseMonthly
+            "month" -> FluviFinancialLimitPeriod.MonthOverride(
+                requireMapArgument(arguments, "year"),
+                requireMapArgument(arguments, "month"),
             )
             else -> throw IllegalArgumentException("Unknown financial-limit period kind.")
         }
@@ -376,6 +386,16 @@ class MainActivity : FlutterActivity() {
             ?: throw IllegalArgumentException("Missing financial-limit amount.")
         return value.toLong().also { require(it >= 0L) }
     }
+
+    private fun requireAmountScaled100(arguments: Map<String, Any?>): Long =
+        (arguments["amountScaled100"] as? Number)?.toLong()
+            ?.also { require(it >= 0L) }
+            ?: throw IllegalArgumentException("Missing financial-limit amount.")
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> requireMapArgument(arguments: Map<String, Any?>, key: String): T =
+        arguments[key] as? T
+            ?: throw IllegalArgumentException("Missing financial-limit $key.")
 
     private fun financialLimitMap(limit: com.fluvi.core.model.FluviFinancialLimit): Map<String, Any?> = mapOf(
         "direction" to limit.key.direction.name,

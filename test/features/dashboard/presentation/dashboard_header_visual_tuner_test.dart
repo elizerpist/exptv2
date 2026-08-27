@@ -239,18 +239,10 @@ void main() {
     await tester.tap(separators);
     await tester.pump();
     expect(summary.value.showSeparators, isFalse);
-
-    final largeMode = find.byKey(
-      ValueKey<String>(
-        'dashboard-summary-mode-layout-${SummaryModeSelectorLayout.largeIcon}',
-      ),
-    );
-    await tester.ensureVisible(largeMode);
-    await tester.tap(largeMode);
-    await tester.pump();
     expect(
-      summary.value.modeSelectorLayout,
-      SummaryModeSelectorLayout.largeIcon,
+      find.byKey(const ValueKey('dashboard-summary-mode-layout-largeIcon')),
+      findsNothing,
+      reason: 'the product has one permanently large icon-only selector',
     );
 
     final dynamicTrio = find.byKey(

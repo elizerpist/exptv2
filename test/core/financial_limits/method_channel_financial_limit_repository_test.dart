@@ -28,7 +28,7 @@ void main() {
         const FinancialLimitKey(
           direction: FinancialLimitDirection.expense,
           target: FinancialLimitAggregateTarget(),
-          period: FinancialLimitMonthPeriod(2026, 7),
+          period: FinancialLimitMonthOverridePeriod(2026, 7),
         ),
         12000000,
       );
@@ -57,8 +57,7 @@ void main() {
                 'direction': 'income',
                 'targetKind': 'category',
                 'categoryId': 'salary',
-                'periodKind': 'year',
-                'year': 2026,
+                'periodKind': 'base',
                 'amountScaled100': 0,
               });
             }
@@ -69,7 +68,7 @@ void main() {
         const FinancialLimitKey(
           direction: FinancialLimitDirection.income,
           target: FinancialLimitCategoryTarget('salary'),
-          period: FinancialLimitYearPeriod(2026),
+          period: FinancialLimitBaseMonthlyPeriod(),
         ),
       );
 
@@ -78,6 +77,35 @@ void main() {
       expect(found.key.target, isA<FinancialLimitCategoryTarget>());
     },
   );
+
+  test('encodes one atomic monthly override batch', () async {
+    MethodCall? received;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          received = call;
+          return <Object?>[
+            _limitPayload(
+              ((call.arguments as Map<Object?, Object?>)['values']
+                      as List<Object?>)[0]
+                  as Map<Object?, Object?>,
+            ),
+          ];
+        });
+
+    final values = await repository.upsertBatch(const <FinancialLimitMutation>[
+      FinancialLimitMutation(
+        key: FinancialLimitKey(
+          direction: FinancialLimitDirection.expense,
+          target: FinancialLimitAggregateTarget(),
+          period: FinancialLimitMonthOverridePeriod(2026, 1),
+        ),
+        amountScaled100: 100,
+      ),
+    ]);
+
+    expect(received?.method, 'upsertFinancialLimitsBatch');
+    expect(values.single.amountScaled100, 100);
+  });
 }
 
 Map<Object?, Object?> _limitPayload(Map<Object?, Object?> source) =>

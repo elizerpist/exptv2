@@ -157,8 +157,7 @@ abstract final class BudgetLimitQuickEditRules {
 final class BudgetLimitQuickEditGestureController {
   BudgetLimitQuickEditGestureController({
     required DashboardBudgetLimitEditController edits,
-    required DashboardBudgetLimitEditContext Function()
-    contextForCurrentSelection,
+    required DashboardBudgetEditContext Function() contextForCurrentSelection,
     BudgetLimitEditTimerScheduler? scheduler,
     BudgetLimitEditHapticCallback? haptic,
   }) : _edits = edits,
@@ -167,11 +166,11 @@ final class BudgetLimitQuickEditGestureController {
        _haptic = haptic ?? _platformHaptic;
 
   final DashboardBudgetLimitEditController _edits;
-  final DashboardBudgetLimitEditContext Function() _contextForCurrentSelection;
+  final DashboardBudgetEditContext Function() _contextForCurrentSelection;
   final BudgetLimitEditTimerScheduler _scheduler;
   final BudgetLimitEditHapticCallback _haptic;
 
-  DashboardBudgetLimitEditSession? _session;
+  DashboardBudgetEditableSession? _session;
   BudgetLimitEditTimer? _autoTimer;
   double? _activationGlobalY;
   double? _lastGlobalY;
@@ -187,7 +186,7 @@ final class BudgetLimitQuickEditGestureController {
   void longPressStarted({required double globalY}) {
     if (_disposed) return;
     _cancelAutoTick();
-    final session = _edits.startEdit(_contextForCurrentSelection());
+    final session = _edits.startContext(_contextForCurrentSelection());
     if (session == null) return;
     _session = session;
     _activationGlobalY = globalY;
@@ -242,7 +241,7 @@ final class BudgetLimitQuickEditGestureController {
     _activationGlobalY = null;
     _resetDirectionalMotion();
     if (active == null) return Future<void>.value();
-    return _edits.finishEdit(active);
+    return _edits.finishContext(active);
   }
 
   void _scheduleAutoTick() {
@@ -275,13 +274,13 @@ final class BudgetLimitQuickEditGestureController {
   }
 
   bool _apply(
-    DashboardBudgetLimitEditSession session, {
+    DashboardBudgetEditableSession session, {
     required int direction,
     required int amountStepScaled100,
     required int tickCount,
     required DashboardBudgetLimitEditSource source,
   }) {
-    final applied = _edits.applySemanticTick(
+    final applied = _edits.applyContextSemanticTick(
       session,
       direction: direction,
       amountStepScaled100: amountStepScaled100,
@@ -315,7 +314,7 @@ final class BudgetLimitQuickEditGestureController {
     _cancelAutoTick();
     final active = _session;
     _session = null;
-    if (active != null) _edits.abortEdit(active);
+    if (active != null) _edits.abortContext(active);
   }
 
   static void _platformHaptic(BudgetLimitEditHaptic value) {

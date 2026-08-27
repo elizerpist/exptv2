@@ -953,14 +953,6 @@ final class _DashboardSummaryPresentationSection extends StatelessWidget {
               value: settings.showSeparators,
               onChanged: controller.setSeparatorsVisible,
             ),
-            _SummaryRadioGroup<SummaryModeSelectorLayout>(
-              label: 'Módválasztó',
-              value: settings.modeSelectorLayout,
-              values: SummaryModeSelectorLayout.values,
-              itemLabel: (value) => value.label,
-              onChanged: controller.selectModeSelectorLayout,
-              keyPrefix: 'dashboard-summary-mode-layout',
-            ),
             _SummaryRadioGroup<SummaryTemporalFlingPresentation>(
               label: 'Idő-fling látvány',
               value: settings.temporalFlingPresentation,
