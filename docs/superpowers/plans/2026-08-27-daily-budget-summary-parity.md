@@ -200,7 +200,9 @@ commit; compilation/build status never substitutes for those conditions.
 - Focused domain/Budget tests passed 24 cases; Core/Summary/scene-window/
   BottomNav passed 75; visible-frame/cache/LogBox/Query/limit-edit passed 150;
   Budget surface/rail/distribution passed 57; the final BottomNav raster test
-  passed 6. The existing Partner pager `>104` height assertion fails
+  passed 6. The exact `test-fluvi-fast.sh` curated CI suite passed 273 cases
+  after its old 2500ms-cooldown boundary assertion was corrected to the
+  approved motion-only contract. The existing Partner pager `>104` height assertion fails
   identically on clean r45 (`100.8`) and is recorded as inherited. `flutter
   analyze` also passed with no issues. Delivery build and physical Android
   inspection remain the final external gates at the time of this note.

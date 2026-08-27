@@ -350,12 +350,24 @@ void main() {
       reason:
           'Timing and ballistic guards cannot own presentation correctness.',
     );
+    for (final forbidden in <String>[
+      'Duration(milliseconds: 2500)',
+      'Timer(',
+      '_keepDynamicTrioVisible',
+      '_dynamicTrioBallisticCooldown',
+    ]) {
+      expect(
+        dynamicTrioPresentation,
+        isNot(contains(forbidden)),
+        reason:
+            'Dynamic Trio must derive visibility from physical motion and '
+            'may not retain a post-settle cooldown.',
+      );
+    }
     expect(
       dynamicTrioPresentation,
-      contains('Duration(milliseconds: 2500)'),
-      reason:
-          'Dynamic Trio has one bounded, presentation-only post-ballistic '
-          'cooldown rather than a data/navigation debounce.',
+      contains('hasActiveScrollActivity'),
+      reason: 'Physical carousel activity is the sole Trio visibility owner.',
     );
     for (final forbidden in <String>[
       'Repository',
@@ -366,7 +378,7 @@ void main() {
       expect(
         dynamicTrioPresentation,
         isNot(contains(forbidden)),
-        reason: 'Dynamic Trio cooldown must not own $forbidden.',
+        reason: 'Dynamic Trio presentation must not own $forbidden.',
       );
     }
     for (final forbidden in <String>[
