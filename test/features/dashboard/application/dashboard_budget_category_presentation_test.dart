@@ -4,6 +4,7 @@ import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
@@ -82,6 +83,7 @@ final class _PresentationHarness {
       visibleFrame: visibleFrame,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       onInputUpdated: onInputUpdated,
     );
   }

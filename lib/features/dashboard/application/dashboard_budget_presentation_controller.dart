@@ -7,13 +7,14 @@ import '../../../core/categories/presentation/budget_category_avatar_artwork.dar
 import '../../../core/financial_limits/domain/financial_limit.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
-import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_target.dart';
 import 'dashboard_budget_limit_edit_controller.dart';
+import 'dashboard_budget_month_end_projection.dart';
 import 'dashboard_budget_period.dart';
 import 'transaction_direction_controller.dart';
 
@@ -48,17 +49,24 @@ final class DashboardBudgetTargetPresentationItem {
   };
 }
 
+/// Distinguishes canonical utilization from the DAY-only derived forecast.
+/// This is presentation analysis mode, not another persisted Budget period.
+enum DashboardBudgetAnalysisMode { actualUtilization, projectedMonthEnd }
+
 @immutable
 final class DashboardBudgetLiveSelectionState {
   const DashboardBudgetLiveSelectionState._({
     required this.direction,
     required this.target,
     required this.title,
-    required this.actualScaled100,
+    required this.displayNumeratorScaled100,
+    required this.canonicalActualScaled100ForLimitEdit,
     required this.limitScaled100,
     required this.limitKey,
     required this.coreRevision,
     required this.analysisScopeLabel,
+    required this.analysisMode,
+    required this.monthEndProjection,
     required this.visual,
   });
 
@@ -70,11 +78,14 @@ final class DashboardBudgetLiveSelectionState {
     direction: direction,
     target: target,
     title: title,
-    actualScaled100: null,
+    displayNumeratorScaled100: null,
+    canonicalActualScaled100ForLimitEdit: null,
     limitScaled100: null,
     limitKey: null,
     coreRevision: null,
     analysisScopeLabel: '—',
+    analysisMode: DashboardBudgetAnalysisMode.actualUtilization,
+    monthEndProjection: null,
     visual: BudgetCategoryAvatarSelectedLimitVisualState.unavailable(
       targetHandle: target.handle,
     ),
@@ -84,39 +95,58 @@ final class DashboardBudgetLiveSelectionState {
     required LedgerDirection direction,
     required DashboardBudgetTarget target,
     required String title,
-    required int actualScaled100,
+    required int displayNumeratorScaled100,
+    required int canonicalActualScaled100ForLimitEdit,
     required int? limitScaled100,
     required FinancialLimitKey limitKey,
     required int coreRevision,
     required String analysisScopeLabel,
+    required DashboardBudgetAnalysisMode analysisMode,
+    DashboardBudgetMonthEndProjection? monthEndProjection,
   }) => DashboardBudgetLiveSelectionState._(
     direction: direction,
     target: target,
     title: title,
-    actualScaled100: actualScaled100,
+    displayNumeratorScaled100: displayNumeratorScaled100,
+    canonicalActualScaled100ForLimitEdit: canonicalActualScaled100ForLimitEdit,
     limitScaled100: limitScaled100,
     limitKey: limitKey,
     coreRevision: coreRevision,
     analysisScopeLabel: analysisScopeLabel,
+    analysisMode: analysisMode,
+    monthEndProjection: monthEndProjection,
     visual: BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: target.handle,
       limitKey: limitKey,
-      actualScaled100: actualScaled100,
+      displayNumeratorScaled100: displayNumeratorScaled100,
       effectiveLimitScaled100: limitScaled100,
+      chromeGeometry:
+          analysisMode == DashboardBudgetAnalysisMode.projectedMonthEnd
+          ? BudgetLimitProgressChromeGeometry.verticalProjection
+          : BudgetLimitProgressChromeGeometry.circular,
     ),
   );
 
   final LedgerDirection direction;
   final DashboardBudgetTarget target;
   final String title;
-  final int? actualScaled100;
+
+  /// The amount rendered by the Header. In DAY mode this is a derived
+  /// month-end forecast, never the canonical accounting actual.
+  final int? displayNumeratorScaled100;
+
+  /// The containing-period prepared actual used by existing monthly limit
+  /// editing and allocation semantics. It must not be replaced by a forecast.
+  final int? canonicalActualScaled100ForLimitEdit;
   final int? limitScaled100;
   final FinancialLimitKey? limitKey;
   final int? coreRevision;
   final String analysisScopeLabel;
+  final DashboardBudgetAnalysisMode analysisMode;
+  final DashboardBudgetMonthEndProjection? monthEndProjection;
   final BudgetCategoryAvatarSelectedLimitVisualState visual;
 
-  bool get isAvailable => actualScaled100 != null;
+  bool get isAvailable => displayNumeratorScaled100 != null;
   bool get hasLimit => limitScaled100 != null;
 
   DashboardBudgetLimitEditContext? get limitEditContext =>
@@ -126,7 +156,7 @@ final class DashboardBudgetLiveSelectionState {
           key: limitKey!,
           coreRevision: coreRevision!,
           targetHandle: target.handle,
-          actualScaled100: actualScaled100!,
+          actualScaled100: canonicalActualScaled100ForLimitEdit!,
           confirmedLimitScaled100: limitScaled100,
         );
 }
@@ -141,7 +171,11 @@ final class DashboardBudgetHeaderPresentation {
 
   DashboardBudgetTarget get target => _selection.target;
   String get title => _selection.title;
-  int? get actualScaled100 => _selection.actualScaled100;
+  int? get displayNumeratorScaled100 => _selection.displayNumeratorScaled100;
+  int? get canonicalActualScaled100ForLimitEdit =>
+      _selection.canonicalActualScaled100ForLimitEdit;
+  DashboardBudgetMonthEndProjection? get monthEndProjection =>
+      _selection.monthEndProjection;
   int? get limitScaled100 => _selection.limitScaled100;
   FinancialLimitKey? get limitKey => _selection.limitKey;
   int? get coreRevision => _selection.coreRevision;
@@ -316,12 +350,14 @@ final class DashboardBudgetPresentationController
     required ValueListenable<DashboardVisibleFrame?> visibleFrame,
     required TransactionDirectionController transactionDirection,
     required PreparedBudgetLimitSnapshot? Function() snapshotForCurrentFrame,
+    required LocalDate logicalAsOfDate,
     DashboardBudgetLimitEditController? limitEditController,
     ValueChanged<int>? onInputUpdated,
   }) : _categoryCollection = categoryCollection,
        _visibleFrame = visibleFrame,
        _transactionDirection = transactionDirection,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
+       _logicalAsOfDate = logicalAsOfDate,
        _limitEditController = limitEditController,
        _onInputUpdated = onInputUpdated,
        super(_initialState()) {
@@ -336,6 +372,7 @@ final class DashboardBudgetPresentationController
   final ValueListenable<DashboardVisibleFrame?> _visibleFrame;
   final TransactionDirectionController _transactionDirection;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
+  final LocalDate _logicalAsOfDate;
   final DashboardBudgetLimitEditController? _limitEditController;
   final ValueChanged<int>? _onInputUpdated;
 
@@ -364,6 +401,7 @@ final class DashboardBudgetPresentationController
   int? _lastHeaderDiagnosticSignature;
   int? _lastProgressDiagnosticSignature;
   int? _lastPartitionDiagnosticSignature;
+  int? _lastMonthEndProjectionDiagnosticSignature;
   int? _lastDirectionDomainDiagnosticSignature;
 
   /// Called by the shared carousel only on semantic selection changes, never
@@ -529,6 +567,7 @@ final class DashboardBudgetPresentationController
     );
     _recordHeaderBinding(liveSelection);
     _recordProgressBinding(liveSelection);
+    _recordMonthEndProjection(liveSelection);
     _recordPartitionBinding(partition, selectedHandle: selectedHandle);
   }
 
@@ -550,6 +589,7 @@ final class DashboardBudgetPresentationController
     );
     _recordHeaderBinding(liveSelection);
     _recordProgressBinding(liveSelection);
+    _recordMonthEndProjection(liveSelection);
     _recordPartitionBinding(partition, selectedHandle: selectedHandle);
   }
 
@@ -625,22 +665,31 @@ final class DashboardBudgetPresentationController
     final effectiveLimitScaled100 = _limitEditController == null
         ? cell.limitScaled100
         : _limitEditController.effectiveLimitFor(key, cell.limitScaled100);
-    final analysisActualScaled100 = _analysisActualFor(
+    final monthEndProjection = _monthEndProjectionFor(
       snapshot: snapshot,
       direction: _direction,
       targetHandle: target.handle,
       scope: visibleScope,
-      persistedActualScaled100: cell.actualScaled100,
+      canonicalMonthlyActualScaled100: cell.actualScaled100,
+      effectiveMonthlyLimitScaled100: effectiveLimitScaled100,
     );
+    final analysisMode = monthEndProjection == null
+        ? DashboardBudgetAnalysisMode.actualUtilization
+        : DashboardBudgetAnalysisMode.projectedMonthEnd;
+    final displayNumeratorScaled100 =
+        monthEndProjection?.projectedMonthEndScaled100 ?? cell.actualScaled100;
     return DashboardBudgetLiveSelectionState.available(
       direction: _direction,
       target: target,
       title: title,
-      actualScaled100: analysisActualScaled100,
+      displayNumeratorScaled100: displayNumeratorScaled100,
+      canonicalActualScaled100ForLimitEdit: cell.actualScaled100,
       limitScaled100: effectiveLimitScaled100,
       limitKey: key,
       coreRevision: snapshot.coreRevision,
       analysisScopeLabel: _analysisScopeLabel(visibleScope),
+      analysisMode: analysisMode,
+      monthEndProjection: monthEndProjection,
     );
   }
 
@@ -713,13 +762,9 @@ final class DashboardBudgetPresentationController
       coreRevision: snapshot.coreRevision,
       bank: bank,
       catalog: catalog,
-      aggregateActualScaled100: _analysisActualFor(
-        snapshot: snapshot,
-        direction: _direction,
-        targetHandle: 0,
-        scope: frame.scope.timeScope,
-        persistedActualScaled100: aggregateCell.actualScaled100,
-      ),
+      // Partition allocation is a canonical financial rule. It must never
+      // consume the DAY forecast display numerator.
+      aggregateActualScaled100: aggregateCell.actualScaled100,
       effectiveAggregateLimitScaled100: effectiveAggregateLimitScaled100,
       preparedAllocatedTotalScaled100:
           bank.allocatedCategoryLimitTotalScaled100ByPeriodSlice[slice],
@@ -739,47 +784,39 @@ final class DashboardBudgetPresentationController
     ),
   };
 
-  /// Actuals follow the exact visible ledger child. Financial-limit storage
-  /// remains intentionally coarser: a Day child uses its containing Month
-  /// limit key while its numerator comes from the existing sparse daily bank.
-  static int _analysisActualFor({
+  DashboardBudgetMonthEndProjection? _monthEndProjectionFor({
     required PreparedBudgetLimitSnapshot snapshot,
     required LedgerDirection direction,
     required int targetHandle,
     required LedgerTimeScope scope,
-    required int persistedActualScaled100,
-  }) => switch (scope) {
-    DayScope(:final date) => _dailyActual(
-      snapshot.rhythmSnapshot,
+    required int canonicalMonthlyActualScaled100,
+    required int? effectiveMonthlyLimitScaled100,
+  }) {
+    if (scope is! DayScope) return null;
+    final date = scope.date;
+    final rhythm = snapshot.rhythmSnapshot;
+    final bank = rhythm == null || rhythm.coreRevision != snapshot.coreRevision
+        ? null
+        : rhythm.directionBank(direction);
+    final monthToDate = bank == null || targetHandle >= bank.targetCount
+        ? 0
+        : bank.monthToDateActualScaled100(
+            targetHandle: targetHandle,
+            year: date.year,
+            month: date.month,
+            throughEpochDay: _logicalAsOfDate.epochDay,
+          );
+    return DashboardBudgetMonthEndProjection.derive(
+      coreRevision: snapshot.coreRevision,
       direction: direction,
       targetHandle: targetHandle,
       year: date.year,
       month: date.month,
-      day: date.day,
-    ),
-    _ => persistedActualScaled100,
-  };
-
-  static int _dailyActual(
-    PreparedBudgetRhythmSnapshot? rhythm, {
-    required LedgerDirection direction,
-    required int targetHandle,
-    required int year,
-    required int month,
-    required int day,
-  }) {
-    if (rhythm == null || rhythm.coreRevision <= 0) return 0;
-    final epochDay =
-        DateTime.utc(year, month, day).millisecondsSinceEpoch ~/
-        Duration.millisecondsPerDay;
-    final points = rhythm
-        .directionBank(direction)
-        .pointsForTargetHandle(targetHandle);
-    for (final point in points) {
-      if (point.epochDay == epochDay) return point.actualScaled100;
-      if (point.epochDay > epochDay) break;
-    }
-    return 0;
+      logicalAsOfDate: _logicalAsOfDate,
+      monthToDateActualScaled100: monthToDate,
+      finalMonthActualScaled100: canonicalMonthlyActualScaled100,
+      effectiveMonthlyLimitScaled100: effectiveMonthlyLimitScaled100,
+    );
   }
 
   String _titleFor(DashboardBudgetTarget target) => target.isAggregate
@@ -814,7 +851,7 @@ final class DashboardBudgetPresentationController
       header.target.handle,
       header.title,
       header.analysisScopeLabel,
-      header.actualScaled100,
+      header.displayNumeratorScaled100,
       header.limitScaled100,
     );
     if (_lastHeaderDiagnosticSignature == signature) return;
@@ -836,11 +873,11 @@ final class DashboardBudgetPresentationController
         stage: 'BUDGET_HEADER_VALUE_BOUND',
         coreRevision: frame?.coreRevision,
         direction: _direction.name,
-        totalMinor: header.actualScaled100,
+        totalMinor: header.displayNumeratorScaled100,
         scope:
             'plane=${_planeDiagnosticName(scope)} '
             'targetHandle=${header.target.handle} '
-            'actualScaled100=${header.actualScaled100} '
+            'displayNumeratorScaled100=${header.displayNumeratorScaled100} '
             'hasLimit=${header.hasLimit} '
             'limitScaled100=${header.limitScaled100 ?? '-'}',
       ),
@@ -870,12 +907,54 @@ final class DashboardBudgetPresentationController
     );
   }
 
+  void _recordMonthEndProjection(DashboardBudgetLiveSelectionState selection) {
+    final projection = selection.monthEndProjection;
+    if (projection == null) return;
+    final scope = _visibleFrame.value?.scope.timeScope;
+    final selectedDay = scope is DayScope ? scope.date : null;
+    final signature = Object.hash(
+      projection.key,
+      projection.monthToDateActualScaled100,
+      projection.projectedMonthEndScaled100,
+      projection.effectiveMonthlyLimitScaled100,
+      selectedDay,
+    );
+    if (_lastMonthEndProjectionDiagnosticSignature == signature) return;
+    _lastMonthEndProjectionDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_MONTH_END_PROJECTION_BOUND',
+        coreRevision: projection.key.coreRevision,
+        direction: projection.key.direction.name,
+        totalMinor: projection.projectedMonthEndScaled100,
+        scope:
+            'targetHandle=${projection.key.targetHandle} '
+            'year=${projection.key.year} month=${projection.key.month} '
+            'projectionEpoch=${projection.key.coreRevision}:'
+            '${projection.key.direction.name}:${projection.key.targetHandle}:'
+            '${projection.key.year}-${projection.key.month}:'
+            '${projection.key.logicalAsOfDate}:'
+            '${projection.key.effectiveMonthlyLimitScaled100 ?? '-'} '
+            'logicalAsOfDate=${projection.key.logicalAsOfDate} '
+            'monthToDateScaled100=${projection.monthToDateActualScaled100} '
+            'elapsedCalendarDays=${projection.elapsedCalendarDays} '
+            'daysInMonth=${projection.daysInMonth} '
+            'projectedMonthEndScaled100=${projection.projectedMonthEndScaled100} '
+            'effectiveMonthlyLimitScaled100=${projection.effectiveMonthlyLimitScaled100 ?? '-'} '
+            'projectionRatio=${projection.projectionRatio} '
+            'gaugeFillRatio=${projection.gaugeFillRatio} '
+            'healthBand=${projection.healthBand.name} '
+            'selectedDay=${selectedDay ?? '-'}',
+      ),
+    );
+  }
+
   void _recordProgressBinding(DashboardBudgetLiveSelectionState selection) {
     final visual = selection.visual;
     final signature = Object.hash(
       visual.targetHandle,
       visual.limitKey,
-      visual.actualScaled100,
+      visual.displayNumeratorScaled100,
       visual.effectiveLimitScaled100,
       visual.rawProgress,
       visual.visualProgress,
@@ -886,12 +965,13 @@ final class DashboardBudgetPresentationController
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_PROGRESS_BOUND',
-        totalMinor: visual.actualScaled100,
+        totalMinor: visual.displayNumeratorScaled100,
         direction: selection.direction.name,
         scope:
             'direction=${selection.direction.name} '
             'targetHandle=${visual.targetHandle} '
             'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
+            'displayNumeratorScaled100=${visual.displayNumeratorScaled100 ?? '-'} '
             'hasPositiveLimit=${visual.hasPositiveLimit} '
             'effectiveLimitScaled100=${visual.effectiveLimitScaled100 ?? '-'} '
             'rawProgress=${visual.rawProgress} '

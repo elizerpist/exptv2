@@ -14,6 +14,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -390,6 +391,7 @@ final class _Harness {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => _snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       limitEditController: edits,
     );
     this.presentation = presentation;

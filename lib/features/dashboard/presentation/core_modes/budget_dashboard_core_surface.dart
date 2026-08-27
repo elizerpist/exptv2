@@ -229,7 +229,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         builder: (context, state, child) {
                           final header = state.header;
                           final amount = header.isAvailable
-                              ? '${DashboardPreparedFormatter.amountMinor(header.actualScaled100!)} / '
+                              ? '${DashboardPreparedFormatter.amountMinor(header.displayNumeratorScaled100!)} / '
                                     '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
                               : '— / —';
                           final partition = state.partition;

@@ -145,6 +145,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 8, day: 19),
       );
       final navigation = DashboardNavigationController(
         initialDate: DateTime(2026, 7, 19),
@@ -207,6 +208,7 @@ void main() {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 8, day: 19),
     );
     final navigation = DashboardNavigationController(
       initialDate: DateTime(2026, 7, 19),

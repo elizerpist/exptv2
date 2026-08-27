@@ -19,6 +19,7 @@ import '../../time_navigation/domain/time_plane.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import '../domain/prepared_dashboard_index.dart';
+import '../domain/prepared_presentation_frame.dart';
 
 typedef DashboardPreparedFrameSelected =
     void Function(DashboardVisibleFrame frame, int selectorMicros);
@@ -320,41 +321,69 @@ final class DashboardPresentationController {
     _selectStructuralTarget();
   }
 
-  /// Reuses the child rail's strict prepared-frame path for an experimental
-  /// DAY crossing inside the already-installed month catalog. No query,
-  /// scene-window preparation, text layout, or post-settle work occurs here.
-  bool publishPreparedExperimentalChild(DashboardNavigationState candidate) {
+  /// General prepared-frame publication for a Segmented Summary component
+  /// crossing. YEAR/MONTH/DAY share this exact foreground contract whenever
+  /// the candidate's frame is already materialized. It deliberately performs
+  /// no compact-frame materialization, scene-window preparation, query, text
+  /// work or settle wait; a strict miss returns false for the existing
+  /// fail-closed structural path.
+  bool publishPreparedExperimentalTemporalCandidate(
+    DashboardNavigationState candidate,
+  ) {
     final installed = _index;
-    final state = navigation.state;
-    if (installed == null ||
-        !state.isRailOpen ||
-        !candidate.isRailOpen ||
-        state.plane != TimePlane.month ||
-        candidate.plane != TimePlane.month ||
-        state.parentQueryKey != candidate.parentQueryKey) {
+    if (installed == null) return false;
+    final candidateQueryKey = candidate.isRailOpen
+        ? candidate.temporalAnchor.sourceChildQueryKey
+        : candidate.parentQueryKey;
+    final catalog = installed.catalogForKey(candidate.parentQueryKey);
+    final candidateSemanticIndex = _selectedIndex(candidate, catalog);
+    final candidateEntry = catalog.entryAtLogicalIndex(candidateSemanticIndex);
+    final resolvedCandidateQueryKey = candidate.isRailOpen
+        ? candidateEntry.queryKey
+        : candidate.parentQueryKey;
+    // Validate all canonical target relations before mutating navigation. A
+    // failed strict lookup must remain a genuinely fail-closed structural
+    // fallback, never a half-committed candidate.
+    if (resolvedCandidateQueryKey != candidateQueryKey) return false;
+    late final DashboardPreparedFrame prepared;
+    try {
+      prepared = installed.frameForKey(candidateQueryKey);
+    } on StateError {
       return false;
     }
-    final catalog = installed.catalogForKey(state.parentQueryKey);
-    final logicalIndex = catalog.logicalIndexForValue(candidate.dayCursor);
-    final entry = catalog.entryAtLogicalIndex(logicalIndex);
-    if (entry.queryKey != candidate.temporalAnchor.sourceChildQueryKey ||
-        !navigation.retainChild(
-          value: entry.value,
-          expectedNavigationEpoch: state.navigationEpoch,
-          childQueryKey: entry.queryKey,
-          coreRevision: installed.coreRevision,
-          reason: DashboardRetainedChildReason.experimentalSelection,
-        )) {
-      return false;
+    navigation.commitTemporalCandidate(candidate);
+    final state = navigation.state;
+    final semanticIndex = _selectedIndex(state, catalog);
+    final selectedEntry = catalog.entryAtLogicalIndex(semanticIndex);
+    final queryKey = state.isRailOpen
+        ? selectedEntry.queryKey
+        : state.parentQueryKey;
+    // The pre-commit validation and canonical commit must refer to one target.
+    // This is defensive only: a mismatch would be an internal invariant
+    // violation, not a reason to route a partially committed state through
+    // structural navigation.
+    assert(queryKey == candidateQueryKey && prepared.queryKey == queryKey);
+    _presentationEpoch += 1;
+    _pendingCommit = null;
+    // Day's old direct path intentionally left the existing child carousel
+    // intact. Parent candidates need only a catalog reconciliation; this is
+    // synchronous metadata and cannot materialize a scene.
+    if (!state.isRailOpen) {
+      _installCatalog(
+        catalog,
+        selectedLogicalIndex: semanticIndex,
+        policy: _semanticInstallPolicyFor(state),
+        reason: 'experimentalPreparedTemporal',
+      );
     }
     frameCoalescer.request(
       DashboardVisibleFrame.fromPrepared(
-        installed.frameForKey(entry.queryKey),
+        prepared,
         parentQueryKey: state.parentQueryKey,
         plane: state.plane,
-        railOpen: true,
-        semanticIndex: entry.logicalIndex,
-        childLabel: entry.label,
+        railOpen: state.isRailOpen,
+        semanticIndex: semanticIndex,
+        childLabel: selectedEntry.label,
         navigationEpoch: state.navigationEpoch,
         presentationEpoch: _presentationEpoch,
         frameGeneration: visibleFrames.nextFrameGeneration(),
@@ -362,6 +391,18 @@ final class DashboardPresentationController {
       ),
     );
     return true;
+  }
+
+  /// Compatibility entrypoint for the original DAY-only fast path. Keeping
+  /// it as a delegate prevents two independent prepared-publication lanes.
+  bool publishPreparedExperimentalChild(DashboardNavigationState candidate) {
+    final state = navigation.state;
+    return state.isRailOpen &&
+        candidate.isRailOpen &&
+        state.plane == TimePlane.month &&
+        candidate.plane == TimePlane.month &&
+        state.parentQueryKey == candidate.parentQueryKey &&
+        publishPreparedExperimentalTemporalCandidate(candidate);
   }
 
   /// Sends the already-derived scalar amount for an ephemeral focus target to

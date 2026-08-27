@@ -17,6 +17,27 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
+  test('segmented visual tracks halve their current quarter-track spacing', () {
+    final geometry = SummarySegmentedTrackGeometry.resolve(
+      width: 344,
+      activeTrackIndices: const <int>[0, 1, 2, 3],
+    );
+
+    expect(geometry.baselineVisualPitch, 86);
+    expect(geometry.visualPitch, 43);
+    expect(
+      geometry.visualCenterForTrack(1) - geometry.visualCenterForTrack(0),
+      43,
+    );
+    expect(
+      geometry.visualCenterForTrack(2) - geometry.visualCenterForTrack(1),
+      43,
+    );
+    expect(geometry.separatorCenterAfterTrack(1), 107.5);
+    expect(geometry.semanticRectForTrack(0).right, 86);
+    expect(geometry.semanticRectForTrack(1).left, 86);
+  });
+
   testWidgets('segmented Summary ports the selected reference material', (
     tester,
   ) async {
@@ -651,9 +672,9 @@ void main() {
 
       expect(trioValues, findsNWidgets(3));
 
-      // Do not use pumpAndSettle here: it advances a fake timer all the way
-      // through the intentional post-ballistic cooldown. Stop at the real
-      // end of the scroll activity, before the cooldown timer is due.
+      // Stop at the first idle observation. Dynamic Trio belongs only to
+      // physical drag/ballistic/snap movement and must not retain neighbors
+      // through an arbitrary post-settle timer.
       for (
         var frame = 0;
         frame < 120 && tester.binding.hasScheduledFrame;
@@ -663,15 +684,11 @@ void main() {
       }
       expect(
         trioValues,
-        findsNWidgets(3),
+        findsOneWidget,
         reason:
-            'A real ballistic completion keeps the motion affordance through '
-            'its short post-settle cooldown.',
+            'The first idle frame after a real ballistic completion is '
+            'center-only.',
       );
-      await tester.pump(const Duration(seconds: 1));
-      expect(trioValues, findsNWidgets(3));
-      await tester.pump(const Duration(seconds: 2));
-      expect(trioValues, findsOneWidget);
     },
   );
 
@@ -685,11 +702,11 @@ void main() {
       final visibleFrames = DashboardVisibleFrameStore();
       addTearDown(navigation.dispose);
       addTearDown(visibleFrames.dispose);
-    const presentation = DashboardSummaryPresentationSettings(
-      showSeparators: true,
-      modeSelectorLayout: SummaryModeSelectorLayout.current,
-      temporalFlingPresentation: SummaryTemporalFlingPresentation.dynamicTrio,
-    );
+      const presentation = DashboardSummaryPresentationSettings(
+        showSeparators: true,
+        modeSelectorLayout: SummaryModeSelectorLayout.current,
+        temporalFlingPresentation: SummaryTemporalFlingPresentation.dynamicTrio,
+      );
       await tester.pumpWidget(
         MaterialApp(
           home: SummaryPillExperiment(

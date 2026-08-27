@@ -27,6 +27,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -50,6 +51,7 @@ void main() {
         visibleFrame: visibleFrame,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       );
       final distributionRail = BudgetTargetAvatarRailController();
       final previewIntents = <int>[];
@@ -129,6 +131,7 @@ void main() {
         visibleFrame: visibleFrame,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       );
       final previews = <int>[];
       final committed = <int>[];
@@ -192,6 +195,7 @@ void main() {
         visibleFrame: visibleFrame,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       );
       final committed = <int>[];
       addTearDown(categories.dispose);
@@ -243,6 +247,7 @@ void main() {
         visibleFrame: visibleFrame,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       );
       final settled = <int>[];
       final explicit = <int>[];
@@ -484,7 +489,7 @@ void main() {
         BudgetCategoryAvatarSelectedLimitVisualState.available(
           targetHandle: 7,
           limitKey: key,
-          actualScaled100: 0,
+          displayNumeratorScaled100: 0,
           effectiveLimitScaled100: 100,
         ),
       );
@@ -523,7 +528,7 @@ void main() {
         BudgetCategoryAvatarSelectedLimitVisualState.available(
           targetHandle: 7,
           limitKey: key,
-          actualScaled100: 50,
+          displayNumeratorScaled100: 50,
           effectiveLimitScaled100: 100000,
         ),
       );
@@ -548,7 +553,7 @@ void main() {
         visual.value = BudgetCategoryAvatarSelectedLimitVisualState.available(
           targetHandle: state.targetHandle,
           limitKey: state.key,
-          actualScaled100: state.actualScaled100,
+          displayNumeratorScaled100: state.actualScaled100,
           effectiveLimitScaled100: state.effectiveLimitScaled100,
         );
       });
@@ -679,7 +684,7 @@ void main() {
         BudgetCategoryAvatarSelectedLimitVisualState.available(
           targetHandle: 7,
           limitKey: key,
-          actualScaled100: 50,
+          displayNumeratorScaled100: 50,
           effectiveLimitScaled100: 100000,
         ),
       );
@@ -704,7 +709,7 @@ void main() {
         visual.value = BudgetCategoryAvatarSelectedLimitVisualState.available(
           targetHandle: state.targetHandle,
           limitKey: state.key,
-          actualScaled100: state.actualScaled100,
+          displayNumeratorScaled100: state.actualScaled100,
           effectiveLimitScaled100: state.effectiveLimitScaled100,
         );
       });
@@ -1272,6 +1277,7 @@ final class _Harness {
       visibleFrame: visibleFrame,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
     );
   }
 
@@ -1306,6 +1312,7 @@ final class _InteractiveRailHarness {
       visibleFrame: visibleFrame,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       limitEditController: edits,
     );
   }

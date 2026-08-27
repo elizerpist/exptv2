@@ -167,6 +167,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       transactionDirection: controller.transactionDirection,
       snapshotForCurrentFrame: () =>
           controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
+      logicalAsOfDate: controller.logicalAsOfDate,
       limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
@@ -435,7 +436,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.foregroundInputMotion.removeListener(
       _onBudgetDistributionVisibleFrame,
     );
-    modeController.removeListener(_syncBudgetDistributionTimePublicationPreparer);
+    modeController.removeListener(
+      _syncBudgetDistributionTimePublicationPreparer,
+    );
     controller.detachBudgetDistributionTimePublicationPreparer();
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);

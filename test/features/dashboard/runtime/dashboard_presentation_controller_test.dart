@@ -381,6 +381,87 @@ void main() {
   );
 
   test(
+    'experimental MONTH crossing publishes its exact prepared frame directly',
+    () {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2026, 7, 14),
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(revision: 7),
+        publishImmediately: true,
+      );
+      final candidate = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: -1,
+      );
+      expect(candidate, isNotNull);
+      final publications = controller.visibleFrames.visiblePublishCount;
+
+      expect(
+        controller.publishPreparedExperimentalTemporalCandidate(candidate!),
+        isTrue,
+      );
+      scheduler.fireFrame();
+
+      expect(controller.navigation.state.monthCursor.month, 6);
+      expect(
+        controller.visibleFrames.value!.queryKey,
+        candidate.parentQueryKey,
+      );
+      expect(
+        controller.visibleFrames.value!.amount.queryKey,
+        candidate.parentQueryKey,
+      );
+      expect(
+        controller.visibleFrames.value!.logBox.queryKey,
+        candidate.parentQueryKey,
+      );
+      expect(controller.visibleFrames.visiblePublishCount, publications + 1);
+    },
+  );
+
+  test(
+    'experimental YEAR crossing publishes its exact prepared frame directly',
+    () {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.year,
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(revision: 7),
+        publishImmediately: true,
+      );
+      final candidate = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.year,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -1,
+      );
+      expect(candidate, isNotNull);
+
+      expect(
+        controller.publishPreparedExperimentalTemporalCandidate(candidate!),
+        isTrue,
+      );
+      scheduler.fireFrame();
+
+      expect(controller.navigation.state.yearCursor, 2025);
+      expect(
+        controller.visibleFrames.value!.queryKey,
+        candidate.parentQueryKey,
+      );
+    },
+  );
+
+  test(
     'experimental component projection validates a frozen selector origin through the installed canonical catalog',
     () {
       final scheduler = _DisplayFrameScheduler();

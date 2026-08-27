@@ -3,6 +3,7 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
   test('threads the configured geometry metrics into its expansion owner', () {
@@ -15,6 +16,20 @@ void main() {
     expect(core.expansion.collapseTravel, 300);
     expect(core.expansion.snapThreshold, 150);
     core.dispose();
+  });
+
+  test('resolves the injected logical as-of date once at the Core boundary', () {
+    final core = DashboardCoreController(
+      initialDate: DateTime(2026, 8, 10, 23, 59),
+    );
+    addTearDown(core.dispose);
+
+    expect(
+      core.logicalAsOfDate,
+      const LocalDate(year: 2026, month: 8, day: 10),
+    );
+    expect(core.presentation.navigation.state.monthCursor.year, 2026);
+    expect(core.presentation.navigation.state.monthCursor.month, 8);
   });
 
   test('exports the latest post-layout LogBox extent snapshot', () {

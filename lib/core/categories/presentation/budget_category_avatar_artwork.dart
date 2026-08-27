@@ -107,6 +107,10 @@ abstract final class BudgetLimitProgressToneResolver {
   }
 }
 
+/// The selected avatar keeps one chrome envelope but DAY presents a derived
+/// month-end forecast as a vertical gauge instead of the monthly ring.
+enum BudgetLimitProgressChromeGeometry { circular, verticalProjection }
+
 /// One atomic Budget selection value. It carries both the exact semantic
 /// target and the visual arc inputs, so an old target's scalar cannot become a
 /// new centre target's ring during a carousel handoff.
@@ -115,11 +119,13 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
   const BudgetCategoryAvatarSelectedLimitVisualState._({
     required this.targetHandle,
     required this.limitKey,
-    required this.actualScaled100,
+    required this.displayNumeratorScaled100,
     required this.effectiveLimitScaled100,
     required this.hasPositiveLimit,
     required this.rawProgress,
     required this.visualProgress,
+    required this.chromeGeometry,
+    required this.breakEvenGaugeRatio,
   });
 
   factory BudgetCategoryAvatarSelectedLimitVisualState.unavailable({
@@ -127,54 +133,71 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
   }) => BudgetCategoryAvatarSelectedLimitVisualState._(
     targetHandle: targetHandle,
     limitKey: null,
-    actualScaled100: null,
+    displayNumeratorScaled100: null,
     effectiveLimitScaled100: null,
     hasPositiveLimit: false,
     rawProgress: 0,
     visualProgress: 0,
+    chromeGeometry: BudgetLimitProgressChromeGeometry.circular,
+    breakEvenGaugeRatio: null,
   );
 
   factory BudgetCategoryAvatarSelectedLimitVisualState.available({
     required int targetHandle,
     required FinancialLimitKey limitKey,
-    required int actualScaled100,
+    required int displayNumeratorScaled100,
     required int? effectiveLimitScaled100,
+    BudgetLimitProgressChromeGeometry chromeGeometry =
+        BudgetLimitProgressChromeGeometry.circular,
   }) {
     final hasPositiveLimit =
         effectiveLimitScaled100 != null && effectiveLimitScaled100 > 0;
     final projection = BudgetLimitProgressProjection.fromAmounts(
-      actualScaled100: actualScaled100,
+      actualScaled100: displayNumeratorScaled100,
       limitScaled100: effectiveLimitScaled100,
     );
+    final visualProgress =
+        chromeGeometry == BudgetLimitProgressChromeGeometry.verticalProjection
+        ? (projection.rawProgress * .75).clamp(0.0, 1.0).toDouble()
+        : projection.visualProgress;
     return BudgetCategoryAvatarSelectedLimitVisualState._(
       targetHandle: targetHandle,
       limitKey: limitKey,
-      actualScaled100: actualScaled100,
+      displayNumeratorScaled100: displayNumeratorScaled100,
       effectiveLimitScaled100: effectiveLimitScaled100,
       hasPositiveLimit: hasPositiveLimit,
       rawProgress: projection.rawProgress,
-      visualProgress: projection.visualProgress,
+      visualProgress: visualProgress,
+      chromeGeometry: chromeGeometry,
+      breakEvenGaugeRatio:
+          chromeGeometry == BudgetLimitProgressChromeGeometry.verticalProjection
+          ? .75
+          : null,
     );
   }
 
   final int targetHandle;
   final FinancialLimitKey? limitKey;
-  final int? actualScaled100;
+  final int? displayNumeratorScaled100;
   final int? effectiveLimitScaled100;
   final bool hasPositiveLimit;
   final double rawProgress;
   final double visualProgress;
+  final BudgetLimitProgressChromeGeometry chromeGeometry;
+  final double? breakEvenGaugeRatio;
 
   bool get paintsProgressChrome => hasPositiveLimit;
 
   bool sameVisualAs(BudgetCategoryAvatarSelectedLimitVisualState other) =>
       targetHandle == other.targetHandle &&
       limitKey == other.limitKey &&
-      actualScaled100 == other.actualScaled100 &&
+      displayNumeratorScaled100 == other.displayNumeratorScaled100 &&
       effectiveLimitScaled100 == other.effectiveLimitScaled100 &&
       hasPositiveLimit == other.hasPositiveLimit &&
       rawProgress == other.rawProgress &&
-      visualProgress == other.visualProgress;
+      visualProgress == other.visualProgress &&
+      chromeGeometry == other.chromeGeometry &&
+      breakEvenGaugeRatio == other.breakEvenGaugeRatio;
 }
 
 /// The approved avatar-artwork compositions in the Budget rail.
@@ -470,6 +493,8 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
             targetAccent: color,
           ),
           sourceProgress: visual.visualProgress,
+          geometry: visual.chromeGeometry,
+          breakEvenGaugeRatio: visual.breakEvenGaugeRatio,
         ),
       );
     }
@@ -540,12 +565,16 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
     required this.categoryColor,
     this.progressColor,
     this.sourceProgress = 0,
+    this.geometry = BudgetLimitProgressChromeGeometry.circular,
+    this.breakEvenGaugeRatio,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
   final Color categoryColor;
   final Color? progressColor;
   final double sourceProgress;
+  final BudgetLimitProgressChromeGeometry geometry;
+  final double? breakEvenGaugeRatio;
   final Color faceColor;
 
   /// Exposed as a small visual contract so the shell and authored SVG floor
@@ -582,6 +611,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             faceColor: faceColor,
             shadowColor: shadowColor,
             sourceProgress: sourceProgress,
+            geometry: geometry,
+            breakEvenGaugeRatio: breakEvenGaugeRatio,
           ),
         ),
       ),
@@ -626,6 +657,8 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.faceColor,
     required this.shadowColor,
     required this.sourceProgress,
+    required this.geometry,
+    required this.breakEvenGaugeRatio,
   });
 
   static const _sourceViewport = Size.square(
@@ -645,6 +678,8 @@ final class _SelectionChromePainter extends CustomPainter {
   final Color faceColor;
   final Color shadowColor;
   final double sourceProgress;
+  final BudgetLimitProgressChromeGeometry geometry;
+  final double? breakEvenGaugeRatio;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -725,6 +760,20 @@ final class _SelectionChromePainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.4),
     );
 
+    if (geometry == BudgetLimitProgressChromeGeometry.circular) {
+      _paintCircularProgress(canvas, trackRect, startAngle, sweep);
+    } else {
+      _paintVerticalProjection(canvas);
+    }
+    canvas.restore();
+  }
+
+  void _paintCircularProgress(
+    Canvas canvas,
+    Rect trackRect,
+    double startAngle,
+    double sweep,
+  ) {
     canvas.drawArc(
       trackRect,
       startAngle,
@@ -808,7 +857,48 @@ final class _SelectionChromePainter extends CustomPainter {
           ..strokeCap = StrokeCap.round,
       );
     }
-    canvas.restore();
+  }
+
+  void _paintVerticalProjection(Canvas canvas) {
+    final gauge = RRect.fromRectAndRadius(
+      Rect.fromLTWH(264, 58, 24, 192),
+      Radius.circular(12),
+    );
+    canvas.drawRRect(gauge, Paint()..color = const Color(0x73CFC7DF));
+    final fillHeight = gauge.height * sourceProgress;
+    if (fillHeight > 0) {
+      final fill = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          gauge.left,
+          gauge.bottom - fillHeight,
+          gauge.width,
+          fillHeight,
+        ),
+        const Radius.circular(12),
+      );
+      canvas.drawRRect(
+        fill,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: <Color>[endColor, middleColor, startColor],
+            stops: const <double>[0, .55, 1],
+          ).createShader(gauge.outerRect),
+      );
+    }
+    final markerRatio = breakEvenGaugeRatio;
+    if (markerRatio != null) {
+      final markerY = gauge.bottom - gauge.height * markerRatio;
+      canvas.drawLine(
+        Offset(gauge.left - 5, markerY),
+        Offset(gauge.right + 5, markerY),
+        Paint()
+          ..color = const Color(0xFF8D849F)
+          ..strokeWidth = 3
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
   @override
@@ -818,7 +908,9 @@ final class _SelectionChromePainter extends CustomPainter {
       oldDelegate.endColor != endColor ||
       oldDelegate.faceColor != faceColor ||
       oldDelegate.shadowColor != shadowColor ||
-      oldDelegate.sourceProgress != sourceProgress;
+      oldDelegate.sourceProgress != sourceProgress ||
+      oldDelegate.geometry != geometry ||
+      oldDelegate.breakEvenGaugeRatio != breakEvenGaugeRatio;
 }
 
 /// Literal source vector contract from the local visual reference.

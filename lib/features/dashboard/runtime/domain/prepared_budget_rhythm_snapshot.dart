@@ -110,6 +110,74 @@ final class PreparedBudgetRhythmDirectionBank {
         ? points[low].actualScaled100
         : 0;
   }
+
+  /// Returns one prepared target's exact month-to-date actual through the
+  /// supplied local-calendar epoch day. The bank is sparse by design, so this
+  /// deliberately counts calendar days nowhere: the Daily Budget projection
+  /// obtains its elapsed-day denominator from the calendar itself.
+  ///
+  /// The walk is bounded to this target's non-zero points in one calendar
+  /// month (at most its 31-day calendar range) after two binary searches; it
+  /// never allocates a sublist or scans another target's rhythm.
+  int monthToDateActualScaled100({
+    required int targetHandle,
+    required int year,
+    required int month,
+    required int throughEpochDay,
+  }) {
+    if (targetHandle < 0 || targetHandle >= targetCount) {
+      throw RangeError.range(targetHandle, 0, targetCount - 1, 'targetHandle');
+    }
+    final monthStart = DateTime.utc(
+      year,
+      month,
+      1,
+    ).difference(DateTime.utc(1970)).inDays;
+    final monthEnd = DateTime.utc(
+      year,
+      month + 1,
+      0,
+    ).difference(DateTime.utc(1970)).inDays;
+    if (throughEpochDay < monthStart) return 0;
+    final inclusiveEnd = throughEpochDay < monthEnd
+        ? throughEpochDay
+        : monthEnd;
+    final rangeStart = targetOffsets[targetHandle];
+    final rangeEnd = targetOffsets[targetHandle + 1];
+    final first = _lowerBound(
+      epochDay: monthStart,
+      low: rangeStart,
+      high: rangeEnd,
+    );
+    final afterLast = _lowerBound(
+      epochDay: inclusiveEnd + 1,
+      low: first,
+      high: rangeEnd,
+    );
+    var total = 0;
+    for (var index = first; index < afterLast; index += 1) {
+      total += points[index].actualScaled100;
+    }
+    return total;
+  }
+
+  int _lowerBound({
+    required int epochDay,
+    required int low,
+    required int high,
+  }) {
+    var lower = low;
+    var upper = high;
+    while (lower < upper) {
+      final middle = (lower + upper) ~/ 2;
+      if (points[middle].epochDay < epochDay) {
+        lower = middle + 1;
+      } else {
+        upper = middle;
+      }
+    }
+    return lower;
+  }
 }
 
 /// Query-independent exact-revision daily source for the compact rolling

@@ -39,6 +39,7 @@ import '../time_navigation/application/dashboard_time_navigation_controller.dart
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/dashboard_temporal_availability.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
@@ -419,6 +420,15 @@ final class DashboardCoreController {
         DashboardInteractionDiagnostics(counters: this.performanceCounters);
     final repository =
         dataRepository ?? const EmptyDashboardDataRuntimeRepository();
+    // The dashboard resolves its logical date exactly once. Every temporal
+    // consumer, including Daily Budget's month-end projection, receives this
+    // same injected calendar identity rather than acquiring its own clock.
+    final resolvedInitialDate = initialDate ?? DateTime.now();
+    logicalAsOfDate = LocalDate(
+      year: resolvedInitialDate.year,
+      month: resolvedInitialDate.month,
+      day: resolvedInitialDate.day,
+    );
     committedLogViewport = CommittedLogViewportCache(pageSize: pageSize);
     final activeRailFlightRecorder = this.railFlightRecorder?.isEnabled == true
         ? this.railFlightRecorder
@@ -427,7 +437,11 @@ final class DashboardCoreController {
     late final DashboardDataRuntime runtimeOwner;
     late final ExplicitCommittedPagingController pagingOwner;
     presentation = DashboardPresentationController(
-      initialDate: initialDate,
+      initialDate: DateTime(
+        logicalAsOfDate.year,
+        logicalAsOfDate.month,
+        logicalAsOfDate.day,
+      ),
       initialPlane: initialPlane,
       initialRailOpen: initialRailOpen,
       initialDirection: initialDirection,
@@ -712,6 +726,7 @@ final class DashboardCoreController {
   late final DashboardRailFlightRecorder? railFlightRecorder;
   late final DashboardRenderReadinessDiagnostics renderReadinessDiagnostics;
   late final DashboardPresentationController presentation;
+  late final LocalDate logicalAsOfDate;
   late final DashboardDataRuntime dataRuntime;
   final ValueNotifier<bool> foregroundInputMotion = ValueNotifier<bool>(false);
   late final CurrentQueryController currentQuery;
@@ -3932,9 +3947,42 @@ final class DashboardCoreController {
     required DashboardNavigationState candidate,
     required DashboardTemporalAnchorComponent component,
   }) {
-    if (component == DashboardTemporalAnchorComponent.day &&
-        presentation.publishPreparedExperimentalChild(candidate)) {
-      _recordNavigationSelection('summaryExperimentPreparedDayCrossed');
+    // A retained interaction bank is complete but deliberately inactive. Its
+    // activation is synchronous metadata/cache selection, not structural
+    // preparation, so it belongs ahead of the visible prepared-frame commit.
+    // This keeps the direct MONTH/YEAR publication just as render-ready as the
+    // accepted DAY path and the Legacy parent cache-hit control.
+    _supersedeAcceptedQueryApplyForDashboardNavigation();
+    final interaction = railInteractionSceneWindowFor(candidate);
+    final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
+    if (retainedHit) _activateSceneWindow(interaction);
+    // All Segmented YEAR/MONTH/DAY components share the same strict prepared
+    // frame contract. A hit commits one canonical temporal target and queues
+    // its exact visible frame now; broad scene coverage remains maintenance.
+    if (presentation.publishPreparedExperimentalTemporalCandidate(candidate)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_COMPONENT_PREPARED_PUBLICATION',
+          queryKey: candidate.isRailOpen
+              ? candidate.temporalAnchor.sourceChildQueryKey.value
+              : candidate.parentQueryKey.value,
+          coreRevision: preparedIndex?.coreRevision,
+          message:
+              'summaryLayout=segmented component=${component.name} '
+              'candidateScope=${candidate.effectiveScope} '
+              'preparedPublicationHit=true '
+              'structuralCoverageRequired=false retainedSceneHit=$retainedHit '
+              'visibleFramePublished=true',
+        ),
+      );
+      _recordNavigationSelection(switch (component) {
+        DashboardTemporalAnchorComponent.year =>
+          'summaryExperimentPreparedYearCrossed',
+        DashboardTemporalAnchorComponent.month =>
+          'summaryExperimentPreparedMonthCrossed',
+        DashboardTemporalAnchorComponent.day =>
+          'summaryExperimentPreparedDayCrossed',
+      });
       return;
     }
     _navigateExperimentalTemporalCandidate(

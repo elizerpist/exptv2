@@ -19,6 +19,8 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart'
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
+const _defaultAsOfDate = LocalDate(year: 2026, month: 1, day: 10);
+
 void main() {
   test(
     'semantic target and direction ticks bind dense header cells immediately',
@@ -36,6 +38,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
       );
       addTearDown(presentation.dispose);
       addTearDown(categories.dispose);
@@ -46,7 +49,7 @@ void main() {
       expect(presentation.value.header.title, 'Budget');
       presentation.setTargetHandle(1);
 
-      expect(presentation.value.header.actualScaled100, 330);
+      expect(presentation.value.header.displayNumeratorScaled100, 330);
       expect(presentation.value.header.limitScaled100, 660);
       expect(presentation.value.header.title, 'Food');
       expect(identical(presentation.value.items, preparedItems), isTrue);
@@ -55,7 +58,7 @@ void main() {
 
       // Direction-local selection has no previous Income target yet, so the
       // aggregate is restored instead of reinterpreting Expense handle 1.
-      expect(presentation.value.header.actualScaled100, 40);
+      expect(presentation.value.header.displayNumeratorScaled100, 40);
       expect(presentation.value.header.limitScaled100, 80);
       expect(presentation.value.header.title, 'Összbevételi cél');
       expect(identical(presentation.value.items, preparedItems), isFalse);
@@ -79,6 +82,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: _handoffSnapshot,
+        logicalAsOfDate: _defaultAsOfDate,
       );
       addTearDown(presentation.dispose);
       addTearDown(categories.dispose);
@@ -126,6 +130,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: _directionalSnapshot,
+        logicalAsOfDate: _defaultAsOfDate,
       );
       addTearDown(presentation.dispose);
       addTearDown(categories.dispose);
@@ -179,6 +184,7 @@ void main() {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: _noLimitSnapshot,
+      logicalAsOfDate: _defaultAsOfDate,
     );
     addTearDown(presentation.dispose);
     addTearDown(categories.dispose);
@@ -194,7 +200,7 @@ void main() {
   });
 
   test(
-    'a Day child binds its exact prepared daily actual while retaining the containing Month limit key',
+    'a Day child retains its Month limit key while daily data stays separately prepared',
     () {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('food'),
@@ -212,6 +218,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: _dayAwareSnapshot,
+        logicalAsOfDate: _defaultAsOfDate,
       );
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
@@ -220,12 +227,140 @@ void main() {
 
       presentation.setTargetHandle(1);
 
-      expect(presentation.value.header.actualScaled100, 42);
+      expect(presentation.value.header.displayNumeratorScaled100, 130);
       expect(presentation.value.header.limitScaled100, 1000);
       expect(
         presentation.value.header.limitKey!.period,
         const FinancialLimitMonthPeriod(2026, 1),
       );
+    },
+  );
+
+  test(
+    'a Day Budget displays a month-end projection without contaminating limit editing',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(
+          scope: const DayScope(LocalDate(year: 2026, month: 1, day: 2)),
+        ),
+      );
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _dayAwareSnapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(presentation.dispose);
+
+      presentation.setTargetHandle(1);
+      final day = presentation.value.liveSelection;
+
+      expect(day.displayNumeratorScaled100, 130);
+      expect(day.canonicalActualScaled100ForLimitEdit, 999);
+      expect(day.monthEndProjection!.monthToDateActualScaled100, 42);
+      expect(day.monthEndProjection!.projectedMonthEndScaled100, 130);
+      expect(
+        day.visual.chromeGeometry,
+        BudgetLimitProgressChromeGeometry.verticalProjection,
+      );
+      expect(day.visual.rawProgress, .13);
+      expect(day.visual.visualProgress, .0975);
+      expect(day.limitEditContext!.actualScaled100, 999);
+      expect(
+        day.limitEditContext!.key.period,
+        const FinancialLimitMonthPeriod(2026, 1),
+      );
+
+      visible.value = _visibleFrame(
+        scope: const DayScope(LocalDate(year: 2026, month: 1, day: 19)),
+      );
+      final otherDay = presentation.value.liveSelection;
+      expect(otherDay.displayNumeratorScaled100, 130);
+      expect(otherDay.monthEndProjection!.key, day.monthEndProjection!.key);
+
+      visible.value = _visibleFrame(
+        scope: const MonthScope(YearMonth(year: 2026, month: 1)),
+      );
+      final month = presentation.value.liveSelection;
+      expect(month.displayNumeratorScaled100, 999);
+      expect(month.canonicalActualScaled100ForLimitEdit, 999);
+      expect(
+        month.visual.chromeGeometry,
+        BudgetLimitProgressChromeGeometry.circular,
+      );
+      expect(month.limitEditContext!.key, day.limitEditContext!.key);
+    },
+  );
+
+  test(
+    'a Day optimistic monthly-limit edit updates only the forecast gauge',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(
+          scope: const DayScope(LocalDate(year: 2026, month: 1, day: 2)),
+        ),
+      );
+      late final DashboardBudgetPresentationController presentation;
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoReadFinancialLimitRepository(),
+        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+      );
+      presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _dayAwareSnapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+        limitEditController: edits,
+      );
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(edits.dispose);
+      addTearDown(presentation.dispose);
+
+      presentation.setTargetHandle(1);
+      final before = presentation.value.liveSelection;
+      final session = edits.startEdit(before.limitEditContext!)!;
+      edits.applySemanticTick(
+        session,
+        direction: 1,
+        amountStepScaled100: 100,
+        tickCount: 1,
+        source: DashboardBudgetLimitEditSource.drag,
+      );
+      final after = presentation.value.liveSelection;
+
+      expect(after.limitKey, before.limitKey);
+      expect(after.displayNumeratorScaled100, before.displayNumeratorScaled100);
+      expect(
+        after.canonicalActualScaled100ForLimitEdit,
+        before.canonicalActualScaled100ForLimitEdit,
+      );
+      expect(after.limitScaled100, 1100);
+      expect(
+        after.monthEndProjection!.key,
+        isNot(before.monthEndProjection!.key),
+        reason: 'The limit-dependent forecast presentation has a new epoch.',
+      );
+      expect(after.visual.rawProgress, 130 / 1100);
+      expect(after.visual.visualProgress, (130 / 1100) * .75);
     },
   );
 
@@ -238,7 +373,7 @@ void main() {
     final state = BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: 1,
       limitKey: key,
-      actualScaled100: 99,
+      displayNumeratorScaled100: 99,
       effectiveLimitScaled100: 100,
     );
 
@@ -256,7 +391,7 @@ void main() {
     final state = BudgetCategoryAvatarSelectedLimitVisualState.available(
       targetHandle: 1,
       limitKey: key,
-      actualScaled100: 9999,
+      displayNumeratorScaled100: 9999,
       effectiveLimitScaled100: 10000,
     );
 
@@ -283,6 +418,7 @@ void main() {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: _snapshot,
+      logicalAsOfDate: _defaultAsOfDate,
     );
     addTearDown(presentation.dispose);
     addTearDown(categories.dispose);
@@ -290,7 +426,7 @@ void main() {
     addTearDown(visible.dispose);
 
     expect(presentation.value.header.isAvailable, isFalse);
-    expect(presentation.value.header.actualScaled100, isNull);
+    expect(presentation.value.header.displayNumeratorScaled100, isNull);
   });
 
   test(
@@ -309,6 +445,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
       );
       addTearDown(presentation.dispose);
       addTearDown(categories.dispose);
@@ -317,14 +454,23 @@ void main() {
 
       presentation.setTargetHandle(1);
       final items = presentation.value.items;
-      expect(presentation.value.header.actualScaled100, 330); // month/food
+      expect(
+        presentation.value.header.displayNumeratorScaled100,
+        330,
+      ); // month/food
 
       visible.value = _visibleFrame(scope: const YearScope(2026));
-      expect(presentation.value.header.actualScaled100, 310); // year/food
+      expect(
+        presentation.value.header.displayNumeratorScaled100,
+        310,
+      ); // year/food
       expect(identical(presentation.value.items, items), isTrue);
 
       visible.value = _visibleFrame(scope: const AllTimeScope());
-      expect(presentation.value.header.actualScaled100, 290); // sum/food
+      expect(
+        presentation.value.header.displayNumeratorScaled100,
+        290,
+      ); // sum/food
       expect(identical(presentation.value.items, items), isTrue);
     },
   );
@@ -348,6 +494,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: _dayAwareSnapshot,
+        logicalAsOfDate: _defaultAsOfDate,
       );
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
@@ -388,6 +535,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
         limitEditController: edits,
       );
       addTearDown(presentation.dispose);
@@ -410,7 +558,7 @@ void main() {
       );
 
       expect(presentation.value.header.title, 'Food');
-      expect(presentation.value.header.actualScaled100, 330);
+      expect(presentation.value.header.displayNumeratorScaled100, 330);
       expect(presentation.value.header.limitScaled100, 100660);
       expect(presentation.value.selectedLimitVisual.targetHandle, 1);
       expect(
@@ -443,6 +591,7 @@ void main() {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: _confirmedLimitSnapshot,
+      logicalAsOfDate: _defaultAsOfDate,
       limitEditController: edits,
     );
     addTearDown(presentation.dispose);
@@ -483,6 +632,7 @@ void main() {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: _confirmedLimitSnapshot,
+      logicalAsOfDate: _defaultAsOfDate,
     );
     addTearDown(presentation.dispose);
     addTearDown(categories.dispose);
@@ -518,6 +668,7 @@ void main() {
         visibleFrame: visible,
         transactionDirection: direction,
         snapshotForCurrentFrame: _noLimitSnapshot,
+        logicalAsOfDate: _defaultAsOfDate,
         limitEditController: edits,
       );
       addTearDown(presentation.dispose);
@@ -549,7 +700,6 @@ void main() {
         isTrue,
       );
       expect(presentation.value.selectedLimitVisual.visualProgress, .42);
-
     },
   );
 }

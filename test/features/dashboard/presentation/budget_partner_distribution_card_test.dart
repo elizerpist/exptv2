@@ -18,6 +18,7 @@ import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_sn
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -187,6 +188,7 @@ final class _PartnerCardHarness {
       visibleFrame: visible,
       transactionDirection: direction,
       snapshotForCurrentFrame: () => _budgetSnapshot(),
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
     );
     final categoryBundle = DashboardBudgetCategoryDistributionProjector.project(
       snapshot: _budgetSnapshot(),

@@ -98,32 +98,42 @@ final class Bnb03BottomNavigationContour {
 }
 
 class _Bnb03BarSurfacePainter extends CustomPainter {
-  const _Bnb03BarSurfacePainter({
-    required this.contour,
-    required this.topBorder,
-  });
+  const _Bnb03BarSurfacePainter({required this.contour});
 
   final Bnb03BottomNavigationContour contour;
-  final DashboardBottomNavTopBorder topBorder;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawPath(contour.physicalPath(size), Paint()..color = Colors.white);
-    if (topBorder == DashboardBottomNavTopBorder.thinGrey) {
-      canvas.drawPath(
-        contour.topContour(size),
-        Paint()
-          ..color = FluviVisualTokens.border
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..isAntiAlias = true,
-      );
-    }
   }
 
   @override
   bool shouldRepaint(covariant _Bnb03BarSurfacePainter oldDelegate) =>
-      oldDelegate.contour != contour || oldDelegate.topBorder != topBorder;
+      oldDelegate.contour != contour;
+}
+
+/// Drawn after the FAB, so the one canonical contour is never hidden by the
+/// FAB's white backing layer. This is paint-only and has no interaction role.
+class _Bnb03TopContourPainter extends CustomPainter {
+  const _Bnb03TopContourPainter({required this.contour});
+
+  final Bnb03BottomNavigationContour contour;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      contour.topContour(size),
+      Paint()
+        ..color = FluviVisualTokens.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..isAntiAlias = true,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _Bnb03TopContourPainter oldDelegate) =>
+      oldDelegate.contour != contour;
 }
 
 class _Bnb03FabCorePainter extends CustomPainter {
@@ -231,6 +241,14 @@ class Bnb03BottomNavigation extends StatelessWidget {
         final scale = actualWidth / _figmaWidth;
 
         double s(double value) => value * scale;
+        final contour = Bnb03BottomNavigationContour(
+          edgeShape: edgeShape,
+          fabCenterX: actualWidth / 2,
+          // The bar begins 24px below the 96px outer FAB canvas.
+          fabCenterY: s(24),
+          fabRadius: s(48),
+          cornerRadius: s(32),
+        );
 
         return SizedBox(
           width: actualWidth,
@@ -245,17 +263,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                 height: s(_barHeight),
                 child: CustomPaint(
                   key: const ValueKey('bnb03-physical-bar-surface'),
-                  painter: _Bnb03BarSurfacePainter(
-                    contour: Bnb03BottomNavigationContour(
-                      edgeShape: edgeShape,
-                      fabCenterX: actualWidth / 2,
-                      // The bar begins 24px below the 96px outer FAB canvas.
-                      fabCenterY: s(24),
-                      fabRadius: s(48),
-                      cornerRadius: s(32),
-                    ),
-                    topBorder: topBorder,
-                  ),
+                  painter: _Bnb03BarSurfacePainter(contour: contour),
                 ),
               ),
 
@@ -338,6 +346,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
               // Exact Figma placement: x=169.5, y=-24 relative to the 75px bar.
               // The wrapper starts 24px above the bar, so its local y is 0 here.
               Positioned(
+                key: const ValueKey('bnb03-fab-layer'),
                 left: s(169.5),
                 top: 0,
                 width: s(96),
@@ -391,6 +400,21 @@ class Bnb03BottomNavigation extends StatelessWidget {
                   ),
                 ),
               ),
+              if (topBorder == DashboardBottomNavTopBorder.thinGrey)
+                Positioned(
+                  key: const ValueKey('bnb03-top-contour-layer'),
+                  left: 0,
+                  top: s(_overflowTop),
+                  width: actualWidth,
+                  height: s(_barHeight),
+                  child: IgnorePointer(
+                    key: const ValueKey('bnb03-top-contour-overlay'),
+                    child: CustomPaint(
+                      key: const ValueKey('bnb03-top-contour-overlay-paint'),
+                      painter: _Bnb03TopContourPainter(contour: contour),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
