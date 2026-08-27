@@ -20,7 +20,7 @@ revision **45**; screenshot
 | BN-01 | E1–E5 | BNB canonical contour + Stack composition | Existing path supplies both FAB sides; one foreground non-interactive contour is visible fully above FAB, no double stroke; rounded/straight × off/on all work. | path + composed Stack + actual raster samples for both FAB sides; physical visual check still pending | PARTIAL |
 | RG-01 | protected invariants | full dashboard | Query semantics, one visible-frame owner, bounded caches, one LogBox controller/position, Budget target identity, established surfaces and FAB interaction remain intact. | protected regression suites; one inherited r45 pager assertion documented below | DONE |
 | DOC-01 | documentation | docs | Source evidence, root cause, final ownership, formula, metrics and validation are factual; no unperformed physical claim. | documentation review | DONE |
-| DEL-01 | delivery | git/Actions | One focused production commit, pushed SHA, exact normal human APK from matching Actions run downloaded and SHA-256 verified. | Actions + file hash | NOT DONE |
+| DEL-01 | delivery | git/Actions | Production commit and its follow-up boundary-test commit are pushed; the exact normal human APK from the successful matching Actions run is downloaded and SHA-256 verified. | Actions + file hash | DONE |
 
 ## Test-boundary note
 
@@ -29,3 +29,21 @@ fails on both the implementation worktree and a clean detached r45 worktree:
 the existing Partner donut assertion expects `height > 104`, while both report
 `100.8`. It is therefore an inherited baseline failure, not changed or masked
 by this delivery.
+
+## Delivery evidence
+
+- Production implementation: `8853ea65467f207f13f270d01e130e53337c4857`.
+- Follow-up boundary contract: `07862a4d2c1bade528e6c58abd5a80afce3fccf1`.
+  The first cloud run exposed an obsolete assertion requiring the deliberately
+  removed 2500ms Trio cooldown; the follow-up makes the boundary test require
+  motion-only visibility instead.
+- Successful GitHub Actions run: `33059787149` for `07862a4d`, with Flutter,
+  clean Room/native, human diagnostic APK and A–J dashboard profile all
+  successful.
+- Normal human APK:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_07862a4.apk`
+  (76 MiB), SHA-256
+  `d44b05502bbd021f0fd162d5afd6fd12093fc8e77309073115641be9019ba7c3`.
+
+The automated profile is not a claim of manual physical visual acceptance.
+The outstanding on-device visual/gesture check remains explicit in `BN-01`.

@@ -204,5 +204,9 @@ commit; compilation/build status never substitutes for those conditions.
   after its old 2500ms-cooldown boundary assertion was corrected to the
   approved motion-only contract. The existing Partner pager `>104` height assertion fails
   identically on clean r45 (`100.8`) and is recorded as inherited. `flutter
-  analyze` also passed with no issues. Delivery build and physical Android
-  inspection remain the final external gates at the time of this note.
+  analyze` also passed with no issues. GitHub Actions run `33059787149` then
+  passed Flutter, clean Room/native, the human diagnostic APK build and the
+  A–J dashboard profile. Its normal human APK is downloaded at
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_07862a4.apk`,
+  SHA-256 `d44b05502bbd021f0fd162d5afd6fd12093fc8e77309073115641be9019ba7c3`.
+  Manual physical Android inspection remains explicitly outstanding.
