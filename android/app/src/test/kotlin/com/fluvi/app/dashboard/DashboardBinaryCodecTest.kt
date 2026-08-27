@@ -120,7 +120,7 @@ class DashboardBinaryCodecTest {
         )
 
         assertEquals(DashboardBinaryCodec.BUDGET_LIMIT_MAGIC, input.readInt())
-        assertEquals(3, input.readInt())
+        assertEquals(DashboardBinaryCodec.BUDGET_LIMIT_VERSION, input.readInt())
         assertEquals(9L, input.readLong())
         assertEquals(2026, input.readInt())
         assertEquals(2026, input.readInt())
