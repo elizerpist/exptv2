@@ -262,7 +262,9 @@ class SeedFluviDemoDatasetUseCase internal constructor(
                                 FluviFinancialLimitPeriod.BaseMonthly,
                             ),
                             amountScaled100 = demoLimitFor(
-                                totalActual / years.count().coerceAtLeast(1),
+                                // BaseMonthly is the typical inherited month,
+                                // never a hidden annual/SUM denominator.
+                                totalActual / (years.count().coerceAtLeast(1) * 12L),
                                 relation,
                                 targetIndex,
                                 0,
@@ -379,7 +381,10 @@ class SeedFluviDemoDatasetUseCase internal constructor(
 
         private fun expectedFinancialLimitCount(): Long {
             val yearCount = financialLimitYearWindow.last - financialLimitYearWindow.first + 1
-            val periodCount = 1 + yearCount + yearCount * 12
+            // One base row plus one sparse override for every third concrete
+            // month. The window always contains a multiple of three months,
+            // so each target receives the same deterministic row count.
+            val periodCount = 1 + yearCount * 4
             val directionCategoryTargetCount = plan.entries
                 .groupBy { it.direction }
                 .values
