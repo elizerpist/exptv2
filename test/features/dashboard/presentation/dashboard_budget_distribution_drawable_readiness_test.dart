@@ -77,10 +77,41 @@ void main() {
     );
     expect(controller.estimatedRetainedBytes, greaterThan(0));
   });
+
+  test('the visible temporal preview hotset publishes a sibling month while '
+      'foreground fling motion is active', () async {
+    var foregroundMotion = false;
+    final controller = _controller(
+      isForegroundInputActive: () => foregroundMotion,
+    );
+    addTearDown(controller.dispose);
+    const year = YearScope(2026);
+    const january = MonthScope(YearMonth(year: 2026, month: 1));
+    const february = MonthScope(YearMonth(year: 2026, month: 2));
+
+    await controller.warmHotsetForPreviewScope(
+      parentScope: year,
+      siblingScopes: const <LedgerTimeScope>[january, february],
+    );
+    foregroundMotion = true;
+
+    expect(
+      controller.publishIfReadyForTimeScope(february),
+      isTrue,
+      reason:
+          'A cache-hot visible preview must bind Card2 synchronously; '
+          'foreground motion may suppress only a cache miss.',
+    );
+    expect(
+      controller.value!.semanticBundle.analysisScope.canonicalKey,
+      february.canonicalKey,
+    );
+  });
 }
 
 DashboardBudgetDistributionDrawableController _controller({
   int maximumFrames = 40,
+  bool Function()? isForegroundInputActive,
 }) {
   final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
     _category('food'),
@@ -91,6 +122,7 @@ DashboardBudgetDistributionDrawableController _controller({
     snapshot: _snapshot(),
     partnerSnapshotForCurrentFrame: _partnerSnapshot,
     maximumFrames: maximumFrames,
+    isForegroundInputActive: isForegroundInputActive,
   );
 }
 

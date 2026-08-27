@@ -7,6 +7,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_layout_metrics.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
@@ -20,6 +21,7 @@ import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
+import '../dashboard_budget_header_presentation.dart';
 import 'budget_category_avatar_rail.dart';
 import 'budget_allocation_partition_lane.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -66,6 +68,9 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final geometry = presentation.geometry;
+    final headerProfile = DashboardBudgetHeaderPresentationScope.profileOf(
+      context,
+    );
     return ValueListenableBuilder<BudgetSectionOrder>(
       valueListenable: sectionOrder ?? _alwaysAvatarsThenChart,
       builder: (context, order, _) {
@@ -161,25 +166,46 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         ),
                 ),
               ),
-              DashboardCoreModeOpacityPosition(
-                bounds: section.indicatorBounds,
-                opacity: geometry.zone2Opacity,
-                offset: Offset(0, geometry.zone2Shift),
-                child: distributionPageController == null
-                    ? DashboardPlaceholderDots(
-                        bounds: section.indicatorBounds,
-                        semanticKey: const ValueKey(
-                          'dashboard-core-mode-budget-dots',
-                        ),
-                      )
-                    : SizedBox(
-                        key: const ValueKey('dashboard-core-mode-budget-dots'),
-                        width: section.indicatorBounds.width,
-                        height: section.indicatorBounds.height,
-                        child: BudgetDistributionPageDots(
-                          controller: distributionPageController!,
-                        ),
-                      ),
+              ValueListenableBuilder<BudgetContentLayout>(
+                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+                builder: (context, layout, _) {
+                  // The source dot gap is 4px. Only Unified Avatar→Chart
+                  // uses it as an extra inner-bottom clearance; Split and
+                  // Chart→Avatar retain their authored indicator geometry.
+                  final bottomClearance =
+                      layout == BudgetContentLayout.unifiedCard &&
+                          order == BudgetSectionOrder.avatarsThenChart
+                      ? DashboardLayoutMetrics.reference.dotGap
+                      : 0.0;
+                  final bounds = DashboardBounds(
+                    left: section.indicatorBounds.left,
+                    top: section.indicatorBounds.top - bottomClearance,
+                    width: section.indicatorBounds.width,
+                    height: section.indicatorBounds.height,
+                  );
+                  return DashboardCoreModeOpacityPosition(
+                    bounds: bounds,
+                    opacity: geometry.zone2Opacity,
+                    offset: Offset(0, geometry.zone2Shift),
+                    child: distributionPageController == null
+                        ? DashboardPlaceholderDots(
+                            bounds: bounds,
+                            semanticKey: const ValueKey(
+                              'dashboard-core-mode-budget-dots',
+                            ),
+                          )
+                        : SizedBox(
+                            key: const ValueKey(
+                              'dashboard-core-mode-budget-dots',
+                            ),
+                            width: bounds.width,
+                            height: bounds.height,
+                            child: BudgetDistributionPageDots(
+                              controller: distributionPageController!,
+                            ),
+                          ),
+                  );
+                },
               ),
               DashboardCoreModeHeaderScaffold(
                 bounds: geometry.headerBounds,
@@ -189,9 +215,13 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 label: 'budget',
                 visualController: headerVisualController,
                 visualFrameListenable: headerVisualFrame,
-                detailTop: 4,
-                detailRight: headerVisualController == null ? 16 : 60,
-                detailBottom: 4,
+                // The source title starts at x=20/y=16. Text keeps the
+                // existing tuner/menu clearance internally; the partition
+                // lane itself now owns equal 16px physical insets.
+                detailLeft: 16,
+                detailTop: 16,
+                detailRight: 16,
+                detailBottom: headerProfile.partitionBottomInset,
                 detail: presentationController == null
                     ? null
                     : ValueListenableBuilder<DashboardBudgetPresentationState>(
@@ -211,8 +241,9 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                               // title/value anchor at every intermediate height
                               // without a feature-local layout threshold or
                               // animation owner.
-                              const titleAndValueHeight = 34.0;
-                              const partitionHeight = 20.0;
+                              const titleAndValueHeight = 36.0;
+                              final partitionHeight =
+                                  13.0 + headerProfile.partitionThickness;
                               final roomReveal =
                                   ((constraints.maxHeight -
                                               titleAndValueHeight) /
@@ -225,50 +256,48 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: Text(
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 4,
+                                      right: 44,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
                                           header.title,
                                           key: const ValueKey(
                                             'budget-header-target-title',
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color:
-                                                FluviVisualTokens.textPrimary,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
+                                          style: TextStyle(
+                                            color: headerProfile.foreground,
+                                            fontSize: 10,
+                                            height: 1,
+                                            fontWeight: FontWeight.w900,
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        header.analysisScopeLabel,
-                                        key: const ValueKey(
-                                          'budget-header-analysis-scope',
+                                        const SizedBox(height: 7),
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            amount,
+                                            key: const ValueKey(
+                                              'budget-header-actual-limit',
+                                            ),
+                                            style: TextStyle(
+                                              color: headerProfile.foreground,
+                                              fontSize: 19,
+                                              height: .96,
+                                              letterSpacing: -.76,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color:
-                                              FluviVisualTokens.textSecondary,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Text(
-                                    amount,
-                                    key: const ValueKey(
-                                      'budget-header-actual-limit',
-                                    ),
-                                    style: const TextStyle(
-                                      color: FluviVisualTokens.textPrimary,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
+                                      ],
                                     ),
                                   ),
                                   const Spacer(),
@@ -283,6 +312,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                         opacity: partitionReveal,
                                         child: _BudgetHeaderAllocationDetail(
                                           partition: partition,
+                                          thickness:
+                                              headerProfile.partitionThickness,
                                         ),
                                       ),
                                     ),
@@ -430,9 +461,13 @@ final class _BudgetSectionLayout {
 }
 
 final class _BudgetHeaderAllocationDetail extends StatelessWidget {
-  const _BudgetHeaderAllocationDetail({required this.partition});
+  const _BudgetHeaderAllocationDetail({
+    required this.partition,
+    required this.thickness,
+  });
 
   final DashboardBudgetPartitionPresentation partition;
+  final double thickness;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -464,7 +499,7 @@ final class _BudgetHeaderAllocationDetail extends StatelessWidget {
       ),
       const SizedBox(height: 4),
       SizedBox(
-        height: 7,
+        height: thickness,
         width: double.infinity,
         child: BudgetAllocationPartitionLane(partition: partition),
       ),

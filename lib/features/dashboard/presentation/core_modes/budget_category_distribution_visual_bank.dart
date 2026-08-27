@@ -338,7 +338,37 @@ final class DashboardBudgetDistributionDrawableController
     return frame;
   }
 
-  Future<void> warmHotsetFor(DashboardNavigationState state) async {
+  Future<void> warmHotsetFor(DashboardNavigationState state) {
+    final direct = _directChildScopesFor?.call(state);
+    return _warmHotsetForScopes(
+      parentScope: state.parentScope,
+      siblingScopes: direct ?? <LedgerTimeScope>[state.retainedChildScope],
+      source: 'committedNavigation',
+    );
+  }
+
+  /// Warms the exact sibling set that can be crossed from the currently
+  /// visible preview. The navigation state intentionally does not substitute
+  /// for this input: while a Summary rail is moving it can still describe the
+  /// settled parent while [parentScope] describes a day/month/year preview.
+  ///
+  /// This remains idle-only maintenance. Its outcome is an O(1) retained
+  /// scene lookup at a later foreground crossing; no Canvas bank is built on
+  /// that crossing itself.
+  Future<void> warmHotsetForPreviewScope({
+    required LedgerTimeScope parentScope,
+    required Iterable<LedgerTimeScope> siblingScopes,
+  }) => _warmHotsetForScopes(
+    parentScope: parentScope,
+    siblingScopes: siblingScopes,
+    source: 'visiblePreview',
+  );
+
+  Future<void> _warmHotsetForScopes({
+    required LedgerTimeScope parentScope,
+    required Iterable<LedgerTimeScope> siblingScopes,
+    required String source,
+  }) async {
     // This cache is an idle-only visual convenience. It has no authority over
     // direct Summary or BudgetAvatar input and it must re-check after yielding
     // because each projection can synchronously build Canvas paths.
@@ -346,21 +376,16 @@ final class DashboardBudgetDistributionDrawableController
     if (_isForegroundInputActive?.call() ?? false) return;
     final scopes = <String, LedgerTimeScope>{};
     void add(LedgerTimeScope scope) => scopes[scope.canonicalKey] = scope;
-    add(state.parentScope);
-    final direct = _directChildScopesFor?.call(state);
-    if (direct == null) {
-      add(state.retainedChildScope);
-    } else {
-      for (final scope in direct) {
-        add(scope);
-      }
+    add(parentScope);
+    for (final scope in siblingScopes) {
+      add(scope);
     }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_DISTRIBUTION_SCENE_HOTSET_PLANNED',
         coreRevision: _snapshotForCurrentFrame()?.coreRevision,
         scope:
-            'parentScope=${state.parentScope.canonicalKey} '
+            'source=$source parentScope=${parentScope.canonicalKey} '
             'childScopeCount=${scopes.length - 1} '
             'retainedBytes=$estimatedRetainedBytes '
             'requiredScopes=${scopes.keys.join(',')}',

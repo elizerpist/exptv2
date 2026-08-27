@@ -350,6 +350,7 @@ class _BudgetPartnerDistributionCardState
           ),
       ],
       donutDiameter: widget.rhythm == null ? 150 : 104,
+      donutScale: .90,
       expandDonutToFit: widget.expandDonutToFit,
       leftFooterMinimumHeight: BudgetRhythmBarChart.minimumLayoutHeight,
       leftFooter: widget.rhythm == null

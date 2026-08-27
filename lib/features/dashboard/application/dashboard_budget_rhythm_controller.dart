@@ -8,7 +8,9 @@ import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
+import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/time_plane.dart';
+import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_presentation_controller.dart';
 import 'dashboard_budget_target.dart';
 
@@ -72,19 +74,22 @@ final class DashboardBudgetRhythmState {
 typedef DashboardBudgetRhythmRolloverScheduler = FluviRolloverScheduler;
 
 /// CoreDashboard-lifetime RAM-only binding. It observes the canonical Budget
-/// semantic selection and navigation plane; local wall-clock time is the sole
-/// rolling-window authority. It owns neither a selected target nor an
-/// alternative navigation model.
+/// semantic selection and exact visible frame. A visible frame is the
+/// interaction-preview authority, so its temporal scope wins over committed
+/// navigation while a Summary rail is moving. It owns neither a selected
+/// target nor an alternative navigation model.
 final class DashboardBudgetRhythmController
     extends ValueNotifier<DashboardBudgetRhythmState?> {
   DashboardBudgetRhythmController({
     required DashboardBudgetPresentationController presentation,
     required DashboardNavigationController navigation,
+    required ValueListenable<DashboardVisibleFrame?> visibleFrame,
     required PreparedBudgetLimitSnapshot? Function() snapshotForCurrentFrame,
     FluviClock clock = const SystemFluviClock(),
     DashboardBudgetRhythmRolloverScheduler? scheduleRollover,
   }) : _presentation = presentation,
        _navigation = navigation,
+       _visibleFrame = visibleFrame,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
        _clock = clock,
        _scheduleRollover =
@@ -92,16 +97,18 @@ final class DashboardBudgetRhythmController
        super(null) {
     _presentation.addListener(_refresh);
     _navigation.addListener(_refresh);
+    _visibleFrame.addListener(_refresh);
     _refresh();
-    _armNextLocalDayRollover();
   }
 
   final DashboardBudgetPresentationController _presentation;
   final DashboardNavigationController _navigation;
+  final ValueListenable<DashboardVisibleFrame?> _visibleFrame;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
   final FluviClock _clock;
   final DashboardBudgetRhythmRolloverScheduler _scheduleRollover;
   VoidCallback? _cancelRollover;
+  DateTime? _armedRolloverDay;
   int? _lastDiagnosticSignature;
 
   void _refresh() {
@@ -118,13 +125,15 @@ final class DashboardBudgetRhythmController
       if (value != null) value = null;
       return;
     }
+    final frame = _visibleFrame.value;
     final state = _navigation.state;
+    final scope = frame?.scope.timeScope;
     final projection = DashboardBudgetRhythmProjector.project(
       snapshot: rhythm,
       direction: selection.direction,
       targetHandle: selection.target.handle,
-      plane: state.plane,
-      localClockDate: _clock.now(),
+      plane: frame?.plane ?? state.plane,
+      localClockDate: _windowEndFor(scope),
     );
     final colors = _colorsFor(selection.target, selection.direction);
     final next = DashboardBudgetRhythmState(
@@ -160,11 +169,35 @@ final class DashboardBudgetRhythmController
         ),
       );
     }
+    if (scope is AllTimeScope || scope == null) {
+      _armNextLocalDayRollover();
+    } else {
+      _cancelRollover?.call();
+      _cancelRollover = null;
+      _armedRolloverDay = null;
+    }
   }
 
+  /// The device clock is the correct rolling-window endpoint only for the
+  /// all-time dashboard. A constrained visible frame instead carries the
+  /// immutable preview period that every Budget consumer must show now.
+  DateTime _windowEndFor(LedgerTimeScope? scope) => switch (scope) {
+    DayScope(:final date) => DateTime.utc(date.year, date.month, date.day),
+    MonthScope(:final value) => DateTime.utc(
+      value.year,
+      value.month,
+      value.daysInMonth,
+    ),
+    YearScope(:final year) => DateTime.utc(year, 12, 31),
+    AllTimeScope() || null => _clock.now(),
+  };
+
   void _armNextLocalDayRollover() {
-    _cancelRollover?.call();
     final now = _clock.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (_cancelRollover != null && _armedRolloverDay == today) return;
+    _cancelRollover?.call();
+    _armedRolloverDay = today;
     final nextLocalDay = DateTime(now.year, now.month, now.day + 1);
     final delay = nextLocalDay.difference(now);
     _cancelRollover = _scheduleRollover(
@@ -172,8 +205,9 @@ final class DashboardBudgetRhythmController
           ? const Duration(milliseconds: 1)
           : delay,
       () {
+        _cancelRollover = null;
+        _armedRolloverDay = null;
         _refresh();
-        _armNextLocalDayRollover();
       },
     );
   }
@@ -207,6 +241,7 @@ final class DashboardBudgetRhythmController
   void dispose() {
     _presentation.removeListener(_refresh);
     _navigation.removeListener(_refresh);
+    _visibleFrame.removeListener(_refresh);
     _cancelRollover?.call();
     super.dispose();
   }

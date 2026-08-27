@@ -650,6 +650,77 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
 
       expect(trioValues, findsNWidgets(3));
+
+      // Do not use pumpAndSettle here: it advances a fake timer all the way
+      // through the intentional post-ballistic cooldown. Stop at the real
+      // end of the scroll activity, before the cooldown timer is due.
+      for (
+        var frame = 0;
+        frame < 120 && tester.binding.hasScheduledFrame;
+        frame += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(
+        trioValues,
+        findsNWidgets(3),
+        reason:
+            'A real ballistic completion keeps the motion affordance through '
+            'its short post-settle cooldown.',
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(trioValues, findsNWidgets(3));
+      await tester.pump(const Duration(seconds: 2));
+      expect(trioValues, findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Dynamic Trio small non-ballistic release collapses immediately',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+    const presentation = DashboardSummaryPresentationSettings(
+      showSeparators: true,
+      modeSelectorLayout: SummaryModeSelectorLayout.current,
+      temporalFlingPresentation: SummaryTemporalFlingPresentation.dynamicTrio,
+    );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            presentation: presentation,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+          ),
+        ),
+      );
+      final target = find.byKey(
+        const ValueKey('summary-pill-segmented-month-selector'),
+      );
+      final trioValues = find.descendant(
+        of: target,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.key is ValueKey<String> &&
+              (widget.key as ValueKey<String>).value.startsWith(
+                'summary-pill-dynamic-trio-',
+              ),
+        ),
+      );
+
+      await tester.drag(target, const Offset(0, -10));
+      await tester.pumpAndSettle();
+      expect(trioValues, findsOneWidget);
     },
   );
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_layout_frame.dart';
@@ -605,9 +607,64 @@ final class _HierarchyValueSelector extends StatefulWidget {
 
 final class _HierarchyValueSelectorState
     extends State<_HierarchyValueSelector> {
+  static const _dynamicTrioBallisticCooldown = Duration(milliseconds: 2500);
   late final CenteredCarouselController _controller =
       CenteredCarouselController(initialIndex: 0);
   DashboardNavigationState? _motionOrigin;
+  Timer? _trioCooldown;
+  bool _ballisticMotionSeen = false;
+  bool _keepDynamicTrioVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.onBallisticStarted = (velocity) {
+      // CenterSnap also reports a zero-velocity spring used to settle a small
+      // drag. Only a real fling earns the post-settle Trio cooldown.
+      _ballisticMotionSeen =
+          velocity.abs() >=
+          CenteredCarouselMotionProfiles
+              .timeRefinementRail
+              .minimumFlingVelocity;
+    };
+  }
+
+  @override
+  void didUpdateWidget(covariant _HierarchyValueSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.presentation != SummaryTemporalFlingPresentation.dynamicTrio) {
+      _cancelDynamicTrioCooldown(collapse: true);
+    }
+  }
+
+  void _cancelDynamicTrioCooldown({required bool collapse}) {
+    _trioCooldown?.cancel();
+    _trioCooldown = null;
+    if (collapse && _keepDynamicTrioVisible && mounted) {
+      setState(() => _keepDynamicTrioVisible = false);
+    } else if (collapse) {
+      _keepDynamicTrioVisible = false;
+    }
+  }
+
+  void _startDynamicTrioCooldownIfNeeded() {
+    if (!_ballisticMotionSeen ||
+        widget.presentation != SummaryTemporalFlingPresentation.dynamicTrio) {
+      _keepDynamicTrioVisible = false;
+      return;
+    }
+    if (mounted) {
+      setState(() => _keepDynamicTrioVisible = true);
+    } else {
+      _keepDynamicTrioVisible = true;
+    }
+    _trioCooldown?.cancel();
+    _trioCooldown = Timer(_dynamicTrioBallisticCooldown, () {
+      if (!mounted) return;
+      setState(() => _keepDynamicTrioVisible = false);
+      _trioCooldown = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -633,6 +690,8 @@ final class _HierarchyValueSelectorState
           height: widget.height,
           viewportKey: ValueKey<String>('${widget.key}-viewport'),
           onMotionStarted: (_) {
+            _cancelDynamicTrioCooldown(collapse: true);
+            _ballisticMotionSeen = false;
             _motionOrigin = widget.navigation.state;
             widget.onMotionActiveChanged?.call(true);
           },
@@ -645,6 +704,7 @@ final class _HierarchyValueSelectorState
           onMotionIdle: (_) {
             _motionOrigin = null;
             _controller.jumpToIndexSilently(0);
+            _startDynamicTrioCooldownIfNeeded();
             widget.onMotionActiveChanged?.call(false);
           },
           itemBuilder: (context, offset, metrics) {
@@ -675,7 +735,9 @@ final class _HierarchyValueSelectorState
                 builder: (context, _) => _DynamicTrioValues(
                   height: widget.height,
                   rawIndex: _controller.rawCenteredLogicalIndex,
-                  isMoving: _controller.hasActiveScrollActivity,
+                  isMoving:
+                      _controller.hasActiveScrollActivity ||
+                      _keepDynamicTrioVisible,
                   origin: _motionOrigin ?? widget.navigation.state,
                   candidateForOffset: widget.candidateForOffset,
                   labelForCandidate: widget.labelForCandidate,
@@ -689,6 +751,7 @@ final class _HierarchyValueSelectorState
 
   @override
   void dispose() {
+    _trioCooldown?.cancel();
     _controller.dispose();
     super.dispose();
   }

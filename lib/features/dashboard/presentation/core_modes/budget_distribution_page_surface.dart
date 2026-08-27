@@ -86,6 +86,7 @@ class BudgetDistributionPageSurface extends StatelessWidget {
     required this.listKey,
     required this.emptyLabel,
     this.donutDiameter = 150,
+    this.donutScale = 1,
     this.expandDonutToFit = false,
     this.leftFooter,
     this.leftFooterMinimumHeight = 0,
@@ -101,6 +102,10 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   /// Category analysis may reserve a local footer below a smaller donut;
   /// Partner retains the original full-height donut/list geometry.
   final double donutDiameter;
+
+  /// Presentation-only diameter factor. Partner uses .90 so the existing
+  /// Column gives the exact reclaimed vertical delta to its rhythm footer.
+  final double donutScale;
 
   /// Legacy preserves its accepted authored diameter. Experimental lower
   /// cards opt into their real padded constraints, so their added height can
@@ -148,9 +153,10 @@ class BudgetDistributionPageSurface extends StatelessWidget {
                                 8)
                             .clamp(0.0, double.infinity)
                             .toDouble();
-                    final diameter = expandDonutToFit
+                    final baselineDiameter = expandDonutToFit
                         ? available
                         : donutDiameter.clamp(0.0, available).toDouble();
+                    final diameter = baselineDiameter * donutScale;
                     final donutBox = SizedBox(
                       key: ValueKey(
                         'budget-distribution-donut-${diameter.toInt()}',

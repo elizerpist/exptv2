@@ -15,6 +15,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribu
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_section_order.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -45,6 +46,21 @@ void main() {
         findsOneWidget,
       );
       expect(collapsedTitle.left, greaterThanOrEqualTo(collapsedHeader.left));
+      expect(collapsedTitle.left, collapsedHeader.left + 20);
+      expect(collapsedTitle.top, collapsedHeader.top + 16);
+      final titleText = tester.widget<Text>(
+        find.byKey(const ValueKey('budget-header-target-title')),
+      );
+      expect(titleText.style!.fontSize, 10);
+      expect(titleText.style!.fontWeight, FontWeight.w900);
+      expect(titleText.style!.height, 1);
+      final amountText = tester.widget<Text>(
+        find.byKey(const ValueKey('budget-header-actual-limit')),
+      );
+      expect(amountText.style!.fontSize, 19);
+      expect(amountText.style!.fontWeight, FontWeight.w900);
+      expect(amountText.style!.height, .96);
+      expect(amountText.style!.letterSpacing, -.76);
       expect(
         collapsedTitle.top,
         lessThan(collapsedHeader.top + collapsedHeader.height / 2),
@@ -111,6 +127,8 @@ void main() {
         findsOneWidget,
       );
       expect(partition.height, 7);
+      expect(partition.left - expandedHeader.left, 16);
+      expect(expandedHeader.right - partition.right, 16);
       expect(partition.left, greaterThanOrEqualTo(expandedHeader.left));
       expect(partition.right, lessThanOrEqualTo(expandedHeader.right));
       expect(partition.bottom, lessThanOrEqualTo(expandedHeader.bottom));
@@ -178,6 +196,72 @@ void main() {
       );
     },
   );
+
+  testWidgets('Budget Header foreground selection recolors only its text', (
+    tester,
+  ) async {
+    final harness = _BudgetHeaderHarness();
+    final headerPresentation = DashboardBudgetHeaderPresentationController()
+      ..selectForeground(DashboardBudgetHeaderForeground.white);
+    addTearDown(harness.dispose);
+    addTearDown(headerPresentation.dispose);
+
+    await tester.pumpWidget(
+      _host(
+        harness,
+        collapseProgress: 180,
+        headerPresentation: headerPresentation,
+      ),
+    );
+    Text title() => tester.widget<Text>(
+      find.byKey(const ValueKey('budget-header-target-title')),
+    );
+    Text amount() => tester.widget<Text>(
+      find.byKey(const ValueKey('budget-header-actual-limit')),
+    );
+    expect(title().style!.color, FluviVisualTokens.textOnAction);
+    expect(amount().style!.color, FluviVisualTokens.textOnAction);
+
+    headerPresentation.selectForeground(DashboardBudgetHeaderForeground.black);
+    await tester.pump();
+    expect(title().style!.color, FluviVisualTokens.textPrimary);
+    expect(amount().style!.color, FluviVisualTokens.textPrimary);
+  });
+
+  testWidgets('Budget Header partition slider keeps the authored centerline', (
+    tester,
+  ) async {
+    final harness = _BudgetHeaderHarness();
+    final headerPresentation = DashboardBudgetHeaderPresentationController();
+    addTearDown(harness.dispose);
+    addTearDown(headerPresentation.dispose);
+
+    Future<void> pump() => tester.pumpWidget(
+      _host(
+        harness,
+        collapseProgress: 0,
+        headerPresentation: headerPresentation,
+      ),
+    );
+
+    await pump();
+    final baseline = tester.getRect(
+      find.byKey(const ValueKey('budget-header-allocation-partition')),
+    );
+    final header = tester.getRect(
+      find.byKey(const ValueKey('dashboard-core-mode-budget-header')),
+    );
+
+    headerPresentation.setPartitionHeightPercent(100);
+    await tester.pump();
+    final doubled = tester.getRect(
+      find.byKey(const ValueKey('budget-header-allocation-partition')),
+    );
+    expect(doubled.height, 14);
+    expect(doubled.center.dy, baseline.center.dy);
+    expect(doubled.top, greaterThanOrEqualTo(header.top));
+    expect(doubled.bottom, lessThanOrEqualTo(header.bottom));
+  });
 
   testWidgets(
     'Unified Budget can translate the full selected-avatar input into its common-card envelope while Split keeps the baseline rail origin',
@@ -343,6 +427,16 @@ void main() {
             'The selected avatar chrome clears the actual donut/list region; '
             'the preceding padded heading lane is intentionally shared.',
       );
+      final dots = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
+      );
+      expect(
+        avatarsFirstUnified.bottom - dots.bottom,
+        closeTo(DashboardLayoutMetrics.reference.dotGap, .001),
+        reason:
+            'The lower Unified chart indicators retain the shared card but '
+            'now own the authored 4px physical bottom gap.',
+      );
     },
   );
 }
@@ -350,8 +444,9 @@ void main() {
 Widget _host(
   _BudgetHeaderHarness harness, {
   required double collapseProgress,
-}) => MaterialApp(
-  home: Scaffold(
+  DashboardBudgetHeaderPresentationController? headerPresentation,
+}) {
+  final surface = Scaffold(
     body: Stack(
       children: <Widget>[
         BudgetDashboardCoreSurface(
@@ -370,8 +465,16 @@ Widget _host(
         ),
       ],
     ),
-  ),
-);
+  );
+  return MaterialApp(
+    home: headerPresentation == null
+        ? surface
+        : DashboardBudgetHeaderPresentationScope(
+            controller: headerPresentation,
+            child: surface,
+          ),
+  );
+}
 
 final class _BudgetHeaderHarness {
   _BudgetHeaderHarness()

@@ -13,6 +13,7 @@ import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_s
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -135,7 +136,9 @@ void main() {
       final direction = TransactionDirectionController(
         initialDirection: TransactionDirection.expense,
       );
-      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(timeScope: const AllTimeScope(), plane: TimePlane.sum),
+      );
       final snapshot = _limitSnapshot();
       final presentation = DashboardBudgetPresentationController(
         categoryCollection: categories,
@@ -152,6 +155,7 @@ void main() {
       final controller = DashboardBudgetRhythmController(
         presentation: presentation,
         navigation: navigation,
+        visibleFrame: visible,
         snapshotForCurrentFrame: () => snapshot,
         clock: clock,
         scheduleRollover: rollover.call,
@@ -169,7 +173,8 @@ void main() {
         controller.value!.projection.windowEnd,
         DateTime.utc(2026, 8, 19),
         reason:
-            'The July dashboard temporal anchor is not rhythm time authority.',
+            'The all-time dashboard is the only rhythm state whose endpoint '
+            'comes from the local clock.',
       );
       expect(rollover.delays.single, const Duration(minutes: 1));
 
@@ -180,6 +185,58 @@ void main() {
       expect(rollover.delays, hasLength(2));
     },
   );
+
+  test('a visible temporal preview, rather than the committed clock window, '
+      'owns the rhythm endpoint during a day crossing', () {
+    final clock = _FakeClock(DateTime(2026, 8, 19, 12));
+    final categories = ValueNotifier<List<FluviCategory>>(
+      const <FluviCategory>[],
+    );
+    final direction = TransactionDirectionController(
+      initialDirection: TransactionDirection.expense,
+    );
+    final visible = ValueNotifier<DashboardVisibleFrame?>(
+      _visibleFrame(
+        timeScope: const DayScope(LocalDate(year: 2026, month: 8, day: 18)),
+        plane: TimePlane.month,
+      ),
+    );
+    final snapshot = _limitSnapshot();
+    final presentation = DashboardBudgetPresentationController(
+      categoryCollection: categories,
+      visibleFrame: visible,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: () => snapshot,
+    );
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 19),
+      initialPlane: TimePlane.month,
+      initialDirection: LedgerDirection.expense,
+      initialCoreRevision: 7,
+    );
+    final controller = DashboardBudgetRhythmController(
+      presentation: presentation,
+      navigation: navigation,
+      visibleFrame: visible,
+      snapshotForCurrentFrame: () => snapshot,
+      clock: clock,
+      scheduleRollover: _FakeRolloverScheduler().call,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(presentation.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(categories.dispose);
+    addTearDown(direction.dispose);
+    addTearDown(visible.dispose);
+
+    expect(
+      controller.value!.projection.windowEnd,
+      DateTime.utc(2026, 8, 18),
+      reason:
+          'The accepted preview day must reach the rhythm card before '
+          'settlement or a wall-clock rollover.',
+    );
+  });
 }
 
 PreparedBudgetRhythmSnapshot _rhythmSnapshot() {
@@ -236,8 +293,10 @@ PreparedBudgetLimitSnapshot _limitSnapshot() {
   );
 }
 
-DashboardVisibleFrame _visibleFrame() {
-  const timeScope = MonthScope(YearMonth(year: 2026, month: 1));
+DashboardVisibleFrame _visibleFrame({
+  LedgerTimeScope timeScope = const MonthScope(YearMonth(year: 2026, month: 1)),
+  TimePlane plane = TimePlane.month,
+}) {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
     timeScope: timeScope,
@@ -263,7 +322,7 @@ DashboardVisibleFrame _visibleFrame() {
   return DashboardVisibleFrame.fromPrepared(
     prepared,
     parentQueryKey: prepared.parentQueryKey,
-    plane: TimePlane.month,
+    plane: plane,
     railOpen: false,
     semanticIndex: 0,
     childLabel: 'January',

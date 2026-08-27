@@ -125,11 +125,18 @@ void main() {
         _sourcesExcept(root, 'lib/features/dashboard', const <String>[
           'lib/features/dashboard/presentation/core_modes/'
               'budget_limit_quick_edit_gesture.dart',
+          'lib/features/dashboard/presentation/widgets/'
+              'summary_pill_experiments.dart',
         ]);
     final budgetLimitGestureInput = _read(
       root,
       'lib/features/dashboard/presentation/core_modes/'
       'budget_limit_quick_edit_gesture.dart',
+    );
+    final dynamicTrioPresentation = _read(
+      root,
+      'lib/features/dashboard/presentation/widgets/'
+      'summary_pill_experiments.dart',
     );
     final motion = _sources(root, 'lib/features/dashboard/motion');
     final presentation = _sources(root, 'lib/features/dashboard/presentation');
@@ -343,6 +350,25 @@ void main() {
       reason:
           'Timing and ballistic guards cannot own presentation correctness.',
     );
+    expect(
+      dynamicTrioPresentation,
+      contains('Duration(milliseconds: 2500)'),
+      reason:
+          'Dynamic Trio has one bounded, presentation-only post-ballistic '
+          'cooldown rather than a data/navigation debounce.',
+    );
+    for (final forbidden in <String>[
+      'Repository',
+      'DashboardDataRuntime',
+      'PreparedDashboardIndex',
+      'Query',
+    ]) {
+      expect(
+        dynamicTrioPresentation,
+        isNot(contains(forbidden)),
+        reason: 'Dynamic Trio cooldown must not own $forbidden.',
+      );
+    }
     for (final forbidden in <String>[
       'Repository',
       'MethodChannel',

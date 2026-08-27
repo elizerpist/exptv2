@@ -26,6 +26,7 @@ import '../../features/dashboard/application/dashboard_interaction_readiness.dar
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
+import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
 import '../../features/dashboard/query/application/query_menu_data_controller.dart';
 import '../../features/dashboard/query/application/saved_query_controller.dart';
 import '../../features/dashboard/query/data/method_channel_query_menu_repository.dart';
@@ -156,6 +157,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   FinancialLimitRepository? _financialLimitRepository;
   late final QueryMenuDataController _queryData;
   late final SavedQueryController _savedQueries;
+  late final DashboardShellPresentationController _shellPresentation;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   int _startupAttemptGeneration = 0;
@@ -207,6 +209,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
               MethodChannelFinancialLimitRepository();
     _queryData = QueryMenuDataController(repository: _queryRepository);
     _savedQueries = SavedQueryController(repository: _queryRepository);
+    _shellPresentation = DashboardShellPresentationController();
     _readiness = DashboardInteractionReadiness(
       diagnostics: _controller.renderReadinessDiagnostics,
       buildInitialFrame: () async {
@@ -510,6 +513,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _categoryCollection.dispose();
     _queryData.dispose();
     _savedQueries.dispose();
+    _shellPresentation.dispose();
     _modeController.dispose();
     _controller.dispose();
     super.dispose();
@@ -691,6 +695,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                             onBudgetCategoryInputUpdated:
                                 _recordBudgetCategoryRailInputUpdated,
                             preparedLogBoxRasters: _preparedLogBoxRasters!,
+                            shellPresentation: _shellPresentation,
                             onLogBoxWarmupSurfaceAttached: (viewportId) {
                               _readiness.markLogBoxSurfaceAttached(
                                 viewportId: viewportId,
@@ -732,15 +737,20 @@ class _FluviAppShellState extends State<FluviAppShell> {
             ],
           ),
           bottomNavigationBar: _BottomNavigationSafeArea(
-            child: Bnb03BottomNavigation(
-              selected: _selectedNavigationItem,
-              onChanged: (item) {
-                if (item == Bnb03Item.search) {
-                  _openQueryMenu();
-                  return;
-                }
-                setState(() => _selectedNavigationItem = item);
-              },
+            child: ValueListenableBuilder<DashboardShellPresentationSettings>(
+              valueListenable: _shellPresentation,
+              builder: (context, settings, _) => Bnb03BottomNavigation(
+                selected: _selectedNavigationItem,
+                edgeShape: settings.bottomNavEdgeShape,
+                topBorder: settings.bottomNavTopBorder,
+                onChanged: (item) {
+                  if (item == Bnb03Item.search) {
+                    _openQueryMenu();
+                    return;
+                  }
+                  setState(() => _selectedNavigationItem = item);
+                },
+              ),
             ),
           ),
         ),

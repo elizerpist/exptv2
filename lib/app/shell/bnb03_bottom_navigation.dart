@@ -1,10 +1,130 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:iconsax_plus/iconsax_plus.dart';
 
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/design/fluvi_highlight.dart';
+import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
 
 enum Bnb03Item { home, search, shop, cart, profile }
+
+/// The one physical BottomNav path owner. It keeps the center FAB arc and the
+/// selected outer top-edge termination in one coordinate system, so fill and
+/// the optional border cannot disagree or cut through the FAB as a rectangular
+/// `Border(top:)` would.
+@immutable
+final class Bnb03BottomNavigationContour {
+  const Bnb03BottomNavigationContour({
+    required this.edgeShape,
+    required this.fabCenterX,
+    required this.fabCenterY,
+    required this.fabRadius,
+    required this.cornerRadius,
+  });
+
+  final DashboardBottomNavEdgeShape edgeShape;
+  final double fabCenterX;
+  final double fabCenterY;
+  final double fabRadius;
+  final double cornerRadius;
+
+  Path physicalPath(Size size) {
+    final path = topContour(size)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    return path;
+  }
+
+  Path topContour(Size size) {
+    final path = Path();
+    final radius = edgeShape == DashboardBottomNavEdgeShape.rounded
+        ? cornerRadius.clamp(0.0, size.width / 2)
+        : 0.0;
+    if (radius == 0) {
+      path.moveTo(0, 0);
+    } else {
+      path
+        ..moveTo(0, radius)
+        ..quadraticBezierTo(0, 0, radius, 0);
+    }
+    final verticalDistance = fabCenterY.abs();
+    final arcHalfWidth = verticalDistance >= fabRadius
+        ? 0.0
+        : math.sqrt(
+            fabRadius * fabRadius - verticalDistance * verticalDistance,
+          );
+    final leftArc = fabCenterX - arcHalfWidth;
+    path.lineTo(leftArc, 0);
+    if (arcHalfWidth > 0) {
+      // Two 60° circle-derived cubic arcs: begin/end at the bar top and
+      // crest at the original FAB top (centerY - radius). This deliberately
+      // avoids an implicit `arcTo` connector, whose tangent can differ from
+      // the fill path and make the thin contour appear to notch too deeply.
+      final cubicFactor = 4 / 3 * math.tan(math.pi / 12);
+      final tangent = fabRadius * cubicFactor;
+      final crestY = fabCenterY - fabRadius;
+      final leftControlX = leftArc + tangent * .5;
+      final crestLeftControlX = fabCenterX - tangent;
+      final crestRightControlX = fabCenterX + tangent;
+      final rightArc = fabCenterX + arcHalfWidth;
+      final rightControlX = rightArc - tangent * .5;
+      final controlY = -tangent * math.sqrt(3) / 2;
+      path
+        ..cubicTo(
+          leftControlX,
+          controlY,
+          crestLeftControlX,
+          crestY,
+          fabCenterX,
+          crestY,
+        )
+        ..cubicTo(
+          crestRightControlX,
+          crestY,
+          rightControlX,
+          controlY,
+          rightArc,
+          0,
+        );
+    }
+    path.lineTo(size.width - radius, 0);
+    if (radius > 0) {
+      path.quadraticBezierTo(size.width, 0, size.width, radius);
+    }
+    return path;
+  }
+}
+
+class _Bnb03BarSurfacePainter extends CustomPainter {
+  const _Bnb03BarSurfacePainter({
+    required this.contour,
+    required this.topBorder,
+  });
+
+  final Bnb03BottomNavigationContour contour;
+  final DashboardBottomNavTopBorder topBorder;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(contour.physicalPath(size), Paint()..color = Colors.white);
+    if (topBorder == DashboardBottomNavTopBorder.thinGrey) {
+      canvas.drawPath(
+        contour.topContour(size),
+        Paint()
+          ..color = FluviVisualTokens.border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..isAntiAlias = true,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _Bnb03BarSurfacePainter oldDelegate) =>
+      oldDelegate.contour != contour || oldDelegate.topBorder != topBorder;
+}
 
 class _Bnb03FabCorePainter extends CustomPainter {
   const _Bnb03FabCorePainter({required this.gradient});
@@ -77,6 +197,8 @@ class Bnb03BottomNavigation extends StatelessWidget {
     required this.onChanged,
     this.width,
     this.fontFamily = 'SF Pro Text',
+    this.edgeShape = DashboardBottomNavEdgeShape.rounded,
+    this.topBorder = DashboardBottomNavTopBorder.off,
   });
 
   final Bnb03Item selected;
@@ -88,6 +210,8 @@ class Bnb03BottomNavigation extends StatelessWidget {
   /// The Figma file uses SF Pro Text Regular.
   /// Add that font to your own app assets for exact typography.
   final String fontFamily;
+  final DashboardBottomNavEdgeShape edgeShape;
+  final DashboardBottomNavTopBorder topBorder;
 
   static const double _figmaWidth = 428;
   static const double _barHeight = 75;
@@ -119,13 +243,18 @@ class Bnb03BottomNavigation extends StatelessWidget {
                 top: s(_overflowTop),
                 width: actualWidth,
                 height: s(_barHeight),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(s(32)),
-                      topRight: Radius.circular(s(32)),
+                child: CustomPaint(
+                  key: const ValueKey('bnb03-physical-bar-surface'),
+                  painter: _Bnb03BarSurfacePainter(
+                    contour: Bnb03BottomNavigationContour(
+                      edgeShape: edgeShape,
+                      fabCenterX: actualWidth / 2,
+                      // The bar begins 24px below the 96px outer FAB canvas.
+                      fabCenterY: s(24),
+                      fabRadius: s(48),
+                      cornerRadius: s(32),
                     ),
+                    topBorder: topBorder,
                   ),
                 ),
               ),

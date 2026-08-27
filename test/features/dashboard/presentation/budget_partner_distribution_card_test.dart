@@ -154,6 +154,23 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('Partner donut is exactly 90 percent of its current 150px slot', (
+    tester,
+  ) async {
+    final harness = _PartnerCardHarness();
+    addTearDown(harness.dispose);
+    await harness.pump(
+      tester,
+      onCommit: ({required partner, required source, required targetHandle}) =>
+          Future<bool>.value(true),
+    );
+
+    final donut = find.byKey(const ValueKey('budget-distribution-donut-135'));
+    expect(donut, findsOneWidget);
+    expect(tester.getRect(donut).width, 135);
+    expect(tester.getRect(donut).height, 135);
+  });
 }
 
 final class _PartnerCardHarness {

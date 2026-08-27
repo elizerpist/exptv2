@@ -27,6 +27,8 @@ final class DashboardLogBoxHeader extends StatelessWidget {
     super.key,
     required this.bounds,
     required this.visibleFrames,
+    this.layoutScale,
+    this.showsSearchPill = true,
     this.performanceCounters,
     this.currentQuery,
     this.onRemoveCategory,
@@ -40,6 +42,8 @@ final class DashboardLogBoxHeader extends StatelessWidget {
 
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
+  final double? layoutScale;
+  final bool showsSearchPill;
   final DashboardPerformanceCounters? performanceCounters;
   final CurrentQueryController? currentQuery;
   final ValueChanged<String>? onRemoveCategory;
@@ -66,6 +70,8 @@ final class DashboardLogBoxHeader extends StatelessWidget {
             _DashboardLedgerHeaderControls(
               bounds: bounds,
               visibleFrames: visibleFrames,
+              layoutScale: layoutScale,
+              showsSearchPill: showsSearchPill,
               performanceCounters: performanceCounters,
             ),
             if (currentQuery != null &&
@@ -97,11 +103,15 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
   const _DashboardLedgerHeaderControls({
     required this.bounds,
     required this.visibleFrames,
+    this.layoutScale,
+    required this.showsSearchPill,
     required this.performanceCounters,
   });
 
   final DashboardBounds bounds;
   final DashboardVisibleFrameStore visibleFrames;
+  final double? layoutScale;
+  final bool showsSearchPill;
   final DashboardPerformanceCounters? performanceCounters;
 
   @override
@@ -112,7 +122,9 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
         final measure = performanceCounters?.measuresDurations ?? false;
         final started = measure ? developer.Timeline.now : 0;
         performanceCounters?.increment(DashboardPerformanceMetric.countBuild);
-        final scale = bounds.height / DashboardLogBoxTokens.summaryHeaderHeight;
+        final scale =
+            layoutScale ??
+            bounds.height / DashboardLogBoxTokens.summaryHeaderHeight;
         final count = frame?.count.formattedEntryCount ?? '0';
         final result = SizedBox(
           height: bounds.height,
@@ -145,17 +157,22 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(
-                height: DashboardLogBoxTokens.ledgerCountToSearchGap * scale,
-              ),
-              SizedBox(
-                height: DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
-                width: double.infinity,
-                child: _DashboardLogBoxSearchPill(scale: scale, bounds: bounds),
-              ),
-              SizedBox(
-                height: DashboardLogBoxTokens.ledgerSearchToListGap * scale,
-              ),
+              if (showsSearchPill) ...<Widget>[
+                SizedBox(
+                  height: DashboardLogBoxTokens.ledgerCountToSearchGap * scale,
+                ),
+                SizedBox(
+                  height: DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
+                  width: double.infinity,
+                  child: _DashboardLogBoxSearchPill(
+                    scale: scale,
+                    bounds: bounds,
+                  ),
+                ),
+                SizedBox(
+                  height: DashboardLogBoxTokens.ledgerSearchToListGap * scale,
+                ),
+              ],
             ],
           ),
         );

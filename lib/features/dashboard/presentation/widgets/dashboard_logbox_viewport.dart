@@ -26,6 +26,7 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
+import '../dashboard_logbox_search_pill_visibility.dart';
 import 'dashboard_query_facet_chips.dart';
 import 'dashboard_logbox_render_surface.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
@@ -392,8 +393,11 @@ final class _DashboardLogBoxViewportState
   double get _facetListGap =>
       _hasQueryFacets ? DashboardLogBoxTokens.facetListGap : 0;
 
-  double get _headerExtent =>
-      widget.bounds.height +
+  double _headerExtentFor({
+    required DashboardLogBoxHeaderLayout layout,
+    required double layoutScale,
+  }) =>
+      layout.heightForScale(layoutScale) +
       (_hasQueryFacets ? DashboardQueryFacetChips.height : 0);
 
   void _onPresentationBindingChanged() {
@@ -528,7 +532,19 @@ final class _DashboardLogBoxViewportState
         width: widget.bounds.width,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final headerExtent = _headerExtent;
+            final headerLayout = DashboardLogBoxSearchPillScope.layoutOf(
+              context,
+            );
+            final layoutScale =
+                widget.bounds.height /
+                DashboardLogBoxTokens.summaryHeaderHeight;
+            final structuralHeaderHeight = headerLayout.heightForScale(
+              layoutScale,
+            );
+            final headerExtent = _headerExtentFor(
+              layout: headerLayout,
+              layoutScale: layoutScale,
+            );
             final visibleHeaderHeight = math.min(
               headerExtent,
               constraints.maxHeight,
@@ -553,9 +569,11 @@ final class _DashboardLogBoxViewportState
                   left: 0,
                   top: 0,
                   width: widget.bounds.width,
-                  height: widget.bounds.height,
+                  height: structuralHeaderHeight,
                 ),
                 visibleFrames: widget.visibleFrames,
+                layoutScale: layoutScale,
+                showsSearchPill: headerLayout.showsSearchPill,
                 performanceCounters: widget.performanceCounters,
                 currentQuery: widget.currentQuery,
                 onRemoveCategory: widget.onRemoveQueryCategory,

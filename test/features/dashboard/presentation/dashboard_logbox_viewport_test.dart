@@ -17,6 +17,7 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_g
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_search_pill_visibility.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_header.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_partner_swipe.dart';
@@ -119,6 +120,45 @@ void main() {
       final searchSemantics = tester.widget<Semantics>(search);
       expect(searchSemantics.properties.button, isTrue);
       expect(searchSemantics.properties.enabled, isFalse);
+    },
+  );
+
+  testWidgets(
+    'hiding SearchPill removes its exact slot without replacing the LogBox scroll position',
+    (tester) async {
+      final visibility = DashboardLogBoxSearchPillController();
+      final fixture = await _readyFixture(
+        tester,
+        totalRows: 94,
+        searchPillVisibility: visibility,
+      );
+      addTearDown(fixture.dispose);
+      addTearDown(visibility.dispose);
+
+      final scroll = find.byKey(const ValueKey('dashboard-logbox-scroll-view'));
+      final oldRect = tester.getRect(scroll);
+      final oldPosition = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        findsOneWidget,
+      );
+
+      visibility.setVisible(false);
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        findsNothing,
+      );
+      final newRect = tester.getRect(scroll);
+      final newPosition = tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position;
+      expect(newRect.height - oldRect.height, 68);
+      expect(newRect.top, oldRect.top - 68);
+      expect(identical(newPosition, oldPosition), isTrue);
     },
   );
 
@@ -1421,6 +1461,7 @@ Future<_ReadyFixture> _readyFixture(
   DashboardLogBoxPartnerSwipeController? partnerSwipe,
   double dashboardLeft = 0,
   double screenWidth = 378,
+  DashboardLogBoxSearchPillController? searchPillVisibility,
 }) async {
   final store = DashboardVisibleFrameStore();
   final committedCache =
@@ -1467,6 +1508,7 @@ Future<_ReadyFixture> _readyFixture(
       dashboardLeft: dashboardLeft,
       screenWidth: screenWidth,
       partnerSwipe: partnerSwipe,
+      searchPillVisibility: searchPillVisibility,
     ),
   );
   await tester.pump();
@@ -1496,46 +1538,49 @@ Widget _viewport({
   DashboardLogBoxPartnerSwipeController? partnerSwipe,
   double dashboardLeft = 0,
   double screenWidth = 378,
+  DashboardLogBoxSearchPillController? searchPillVisibility,
 }) => MaterialApp(
-  home: SizedBox(
-    width: screenWidth,
-    height: 420,
-    child: Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        Positioned(
-          left: dashboardLeft,
-          top: 0,
-          bottom: 0,
-          width: 378,
-          child: DashboardLogBoxViewport(
-            bounds: DashboardBounds(
-              left: dashboardLeft,
-              top: 28,
-              width: 378,
-              height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+  home: DashboardLogBoxSearchPillScope(
+    controller: searchPillVisibility,
+    child: SizedBox(
+      width: screenWidth,
+      height: 420,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Positioned(
+            left: dashboardLeft,
+            top: 0,
+            bottom: 0,
+            width: 378,
+            child: DashboardLogBoxViewport(
+              bounds: DashboardBounds(
+                left: dashboardLeft,
+                top: 28,
+                width: 378,
+                height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+              ),
+              visibleFrames: store,
+              committedViewport: cache,
+              preparedSceneCache: railScenes,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: onLoadNextPage,
+              onLoadPreviousPage: onLoadPreviousPage,
+              onVerticalScrollStarted: onVerticalScrollStarted,
+              onVerticalScrollEnded: onVerticalScrollEnded,
+              onVerticalPointerIntentStarted: onVerticalPointerIntentStarted,
+              onVerticalPointerIntentEnded: onVerticalPointerIntentEnded,
+              performanceCounters: performanceCounters,
+              currentQuery: currentQuery,
+              partnerSwipe: partnerSwipe,
+              onRemoveQueryCategory: currentQuery == null ? null : (_) {},
+              onRemoveQueryPartner: currentQuery == null ? null : (_) {},
+              onClearQuery: currentQuery == null ? null : () {},
             ),
-            visibleFrames: store,
-            committedViewport: cache,
-            preparedSceneCache: railScenes,
-            preparedRasters: PreparedVectorAssetAtlas.instance.logBoxRastersFor(
-              3,
-            ),
-            onLoadNextPage: onLoadNextPage,
-            onLoadPreviousPage: onLoadPreviousPage,
-            onVerticalScrollStarted: onVerticalScrollStarted,
-            onVerticalScrollEnded: onVerticalScrollEnded,
-            onVerticalPointerIntentStarted: onVerticalPointerIntentStarted,
-            onVerticalPointerIntentEnded: onVerticalPointerIntentEnded,
-            performanceCounters: performanceCounters,
-            currentQuery: currentQuery,
-            partnerSwipe: partnerSwipe,
-            onRemoveQueryCategory: currentQuery == null ? null : (_) {},
-            onRemoveQueryPartner: currentQuery == null ? null : (_) {},
-            onClearQuery: currentQuery == null ? null : () {},
           ),
-        ),
-      ],
+        ],
+      ),
     ),
   ),
 );

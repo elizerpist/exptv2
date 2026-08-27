@@ -14,6 +14,9 @@ import '../dashboard_corner_roundness.dart';
 import '../dashboard_border_style.dart';
 import '../dashboard_logbox_height.dart';
 import '../dashboard_logbox_amount_palette.dart';
+import '../dashboard_logbox_search_pill_visibility.dart';
+import '../dashboard_budget_header_presentation.dart';
+import '../dashboard_shell_presentation.dart';
 import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
 import '../dashboard_summary_presentation.dart';
@@ -357,6 +360,9 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.border,
     this.logBoxHeight,
     this.amountPalette,
+    this.searchPillVisibility,
+    this.budgetHeaderPresentation,
+    this.shellPresentation,
   });
 
   final DashboardHeaderVisualController controller;
@@ -370,6 +376,9 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final DashboardBorderController? border;
   final DashboardLogBoxHeightController? logBoxHeight;
   final DashboardLogBoxAmountPaletteController? amountPalette;
+  final DashboardLogBoxSearchPillController? searchPillVisibility;
+  final DashboardBudgetHeaderPresentationController? budgetHeaderPresentation;
+  final DashboardShellPresentationController? shellPresentation;
 
   @override
   Widget build(
@@ -453,6 +462,21 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
               ],
               if (logBoxHeight case final height?) ...<Widget>[
                 _DashboardLogBoxHeightSection(controller: height),
+                const SizedBox(height: 14),
+              ],
+              if (searchPillVisibility case final searchPill?) ...<Widget>[
+                _DashboardSearchPillVisibilitySection(controller: searchPill),
+                const SizedBox(height: 14),
+              ],
+              if (budgetHeaderPresentation
+                  case final budgetHeader?) ...<Widget>[
+                _DashboardBudgetHeaderPresentationSection(
+                  controller: budgetHeader,
+                ),
+                const SizedBox(height: 14),
+              ],
+              if (shellPresentation case final shell?) ...<Widget>[
+                _DashboardBottomNavPresentationSection(controller: shell),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
@@ -1167,6 +1191,120 @@ final class _DashboardLogBoxHeightSection extends StatelessWidget {
               divisions: DashboardLogBoxHeight.divisions,
               value: height.position,
               onChanged: controller.setPosition,
+            ),
+          ],
+        ),
+      );
+}
+
+final class _DashboardSearchPillVisibilitySection extends StatelessWidget {
+  const _DashboardSearchPillVisibilitySection({required this.controller});
+
+  final DashboardLogBoxSearchPillController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardLogBoxSearchPillSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'LogBox',
+          children: <Widget>[
+            SwitchListTile.adaptive(
+              key: const ValueKey('dashboard-logbox-search-pill-visible'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('SearchPill'),
+              value: settings.isVisible,
+              onChanged: controller.setVisible,
+            ),
+          ],
+        ),
+      );
+}
+
+final class _DashboardBudgetHeaderPresentationSection extends StatelessWidget {
+  const _DashboardBudgetHeaderPresentationSection({required this.controller});
+
+  final DashboardBudgetHeaderPresentationController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardBudgetHeaderPresentationSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'Budget Header',
+          children: <Widget>[
+            _TunerSlider(
+              key: const ValueKey('dashboard-header-partition-height'),
+              label: 'Partíció magasság',
+              valueLabel: '+${settings.partitionHeightPercent.round()}%',
+              min: 0,
+              max: 100,
+              divisions: 100,
+              value: settings.partitionHeightPercent,
+              onChanged: controller.setPartitionHeightPercent,
+            ),
+            RadioGroup<DashboardBudgetHeaderForeground>(
+              groupValue: settings.foreground,
+              onChanged: (value) {
+                if (value != null) controller.selectForeground(value);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final foreground
+                      in DashboardBudgetHeaderForeground.values)
+                    RadioListTile<DashboardBudgetHeaderForeground>(
+                      key: ValueKey(
+                        'dashboard-header-foreground-${foreground.name}',
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        foreground == DashboardBudgetHeaderForeground.white
+                            ? 'Fehér'
+                            : 'Fekete',
+                      ),
+                      value: foreground,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+final class _DashboardBottomNavPresentationSection extends StatelessWidget {
+  const _DashboardBottomNavPresentationSection({required this.controller});
+
+  final DashboardShellPresentationController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<DashboardShellPresentationSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'BottomNav',
+          children: <Widget>[
+            _SummaryRadioGroup<DashboardBottomNavEdgeShape>(
+              label: 'Felső szélek',
+              value: settings.bottomNavEdgeShape,
+              values: DashboardBottomNavEdgeShape.values,
+              itemLabel: (value) => value == DashboardBottomNavEdgeShape.rounded
+                  ? 'Kerekített'
+                  : 'Egyenes',
+              onChanged: controller.selectBottomNavEdgeShape,
+              keyPrefix: 'dashboard-bottom-nav-edge-shape',
+            ),
+            _SummaryRadioGroup<DashboardBottomNavTopBorder>(
+              label: 'Felső kontúr',
+              value: settings.bottomNavTopBorder,
+              values: DashboardBottomNavTopBorder.values,
+              itemLabel: (value) => value == DashboardBottomNavTopBorder.off
+                  ? 'Ki'
+                  : 'Vékony szürke',
+              onChanged: controller.selectBottomNavTopBorder,
+              keyPrefix: 'dashboard-bottom-nav-top-border',
             ),
           ],
         ),
