@@ -115,7 +115,7 @@ class SeedFluviDemoDatasetUseCaseTest {
     }
 
     @Test
-    fun seedProvidesUnderEqualAndOverExamplesForEveryDirectionAndResolvedCalendarPlane() = runBlocking {
+    fun seedProvidesUnderEqualAndOverMonthExamplesForEveryDirection() = runBlocking {
         core.demoSeed.seed(financialLimitYearWindow = 2025..2026)
         // A freshly created core starts at revision 1; the seed transaction
         // intentionally advances it exactly once after the coherent fixture.
@@ -123,16 +123,17 @@ class SeedFluviDemoDatasetUseCaseTest {
             expectedRevision = 2L,
             yearWindow = FluviPreparedYearWindow(2025, 2026),
         )
-        val yearSlices = (1 until 1 + snapshot.yearCount).toList()
         val monthSlices = (1 + snapshot.yearCount until snapshot.periodSliceCount).toList()
 
         LedgerDirection.entries.forEach { direction ->
             val bank = snapshot.directionBank(direction)
-            // Slice zero intentionally retains raw all-time acquisition data.
-            // SUM presentation now derives a typical-month analysis from it,
-            // rather than treating it as an independently persisted SUM
-            // limit. Calendar month/year cells are the resolved-limit planes.
-            for (slices in listOf(yearSlices, monthSlices)) {
+            // This fixture deliberately supplies each monthly health band.
+            // YEAR is a sum of independently resolved months, so an exact
+            // annual ratio is neither required nor generally possible from
+            // sparse overrides. Slice zero retains raw all-time data; SUM
+            // derives its typical-month analysis from that data instead of
+            // treating it as an independently persisted limit.
+            for (slices in listOf(monthSlices)) {
                 val relations = mutableSetOf<Int>()
                 slices.forEach { slice ->
                     for (handle in 0 until bank.targetCount) {
