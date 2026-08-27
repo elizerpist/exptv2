@@ -41,26 +41,25 @@ void main() {
         targetHandle: 1,
         limitKey: null,
         displayNumeratorScaled100: 50,
-        effectiveLimitScaled100: 100,
+        displayDenominatorScaled100: 100,
       ),
       BudgetCategoryAvatarSelectedLimitVisualState.available(
         targetHandle: 1,
         limitKey: null,
         displayNumeratorScaled100: 100,
-        effectiveLimitScaled100: 100,
+        displayDenominatorScaled100: 100,
         chromeGeometry: BudgetLimitProgressChromeGeometry.verticalProjection,
       ),
       BudgetCategoryAvatarSelectedLimitVisualState.available(
         targetHandle: 1,
         limitKey: null,
         displayNumeratorScaled100: 100,
-        effectiveLimitScaled100: 100,
+        displayDenominatorScaled100: 100,
         chromeGeometry: BudgetLimitProgressChromeGeometry.annualSegments,
         annualSegments: List<BudgetProgressRingAnnualSegment>.filled(
           12,
           const BudgetProgressRingAnnualSegment(
-            rawProgress: .5,
-            isFuture: false,
+            health: BudgetProgressRingAnnualSegmentHealth.healthy,
           ),
         ),
       ),
@@ -68,7 +67,7 @@ void main() {
         targetHandle: 1,
         limitKey: null,
         displayNumeratorScaled100: 50,
-        effectiveLimitScaled100: 100,
+        displayDenominatorScaled100: 100,
         chromeGeometry: BudgetLimitProgressChromeGeometry.typicalMarker,
         typicalMarkerPosition: .5,
       ),
@@ -81,6 +80,91 @@ void main() {
     expect(BudgetProgressRingGeometry.sourceTrackWidth, isNonZero);
     expect(states[1].visualProgress, .75);
     expect(states[2].annualSegments, hasLength(12));
+  });
+
+  test('DAY break-even uses two mirrored sphere markers, not a line', () {
+    final markers = BudgetProgressRingDayPaceMarkers.resolve(
+      geometry: BudgetProgressRingGeometry.source,
+    );
+
+    expect(markers.sourceGeometryId, BudgetProgressRingGeometry.sourceId);
+    expect(markers.materialId, BudgetProgressRingSphereMaterial.sourceId);
+    expect(markers.left.center.dy, markers.right.center.dy);
+    expect(
+      markers.left.center.dx + markers.right.center.dx,
+      BudgetProgressRingGeometry.source.center.dx * 2,
+    );
+    expect(markers.left.center.dy, closeTo(100.24, .000001));
+    expect(markers.breakEvenGaugeRatio, .75);
+  });
+
+  test(
+    'YEAR segments are twelve fixed health cells without partial progress',
+    () {
+      final cells = List<BudgetProgressRingAnnualSegment>.generate(
+        12,
+        (index) => BudgetProgressRingAnnualSegment(
+          health: switch (index) {
+            0 => BudgetProgressRingAnnualSegmentHealth.healthy,
+            1 => BudgetProgressRingAnnualSegmentHealth.warning,
+            2 => BudgetProgressRingAnnualSegmentHealth.danger,
+            _ => BudgetProgressRingAnnualSegmentHealth.neutral,
+          },
+        ),
+      );
+
+      expect(cells, hasLength(12));
+      expect(cells[0].health, BudgetProgressRingAnnualSegmentHealth.healthy);
+      expect(cells[1].health, BudgetProgressRingAnnualSegmentHealth.warning);
+      expect(cells[2].health, BudgetProgressRingAnnualSegmentHealth.danger);
+      for (final cell in cells.skip(3)) {
+        expect(cell.health, BudgetProgressRingAnnualSegmentHealth.neutral);
+      }
+      expect(
+        BudgetProgressRingAnnualSegment.fixedSweepRadians,
+        closeTo(
+          2 * math.pi / 12 - BudgetProgressRingAnnualSegment.sectionGapRadians,
+          .000001,
+        ),
+      );
+    },
+  );
+
+  test('YEAR cell health is green/yellow/red or explicit neutral', () {
+    BudgetProgressRingAnnualSegmentHealth resolve({
+      required int actual,
+      required int? limit,
+      bool future = false,
+    }) => BudgetProgressRingAnnualSegmentHealthResolver.resolve(
+      actualScaled100: actual,
+      resolvedMonthlyLimitScaled100: limit,
+      isFuture: future,
+    );
+
+    expect(
+      resolve(actual: 74, limit: 100),
+      BudgetProgressRingAnnualSegmentHealth.healthy,
+    );
+    expect(
+      resolve(actual: 75, limit: 100),
+      BudgetProgressRingAnnualSegmentHealth.warning,
+    );
+    expect(
+      resolve(actual: 90, limit: 100),
+      BudgetProgressRingAnnualSegmentHealth.warning,
+    );
+    expect(
+      resolve(actual: 91, limit: 100),
+      BudgetProgressRingAnnualSegmentHealth.danger,
+    );
+    expect(
+      resolve(actual: 0, limit: 100, future: true),
+      BudgetProgressRingAnnualSegmentHealth.neutral,
+    );
+    expect(
+      resolve(actual: 0, limit: null),
+      BudgetProgressRingAnnualSegmentHealth.neutral,
+    );
   });
 
   testWidgets(
@@ -538,7 +622,7 @@ void main() {
           targetHandle: 7,
           limitKey: key,
           displayNumeratorScaled100: 0,
-          effectiveLimitScaled100: 100,
+          displayDenominatorScaled100: 100,
         ),
       );
       addTearDown(visual.dispose);
@@ -577,7 +661,7 @@ void main() {
           targetHandle: 7,
           limitKey: key,
           displayNumeratorScaled100: 50,
-          effectiveLimitScaled100: 100000,
+          displayDenominatorScaled100: 100000,
         ),
       );
       final edits = DashboardBudgetLimitEditController(
@@ -602,7 +686,7 @@ void main() {
           targetHandle: state.targetHandle,
           limitKey: state.key,
           displayNumeratorScaled100: state.actualScaled100,
-          effectiveLimitScaled100: state.effectiveLimitScaled100,
+          displayDenominatorScaled100: state.effectiveLimitScaled100,
         );
       });
       addTearDown(visual.dispose);
@@ -733,7 +817,7 @@ void main() {
           targetHandle: 7,
           limitKey: key,
           displayNumeratorScaled100: 50,
-          effectiveLimitScaled100: 100000,
+          displayDenominatorScaled100: 100000,
         ),
       );
       final edits = DashboardBudgetLimitEditController(
@@ -758,7 +842,7 @@ void main() {
           targetHandle: state.targetHandle,
           limitKey: state.key,
           displayNumeratorScaled100: state.actualScaled100,
-          effectiveLimitScaled100: state.effectiveLimitScaled100,
+          displayDenominatorScaled100: state.effectiveLimitScaled100,
         );
       });
       addTearDown(visual.dispose);

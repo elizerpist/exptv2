@@ -167,7 +167,7 @@ void main() {
         final dynamic partition = state.partition;
         final dynamic food = partition.segmentForCategoryHandle(1);
         expect(state.header.limitScaled100, 2600000);
-        expect(state.selectedLimitVisual.effectiveLimitScaled100, 2600000);
+        expect(state.selectedLimitVisual.displayDenominatorScaled100, 2600000);
         expect(partition.liveAllocatedTotalScaled100, 2600000);
         expect(food.totalRatio, .26);
         expect(identical(state.items, beforeItems), isTrue);

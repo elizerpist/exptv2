@@ -50,11 +50,11 @@ final class DashboardBudgetTargetPresentationItem {
   };
 }
 
-/// Distinguishes canonical utilization from the DAY-only derived forecast.
+/// Distinguishes canonical utilization from the DAY-only derived pace.
 /// This is presentation analysis mode, not another persisted Budget period.
 enum DashboardBudgetAnalysisMode {
   actualUtilization,
-  projectedMonthEnd,
+  dailyPace,
   annualSegments,
   typicalMarker,
 }
@@ -66,6 +66,7 @@ final class DashboardBudgetLiveSelectionState {
     required this.target,
     required this.title,
     required this.displayNumeratorScaled100,
+    required this.displayDenominatorScaled100,
     required this.canonicalActualScaled100ForLimitEdit,
     required this.limitScaled100,
     required this.limitKey,
@@ -88,6 +89,7 @@ final class DashboardBudgetLiveSelectionState {
     target: target,
     title: title,
     displayNumeratorScaled100: null,
+    displayDenominatorScaled100: null,
     canonicalActualScaled100ForLimitEdit: null,
     limitScaled100: null,
     limitKey: null,
@@ -121,9 +123,13 @@ final class DashboardBudgetLiveSelectionState {
     target: target,
     title: title,
     displayNumeratorScaled100: scopeAnalysis.displayNumeratorScaled100,
+    displayDenominatorScaled100: scopeAnalysis.displayDenominatorScaled100,
     canonicalActualScaled100ForLimitEdit:
         scopeAnalysis.canonicalActualScaled100ForLimitEdit,
-    limitScaled100: scopeAnalysis.denominatorScaled100,
+    // The canonical monthly/year/base limit remains available for edit and
+    // persistence semantics. DAY's Header visual denominator is its allowed
+    // daily average and is intentionally separate above.
+    limitScaled100: scopeAnalysis.canonicalLimitScaled100ForEdit,
     limitKey: limitKey,
     editContext: editContext,
     coreRevision: coreRevision,
@@ -135,11 +141,12 @@ final class DashboardBudgetLiveSelectionState {
       targetHandle: target.handle,
       limitKey: limitKey,
       displayNumeratorScaled100: scopeAnalysis.displayNumeratorScaled100!,
-      effectiveLimitScaled100: scopeAnalysis.denominatorScaled100,
+      displayDenominatorScaled100: scopeAnalysis.displayDenominatorScaled100,
+      rawProgressOverride: scopeAnalysis.rawRatio,
       chromeGeometry: switch (analysisMode) {
         DashboardBudgetAnalysisMode.actualUtilization =>
           BudgetLimitProgressChromeGeometry.circular,
-        DashboardBudgetAnalysisMode.projectedMonthEnd =>
+        DashboardBudgetAnalysisMode.dailyPace =>
           BudgetLimitProgressChromeGeometry.verticalProjection,
         DashboardBudgetAnalysisMode.annualSegments =>
           BudgetLimitProgressChromeGeometry.annualSegments,
@@ -156,8 +163,12 @@ final class DashboardBudgetLiveSelectionState {
   final String title;
 
   /// The amount rendered by the Header. In DAY mode this is a derived
-  /// month-end forecast, never the canonical accounting actual.
+  /// actual daily average, never the canonical accounting actual or forecast.
   final int? displayNumeratorScaled100;
+
+  /// The Header's paired denominator. In DAY mode this is allowed daily
+  /// average; it is deliberately not the persisted monthly limit amount.
+  final int? displayDenominatorScaled100;
 
   /// The containing-period prepared actual used by existing monthly limit
   /// editing and allocation semantics. It must not be replaced by a forecast.
@@ -174,6 +185,7 @@ final class DashboardBudgetLiveSelectionState {
 
   bool get isAvailable => displayNumeratorScaled100 != null;
   bool get hasLimit => limitScaled100 != null;
+  int? get monthlyLimitScaled100 => limitScaled100;
 
   DashboardBudgetLimitEditContext? get limitEditContext =>
       editContext is DashboardBudgetLimitEditContext
@@ -192,6 +204,8 @@ final class DashboardBudgetHeaderPresentation {
   DashboardBudgetTarget get target => _selection.target;
   String get title => _selection.title;
   int? get displayNumeratorScaled100 => _selection.displayNumeratorScaled100;
+  int? get displayDenominatorScaled100 =>
+      _selection.displayDenominatorScaled100;
   int? get canonicalActualScaled100ForLimitEdit =>
       _selection.canonicalActualScaled100ForLimitEdit;
   DashboardBudgetMonthEndProjection? get monthEndProjection =>
@@ -777,7 +791,7 @@ final class DashboardBudgetPresentationController
     }
     final analysisMode = switch (scopeAnalysis) {
       DashboardBudgetDayProjectionAnalysis() =>
-        DashboardBudgetAnalysisMode.projectedMonthEnd,
+        DashboardBudgetAnalysisMode.dailyPace,
       DashboardBudgetYearAnalysis() =>
         DashboardBudgetAnalysisMode.annualSegments,
       DashboardBudgetTypicalMonthAnalysis() =>
@@ -856,7 +870,7 @@ final class DashboardBudgetPresentationController
       coreRevision: coreRevision,
       targetHandle: target.handle,
       actualScaled100: scopeAnalysis.canonicalActualScaled100ForLimitEdit,
-      confirmedLimitScaled100: scopeAnalysis.denominatorScaled100,
+      confirmedLimitScaled100: scopeAnalysis.canonicalLimitScaled100ForEdit,
     );
   }
 
@@ -974,18 +988,27 @@ final class DashboardBudgetPresentationController
   }) => List<BudgetProgressRingAnnualSegment>.unmodifiable([
     for (var index = 0; index < 12; index += 1)
       BudgetProgressRingAnnualSegment(
-        rawProgress:
-            analysis.monthlyResolvedLimitsScaled100[index] == null ||
-                analysis.monthlyResolvedLimitsScaled100[index]! <= 0
-            ? 0
-            : analysis.monthlyActualsScaled100[index] /
-                  analysis.monthlyResolvedLimitsScaled100[index]!,
-        isFuture:
-            year > _logicalAsOfDate.year ||
-            (year == _logicalAsOfDate.year &&
-                index + 1 > _logicalAsOfDate.month),
+        health: _annualSegmentHealthFor(
+          actualScaled100: analysis.monthlyActualsScaled100[index],
+          resolvedMonthlyLimitScaled100:
+              analysis.monthlyResolvedLimitsScaled100[index],
+          isFuture:
+              year > _logicalAsOfDate.year ||
+              (year == _logicalAsOfDate.year &&
+                  index + 1 > _logicalAsOfDate.month),
+        ),
       ),
   ]);
+
+  BudgetProgressRingAnnualSegmentHealth _annualSegmentHealthFor({
+    required int actualScaled100,
+    required int? resolvedMonthlyLimitScaled100,
+    required bool isFuture,
+  }) => BudgetProgressRingAnnualSegmentHealthResolver.resolve(
+    actualScaled100: actualScaled100,
+    resolvedMonthlyLimitScaled100: resolvedMonthlyLimitScaled100,
+    isFuture: isFuture,
+  );
 
   DashboardBudgetTypicalMonthAnalysis _typicalMonthAnalysisFor({
     required PreparedBudgetLimitSnapshot snapshot,
@@ -1099,7 +1122,7 @@ final class DashboardBudgetPresentationController
         target: aggregate,
         year: year,
         annualActualScaled100: aggregateCell.actualScaled100,
-      ).denominatorScaled100,
+      ).displayDenominatorScaled100,
       _ => _effectiveLimitForPreparedCell(
         snapshot: snapshot,
         target: aggregate,
@@ -1164,7 +1187,7 @@ final class DashboardBudgetPresentationController
           target: target,
           year: period.year,
           annualActualScaled100: cell.actualScaled100,
-        ).denominatorScaled100;
+        ).displayDenominatorScaled100;
         if (effective == null || effective == cell.limitScaled100) continue;
         effectiveLimitByTargetHandle[handle] = effective;
         inheritedOrYearAllocationDeltaScaled100 +=
@@ -1292,6 +1315,7 @@ final class DashboardBudgetPresentationController
       header.title,
       header.analysisScopeLabel,
       header.displayNumeratorScaled100,
+      header.displayDenominatorScaled100,
       header.limitScaled100,
     );
     if (_lastHeaderDiagnosticSignature == signature) return;
@@ -1318,8 +1342,9 @@ final class DashboardBudgetPresentationController
             'plane=${_planeDiagnosticName(scope)} '
             'targetHandle=${header.target.handle} '
             'displayNumeratorScaled100=${header.displayNumeratorScaled100} '
+            'displayDenominatorScaled100=${header.displayDenominatorScaled100 ?? '-'} '
             'hasLimit=${header.hasLimit} '
-            'limitScaled100=${header.limitScaled100 ?? '-'}',
+            'canonicalLimitScaled100=${header.limitScaled100 ?? '-'}',
       ),
     );
   }
@@ -1355,18 +1380,20 @@ final class DashboardBudgetPresentationController
     final signature = Object.hash(
       projection.key,
       projection.monthToDateActualScaled100,
+      projection.actualDailyAverageScaled100,
+      projection.allowedDailyAverageScaled100,
+      projection.paceRatio,
       projection.projectedMonthEndScaled100,
       projection.effectiveMonthlyLimitScaled100,
-      selectedDay,
     );
     if (_lastMonthEndProjectionDiagnosticSignature == signature) return;
     _lastMonthEndProjectionDiagnosticSignature = signature;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'BUDGET_MONTH_END_PROJECTION_BOUND',
+        stage: 'BUDGET_DAILY_PACE_BOUND',
         coreRevision: projection.key.coreRevision,
         direction: projection.key.direction.name,
-        totalMinor: projection.projectedMonthEndScaled100,
+        totalMinor: projection.actualDailyAverageScaled100,
         scope:
             'targetHandle=${projection.key.targetHandle} '
             'year=${projection.key.year} month=${projection.key.month} '
@@ -1379,6 +1406,9 @@ final class DashboardBudgetPresentationController
             'monthToDateScaled100=${projection.monthToDateActualScaled100} '
             'elapsedCalendarDays=${projection.elapsedCalendarDays} '
             'daysInMonth=${projection.daysInMonth} '
+            'actualDailyAverageScaled100=${projection.actualDailyAverageScaled100 ?? '-'} '
+            'allowedDailyAverageScaled100=${projection.allowedDailyAverageScaled100 ?? '-'} '
+            'paceRatio=${projection.paceRatio} '
             'projectedMonthEndScaled100=${projection.projectedMonthEndScaled100} '
             'effectiveMonthlyLimitScaled100=${projection.effectiveMonthlyLimitScaled100 ?? '-'} '
             'projectionRatio=${projection.projectionRatio} '
@@ -1395,7 +1425,7 @@ final class DashboardBudgetPresentationController
       visual.targetHandle,
       visual.limitKey,
       visual.displayNumeratorScaled100,
-      visual.effectiveLimitScaled100,
+      visual.displayDenominatorScaled100,
       visual.rawProgress,
       visual.visualProgress,
       selection.direction,
@@ -1413,7 +1443,7 @@ final class DashboardBudgetPresentationController
             'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
             'displayNumeratorScaled100=${visual.displayNumeratorScaled100 ?? '-'} '
             'hasPositiveLimit=${visual.hasPositiveLimit} '
-            'effectiveLimitScaled100=${visual.effectiveLimitScaled100 ?? '-'} '
+            'displayDenominatorScaled100=${visual.displayDenominatorScaled100 ?? '-'} '
             'rawProgress=${visual.rawProgress} '
             'visualProgress=${visual.visualProgress}',
       ),

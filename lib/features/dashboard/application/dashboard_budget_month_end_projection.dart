@@ -4,7 +4,7 @@ import '../../../core/categories/domain/budget_progress_health.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/domain/local_date.dart';
 
-/// The semantic availability of a containing-month pace calculation.
+/// The semantic availability of a containing-month daily-pace calculation.
 ///
 /// A future month intentionally has no fabricated daily pace. Its forecast is
 /// represented as an unavailable zero value rather than an infinity or a
@@ -20,7 +20,7 @@ enum DashboardBudgetProjectionHealthBand {
   danger,
 }
 
-/// Stable identity for a derived month-end forecast.
+/// Stable identity for derived DAY pace and its secondary month-end forecast.
 ///
 /// Crucially, [selectedDay] is absent. Moving between days in the same visible
 /// month must change the Day LogBox and Summary data without changing the
@@ -69,12 +69,14 @@ final class DashboardBudgetMonthEndProjectionKey {
   );
 }
 
-/// Pure, immutable Daily Budget presentation input over the existing monthly
+/// Pure, immutable Daily Budget pace input over the existing monthly
 /// FinancialLimit model.
 ///
-/// This is not a persisted financial actual. [projectedMonthEndScaled100] is
-/// a display forecast only. Limit editing, allocation partitions and canonical
-/// accounting still use the containing month's prepared actual separately.
+/// This is not a persisted financial actual. The DAY primary concepts are
+/// [actualDailyAverageScaled100], [allowedDailyAverageScaled100], and
+/// [paceRatio]. [projectedMonthEndScaled100] remains a secondary mathematical
+/// forecast. Limit editing, allocation partitions and canonical accounting
+/// still use the containing month's prepared actual separately.
 @immutable
 final class DashboardBudgetMonthEndProjection {
   const DashboardBudgetMonthEndProjection._({
@@ -83,6 +85,9 @@ final class DashboardBudgetMonthEndProjection {
     required this.monthToDateActualScaled100,
     required this.elapsedCalendarDays,
     required this.daysInMonth,
+    required this.actualDailyAverageScaled100,
+    required this.allowedDailyAverageScaled100,
+    required this.paceRatio,
     required this.projectedMonthEndScaled100,
     required this.effectiveMonthlyLimitScaled100,
     required this.projectionRatio,
@@ -91,7 +96,8 @@ final class DashboardBudgetMonthEndProjection {
     required this.healthBand,
   });
 
-  /// Derives one month-end pace from already prepared scalar values.
+  /// Derives one daily pace and a secondary month-end forecast from already
+  /// prepared scalar values.
   ///
   /// Positive scaled-money division rounds half up, matching the project's
   /// existing integer percentage convention: `(numerator + divisor ~/ 2) ~/
@@ -139,6 +145,20 @@ final class DashboardBudgetMonthEndProjection {
         : comparison == 0
         ? monthToDateActualScaled100
         : 0;
+    final actualDailyAverage =
+        availability ==
+            DashboardBudgetMonthEndProjectionAvailability.unavailable
+        ? null
+        : _roundPositiveDivision(sourceActual, elapsed);
+    final hasLimit =
+        effectiveMonthlyLimitScaled100 != null &&
+        effectiveMonthlyLimitScaled100 > 0;
+    final allowedDailyAverage =
+        availability ==
+                DashboardBudgetMonthEndProjectionAvailability.unavailable ||
+            !hasLimit
+        ? null
+        : _roundPositiveDivision(effectiveMonthlyLimitScaled100, daysInMonth);
     final projected = switch (availability) {
       DashboardBudgetMonthEndProjectionAvailability.unavailable => 0,
       DashboardBudgetMonthEndProjectionAvailability.available
@@ -147,28 +167,34 @@ final class DashboardBudgetMonthEndProjection {
       DashboardBudgetMonthEndProjectionAvailability.available =>
         _roundPositiveDivision(sourceActual * daysInMonth, elapsed),
     };
-    final hasLimit =
-        effectiveMonthlyLimitScaled100 != null &&
-        effectiveMonthlyLimitScaled100 > 0;
-    final rawRatio =
+    // Keep pace semantics rational until the final ratio. Dividing rounded
+    // daily header amounts here would silently change health at fractional
+    // cent boundaries. The equivalent projected-month ratio stays available
+    // as a secondary forecast identity, not as the primary DAY terminology.
+    final paceRatio =
         availability ==
                 DashboardBudgetMonthEndProjectionAvailability.unavailable ||
             !hasLimit
         ? 0.0
-        : projected / effectiveMonthlyLimitScaled100;
-    final fill = _boundedGaugeFill(rawRatio);
+        : sourceActual *
+              daysInMonth /
+              (elapsed * effectiveMonthlyLimitScaled100);
+    final fill = _boundedGaugeFill(paceRatio);
     return DashboardBudgetMonthEndProjection._(
       key: key,
       availability: availability,
       monthToDateActualScaled100: sourceActual,
       elapsedCalendarDays: elapsed,
       daysInMonth: daysInMonth,
+      actualDailyAverageScaled100: actualDailyAverage,
+      allowedDailyAverageScaled100: allowedDailyAverage,
+      paceRatio: paceRatio,
       projectedMonthEndScaled100: projected,
       effectiveMonthlyLimitScaled100: effectiveMonthlyLimitScaled100,
-      projectionRatio: rawRatio,
+      projectionRatio: paceRatio,
       gaugeFillRatio: fill,
       breakEvenGaugeRatio: .75,
-      healthBand: _healthFor(availability: availability, rawRatio: rawRatio),
+      healthBand: _healthFor(availability: availability, rawRatio: paceRatio),
     );
   }
 
@@ -177,6 +203,21 @@ final class DashboardBudgetMonthEndProjection {
   final int monthToDateActualScaled100;
   final int elapsedCalendarDays;
   final int daysInMonth;
+
+  /// Rounded, localized-header-ready actual spend per elapsed calendar day.
+  /// Null means a future month, for which pace is intentionally undefined.
+  final int? actualDailyAverageScaled100;
+
+  /// Rounded, localized-header-ready sustainable spend per calendar day from
+  /// the same containing-month limit. Null also covers a missing/zero limit.
+  final int? allowedDailyAverageScaled100;
+
+  /// Exact unbounded daily pace ratio. This intentionally retains the
+  /// rational month-spend × days / (elapsed × monthly-limit) value instead of
+  /// dividing rounded header amounts.
+  final double paceRatio;
+
+  /// Secondary forecast only; never the DAY Header's primary value.
   final int projectedMonthEndScaled100;
   final int? effectiveMonthlyLimitScaled100;
   final double projectionRatio;

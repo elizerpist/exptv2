@@ -44,6 +44,12 @@ void main() {
     final yearVisual = geometry.visualContentRectForTrack(1);
     final monthVisual = geometry.visualContentRectForTrack(2);
     final dayVisual = geometry.visualContentRectForTrack(3);
+    // A visual label may not live inside an independently padded interaction
+    // lane. The exact same Rect owns its paint/clip/semantics/gesture.
+    expect(modeVisual, mode);
+    expect(yearVisual, year);
+    expect(monthVisual, month);
+    expect(dayVisual, day);
     expect(
       yearVisual.left - modeVisual.right,
       closeTo(geometry.segmentedSectionGap, .000001),
@@ -72,9 +78,6 @@ void main() {
       ),
       reason: 'the half-gap must come from old width and old 25px badge',
     );
-    for (final rect in <Rect>[mode, year, month, day]) {
-      expect(rect.width, greaterThanOrEqualTo(40));
-    }
   });
 
   testWidgets('segmented Summary ports the selected reference material', (

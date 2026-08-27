@@ -118,9 +118,7 @@ final class SummarySegmentedTrackGeometry {
     required this.preRegressionContentEdgeGap,
     required this.segmentedSectionGap,
     required Map<int, Rect> sectionRects,
-    required Map<int, Rect> visualContentRects,
-  }) : _sectionRects = sectionRects,
-       _visualContentRects = visualContentRects;
+  }) : _sectionRects = sectionRects;
 
   /// The old unshifted four-track layout is the comparison baseline. Its mode
   /// and year content bounds yield one concrete empty content-edge distance.
@@ -166,39 +164,15 @@ final class SummarySegmentedTrackGeometry {
       );
     }
     final gap = baselineGap / 2;
-    // The component Rect is the hit, semantics and clipping owner. It has a
-    // reasonable touch envelope while the authored content remains centred
-    // within it. Expand toward 44dp only as far as actual neighbour Rects
-    // remain disjoint; this never reintroduces hidden quarter-width lanes.
-    var touchWidth = 44.0;
-    for (var index = 0; index < activeTrackIndices.length - 1; index += 1) {
-      final firstWidth = metrics.widthForTrack(activeTrackIndices[index]);
-      final secondWidth = metrics.widthForTrack(activeTrackIndices[index + 1]);
-      final smaller = math.min(firstWidth, secondWidth);
-      final larger = math.max(firstWidth, secondWidth);
-      final maximumWithoutOverlap = smaller + gap * 2 <= larger
-          ? smaller + gap * 2
-          : (firstWidth + secondWidth) / 2 + gap;
-      touchWidth = math.min(touchWidth, maximumWithoutOverlap);
-    }
     final sectionRects = <int, Rect>{};
-    final visualContentRects = <int, Rect>{};
-    // The large mode visual itself—not the padded gesture owner—uses the same
-    // left inset as its top inset.
-    var nextVisualLeft = (height - metrics.modeVisualSize) / 2;
+    // The large mode component itself—not an old padded lane—uses the same
+    // left inset as its top inset. Each following component's one Rect is
+    // laid out from the preceding right edge and the one shared semantic gap.
+    var nextLeft = (height - metrics.modeVisualSize) / 2;
     for (final track in activeTrackIndices) {
       final contentWidth = metrics.widthForTrack(track);
-      final sectionWidth = math.max(contentWidth, touchWidth);
-      final visualLeft = nextVisualLeft;
-      final ownerLeft = visualLeft - (sectionWidth - contentWidth) / 2;
-      sectionRects[track] = Rect.fromLTWH(ownerLeft, 0, sectionWidth, height);
-      visualContentRects[track] = Rect.fromLTWH(
-        visualLeft,
-        (height - metrics.modeVisualSize) / 2,
-        contentWidth,
-        metrics.modeVisualSize,
-      );
-      nextVisualLeft += contentWidth + gap;
+      sectionRects[track] = Rect.fromLTWH(nextLeft, 0, contentWidth, height);
+      nextLeft += contentWidth + gap;
     }
     final exceedsBounds = sectionRects.values.any(
       (rect) => rect.left < 0 || rect.right > width,
@@ -225,7 +199,6 @@ final class SummarySegmentedTrackGeometry {
       preRegressionContentEdgeGap: baselineGap,
       segmentedSectionGap: gap,
       sectionRects: Map<int, Rect>.unmodifiable(sectionRects),
-      visualContentRects: Map<int, Rect>.unmodifiable(visualContentRects),
     );
   }
 
@@ -236,21 +209,19 @@ final class SummarySegmentedTrackGeometry {
   final double preRegressionContentEdgeGap;
   final double segmentedSectionGap;
   final Map<int, Rect> _sectionRects;
-  final Map<int, Rect> _visualContentRects;
 
   Rect semanticRectForTrack(int track) => _rectForTrack(track);
 
   double semanticCenterForTrack(int track) => _rectForTrack(track).center.dx;
 
-  /// The painted content is centred within the exact same owning interaction
-  /// Rect; this catches any future return of a visual-only translation.
+  /// The painted selector uses the exact owning interaction Rect; this catches
+  /// any future return of visual-only translations or separate touch lanes.
   double visualCenterForTrack(int track) =>
       visualContentRectForTrack(track).center.dx;
 
-  /// Authored glyph/badge bounds within the one owning semantic Rect.
-  Rect visualContentRectForTrack(int track) =>
-      _visualContentRects[track] ??
-      (throw ArgumentError.value(track, 'track', 'Inactive Summary track.'));
+  /// There is no second visual Rect. This is kept as an explicit API so tests
+  /// can pin visual/hit/semantics parity.
+  Rect visualContentRectForTrack(int track) => _rectForTrack(track);
 
   double separatorCenterAfterTrack(int leadingTrack) {
     final leadingIndex = activeTrackIndices.indexOf(leadingTrack);

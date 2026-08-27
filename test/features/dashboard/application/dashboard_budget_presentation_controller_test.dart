@@ -228,7 +228,8 @@ void main() {
 
       presentation.setTargetHandle(1);
 
-      expect(presentation.value.header.displayNumeratorScaled100, 130);
+      expect(presentation.value.header.displayNumeratorScaled100, 4);
+      expect(presentation.value.header.displayDenominatorScaled100, 32);
       expect(presentation.value.header.limitScaled100, 1000);
       expect(
         presentation.value.header.limitKey!.period,
@@ -238,7 +239,7 @@ void main() {
   );
 
   test(
-    'a Day Budget displays a month-end projection without contaminating limit editing',
+    'a Day Budget publishes daily pace while preserving the monthly edit actual',
     () {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('food'),
@@ -266,16 +267,23 @@ void main() {
       presentation.setTargetHandle(1);
       final day = presentation.value.liveSelection;
 
-      expect(day.displayNumeratorScaled100, 130);
+      // DAY Header is average actual spend/day over allowed spend/day. The
+      // month-end forecast stays available as a secondary calculation only.
+      expect(day.displayNumeratorScaled100, 4);
+      expect(day.displayDenominatorScaled100, 32);
+      expect(day.monthlyLimitScaled100, 1000);
       expect(day.canonicalActualScaled100ForLimitEdit, 999);
       expect(day.monthEndProjection!.monthToDateActualScaled100, 42);
+      expect(day.monthEndProjection!.actualDailyAverageScaled100, 4);
+      expect(day.monthEndProjection!.allowedDailyAverageScaled100, 32);
+      expect(day.monthEndProjection!.paceRatio, 42 * 31 / (10 * 1000));
       expect(day.monthEndProjection!.projectedMonthEndScaled100, 130);
       expect(
         day.visual.chromeGeometry,
         BudgetLimitProgressChromeGeometry.verticalProjection,
       );
-      expect(day.visual.rawProgress, .13);
-      expect(day.visual.visualProgress, .0975);
+      expect(day.visual.rawProgress, 42 * 31 / (10 * 1000));
+      expect(day.visual.visualProgress, closeTo(.09765, 1e-9));
       expect(day.limitEditContext!.actualScaled100, 999);
       expect(
         day.limitEditContext!.key.period,
@@ -286,7 +294,8 @@ void main() {
         scope: const DayScope(LocalDate(year: 2026, month: 1, day: 19)),
       );
       final otherDay = presentation.value.liveSelection;
-      expect(otherDay.displayNumeratorScaled100, 130);
+      expect(otherDay.displayNumeratorScaled100, 4);
+      expect(otherDay.displayDenominatorScaled100, 32);
       expect(otherDay.monthEndProjection!.key, day.monthEndProjection!.key);
 
       visible.value = _visibleFrame(
@@ -304,7 +313,7 @@ void main() {
   );
 
   test(
-    'a Day optimistic monthly-limit edit updates only the forecast gauge',
+    'a Day optimistic monthly-limit edit updates only the pace gauge',
     () {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('food'),
@@ -360,8 +369,8 @@ void main() {
         isNot(before.monthEndProjection!.key),
         reason: 'The limit-dependent forecast presentation has a new epoch.',
       );
-      expect(after.visual.rawProgress, 130 / 1100);
-      expect(after.visual.visualProgress, (130 / 1100) * .75);
+      expect(after.visual.rawProgress, 42 * 31 / (10 * 1100));
+      expect(after.visual.visualProgress, (42 * 31 / (10 * 1100)) * .75);
     },
   );
 
@@ -375,7 +384,7 @@ void main() {
       targetHandle: 1,
       limitKey: key,
       displayNumeratorScaled100: 99,
-      effectiveLimitScaled100: 100,
+      displayDenominatorScaled100: 100,
     );
 
     expect(state.rawProgress, .99);
@@ -393,7 +402,7 @@ void main() {
       targetHandle: 1,
       limitKey: key,
       displayNumeratorScaled100: 9999,
-      effectiveLimitScaled100: 10000,
+      displayDenominatorScaled100: 10000,
     );
 
     expect(state.rawProgress, .9999);
@@ -512,8 +521,14 @@ void main() {
       BudgetLimitProgressChromeGeometry.annualSegments,
     );
     expect(selection.visual.annualSegments, hasLength(12));
-    expect(selection.visual.annualSegments[0].rawProgress, .1);
-    expect(selection.visual.annualSegments[1].isFuture, isTrue);
+    expect(
+      selection.visual.annualSegments[0].health,
+      BudgetProgressRingAnnualSegmentHealth.healthy,
+    );
+    expect(
+      selection.visual.annualSegments[1].health,
+      BudgetProgressRingAnnualSegmentHealth.neutral,
+    );
     expect(
       presentation.value.header.editContext,
       isA<DashboardBudgetYearLimitEditContext>(),
@@ -651,7 +666,7 @@ void main() {
       expect(presentation.value.header.limitScaled100, 100660);
       expect(presentation.value.selectedLimitVisual.targetHandle, 1);
       expect(
-        presentation.value.selectedLimitVisual.effectiveLimitScaled100,
+        presentation.value.selectedLimitVisual.displayDenominatorScaled100,
         100660,
       );
       expect(
@@ -703,7 +718,7 @@ void main() {
 
     expect(presentation.value.header.limitScaled100, 88475000);
     expect(
-      presentation.value.selectedLimitVisual.effectiveLimitScaled100,
+      presentation.value.selectedLimitVisual.displayDenominatorScaled100,
       88475000,
     );
   });
@@ -732,7 +747,7 @@ void main() {
 
     expect(presentation.value.header.limitScaled100, 88375000);
     expect(
-      presentation.value.selectedLimitVisual.effectiveLimitScaled100,
+      presentation.value.selectedLimitVisual.displayDenominatorScaled100,
       88375000,
     );
   });

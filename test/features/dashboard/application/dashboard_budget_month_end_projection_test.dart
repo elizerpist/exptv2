@@ -83,6 +83,33 @@ void main() {
       expect(projection.healthBand, DashboardBudgetProjectionHealthBand.danger);
     });
 
+    test(
+      'models daily pace explicitly instead of naming projection as pace',
+      () {
+        final projection = DashboardBudgetMonthEndProjection.derive(
+          coreRevision: 7,
+          direction: LedgerDirection.expense,
+          targetHandle: 0,
+          year: 2026,
+          month: 4,
+          logicalAsOfDate: const LocalDate(year: 2026, month: 4, day: 10),
+          monthToDateActualScaled100: 12000000,
+          finalMonthActualScaled100: 0,
+          effectiveMonthlyLimitScaled100: 30000000,
+        );
+
+        // The MONTH product is 120k / 300k == 40%, whereas DAY is a pace:
+        // 12k/day / 10k/day == 120%. These must remain distinct concepts even
+        // though projected month end / monthly limit has the same raw ratio.
+        expect(projection.actualDailyAverageScaled100, 1200000);
+        expect(projection.allowedDailyAverageScaled100, 1000000);
+        expect(projection.paceRatio, 1.2);
+        expect(projection.projectedMonthEndScaled100, 36000000);
+        expect(projection.projectionRatio, projection.paceRatio);
+        expect(projection.gaugeFillRatio, closeTo(.9, .000000001));
+      },
+    );
+
     test('handles leap-month length, past final actual and future safely', () {
       final leap = DashboardBudgetMonthEndProjection.derive(
         coreRevision: 7,
@@ -124,7 +151,10 @@ void main() {
       expect(future.isAvailable, isFalse);
       expect(future.elapsedCalendarDays, 0);
       expect(future.projectedMonthEndScaled100, 0);
+      expect(future.actualDailyAverageScaled100, isNull);
+      expect(future.allowedDailyAverageScaled100, isNull);
       expect(future.projectionRatio.isFinite, isTrue);
+      expect(future.paceRatio.isFinite, isTrue);
       expect(future.gaugeFillRatio, 0);
     });
 

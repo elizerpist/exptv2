@@ -182,9 +182,9 @@ final class BudgetProgressRingGeometry {
   double get capRadius => trackWidth / 2;
 }
 
-/// Fill strategies over the one [BudgetProgressRingGeometry]. The DAY strategy
-/// remains a bottom-to-top analytical reveal, but it is no longer a separate
-/// rectangular gauge asset.
+/// Fill strategies over the one [BudgetProgressRingGeometry]. Every strategy
+/// keeps the source ring's dimensions and 3D material; only its derived data
+/// projection changes.
 enum BudgetLimitProgressChromeGeometry {
   circular,
   verticalProjection,
@@ -192,26 +192,111 @@ enum BudgetLimitProgressChromeGeometry {
   typicalMarker,
 }
 
-/// One bounded annual section source. The painter resolves its colour from
-/// [rawProgress] through the same common Budget health resolver as MONTH.
+/// YEAR cells are complete, fixed angular capsules. A cell's colour conveys
+/// the month's health; it is never a partial mini progress bar.
+enum BudgetProgressRingAnnualSegmentHealth { neutral, healthy, warning, danger }
+
+/// Resolves YEAR's fixed visual cell from the common raw-ratio health rule.
+/// The normal Month category accent is intentionally translated to the fixed
+/// annual health green here; all other scopes retain their own material rule.
+abstract final class BudgetProgressRingAnnualSegmentHealthResolver {
+  static BudgetProgressRingAnnualSegmentHealth resolve({
+    required int actualScaled100,
+    required int? resolvedMonthlyLimitScaled100,
+    required bool isFuture,
+  }) {
+    if (isFuture ||
+        resolvedMonthlyLimitScaled100 == null ||
+        resolvedMonthlyLimitScaled100 <= 0) {
+      return BudgetProgressRingAnnualSegmentHealth.neutral;
+    }
+    return switch (BudgetProgressHealthResolver.resolve(
+      isAvailable: true,
+      rawRatio: actualScaled100 / resolvedMonthlyLimitScaled100,
+    )) {
+      BudgetProgressHealth.targetAccent =>
+        BudgetProgressRingAnnualSegmentHealth.healthy,
+      BudgetProgressHealth.warning =>
+        BudgetProgressRingAnnualSegmentHealth.warning,
+      BudgetProgressHealth.danger =>
+        BudgetProgressRingAnnualSegmentHealth.danger,
+      BudgetProgressHealth.unavailable =>
+        BudgetProgressRingAnnualSegmentHealth.neutral,
+    };
+  }
+}
+
 @immutable
 final class BudgetProgressRingAnnualSegment {
-  const BudgetProgressRingAnnualSegment({
-    required this.rawProgress,
-    required this.isFuture,
-  }) : assert(rawProgress >= 0);
+  const BudgetProgressRingAnnualSegment({required this.health});
 
-  final double rawProgress;
-  final bool isFuture;
+  static const sectionGapRadians = .018;
+  static const fixedSweepRadians = math.pi * 2 / 12 - sectionGapRadians;
+
+  final BudgetProgressRingAnnualSegmentHealth health;
 
   @override
   bool operator ==(Object other) =>
-      other is BudgetProgressRingAnnualSegment &&
-      other.rawProgress == rawProgress &&
-      other.isFuture == isFuture;
+      other is BudgetProgressRingAnnualSegment && other.health == health;
 
   @override
-  int get hashCode => Object.hash(rawProgress, isFuture);
+  int get hashCode => health.hashCode;
+}
+
+/// One marker derives both sphere centres from the shared source ring. It is
+/// deliberately a visual reference only: pace semantics remain in the
+/// prepared DAY analysis.
+@immutable
+final class BudgetProgressRingDayPaceMarker {
+  const BudgetProgressRingDayPaceMarker(this.center);
+
+  final Offset center;
+}
+
+@immutable
+final class BudgetProgressRingDayPaceMarkers {
+  const BudgetProgressRingDayPaceMarkers._({
+    required this.left,
+    required this.right,
+  });
+
+  static const _breakEvenGaugeRatio = .75;
+  static const markerRadius = 9.0;
+
+  factory BudgetProgressRingDayPaceMarkers.resolve({
+    required BudgetProgressRingGeometry geometry,
+  }) {
+    final trackRect = Rect.fromCircle(
+      center: geometry.center,
+      radius: geometry.trackRadius,
+    );
+    final y = trackRect.bottom - trackRect.height * _breakEvenGaugeRatio;
+    final offset =
+        geometry.trackRadius + geometry.trackWidth / 2 + markerRadius + 7;
+    return BudgetProgressRingDayPaceMarkers._(
+      left: BudgetProgressRingDayPaceMarker(
+        Offset(geometry.center.dx - offset, y),
+      ),
+      right: BudgetProgressRingDayPaceMarker(
+        Offset(geometry.center.dx + offset, y),
+      ),
+    );
+  }
+
+  final BudgetProgressRingDayPaceMarker left;
+  final BudgetProgressRingDayPaceMarker right;
+
+  String get sourceGeometryId => BudgetProgressRingGeometry.sourceId;
+  String get materialId => BudgetProgressRingSphereMaterial.sourceId;
+  double get breakEvenGaugeRatio => _breakEvenGaugeRatio;
+}
+
+/// Shared 3D material for the two DAY break-even reference spheres.
+abstract final class BudgetProgressRingSphereMaterial {
+  static const sourceId = 'fluvi-selected-budget-sphere-marker-v1';
+  static const body = Color(0xFFB3A8C4);
+  static const depth = Color(0xFF655977);
+  static const highlight = Color(0xD9FFFFFF);
 }
 
 /// One atomic Budget selection value. It carries both the exact semantic
@@ -223,7 +308,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     required this.targetHandle,
     required this.limitKey,
     required this.displayNumeratorScaled100,
-    required this.effectiveLimitScaled100,
+    required this.displayDenominatorScaled100,
     required this.hasPositiveLimit,
     required this.rawProgress,
     required this.visualProgress,
@@ -239,7 +324,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     targetHandle: targetHandle,
     limitKey: null,
     displayNumeratorScaled100: null,
-    effectiveLimitScaled100: null,
+    displayDenominatorScaled100: null,
     hasPositiveLimit: false,
     rawProgress: 0,
     visualProgress: 0,
@@ -253,7 +338,8 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     required int targetHandle,
     required FinancialLimitKey? limitKey,
     required int displayNumeratorScaled100,
-    required int? effectiveLimitScaled100,
+    required int? displayDenominatorScaled100,
+    double? rawProgressOverride,
     BudgetLimitProgressChromeGeometry chromeGeometry =
         BudgetLimitProgressChromeGeometry.circular,
     List<BudgetProgressRingAnnualSegment> annualSegments =
@@ -261,22 +347,23 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
     double? typicalMarkerPosition,
   }) {
     final hasPositiveLimit =
-        effectiveLimitScaled100 != null && effectiveLimitScaled100 > 0;
+        displayDenominatorScaled100 != null && displayDenominatorScaled100 > 0;
     final projection = BudgetLimitProgressProjection.fromAmounts(
       actualScaled100: displayNumeratorScaled100,
-      limitScaled100: effectiveLimitScaled100,
+      limitScaled100: displayDenominatorScaled100,
     );
+    final rawProgress = rawProgressOverride ?? projection.rawProgress;
     final visualProgress =
         chromeGeometry == BudgetLimitProgressChromeGeometry.verticalProjection
-        ? (projection.rawProgress * .75).clamp(0.0, 1.0).toDouble()
-        : projection.visualProgress;
+        ? (rawProgress * .75).clamp(0.0, 1.0).toDouble()
+        : BudgetLimitProgressProjection.boundedVisualProgress(rawProgress);
     return BudgetCategoryAvatarSelectedLimitVisualState._(
       targetHandle: targetHandle,
       limitKey: limitKey,
       displayNumeratorScaled100: displayNumeratorScaled100,
-      effectiveLimitScaled100: effectiveLimitScaled100,
+      displayDenominatorScaled100: displayDenominatorScaled100,
       hasPositiveLimit: hasPositiveLimit,
-      rawProgress: projection.rawProgress,
+      rawProgress: rawProgress,
       visualProgress: visualProgress,
       chromeGeometry: chromeGeometry,
       breakEvenGaugeRatio:
@@ -293,7 +380,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
   final int targetHandle;
   final FinancialLimitKey? limitKey;
   final int? displayNumeratorScaled100;
-  final int? effectiveLimitScaled100;
+  final int? displayDenominatorScaled100;
   final bool hasPositiveLimit;
   final double rawProgress;
   final double visualProgress;
@@ -309,7 +396,7 @@ final class BudgetCategoryAvatarSelectedLimitVisualState {
       targetHandle == other.targetHandle &&
       limitKey == other.limitKey &&
       displayNumeratorScaled100 == other.displayNumeratorScaled100 &&
-      effectiveLimitScaled100 == other.effectiveLimitScaled100 &&
+      displayDenominatorScaled100 == other.displayDenominatorScaled100 &&
       hasPositiveLimit == other.hasPositiveLimit &&
       rawProgress == other.rawProgress &&
       visualProgress == other.visualProgress &&
@@ -895,7 +982,7 @@ final class _SelectionChromePainter extends CustomPainter {
       case BudgetLimitProgressChromeGeometry.circular:
         _paintActiveArc(canvas, trackRect, startAngle, sweep);
       case BudgetLimitProgressChromeGeometry.verticalProjection:
-        _paintVerticalProjectionRing(canvas, trackRect);
+        _paintDayPaceRing(canvas, trackRect);
       case BudgetLimitProgressChromeGeometry.annualSegments:
         _paintAnnualSegments(canvas, trackRect, startAngle);
       case BudgetLimitProgressChromeGeometry.typicalMarker:
@@ -1013,7 +1100,7 @@ final class _SelectionChromePainter extends CustomPainter {
     );
   }
 
-  void _paintVerticalProjectionRing(Canvas canvas, Rect trackRect) {
+  void _paintDayPaceRing(Canvas canvas, Rect trackRect) {
     // Mapping a bottom-to-top gauge height to the lower circular arc preserves
     // the approved ring track, its gradient and rounded active endpoint. At
     // 50% the lower semicircle is filled; at 100% the identical ring is full.
@@ -1022,46 +1109,85 @@ final class _SelectionChromePainter extends CustomPainter {
     final startAngle = math.asin(cutoff.clamp(-1.0, 1.0).toDouble());
     final sweep = math.pi - 2 * startAngle;
     _paintActiveArc(canvas, trackRect, startAngle, sweep);
-    final markerRatio = breakEvenGaugeRatio;
-    if (markerRatio != null) {
-      final markerY = trackRect.bottom - trackRect.height * markerRatio;
-      canvas.drawLine(
-        Offset(trackRect.left - 5, markerY),
-        Offset(trackRect.right + 5, markerY),
-        Paint()
-          ..color = const Color(0xFF8D849F)
-          ..strokeWidth = 3
-          ..strokeCap = StrokeCap.round,
+    if (breakEvenGaugeRatio != null) {
+      final markers = BudgetProgressRingDayPaceMarkers.resolve(
+        geometry: ringGeometry,
       );
+      _paintDayPaceSphere(canvas, markers.left.center);
+      _paintDayPaceSphere(canvas, markers.right.center);
     }
+  }
+
+  void _paintDayPaceSphere(Canvas canvas, Offset center) {
+    final bodyRect = Rect.fromCircle(
+      center: center,
+      radius: BudgetProgressRingDayPaceMarkers.markerRadius,
+    );
+    canvas.drawCircle(
+      center + const Offset(0, 2),
+      BudgetProgressRingDayPaceMarkers.markerRadius,
+      Paint()
+        ..color = BudgetProgressRingSphereMaterial.depth.withValues(alpha: .28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+    );
+    canvas.drawCircle(
+      center,
+      BudgetProgressRingDayPaceMarkers.markerRadius,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-.35, -.4),
+          radius: .9,
+          colors: <Color>[
+            BudgetProgressRingSphereMaterial.highlight,
+            BudgetProgressRingSphereMaterial.body,
+            BudgetProgressRingSphereMaterial.depth,
+          ],
+          stops: <double>[0, .42, 1],
+        ).createShader(bodyRect),
+    );
+    canvas.drawCircle(
+      center + const Offset(-2.5, -3),
+      2.2,
+      Paint()..color = BudgetProgressRingSphereMaterial.highlight,
+    );
   }
 
   void _paintAnnualSegments(Canvas canvas, Rect trackRect, double startAngle) {
     if (annualSegments.length != 12) return;
     const sectionSweep = math.pi * 2 / 12;
-    const sectionGap = .018;
     for (var index = 0; index < annualSegments.length; index += 1) {
       final segment = annualSegments[index];
-      if (segment.isFuture || segment.rawProgress <= 0) continue;
-      final activeSweep =
-          (sectionSweep - sectionGap) * segment.rawProgress.clamp(0.0, 1.0);
-      final sectionStart = startAngle + sectionSweep * index + sectionGap / 2;
-      final tone = BudgetLimitProgressToneResolver.resolve(
-        rawProgress: segment.rawProgress,
-        targetAccent: targetAccent,
+      final sectionStart =
+          startAngle +
+          sectionSweep * index +
+          BudgetProgressRingAnnualSegment.sectionGapRadians / 2;
+      final gradient = _SelectionArcGradient.fromCategoryColor(
+        _annualSegmentColor(segment.health),
       );
-      final gradient = _SelectionArcGradient.fromCategoryColor(tone);
       _paintActiveArcWithColors(
         canvas,
         trackRect,
         sectionStart,
-        activeSweep,
+        BudgetProgressRingAnnualSegment.fixedSweepRadians,
         gradient.start,
         gradient.middle,
         gradient.end,
       );
     }
   }
+
+  Color _annualSegmentColor(BudgetProgressRingAnnualSegmentHealth health) =>
+      switch (health) {
+        BudgetProgressRingAnnualSegmentHealth.healthy =>
+          FluviVisualTokens.budgetProgressHealthy,
+        BudgetProgressRingAnnualSegmentHealth.warning =>
+          FluviVisualTokens.budgetProgressWarning,
+        BudgetProgressRingAnnualSegmentHealth.danger =>
+          FluviVisualTokens.budgetProgressDanger,
+        BudgetProgressRingAnnualSegmentHealth.neutral => const Color(
+          0xFFC5BDCF,
+        ),
+      };
 
   void _paintTypicalMarker(Canvas canvas, Rect trackRect, double startAngle) {
     final rawPosition = typicalMarkerPosition;

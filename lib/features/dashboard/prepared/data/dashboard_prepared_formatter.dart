@@ -10,5 +10,10 @@ abstract final class DashboardPreparedFormatter {
     return '$sign$major,$minor Ft';
   }
 
+  /// Presentation copy for the DAY Budget Header. Domain pace values remain
+  /// scaled money; only this formatter owns the Hungarian unit suffix.
+  static String amountMinorPerDay(int totalMinor) =>
+      '${amountMinor(totalMinor)}/nap';
+
   static String entryCount(int value) => value.toString();
 }

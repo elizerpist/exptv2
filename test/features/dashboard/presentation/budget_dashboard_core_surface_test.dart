@@ -19,6 +19,8 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_pr
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_snapshot.dart';
+import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_formatter.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -27,6 +29,30 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
+  testWidgets(
+    'DAY Budget Header binds daily pace rather than month projection',
+    (tester) async {
+      final harness = _BudgetHeaderHarness(
+        initialFrame: _dayVisibleFrame(),
+        snapshotForCurrentFrame: _dayHeaderSnapshot,
+      );
+      addTearDown(harness.dispose);
+
+      await tester.pumpWidget(_host(harness, collapseProgress: 180));
+      await tester.pump();
+
+      final amount = tester.widget<Text>(
+        find.byKey(const ValueKey('budget-header-actual-limit')),
+      );
+      expect(
+        amount.data,
+        '${DashboardPreparedFormatter.amountMinorPerDay(120000)} / '
+        '${DashboardPreparedFormatter.amountMinorPerDay(96774)}',
+      );
+      expect(amount.data, isNot(contains('12000,00 Ft / 30000,00 Ft')));
+    },
+  );
+
   testWidgets(
     'Budget header anchors title/value while its existing expansion reveals the allocation lane',
     (tester) async {
@@ -478,27 +504,32 @@ Widget _host(
 }
 
 final class _BudgetHeaderHarness {
-  _BudgetHeaderHarness()
-    : categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-        const FluviCategory(
-          id: 'food',
-          name: 'Food',
-          colorId: 'color_13',
-          iconId: 'icon_01',
-          isSystemUncategorized: false,
-          createdAtUtcMs: 1,
-          updatedAtUtcMs: 1,
-        ),
-      ]),
-      visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame()),
-      direction = TransactionDirectionController(
-        initialDirection: TransactionDirection.expense,
-      ) {
+  _BudgetHeaderHarness({
+    DashboardVisibleFrame? initialFrame,
+    PreparedBudgetLimitSnapshot Function()? snapshotForCurrentFrame,
+  }) : _snapshotForCurrentFrame = snapshotForCurrentFrame ?? _snapshot,
+       categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+         const FluviCategory(
+           id: 'food',
+           name: 'Food',
+           colorId: 'color_13',
+           iconId: 'icon_01',
+           isSystemUncategorized: false,
+           createdAtUtcMs: 1,
+           updatedAtUtcMs: 1,
+         ),
+       ]),
+       visible = ValueNotifier<DashboardVisibleFrame?>(
+         initialFrame ?? _visibleFrame(),
+       ),
+       direction = TransactionDirectionController(
+         initialDirection: TransactionDirection.expense,
+       ) {
     presentation = DashboardBudgetPresentationController(
       categoryCollection: categories,
       visibleFrame: visible,
       transactionDirection: direction,
-      snapshotForCurrentFrame: _snapshot,
+      snapshotForCurrentFrame: _snapshotForCurrentFrame,
       logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
     );
   }
@@ -506,6 +537,7 @@ final class _BudgetHeaderHarness {
   final ValueNotifier<List<FluviCategory>> categories;
   final ValueNotifier<DashboardVisibleFrame?> visible;
   final TransactionDirectionController direction;
+  final PreparedBudgetLimitSnapshot Function() _snapshotForCurrentFrame;
   late final DashboardBudgetPresentationController presentation;
 
   void dispose() {
@@ -514,6 +546,56 @@ final class _BudgetHeaderHarness {
     visible.dispose();
     direction.dispose();
   }
+}
+
+PreparedBudgetLimitSnapshot _dayHeaderSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  cells[4] = const PreparedBudgetLimitCell(
+    actualScaled100: 1200000,
+    limitScaled100: 3000000,
+  );
+  cells[5] = const PreparedBudgetLimitCell(
+    actualScaled100: 1,
+    limitScaled100: 1,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['food'],
+    cells: cells,
+  );
+  final dayTen = DateTime.utc(
+    2026,
+    1,
+    10,
+  ).difference(DateTime.utc(1970)).inDays;
+  PreparedBudgetRhythmDirectionBank rhythm() =>
+      PreparedBudgetRhythmDirectionBank.fromTargetPoints(
+        targetPoints: <List<PreparedBudgetRhythmPoint>>[
+          <PreparedBudgetRhythmPoint>[
+            PreparedBudgetRhythmPoint(
+              epochDay: dayTen,
+              actualScaled100: 1200000,
+            ),
+          ],
+          <PreparedBudgetRhythmPoint>[
+            PreparedBudgetRhythmPoint(epochDay: dayTen, actualScaled100: 1),
+          ],
+        ],
+      );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+    rhythmSnapshot: PreparedBudgetRhythmSnapshot(
+      coreRevision: 7,
+      incomeBank: rhythm(),
+      expenseBank: rhythm(),
+    ),
+  );
 }
 
 PreparedBudgetLimitSnapshot _snapshot() {
@@ -574,6 +656,44 @@ DashboardVisibleFrame _visibleFrame() {
     railOpen: false,
     semanticIndex: 0,
     childLabel: 'January',
+    navigationEpoch: 1,
+    presentationEpoch: 1,
+    frameGeneration: 1,
+    mode: DashboardVisibleMode.committed,
+  );
+}
+
+DashboardVisibleFrame _dayVisibleFrame() {
+  const scope = DayScope(LocalDate(year: 2026, month: 1, day: 2));
+  final queryScope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: scope,
+  );
+  final prepared = DashboardPreparedFrame.complete(
+    scope: queryScope,
+    parentQueryKey: queryScope.copyWith(timeScope: const YearScope(2026)).key,
+    coreRevision: 7,
+    totalMinor: 0,
+    formattedAmount: '0 Ft',
+    entryCount: 0,
+    formattedEntryCount: '0',
+    logBox: DashboardLogViewportState(
+      queryKey: queryScope.key,
+      revision: 7,
+      groups: const <DashboardDayLogGroupViewModel>[],
+      entryCount: 0,
+      nextCursor: null,
+      direction: LedgerDirection.expense,
+    ),
+    presentationDigest: 1,
+  );
+  return DashboardVisibleFrame.fromPrepared(
+    prepared,
+    parentQueryKey: prepared.parentQueryKey,
+    plane: TimePlane.month,
+    railOpen: true,
+    semanticIndex: 0,
+    childLabel: '2026. január 2.',
     navigationEpoch: 1,
     presentationEpoch: 1,
     frameGeneration: 1,

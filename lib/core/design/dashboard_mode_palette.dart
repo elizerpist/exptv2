@@ -24,6 +24,10 @@ abstract final class FluviVisualTokens {
   static const budgetProgressWarning = Color(0xFFF59E0B);
   static const budgetProgressDanger = Color(0xFFEF4444);
 
+  /// YEAR's fixed health cells deliberately use a semantic health green,
+  /// rather than the selected category accent used by the MONTH ring.
+  static const budgetProgressHealthy = Color(0xFF22C55E);
+
   /// The single app highlight ramp taken from the Balance B3M active rail.
   /// Every non-income/expense highlight must resolve through this gradient.
   static const appHighlightGradient = LinearGradient(

@@ -64,26 +64,34 @@ final class DashboardBudgetResolvedMonthlyLimitResolver {
 sealed class DashboardBudgetScopeAnalysis {
   const DashboardBudgetScopeAnalysis({
     required this.displayNumeratorScaled100,
+    required this.displayDenominatorScaled100,
     required this.canonicalActualScaled100ForLimitEdit,
-    required this.denominatorScaled100,
+    required this.canonicalLimitScaled100ForEdit,
+    this.rawRatioOverride,
   });
 
   final int? displayNumeratorScaled100;
+  final int? displayDenominatorScaled100;
   final int? canonicalActualScaled100ForLimitEdit;
-  final int? denominatorScaled100;
+  final int? canonicalLimitScaled100ForEdit;
+
+  /// DAY pace retains rational precision here rather than reverse-engineering
+  /// a health ratio from rounded, header-ready daily money values.
+  final double? rawRatioOverride;
 
   double get rawRatio =>
-      displayNumeratorScaled100 != null &&
-          denominatorScaled100 != null &&
-          denominatorScaled100! > 0
-      ? displayNumeratorScaled100! / denominatorScaled100!
-      : 0;
+      rawRatioOverride ??
+      (displayNumeratorScaled100 != null &&
+              displayDenominatorScaled100 != null &&
+              displayDenominatorScaled100! > 0
+          ? displayNumeratorScaled100! / displayDenominatorScaled100!
+          : 0);
 
   BudgetProgressHealth get health => BudgetProgressHealthResolver.resolve(
     isAvailable:
         displayNumeratorScaled100 != null &&
-        denominatorScaled100 != null &&
-        denominatorScaled100! > 0,
+        displayDenominatorScaled100 != null &&
+        displayDenominatorScaled100! > 0,
     rawRatio: rawRatio,
   );
 }
@@ -94,8 +102,9 @@ final class DashboardBudgetMonthAnalysis extends DashboardBudgetScopeAnalysis {
     required int? resolvedMonthlyLimitScaled100,
   }) : super(
          displayNumeratorScaled100: monthlyActualScaled100,
+         displayDenominatorScaled100: resolvedMonthlyLimitScaled100,
          canonicalActualScaled100ForLimitEdit: monthlyActualScaled100,
-         denominatorScaled100: resolvedMonthlyLimitScaled100,
+         canonicalLimitScaled100ForEdit: resolvedMonthlyLimitScaled100,
        );
 }
 
@@ -105,9 +114,12 @@ final class DashboardBudgetDayProjectionAnalysis
     required this.projection,
     required int canonicalMonthlyActualScaled100,
   }) : super(
-         displayNumeratorScaled100: projection.projectedMonthEndScaled100,
+         displayNumeratorScaled100: projection.actualDailyAverageScaled100,
+         displayDenominatorScaled100: projection.allowedDailyAverageScaled100,
          canonicalActualScaled100ForLimitEdit: canonicalMonthlyActualScaled100,
-         denominatorScaled100: projection.effectiveMonthlyLimitScaled100,
+         canonicalLimitScaled100ForEdit:
+             projection.effectiveMonthlyLimitScaled100,
+         rawRatioOverride: projection.paceRatio,
        );
 
   final DashboardBudgetMonthEndProjection projection;
@@ -123,8 +135,9 @@ final class DashboardBudgetYearAnalysis extends DashboardBudgetScopeAnalysis {
        assert(monthlyResolvedLimitsScaled100.length == 12),
        super(
          displayNumeratorScaled100: annualActualScaled100,
+         displayDenominatorScaled100: annualResolvedLimitScaled100,
          canonicalActualScaled100ForLimitEdit: annualActualScaled100,
-         denominatorScaled100: annualResolvedLimitScaled100,
+         canonicalLimitScaled100ForEdit: annualResolvedLimitScaled100,
        );
 
   final List<int> monthlyActualsScaled100;
@@ -138,8 +151,9 @@ final class DashboardBudgetTypicalMonthAnalysis
     required int? baseMonthlyLimitScaled100,
   }) : super(
          displayNumeratorScaled100: average.averageMonthlySpendScaled100,
+         displayDenominatorScaled100: baseMonthlyLimitScaled100,
          canonicalActualScaled100ForLimitEdit: null,
-         denominatorScaled100: baseMonthlyLimitScaled100,
+         canonicalLimitScaled100ForEdit: baseMonthlyLimitScaled100,
        );
 }
 

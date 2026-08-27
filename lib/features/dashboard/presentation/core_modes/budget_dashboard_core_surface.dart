@@ -11,6 +11,7 @@ import '../../../../core/design/dashboard_layout_metrics.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_budget_scope_analysis.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
@@ -228,9 +229,16 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         valueListenable: presentationController!,
                         builder: (context, state, child) {
                           final header = state.header;
+                          final dayPace =
+                              header.scopeAnalysis
+                                  is DashboardBudgetDayProjectionAnalysis;
                           final amount = header.isAvailable
-                              ? '${DashboardPreparedFormatter.amountMinor(header.displayNumeratorScaled100!)} / '
-                                    '${header.hasLimit ? DashboardPreparedFormatter.amountMinor(header.limitScaled100!) : '—'}'
+                              ? '${dayPace ? DashboardPreparedFormatter.amountMinorPerDay(header.displayNumeratorScaled100!) : DashboardPreparedFormatter.amountMinor(header.displayNumeratorScaled100!)} / '
+                                    '${header.displayDenominatorScaled100 == null
+                                        ? '—'
+                                        : dayPace
+                                        ? DashboardPreparedFormatter.amountMinorPerDay(header.displayDenominatorScaled100!)
+                                        : DashboardPreparedFormatter.amountMinor(header.displayDenominatorScaled100!)}'
                               : '— / —';
                           final partition = state.partition;
                           final expansion = geometry.headerExpansionProgress;
