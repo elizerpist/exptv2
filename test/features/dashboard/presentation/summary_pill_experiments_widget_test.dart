@@ -80,6 +80,54 @@ void main() {
     );
   });
 
+  test('segmented mirror reverses only the owned component Rects', () {
+    final normal = SummarySegmentedTrackGeometry.resolve(
+      width: 218.8,
+      preRegressionNavigationWidth: 210.8,
+      activeTrackIndices: const <int>[0, 1, 2, 3],
+      orientation: SummarySegmentedOrientation.normal,
+    );
+    final mirrored = SummarySegmentedTrackGeometry.resolve(
+      width: 218.8,
+      preRegressionNavigationWidth: 210.8,
+      activeTrackIndices: const <int>[0, 1, 2, 3],
+      orientation: SummarySegmentedOrientation.mirrored,
+    );
+
+    expect(
+      mirrored.semanticRectForTrack(3).right,
+      lessThan(mirrored.semanticRectForTrack(2).left),
+    );
+    expect(
+      mirrored.semanticRectForTrack(2).right,
+      lessThan(mirrored.semanticRectForTrack(1).left),
+    );
+    expect(
+      mirrored.semanticRectForTrack(1).right,
+      lessThan(mirrored.semanticRectForTrack(0).left),
+    );
+    for (final track in const <int>[0, 1, 2, 3]) {
+      expect(
+        mirrored.semanticRectForTrack(track),
+        mirrored.visualContentRectForTrack(track),
+      );
+      expect(
+        mirrored.semanticRectForTrack(track).width,
+        closeTo(normal.semanticRectForTrack(track).width, .000001),
+      );
+    }
+    expect(
+      mirrored.semanticRectForTrack(2).left -
+          mirrored.semanticRectForTrack(3).right,
+      closeTo(normal.segmentedSectionGap, .000001),
+    );
+    expect(
+      mirrored.width - mirrored.semanticRectForTrack(0).right,
+      (mirrored.height - mirrored.contentMetrics.modeVisualSize) / 2,
+      reason: 'mirrored mode right inset matches normal top inset',
+    );
+  });
+
   testWidgets('segmented Summary ports the selected reference material', (
     tester,
   ) async {
@@ -444,6 +492,112 @@ void main() {
         dayTicks.last.month,
         reason: 'the YEAR spinner never carries into the MONTH selector',
       );
+    },
+  );
+
+  testWidgets(
+    'mirrored Segmented fields retain their own rendered hit Rects and flings',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 15),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final componentTicks = <DashboardTemporalAnchorComponent>[];
+      final levelTicks = <TimePlane>[];
+      const presentation = DashboardSummaryPresentationSettings(
+        showSeparators: true,
+        temporalFlingPresentation: SummaryTemporalFlingPresentation.current,
+        segmentedOrientation: SummarySegmentedOrientation.mirrored,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              presentation: presentation,
+              onLevelCrossed: (plane, _) => levelTicks.add(plane),
+              onComponentCrossed: (candidate, component) {
+                componentTicks.add(component);
+                navigation.commitTemporalCandidate(candidate);
+              },
+            ),
+          ),
+        ),
+      );
+
+      final shell = tester.getRect(
+        find.byKey(const ValueKey('summary-pill-experiment-segmented')),
+      );
+      final amount = tester.getRect(
+        find.byKey(const ValueKey('summary-pill-experiment-amount-zone')),
+      );
+      final inset = shell.width <= 320
+          ? 6.0
+          : FluviVisualTokens.controlHorizontalInset;
+      final geometry = SummarySegmentedTrackGeometry.resolve(
+        width: shell.width - amount.width - inset,
+        height: amount.height,
+        activeTrackIndices: const <int>[0, 1, 2, 3],
+        preRegressionNavigationWidth: shell.width - amount.width - inset * 2,
+        orientation: SummarySegmentedOrientation.mirrored,
+      );
+      final selectors = <int, Finder>{
+        0: find.byKey(const ValueKey('summary-pill-segmented-mode-selector')),
+        1: find.byKey(const ValueKey('summary-pill-segmented-year-selector')),
+        2: find.byKey(const ValueKey('summary-pill-segmented-month-selector')),
+        3: find.byKey(const ValueKey('summary-pill-segmented-day-selector')),
+      };
+      for (final entry in selectors.entries) {
+        expect(
+          tester.getRect(entry.value),
+          geometry
+              .semanticRectForTrack(entry.key)
+              .shift(Offset(amount.right, amount.top)),
+          reason: 'mirrored visual, clip, semantics and hit owner must match',
+        );
+      }
+      expect(amount.right, lessThan(tester.getRect(selectors[3]!).left));
+      expect(
+        tester.getRect(selectors[3]!).right,
+        lessThan(tester.getRect(selectors[2]!).left),
+      );
+      expect(
+        tester.getRect(selectors[2]!).right,
+        lessThan(tester.getRect(selectors[1]!).left),
+      );
+      expect(
+        tester.getRect(selectors[1]!).right,
+        lessThan(tester.getRect(selectors[0]!).left),
+      );
+
+      await tester.fling(selectors[0]!, const Offset(0, 40), 600);
+      await tester.pumpAndSettle();
+      expect(levelTicks, isNotEmpty);
+
+      for (final component in <DashboardTemporalAnchorComponent>[
+        DashboardTemporalAnchorComponent.year,
+        DashboardTemporalAnchorComponent.month,
+        DashboardTemporalAnchorComponent.day,
+      ]) {
+        componentTicks.clear();
+        final finder = switch (component) {
+          DashboardTemporalAnchorComponent.year => selectors[1]!,
+          DashboardTemporalAnchorComponent.month => selectors[2]!,
+          DashboardTemporalAnchorComponent.day => selectors[3]!,
+        };
+        await tester.fling(finder, const Offset(0, -120), 1500);
+        await tester.pumpAndSettle();
+        expect(componentTicks, isNotEmpty);
+        expect(componentTicks, everyElement(component));
+      }
     },
   );
 

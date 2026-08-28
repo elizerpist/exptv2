@@ -8,37 +8,58 @@ enum SummaryTemporalFlingPresentation {
   final String label;
 }
 
+/// Horizontal arrangement for the segmented SummaryPill only. It deliberately
+/// moves owned component Rects without changing text direction or vertical
+/// temporal gesture semantics.
+enum SummarySegmentedOrientation {
+  normal('Normál'),
+  mirrored('Tükrözött');
+
+  const SummarySegmentedOrientation(this.label);
+  final String label;
+}
+
 @immutable
 final class DashboardSummaryPresentationSettings {
   const DashboardSummaryPresentationSettings({
     required this.showSeparators,
     required this.temporalFlingPresentation,
+    this.segmentedOrientation = SummarySegmentedOrientation.normal,
   });
 
   const DashboardSummaryPresentationSettings.defaults()
     : showSeparators = true,
-      temporalFlingPresentation = SummaryTemporalFlingPresentation.current;
+      temporalFlingPresentation = SummaryTemporalFlingPresentation.current,
+      segmentedOrientation = SummarySegmentedOrientation.normal;
 
   final bool showSeparators;
   final SummaryTemporalFlingPresentation temporalFlingPresentation;
+  final SummarySegmentedOrientation segmentedOrientation;
 
   DashboardSummaryPresentationSettings copyWith({
     bool? showSeparators,
     SummaryTemporalFlingPresentation? temporalFlingPresentation,
+    SummarySegmentedOrientation? segmentedOrientation,
   }) => DashboardSummaryPresentationSettings(
     showSeparators: showSeparators ?? this.showSeparators,
     temporalFlingPresentation:
         temporalFlingPresentation ?? this.temporalFlingPresentation,
+    segmentedOrientation: segmentedOrientation ?? this.segmentedOrientation,
   );
 
   @override
   bool operator ==(Object other) =>
       other is DashboardSummaryPresentationSettings &&
       other.showSeparators == showSeparators &&
-      other.temporalFlingPresentation == temporalFlingPresentation;
+      other.temporalFlingPresentation == temporalFlingPresentation &&
+      other.segmentedOrientation == segmentedOrientation;
 
   @override
-  int get hashCode => Object.hash(showSeparators, temporalFlingPresentation);
+  int get hashCode => Object.hash(
+    showSeparators,
+    temporalFlingPresentation,
+    segmentedOrientation,
+  );
 }
 
 final class DashboardSummaryPresentationController
@@ -52,6 +73,9 @@ final class DashboardSummaryPresentationController
   void selectTemporalFlingPresentation(
     SummaryTemporalFlingPresentation presentation,
   ) => _set(value.copyWith(temporalFlingPresentation: presentation));
+
+  void selectSegmentedOrientation(SummarySegmentedOrientation orientation) =>
+      _set(value.copyWith(segmentedOrientation: orientation));
 
   void reset() => _set(const DashboardSummaryPresentationSettings.defaults());
 

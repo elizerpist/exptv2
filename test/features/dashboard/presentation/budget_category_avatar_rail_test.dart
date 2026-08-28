@@ -83,8 +83,9 @@ void main() {
   });
 
   test('DAY break-even uses two mirrored sphere markers, not a line', () {
+    final geometry = BudgetProgressRingGeometry.source;
     final markers = BudgetProgressRingDayPaceMarkers.resolve(
-      geometry: BudgetProgressRingGeometry.source,
+      geometry: geometry,
     );
 
     expect(markers.sourceGeometryId, BudgetProgressRingGeometry.sourceId);
@@ -92,7 +93,17 @@ void main() {
     expect(markers.left.center.dy, markers.right.center.dy);
     expect(
       markers.left.center.dx + markers.right.center.dx,
-      BudgetProgressRingGeometry.source.center.dx * 2,
+      geometry.center.dx * 2,
+    );
+    expect(
+      (markers.left.center - geometry.center).distance,
+      closeTo(geometry.trackRadius, .000001),
+      reason: 'left marker centre must lie on the shared track centreline',
+    );
+    expect(
+      (markers.right.center - geometry.center).distance,
+      closeTo(geometry.trackRadius, .000001),
+      reason: 'right marker centre must lie on the shared track centreline',
     );
     expect(markers.left.center.dy, closeTo(100.24, .000001));
     expect(markers.breakEvenGaugeRatio, .75);
@@ -123,9 +134,19 @@ void main() {
       expect(
         BudgetProgressRingAnnualSegment.fixedSweepRadians,
         closeTo(
-          2 * math.pi / 12 - BudgetProgressRingAnnualSegment.sectionGapRadians,
+          BudgetProgressRingAnnualSegment.slotSweepRadians -
+              BudgetProgressRingAnnualSegment.centerlineGapRadians,
           .000001,
         ),
+      );
+      expect(
+        BudgetProgressRingAnnualSegment.paintedVisibleGapLength,
+        BudgetProgressRingAnnualSegment.annualSegmentVisibleGap,
+      );
+      expect(
+        BudgetProgressRingAnnualSegment.paintedVisibleGapLength,
+        greaterThan(0),
+        reason: 'round caps require a real positive painted gap',
       );
     },
   );
@@ -166,6 +187,123 @@ void main() {
       BudgetProgressRingAnnualSegmentHealth.neutral,
     );
   });
+
+  test('YEAR health material preserves canonical health hue families', () {
+    final annualChrome = BudgetCategoryAvatarSelectionChrome(
+      categoryColor: const Color(0xFFD834C9),
+      geometry: BudgetLimitProgressChromeGeometry.annualSegments,
+      annualSegments: const <BudgetProgressRingAnnualSegment>[
+        BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.danger,
+        ),
+      ],
+    );
+    final healthy = BudgetProgressRingAnnualHealthMaterial.forHealth(
+      BudgetProgressRingAnnualSegmentHealth.healthy,
+    );
+    final warning = BudgetProgressRingAnnualHealthMaterial.forHealth(
+      BudgetProgressRingAnnualSegmentHealth.warning,
+    );
+    final danger = BudgetProgressRingAnnualHealthMaterial.forHealth(
+      BudgetProgressRingAnnualSegmentHealth.danger,
+    );
+    final neutral = BudgetProgressRingAnnualHealthMaterial.forHealth(
+      BudgetProgressRingAnnualSegmentHealth.neutral,
+    );
+
+    expect(healthy.base, FluviVisualTokens.budgetProgressHealthy);
+    expect(warning.base, FluviVisualTokens.budgetProgressWarning);
+    expect(danger.base, FluviVisualTokens.budgetProgressDanger);
+    expect(neutral.base, const Color(0xFFC5BDCF));
+    expect(
+      annualChrome.usesCategoryHueShift,
+      isFalse,
+      reason: 'YEAR must bypass the category arc hue transform entirely',
+    );
+    for (final material in <BudgetProgressRingAnnualHealthMaterial>[
+      healthy,
+      warning,
+      danger,
+      neutral,
+    ]) {
+      expect(material.usesCategoryHueShift, isFalse);
+    }
+    expect(
+      HSLColor.fromColor(danger.end).hue,
+      closeTo(HSLColor.fromColor(danger.base).hue, .001),
+      reason: 'annual danger depth must remain red, never rotate magenta',
+    );
+  });
+
+  testWidgets(
+    'YEAR ring raster keeps twelve fixed health cells visibly separated',
+    (tester) async {
+      const key = ValueKey<String>('annual-health-ring-raster');
+      final segments = <BudgetProgressRingAnnualSegment>[
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.healthy,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.warning,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.danger,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.healthy,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.danger,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.warning,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.healthy,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.neutral,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.neutral,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.neutral,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.neutral,
+        ),
+        const BudgetProgressRingAnnualSegment(
+          health: BudgetProgressRingAnnualSegmentHealth.neutral,
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: const Color(0xFF201D29),
+            body: Center(
+              child: RepaintBoundary(
+                key: key,
+                child: BudgetCategoryAvatarSelectionChrome(
+                  categoryColor: const Color(0xFFD834C9),
+                  geometry: BudgetLimitProgressChromeGeometry.annualSegments,
+                  annualSegments: segments,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        find.byKey(key),
+        matchesGoldenFile(
+          '../../../goldens/budget_annual_fixed_health_cells.png',
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'a distribution route uses the existing rail preview for every cyclic crossing',

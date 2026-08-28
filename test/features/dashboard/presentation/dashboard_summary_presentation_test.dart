@@ -14,6 +14,10 @@ void main() {
         controller.value.temporalFlingPresentation,
         SummaryTemporalFlingPresentation.current,
       );
+      expect(
+        controller.value.segmentedOrientation,
+        SummarySegmentedOrientation.normal,
+      );
     },
   );
 
@@ -27,7 +31,8 @@ void main() {
       ..setSeparatorsVisible(false)
       ..selectTemporalFlingPresentation(
         SummaryTemporalFlingPresentation.dynamicTrio,
-      );
+      )
+      ..selectSegmentedOrientation(SummarySegmentedOrientation.mirrored);
     order.select(BudgetSectionOrder.chartThenAvatars);
 
     expect(summary.value.showSeparators, isFalse);
@@ -35,9 +40,17 @@ void main() {
       summary.value.temporalFlingPresentation,
       SummaryTemporalFlingPresentation.dynamicTrio,
     );
+    expect(
+      summary.value.segmentedOrientation,
+      SummarySegmentedOrientation.mirrored,
+    );
     expect(order.value, BudgetSectionOrder.chartThenAvatars);
 
     summary.reset();
+    expect(
+      summary.value.segmentedOrientation,
+      SummarySegmentedOrientation.normal,
+    );
     expect(order.value, BudgetSectionOrder.chartThenAvatars);
   });
 

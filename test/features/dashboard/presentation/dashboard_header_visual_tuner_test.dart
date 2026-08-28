@@ -259,6 +259,20 @@ void main() {
       SummaryTemporalFlingPresentation.dynamicTrio,
     );
 
+    final mirrored = find.byKey(
+      ValueKey<String>(
+        'dashboard-summary-segmented-orientation-'
+        '${SummarySegmentedOrientation.mirrored}',
+      ),
+    );
+    await tester.ensureVisible(mirrored);
+    await tester.tap(mirrored);
+    await tester.pump();
+    expect(
+      summary.value.segmentedOrientation,
+      SummarySegmentedOrientation.mirrored,
+    );
+
     final chartFirst = find.byKey(
       const ValueKey<String>('dashboard-budget-section-order-chartThenAvatars'),
     );

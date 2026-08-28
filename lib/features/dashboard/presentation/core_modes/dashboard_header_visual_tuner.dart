@@ -961,6 +961,14 @@ final class _DashboardSummaryPresentationSection extends StatelessWidget {
               onChanged: controller.selectTemporalFlingPresentation,
               keyPrefix: 'dashboard-summary-fling-presentation',
             ),
+            _SummaryRadioGroup<SummarySegmentedOrientation>(
+              label: 'Szekciós elrendezés',
+              value: settings.segmentedOrientation,
+              values: SummarySegmentedOrientation.values,
+              itemLabel: (value) => value.label,
+              onChanged: controller.selectSegmentedOrientation,
+              keyPrefix: 'dashboard-summary-segmented-orientation',
+            ),
           ],
         ),
       );

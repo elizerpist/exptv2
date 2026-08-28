@@ -230,8 +230,37 @@ abstract final class BudgetProgressRingAnnualSegmentHealthResolver {
 final class BudgetProgressRingAnnualSegment {
   const BudgetProgressRingAnnualSegment({required this.health});
 
-  static const sectionGapRadians = .018;
-  static const fixedSweepRadians = math.pi * 2 / 12 - sectionGapRadians;
+  /// Every calendar month owns one exact angular slot. This remains separate
+  /// from the painted sweep so DEC→JAN is exactly the same as every other
+  /// boundary instead of accumulating prior floating-point sweep lengths.
+  static const slotSweepRadians = math.pi * 2 / 12;
+
+  /// Positive empty distance between the two *painted* round caps in source
+  /// space. At the selected 112px ring scale, eight source units remain a
+  /// clearly visible, equal separator without making any month a progress bar.
+  static const annualSegmentVisibleGap = 8.0;
+
+  /// Two round caps consume one full stroke width along the arc tangent. The
+  /// centreline gap therefore needs that width plus the desired visible void.
+  static const centerlineGapLength =
+      BudgetProgressRingGeometry.sourceTrackWidth + annualSegmentVisibleGap;
+  static const centerlineGapRadians =
+      centerlineGapLength / BudgetProgressRingGeometry.sourceTrackRadius;
+  static const fixedSweepRadians = slotSweepRadians - centerlineGapRadians;
+  static const paintedVisibleGapLength =
+      centerlineGapLength - BudgetProgressRingGeometry.sourceTrackWidth;
+
+  static double startAngleFor({
+    required double canonicalStartAngle,
+    required int monthIndex,
+  }) {
+    if (monthIndex < 0 || monthIndex >= 12) {
+      throw ArgumentError.value(monthIndex, 'monthIndex', 'Expected 0..11.');
+    }
+    return canonicalStartAngle +
+        monthIndex * slotSweepRadians +
+        centerlineGapRadians / 2;
+  }
 
   final BudgetProgressRingAnnualSegmentHealth health;
 
@@ -241,6 +270,51 @@ final class BudgetProgressRingAnnualSegment {
 
   @override
   int get hashCode => health.hashCode;
+}
+
+/// 3D YEAR material with a semantic health hue that cannot inherit the
+/// category-arc hue rotation. Highlight and depth only adjust lightness.
+@immutable
+final class BudgetProgressRingAnnualHealthMaterial {
+  const BudgetProgressRingAnnualHealthMaterial._({
+    required this.base,
+    required this.start,
+    required this.middle,
+    required this.end,
+  });
+
+  factory BudgetProgressRingAnnualHealthMaterial.forHealth(
+    BudgetProgressRingAnnualSegmentHealth health,
+  ) {
+    final base = switch (health) {
+      BudgetProgressRingAnnualSegmentHealth.healthy =>
+        FluviVisualTokens.budgetProgressHealthy,
+      BudgetProgressRingAnnualSegmentHealth.warning =>
+        FluviVisualTokens.budgetProgressWarning,
+      BudgetProgressRingAnnualSegmentHealth.danger =>
+        FluviVisualTokens.budgetProgressDanger,
+      BudgetProgressRingAnnualSegmentHealth.neutral => const Color(0xFFC5BDCF),
+    };
+    final hsl = HSLColor.fromColor(base);
+    return BudgetProgressRingAnnualHealthMaterial._(
+      base: base,
+      start: hsl
+          .withLightness((hsl.lightness + .18).clamp(0, 1).toDouble())
+          .toColor(),
+      middle: base,
+      end: hsl
+          .withLightness((hsl.lightness - .20).clamp(0, 1).toDouble())
+          .toColor(),
+    );
+  }
+
+  final Color base;
+  final Color start;
+  final Color middle;
+  final Color end;
+
+  /// Public source-contract assertion used by the regression suite.
+  bool get usesCategoryHueShift => false;
 }
 
 /// One marker derives both sphere centres from the shared source ring. It is
@@ -271,14 +345,16 @@ final class BudgetProgressRingDayPaceMarkers {
       radius: geometry.trackRadius,
     );
     final y = trackRect.bottom - trackRect.height * _breakEvenGaugeRatio;
-    final offset =
-        geometry.trackRadius + geometry.trackWidth / 2 + markerRadius + 7;
+    final dy = y - geometry.center.dy;
+    final xOffset = math.sqrt(
+      math.max(0, geometry.trackRadius * geometry.trackRadius - dy * dy),
+    );
     return BudgetProgressRingDayPaceMarkers._(
       left: BudgetProgressRingDayPaceMarker(
-        Offset(geometry.center.dx - offset, y),
+        Offset(geometry.center.dx - xOffset, y),
       ),
       right: BudgetProgressRingDayPaceMarker(
-        Offset(geometry.center.dx + offset, y),
+        Offset(geometry.center.dx + xOffset, y),
       ),
     );
   }
@@ -802,11 +878,19 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
       2 *
       BudgetLimitProgressProjection.boundedVisualProgress(visualProgress);
 
+  /// YEAR uses its own semantic green/yellow/red material. It deliberately
+  /// must not enter the category-arc hue transform used by the continuous
+  /// MONTH/DAY/SUM strategies.
+  bool get usesCategoryHueShift =>
+      geometry != BudgetLimitProgressChromeGeometry.annualSegments;
+
   @override
   Widget build(BuildContext context) {
-    final gradient = _SelectionArcGradient.fromCategoryColor(
-      progressColor ?? categoryColor,
-    );
+    final gradient = usesCategoryHueShift
+        ? _SelectionArcGradient.fromCategoryColor(
+            progressColor ?? categoryColor,
+          )
+        : null;
     final shadowColor = castShadowColor;
     return SizedBox.square(
       key: const ValueKey('budget-category-avatar-selection-shell'),
@@ -819,9 +903,12 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
           painter: _SelectionChromePainter(
             ringGeometry: BudgetProgressRingGeometry.source,
             targetAccent: categoryColor,
-            startColor: gradient.start,
-            middleColor: gradient.middle,
-            endColor: gradient.end,
+            // The annual strategy never reads these fallback values. Passing
+            // opaque neutral values makes the no-category-gradient contract
+            // structural instead of merely relying on painter branch order.
+            startColor: gradient?.start ?? const Color(0xFF000000),
+            middleColor: gradient?.middle ?? const Color(0xFF000000),
+            endColor: gradient?.end ?? const Color(0xFF000000),
             faceColor: faceColor,
             shadowColor: shadowColor,
             sourceProgress: sourceProgress,
@@ -1154,40 +1241,26 @@ final class _SelectionChromePainter extends CustomPainter {
 
   void _paintAnnualSegments(Canvas canvas, Rect trackRect, double startAngle) {
     if (annualSegments.length != 12) return;
-    const sectionSweep = math.pi * 2 / 12;
     for (var index = 0; index < annualSegments.length; index += 1) {
       final segment = annualSegments[index];
-      final sectionStart =
-          startAngle +
-          sectionSweep * index +
-          BudgetProgressRingAnnualSegment.sectionGapRadians / 2;
-      final gradient = _SelectionArcGradient.fromCategoryColor(
-        _annualSegmentColor(segment.health),
+      final sectionStart = BudgetProgressRingAnnualSegment.startAngleFor(
+        canonicalStartAngle: startAngle,
+        monthIndex: index,
+      );
+      final material = BudgetProgressRingAnnualHealthMaterial.forHealth(
+        segment.health,
       );
       _paintActiveArcWithColors(
         canvas,
         trackRect,
         sectionStart,
         BudgetProgressRingAnnualSegment.fixedSweepRadians,
-        gradient.start,
-        gradient.middle,
-        gradient.end,
+        material.start,
+        material.middle,
+        material.end,
       );
     }
   }
-
-  Color _annualSegmentColor(BudgetProgressRingAnnualSegmentHealth health) =>
-      switch (health) {
-        BudgetProgressRingAnnualSegmentHealth.healthy =>
-          FluviVisualTokens.budgetProgressHealthy,
-        BudgetProgressRingAnnualSegmentHealth.warning =>
-          FluviVisualTokens.budgetProgressWarning,
-        BudgetProgressRingAnnualSegmentHealth.danger =>
-          FluviVisualTokens.budgetProgressDanger,
-        BudgetProgressRingAnnualSegmentHealth.neutral => const Color(
-          0xFFC5BDCF,
-        ),
-      };
 
   void _paintTypicalMarker(Canvas canvas, Rect trackRect, double startAngle) {
     final rawPosition = typicalMarkerPosition;

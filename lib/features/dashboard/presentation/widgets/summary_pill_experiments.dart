@@ -117,6 +117,7 @@ final class SummarySegmentedTrackGeometry {
     required this.contentMetrics,
     required this.preRegressionContentEdgeGap,
     required this.segmentedSectionGap,
+    required this.orientation,
     required Map<int, Rect> sectionRects,
   }) : _sectionRects = sectionRects;
 
@@ -138,6 +139,8 @@ final class SummarySegmentedTrackGeometry {
     double height = 59,
     SummarySegmentedContentMetrics? contentMetrics,
     double? preRegressionNavigationWidth,
+    SummarySegmentedOrientation orientation =
+        SummarySegmentedOrientation.normal,
   }) {
     if (width <= 0 || height <= 0 || activeTrackIndices.isEmpty) {
       throw ArgumentError(
@@ -165,14 +168,34 @@ final class SummarySegmentedTrackGeometry {
     }
     final gap = baselineGap / 2;
     final sectionRects = <int, Rect>{};
-    // The large mode component itself—not an old padded lane—uses the same
-    // left inset as its top inset. Each following component's one Rect is
-    // laid out from the preceding right edge and the one shared semantic gap.
-    var nextLeft = (height - metrics.modeVisualSize) / 2;
+    // The large mode component itself—not an old padded lane—uses its top
+    // inset on the outer normal/mirrored edge. Every item receives the one
+    // Rect later used for its paint, clip, semantics and gesture surface.
+    final modeInset = (height - metrics.modeVisualSize) / 2;
+    var nextEdge = switch (orientation) {
+      SummarySegmentedOrientation.normal => modeInset,
+      SummarySegmentedOrientation.mirrored => width - modeInset,
+    };
     for (final track in activeTrackIndices) {
       final contentWidth = metrics.widthForTrack(track);
-      sectionRects[track] = Rect.fromLTWH(nextLeft, 0, contentWidth, height);
-      nextLeft += contentWidth + gap;
+      sectionRects[track] = switch (orientation) {
+        SummarySegmentedOrientation.normal => Rect.fromLTWH(
+          nextEdge,
+          0,
+          contentWidth,
+          height,
+        ),
+        SummarySegmentedOrientation.mirrored => Rect.fromLTWH(
+          nextEdge - contentWidth,
+          0,
+          contentWidth,
+          height,
+        ),
+      };
+      nextEdge += switch (orientation) {
+        SummarySegmentedOrientation.normal => contentWidth + gap,
+        SummarySegmentedOrientation.mirrored => -(contentWidth + gap),
+      };
     }
     final exceedsBounds = sectionRects.values.any(
       (rect) => rect.left < 0 || rect.right > width,
@@ -198,6 +221,7 @@ final class SummarySegmentedTrackGeometry {
       contentMetrics: metrics,
       preRegressionContentEdgeGap: baselineGap,
       segmentedSectionGap: gap,
+      orientation: orientation,
       sectionRects: Map<int, Rect>.unmodifiable(sectionRects),
     );
   }
@@ -208,6 +232,7 @@ final class SummarySegmentedTrackGeometry {
   final SummarySegmentedContentMetrics contentMetrics;
   final double preRegressionContentEdgeGap;
   final double segmentedSectionGap;
+  final SummarySegmentedOrientation orientation;
   final Map<int, Rect> _sectionRects;
 
   Rect semanticRectForTrack(int track) => _rectForTrack(track);
@@ -314,46 +339,59 @@ final class SummaryPillExperiment extends StatelessWidget {
           // for the requested 50% gap—not as a visual or gesture lane.
           final preRegressionNavigationWidth =
               constraints.maxWidth - amountWidth - inset * 2;
-          // The amount zone preserves its existing right edge and start. The
-          // navigation surface begins at the Summary's actual left edge so
-          // the mode badge can use the same left and top visual inset.
+          // Normal preserves the existing right-side amount zone; mirrored
+          // swaps the two whole zones. In either orientation, navigation's
+          // outer edge is the mode badge's equal horizontal/vertical inset.
           final navigationWidth = constraints.maxWidth - amountWidth - inset;
-          return Row(
-            children: <Widget>[
-              SizedBox(
-                width: navigationWidth,
-                height: bounds.height,
-                child: _SegmentedNavigationSurface(
-                  level: level,
-                  height: bounds.height,
-                  width: navigationWidth,
-                  preRegressionNavigationWidth: preRegressionNavigationWidth,
-                  navigation: navigation,
-                  presentation: presentation,
-                  onLevelCrossed: onLevelCrossed,
-                  onComponentCrossed: onComponentCrossed,
-                  componentCandidateProjector: componentCandidateProjector,
-                  onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
-                ),
-              ),
-              SizedBox(
-                key: const ValueKey<String>(
-                  'summary-pill-experiment-amount-zone',
-                ),
-                width: amountWidth,
-                height: bounds.height,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: SummaryPillPreparedAmountSlot(
-                    visibleFrames: visibleFrames,
-                    performanceCounters: performanceCounters,
-                    onMotionActiveChanged: onAmountMotionActiveChanged,
-                  ),
-                ),
-              ),
-              SizedBox(width: inset),
-            ],
+          final navigationSurface = SizedBox(
+            width: navigationWidth,
+            height: bounds.height,
+            child: _SegmentedNavigationSurface(
+              level: level,
+              height: bounds.height,
+              width: navigationWidth,
+              preRegressionNavigationWidth: preRegressionNavigationWidth,
+              navigation: navigation,
+              presentation: presentation,
+              onLevelCrossed: onLevelCrossed,
+              onComponentCrossed: onComponentCrossed,
+              componentCandidateProjector: componentCandidateProjector,
+              onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
+            ),
           );
+          final amountZone = SizedBox(
+            key: const ValueKey<String>('summary-pill-experiment-amount-zone'),
+            width: amountWidth,
+            height: bounds.height,
+            child: Align(
+              alignment:
+                  presentation.segmentedOrientation ==
+                      SummarySegmentedOrientation.normal
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              child: SummaryPillPreparedAmountSlot(
+                visibleFrames: visibleFrames,
+                performanceCounters: performanceCounters,
+                onMotionActiveChanged: onAmountMotionActiveChanged,
+              ),
+            ),
+          );
+          return switch (presentation.segmentedOrientation) {
+            SummarySegmentedOrientation.normal => Row(
+              children: <Widget>[
+                navigationSurface,
+                amountZone,
+                SizedBox(width: inset),
+              ],
+            ),
+            SummarySegmentedOrientation.mirrored => Row(
+              children: <Widget>[
+                SizedBox(width: inset),
+                amountZone,
+                navigationSurface,
+              ],
+            ),
+          };
         },
       );
       return SizedBox(
@@ -536,6 +574,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
       height: height,
       activeTrackIndices: activeTracks,
       preRegressionNavigationWidth: preRegressionNavigationWidth,
+      orientation: presentation.segmentedOrientation,
     );
     return Stack(
       children: <Widget>[
@@ -886,16 +925,18 @@ final class _HierarchyValueSelectorState
         ),
         if (widget.presentation == SummaryTemporalFlingPresentation.dynamicTrio)
           ExcludeSemantics(
-            child: IgnorePointer(
-              child: ListenableBuilder(
-                listenable: _controller,
-                builder: (context, _) => _DynamicTrioValues(
-                  height: widget.height,
-                  rawIndex: _controller.rawCenteredLogicalIndex,
-                  isMoving: _controller.hasActiveScrollActivity,
-                  origin: _motionOrigin ?? widget.navigation.state,
-                  candidateForOffset: widget.candidateForOffset,
-                  labelForCandidate: widget.labelForCandidate,
+            child: ClipRect(
+              child: IgnorePointer(
+                child: ListenableBuilder(
+                  listenable: _controller,
+                  builder: (context, _) => _DynamicTrioValues(
+                    height: widget.height,
+                    rawIndex: _controller.rawCenteredLogicalIndex,
+                    isMoving: _controller.hasActiveScrollActivity,
+                    origin: _motionOrigin ?? widget.navigation.state,
+                    candidateForOffset: widget.candidateForOffset,
+                    labelForCandidate: widget.labelForCandidate,
+                  ),
                 ),
               ),
             ),
