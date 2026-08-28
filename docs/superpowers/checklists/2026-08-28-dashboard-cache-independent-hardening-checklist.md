@@ -18,7 +18,7 @@ Android screenshots `Screenshot_20260828-191823.png`,
 | COLL-01 | No opaque grey slab through collapse/expand. Screenshot `191823`. | cascade/card hierarchy | Production Card2 opts into opaque-content clipping; 0/.25/.5/.75/1 raster and production-composition tests pass. | DONE |
 | SUM-01 | Real colored SUM raster: green starts clockwise of top; 3/6 green; warning .75; danger .9; red reaches top. | SUM scale shader/painter | Pixel/raster samples on both colored styles plus marker-coordinate test pass. | DONE |
 | REG-01 | Preserve live-interaction/search/query identities, fling, direct Category/Partner focus and LogBox identities. | regression suites | `scripts/test-fluvi-fast.sh`: 280 passing tests. | DONE |
-| VERIFY-01 | Analyze, diff check, prescribed online Android CI and human APK. | verification | Exact command/run evidence; downloaded APK + SHA-256. | NOT DONE |
+| VERIFY-01 | Analyze, diff check, prescribed online Android CI and human APK. | verification | `flutter analyze --no-fatal-infos` clean (73.3s); `scripts/test-fluvi-fast.sh` 280 passing; GitHub Actions run `33213729885` for `6544b714fd0f4b858d117a441ba9a1e14aed7458` succeeded, including the A–J profile gate; downloaded `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_6544b71.apk`, SHA-256 `474d3cb94ea369301a314f6025f183242db05a44f39f4ae6384724c86e19a47e`. | DONE |
 | VERIFY-02 | Physical Android acceptance. | human-device validation | Warm/cold, mixed input, rhythm, collapse and both SUM styles tested. | BLOCKED (no attached/ADB device yet) |
 
 ## Recorded root-cause evidence
