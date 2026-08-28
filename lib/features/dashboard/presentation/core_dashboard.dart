@@ -48,6 +48,8 @@ import 'dashboard_shell_presentation.dart';
 import 'dashboard_shadow_style.dart';
 import 'summary_pill_variant.dart';
 import 'dashboard_summary_presentation.dart';
+import 'dashboard_summary_auto_reset_controller.dart';
+import 'dashboard_upper_vertical_gesture_coordinator.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/year_month.dart';
@@ -126,6 +128,9 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardHeaderStaticColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
   late final DashboardHeaderStaticColorPolicy _mindHeaderColorPolicy;
+  late final DashboardSummaryAutoResetController _summaryAutoResetController;
+  late final DashboardSummaryAutoResetMotionRegistry _summaryAutoResetMotions;
+  late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
 
@@ -142,6 +147,13 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetContentCardStyle = BudgetContentCardStyleController();
     _budgetSectionOrderController = BudgetSectionOrderController();
     _summaryPresentationController = DashboardSummaryPresentationController();
+    _summaryAutoResetController = DashboardSummaryAutoResetController();
+    _summaryAutoResetMotions = DashboardSummaryAutoResetMotionRegistry();
+    _upperVerticalGestures = DashboardUpperVerticalGestureCoordinator(
+      expansion: controller.expansion,
+      mapViewportDelta: (delta) => delta,
+      onForegroundInteraction: _cancelSummaryAutoReset,
+    );
     _cornerRoundnessController = DashboardCornerRoundnessController();
     _shadowStyleController = DashboardShadowStyleController();
     _borderController = DashboardBorderController();
@@ -438,6 +450,10 @@ class _CoreDashboardState extends State<CoreDashboard>
 
   @override
   void dispose() {
+    _summaryAutoResetController.cancel();
+    _summaryAutoResetMotions.cancelMountedMotion();
+    _summaryAutoResetController.dispose();
+    _upperVerticalGestures.cancel();
     controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
     controller.setMotionLaneActive(DashboardMotionLane.summaryText, false);
     controller.visibleFrames.removeListener(_onBudgetDistributionVisibleFrame);
@@ -512,6 +528,9 @@ class _CoreDashboardState extends State<CoreDashboard>
           : 0,
       builder: (context, frame) {
         final geometry = frame.geometry;
+        _upperVerticalGestures.updateViewportMapper(
+          geometry.mapViewportVerticalDragToController,
+        );
         Widget profileRenderProbe({
           required Widget child,
           required DashboardPerformanceMetric layoutMetric,
@@ -590,6 +609,7 @@ class _CoreDashboardState extends State<CoreDashboard>
                                     onBudgetAvatarMotionActiveChanged:
                                         (active) {
                                           if (active) {
+                                            _cancelSummaryAutoReset();
                                             controller
                                                 .beginBudgetAvatarMotion();
                                           } else {
@@ -598,18 +618,13 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         },
                                     presentationFor: frame.presentationFor,
                                     onVerticalExpansionStart:
-                                        controller.expansion.beginDrag,
+                                        _upperVerticalGestures.begin,
                                     onVerticalExpansionDragBy:
-                                        (
-                                          viewportDelta,
-                                        ) => controller.expansion.dragBy(
-                                          geometry
-                                              .mapViewportVerticalDragToController(
-                                                viewportDelta,
-                                              ),
-                                        ),
+                                        _upperVerticalGestures.dragByViewport,
                                     onVerticalExpansionEnd:
-                                        controller.expansion.endDrag,
+                                        _upperVerticalGestures.end,
+                                    upperVerticalGestures:
+                                        _upperVerticalGestures,
                                   ),
                                   _FramePosition(
                                     bounds: geometry.actionBounds,
@@ -635,8 +650,18 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         performanceCounters:
                                             controller.performanceCounters,
                                         onSelected: (direction) {
+                                          _cancelSummaryAutoReset();
                                           controller.selectDirection(direction);
                                         },
+                                        onVerticalDragStart: (_) =>
+                                            _upperVerticalGestures.begin(),
+                                        onVerticalDragUpdate: (details) =>
+                                            _upperVerticalGestures
+                                                .dragByViewport(
+                                                  details.delta.dy,
+                                                ),
+                                        onVerticalDragEnd: (_) =>
+                                            _upperVerticalGestures.end(),
                                       ),
                                     ),
                                   ),
@@ -661,6 +686,12 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             DashboardMotionLane.amount,
                                             active,
                                           ),
+                                      autoResetController:
+                                          _summaryAutoResetController,
+                                      autoResetMotions:
+                                          _summaryAutoResetMotions,
+                                      upperVerticalGestures:
+                                          _upperVerticalGestures,
                                     ),
                                   ),
                                   _FramePosition(
@@ -864,16 +895,13 @@ class _CoreDashboardState extends State<CoreDashboard>
                                       isDragging: frame.isExpansionDragging,
                                       onTap: controller.expansion.toggle,
                                       onVerticalDragStart: (_) =>
-                                          controller.expansion.beginDrag(),
+                                          _upperVerticalGestures.begin(),
                                       onVerticalDragUpdate: (details) =>
-                                          controller.expansion.dragBy(
-                                            geometry
-                                                .mapViewportVerticalDragToController(
-                                                  details.delta.dy,
-                                                ),
+                                          _upperVerticalGestures.dragByViewport(
+                                            details.delta.dy,
                                           ),
                                       onVerticalDragEnd: (_) =>
-                                          controller.expansion.endDrag(),
+                                          _upperVerticalGestures.end(),
                                     ),
                                   ),
                                   _DashboardHeaderVisualTunerOverlay(
@@ -920,6 +948,11 @@ class _CoreDashboardState extends State<CoreDashboard>
   void _onLayoutPresentationChanged() {
     if (mounted) setState(() {});
   }
+
+  void _cancelSummaryAutoReset() {
+    _summaryAutoResetController.cancel();
+    _summaryAutoResetMotions.cancelMountedMotion();
+  }
 }
 
 class _DashboardSummaryRegion extends StatelessWidget {
@@ -931,6 +964,9 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.motionController,
     required this.onMotionActiveChanged,
     required this.onAmountMotionActiveChanged,
+    required this.autoResetController,
+    required this.autoResetMotions,
+    required this.upperVerticalGestures,
   });
 
   final DashboardBounds bounds;
@@ -940,6 +976,9 @@ class _DashboardSummaryRegion extends StatelessWidget {
   final SummaryNavigationMotionController motionController;
   final ValueChanged<bool> onMotionActiveChanged;
   final ValueChanged<bool> onAmountMotionActiveChanged;
+  final DashboardSummaryAutoResetController autoResetController;
+  final DashboardSummaryAutoResetMotionRegistry autoResetMotions;
+  final DashboardUpperVerticalGestureCoordinator upperVerticalGestures;
 
   @override
   Widget build(BuildContext context) =>
@@ -960,11 +999,44 @@ class _DashboardSummaryRegion extends StatelessWidget {
                   presentation: presentation,
                   onSelectorMotionActiveChanged: (active) {
                     if (active) {
+                      if (!autoResetMotions.isExecuting) {
+                        autoResetController.cancel();
+                      }
                       controller.beginSegmentedSummaryMotion();
                     } else {
                       controller.endSegmentedSummaryMotion();
                     }
                   },
+                  onSelectorDirectInputStarted: () {
+                    autoResetController.cancel();
+                    autoResetMotions.cancelMountedMotion();
+                  },
+                  onBackgroundTap: () {
+                    // A second background tap supersedes even a reset that
+                    // is currently waiting for a selector to mount.
+                    autoResetMotions.cancelMountedMotion();
+                    final navigation = controller.navigation.state;
+                    final plan = DashboardSummaryAutoResetPlan.resolve(
+                      plane: navigation.plane,
+                      isRailOpen: navigation.isRailOpen,
+                      year: navigation.yearCursor,
+                      month: navigation.monthCursor.month,
+                      logicalToday: controller.logicalAsOfDate,
+                    );
+                    unawaited(
+                      autoResetController.start(
+                        plan: plan,
+                        runStep: autoResetMotions.run,
+                      ),
+                    );
+                  },
+                  onBackgroundVerticalDragStart: (_) =>
+                      upperVerticalGestures.begin(),
+                  onBackgroundVerticalDragUpdate: (details) =>
+                      upperVerticalGestures.dragByViewport(details.delta.dy),
+                  onBackgroundVerticalDragEnd: (_) =>
+                      upperVerticalGestures.end(),
+                  autoResetMotionRegistry: autoResetMotions,
                   componentCandidateProjector:
                       ({
                         required base,

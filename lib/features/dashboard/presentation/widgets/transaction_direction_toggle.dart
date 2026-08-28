@@ -25,6 +25,9 @@ class TransactionDirectionToggle extends StatelessWidget {
     required this.onSelected,
     this.selectedIconScaleAnimation,
     this.performanceCounters,
+    this.onVerticalDragStart,
+    this.onVerticalDragUpdate,
+    this.onVerticalDragEnd,
   });
 
   final DashboardBounds bounds;
@@ -35,6 +38,9 @@ class TransactionDirectionToggle extends StatelessWidget {
   final ValueChanged<TransactionDirection> onSelected;
   final Animation<double>? selectedIconScaleAnimation;
   final DashboardPerformanceCounters? performanceCounters;
+  final GestureDragStartCallback? onVerticalDragStart;
+  final GestureDragUpdateCallback? onVerticalDragUpdate;
+  final GestureDragEndCallback? onVerticalDragEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +72,9 @@ class TransactionDirectionToggle extends StatelessWidget {
                   ? selectedIconScaleAnimation
                   : null,
               onTap: onSelected,
+              onVerticalDragStart: onVerticalDragStart,
+              onVerticalDragUpdate: onVerticalDragUpdate,
+              onVerticalDragEnd: onVerticalDragEnd,
               performanceCounters: performanceCounters,
               borderRadius: controlRadius,
             ),
@@ -87,6 +96,9 @@ class TransactionDirectionToggle extends StatelessWidget {
                   ? selectedIconScaleAnimation
                   : null,
               onTap: onSelected,
+              onVerticalDragStart: onVerticalDragStart,
+              onVerticalDragUpdate: onVerticalDragUpdate,
+              onVerticalDragEnd: onVerticalDragEnd,
               performanceCounters: performanceCounters,
               borderRadius: controlRadius,
             ),
@@ -110,6 +122,9 @@ class _DirectionButton extends StatelessWidget {
     required this.onTap,
     required this.performanceCounters,
     required this.borderRadius,
+    this.onVerticalDragStart,
+    this.onVerticalDragUpdate,
+    this.onVerticalDragEnd,
   });
 
   final TransactionDirection direction;
@@ -123,6 +138,9 @@ class _DirectionButton extends StatelessWidget {
   final ValueChanged<TransactionDirection> onTap;
   final DashboardPerformanceCounters? performanceCounters;
   final BorderRadius borderRadius;
+  final GestureDragStartCallback? onVerticalDragStart;
+  final GestureDragUpdateCallback? onVerticalDragUpdate;
+  final GestureDragEndCallback? onVerticalDragEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +149,9 @@ class _DirectionButton extends StatelessWidget {
     ).depthFor(DashboardCornerSurfaceFamily.directionControl);
     return GestureDetector(
       onTap: () => onTap(direction),
+      onVerticalDragStart: onVerticalDragStart,
+      onVerticalDragUpdate: onVerticalDragUpdate,
+      onVerticalDragEnd: onVerticalDragEnd,
       child: SizedBox(
         height: AppSelectorMetrics.directionControlHeight,
         child: FluviRoundedBox(

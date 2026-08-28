@@ -169,6 +169,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     required this.headerKey,
     required this.labelKey,
     required this.label,
+    this.labelContent,
     this.visualController,
     this.visualFrameListenable,
     this.detail,
@@ -183,6 +184,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final Key headerKey;
   final Key labelKey;
   final String label;
+  final Widget? labelContent;
   final DashboardHeaderVisualController? visualController;
   final ValueListenable<DashboardHeaderVisualFrame>? visualFrameListenable;
   final Widget? detail;
@@ -214,13 +216,15 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
           Positioned(
             top: 12,
             right: visualController == null ? 14 : 62,
-            child: Text(
-              label,
-              key: labelKey,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: FluviVisualTokens.textSecondary,
-              ),
-            ),
+            child:
+                labelContent ??
+                Text(
+                  label,
+                  key: labelKey,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: FluviVisualTokens.textSecondary,
+                  ),
+                ),
           ),
           if (detail case final detail?)
             Positioned(

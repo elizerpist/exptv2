@@ -11,7 +11,6 @@ import '../../../../core/design/dashboard_layout_metrics.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
-import '../../application/dashboard_budget_scope_analysis.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_budget_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
@@ -22,6 +21,7 @@ import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import '../dashboard_budget_header_presentation.dart';
 import 'budget_category_avatar_rail.dart';
 import 'budget_allocation_partition_lane.dart';
@@ -49,6 +49,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.onAvatarMotionActiveChanged,
     this.headerVisualController,
     this.headerVisualFrame,
+    this.upperVerticalGestures,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -65,6 +66,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final ValueChanged<bool>? onAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +118,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         contentCardStyle: contentCardStyle,
                         rhythm: rhythm,
                         drilldown: drilldown,
+                        upperVerticalGestures: upperVerticalGestures,
                       ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
@@ -214,6 +217,21 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 headerKey: const ValueKey('dashboard-core-mode-budget-header'),
                 labelKey: const ValueKey('dashboard-core-mode-label-budget'),
                 label: 'budget',
+                labelContent: presentationController == null
+                    ? null
+                    : ValueListenableBuilder<DashboardBudgetPresentationState>(
+                        valueListenable: presentationController!,
+                        builder: (context, state, _) => Text(
+                          state.header.metric.modeLabel,
+                          key: const ValueKey(
+                            'dashboard-core-mode-label-budget',
+                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: FluviVisualTokens.textSecondary,
+                              ),
+                        ),
+                      ),
                 visualController: headerVisualController,
                 visualFrameListenable: headerVisualFrame,
                 // The source title starts at x=20/y=16. Text keeps the
@@ -229,14 +247,12 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         valueListenable: presentationController!,
                         builder: (context, state, child) {
                           final header = state.header;
-                          final dayPace =
-                              header.scopeAnalysis
-                                  is DashboardBudgetDayProjectionAnalysis;
+                          final metric = header.metric;
                           final amount = header.isAvailable
-                              ? '${dayPace ? DashboardPreparedFormatter.amountMinorPerDay(header.displayNumeratorScaled100!) : DashboardPreparedFormatter.amountMinor(header.displayNumeratorScaled100!)} / '
+                              ? '${metric.usesPerDayAmounts ? DashboardPreparedFormatter.amountMinorPerDay(header.displayNumeratorScaled100!) : DashboardPreparedFormatter.amountMinor(header.displayNumeratorScaled100!)} / '
                                     '${header.displayDenominatorScaled100 == null
                                         ? '—'
-                                        : dayPace
+                                        : metric.usesPerDayAmounts
                                         ? DashboardPreparedFormatter.amountMinorPerDay(header.displayDenominatorScaled100!)
                                         : DashboardPreparedFormatter.amountMinor(header.displayDenominatorScaled100!)}'
                               : '— / —';
@@ -287,7 +303,28 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
-                                        const SizedBox(height: 7),
+                                        Text(
+                                          metric.metricLabel,
+                                          key: const ValueKey(
+                                            'budget-header-metric-label',
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: headerProfile.foreground
+                                                .withValues(alpha: .72),
+                                            // The fixed Header already has a
+                                            // seven-source-pixel interline
+                                            // lane between target and amount.
+                                            // The metric owns that existing
+                                            // lane, retaining the accepted
+                                            // Header/partition geometry even
+                                            // at its collapsed height.
+                                            fontSize: 7,
+                                            height: 1,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
                                         FittedBox(
                                           fit: BoxFit.scaleDown,
                                           alignment: Alignment.centerLeft,

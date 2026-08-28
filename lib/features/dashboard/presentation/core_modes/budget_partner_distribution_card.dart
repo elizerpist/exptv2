@@ -18,6 +18,7 @@ import 'budget_rhythm_bar_chart.dart';
 import 'budget_clay_donut_scene.dart';
 import 'budget_partner_distribution_visual_bank.dart';
 import 'budget_partner_visual_intent.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 typedef BudgetPartnerFocusCommit =
     Future<bool> Function({
@@ -39,6 +40,7 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
     this.drilldown,
     this.partnerFocusCommit,
     this.focusController,
+    this.upperVerticalGestures,
   });
 
   final DashboardBudgetPresentationController presentation;
@@ -57,6 +59,7 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
   /// focused widget tests verify acknowledgement without a repository setup.
   @visibleForTesting
   final DashboardEphemeralFocusController? focusController;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   State<BudgetPartnerDistributionCard> createState() =>
@@ -330,6 +333,7 @@ class _BudgetPartnerDistributionCardState
       rightHeading: 'Partnerek',
       listKey: const ValueKey('budget-partner-distribution-list'),
       emptyLabel: 'Nincs partner',
+      upperVerticalGestures: widget.upperVerticalGestures,
       rows: <Widget>[
         for (final entry in frame.entries)
           BudgetDistributionLegendRow(

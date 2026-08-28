@@ -163,6 +163,7 @@ final class BudgetProgressRingGeometry {
   static const sourceTrackRadius = 107.52;
   static const sourceTrackWidth = 24.0;
   static const roundedCapRadius = 12.0;
+  static const canonicalClockwiseStartAngle = -math.pi / 2;
 
   final String id;
   final Size viewport;
@@ -367,12 +368,106 @@ final class BudgetProgressRingDayPaceMarkers {
   double get breakEvenGaugeRatio => _breakEvenGaugeRatio;
 }
 
-/// Shared 3D material for the two DAY break-even reference spheres.
-abstract final class BudgetProgressRingSphereMaterial {
+/// The one 3D sphere material language used by DAY and SUM reference marks.
+///
+/// DAY preserves its accepted neutral material. SUM changes only the semantic
+/// base hue through [forHealthColor], keeping the same highlight/body/depth
+/// construction and sphere geometry rather than introducing another marker
+/// asset.
+@immutable
+final class BudgetProgressRingSphereMaterial {
+  const BudgetProgressRingSphereMaterial._({
+    required this.base,
+    required this.highlight,
+    required this.body,
+    required this.depth,
+  });
+
   static const sourceId = 'fluvi-selected-budget-sphere-marker-v1';
-  static const body = Color(0xFFB3A8C4);
-  static const depth = Color(0xFF655977);
-  static const highlight = Color(0xD9FFFFFF);
+  static const defaultBody = Color(0xFFB3A8C4);
+  static const defaultDepth = Color(0xFF655977);
+  static const defaultHighlight = Color(0xD9FFFFFF);
+
+  static const day = BudgetProgressRingSphereMaterial._(
+    base: defaultBody,
+    highlight: defaultHighlight,
+    body: defaultBody,
+    depth: defaultDepth,
+  );
+
+  factory BudgetProgressRingSphereMaterial.forHealthColor(Color base) {
+    final hsl = HSLColor.fromColor(base);
+    return BudgetProgressRingSphereMaterial._(
+      base: base,
+      highlight: hsl
+          .withLightness((hsl.lightness + .26).clamp(0, 1).toDouble())
+          .toColor()
+          .withValues(alpha: .90),
+      body: base,
+      depth: hsl
+          .withLightness((hsl.lightness - .24).clamp(0, 1).toDouble())
+          .toColor(),
+    );
+  }
+
+  final Color base;
+  final Color highlight;
+  final Color body;
+  final Color depth;
+
+  String get sourceGeometryId => BudgetProgressRingSphereMaterial.sourceId;
+  bool get usesCategoryHueShift => false;
+}
+
+/// One semantic SUM reference point. Its ratio is measured from the shared
+/// canonical top origin and advances clockwise in Canvas angle space.
+@immutable
+final class BudgetProgressRingSumScaleMarker {
+  const BudgetProgressRingSumScaleMarker({
+    required this.ratio,
+    required this.center,
+    required this.material,
+  });
+
+  final double ratio;
+  final Offset center;
+  final BudgetProgressRingSphereMaterial material;
+}
+
+/// Static SUM scale geometry. The short SUM arc remains the selected current
+/// value marker; these three spheres are persistent reference points only.
+abstract final class BudgetProgressRingSumScaleMarkers {
+  static const ratios = <double>[.50, .75, .90];
+
+  static List<BudgetProgressRingSumScaleMarker> resolve({
+    required BudgetProgressRingGeometry geometry,
+  }) {
+    const colors = <Color>[
+      FluviVisualTokens.budgetProgressHealthy,
+      FluviVisualTokens.budgetProgressWarning,
+      FluviVisualTokens.budgetProgressDanger,
+    ];
+    return List<BudgetProgressRingSumScaleMarker>.unmodifiable(
+      List<BudgetProgressRingSumScaleMarker>.generate(ratios.length, (index) {
+        final ratio = ratios[index];
+        final angle =
+            BudgetProgressRingGeometry.canonicalClockwiseStartAngle +
+            math.pi * 2 * ratio;
+        return BudgetProgressRingSumScaleMarker(
+          ratio: ratio,
+          center:
+              geometry.center +
+              Offset(
+                math.cos(angle) * geometry.trackRadius,
+                math.sin(angle) * geometry.trackRadius,
+              ),
+          material: BudgetProgressRingSphereMaterial.forHealthColor(
+            colors[index],
+          ),
+        );
+      }),
+    );
+  }
 }
 
 /// One atomic Budget selection value. It carries both the exact semantic
@@ -1000,7 +1095,7 @@ final class _SelectionChromePainter extends CustomPainter {
       center: ringGeometry.center,
       radius: ringGeometry.trackRadius,
     );
-    const startAngle = -math.pi / 2;
+    const startAngle = BudgetProgressRingGeometry.canonicalClockwiseStartAngle;
     final sweep =
         BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(
           sourceProgress,
@@ -1200,12 +1295,24 @@ final class _SelectionChromePainter extends CustomPainter {
       final markers = BudgetProgressRingDayPaceMarkers.resolve(
         geometry: ringGeometry,
       );
-      _paintDayPaceSphere(canvas, markers.left.center);
-      _paintDayPaceSphere(canvas, markers.right.center);
+      _paintSphere(
+        canvas,
+        center: markers.left.center,
+        material: BudgetProgressRingSphereMaterial.day,
+      );
+      _paintSphere(
+        canvas,
+        center: markers.right.center,
+        material: BudgetProgressRingSphereMaterial.day,
+      );
     }
   }
 
-  void _paintDayPaceSphere(Canvas canvas, Offset center) {
+  void _paintSphere(
+    Canvas canvas, {
+    required Offset center,
+    required BudgetProgressRingSphereMaterial material,
+  }) {
     final bodyRect = Rect.fromCircle(
       center: center,
       radius: BudgetProgressRingDayPaceMarkers.markerRadius,
@@ -1214,28 +1321,24 @@ final class _SelectionChromePainter extends CustomPainter {
       center + const Offset(0, 2),
       BudgetProgressRingDayPaceMarkers.markerRadius,
       Paint()
-        ..color = BudgetProgressRingSphereMaterial.depth.withValues(alpha: .28)
+        ..color = material.depth.withValues(alpha: .28)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
     );
     canvas.drawCircle(
       center,
       BudgetProgressRingDayPaceMarkers.markerRadius,
       Paint()
-        ..shader = const RadialGradient(
+        ..shader = RadialGradient(
           center: Alignment(-.35, -.4),
           radius: .9,
-          colors: <Color>[
-            BudgetProgressRingSphereMaterial.highlight,
-            BudgetProgressRingSphereMaterial.body,
-            BudgetProgressRingSphereMaterial.depth,
-          ],
+          colors: <Color>[material.highlight, material.body, material.depth],
           stops: <double>[0, .42, 1],
         ).createShader(bodyRect),
     );
     canvas.drawCircle(
       center + const Offset(-2.5, -3),
       2.2,
-      Paint()..color = BudgetProgressRingSphereMaterial.highlight,
+      Paint()..color = material.highlight,
     );
   }
 
@@ -1264,11 +1367,20 @@ final class _SelectionChromePainter extends CustomPainter {
 
   void _paintTypicalMarker(Canvas canvas, Rect trackRect, double startAngle) {
     final rawPosition = typicalMarkerPosition;
-    if (rawPosition == null) return;
-    const markerSweep = math.pi * 2 * .055;
-    final position = rawPosition.clamp(0.0, 1.0).toDouble();
-    final markerStart = startAngle + position * (math.pi * 2 - markerSweep);
-    _paintActiveArc(canvas, trackRect, markerStart, markerSweep);
+    if (rawPosition != null) {
+      const markerSweep = math.pi * 2 * .055;
+      final position = rawPosition.clamp(0.0, 1.0).toDouble();
+      final markerStart = startAngle + position * (math.pi * 2 - markerSweep);
+      _paintActiveArc(canvas, trackRect, markerStart, markerSweep);
+    }
+    // The current short arc remains the selected typical value. Reference
+    // scale points intentionally paint after it so their fixed thresholds stay
+    // legible when the current marker reaches one of them.
+    for (final marker in BudgetProgressRingSumScaleMarkers.resolve(
+      geometry: ringGeometry,
+    )) {
+      _paintSphere(canvas, center: marker.center, material: marker.material);
+    }
   }
 
   @override

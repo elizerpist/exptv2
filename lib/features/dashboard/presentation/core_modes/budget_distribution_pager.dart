@@ -13,6 +13,7 @@ import 'budget_partner_distribution_card.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import '../budget_content_card_style.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 enum BudgetDistributionPage { category, partner }
 
@@ -90,6 +91,7 @@ class BudgetDistributionPager extends StatefulWidget {
     this.contentCardStyle,
     this.rhythm,
     this.drilldown,
+    this.upperVerticalGestures,
   });
 
   final BudgetDistributionPageController controller;
@@ -101,6 +103,7 @@ class BudgetDistributionPager extends StatefulWidget {
   final ValueListenable<BudgetContentLayout>? contentCardStyle;
   final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   State<BudgetDistributionPager> createState() =>
@@ -174,6 +177,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 drawableFrames: widget.drawableFrames,
                 avatarRailController: widget.avatarRailController,
                 expandDonutToFit: widget.expandCategoryDonutToFit,
+                upperVerticalGestures: widget.upperVerticalGestures,
               ),
             ),
             BudgetDistributionPage.partner => BudgetDistributionPageCard(
@@ -185,6 +189,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 expandDonutToFit: widget.expandCategoryDonutToFit,
                 rhythm: widget.rhythm,
                 drilldown: widget.drilldown,
+                upperVerticalGestures: widget.upperVerticalGestures,
               ),
             ),
           },

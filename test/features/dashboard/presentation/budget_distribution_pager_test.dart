@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_category_d
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_rhythm_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
@@ -16,6 +17,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -28,6 +30,68 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
+  testWidgets(
+    'distribution legend retains its controller and hands boundary overscroll to Header expansion',
+    (tester) async {
+      final expansion = DashboardExpansionController();
+      final coordinator = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      Widget surface(String heading) => MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 378,
+            height: 240,
+            child: BudgetDistributionPageSurface(
+              key: const ValueKey('stable-distribution-surface'),
+              heading: Text(heading),
+              donut: const SizedBox(),
+              rightHeading: 'Lista',
+              listKey: const ValueKey('stable-distribution-list'),
+              emptyLabel: '—',
+              upperVerticalGestures: coordinator,
+              rows: List<Widget>.generate(
+                40,
+                (index) => SizedBox(height: 24, child: Text('row $index')),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(surface('one'));
+      final scrollableFinder = find.descendant(
+        of: find.byKey(const ValueKey('stable-distribution-list')),
+        matching: find.byType(Scrollable),
+      );
+      final oldScrollable = tester.state<ScrollableState>(scrollableFinder);
+      final oldPosition = oldScrollable.position;
+      oldPosition.jumpTo(48);
+
+      await tester.pumpWidget(surface('two'));
+      await tester.pump();
+      final currentScrollable = tester.state<ScrollableState>(scrollableFinder);
+      expect(identical(currentScrollable, oldScrollable), isTrue);
+      expect(identical(currentScrollable.position, oldPosition), isTrue);
+      expect(currentScrollable.position.pixels, 48);
+
+      currentScrollable.position.jumpTo(0);
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('stable-distribution-list')),
+        ),
+      );
+      await gesture.moveBy(const Offset(0, 80));
+      await tester.pump();
+      expect(expansion.isDragging, isTrue);
+      expect(currentScrollable.position.pixels, 0);
+      await gesture.up();
+      await tester.pump();
+      expect(expansion.isDragging, isFalse);
+    },
+  );
+
   testWidgets(
     'category donut derives its useful diameter from the lower-card constraints',
     (tester) async {

@@ -109,6 +109,41 @@ void main() {
     expect(markers.breakEvenGaugeRatio, .75);
   });
 
+  test('SUM scale exposes three clockwise shared-track health spheres', () {
+    final geometry = BudgetProgressRingGeometry.source;
+    final markers = BudgetProgressRingSumScaleMarkers.resolve(
+      geometry: geometry,
+    );
+
+    expect(markers, hasLength(3));
+    expect(markers.map((marker) => marker.ratio), <double>[.50, .75, .90]);
+    expect(markers.map((marker) => marker.material.base), <Color>[
+      FluviVisualTokens.budgetProgressHealthy,
+      FluviVisualTokens.budgetProgressWarning,
+      FluviVisualTokens.budgetProgressDanger,
+    ]);
+    for (final marker in markers) {
+      expect(
+        (marker.center - geometry.center).distance,
+        closeTo(geometry.trackRadius, .000001),
+        reason: 'SUM reference spheres must sit on the shared track centreline',
+      );
+      expect(
+        marker.material.sourceGeometryId,
+        BudgetProgressRingSphereMaterial.sourceId,
+      );
+      expect(marker.material.usesCategoryHueShift, isFalse);
+    }
+    // Canvas angles increase clockwise: .50 is bottom, .75 left and .90 is
+    // then in the upper-left quadrant from the shared top origin.
+    expect(markers[0].center.dx, closeTo(154, .000001));
+    expect(markers[0].center.dy, closeTo(261.52, .000001));
+    expect(markers[1].center.dx, closeTo(46.48, .000001));
+    expect(markers[1].center.dy, closeTo(154, .000001));
+    expect(markers[2].center.dx, lessThan(geometry.center.dx));
+    expect(markers[2].center.dy, lessThan(geometry.center.dy));
+  });
+
   test(
     'YEAR segments are twelve fixed health cells without partial progress',
     () {

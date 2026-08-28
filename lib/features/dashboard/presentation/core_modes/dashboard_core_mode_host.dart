@@ -20,6 +20,7 @@ import 'dashboard_header_visual_tuner.dart';
 import 'mind_dashboard_core_surface.dart';
 import '../budget_content_card_style.dart';
 import '../budget_section_order.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 typedef DashboardCoreModePresentationLookup =
     DashboardCoreModePresentation Function(DashboardModeSpec mode);
@@ -52,6 +53,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
+    this.upperVerticalGestures,
   });
 
   final DashboardCoreModeController controller;
@@ -74,6 +76,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   State<DashboardCoreModeHost> createState() => _DashboardCoreModeHostState();
@@ -185,6 +188,21 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
+        Positioned(
+          left: presentation.geometry.modeContentBounds.left,
+          top: presentation.geometry.modeContentBounds.top,
+          width: presentation.geometry.modeContentBounds.width,
+          height: presentation.geometry.modeContentBounds.height,
+          child: GestureDetector(
+            key: const ValueKey('dashboard-core-mode-content-gesture-region'),
+            behavior: HitTestBehavior.translucent,
+            dragStartBehavior: DragStartBehavior.down,
+            onPanStart: _onPanStart,
+            onPanUpdate: _onPanUpdate,
+            onPanEnd: _onPanEnd,
+            onPanCancel: _onPanCancel,
+          ),
+        ),
         _buildModeSurface(mode, presentation),
         Positioned(
           left: headerBounds.left,
@@ -238,6 +256,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         rhythm: widget.budgetRhythm,
         drilldown: widget.budgetDrilldown,
         onAvatarMotionActiveChanged: widget.onBudgetAvatarMotionActiveChanged,
+        upperVerticalGestures: widget.upperVerticalGestures,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.budgetHeaderVisualFrame,
       ),

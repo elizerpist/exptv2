@@ -193,6 +193,89 @@ final class DashboardBudgetLiveSelectionState {
       : null;
 }
 
+/// The Header's vocabulary is a projection of the typed Budget analysis, not
+/// a second interpretation of the selected time plane.  Keeping it here
+/// prevents DAY/MONTH/YEAR/SUM wording from drifting across Header widgets.
+@immutable
+final class DashboardBudgetHeaderMetricPresentation {
+  const DashboardBudgetHeaderMetricPresentation._({
+    required this.metricLabel,
+    required this.modeLabel,
+    required this.usesPerDayAmounts,
+    required this.supportingStatusKind,
+  });
+
+  factory DashboardBudgetHeaderMetricPresentation.forAnalysis(
+    DashboardBudgetScopeAnalysis? analysis,
+  ) => switch (analysis) {
+    DashboardBudgetDayProjectionAnalysis() =>
+      const DashboardBudgetHeaderMetricPresentation._day(),
+    DashboardBudgetMonthAnalysis() =>
+      const DashboardBudgetHeaderMetricPresentation._month(),
+    DashboardBudgetYearAnalysis() =>
+      const DashboardBudgetHeaderMetricPresentation._year(),
+    DashboardBudgetTypicalMonthAnalysis() =>
+      const DashboardBudgetHeaderMetricPresentation._sum(),
+    null => const DashboardBudgetHeaderMetricPresentation._unavailable(),
+  };
+
+  const DashboardBudgetHeaderMetricPresentation._day()
+    : this._(
+        metricLabel: 'Napi tempó',
+        modeLabel: 'tempó',
+        usesPerDayAmounts: true,
+        supportingStatusKind: DashboardBudgetHeaderSupportingStatusKind.pace,
+      );
+
+  const DashboardBudgetHeaderMetricPresentation._month()
+    : this._(
+        metricLabel: 'Havi állás',
+        modeLabel: 'havi budget',
+        usesPerDayAmounts: false,
+        supportingStatusKind:
+            DashboardBudgetHeaderSupportingStatusKind.utilization,
+      );
+
+  const DashboardBudgetHeaderMetricPresentation._year()
+    : this._(
+        metricLabel: 'Éves állás',
+        modeLabel: 'éves budget',
+        usesPerDayAmounts: false,
+        supportingStatusKind:
+            DashboardBudgetHeaderSupportingStatusKind.annualAggregate,
+      );
+
+  const DashboardBudgetHeaderMetricPresentation._sum()
+    : this._(
+        metricLabel: 'Havi átlag',
+        modeLabel: 'alap budget',
+        usesPerDayAmounts: false,
+        supportingStatusKind:
+            DashboardBudgetHeaderSupportingStatusKind.typicalUtilization,
+      );
+
+  const DashboardBudgetHeaderMetricPresentation._unavailable()
+    : this._(
+        metricLabel: 'Budget',
+        modeLabel: 'budget',
+        usesPerDayAmounts: false,
+        supportingStatusKind: DashboardBudgetHeaderSupportingStatusKind.none,
+      );
+
+  final String metricLabel;
+  final String modeLabel;
+  final bool usesPerDayAmounts;
+  final DashboardBudgetHeaderSupportingStatusKind supportingStatusKind;
+}
+
+enum DashboardBudgetHeaderSupportingStatusKind {
+  none,
+  pace,
+  utilization,
+  annualAggregate,
+  typicalUtilization,
+}
+
 /// Rendering adapter for the header. It owns no independent data: all values
 /// are proxied from the exact same immutable selection used by the ring.
 @immutable
@@ -216,6 +299,8 @@ final class DashboardBudgetHeaderPresentation {
   DashboardBudgetEditContext? get editContext => _selection.editContext;
   int? get coreRevision => _selection.coreRevision;
   String get analysisScopeLabel => _selection.analysisScopeLabel;
+  DashboardBudgetHeaderMetricPresentation get metric =>
+      DashboardBudgetHeaderMetricPresentation.forAnalysis(scopeAnalysis);
   bool get isAvailable => _selection.isAvailable;
   bool get hasLimit => _selection.hasLimit;
   DashboardBudgetLimitEditContext? get limitEditContext =>

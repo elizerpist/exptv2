@@ -17,6 +17,7 @@ import 'budget_category_distribution_visual_bank.dart';
 import 'budget_clay_donut_scene.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 /// Budget card2's category-distribution page. It receives already-prepared
 /// semantic and vector banks; it is only a renderer plus command source.
@@ -27,6 +28,7 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
     required this.drawableFrames,
     required this.avatarRailController,
     this.expandDonutToFit = false,
+    this.upperVerticalGestures,
   });
 
   final DashboardBudgetPresentationController presentation;
@@ -34,6 +36,7 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
   final bool expandDonutToFit;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   State<BudgetCategoryDistributionCard> createState() =>
@@ -149,6 +152,7 @@ class _BudgetCategoryDistributionCardState
       rightHeading: 'Kategóriák',
       listKey: const ValueKey('budget-category-distribution-list'),
       expandDonutToFit: widget.expandDonutToFit,
+      upperVerticalGestures: widget.upperVerticalGestures,
       emptyLabel: direction == LedgerDirection.income
           ? 'Nincs bevétel'
           : 'Nincs költés',

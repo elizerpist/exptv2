@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import '../dashboard_summary_presentation.dart';
+import '../dashboard_summary_auto_reset_controller.dart';
 import 'dashboard_summary_pill.dart';
 
 typedef SummaryPillComponentCandidateProjector =
@@ -288,6 +290,12 @@ final class SummaryPillExperiment extends StatelessWidget {
     this.performanceCounters,
     this.onAmountMotionActiveChanged,
     this.onSelectorMotionActiveChanged,
+    this.onSelectorDirectInputStarted,
+    this.onBackgroundTap,
+    this.onBackgroundVerticalDragStart,
+    this.onBackgroundVerticalDragUpdate,
+    this.onBackgroundVerticalDragEnd,
+    this.autoResetMotionRegistry,
     this.presentation = const DashboardSummaryPresentationSettings.defaults(),
   }) : assert(variant == SummaryPillVariant.segmented);
 
@@ -305,6 +313,12 @@ final class SummaryPillExperiment extends StatelessWidget {
   final DashboardPerformanceCounters? performanceCounters;
   final ValueChanged<bool>? onAmountMotionActiveChanged;
   final ValueChanged<bool>? onSelectorMotionActiveChanged;
+  final VoidCallback? onSelectorDirectInputStarted;
+  final VoidCallback? onBackgroundTap;
+  final GestureDragStartCallback? onBackgroundVerticalDragStart;
+  final GestureDragUpdateCallback? onBackgroundVerticalDragUpdate;
+  final GestureDragEndCallback? onBackgroundVerticalDragEnd;
+  final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
   final DashboardSummaryPresentationSettings presentation;
 
   @override
@@ -343,6 +357,32 @@ final class SummaryPillExperiment extends StatelessWidget {
           // swaps the two whole zones. In either orientation, navigation's
           // outer edge is the mode badge's equal horizontal/vertical inset.
           final navigationWidth = constraints.maxWidth - amountWidth - inset;
+          final activeTracks = <int>[
+            0,
+            if (level != SummaryPillExperimentLevel.sum) 1,
+            if (level == SummaryPillExperimentLevel.month ||
+                level == SummaryPillExperimentLevel.day)
+              2,
+            if (level == SummaryPillExperimentLevel.day) 3,
+          ];
+          final selectorGeometry = SummarySegmentedTrackGeometry.resolve(
+            width: navigationWidth,
+            height: bounds.height,
+            activeTrackIndices: activeTracks,
+            preRegressionNavigationWidth: preRegressionNavigationWidth,
+            orientation: presentation.segmentedOrientation,
+          );
+          final navigationLeft =
+              presentation.segmentedOrientation ==
+                  SummarySegmentedOrientation.normal
+              ? 0.0
+              : inset + amountWidth;
+          bool isSelectorPosition(Offset localPosition) => activeTracks.any(
+            (track) => selectorGeometry
+                .semanticRectForTrack(track)
+                .shift(Offset(navigationLeft, 0))
+                .contains(localPosition),
+          );
           final navigationSurface = SizedBox(
             width: navigationWidth,
             height: bounds.height,
@@ -357,6 +397,8 @@ final class SummaryPillExperiment extends StatelessWidget {
               onComponentCrossed: onComponentCrossed,
               componentCandidateProjector: componentCandidateProjector,
               onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
+              onSelectorDirectInputStarted: onSelectorDirectInputStarted,
+              autoResetMotionRegistry: autoResetMotionRegistry,
             ),
           );
           final amountZone = SizedBox(
@@ -376,7 +418,7 @@ final class SummaryPillExperiment extends StatelessWidget {
               ),
             ),
           );
-          return switch (presentation.segmentedOrientation) {
+          final sections = switch (presentation.segmentedOrientation) {
             SummarySegmentedOrientation.normal => Row(
               children: <Widget>[
                 navigationSurface,
@@ -392,6 +434,27 @@ final class SummaryPillExperiment extends StatelessWidget {
               ],
             ),
           };
+          // Selector sections are above this surface in the hit-test tree, so
+          // temporal flings retain exact Rect ownership. The exposed surface
+          // is the only Summary region that can tap-reset or drag Header.
+          return Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              GestureDetector(
+                key: const ValueKey<String>('summary-pill-background-gesture'),
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) {
+                  if (!isSelectorPosition(details.localPosition)) {
+                    onBackgroundTap?.call();
+                  }
+                },
+                onVerticalDragStart: onBackgroundVerticalDragStart,
+                onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
+                onVerticalDragEnd: onBackgroundVerticalDragEnd,
+              ),
+              sections,
+            ],
+          );
         },
       );
       return SizedBox(
@@ -481,6 +544,8 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     required this.onComponentCrossed,
     this.componentCandidateProjector,
     this.onSelectorMotionActiveChanged,
+    this.onSelectorDirectInputStarted,
+    this.autoResetMotionRegistry,
   });
 
   final SummaryPillExperimentLevel level;
@@ -493,6 +558,8 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final _ComponentCrossed onComponentCrossed;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
   final ValueChanged<bool>? onSelectorMotionActiveChanged;
+  final VoidCallback? onSelectorDirectInputStarted;
+  final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
 
   @override
   Widget build(BuildContext context) => _FixedHierarchyTracks(
@@ -514,10 +581,14 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       level: level,
       onCrossed: onLevelCrossed,
       onMotionActiveChanged: onSelectorMotionActiveChanged,
+      onDirectInputStarted: onSelectorDirectInputStarted,
+      autoResetMotionRegistry: autoResetMotionRegistry,
     ),
     onComponentCrossed: onComponentCrossed,
     componentCandidateProjector: componentCandidateProjector,
     onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
+    onSelectorDirectInputStarted: onSelectorDirectInputStarted,
+    autoResetMotionRegistry: autoResetMotionRegistry,
   );
 }
 
@@ -539,6 +610,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     required this.onComponentCrossed,
     this.componentCandidateProjector,
     this.onSelectorMotionActiveChanged,
+    this.onSelectorDirectInputStarted,
+    this.autoResetMotionRegistry,
   });
 
   final String keyPrefix;
@@ -557,6 +630,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final _ComponentCrossed onComponentCrossed;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
   final ValueChanged<bool>? onSelectorMotionActiveChanged;
+  final VoidCallback? onSelectorDirectInputStarted;
+  final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
 
   @override
   Widget build(BuildContext context) {
@@ -616,7 +691,10 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 DashboardTemporalAnchorComponent.year,
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
+              onDirectInputStarted: onSelectorDirectInputStarted,
               presentation: presentation.temporalFlingPresentation,
+              component: DashboardTemporalAnchorComponent.year,
+              autoResetMotionRegistry: autoResetMotionRegistry,
             ),
           ),
         if ((level == SummaryPillExperimentLevel.month ||
@@ -655,7 +733,10 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 DashboardTemporalAnchorComponent.month,
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
+              onDirectInputStarted: onSelectorDirectInputStarted,
               presentation: presentation.temporalFlingPresentation,
+              component: DashboardTemporalAnchorComponent.month,
+              autoResetMotionRegistry: autoResetMotionRegistry,
             ),
           ),
         if (level == SummaryPillExperimentLevel.day)
@@ -688,7 +769,10 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 DashboardTemporalAnchorComponent.day,
               ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
+              onDirectInputStarted: onSelectorDirectInputStarted,
               presentation: presentation.temporalFlingPresentation,
+              component: DashboardTemporalAnchorComponent.day,
+              autoResetMotionRegistry: autoResetMotionRegistry,
             ),
           ),
         if (presentation.showSeparators &&
@@ -699,8 +783,17 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     );
   }
 
-  Widget _track(Rect rect, Widget child) =>
-      Positioned.fromRect(rect: rect, child: child);
+  Widget _track(Rect rect, Widget child) => Positioned.fromRect(
+    rect: rect,
+    // The real selector Rect is a hard boundary: even an ordinary tap that
+    // does not become a fling must not fall through to Summary background
+    // reset. The child still owns its vertical carousel recognizer.
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: child,
+    ),
+  );
 
   Widget _separator(
     SummarySegmentedTrackGeometry geometry, {
@@ -734,12 +827,16 @@ final class _ModeSelector extends StatefulWidget {
     required this.level,
     required this.onCrossed,
     this.onMotionActiveChanged,
+    this.autoResetMotionRegistry,
+    this.onDirectInputStarted,
   });
 
   final double height;
   final SummaryPillExperimentLevel level;
   final _LevelCrossed onCrossed;
   final ValueChanged<bool>? onMotionActiveChanged;
+  final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
+  final VoidCallback? onDirectInputStarted;
 
   @override
   State<_ModeSelector> createState() => _ModeSelectorState();
@@ -748,6 +845,16 @@ final class _ModeSelector extends StatefulWidget {
 final class _ModeSelectorState extends State<_ModeSelector> {
   late final CenteredCarouselController _controller =
       CenteredCarouselController(initialIndex: widget.level.index);
+  late final DashboardSummaryAutoResetMotionRunner _resetRunner = _runResetStep;
+  late final VoidCallback _resetCanceller = _cancelResetMotion;
+
+  DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachResetRunner();
+  }
 
   @override
   void didUpdateWidget(covariant _ModeSelector oldWidget) {
@@ -756,7 +863,62 @@ final class _ModeSelectorState extends State<_ModeSelector> {
         !_controller.hasActiveScrollActivity) {
       _controller.jumpToIndexSilently(widget.level.index);
     }
+    if (!identical(
+      oldWidget.autoResetMotionRegistry,
+      widget.autoResetMotionRegistry,
+    )) {
+      _detachResetRunner(oldWidget.autoResetMotionRegistry);
+      _attachResetRunner();
+    }
   }
+
+  void _attachResetRunner() {
+    final registry = widget.autoResetMotionRegistry;
+    if (registry == null) return;
+    _attachedRegistry = registry;
+    registry.attach(
+      kind: DashboardSummaryAutoResetStepKind.level,
+      runner: _resetRunner,
+      cancelMotion: _resetCanceller,
+    );
+  }
+
+  void _detachResetRunner(DashboardSummaryAutoResetMotionRegistry? registry) {
+    registry?.detach(
+      kind: DashboardSummaryAutoResetStepKind.level,
+      runner: _resetRunner,
+      cancelMotion: _resetCanceller,
+    );
+    if (identical(_attachedRegistry, registry)) _attachedRegistry = null;
+  }
+
+  Future<void> _runResetStep(DashboardSummaryAutoResetStep step) async {
+    final targetPlane = step.plane;
+    final targetRail = step.isRailOpen;
+    if (step.kind != DashboardSummaryAutoResetStepKind.level ||
+        targetPlane == null ||
+        targetRail == null) {
+      return;
+    }
+    final target = SummaryPillExperimentLevel.values.firstWhere(
+      (level) => level.plane == targetPlane && level.isRailOpen == targetRail,
+    );
+    final count = SummaryPillExperimentLevel.values.length;
+    final raw = _positiveModulo(
+      target.index - _controller.selectedLogicalIndex,
+      count,
+    );
+    final offset = raw > count / 2 ? raw - count : raw;
+    if (offset == 0) return;
+    await _controller.animateToIndex(
+      _controller.selectedLogicalIndex + offset,
+      duration: Duration(milliseconds: 130 * offset.abs()),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _cancelResetMotion() =>
+      _controller.jumpToIndexSilently(_controller.selectedLogicalIndex);
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -781,7 +943,12 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       ),
       height: widget.height,
       viewportKey: ValueKey<String>('${widget.key}-viewport'),
-      onMotionStarted: (_) => widget.onMotionActiveChanged?.call(true),
+      onMotionStarted: (origin) {
+        if (origin == CenteredCarouselMotionOrigin.userDrag) {
+          widget.onDirectInputStarted?.call();
+        }
+        widget.onMotionActiveChanged?.call(true);
+      },
       onSelectedChanged: (index) {
         final level =
             SummaryPillExperimentLevel.values[_positiveModulo(
@@ -800,6 +967,7 @@ final class _ModeSelectorState extends State<_ModeSelector> {
 
   @override
   void dispose() {
+    _detachResetRunner(_attachedRegistry);
     _controller.dispose();
     super.dispose();
   }
@@ -838,7 +1006,10 @@ final class _HierarchyValueSelector extends StatefulWidget {
     required this.labelForCandidate,
     required this.onCrossed,
     required this.presentation,
+    required this.component,
     this.onMotionActiveChanged,
+    this.autoResetMotionRegistry,
+    this.onDirectInputStarted,
   });
 
   final double height;
@@ -852,7 +1023,10 @@ final class _HierarchyValueSelector extends StatefulWidget {
   final String Function(DashboardNavigationState candidate) labelForCandidate;
   final ValueChanged<DashboardNavigationState> onCrossed;
   final SummaryTemporalFlingPresentation presentation;
+  final DashboardTemporalAnchorComponent component;
   final ValueChanged<bool>? onMotionActiveChanged;
+  final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
+  final VoidCallback? onDirectInputStarted;
 
   @override
   State<_HierarchyValueSelector> createState() =>
@@ -863,7 +1037,118 @@ final class _HierarchyValueSelectorState
     extends State<_HierarchyValueSelector> {
   late final CenteredCarouselController _controller =
       CenteredCarouselController(initialIndex: 0);
+  late final DashboardSummaryAutoResetMotionRunner _resetRunner = _runResetStep;
+  late final VoidCallback _resetCanceller = _cancelResetMotion;
   DashboardNavigationState? _motionOrigin;
+  DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
+
+  DashboardSummaryAutoResetStepKind get _resetStepKind =>
+      switch (widget.component) {
+        DashboardTemporalAnchorComponent.year =>
+          DashboardSummaryAutoResetStepKind.year,
+        DashboardTemporalAnchorComponent.month =>
+          DashboardSummaryAutoResetStepKind.month,
+        DashboardTemporalAnchorComponent.day => throw StateError(
+          'DAY is never a Summary reset target.',
+        ),
+      };
+
+  @override
+  void initState() {
+    super.initState();
+    _attachResetRunner();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HierarchyValueSelector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.autoResetMotionRegistry,
+      widget.autoResetMotionRegistry,
+    )) {
+      _detachResetRunner(oldWidget.autoResetMotionRegistry);
+      _attachResetRunner();
+    }
+  }
+
+  void _attachResetRunner() {
+    final registry = widget.autoResetMotionRegistry;
+    if (registry == null ||
+        widget.component == DashboardTemporalAnchorComponent.day) {
+      return;
+    }
+    _attachedRegistry = registry;
+    registry.attach(
+      kind: _resetStepKind,
+      runner: _resetRunner,
+      cancelMotion: _resetCanceller,
+    );
+  }
+
+  void _detachResetRunner(DashboardSummaryAutoResetMotionRegistry? registry) {
+    if (widget.component != DashboardTemporalAnchorComponent.day) {
+      registry?.detach(
+        kind: _resetStepKind,
+        runner: _resetRunner,
+        cancelMotion: _resetCanceller,
+      );
+    }
+    if (identical(_attachedRegistry, registry)) _attachedRegistry = null;
+  }
+
+  Future<void> _runResetStep(DashboardSummaryAutoResetStep step) async {
+    if (step.kind != _resetStepKind || step.targetValue == null) return;
+    if (widget.component == DashboardTemporalAnchorComponent.day) return;
+    final current = switch (widget.component) {
+      DashboardTemporalAnchorComponent.year =>
+        widget.navigation.state.yearCursor,
+      DashboardTemporalAnchorComponent.month =>
+        widget.navigation.state.monthCursor.month,
+      DashboardTemporalAnchorComponent.day => 0,
+    };
+    final offset = switch (widget.component) {
+      DashboardTemporalAnchorComponent.month => _shortestMonthOffset(
+        current: current,
+        target: step.targetValue!,
+      ),
+      DashboardTemporalAnchorComponent.year => _shortestYearOffset(
+        current: current,
+        target: step.targetValue!,
+      ),
+      DashboardTemporalAnchorComponent.day => 0,
+    };
+    if (offset == 0) return;
+    await _controller.animateToIndex(
+      offset,
+      duration: Duration(milliseconds: 95 * offset.abs().clamp(1, 6).toInt()),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _cancelResetMotion() => _controller.jumpToIndexSilently(0);
+
+  int _shortestMonthOffset({required int current, required int target}) {
+    final values =
+        widget.navigation.temporalAvailability.monthsForYear(
+          widget.navigation.state.yearCursor,
+        ) ??
+        List<int>.generate(12, (index) => index + 1);
+    final currentIndex = values.indexOf(current);
+    final targetIndex = values.indexOf(target);
+    if (currentIndex < 0 || targetIndex < 0) return 0;
+    final forward = (targetIndex - currentIndex) % values.length;
+    return forward > values.length / 2 ? forward - values.length : forward;
+  }
+
+  int _shortestYearOffset({required int current, required int target}) {
+    final values = widget.navigation.temporalAvailability.allowedYears;
+    if (values == null) return target - current;
+    final currentIndex = values.indexOf(current);
+    final targetIndex = values.indexOf(target);
+    if (currentIndex < 0 || targetIndex < 0) return 0;
+    final forward = (targetIndex - currentIndex) % values.length;
+    return forward > values.length / 2 ? forward - values.length : forward;
+  }
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -888,7 +1173,10 @@ final class _HierarchyValueSelectorState
           ),
           height: widget.height,
           viewportKey: ValueKey<String>('${widget.key}-viewport'),
-          onMotionStarted: (_) {
+          onMotionStarted: (origin) {
+            if (origin == CenteredCarouselMotionOrigin.userDrag) {
+              widget.onDirectInputStarted?.call();
+            }
             _motionOrigin = widget.navigation.state;
             widget.onMotionActiveChanged?.call(true);
           },
@@ -947,6 +1235,7 @@ final class _HierarchyValueSelectorState
 
   @override
   void dispose() {
+    _detachResetRunner(_attachedRegistry);
     _controller.dispose();
     super.dispose();
   }

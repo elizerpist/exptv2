@@ -168,6 +168,131 @@ void main() {
     expect(shell.decoration.border, isNull);
   });
 
+  testWidgets(
+    'Summary background owns tap reset while selector Rects stay excluded',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      var resetTaps = 0;
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+            onBackgroundTap: () => resetTaps += 1,
+          ),
+        ),
+      );
+
+      await tester.tapAt(const Offset(374, 29));
+      await tester.pump();
+      expect(resetTaps, 1);
+
+      await tester.tap(
+        find.byKey(const ValueKey('summary-pill-segmented-year-selector')),
+      );
+      await tester.pump();
+      expect(resetTaps, 1);
+    },
+  );
+
+  testWidgets('Summary background vertical drag does not become a reset tap', (
+    tester,
+  ) async {
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime(2026, 7, 22),
+      initialPlane: TimePlane.month,
+    );
+    final visibleFrames = DashboardVisibleFrameStore();
+    var resetTaps = 0;
+    var dragStarts = 0;
+    var dragUpdates = 0;
+    var dragEnds = 0;
+    addTearDown(navigation.dispose);
+    addTearDown(visibleFrames.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SummaryPillExperiment(
+          variant: SummaryPillVariant.segmented,
+          bounds: _bounds,
+          navigation: navigation,
+          visibleFrames: visibleFrames,
+          onLevelCrossed: (_, _) {},
+          onComponentCrossed: (_, _) {},
+          onBackgroundTap: () => resetTaps += 1,
+          onBackgroundVerticalDragStart: (_) => dragStarts += 1,
+          onBackgroundVerticalDragUpdate: (_) => dragUpdates += 1,
+          onBackgroundVerticalDragEnd: (_) => dragEnds += 1,
+        ),
+      ),
+    );
+
+    final gesture = await tester.startGesture(const Offset(374, 29));
+    await gesture.moveBy(const Offset(0, -45));
+    // The first movement resolves Flutter's vertical-drag arena. The
+    // following sample is the first owned expansion delta.
+    await gesture.moveBy(const Offset(0, -18));
+    await gesture.up();
+    await tester.pump();
+
+    expect(dragStarts, 1);
+    expect(dragUpdates, greaterThan(0));
+    expect(dragEnds, 1);
+    expect(resetTaps, 0);
+  });
+
+  testWidgets(
+    'mirrored Summary keeps reset behind its mirrored selector Rects',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      var resetTaps = 0;
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (_, _) {},
+            presentation: const DashboardSummaryPresentationSettings(
+              showSeparators: true,
+              temporalFlingPresentation:
+                  SummaryTemporalFlingPresentation.current,
+              segmentedOrientation: SummarySegmentedOrientation.mirrored,
+            ),
+            onBackgroundTap: () => resetTaps += 1,
+          ),
+        ),
+      );
+
+      await tester.tapAt(const Offset(4, 29));
+      await tester.pump();
+      expect(resetTaps, 1);
+
+      await tester.tap(
+        find.byKey(const ValueKey('summary-pill-segmented-year-selector')),
+      );
+      await tester.pump();
+      expect(resetTaps, 1);
+    },
+  );
+
   testWidgets('segmented shell resolves the global SummaryPill family', (
     tester,
   ) async {

@@ -262,6 +262,44 @@ void main() {
     },
   );
 
+  testWidgets(
+    'direction control keeps tap exclusive from vertical Header drag',
+    (tester) async {
+      final selections = <TransactionDirection>[];
+      var verticalUpdates = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TransactionDirectionToggle(
+              bounds: _bounds,
+              palette: _togglePalette,
+              selectedDirection: TransactionDirection.expense,
+              incomeIconScale: 1,
+              expenseIconScale: 1,
+              onSelected: selections.add,
+              onVerticalDragStart: (_) {},
+              onVerticalDragUpdate: (_) => verticalUpdates += 1,
+              onVerticalDragEnd: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('fluvi-income-button')));
+      expect(selections, <TransactionDirection>[TransactionDirection.income]);
+      expect(verticalUpdates, 0);
+
+      await tester.drag(
+        find.byKey(const ValueKey('fluvi-income-button')),
+        const Offset(0, -80),
+      );
+      expect(verticalUpdates, greaterThan(0));
+      expect(selections, <TransactionDirection>[
+        TransactionDirection.income,
+      ], reason: 'the drag gesture may not also select a direction');
+    },
+  );
+
   testWidgets('direction buttons resolve the global control family', (
     tester,
   ) async {

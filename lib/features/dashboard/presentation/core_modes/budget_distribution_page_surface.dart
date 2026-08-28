@@ -9,6 +9,7 @@ import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import '../budget_content_card_style.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 /// The one physical Card2 surface used by both lazily built page items. It is
 /// deliberately inside the PageView so radius and shadow travel with the
@@ -76,7 +77,7 @@ final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =
 /// Shared Card2 page geometry. Category and Partner supply only their exact
 /// prepared donut, heading and rows; padding, flexes, list ownership and row
 /// appearance stay one production contract.
-class BudgetDistributionPageSurface extends StatelessWidget {
+class BudgetDistributionPageSurface extends StatefulWidget {
   const BudgetDistributionPageSurface({
     super.key,
     required this.heading,
@@ -90,6 +91,7 @@ class BudgetDistributionPageSurface extends StatelessWidget {
     this.expandDonutToFit = false,
     this.leftFooter,
     this.leftFooterMinimumHeight = 0,
+    this.upperVerticalGestures,
   });
 
   final Widget heading;
@@ -118,6 +120,7 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   /// card height, rather than forcing that chart to overflow on an
   /// intermediate dashboard geometry.
   final double leftFooterMinimumHeight;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   /// The first donut/list visual region begins only after this authored
   /// padding-and-heading lane. Budget's selected avatar shell may occupy the
@@ -127,11 +130,55 @@ class BudgetDistributionPageSurface extends StatelessWidget {
   static const double firstChartVisualOffset = outerPadding + headingHeight;
 
   @override
+  State<BudgetDistributionPageSurface> createState() =>
+      _BudgetDistributionPageSurfaceState();
+}
+
+final class _BudgetDistributionPageSurfaceState
+    extends State<BudgetDistributionPageSurface> {
+  late final ScrollController _legendScrollController = ScrollController();
+  bool _isBoundaryHandoff = false;
+
+  @override
+  void dispose() {
+    if (_isBoundaryHandoff) widget.upperVerticalGestures?.end();
+    _legendScrollController.dispose();
+    super.dispose();
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    final coordinator = widget.upperVerticalGestures;
+    if (coordinator == null) return false;
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      coordinator.onForegroundInteraction?.call();
+      if (_isBoundaryHandoff) {
+        // The child regained a real scrollable range; it again owns this drag.
+        coordinator.end();
+        _isBoundaryHandoff = false;
+      }
+    }
+    if (notification is OverscrollNotification &&
+        notification.dragDetails != null) {
+      coordinator.consumeBoundaryOverscroll(notification.overscroll);
+      _isBoundaryHandoff = true;
+    }
+    if (notification is ScrollEndNotification && _isBoundaryHandoff) {
+      coordinator.end();
+      _isBoundaryHandoff = false;
+    }
+    return false;
+  }
+
+  @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(outerPadding),
+    padding: const EdgeInsets.all(BudgetDistributionPageSurface.outerPadding),
     child: Column(
       children: <Widget>[
-        SizedBox(height: headingHeight, child: heading),
+        SizedBox(
+          height: BudgetDistributionPageSurface.headingHeight,
+          child: widget.heading,
+        ),
         Expanded(
           child: Row(
             children: <Widget>[
@@ -139,9 +186,9 @@ class BudgetDistributionPageSurface extends StatelessWidget {
                 flex: 188,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final footerHeight = leftFooter == null
+                    final footerHeight = widget.leftFooter == null
                         ? 0.0
-                        : leftFooterMinimumHeight + 3;
+                        : widget.leftFooterMinimumHeight + 3;
                     final availableHeight =
                         (constraints.maxHeight - footerHeight)
                             .clamp(0.0, double.infinity)
@@ -153,25 +200,25 @@ class BudgetDistributionPageSurface extends StatelessWidget {
                                 8)
                             .clamp(0.0, double.infinity)
                             .toDouble();
-                    final baselineDiameter = expandDonutToFit
+                    final baselineDiameter = widget.expandDonutToFit
                         ? available
-                        : donutDiameter.clamp(0.0, available).toDouble();
-                    final diameter = baselineDiameter * donutScale;
+                        : widget.donutDiameter.clamp(0.0, available).toDouble();
+                    final diameter = baselineDiameter * widget.donutScale;
                     final donutBox = SizedBox(
                       key: ValueKey(
                         'budget-distribution-donut-${diameter.toInt()}',
                       ),
                       width: diameter,
                       height: diameter,
-                      child: donut,
+                      child: widget.donut,
                     );
-                    return leftFooter == null
+                    return widget.leftFooter == null
                         ? Center(child: donutBox)
                         : Column(
                             children: <Widget>[
                               Center(child: donutBox),
                               const SizedBox(height: 3),
-                              Expanded(child: leftFooter!),
+                              Expanded(child: widget.leftFooter!),
                             ],
                           );
                   },
@@ -184,7 +231,7 @@ class BudgetDistributionPageSurface extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     Text(
-                      rightHeading,
+                      widget.rightHeading,
                       style: const TextStyle(
                         color: Color(0xff51617f),
                         fontSize: 9,
@@ -194,10 +241,10 @@ class BudgetDistributionPageSurface extends StatelessWidget {
                     ),
                     const SizedBox(height: 7),
                     Expanded(
-                      child: rows.isEmpty
+                      child: widget.rows.isEmpty
                           ? Center(
                               child: Text(
-                                emptyLabel,
+                                widget.emptyLabel,
                                 style: const TextStyle(
                                   color: Color(0xff66738d),
                                   fontSize: 8,
@@ -206,12 +253,16 @@ class BudgetDistributionPageSurface extends StatelessWidget {
                                 ),
                               ),
                             )
-                          : ListView.builder(
-                              key: listKey,
-                              primary: false,
-                              padding: EdgeInsets.zero,
-                              itemCount: rows.length,
-                              itemBuilder: (_, index) => rows[index],
+                          : NotificationListener<ScrollNotification>(
+                              onNotification: _handleScrollNotification,
+                              child: ListView.builder(
+                                key: widget.listKey,
+                                controller: _legendScrollController,
+                                primary: false,
+                                padding: EdgeInsets.zero,
+                                itemCount: widget.rows.length,
+                                itemBuilder: (_, index) => widget.rows[index],
+                              ),
                             ),
                     ),
                   ],
