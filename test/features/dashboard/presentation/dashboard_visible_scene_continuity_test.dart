@@ -299,8 +299,13 @@ void main() {
       final scrollView = find.byKey(
         const ValueKey('dashboard-logbox-scroll-view'),
       );
+      // SearchPill is now a real editable TextField and therefore owns its
+      // own horizontal text Scrollable. This test validates the sole Ledger
+      // viewport, so bind explicitly to the Scrollable below its stable key.
       final position = tester
-          .state<ScrollableState>(find.byType(Scrollable))
+          .state<ScrollableState>(
+            find.descendant(of: scrollView, matching: find.byType(Scrollable)),
+          )
           .position;
       await tester.drag(scrollView, const Offset(0, -600));
       await tester.pump();

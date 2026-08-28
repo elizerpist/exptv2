@@ -66,8 +66,12 @@ class CurrentLedgerQueryScope {
       'categories:${categories.join(',')}',
       'partners:${partners.join(',')}',
       'refinements:$refinementValue',
-      'search:${normalizedSearch ?? ''}',
     ];
+    // Preserve every pre-Search canonical key byte-for-byte. A non-empty
+    // prepared-only search facet still gets its own immutable projection key,
+    // while unfiltered scene/cache identities retain their established route.
+    final search = normalizedSearch;
+    if (search != null) values.add('search:$search');
     if (temporalFilter.isRestrictive) {
       values.add('periods:${temporalFilter.canonicalKey}');
     }
