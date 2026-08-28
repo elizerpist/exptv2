@@ -53,6 +53,69 @@
       line-height: 1.1;
     }
 
+    .card-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .card-toggle {
+      appearance: none;
+      flex: 0 0 auto;
+      min-height: 24px;
+      padding: 4px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #f8fafc;
+      color: var(--muted);
+      font: 760 8px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      letter-spacing: .04em;
+      touch-action: manipulation;
+    }
+
+    .card-toggle:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+    .reference-carousel {
+      display: flex;
+      min-width: 0;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      touch-action: pan-x pan-y;
+    }
+
+    .reference-carousel::-webkit-scrollbar { display: none; }
+
+    .reference-slide {
+      display: grid;
+      flex: 0 0 100%;
+      min-width: 0;
+      gap: 6px;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+    }
+
+    .reference-slide-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.1;
+    }
+
+    .reference-swipe-hint {
+      flex: 0 0 auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+
     .category-block {
       display: grid;
       grid-template-columns: 76px minmax(0, 1fr);
@@ -71,6 +134,23 @@
       gap: 6px;
       padding-top: 1px;
     }
+
+    .category-content { min-width: 0; }
+
+    .category-block.is-collapsed { grid-template-columns: minmax(0, 1fr); }
+
+    .category-block.is-collapsed .category-anchor {
+      flex-direction: row;
+      align-items: center;
+      padding-top: 0;
+    }
+
+    .category-block.is-collapsed .canonical-swatch { width: 34px; height: 34px; }
+
+    .category-block.is-collapsed .card-toggle { margin-inline-start: auto; }
+
+    .reference-block.is-collapsed .reference-content,
+    .category-block.is-collapsed .category-content { display: none; }
 
     .canonical-swatch {
       width: 44px;
@@ -132,7 +212,7 @@
 
     .slot-grid {
       display: grid;
-      grid-template-columns: repeat(10, minmax(0, 1fr));
+      grid-template-columns: repeat(var(--slot-count, 10), minmax(0, 1fr));
       gap: 3px;
       min-width: 0;
     }
@@ -211,7 +291,7 @@
     .window-track {
       position: relative;
       display: grid;
-      grid-template-columns: repeat(10, minmax(0, 1fr));
+      grid-template-columns: repeat(var(--slot-count, 10), minmax(0, 1fr));
       height: 9px;
       overflow: visible;
       border-radius: 3px;
@@ -307,11 +387,26 @@
       { id: 'color_20', colorA: '#CB3ED6', middleColor: '#D932C9', colorB: '#E427BD' },
       { id: 'color_21', colorA: '#E43EC4', middleColor: '#F04AB6', colorB: '#FB56A8' },
     ]);
+    const COOL_COMPARISON_CATEGORY_IDS = Object.freeze([
+      'color_11', 'color_12', 'color_13', 'color_14', 'color_15',
+    ]);
+    const COOL_COMPARISON_CATEGORY_ID_SET = new Set(COOL_COMPARISON_CATEGORY_IDS);
+    const DISPLAY_CATEGORIES = Object.freeze([
+      ...CATEGORIES.filter((category) => COOL_COMPARISON_CATEGORY_ID_SET.has(category.id)),
+      ...CATEGORIES.filter((category) => !COOL_COMPARISON_CATEGORY_ID_SET.has(category.id)),
+    ]);
 
     // Exact source values from docs/prototypes/color_lab.html coolScaleStops.
     const COOL_SOURCE_STOPS = Object.freeze([
       '#FFFFFF', '#E6FBFF', '#BDF5FF', '#75E6FF', '#22D3EE',
       '#06B6D4', '#0284C7', '#0057D9', '#0030A8', '#00135F',
+    ]);
+    // Comparison candidate: remove the overly dark former tenth navy, insert
+    // one perceptual midpoint, and stretch the former ninth stop to the new
+    // tenth/darkest endpoint.
+    const COOL_TEN_STOP_CANDIDATE = Object.freeze([
+      '#FFFFFF', '#E6FBFF', '#BDF5FF', '#75E6FF', '#22D3EE',
+      '#06B6D4', '#0284C7', '#0057D9', '#0044C0', '#0030A8',
     ]);
     const WINDOW_WIDTH_PERCENT = 28;
     const WINDOW_CENTERS = Object.freeze([30, 50, 70]);
@@ -674,6 +769,43 @@
       ), 0) / left.slots.length;
     }
 
+    function categoryGradientTailCandidate(result) {
+      const endpointA = colorFromHex(result.category.colorA);
+      const endpointB = colorFromHex(result.category.colorB);
+      const light = endpointA.target.L >= endpointB.target.L ? endpointA : endpointB;
+      const dark = light === endpointA ? endpointB : endpointA;
+      const sourceLead = result.slots.slice(0, 6);
+      const sourceEndLightness = sourceLead[sourceLead.length - 1].target.L;
+      const leadEndLightness = Math.min(
+        .992,
+        light.target.L + Math.max(.0075, (1 - light.target.L) * .13),
+      );
+      const leadSlots = sourceLead.map((slot, index) => {
+        if (index === 0) return colorFromHex('#FFFFFF');
+        const progress = clamp((1 - slot.target.L) / Math.max(EPSILON, 1 - sourceEndLightness), 0, 1);
+        return gamutMapOklch({ ...slot.target, L: 1 - (1 - leadEndLightness) * progress });
+      });
+      const bridge = samplePalette([leadSlots[5], light], 50);
+      const middle = samplePalette([light, dark], 50);
+      return { ...result, slots: [...leadSlots, bridge, light, middle, dark] };
+    }
+
+    // Third page: retain the custom lead through slot 8, then stretch the
+    // current palette's slots 8 and 9 into positions 9 and 10. The category
+    // A/B endpoints do not participate in this candidate tail.
+    function categoryStretchedTailCandidate(result) {
+      const custom = categoryGradientTailCandidate(result);
+      return { ...result, slots: [...custom.slots.slice(0, 8), result.slots[7], result.slots[8]] };
+    }
+
+    // Fourth page: retain the current palette through slot 8 (including its
+    // slot-7 identity marker), drop the old slot 10, and fill slot 9 with the
+    // perceptual midpoint of the original slots 8 and 9.
+    function categoryCurrentTailCompressedCandidate(result) {
+      const middle = samplePalette([result.slots[7], result.slots[8]], 50);
+      return { ...result, slots: [...result.slots.slice(0, 8), middle, result.slots[8]] };
+    }
+
     function validateCollection(results) {
       const totals = {
         categories: CATEGORIES.length,
@@ -768,15 +900,16 @@
       return { totals, failures };
     }
 
-    function renderSlots(slots, category, label) {
+    function renderSlots(slots, category, label, highlightIndex = 6, highlightLabel = 'canonical identity') {
       const grid = document.createElement('div');
       grid.className = 'slot-grid';
+      grid.style.setProperty('--slot-count', String(slots.length));
       slots.forEach((slot, index) => {
         const button = document.createElement('button');
-        button.className = `slot${index === 6 ? ' is-canonical' : ''}`;
+        button.className = `slot${index === highlightIndex ? ' is-canonical' : ''}`;
         button.type = 'button';
         button.title = `${category} ${label}, slot ${index + 1}: ${slot.hex}`;
-        button.setAttribute('aria-label', `${category}, ${label}, slot ${index + 1}, ${slot.hex}${index === 6 ? ', canonical identity' : ''}`);
+        button.setAttribute('aria-label', `${category}, ${label}, slot ${index + 1}, ${slot.hex}${index === highlightIndex ? `, ${highlightLabel}` : ''}`);
         const number = document.createElement('span');
         number.className = 'slot-number';
         number.textContent = String(index + 1);
@@ -801,6 +934,7 @@
         label.textContent = String(item.center);
         const track = document.createElement('div');
         track.className = 'window-track';
+        track.style.setProperty('--slot-count', String(slots.length));
         slots.forEach((slot) => {
           const segment = document.createElement('span');
           segment.className = 'window-track-segment';
@@ -828,15 +962,163 @@
       return root;
     }
 
+    function renderReferenceSlide({ title, slots, highlightIndex, highlightLabel }) {
+      const slide = document.createElement('article');
+      slide.className = 'reference-slide';
+      const meta = document.createElement('div');
+      meta.className = 'reference-slide-meta';
+      const label = document.createElement('span');
+      label.textContent = title;
+      const hint = document.createElement('span');
+      hint.className = 'reference-swipe-hint';
+      hint.textContent = 'SWIPE ⇄';
+      meta.append(label, hint);
+      slide.append(
+        meta,
+        renderSlots(slots, 'Color Lab Cool', title, highlightIndex, highlightLabel),
+        renderWindowEvidence(slots, windowEvidence(slots)),
+      );
+      return slide;
+    }
+
     function renderReference() {
       const reference = document.createElement('section');
       reference.className = 'reference-block';
+      const heading = document.createElement('div');
+      heading.className = 'card-heading';
       const title = document.createElement('div');
       title.className = 'reference-title';
       title.textContent = 'REFERENCE · COLOR LAB COOL';
-      const slots = COOL_SOURCE_STOPS.map(colorFromHex);
-      reference.append(title, renderSlots(slots, 'Color Lab Cool', 'source'), renderWindowEvidence(slots, windowEvidence(slots)));
+      const content = document.createElement('div');
+      content.className = 'reference-content';
+      const carousel = document.createElement('div');
+      carousel.className = 'reference-carousel';
+      carousel.setAttribute('aria-label', 'Swipe between the current and candidate ten-stop Cool reference scales');
+      carousel.append(
+        renderReferenceSlide({
+          title: 'CURRENT · 10 STOPS · HIGHLIGHT 7',
+          slots: COOL_SOURCE_STOPS.map(colorFromHex),
+          highlightIndex: 6,
+          highlightLabel: 'current highlighted scale segment',
+        }),
+        renderReferenceSlide({
+          title: 'CANDIDATE · 10 STOPS · HIGHLIGHT 8',
+          slots: COOL_TEN_STOP_CANDIDATE.map(colorFromHex),
+          highlightIndex: 7,
+          highlightLabel: 'candidate highlighted scale segment',
+        }),
+      );
+      installInfiniteCarousel(carousel);
+      content.append(carousel);
+      heading.append(title, createCollapseToggle(reference, content, 'Cool reference'));
+      reference.append(heading, content);
       return reference;
+    }
+
+    function renderVariationStack(rows, { highlightIndex = 6, highlightLabel = 'canonical identity', tailMetric = null } = {}) {
+      const stack = document.createElement('div');
+      stack.className = 'variation-stack';
+      for (const result of rows) {
+        const row = document.createElement('div');
+        row.className = 'variation-row';
+        const meta = document.createElement('div');
+        meta.className = 'variation-meta';
+        const label = document.createElement('span');
+        label.className = 'variation-label';
+        label.textContent = result.label;
+        const metrics = document.createElement('span');
+        metrics.className = 'variation-metrics';
+        metrics.textContent = tailMetric ?? `H ${result.metrics.hueSpan.toFixed(0)}° · 28Δ ${result.metrics.windows[1].delta.toFixed(2)}`;
+        meta.append(label, metrics);
+        row.append(
+          meta,
+          renderSlots(result.slots, result.category.id, result.label, highlightIndex, highlightLabel),
+          renderWindowEvidence(result.slots, windowEvidence(result.slots)),
+        );
+        stack.append(row);
+      }
+      return stack;
+    }
+
+    function renderCategoryPaletteSlide({ title, rows, options }) {
+      const slide = document.createElement('article');
+      slide.className = 'reference-slide';
+      const meta = document.createElement('div');
+      meta.className = 'reference-slide-meta';
+      const label = document.createElement('span');
+      label.textContent = title;
+      const hint = document.createElement('span');
+      hint.className = 'reference-swipe-hint';
+      hint.textContent = 'SWIPE ⇄';
+      meta.append(label, hint);
+      slide.append(
+        meta,
+        renderVariationStack(rows, options),
+      );
+      return slide;
+    }
+
+    let collapseTargetSequence = 0;
+    function createCollapseToggle(card, content, label) {
+      collapseTargetSequence += 1;
+      content.id = `palette-card-content-${collapseTargetSequence}`;
+      const toggle = document.createElement('button');
+      toggle.className = 'card-toggle';
+      toggle.type = 'button';
+      toggle.setAttribute('aria-controls', content.id);
+      toggle.setAttribute('aria-label', `Collapse ${label}`);
+      const sync = () => {
+        const collapsed = card.classList.contains('is-collapsed');
+        toggle.textContent = collapsed ? 'OPEN' : 'CLOSE';
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-label', `${collapsed ? 'Expand' : 'Collapse'} ${label}`);
+      };
+      toggle.addEventListener('click', () => {
+        card.classList.toggle('is-collapsed');
+        sync();
+      });
+      sync();
+      return toggle;
+    }
+
+    function installInfiniteCarousel(carousel) {
+      const originals = Array.from(carousel.children);
+      if (originals.length < 2) return;
+
+      const makeClone = (source) => {
+        const clone = source.cloneNode(true);
+        clone.dataset.loopClone = 'true';
+        clone.setAttribute('aria-hidden', 'true');
+        for (const button of clone.querySelectorAll('button')) {
+          button.tabIndex = -1;
+          button.addEventListener('click', () => {
+            const hex = button.title.match(/#[0-9a-f]{6}/i)?.[0];
+            if (hex) showToast(hex.toUpperCase());
+          });
+        }
+        return clone;
+      };
+
+      carousel.prepend(makeClone(originals[originals.length - 1]));
+      carousel.append(makeClone(originals[0]));
+
+      const pageWidth = () => carousel.clientWidth;
+      const jumpTo = (page) => carousel.scrollTo({ left: pageWidth() * page, behavior: 'auto' });
+      const normalizeLoopPosition = () => {
+        const width = pageWidth();
+        if (!width) return;
+        const page = Math.round(carousel.scrollLeft / width);
+        if (page === 0) jumpTo(originals.length);
+        if (page === originals.length + 1) jumpTo(1);
+      };
+      let scrollEndTimer = 0;
+      const scheduleNormalization = () => {
+        window.clearTimeout(scrollEndTimer);
+        scrollEndTimer = window.setTimeout(normalizeLoopPosition, 80);
+      };
+      carousel.addEventListener('scroll', scheduleNormalization, { passive: true });
+      carousel.addEventListener('scrollend', normalizeLoopPosition);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => jumpTo(1)));
     }
 
     function renderCategoryBlock(category, rows) {
@@ -854,26 +1136,45 @@
       const hex = document.createElement('div');
       hex.className = 'canonical-hex';
       hex.textContent = category.middleColor;
-      anchor.append(swatch, id, hex);
-
-      const stack = document.createElement('div');
-      stack.className = 'variation-stack';
-      for (const result of rows) {
-        const row = document.createElement('div');
-        row.className = 'variation-row';
-        const meta = document.createElement('div');
-        meta.className = 'variation-meta';
-        const label = document.createElement('span');
-        label.className = 'variation-label';
-        label.textContent = result.label;
-        const metrics = document.createElement('span');
-        metrics.className = 'variation-metrics';
-        metrics.textContent = `H ${result.metrics.hueSpan.toFixed(0)}° · 28Δ ${result.metrics.windows[1].delta.toFixed(2)}`;
-        meta.append(label, metrics);
-        row.append(meta, renderSlots(result.slots, result.category.id, result.label), renderWindowEvidence(result.slots, result.metrics.windows));
-        stack.append(row);
-      }
-      block.append(anchor, stack);
+      const content = document.createElement('div');
+      content.className = 'category-content';
+      const carousel = document.createElement('div');
+      carousel.className = 'reference-carousel';
+      carousel.setAttribute('aria-label', `Swipe between the current and light-to-dark ${category.id} palettes`);
+      carousel.append(
+        renderCategoryPaletteSlide({ title: 'CURRENT · 5 SCALES · HIGHLIGHT 7', rows }),
+        renderCategoryPaletteSlide({
+          title: 'CANDIDATE · 5 SCALES · L8 / M9 / D10',
+          rows: rows.map(categoryGradientTailCandidate),
+          options: {
+            highlightIndex: 7,
+            highlightLabel: 'category light endpoint',
+            tailMetric: 'L 8 · M 9 · D 10',
+          },
+        }),
+        renderCategoryPaletteSlide({
+          title: 'STRETCHED · C1–8 / R8→9 / R9→10',
+          rows: rows.map(categoryStretchedTailCandidate),
+          options: {
+            highlightIndex: 7,
+            highlightLabel: 'custom slot 8',
+            tailMetric: 'C 8 · R8→9 · R9→10',
+          },
+        }),
+        renderCategoryPaletteSlide({
+          title: 'COMPRESSED · R1–8 / M9 / R9→10',
+          rows: rows.map(categoryCurrentTailCompressedCandidate),
+          options: {
+            highlightIndex: 6,
+            highlightLabel: 'current canonical identity',
+            tailMetric: 'R 1–8 · M 9 · R9→10',
+          },
+        }),
+      );
+      installInfiniteCarousel(carousel);
+      content.append(carousel);
+      anchor.append(swatch, id, hex, createCollapseToggle(block, content, category.id));
+      block.append(anchor, content);
       return block;
     }
 
@@ -892,7 +1193,7 @@
       for (const result of results) byCategory.get(result.category.id).push(result);
       const fragment = document.createDocumentFragment();
       fragment.append(renderReference());
-      for (const category of CATEGORIES) fragment.append(renderCategoryBlock(category, byCategory.get(category.id)));
+      for (const category of DISPLAY_CATEGORIES) fragment.append(renderCategoryBlock(category, byCategory.get(category.id)));
       root.replaceChildren(fragment);
     }
 
