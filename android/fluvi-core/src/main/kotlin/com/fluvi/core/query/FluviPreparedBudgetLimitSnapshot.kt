@@ -26,59 +26,13 @@ data class FluviPreparedBudgetDirectionBank(
     }
 }
 
-/** Sparse positive daily actuals keyed by the same direction-local Budget
- * target handles as [FluviPreparedBudgetDirectionBank]. */
-data class FluviPreparedBudgetRhythmPoint(
-    val epochDay: Long,
-    val actualScaled100: Long,
-) {
-    init {
-        require(actualScaled100 > 0L)
-    }
-}
-
-data class FluviPreparedBudgetRhythmDirectionBank(
-    val targetCount: Int,
-    val targetOffsets: IntArray,
-    val points: List<FluviPreparedBudgetRhythmPoint>,
-) {
-    init {
-        require(targetCount > 0)
-        require(targetOffsets.size == targetCount + 1)
-        require(targetOffsets.first() == 0)
-        require(targetOffsets.last() == points.size)
-        (0 until targetCount).forEach { handle ->
-            val start = targetOffsets[handle]
-            val end = targetOffsets[handle + 1]
-            require(start in 0..end && end <= points.size)
-            var previous = Long.MIN_VALUE
-            (start until end).forEach { index ->
-                val point = points[index]
-                require(point.epochDay > previous)
-                previous = point.epochDay
-            }
-        }
-    }
-}
-
-data class FluviPreparedBudgetRhythmSnapshot(
-    val coreRevision: Long,
-    val incomeBank: FluviPreparedBudgetRhythmDirectionBank,
-    val expenseBank: FluviPreparedBudgetRhythmDirectionBank,
-) {
-    fun directionBank(direction: LedgerDirection): FluviPreparedBudgetRhythmDirectionBank = when (direction) {
-        LedgerDirection.income -> incomeBank
-        LedgerDirection.expense -> expenseBank
-    }
-}
-
 /** Compact native source for the prepared Flutter Budget limit bank. */
 data class FluviPreparedBudgetLimitSnapshot(
     val coreRevision: Long,
     val yearWindow: FluviPreparedYearWindow,
     val incomeBank: FluviPreparedBudgetDirectionBank,
     val expenseBank: FluviPreparedBudgetDirectionBank,
-    val rhythmSnapshot: FluviPreparedBudgetRhythmSnapshot,
+    val spendingRhythmSnapshot: FluviPreparedSpendingRhythmSnapshot,
     val sqlCallCount: Int,
     val sqlDurationNanos: Long,
 ) {
@@ -93,8 +47,8 @@ data class FluviPreparedBudgetLimitSnapshot(
     init {
         incomeBank.requireLayout(periodSliceCount)
         expenseBank.requireLayout(periodSliceCount)
-        require(rhythmSnapshot.coreRevision == coreRevision)
-        require(rhythmSnapshot.incomeBank.targetCount == incomeBank.targetCount)
-        require(rhythmSnapshot.expenseBank.targetCount == expenseBank.targetCount)
+        require(spendingRhythmSnapshot.coreRevision == coreRevision)
+        require(spendingRhythmSnapshot.incomeBank.targetCount == incomeBank.targetCount)
+        require(spendingRhythmSnapshot.expenseBank.targetCount == expenseBank.targetCount)
     }
 }

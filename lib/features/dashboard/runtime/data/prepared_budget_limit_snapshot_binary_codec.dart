@@ -3,7 +3,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../domain/prepared_budget_limit_snapshot.dart';
-import '../domain/prepared_budget_rhythm_snapshot.dart';
+import '../domain/prepared_spending_rhythm_snapshot.dart';
 
 typedef DashboardPreparedBudgetLimitSnapshotDecodeWorker =
     Future<PreparedBudgetLimitSnapshot> Function(Uint8List bytes);
@@ -25,13 +25,18 @@ final class IsolateDashboardPreparedBudgetLimitSnapshotDecodeWorker {
 /// Compact versioned transport for query-independent dense Budget values.
 abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int magic = 0x464c424c;
-  static const int version = 4;
+  static const int version = 5;
   static const int missingLimitSentinel = -1;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumCategoryCount = 512;
   static const int maximumDenseCellCount =
       (1 + 32 + 32 * 12) * (maximumCategoryCount + 1) * 2;
-  static const int maximumRhythmPointCount = 2 * 1024 * 1024;
+  static const int spendingRhythmPartsPerPoint =
+      SpendingRhythmDayPart.bucketCount;
+  static const int spendingRhythmBytesPerPoint =
+      8 + 8 + spendingRhythmPartsPerPoint * 8;
+  static const int maximumSpendingRhythmPointCount =
+      maximumPayloadBytes ~/ spendingRhythmBytesPerPoint;
 
   static PreparedBudgetLimitSnapshot decode(Uint8List bytes) {
     if (bytes.lengthInBytes > maximumPayloadBytes) {
@@ -52,7 +57,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     }
     final incomeBank = _readDirectionBank(reader);
     final expenseBank = _readDirectionBank(reader);
-    final rhythm = PreparedBudgetRhythmSnapshot(
+    final rhythm = PreparedSpendingRhythmSnapshot(
       coreRevision: revision,
       incomeBank: _readRhythmBank(
         reader,
@@ -70,23 +75,23 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       yearWindowEndInclusive: endYear,
       incomeBank: incomeBank,
       expenseBank: expenseBank,
-      rhythmSnapshot: rhythm,
+      spendingRhythmSnapshot: rhythm,
       nativeSqlCallCount: nativeSqlCallCount,
       nativeSqlDurationMicros: nativeSqlDurationNanos ~/ 1000,
     );
   }
 
-  static PreparedBudgetRhythmDirectionBank _readRhythmBank(
+  static PreparedSpendingRhythmDirectionBank _readRhythmBank(
     _BudgetBinaryReader reader, {
     required int expectedTargetCount,
   }) {
     final targetCount = reader.readInt32();
     if (targetCount != expectedTargetCount) {
-      throw FormatException('Budget rhythm target domain mismatch.');
+      throw FormatException('Spending Rhythm target domain mismatch.');
     }
     final offsetCount = reader.readInt32();
     if (offsetCount != targetCount + 1) {
-      throw FormatException('Invalid Budget rhythm offset count.');
+      throw FormatException('Invalid Spending Rhythm offset count.');
     }
     final offsets = List<int>.generate(
       offsetCount,
@@ -94,21 +99,29 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       growable: false,
     );
     final pointCount = reader.readInt32();
-    if (pointCount < 0 || pointCount > maximumRhythmPointCount) {
-      throw FormatException('Invalid Budget rhythm point count.');
+    if (pointCount < 0 || pointCount > maximumSpendingRhythmPointCount) {
+      throw FormatException('Invalid Spending Rhythm point count.');
     }
-    final points = List<PreparedBudgetRhythmPoint>.generate(
-      pointCount,
-      (_) => PreparedBudgetRhythmPoint(
-        epochDay: reader.readInt64(),
-        actualScaled100: reader.readInt64(),
-      ),
+    final epochDays = List<int>.filled(pointCount, 0, growable: false);
+    final actuals = List<int>.filled(pointCount, 0, growable: false);
+    final parts = List<int>.filled(
+      pointCount * spendingRhythmPartsPerPoint,
+      0,
       growable: false,
     );
-    return PreparedBudgetRhythmDirectionBank(
+    for (var point = 0; point < pointCount; point += 1) {
+      epochDays[point] = reader.readInt64();
+      actuals[point] = reader.readInt64();
+      for (var part = 0; part < spendingRhythmPartsPerPoint; part += 1) {
+        parts[point * spendingRhythmPartsPerPoint + part] = reader.readInt64();
+      }
+    }
+    return PreparedSpendingRhythmDirectionBank(
       targetCount: targetCount,
       targetOffsets: offsets,
-      points: points,
+      epochDays: epochDays,
+      dailyActualScaled100: actuals,
+      dayPartActualScaled100: parts,
     );
   }
 

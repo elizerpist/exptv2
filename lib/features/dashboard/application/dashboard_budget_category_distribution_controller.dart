@@ -7,7 +7,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
-import '../runtime/domain/prepared_budget_rhythm_snapshot.dart';
+import '../runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/year_month.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
@@ -298,7 +298,7 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
     DayScope(:final date) => _rhythmFor(
       snapshot,
       direction,
-    ).actualAtEpochDay(targetHandle: targetHandle, epochDay: date.epochDay),
+    ).targetView(targetHandle).actualAtEpochDay(date.epochDay),
     _ =>
       snapshot
           .cellAt(
@@ -309,11 +309,11 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
           .actualScaled100,
   };
 
-  static PreparedBudgetRhythmDirectionBank _rhythmFor(
+  static PreparedSpendingRhythmDirectionBank _rhythmFor(
     PreparedBudgetLimitSnapshot snapshot,
     LedgerDirection direction,
   ) {
-    final rhythm = snapshot.rhythmSnapshot;
+    final rhythm = snapshot.spendingRhythmSnapshot;
     if (rhythm == null || rhythm.coreRevision != snapshot.coreRevision) {
       throw StateError('Exact prepared Budget daily rhythm is unavailable.');
     }

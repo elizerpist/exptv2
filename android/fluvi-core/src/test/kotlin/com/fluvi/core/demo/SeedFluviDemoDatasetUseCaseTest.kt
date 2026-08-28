@@ -188,13 +188,13 @@ class SeedFluviDemoDatasetUseCaseTest {
     }
 
     @Test
-    fun preparedBudgetSnapshotRetainsSparseDailyTargetRhythmsFromTheSameAcquisition() = runBlocking {
+    fun preparedBudgetSnapshotRetainsSparseDayPartRhythmsFromTheSameAcquisition() = runBlocking {
         core.demoSeed.seed(financialLimitYearWindow = 2025..2026)
         val snapshot = core.budget.preparedLimitSnapshot(
             expectedRevision = 2L,
             yearWindow = FluviPreparedYearWindow(2025, 2026),
         )
-        val rhythm = snapshot.rhythmSnapshot
+        val rhythm = snapshot.spendingRhythmSnapshot
         assertEquals(snapshot.coreRevision, rhythm.coreRevision)
         LedgerDirection.entries.forEach { direction ->
             val dense = snapshot.directionBank(direction)
@@ -207,6 +207,9 @@ class SeedFluviDemoDatasetUseCaseTest {
                 .sumOf { it.actualScaled100 }
             assertEquals(dense.actualScaled100[0], aggregateSum)
             assertTrue(sparse.points.all { it.actualScaled100 > 0L })
+            assertTrue(sparse.points.all { point ->
+                point.dayPartActualScaled100.sum() == point.actualScaled100
+            })
         }
         // The rhythm is folded while the existing grouped native row set is
         // present; it does not introduce a per-bar/category SQL shape.

@@ -6,7 +6,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
-import '../../application/dashboard_budget_rhythm_controller.dart';
+import '../../application/dashboard_spending_rhythm_controller.dart';
 import 'budget_category_distribution_card.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
@@ -101,7 +101,7 @@ class BudgetDistributionPager extends StatefulWidget {
   final BudgetTargetAvatarRailController avatarRailController;
   final bool expandCategoryDonutToFit;
   final ValueListenable<BudgetContentLayout>? contentCardStyle;
-  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
+  final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 

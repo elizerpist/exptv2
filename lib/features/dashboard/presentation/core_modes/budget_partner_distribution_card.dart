@@ -7,14 +7,14 @@ import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
-import '../../application/dashboard_budget_rhythm_controller.dart';
+import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_budget_partner_distribution_controller.dart';
 import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_page_surface.dart';
-import 'budget_rhythm_bar_chart.dart';
+import 'spending_rhythm_bar_chart.dart';
 import 'budget_clay_donut_scene.dart';
 import 'budget_partner_distribution_visual_bank.dart';
 import 'budget_partner_visual_intent.dart';
@@ -47,7 +47,7 @@ class BudgetPartnerDistributionCard extends StatefulWidget {
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>
   drawableFrames;
   final bool expandDonutToFit;
-  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
+  final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
 
   /// Narrow test/presentation seam. Production takes the existing
@@ -353,17 +353,20 @@ class _BudgetPartnerDistributionCardState
                 : null,
           ),
       ],
-      donutDiameter: widget.rhythm == null ? 150 : 104,
+      donutDiameter: 150,
       donutScale: .90,
       expandDonutToFit: widget.expandDonutToFit,
-      leftFooterMinimumHeight: BudgetRhythmBarChart.minimumLayoutHeight,
-      leftFooter: widget.rhythm == null
+      fullWidthFooterMinimumHeight: SpendingRhythmBarChart.minimumLayoutHeight,
+      fullWidthFooter: widget.rhythm == null
           ? null
-          : ValueListenableBuilder<DashboardBudgetRhythmState?>(
+          : ValueListenableBuilder<DashboardSpendingRhythmState?>(
               valueListenable: widget.rhythm!,
               builder: (context, rhythm, child) => rhythm == null
                   ? const SizedBox.shrink()
-                  : BudgetRhythmBarChart(state: rhythm),
+                  : SpendingRhythmBarChart(
+                      key: const ValueKey('partner-spending-rhythm-chart'),
+                      state: rhythm,
+                    ),
             ),
     );
   }

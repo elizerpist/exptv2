@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
-import '../../application/dashboard_budget_rhythm_controller.dart';
+import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
@@ -66,7 +66,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final BudgetDistributionPageController? budgetDistributionPageController;
   final ValueListenable<BudgetContentLayout>? budgetContentCardStyle;
   final ValueListenable<BudgetSectionOrder>? budgetSectionOrder;
-  final ValueListenable<DashboardBudgetRhythmState?>? budgetRhythm;
+  final ValueListenable<DashboardSpendingRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
   final ValueChanged<bool>? onBudgetAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
@@ -168,6 +168,30 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
 
   void _onPanCancel() => _finishPointerSequence();
 
+  /// Content cards are an extension of Header vertical expansion, never a
+  /// mode-switch surface. Keeping this separate from the Header's pan path
+  /// prevents a vertical recognizer that observes a diagonal/horizontal
+  /// displacement from reaching [_switchHorizontalModeOnce].
+  void _onContentVerticalStart(DragStartDetails details) {
+    _pointerAxis = GestureDirectionIntent.vertical;
+    _pointerOrigin = details.globalPosition;
+    _appliedVerticalDisplacement = 0;
+    _verticalExpansionStarted = false;
+    _horizontalModeSwitched = false;
+  }
+
+  void _onContentVerticalUpdate(DragUpdateDetails details) {
+    final delta = details.delta.dy;
+    if (delta == 0) return;
+    if (!_verticalExpansionStarted) {
+      _verticalExpansionStarted = true;
+      widget.onVerticalExpansionStart();
+    }
+    widget.onVerticalExpansionDragBy(delta);
+  }
+
+  void _onContentVerticalEnd(DragEndDetails _) => _finishPointerSequence();
+
   void _finishPointerSequence() {
     if (_pointerAxis == GestureDirectionIntent.vertical &&
         _verticalExpansionStarted) {
@@ -188,22 +212,23 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Positioned(
-          left: presentation.geometry.modeContentBounds.left,
-          top: presentation.geometry.modeContentBounds.top,
-          width: presentation.geometry.modeContentBounds.width,
-          height: presentation.geometry.modeContentBounds.height,
+        // The mode surface itself must own a real full-sized hit-test parent.
+        // A non-positioned wrapper can shrink to the visual Stack's zero-size
+        // layout child even while its positioned cards paint below it, which
+        // was the physical reason Card2 drags were insensitive.
+        const SizedBox.expand(),
+        Positioned.fill(
           child: GestureDetector(
             key: const ValueKey('dashboard-core-mode-content-gesture-region'),
             behavior: HitTestBehavior.translucent,
             dragStartBehavior: DragStartBehavior.down,
-            onPanStart: _onPanStart,
-            onPanUpdate: _onPanUpdate,
-            onPanEnd: _onPanEnd,
-            onPanCancel: _onPanCancel,
+            onVerticalDragStart: _onContentVerticalStart,
+            onVerticalDragUpdate: _onContentVerticalUpdate,
+            onVerticalDragEnd: _onContentVerticalEnd,
+            onVerticalDragCancel: _finishPointerSequence,
+            child: _buildModeSurface(mode, presentation),
           ),
         ),
-        _buildModeSurface(mode, presentation),
         Positioned(
           left: headerBounds.left,
           top: headerBounds.top,

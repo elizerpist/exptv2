@@ -30,7 +30,7 @@
 | `lib/features/dashboard/presentation/core_modes/spending_rhythm_bar_layout.dart` | pure width, gap, pitch and scroll solver |
 | `lib/features/dashboard/presentation/core_modes/spending_rhythm_bar_chart.dart` | rendering, x-axis and average visual only |
 | `lib/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart` | Partner-specific upper/lower full-width composition |
-| `lib/features/dashboard/presentation/dashboard_budget_ring_presentation*.dart` | SUM style and healthy-colour setting owner |
+| `lib/core/financial_limits/presentation/budget_ring_presentation.dart` | SUM style and healthy-colour setting owner |
 | `lib/features/dashboard/presentation/core_modes/dashboard_header_contrast_text.dart` | one Header text contrast primitive |
 | `lib/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart` | one pointer-sequence gesture arbiter and handoff owner |
 
@@ -143,7 +143,7 @@ final class SpendingRhythmBarLayout {
 }
 ```
 
-- [ ] **Step 1: Write solver RED tests.** Pin `11.0` to the former authored width. At measured minimum usable Partner width assert 6 remains 11; 12/28/29/30/31 fit with `min <= width <= 11` and equal non-negative gaps; 31 never scrolls; SUM 32 remains at min with content wider than viewport.
+- [ ] **Step 1: Write solver RED tests.** Pin `11.0` to the former authored width. At measured minimum usable Partner width assert the corrected 8-part DAY chart remains 11; 12/28/29/30/31 fit with `min <= width <= 11` and equal non-negative gaps; 31 never scrolls; SUM 32 remains at min with content wider than viewport.
 - [ ] **Step 2: Verify RED.** Run the layout test in proot; expected unresolved solver.
 - [ ] **Step 3: Implement explicit layout tokens.** Measure actual Partner minimum inner width from constraints. Select a named minimum inter-bar visual gap, derive `minBarWidth = (minimumWidth - 30*minGap)/31`, assert positive, then implement documented fit/clamp/equal-gap math. SUM >31 freezes 31-slot pitch and uses all bars for extent.
 - [ ] **Step 4: Write chart RED tests.** For values 5k/20k/10k/0 expect `.25/1/.5/0`, mean 8.75k and average fraction .4375; all-zero has no average. Check DAY labels, MONTH `1/5/10/15/20/25/last`, YEAR Jan–Dec and concrete moving SUM year labels.

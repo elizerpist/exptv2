@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../query/domain/ledger_direction.dart';
-import 'prepared_budget_rhythm_snapshot.dart';
+import 'prepared_spending_rhythm_snapshot.dart';
 
 /// One typed financial-limit period. It has no string allocation on the hot
 /// target/time semantic tick path.
@@ -142,7 +142,7 @@ final class PreparedBudgetLimitSnapshot {
     required this.yearWindowEndInclusive,
     required this.incomeBank,
     required this.expenseBank,
-    this.rhythmSnapshot,
+    this.spendingRhythmSnapshot,
     this.nativeSqlCallCount = 0,
     this.nativeSqlDurationMicros = 0,
   }) : assert(coreRevision > 0),
@@ -152,7 +152,7 @@ final class PreparedBudgetLimitSnapshot {
        assert(nativeSqlDurationMicros >= 0) {
     incomeBank.requireLayout(periodSliceCount: periodSliceCount);
     expenseBank.requireLayout(periodSliceCount: periodSliceCount);
-    final rhythm = rhythmSnapshot;
+    final rhythm = spendingRhythmSnapshot;
     if (rhythm != null &&
         (rhythm.coreRevision != coreRevision ||
             rhythm.incomeBank.targetCount != incomeBank.targetCount ||
@@ -169,11 +169,11 @@ final class PreparedBudgetLimitSnapshot {
   final PreparedBudgetLimitDirectionBank incomeBank;
   final PreparedBudgetLimitDirectionBank expenseBank;
 
-  /// Sparse query-independent daily actuals retained from the same native
-  /// acquisition as this dense SUM/YEAR/MONTH bank. It is intentionally
-  /// optional only while decoding legacy test fixtures; production payloads
-  /// are versioned to include it.
-  final PreparedBudgetRhythmSnapshot? rhythmSnapshot;
+  /// Timestamp-faithful, target-indexed Spending Rhythm facts retained from
+  /// the same native acquisition as this dense SUM/YEAR/MONTH bank. It is
+  /// optional only for hand-built non-rhythm fixtures; production payload
+  /// version 5 always includes it.
+  final PreparedSpendingRhythmSnapshot? spendingRhythmSnapshot;
   final int nativeSqlCallCount;
   final int nativeSqlDurationMicros;
 

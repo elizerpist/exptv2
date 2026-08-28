@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../dashboard_budget_header_presentation.dart';
 
 /// One narrow paint lane for the prepared Budget category-allocation
 /// partition. It traverses the retained canonical bank; the allocation total
@@ -16,21 +17,31 @@ final class BudgetAllocationPartitionLane extends StatelessWidget {
   final DashboardBudgetPartitionPresentation partition;
 
   @override
-  Widget build(BuildContext context) => RepaintBoundary(
-    child: CustomPaint(
-      key: const ValueKey('budget-header-allocation-partition'),
-      painter: BudgetAllocationPartitionPainter(partition: partition),
-      child: const SizedBox.expand(),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final profile = DashboardBudgetHeaderPresentationScope.profileOf(context);
+    return RepaintBoundary(
+      child: CustomPaint(
+        key: const ValueKey('budget-header-allocation-partition'),
+        painter: BudgetAllocationPartitionPainter(
+          partition: partition,
+          showOuterContour: profile.settings.showPartitionContour,
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
 }
 
 /// Paint-only renderer for the ordered dense Budget bank. It never sorts,
 /// searches, aggregates or projects category collections.
 final class BudgetAllocationPartitionPainter extends CustomPainter {
-  const BudgetAllocationPartitionPainter({required this.partition});
+  const BudgetAllocationPartitionPainter({
+    required this.partition,
+    this.showOuterContour = false,
+  });
 
   final DashboardBudgetPartitionPresentation partition;
+  final bool showOuterContour;
 
   static const _cornerRadius = Radius.circular(4);
   static const _allocatedRemainderOpacity = .38;
@@ -48,40 +59,46 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
         Paint()..color = FluviVisualTokens.surface.withValues(alpha: .28),
       );
 
-    if (!partition.hasPositiveAggregateLimit) {
-      canvas.restore();
-      return;
-    }
-    final bank = partition.bank;
-    final catalog = partition.catalog;
-    if (bank == null || catalog == null) {
-      canvas.restore();
-      return;
-    }
-
-    var covered = 0.0;
-    for (var handle = 1; handle < bank.targetCount; handle += 1) {
-      if (covered >= 1) break;
-      final category = catalog.targetAtHandle(handle).category;
-      if (category == null) continue;
-      final segment = partition.segmentForCategoryHandle(handle);
-      final color = CategoryColorCatalog.resolve(category.colorId).middleColor;
-      covered = _paintPortion(
-        canvas: canvas,
-        track: track,
-        covered: covered,
-        ratio: segment.opaqueRatio,
-        color: color,
-      );
-      covered = _paintPortion(
-        canvas: canvas,
-        track: track,
-        covered: covered,
-        ratio: segment.translucentRatio,
-        color: color.withValues(alpha: _allocatedRemainderOpacity),
-      );
+    if (partition.hasPositiveAggregateLimit) {
+      final bank = partition.bank;
+      final catalog = partition.catalog;
+      if (bank != null && catalog != null) {
+        var covered = 0.0;
+        for (var handle = 1; handle < bank.targetCount; handle += 1) {
+          if (covered >= 1) break;
+          final category = catalog.targetAtHandle(handle).category;
+          if (category == null) continue;
+          final segment = partition.segmentForCategoryHandle(handle);
+          final color = CategoryColorCatalog.resolve(
+            category.colorId,
+          ).middleColor;
+          covered = _paintPortion(
+            canvas: canvas,
+            track: track,
+            covered: covered,
+            ratio: segment.opaqueRatio,
+            color: color,
+          );
+          covered = _paintPortion(
+            canvas: canvas,
+            track: track,
+            covered: covered,
+            ratio: segment.translucentRatio,
+            color: color.withValues(alpha: _allocatedRemainderOpacity),
+          );
+        }
+      }
     }
     canvas.restore();
+    if (showOuterContour) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(track.deflate(.5), const Radius.circular(3.5)),
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
   }
 
   double _paintPortion({
@@ -124,6 +141,7 @@ final class BudgetAllocationPartitionPainter extends CustomPainter {
           old.effectiveLimitByTargetHandle,
           partition.effectiveLimitByTargetHandle,
         ) ||
-        !identical(old.categoryOverlay, partition.categoryOverlay);
+        !identical(old.categoryOverlay, partition.categoryOverlay) ||
+        oldDelegate.showOuterContour != showOuterContour;
   }
 }

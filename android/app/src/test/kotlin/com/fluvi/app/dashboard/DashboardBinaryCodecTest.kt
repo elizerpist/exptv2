@@ -11,9 +11,10 @@ import com.fluvi.core.query.FluviPreparedDashboardIndexFrame
 import com.fluvi.core.query.FluviPreparedDashboardGeometryDayBucket
 import com.fluvi.core.query.FluviPreparedBudgetDirectionBank
 import com.fluvi.core.query.FluviPreparedBudgetLimitSnapshot
-import com.fluvi.core.query.FluviPreparedBudgetRhythmDirectionBank
-import com.fluvi.core.query.FluviPreparedBudgetRhythmPoint
-import com.fluvi.core.query.FluviPreparedBudgetRhythmSnapshot
+import com.fluvi.core.query.FluviPreparedSpendingRhythmDirectionBank
+import com.fluvi.core.query.FluviPreparedSpendingRhythmPoint
+import com.fluvi.core.query.FluviPreparedSpendingRhythmSnapshot
+import com.fluvi.core.query.SpendingRhythmDayPart
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDistributionCell
 import com.fluvi.core.query.FluviPreparedBudgetPartnerCategoryContribution
 import com.fluvi.core.query.FluviPreparedBudgetPartnerDayCell
@@ -107,7 +108,7 @@ class DashboardBinaryCodecTest {
             yearWindow = FluviPreparedYearWindow(2026, 2026),
             incomeBank = budgetBank("salary", actual = 20L, limit = 100L),
             expenseBank = budgetBank("rent", actual = 80L, limit = 100L),
-            rhythmSnapshot = FluviPreparedBudgetRhythmSnapshot(
+            spendingRhythmSnapshot = FluviPreparedSpendingRhythmSnapshot(
                 coreRevision = 9L,
                 incomeBank = rhythmBank(20L),
                 expenseBank = rhythmBank(80L),
@@ -321,11 +322,19 @@ class DashboardBinaryCodecTest {
         input.skipBytes(27)
     }
 
-    private fun rhythmBank(value: Long): FluviPreparedBudgetRhythmDirectionBank =
-        FluviPreparedBudgetRhythmDirectionBank(
+    private fun rhythmBank(value: Long): FluviPreparedSpendingRhythmDirectionBank =
+        FluviPreparedSpendingRhythmDirectionBank(
             targetCount = 2,
             targetOffsets = intArrayOf(0, 1, 1),
-            points = listOf(FluviPreparedBudgetRhythmPoint(20_000L, value)),
+            points = listOf(
+                FluviPreparedSpendingRhythmPoint(
+                    epochDay = 20_000L,
+                    actualScaled100 = value,
+                    dayPartActualScaled100 = LongArray(SpendingRhythmDayPart.entries.size).also {
+                        it[SpendingRhythmDayPart.LATE_EVENING.ordinal] = value
+                    },
+                ),
+            ),
         )
 
     private fun assertRhythmBank(input: DataInputStream, value: Long) {
@@ -334,6 +343,10 @@ class DashboardBinaryCodecTest {
         assertArrayEquals(intArrayOf(0, 1, 1), IntArray(3) { input.readInt() })
         assertEquals(1, input.readInt())
         assertEquals(20_000L, input.readLong())
+        assertEquals(value, input.readLong())
+        repeat(SpendingRhythmDayPart.entries.size - 1) {
+            assertEquals(0L, input.readLong())
+        }
         assertEquals(value, input.readLong())
     }
 

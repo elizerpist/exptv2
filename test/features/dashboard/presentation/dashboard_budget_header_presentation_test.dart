@@ -43,4 +43,35 @@ void main() {
       expect(profile.foreground, FluviVisualTokens.textPrimary);
     },
   );
+
+  test(
+    'partition contour and text contrast default to the baseline and reset',
+    () {
+      final controller = DashboardBudgetHeaderPresentationController();
+      addTearDown(controller.dispose);
+
+      expect(controller.value.showPartitionContour, isFalse);
+      expect(
+        controller.value.textContrastStyle,
+        DashboardHeaderTextContrastStyle.none,
+      );
+
+      controller
+        ..setPartitionContour(true)
+        ..selectTextContrastStyle(
+          DashboardHeaderTextContrastStyle.oppositeOutline,
+        );
+      expect(controller.value.showPartitionContour, isTrue);
+      expect(
+        controller.value.textContrastStyle,
+        DashboardHeaderTextContrastStyle.oppositeOutline,
+      );
+
+      controller.reset();
+      expect(
+        controller.value,
+        DashboardBudgetHeaderPresentationSettings.defaults,
+      );
+    },
+  );
 }

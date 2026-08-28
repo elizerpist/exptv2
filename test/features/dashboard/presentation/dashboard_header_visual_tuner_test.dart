@@ -11,7 +11,9 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dar
 import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_amount_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
+import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -286,6 +288,55 @@ void main() {
     summary.dispose();
     budgetOrder.dispose();
   });
+
+  testWidgets(
+    'SUM controls and Header presentation settings remain independent',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final ring = BudgetRingPresentationController();
+      final header = DashboardBudgetHeaderPresentationController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 520,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              budgetRingPresentation: ring,
+              budgetHeaderPresentation: header,
+            ),
+          ),
+        ),
+      );
+
+      final arc = find.text('Színes skála + fehér szegmens');
+      await tester.ensureVisible(arc);
+      await tester.tap(arc);
+      await tester.pump();
+      expect(ring.value.sumRingStyle, BudgetSumRingStyle.coloredScaleWhiteArc);
+
+      final accent = find.text('Egészséges szín: Kategóriaszín');
+      await tester.ensureVisible(accent);
+      await tester.tap(accent);
+      await tester.pump();
+      expect(ring.value.healthyColorMode, BudgetHealthyColorMode.targetAccent);
+
+      header
+        ..setPartitionContour(true)
+        ..selectTextContrastStyle(
+          DashboardHeaderTextContrastStyle.oppositeOutline,
+        );
+      expect(header.value.showPartitionContour, isTrue);
+      expect(
+        header.value.textContrastStyle,
+        DashboardHeaderTextContrastStyle.oppositeOutline,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      ring.dispose();
+      header.dispose();
+    },
+  );
 
   test('tuner placement always reserves the live Header plus its gap', () {
     const gap = 12.0;

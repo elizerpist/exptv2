@@ -81,7 +81,7 @@ void main() {
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
       expect(find.text('Kategóriák'), findsOneWidget);
       expect(
-        find.text('7 napos ritmus'),
+        find.text('Költési ritmus'),
         findsNothing,
         reason: 'Rhythm belongs to the Partner analysis page, not Category.',
       );

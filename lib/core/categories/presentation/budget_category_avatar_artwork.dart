@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../financial_limits/presentation/budget_ring_presentation.dart';
 import '../../assets/prepared_vector_asset_atlas.dart';
 import '../../design/dashboard_mode_palette.dart';
 import '../../financial_limits/domain/financial_limit.dart';
@@ -181,6 +182,15 @@ final class BudgetProgressRingGeometry {
   final Size groundShadowSize;
 
   double get capRadius => trackWidth / 2;
+
+  /// The one circular ratio coordinate for every scope renderer. Canvas Y
+  /// increases downward, so the positive sweep is the authored clockwise
+  /// Budget direction.
+  Offset pointForRatio(double ratio) {
+    final angle = canonicalClockwiseStartAngle + math.pi * 2 * ratio;
+    return center +
+        Offset(math.cos(angle) * trackRadius, math.sin(angle) * trackRadius);
+  }
 }
 
 /// Fill strategies over the one [BudgetProgressRingGeometry]. Every strategy
@@ -285,11 +295,11 @@ final class BudgetProgressRingAnnualHealthMaterial {
   });
 
   factory BudgetProgressRingAnnualHealthMaterial.forHealth(
-    BudgetProgressRingAnnualSegmentHealth health,
-  ) {
+    BudgetProgressRingAnnualSegmentHealth health, {
+    Color healthyColor = FluviVisualTokens.budgetProgressHealthy,
+  }) {
     final base = switch (health) {
-      BudgetProgressRingAnnualSegmentHealth.healthy =>
-        FluviVisualTokens.budgetProgressHealthy,
+      BudgetProgressRingAnnualSegmentHealth.healthy => healthyColor,
       BudgetProgressRingAnnualSegmentHealth.warning =>
         FluviVisualTokens.budgetProgressWarning,
       BudgetProgressRingAnnualSegmentHealth.danger =>
@@ -395,6 +405,10 @@ final class BudgetProgressRingSphereMaterial {
     depth: defaultDepth,
   );
 
+  static final white = BudgetProgressRingSphereMaterial.forHealthColor(
+    const Color(0xfff8f6ff),
+  );
+
   factory BudgetProgressRingSphereMaterial.forHealthColor(Color base) {
     final hsl = HSLColor.fromColor(base);
     return BudgetProgressRingSphereMaterial._(
@@ -441,6 +455,7 @@ abstract final class BudgetProgressRingSumScaleMarkers {
 
   static List<BudgetProgressRingSumScaleMarker> resolve({
     required BudgetProgressRingGeometry geometry,
+    Color healthyColor = FluviVisualTokens.budgetProgressHealthy,
   }) {
     const colors = <Color>[
       FluviVisualTokens.budgetProgressHealthy,
@@ -450,24 +465,36 @@ abstract final class BudgetProgressRingSumScaleMarkers {
     return List<BudgetProgressRingSumScaleMarker>.unmodifiable(
       List<BudgetProgressRingSumScaleMarker>.generate(ratios.length, (index) {
         final ratio = ratios[index];
-        final angle =
-            BudgetProgressRingGeometry.canonicalClockwiseStartAngle +
-            math.pi * 2 * ratio;
         return BudgetProgressRingSumScaleMarker(
           ratio: ratio,
-          center:
-              geometry.center +
-              Offset(
-                math.cos(angle) * geometry.trackRadius,
-                math.sin(angle) * geometry.trackRadius,
-              ),
+          center: geometry.pointForRatio(ratio),
           material: BudgetProgressRingSphereMaterial.forHealthColor(
-            colors[index],
+            index == 0 ? healthyColor : colors[index],
           ),
         );
       }),
     );
   }
+}
+
+/// Fixed white semantic boundaries for the two coloured SUM-scale styles.
+/// They share the exact circle coordinate/material authority with the DAY and
+/// current-SUM spheres; only the ratios and neutral material differ.
+abstract final class BudgetProgressRingSumColoredScaleMarkers {
+  static const List<double> boundaryRatios = <double>[.75, .90];
+
+  static List<BudgetProgressRingSumScaleMarker> resolve({
+    required BudgetProgressRingGeometry geometry,
+  }) => List<BudgetProgressRingSumScaleMarker>.unmodifiable(
+    <BudgetProgressRingSumScaleMarker>[
+      for (final ratio in boundaryRatios)
+        BudgetProgressRingSumScaleMarker(
+          ratio: ratio,
+          center: geometry.pointForRatio(ratio),
+          material: BudgetProgressRingSphereMaterial.white,
+        ),
+    ],
+  );
 }
 
 /// One atomic Budget selection value. It carries both the exact semantic
@@ -981,6 +1008,7 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ringPresentation = BudgetRingPresentationScope.settingsOf(context);
     final gradient = usesCategoryHueShift
         ? _SelectionArcGradient.fromCategoryColor(
             progressColor ?? categoryColor,
@@ -1011,6 +1039,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             breakEvenGaugeRatio: breakEvenGaugeRatio,
             annualSegments: annualSegments,
             typicalMarkerPosition: typicalMarkerPosition,
+            sumRingStyle: ringPresentation.sumRingStyle,
+            healthyColorMode: ringPresentation.healthyColorMode,
           ),
         ),
       ),
@@ -1061,6 +1091,8 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.breakEvenGaugeRatio,
     required this.annualSegments,
     required this.typicalMarkerPosition,
+    required this.sumRingStyle,
+    required this.healthyColorMode,
   });
 
   final BudgetProgressRingGeometry ringGeometry;
@@ -1075,6 +1107,8 @@ final class _SelectionChromePainter extends CustomPainter {
   final double? breakEvenGaugeRatio;
   final List<BudgetProgressRingAnnualSegment> annualSegments;
   final double? typicalMarkerPosition;
+  final BudgetSumRingStyle sumRingStyle;
+  final BudgetHealthyColorMode healthyColorMode;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1173,7 +1207,16 @@ final class _SelectionChromePainter extends CustomPainter {
     canvas.restore();
   }
 
+  Color get _healthyColor => BudgetHealthyVisualColorResolver.resolve(
+    mode: healthyColorMode,
+    targetAccent: targetAccent,
+    fixedGreen: FluviVisualTokens.budgetProgressHealthy,
+  );
+
   void _paintRingTrack(Canvas canvas, Rect trackRect, double startAngle) {
+    final usesColoredSumScale =
+        geometry == BudgetLimitProgressChromeGeometry.typicalMarker &&
+        sumRingStyle != BudgetSumRingStyle.current;
     canvas.drawArc(
       trackRect,
       startAngle,
@@ -1191,12 +1234,16 @@ final class _SelectionChromePainter extends CustomPainter {
       math.pi * 2,
       false,
       Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: ringGeometry.trackGradientColors,
-          stops: ringGeometry.trackGradientStops,
-        ).createShader(trackRect)
+        ..shader =
+            (usesColoredSumScale
+                    ? _sumScaleGradient(startAngle)
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: ringGeometry.trackGradientColors,
+                        stops: ringGeometry.trackGradientStops,
+                      ))
+                .createShader(trackRect)
         ..style = PaintingStyle.stroke
         ..strokeWidth = ringGeometry.trackWidth
         ..strokeCap = StrokeCap.round,
@@ -1211,6 +1258,32 @@ final class _SelectionChromePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 5
         ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  Gradient _sumScaleGradient(double startAngle) {
+    const transitionHalfWidth = .035;
+    final warning = FluviVisualTokens.budgetProgressWarning;
+    final danger = FluviVisualTokens.budgetProgressDanger;
+    return SweepGradient(
+      startAngle: startAngle,
+      endAngle: startAngle + math.pi * 2,
+      colors: <Color>[
+        _healthyColor,
+        Color.lerp(_healthyColor, warning, .5)!,
+        warning,
+        Color.lerp(warning, danger, .5)!,
+        danger,
+        danger,
+      ],
+      stops: const <double>[
+        0,
+        .75 - transitionHalfWidth,
+        .75 + transitionHalfWidth,
+        .90 - transitionHalfWidth,
+        .90 + transitionHalfWidth,
+        1,
+      ],
     );
   }
 
@@ -1352,6 +1425,7 @@ final class _SelectionChromePainter extends CustomPainter {
       );
       final material = BudgetProgressRingAnnualHealthMaterial.forHealth(
         segment.health,
+        healthyColor: _healthyColor,
       );
       _paintActiveArcWithColors(
         canvas,
@@ -1366,6 +1440,10 @@ final class _SelectionChromePainter extends CustomPainter {
   }
 
   void _paintTypicalMarker(Canvas canvas, Rect trackRect, double startAngle) {
+    if (sumRingStyle != BudgetSumRingStyle.current) {
+      _paintColoredSumMarker(canvas, trackRect, startAngle);
+      return;
+    }
     final rawPosition = typicalMarkerPosition;
     if (rawPosition != null) {
       const markerSweep = math.pi * 2 * .055;
@@ -1378,9 +1456,63 @@ final class _SelectionChromePainter extends CustomPainter {
     // legible when the current marker reaches one of them.
     for (final marker in BudgetProgressRingSumScaleMarkers.resolve(
       geometry: ringGeometry,
+      healthyColor: _healthyColor,
     )) {
       _paintSphere(canvas, center: marker.center, material: marker.material);
     }
+  }
+
+  void _paintColoredSumMarker(
+    Canvas canvas,
+    Rect trackRect,
+    double startAngle,
+  ) {
+    const markerSweep = math.pi * 2 * .055;
+    final boundaries = BudgetProgressRingSumColoredScaleMarkers.resolve(
+      geometry: ringGeometry,
+    );
+    final rawPosition = typicalMarkerPosition;
+    if (rawPosition != null) {
+      final position = rawPosition.clamp(0.0, 1.0).toDouble();
+      final center = _centerForRatio(position, startAngle);
+      switch (sumRingStyle) {
+        case BudgetSumRingStyle.current:
+          break;
+        case BudgetSumRingStyle.coloredScaleWhiteArc:
+          _paintActiveArcWithColors(
+            canvas,
+            trackRect,
+            startAngle + position * math.pi * 2 - markerSweep / 2,
+            markerSweep,
+            BudgetProgressRingSphereMaterial.white.highlight,
+            BudgetProgressRingSphereMaterial.white.body,
+            BudgetProgressRingSphereMaterial.white.depth,
+          );
+        case BudgetSumRingStyle.coloredScaleMovingSphere:
+          _paintSphere(
+            canvas,
+            center: center,
+            material: BudgetProgressRingSphereMaterial.white,
+          );
+      }
+    }
+    // Boundary spheres deliberately paint last, like DAY's fixed reference
+    // markers, so the financial-coordinate boundaries stay legible when the
+    // current white indicator happens to coincide with one of them.
+    for (final boundary in boundaries) {
+      _paintSphere(
+        canvas,
+        center: boundary.center,
+        material: boundary.material,
+      );
+    }
+  }
+
+  Offset _centerForRatio(double ratio, double startAngle) {
+    assert(
+      startAngle == BudgetProgressRingGeometry.canonicalClockwiseStartAngle,
+    );
+    return ringGeometry.pointForRatio(ratio);
   }
 
   @override
@@ -1396,7 +1528,9 @@ final class _SelectionChromePainter extends CustomPainter {
       oldDelegate.geometry != geometry ||
       oldDelegate.breakEvenGaugeRatio != breakEvenGaugeRatio ||
       !listEquals(oldDelegate.annualSegments, annualSegments) ||
-      oldDelegate.typicalMarkerPosition != typicalMarkerPosition;
+      oldDelegate.typicalMarkerPosition != typicalMarkerPosition ||
+      oldDelegate.sumRingStyle != sumRingStyle ||
+      oldDelegate.healthyColorMode != healthyColorMode;
 }
 
 /// Literal source vector contract from the local visual reference.

@@ -12,7 +12,7 @@ import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
-import '../../application/dashboard_budget_rhythm_controller.dart';
+import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
@@ -25,6 +25,7 @@ import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import '../dashboard_budget_header_presentation.dart';
 import 'budget_category_avatar_rail.dart';
 import 'budget_allocation_partition_lane.dart';
+import 'dashboard_header_contrast_text.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
@@ -61,7 +62,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final BudgetDistributionPageController? distributionPageController;
   final ValueListenable<BudgetContentLayout>? contentCardStyle;
   final ValueListenable<BudgetSectionOrder>? sectionOrder;
-  final ValueListenable<DashboardBudgetRhythmState?>? rhythm;
+  final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final ValueChanged<bool>? onAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
@@ -221,16 +222,19 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     ? null
                     : ValueListenableBuilder<DashboardBudgetPresentationState>(
                         valueListenable: presentationController!,
-                        builder: (context, state, _) => Text(
-                          state.header.metric.modeLabel,
-                          key: const ValueKey(
-                            'dashboard-core-mode-label-budget',
-                          ),
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: FluviVisualTokens.textSecondary,
+                        builder: (context, state, _) =>
+                            DashboardHeaderContrastText(
+                              data: state.header.metric.modeLabel,
+                              key: const ValueKey(
+                                'dashboard-core-mode-label-budget',
                               ),
-                        ),
+                              style:
+                                  Theme.of(context).textTheme.labelSmall ??
+                                  const TextStyle(),
+                              foreground: headerProfile.foreground,
+                              contrastStyle:
+                                  headerProfile.settings.textContrastStyle,
+                            ),
                       ),
                 visualController: headerVisualController,
                 visualFrameListenable: headerVisualFrame,
@@ -289,30 +293,31 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
-                                        Text(
-                                          header.title,
+                                        DashboardHeaderContrastText(
+                                          data: header.title,
                                           key: const ValueKey(
                                             'budget-header-target-title',
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: headerProfile.foreground,
+                                          style: const TextStyle(
                                             fontSize: 10,
                                             height: 1,
                                             fontWeight: FontWeight.w900,
                                           ),
+                                          foreground: headerProfile.foreground,
+                                          contrastStyle: headerProfile
+                                              .settings
+                                              .textContrastStyle,
                                         ),
-                                        Text(
-                                          metric.metricLabel,
+                                        DashboardHeaderContrastText(
+                                          data: metric.metricLabel,
                                           key: const ValueKey(
                                             'budget-header-metric-label',
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: headerProfile.foreground
-                                                .withValues(alpha: .72),
+                                          style: const TextStyle(
                                             // The fixed Header already has a
                                             // seven-source-pixel interline
                                             // lane between target and amount.
@@ -324,22 +329,31 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                             height: 1,
                                             fontWeight: FontWeight.w700,
                                           ),
+                                          foreground: headerProfile.foreground
+                                              .withValues(alpha: .72),
+                                          contrastStyle: headerProfile
+                                              .settings
+                                              .textContrastStyle,
                                         ),
                                         FittedBox(
                                           fit: BoxFit.scaleDown,
                                           alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            amount,
+                                          child: DashboardHeaderContrastText(
+                                            data: amount,
                                             key: const ValueKey(
                                               'budget-header-actual-limit',
                                             ),
-                                            style: TextStyle(
-                                              color: headerProfile.foreground,
+                                            style: const TextStyle(
                                               fontSize: 19,
                                               height: .96,
                                               letterSpacing: -.76,
                                               fontWeight: FontWeight.w900,
                                             ),
+                                            foreground:
+                                                headerProfile.foreground,
+                                            contrastStyle: headerProfile
+                                                .settings
+                                                .textContrastStyle,
                                           ),
                                         ),
                                       ],
@@ -515,41 +529,40 @@ final class _BudgetHeaderAllocationDetail extends StatelessWidget {
   final double thickness;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: <Widget>[
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: <Widget>[
-          Text(
-            _allocationLabel(partition),
-            key: const ValueKey('budget-header-allocation-percent'),
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final profile = DashboardBudgetHeaderPresentationScope.profileOf(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            DashboardHeaderContrastText(
+              data: _allocationLabel(partition),
+              key: const ValueKey('budget-header-allocation-percent'),
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+              foreground: profile.foreground.withValues(alpha: .78),
+              contrastStyle: profile.settings.textContrastStyle,
             ),
-          ),
-          Text(
-            _remainingStatusLabel(partition),
-            key: const ValueKey('budget-header-remaining-status'),
-            textAlign: TextAlign.end,
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
+            DashboardHeaderContrastText(
+              data: _remainingStatusLabel(partition),
+              key: const ValueKey('budget-header-remaining-status'),
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+              foreground: profile.foreground.withValues(alpha: .78),
+              contrastStyle: profile.settings.textContrastStyle,
             ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 4),
-      SizedBox(
-        height: thickness,
-        width: double.infinity,
-        child: BudgetAllocationPartitionLane(partition: partition),
-      ),
-    ],
-  );
+          ],
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: thickness,
+          width: double.infinity,
+          child: BudgetAllocationPartitionLane(partition: partition),
+        ),
+      ],
+    );
+  }
 
   static String _allocationLabel(DashboardBudgetPartitionPresentation value) {
     if (!value.hasPositiveAggregateLimit) return '—';

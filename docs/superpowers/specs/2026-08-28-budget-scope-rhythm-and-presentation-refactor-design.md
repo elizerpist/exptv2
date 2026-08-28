@@ -72,9 +72,10 @@ dayPartActualScaled100[]    // flat: pointIndex * 8 + dayPartOrdinal
 
 Offsets form lightweight target views rather than allocating copied sublists.
 Each prepared day satisfies `daily == sum(eight day parts)`. The native query
-groups by direction, target/category, local epoch day and the classifier
-ordinal, then materializes the compact day record. This preserves timestamp
-information before daily aggregation discards it.
+groups by direction, target/category, local epoch day and stored local-minute
+value, then applies the one classifier while materializing the compact day
+record. This preserves timestamp information before daily aggregation
+discards it.
 
 The transport version is bumped atomically in Kotlin and Dart, with explicit
 payload-size accounting and fail-closed validation of array length, offsets,
@@ -137,12 +138,13 @@ barWidth = clamp(fitWidth, minBarWidth, maxBarWidth)
 gap = (availableWidth - count * barWidth) / (count - 1)
 ```
 
-`minGap` is an explicit chart token selected from the narrowest existing
-rounded-bar/card spacing after implementation measurement. The supported
-minimum inner chart width and `minGap` derive one documented
-`minBarWidth = (minimumWidth - 30 * minGap) / 31`; they are pinned by layout
-tests rather than hidden in a widget. Six DAY bars retain the 11dp cap and
-gain equal gaps rather than becoming columns. MONTH never scrolls. SUM with
+The concrete layout tokens are `supportedMinimumChartWidth = 358dp`,
+`minGap = 2dp`, `maxBarWidth = 11dp`, and therefore
+`minBarWidth = (358 - 30 * 2) / 31 = 9.612903…dp`. They are pinned by layout
+tests rather than hidden in a widget. Eight DAY bars retain the 11dp cap and
+gain equal gaps rather than becoming columns. The Partner footer reserves a
+38dp title/plot/axis minimum within the existing card height; only the list
+viewport gives up height. MONTH never scrolls. SUM with
 more than 31 years uses the fixed 31-slot pitch and one persistent local
 horizontal controller; it still renders every concrete year.
 
@@ -156,7 +158,9 @@ averageFraction = mean / maxBucket
 ```
 
 All-zero analyses retain their required x-axis slots, render zero bars, and
-omit a fake average line. X labels are analysis-owned: all DAY labels;
+omit a fake average line. X labels are analysis-owned: DAY shows compact
+`0,3,6,9,12,15,18,21` start-hour anchors while the aggregate accessibility
+semantics retain all eight full Hungarian labels; MONTH shows
 `1,5,10,15,20,25,last` for MONTH (deduplicated); Jan–Dec for YEAR; concrete
 moving year labels for SUM.
 
@@ -239,11 +243,13 @@ undecided → child horizontal / child tap / child vertical scroll /
             header vertical drag / cancelled
 ```
 
-Background surfaces participate through parent arena listeners and precise
-hit regions behind/alongside child controls; no opaque full-card overlay sits
-above taps, PageView or avatar controls. The previous only-reliable route was
-right legend `OverscrollNotification`, which explains why empty card,
-heading, donut whitespace and chart surface were inert.
+`DashboardCoreModeHost` now gives the mode surface a real
+`Positioned.fill` vertical-drag participant beneath child controls. This is
+not an opaque overlay: taps and strong child axes still win their arena. The
+previous only-reliable route was right legend `OverscrollNotification`, which
+explains why empty card, heading, donut whitespace and chart surface were
+inert. The list retains that notification only for its residual boundary
+handoff.
 
 | Surface | Vertical behavior | Protected behavior |
 | --- | --- | --- |
@@ -277,7 +283,7 @@ queries. No paint path aggregates transactions or creates text layout.
 
 Tests are written red-first for native/Dart codec parity, eight-bucket
 classification, typed scope analyses, no-rolling history, zero buckets,
-full-width layout, 6/12/28/29/30/31/>31 bar geometry, normalization and
+full-width layout, 8/12/28/29/30/31/>31 bar geometry, normalization and
 labels, ring strategy/material invariants, header contrast/contour, and real
 pointer gesture ownership/handoff. Architecture boundary tests prohibit UI
 repository access and duplicate settings/gesture owners. Visual cases inspect

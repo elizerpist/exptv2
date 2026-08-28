@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_body_order.dart';
@@ -362,6 +363,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.amountPalette,
     this.searchPillVisibility,
     this.budgetHeaderPresentation,
+    this.budgetRingPresentation,
     this.shellPresentation,
   });
 
@@ -378,6 +380,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final DashboardLogBoxAmountPaletteController? amountPalette;
   final DashboardLogBoxSearchPillController? searchPillVisibility;
   final DashboardBudgetHeaderPresentationController? budgetHeaderPresentation;
+  final BudgetRingPresentationController? budgetRingPresentation;
   final DashboardShellPresentationController? shellPresentation;
 
   @override
@@ -473,6 +476,10 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 _DashboardBudgetHeaderPresentationSection(
                   controller: budgetHeader,
                 ),
+                const SizedBox(height: 14),
+              ],
+              if (budgetRingPresentation case final ring?) ...<Widget>[
+                _BudgetRingPresentationSection(controller: ring),
                 const SizedBox(height: 14),
               ],
               if (shellPresentation case final shell?) ...<Widget>[
@@ -933,6 +940,67 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   );
 }
 
+final class _BudgetRingPresentationSection extends StatelessWidget {
+  const _BudgetRingPresentationSection({required this.controller});
+
+  final BudgetRingPresentationController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<BudgetRingPresentationSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'SUM Budget',
+          children: <Widget>[
+            RadioGroup<BudgetSumRingStyle>(
+              groupValue: settings.sumRingStyle,
+              onChanged: (style) {
+                if (style != null) controller.selectSumRingStyle(style);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final style in BudgetSumRingStyle.values)
+                    RadioListTile<BudgetSumRingStyle>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(switch (style) {
+                        BudgetSumRingStyle.current => 'Jelenlegi',
+                        BudgetSumRingStyle.coloredScaleWhiteArc =>
+                          'Színes skála + fehér szegmens',
+                        BudgetSumRingStyle.coloredScaleMovingSphere =>
+                          'Színes skála + gömb',
+                      }),
+                      value: style,
+                    ),
+                ],
+              ),
+            ),
+            RadioGroup<BudgetHealthyColorMode>(
+              groupValue: settings.healthyColorMode,
+              onChanged: (mode) {
+                if (mode != null) controller.selectHealthyColorMode(mode);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final mode in BudgetHealthyColorMode.values)
+                    RadioListTile<BudgetHealthyColorMode>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        mode == BudgetHealthyColorMode.fixedGreen
+                            ? 'Egészséges szín: Zöld'
+                            : 'Egészséges szín: Kategóriaszín',
+                      ),
+                      value: mode,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
 final class _DashboardSummaryPresentationSection extends StatelessWidget {
   const _DashboardSummaryPresentationSection({required this.controller});
 
@@ -1265,6 +1333,38 @@ final class _DashboardBudgetHeaderPresentationSection extends StatelessWidget {
                             : 'Fekete',
                       ),
                       value: foreground,
+                    ),
+                ],
+              ),
+            ),
+            SwitchListTile(
+              key: const ValueKey('dashboard-header-partition-contour'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Partíció kontúr'),
+              value: settings.showPartitionContour,
+              onChanged: controller.setPartitionContour,
+            ),
+            RadioGroup<DashboardHeaderTextContrastStyle>(
+              groupValue: settings.textContrastStyle,
+              onChanged: (style) {
+                if (style != null) controller.selectTextContrastStyle(style);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final style in DashboardHeaderTextContrastStyle.values)
+                    RadioListTile<DashboardHeaderTextContrastStyle>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(switch (style) {
+                        DashboardHeaderTextContrastStyle.none =>
+                          'Szöveg kontraszt: Nincs',
+                        DashboardHeaderTextContrastStyle.hardOppositeShadow =>
+                          'Szöveg kontraszt: Éles árnyék',
+                        DashboardHeaderTextContrastStyle.oppositeOutline =>
+                          'Szöveg kontraszt: Körvonal',
+                      }),
+                      value: style,
                     ),
                 ],
               ),

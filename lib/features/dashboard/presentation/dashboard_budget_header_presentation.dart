@@ -4,35 +4,56 @@ import '../../../core/design/dashboard_mode_palette.dart';
 
 enum DashboardBudgetHeaderForeground { white, black }
 
+enum DashboardHeaderTextContrastStyle {
+  none,
+  hardOppositeShadow,
+  oppositeOutline,
+}
+
 @immutable
 final class DashboardBudgetHeaderPresentationSettings {
   const DashboardBudgetHeaderPresentationSettings({
     this.partitionHeightPercent = 0,
     this.foreground = DashboardBudgetHeaderForeground.black,
+    this.showPartitionContour = false,
+    this.textContrastStyle = DashboardHeaderTextContrastStyle.none,
   }) : assert(partitionHeightPercent >= 0 && partitionHeightPercent <= 100);
 
   static const defaults = DashboardBudgetHeaderPresentationSettings();
 
   final double partitionHeightPercent;
   final DashboardBudgetHeaderForeground foreground;
+  final bool showPartitionContour;
+  final DashboardHeaderTextContrastStyle textContrastStyle;
 
   DashboardBudgetHeaderPresentationSettings copyWith({
     double? partitionHeightPercent,
     DashboardBudgetHeaderForeground? foreground,
+    bool? showPartitionContour,
+    DashboardHeaderTextContrastStyle? textContrastStyle,
   }) => DashboardBudgetHeaderPresentationSettings(
     partitionHeightPercent:
         partitionHeightPercent ?? this.partitionHeightPercent,
     foreground: foreground ?? this.foreground,
+    showPartitionContour: showPartitionContour ?? this.showPartitionContour,
+    textContrastStyle: textContrastStyle ?? this.textContrastStyle,
   );
 
   @override
   bool operator ==(Object other) =>
       other is DashboardBudgetHeaderPresentationSettings &&
       other.partitionHeightPercent == partitionHeightPercent &&
-      other.foreground == foreground;
+      other.foreground == foreground &&
+      other.showPartitionContour == showPartitionContour &&
+      other.textContrastStyle == textContrastStyle;
 
   @override
-  int get hashCode => Object.hash(partitionHeightPercent, foreground);
+  int get hashCode => Object.hash(
+    partitionHeightPercent,
+    foreground,
+    showPartitionContour,
+    textContrastStyle,
+  );
 }
 
 /// Paint/layout profile for Budget Header controls. The slider changes only
@@ -75,6 +96,16 @@ final class DashboardBudgetHeaderPresentationController
 
   void selectForeground(DashboardBudgetHeaderForeground foreground) {
     final next = value.copyWith(foreground: foreground);
+    if (next != value) value = next;
+  }
+
+  void setPartitionContour(bool value) {
+    final next = this.value.copyWith(showPartitionContour: value);
+    if (next != this.value) this.value = next;
+  }
+
+  void selectTextContrastStyle(DashboardHeaderTextContrastStyle style) {
+    final next = value.copyWith(textContrastStyle: style);
     if (next != value) value = next;
   }
 

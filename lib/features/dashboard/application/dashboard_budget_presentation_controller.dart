@@ -1322,18 +1322,19 @@ final class DashboardBudgetPresentationController
   }) {
     if (scope is! DayScope) return null;
     final date = scope.date;
-    final rhythm = snapshot.rhythmSnapshot;
+    final rhythm = snapshot.spendingRhythmSnapshot;
     final bank = rhythm == null || rhythm.coreRevision != snapshot.coreRevision
         ? null
         : rhythm.directionBank(direction);
     final monthToDate = bank == null || targetHandle >= bank.targetCount
         ? 0
-        : bank.monthToDateActualScaled100(
-            targetHandle: targetHandle,
-            year: date.year,
-            month: date.month,
-            throughEpochDay: _logicalAsOfDate.epochDay,
-          );
+        : bank
+              .targetView(targetHandle)
+              .actualForMonthThroughEpochDay(
+                year: date.year,
+                month: date.month,
+                throughEpochDay: _logicalAsOfDate.epochDay,
+              );
     return DashboardBudgetMonthEndProjection.derive(
       coreRevision: snapshot.coreRevision,
       direction: direction,

@@ -19,7 +19,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_pr
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/prepared/data/dashboard_prepared_formatter.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -291,6 +291,48 @@ void main() {
     expect(doubled.top, greaterThanOrEqualTo(header.top));
     expect(doubled.bottom, lessThanOrEqualTo(header.bottom));
   });
+
+  testWidgets(
+    'partition contour changes only the painter contract, not its bounds',
+    (tester) async {
+      final harness = _BudgetHeaderHarness();
+      final headerPresentation = DashboardBudgetHeaderPresentationController();
+      addTearDown(harness.dispose);
+      addTearDown(headerPresentation.dispose);
+
+      await tester.pumpWidget(
+        _host(
+          harness,
+          collapseProgress: 0,
+          headerPresentation: headerPresentation,
+        ),
+      );
+      final lane = find.byKey(
+        const ValueKey('budget-header-allocation-partition'),
+      );
+      final bounds = tester.getRect(lane);
+      expect(
+        tester.widget<CustomPaint>(lane).painter,
+        isA<BudgetAllocationPartitionPainter>().having(
+          (painter) => painter.showOuterContour,
+          'contour',
+          isFalse,
+        ),
+      );
+
+      headerPresentation.setPartitionContour(true);
+      await tester.pump();
+      expect(tester.getRect(lane), bounds);
+      expect(
+        tester.widget<CustomPaint>(lane).painter,
+        isA<BudgetAllocationPartitionPainter>().having(
+          (painter) => painter.showOuterContour,
+          'contour',
+          isTrue,
+        ),
+      );
+    },
+  );
 
   testWidgets(
     'Unified Budget can translate the full selected-avatar input into its common-card envelope while Split keeps the baseline rail origin',
@@ -572,18 +614,29 @@ PreparedBudgetLimitSnapshot _dayHeaderSnapshot() {
     1,
     10,
   ).difference(DateTime.utc(1970)).inDays;
-  PreparedBudgetRhythmDirectionBank rhythm() =>
-      PreparedBudgetRhythmDirectionBank.fromTargetPoints(
-        targetPoints: <List<PreparedBudgetRhythmPoint>>[
-          <PreparedBudgetRhythmPoint>[
-            PreparedBudgetRhythmPoint(
-              epochDay: dayTen,
-              actualScaled100: 1200000,
-            ),
-          ],
-          <PreparedBudgetRhythmPoint>[
-            PreparedBudgetRhythmPoint(epochDay: dayTen, actualScaled100: 1),
-          ],
+  PreparedSpendingRhythmDirectionBank rhythm() =>
+      PreparedSpendingRhythmDirectionBank(
+        targetCount: 2,
+        targetOffsets: const <int>[0, 1, 2],
+        epochDays: <int>[dayTen, dayTen],
+        dailyActualScaled100: const <int>[1200000, 1],
+        dayPartActualScaled100: const <int>[
+          1200000,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
         ],
       );
   return PreparedBudgetLimitSnapshot(
@@ -592,7 +645,7 @@ PreparedBudgetLimitSnapshot _dayHeaderSnapshot() {
     yearWindowEndInclusive: 2026,
     incomeBank: bank(),
     expenseBank: bank(),
-    rhythmSnapshot: PreparedBudgetRhythmSnapshot(
+    spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
       coreRevision: 7,
       incomeBank: rhythm(),
       expenseBank: rhythm(),

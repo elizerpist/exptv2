@@ -134,7 +134,7 @@ void main() {
     await gesture.moveBy(const Offset(-8, 0));
     await tester.pump();
 
-    expect(controller.committedMode, DashboardModeSpec.balance);
+    expect(controller.committedMode.mode, DashboardMode.balance);
     expect(tester.getRect(header), headerBefore);
     expect(tester.getRect(card), cardBefore);
     expect(_mountedModeRootCount(tester), 1);
@@ -208,7 +208,7 @@ void main() {
     await _dragHeader(tester, const Offset(-260, 0));
     expect(controller.committedMode, DashboardModeSpec.budget);
     await _dragHeader(tester, const Offset(-260, 0));
-    expect(controller.committedMode, DashboardModeSpec.mind);
+    expect(controller.committedMode.mode, DashboardMode.mind);
   });
 
   testWidgets('right header swipe immediately cycles Balance to Mind', (
@@ -247,7 +247,7 @@ void main() {
     expect(expansion.starts, 1);
     expect(expansion.ends, 1);
     expect(expansion.totalDelta, lessThan(0));
-    expect(controller.committedMode, DashboardModeSpec.balance);
+    expect(controller.committedMode.mode, DashboardMode.balance);
     expect(_mountedModeRootCount(tester), 1);
   });
 
@@ -267,7 +267,7 @@ void main() {
     await gesture.moveBy(const Offset(-36, -31));
     await tester.pump();
     expect(expansion.starts, 0);
-    expect(controller.committedMode, DashboardModeSpec.balance);
+    expect(controller.committedMode.mode, DashboardMode.balance);
     expect(_mountedModeRootCount(tester), 1);
 
     await gesture.moveBy(const Offset(0, -100));
@@ -275,7 +275,7 @@ void main() {
     await gesture.up();
 
     expect(expansion.starts, 1);
-    expect(controller.committedMode, DashboardModeSpec.balance);
+    expect(controller.committedMode.mode, DashboardMode.balance);
   });
 
   testWidgets('card and Mind-body drags never claim global mode navigation', (
@@ -292,7 +292,7 @@ void main() {
       const Offset(-260, 0),
     );
     await tester.pump();
-    expect(controller.committedMode, DashboardModeSpec.balance);
+    expect(controller.committedMode.mode, DashboardMode.balance);
 
     controller.setProgrammaticMode(DashboardModeSpec.mind);
     await tester.pump();
@@ -301,8 +301,38 @@ void main() {
       const Offset(-260, 0),
     );
     await tester.pump();
-    expect(controller.committedMode, DashboardModeSpec.mind);
+    expect(controller.committedMode.mode, DashboardMode.mind);
   });
+
+  testWidgets(
+    'a physical vertical drag on the Budget content-card background uses the Header expansion owner',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.budget,
+      );
+      final expansion = _ExpansionRecorder();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _ModeHostHarness(controller: controller, expansion: expansion),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+        ),
+      );
+      await gesture.moveBy(const Offset(0, -120));
+      await gesture.up();
+      await tester.pump();
+
+      expect(expansion.starts, 1);
+      expect(expansion.ends, 1);
+      expect(expansion.totalDelta, lessThan(0));
+      expect(controller.committedMode.mode, DashboardMode.budget);
+    },
+  );
 
   testWidgets('atomic replacement preserves the current expansion geometry', (
     tester,
@@ -349,6 +379,7 @@ class _ModeHostHarness extends StatelessWidget {
           alignment: Alignment.topLeft,
           child: SizedBox(
             width: DashboardLayoutMetrics.reference.contentWidth + 34,
+            height: DashboardLayoutMetrics.reference.canvasHeight,
             child: DashboardCoreModeHost(
               controller: controller,
               presentationFor: (mode) =>

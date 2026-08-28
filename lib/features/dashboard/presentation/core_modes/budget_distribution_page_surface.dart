@@ -91,6 +91,8 @@ class BudgetDistributionPageSurface extends StatefulWidget {
     this.expandDonutToFit = false,
     this.leftFooter,
     this.leftFooterMinimumHeight = 0,
+    this.fullWidthFooter,
+    this.fullWidthFooterMinimumHeight = 0,
     this.upperVerticalGestures,
   });
 
@@ -115,11 +117,16 @@ class BudgetDistributionPageSurface extends StatefulWidget {
   final bool expandDonutToFit;
   final Widget? leftFooter;
 
+  /// Partner-only lower section. It is deliberately separate from
+  /// [leftFooter]: Category keeps the original two-column geometry.
+  final Widget? fullWidthFooter;
+
   /// A footer such as the existing partner rhythm chart keeps a real minimum
   /// readable height. The constraint-driven donut consumes only the leftover
   /// card height, rather than forcing that chart to overflow on an
   /// intermediate dashboard geometry.
   final double leftFooterMinimumHeight;
+  final double fullWidthFooterMinimumHeight;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   /// The first donut/list visual region begins only after this authored
@@ -180,99 +187,109 @@ final class _BudgetDistributionPageSurfaceState
           child: widget.heading,
         ),
         Expanded(
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                flex: 188,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final footerHeight = widget.leftFooter == null
-                        ? 0.0
-                        : widget.leftFooterMinimumHeight + 3;
-                    final availableHeight =
-                        (constraints.maxHeight - footerHeight)
-                            .clamp(0.0, double.infinity)
-                            .toDouble();
-                    final available =
-                        ((constraints.maxWidth < availableHeight
-                                    ? constraints.maxWidth
-                                    : availableHeight) -
-                                8)
-                            .clamp(0.0, double.infinity)
-                            .toDouble();
-                    final baselineDiameter = widget.expandDonutToFit
-                        ? available
-                        : widget.donutDiameter.clamp(0.0, available).toDouble();
-                    final diameter = baselineDiameter * widget.donutScale;
-                    final donutBox = SizedBox(
-                      key: ValueKey(
-                        'budget-distribution-donut-${diameter.toInt()}',
-                      ),
-                      width: diameter,
-                      height: diameter,
-                      child: widget.donut,
-                    );
-                    return widget.leftFooter == null
-                        ? Center(child: donutBox)
-                        : Column(
-                            children: <Widget>[
-                              Center(child: donutBox),
-                              const SizedBox(height: 3),
-                              Expanded(child: widget.leftFooter!),
-                            ],
-                          );
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 160,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: widget.fullWidthFooter == null
+              ? _buildUpperRow()
+              : Column(
                   children: <Widget>[
-                    Text(
-                      widget.rightHeading,
-                      style: const TextStyle(
-                        color: Color(0xff51617f),
-                        fontSize: 9,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Expanded(
-                      child: widget.rows.isEmpty
-                          ? Center(
-                              child: Text(
-                                widget.emptyLabel,
-                                style: const TextStyle(
-                                  color: Color(0xff66738d),
-                                  fontSize: 8,
-                                  height: 1,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            )
-                          : NotificationListener<ScrollNotification>(
-                              onNotification: _handleScrollNotification,
-                              child: ListView.builder(
-                                key: widget.listKey,
-                                controller: _legendScrollController,
-                                primary: false,
-                                padding: EdgeInsets.zero,
-                                itemCount: widget.rows.length,
-                                itemBuilder: (_, index) => widget.rows[index],
-                              ),
-                            ),
+                    Expanded(child: _buildUpperRow()),
+                    const SizedBox(height: 3),
+                    SizedBox(
+                      height: widget.fullWidthFooterMinimumHeight,
+                      child: widget.fullWidthFooter,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
         ),
       ],
     ),
+  );
+
+  Widget _buildUpperRow() => Row(
+    children: <Widget>[
+      Expanded(
+        flex: 188,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final footerHeight = widget.leftFooter == null
+                ? 0.0
+                : widget.leftFooterMinimumHeight + 3;
+            final availableHeight = (constraints.maxHeight - footerHeight)
+                .clamp(0.0, double.infinity)
+                .toDouble();
+            final available =
+                ((constraints.maxWidth < availableHeight
+                            ? constraints.maxWidth
+                            : availableHeight) -
+                        8)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+            final baselineDiameter = widget.expandDonutToFit
+                ? available
+                : widget.donutDiameter.clamp(0.0, available).toDouble();
+            final diameter = baselineDiameter * widget.donutScale;
+            final donutBox = SizedBox(
+              key: ValueKey('budget-distribution-donut-${diameter.toInt()}'),
+              width: diameter,
+              height: diameter,
+              child: widget.donut,
+            );
+            return widget.leftFooter == null
+                ? Center(child: donutBox)
+                : Column(
+                    children: <Widget>[
+                      Center(child: donutBox),
+                      const SizedBox(height: 3),
+                      Expanded(child: widget.leftFooter!),
+                    ],
+                  );
+          },
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        flex: 160,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              widget.rightHeading,
+              style: const TextStyle(
+                color: Color(0xff51617f),
+                fontSize: 9,
+                height: 1,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Expanded(
+              child: widget.rows.isEmpty
+                  ? Center(
+                      child: Text(
+                        widget.emptyLabel,
+                        style: const TextStyle(
+                          color: Color(0xff66738d),
+                          fontSize: 8,
+                          height: 1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: _handleScrollNotification,
+                      child: ListView.builder(
+                        key: widget.listKey,
+                        controller: _legendScrollController,
+                        primary: false,
+                        padding: EdgeInsets.zero,
+                        itemCount: widget.rows.length,
+                        itemBuilder: (_, index) => widget.rows[index],
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    ],
   );
 }
 

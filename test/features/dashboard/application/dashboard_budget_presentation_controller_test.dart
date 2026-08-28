@@ -13,7 +13,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -1034,21 +1034,29 @@ PreparedBudgetLimitSnapshot _dayAwareSnapshot() {
   final januarySecond =
       DateTime.utc(2026, 1, 2).millisecondsSinceEpoch ~/
       Duration.millisecondsPerDay;
-  PreparedBudgetRhythmDirectionBank rhythm() =>
-      PreparedBudgetRhythmDirectionBank.fromTargetPoints(
-        targetPoints: <List<PreparedBudgetRhythmPoint>>[
-          <PreparedBudgetRhythmPoint>[
-            PreparedBudgetRhythmPoint(
-              epochDay: januarySecond,
-              actualScaled100: 42,
-            ),
-          ],
-          <PreparedBudgetRhythmPoint>[
-            PreparedBudgetRhythmPoint(
-              epochDay: januarySecond,
-              actualScaled100: 42,
-            ),
-          ],
+  PreparedSpendingRhythmDirectionBank rhythm() =>
+      PreparedSpendingRhythmDirectionBank(
+        targetCount: 2,
+        targetOffsets: const <int>[0, 1, 2],
+        epochDays: <int>[januarySecond, januarySecond],
+        dailyActualScaled100: const <int>[42, 42],
+        dayPartActualScaled100: const <int>[
+          42,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          42,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
         ],
       );
   return PreparedBudgetLimitSnapshot(
@@ -1057,7 +1065,7 @@ PreparedBudgetLimitSnapshot _dayAwareSnapshot() {
     yearWindowEndInclusive: 2026,
     incomeBank: bank(),
     expenseBank: bank(),
-    rhythmSnapshot: PreparedBudgetRhythmSnapshot(
+    spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
       coreRevision: 7,
       incomeBank: rhythm(),
       expenseBank: rhythm(),

@@ -152,10 +152,10 @@ class FluviBudgetReadService internal constructor(
 
         val monthlyRows = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
-                "SELECT direction, category_id, booked_local_epoch_day, " +
+                "SELECT direction, category_id, booked_local_epoch_day, booked_local_time_minutes, " +
                     "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
                     "FROM fluvi_ledger_entries " +
-                    "GROUP BY direction, category_id, booked_local_epoch_day",
+                    "GROUP BY direction, category_id, booked_local_epoch_day, booked_local_time_minutes",
             ),
         ).use { cursor ->
             buildList {
@@ -165,7 +165,8 @@ class FluviBudgetReadService internal constructor(
                             direction = LedgerDirection.valueOf(cursor.getString(0)),
                             categoryId = cursor.getString(1),
                             epochDay = cursor.getLong(2),
-                            amountScaled100 = cursor.getLong(3),
+                            bookedLocalTimeMinutes = cursor.getInt(3),
+                            amountScaled100 = cursor.getLong(4),
                         ),
                     )
                 }
@@ -196,8 +197,18 @@ class FluviBudgetReadService internal constructor(
             val bank = banks.getValue(row.direction)
             val categoryHandle = bank.handleByCategoryId[row.categoryId] ?: return@forEach
             if (row.amountScaled100 > 0L) {
-                bank.addRhythm(0, row.epochDay, row.amountScaled100)
-                bank.addRhythm(categoryHandle, row.epochDay, row.amountScaled100)
+                bank.addSpendingRhythm(
+                    targetHandle = 0,
+                    epochDay = row.epochDay,
+                    bookedLocalTimeMinutes = row.bookedLocalTimeMinutes,
+                    amount = row.amountScaled100,
+                )
+                bank.addSpendingRhythm(
+                    targetHandle = categoryHandle,
+                    epochDay = row.epochDay,
+                    bookedLocalTimeMinutes = row.bookedLocalTimeMinutes,
+                    amount = row.amountScaled100,
+                )
             }
             val date = LocalDate.ofEpochDay(row.epochDay)
             val sumSlice = 0
@@ -289,10 +300,10 @@ class FluviBudgetReadService internal constructor(
             yearWindow = yearWindow,
             incomeBank = banks.getValue(LedgerDirection.income).freeze(),
             expenseBank = banks.getValue(LedgerDirection.expense).freeze(),
-            rhythmSnapshot = FluviPreparedBudgetRhythmSnapshot(
+            spendingRhythmSnapshot = FluviPreparedSpendingRhythmSnapshot(
                 coreRevision = revision,
-                incomeBank = banks.getValue(LedgerDirection.income).freezeRhythm(),
-                expenseBank = banks.getValue(LedgerDirection.expense).freezeRhythm(),
+                incomeBank = banks.getValue(LedgerDirection.income).freezeSpendingRhythm(),
+                expenseBank = banks.getValue(LedgerDirection.expense).freezeSpendingRhythm(),
             ),
             sqlCallCount = sqlCalls,
             sqlDurationNanos = System.nanoTime() - startedAt,
@@ -319,6 +330,7 @@ class FluviBudgetReadService internal constructor(
         val direction: LedgerDirection,
         val categoryId: String,
         val epochDay: Long,
+        val bookedLocalTimeMinutes: Int,
         val amountScaled100: Long,
     )
 
@@ -503,7 +515,7 @@ class FluviBudgetReadService internal constructor(
         val actualScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)),
         val limitScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)) { -1L },
         val limitSource: ByteArray = ByteArray(periodSliceCount * (orderedCategoryIds.size + 1)),
-        val dailyActualByTarget: MutableMap<Int, MutableMap<Long, Long>> = hashMapOf(),
+        val spendingRhythmByTarget: MutableMap<Int, MutableMap<Long, MutableSpendingRhythmDay>> = hashMapOf(),
     ) {
         val targetCount: Int get() = orderedCategoryIds.size + 1
 
@@ -514,31 +526,48 @@ class FluviBudgetReadService internal constructor(
             limitSource = limitSource,
         )
 
-        fun addRhythm(targetHandle: Int, epochDay: Long, amount: Long) {
+        fun addSpendingRhythm(
+            targetHandle: Int,
+            epochDay: Long,
+            bookedLocalTimeMinutes: Int,
+            amount: Long,
+        ) {
             require(targetHandle in 0 until targetCount)
-            val days = dailyActualByTarget.getOrPut(targetHandle) { hashMapOf() }
-            days[epochDay] = (days[epochDay] ?: 0L) + amount
+            require(amount > 0L)
+            val days = spendingRhythmByTarget.getOrPut(targetHandle) { hashMapOf() }
+            val day = days.getOrPut(epochDay) { MutableSpendingRhythmDay() }
+            day.actualScaled100 += amount
+            val part = BudgetRhythmDayPartClassifier.classify(bookedLocalTimeMinutes)
+            day.dayPartActualScaled100[part.ordinal] += amount
         }
 
-        fun freezeRhythm(): FluviPreparedBudgetRhythmDirectionBank {
+        fun freezeSpendingRhythm(): FluviPreparedSpendingRhythmDirectionBank {
             val offsets = IntArray(targetCount + 1)
-            val points = ArrayList<FluviPreparedBudgetRhythmPoint>()
+            val points = ArrayList<FluviPreparedSpendingRhythmPoint>()
             (0 until targetCount).forEach { handle ->
-                dailyActualByTarget[handle]
+                spendingRhythmByTarget[handle]
                     .orEmpty()
-                    .asSequence()
-                    .filter { (_, amount) -> amount > 0L }
-                    .sortedBy { (epochDay, _) -> epochDay }
-                    .forEach { (epochDay, amount) ->
-                        points += FluviPreparedBudgetRhythmPoint(epochDay, amount)
+                    .toSortedMap()
+                    .forEach { (epochDay, day) ->
+                        points += FluviPreparedSpendingRhythmPoint(
+                            epochDay = epochDay,
+                            actualScaled100 = day.actualScaled100,
+                            dayPartActualScaled100 = day.dayPartActualScaled100,
+                        )
                     }
                 offsets[handle + 1] = points.size
             }
-            return FluviPreparedBudgetRhythmDirectionBank(
+            return FluviPreparedSpendingRhythmDirectionBank(
                 targetCount = targetCount,
                 targetOffsets = offsets,
                 points = points,
             )
         }
+
+        private class MutableSpendingRhythmDay(
+            var actualScaled100: Long = 0L,
+            val dayPartActualScaled100: LongArray =
+                LongArray(SpendingRhythmDayPart.entries.size),
+        )
     }
 }

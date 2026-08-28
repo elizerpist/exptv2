@@ -6,7 +6,7 @@ import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_budget_rhythm_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -187,7 +187,7 @@ void main() {
         ..attach(_FakeRailDelegate(targetCount: 3));
       final pages = BudgetDistributionPageController();
       final cardStyle = BudgetContentCardStyleController();
-      final rhythm = ValueNotifier<DashboardBudgetRhythmState?>(_rhythm());
+      final rhythm = ValueNotifier<DashboardSpendingRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
       addTearDown(visible.dispose);
@@ -240,7 +240,7 @@ void main() {
         find.byKey(const ValueKey('budget-distribution-donut-157')),
         findsOneWidget,
       );
-      expect(find.text('7 napos ritmus'), findsNothing);
+      expect(find.text('Költési ritmus'), findsNothing);
       expect(
         find.byKey(const ValueKey('budget-category-distribution-card')),
         findsOneWidget,
@@ -331,7 +331,17 @@ void main() {
       );
       expect(partnerDonut, findsOneWidget);
       expect(tester.getSize(partnerDonut).height, greaterThan(104));
-      expect(find.text('7 napos ritmus'), findsOneWidget);
+      expect(find.text('Költési ritmus'), findsOneWidget);
+      final rhythmBounds = tester.getRect(
+        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+      );
+      expect(rhythmBounds.width, 358);
+      expect(
+        rhythmBounds.width,
+        greaterThan(tester.getSize(partnerDonut).width),
+        reason:
+            'Partner rhythm owns the full inner card width, not the donut column.',
+      );
       expect(
         tester
             .widget<BudgetPartnerDistributionCard>(
@@ -461,21 +471,18 @@ void main() {
   );
 }
 
-DashboardBudgetRhythmState _rhythm() => DashboardBudgetRhythmState(
-  projection: DashboardBudgetRhythmProjection(
+DashboardSpendingRhythmState _rhythm() => DashboardSpendingRhythmState(
+  analysis: MonthSpendingRhythm(
     coreRevision: 7,
     direction: LedgerDirection.expense,
     targetHandle: 0,
-    plane: TimePlane.month,
-    windowStart: DateTime.utc(2026, 8, 13),
-    windowEnd: DateTime.utc(2026, 8, 19),
-    title: '7 napos ritmus',
-    bars: <DashboardBudgetRhythmBar>[
-      for (var index = 0; index < 7; index += 1)
-        DashboardBudgetRhythmBar(
+    scope: const MonthScope(YearMonth(year: 2026, month: 8)),
+    buckets: <SpendingRhythmBucket>[
+      for (var index = 0; index < 31; index += 1)
+        SpendingRhythmBucket(
           label: '$index',
+          accessibilityLabel: '$index',
           actualScaled100: index,
-          visualFraction: index / 6,
         ),
     ],
   ),

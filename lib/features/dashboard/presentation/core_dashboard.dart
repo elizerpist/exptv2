@@ -11,6 +11,7 @@ import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
+import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../core/design/dashboard_body_order.dart';
@@ -21,7 +22,7 @@ import '../application/dashboard_core_mode_controller.dart';
 import '../application/dashboard_mode_spec.dart';
 import '../application/dashboard_budget_presentation_controller.dart';
 import '../application/dashboard_budget_logbox_drilldown_coordinator.dart';
-import '../application/dashboard_budget_rhythm_controller.dart';
+import '../application/dashboard_spending_rhythm_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
@@ -115,11 +116,12 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardLogBoxSearchPillController _logBoxSearchPillController;
   late final DashboardBudgetHeaderPresentationController
   _budgetHeaderPresentationController;
+  late final BudgetRingPresentationController _budgetRingPresentationController;
   late final DashboardLogBoxPreparedSceneCache _preparedSceneCache;
   late final DashboardLogBoxPartnerSwipeController _partnerSwipe;
   late final DashboardBudgetPresentationController _budgetPresentation;
   late final DashboardBudgetLogboxDrilldownCoordinator _budgetDrilldown;
-  late final DashboardBudgetRhythmController _budgetRhythm;
+  late final DashboardSpendingRhythmController _budgetRhythm;
   late final DashboardBudgetDistributionDrawableController
   _budgetDistributionDrawables;
   late final BudgetTargetAvatarRailController _budgetAvatarRailController;
@@ -162,6 +164,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _logBoxSearchPillController = DashboardLogBoxSearchPillController();
     _budgetHeaderPresentationController =
         DashboardBudgetHeaderPresentationController();
+    _budgetRingPresentationController = BudgetRingPresentationController();
     _logBoxHeightController.addListener(_onLogBoxHeightChanged);
     _summaryPillVariantController.addListener(_onLayoutPresentationChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
@@ -217,7 +220,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetDrilldown = DashboardBudgetLogboxDrilldownCoordinator(
       core: controller,
     );
-    _budgetRhythm = DashboardBudgetRhythmController(
+    _budgetRhythm = DashboardSpendingRhythmController(
       presentation: _budgetPresentation,
       navigation: controller.navigation,
       visibleFrame: controller.visibleFrames,
@@ -481,6 +484,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _logBoxAmountPaletteController.dispose();
     _logBoxSearchPillController.dispose();
     _budgetHeaderPresentationController.dispose();
+    _budgetRingPresentationController.dispose();
     _logBoxHeightController
       ..removeListener(_onLogBoxHeightChanged)
       ..dispose();
@@ -551,108 +555,364 @@ class _CoreDashboardState extends State<CoreDashboard>
 
         return DashboardLogBoxSearchPillScope(
           controller: _logBoxSearchPillController,
-          child: DashboardBudgetHeaderPresentationScope(
-            controller: _budgetHeaderPresentationController,
-            child: DashboardLogBoxLayoutScope(
-              controller: _logBoxHeightController,
-              child: DashboardLogBoxAmountPaletteScope(
-                controller: _logBoxAmountPaletteController,
-                child: DashboardBorderScope(
-                  controller: _borderController,
-                  child: DashboardShadowStyleScope(
-                    controller: _shadowStyleController,
-                    child: DashboardCornerRoundnessScope(
-                      controller: _cornerRoundnessController,
-                      child: DashboardRenderPhaseProbe(
-                        counters: controller.performanceCounters,
-                        child: ColoredBox(
-                          key: const ValueKey('core-dashboard'),
-                          color: frame.palette.pageBackground,
-                          child: Padding(
-                            key: const ValueKey('dashboard-content-inset'),
-                            padding: EdgeInsets.only(top: contentTopPadding),
-                            child: SizedBox.expand(
-                              child: Stack(
-                                fit: StackFit.expand,
-                                clipBehavior: Clip.none,
-                                children: [
-                                  _FramePosition(
-                                    bounds: geometry.brandLockupBounds,
-                                    child: FluviBrandLockup(
+          child: BudgetRingPresentationScope(
+            controller: _budgetRingPresentationController,
+            child: DashboardBudgetHeaderPresentationScope(
+              controller: _budgetHeaderPresentationController,
+              child: DashboardLogBoxLayoutScope(
+                controller: _logBoxHeightController,
+                child: DashboardLogBoxAmountPaletteScope(
+                  controller: _logBoxAmountPaletteController,
+                  child: DashboardBorderScope(
+                    controller: _borderController,
+                    child: DashboardShadowStyleScope(
+                      controller: _shadowStyleController,
+                      child: DashboardCornerRoundnessScope(
+                        controller: _cornerRoundnessController,
+                        child: DashboardRenderPhaseProbe(
+                          counters: controller.performanceCounters,
+                          child: ColoredBox(
+                            key: const ValueKey('core-dashboard'),
+                            color: frame.palette.pageBackground,
+                            child: Padding(
+                              key: const ValueKey('dashboard-content-inset'),
+                              padding: EdgeInsets.only(top: contentTopPadding),
+                              child: SizedBox.expand(
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    _FramePosition(
                                       bounds: geometry.brandLockupBounds,
-                                    ),
-                                  ),
-                                  DashboardCoreModeHost(
-                                    controller: modeController,
-                                    headerVisualController:
-                                        _headerVisualController,
-                                    balanceHeaderVisualFrame:
-                                        _balanceHeaderColorPolicy,
-                                    budgetHeaderVisualFrame:
-                                        _budgetHeaderColorPolicy,
-                                    mindHeaderVisualFrame:
-                                        _mindHeaderColorPolicy,
-                                    budgetPresentation: _budgetPresentation,
-                                    budgetLimitEditController: _budgetLimitEdit,
-                                    budgetDistributionDrawables:
-                                        _budgetDistributionDrawables,
-                                    budgetAvatarRailController:
-                                        _budgetAvatarRailController,
-                                    budgetDistributionPageController:
-                                        _budgetDistributionPageController,
-                                    budgetContentCardStyle:
-                                        _budgetContentCardStyle,
-                                    budgetSectionOrder:
-                                        _budgetSectionOrderController,
-                                    budgetRhythm: _budgetRhythm,
-                                    budgetDrilldown: _budgetDrilldown,
-                                    onBudgetAvatarMotionActiveChanged:
-                                        (active) {
-                                          if (active) {
-                                            _cancelSummaryAutoReset();
-                                            controller
-                                                .beginBudgetAvatarMotion();
-                                          } else {
-                                            controller.endBudgetAvatarMotion();
-                                          }
-                                        },
-                                    presentationFor: frame.presentationFor,
-                                    onVerticalExpansionStart:
-                                        _upperVerticalGestures.begin,
-                                    onVerticalExpansionDragBy:
-                                        _upperVerticalGestures.dragByViewport,
-                                    onVerticalExpansionEnd:
-                                        _upperVerticalGestures.end,
-                                    upperVerticalGestures:
-                                        _upperVerticalGestures,
-                                  ),
-                                  _FramePosition(
-                                    bounds: geometry.actionBounds,
-                                    child: Semantics(
-                                      key: const ValueKey(
-                                        'dashboard-action-row',
+                                      child: FluviBrandLockup(
+                                        bounds: geometry.brandLockupBounds,
                                       ),
-                                      label:
-                                          frame.selectedDirection ==
-                                              TransactionDirection.income
-                                          ? 'Bevétel'
-                                          : 'Kiadás',
-                                      child: TransactionDirectionToggle(
-                                        bounds: geometry.actionBounds,
-                                        palette: frame.palette,
-                                        selectedDirection:
-                                            frame.selectedDirection,
-                                        incomeIconScale: frame.incomeIconScale,
-                                        expenseIconScale:
-                                            frame.expenseIconScale,
-                                        selectedIconScaleAnimation:
-                                            frame.directionPulseScale,
-                                        performanceCounters:
-                                            controller.performanceCounters,
-                                        onSelected: (direction) {
-                                          _cancelSummaryAutoReset();
-                                          controller.selectDirection(direction);
+                                    ),
+                                    DashboardCoreModeHost(
+                                      controller: modeController,
+                                      headerVisualController:
+                                          _headerVisualController,
+                                      balanceHeaderVisualFrame:
+                                          _balanceHeaderColorPolicy,
+                                      budgetHeaderVisualFrame:
+                                          _budgetHeaderColorPolicy,
+                                      mindHeaderVisualFrame:
+                                          _mindHeaderColorPolicy,
+                                      budgetPresentation: _budgetPresentation,
+                                      budgetLimitEditController:
+                                          _budgetLimitEdit,
+                                      budgetDistributionDrawables:
+                                          _budgetDistributionDrawables,
+                                      budgetAvatarRailController:
+                                          _budgetAvatarRailController,
+                                      budgetDistributionPageController:
+                                          _budgetDistributionPageController,
+                                      budgetContentCardStyle:
+                                          _budgetContentCardStyle,
+                                      budgetSectionOrder:
+                                          _budgetSectionOrderController,
+                                      budgetRhythm: _budgetRhythm,
+                                      budgetDrilldown: _budgetDrilldown,
+                                      onBudgetAvatarMotionActiveChanged:
+                                          (active) {
+                                            if (active) {
+                                              _cancelSummaryAutoReset();
+                                              controller
+                                                  .beginBudgetAvatarMotion();
+                                            } else {
+                                              controller
+                                                  .endBudgetAvatarMotion();
+                                            }
+                                          },
+                                      presentationFor: frame.presentationFor,
+                                      onVerticalExpansionStart:
+                                          _upperVerticalGestures.begin,
+                                      onVerticalExpansionDragBy:
+                                          _upperVerticalGestures.dragByViewport,
+                                      onVerticalExpansionEnd:
+                                          _upperVerticalGestures.end,
+                                      upperVerticalGestures:
+                                          _upperVerticalGestures,
+                                    ),
+                                    _FramePosition(
+                                      bounds: geometry.actionBounds,
+                                      child: Semantics(
+                                        key: const ValueKey(
+                                          'dashboard-action-row',
+                                        ),
+                                        label:
+                                            frame.selectedDirection ==
+                                                TransactionDirection.income
+                                            ? 'Bevétel'
+                                            : 'Kiadás',
+                                        child: TransactionDirectionToggle(
+                                          bounds: geometry.actionBounds,
+                                          palette: frame.palette,
+                                          selectedDirection:
+                                              frame.selectedDirection,
+                                          incomeIconScale:
+                                              frame.incomeIconScale,
+                                          expenseIconScale:
+                                              frame.expenseIconScale,
+                                          selectedIconScaleAnimation:
+                                              frame.directionPulseScale,
+                                          performanceCounters:
+                                              controller.performanceCounters,
+                                          onSelected: (direction) {
+                                            _cancelSummaryAutoReset();
+                                            controller.selectDirection(
+                                              direction,
+                                            );
+                                          },
+                                          onVerticalDragStart: (_) =>
+                                              _upperVerticalGestures.begin(),
+                                          onVerticalDragUpdate: (details) =>
+                                              _upperVerticalGestures
+                                                  .dragByViewport(
+                                                    details.delta.dy,
+                                                  ),
+                                          onVerticalDragEnd: (_) =>
+                                              _upperVerticalGestures.end(),
+                                        ),
+                                      ),
+                                    ),
+                                    _FramePosition(
+                                      bounds: geometry.summaryBounds,
+                                      child: _DashboardSummaryRegion(
+                                        bounds: geometry.summaryBounds,
+                                        controller: controller,
+                                        summaryPillVariants:
+                                            _summaryPillVariantController,
+                                        summaryPresentation:
+                                            _summaryPresentationController,
+                                        motionController:
+                                            _summaryMotionController,
+                                        onMotionActiveChanged: (active) =>
+                                            controller.setMotionLaneActive(
+                                              DashboardMotionLane.summaryShell,
+                                              active,
+                                            ),
+                                        onAmountMotionActiveChanged: (active) =>
+                                            controller.setMotionLaneActive(
+                                              DashboardMotionLane.amount,
+                                              active,
+                                            ),
+                                        autoResetController:
+                                            _summaryAutoResetController,
+                                        autoResetMotions:
+                                            _summaryAutoResetMotions,
+                                        upperVerticalGestures:
+                                            _upperVerticalGestures,
+                                      ),
+                                    ),
+                                    _FramePosition(
+                                      bounds: geometry.railBounds,
+                                      child: ValueListenableBuilder<SummaryPillVariant>(
+                                        valueListenable:
+                                            _summaryPillVariantController,
+                                        builder: (context, variant, _) {
+                                          if (variant !=
+                                              SummaryPillVariant.legacy) {
+                                            // DAY remains the canonical month child query in
+                                            // an experiment, but its legacy rail must not add
+                                            // a second visible control surface.
+                                            return const SizedBox.expand();
+                                          }
+                                          return Opacity(
+                                            opacity: frame.railReveal,
+                                            child: IgnorePointer(
+                                              ignoring:
+                                                  !geometry.isRailExpanded,
+                                              child: profileRenderProbe(
+                                                layoutMetric:
+                                                    DashboardPerformanceMetric
+                                                        .railLayout,
+                                                paintMetric:
+                                                    DashboardPerformanceMetric
+                                                        .railPaint,
+                                                layoutDurationMetric:
+                                                    DashboardPerformanceMetric
+                                                        .railLayoutMicros,
+                                                paintDurationMetric:
+                                                    DashboardPerformanceMetric
+                                                        .railPaintMicros,
+                                                child: TimeRefinementRail(
+                                                  bounds: geometry.railBounds,
+                                                  motion: controller.motion,
+                                                  onPreviewLogicalIndexChanged:
+                                                      (oldIndex, newIndex) =>
+                                                          _summaryMotionController
+                                                              .triggerRailTick(
+                                                                oldLogicalIndex:
+                                                                    oldIndex,
+                                                                newLogicalIndex:
+                                                                    newIndex,
+                                                              ),
+                                                  onMotionBaselineEstablished:
+                                                      _summaryMotionController
+                                                          .resetRailTickBaseline,
+                                                  onMotionStarted: controller
+                                                      .beginRailMotion,
+                                                  performanceCounters:
+                                                      controller
+                                                          .performanceCounters,
+                                                  motionDiagnostics: controller
+                                                      .railFlightRecorder,
+                                                ),
+                                              ),
+                                            ),
+                                          );
                                         },
+                                      ),
+                                    ),
+                                    Positioned(
+                                      left: geometry.logBoxHeaderBounds.left,
+                                      top: geometry.logBoxHeaderBounds.top,
+                                      width: geometry.logBoxHeaderBounds.width,
+                                      bottom: 0,
+                                      child: profileRenderProbe(
+                                        layoutMetric: DashboardPerformanceMetric
+                                            .logLayout,
+                                        paintMetric:
+                                            DashboardPerformanceMetric.logPaint,
+                                        layoutDurationMetric:
+                                            DashboardPerformanceMetric
+                                                .logLayoutMicros,
+                                        paintDurationMetric:
+                                            DashboardPerformanceMetric
+                                                .logPaintMicros,
+                                        child: DashboardLogBoxViewport(
+                                          bounds: geometry.logBoxHeaderBounds,
+                                          visibleFrames:
+                                              controller.visibleFrames,
+                                          preparedRasters: logBoxRasters,
+                                          committedViewport:
+                                              controller.committedLogViewport,
+                                          renderCriticalPayloads: controller
+                                              .renderCriticalLogBoxPayloads,
+                                          sceneWindowProvider: controller
+                                              .renderCriticalLogBoxSceneWindow,
+                                          preparedSceneCache:
+                                              _preparedSceneCache,
+                                          onLoadNextPage:
+                                              (desiredLastReadyOrdinal) {
+                                                unawaited(
+                                                  controller
+                                                      .requestForwardPageDemand(
+                                                        desiredLastReadyOrdinal,
+                                                      ),
+                                                );
+                                              },
+                                          onLoadPreviousPage: () {
+                                            unawaited(
+                                              controller.loadPreviousPage(),
+                                            );
+                                          },
+                                          onVerticalPointerDown: controller
+                                              .noteVerticalPointerDown,
+                                          onVerticalPointerIntentStarted: controller
+                                              .noteVerticalPointerIntentStarted,
+                                          onVerticalPointerIntentEnded: controller
+                                              .noteVerticalPointerIntentEnded,
+                                          onVerticalScrollStarted: controller
+                                              .beginVerticalInteraction,
+                                          onVerticalScrollEnded: controller
+                                              .resumeSceneWindowMaintenanceAfterVerticalInput,
+                                          verticalBackgroundWork: () =>
+                                              controller.verticalBackgroundWork,
+                                          performanceCounters:
+                                              controller.performanceCounters,
+                                          renderDiagnostics: controller
+                                              .renderReadinessDiagnostics,
+                                          renderDiagnosticContextProvider: () =>
+                                              controller
+                                                  .renderDiagnosticContext,
+                                          onExtentPublished: controller
+                                              .recordLogBoxRenderExtent,
+                                          onCommittedScopeReset: controller
+                                              .recordVerticalCommittedScopeReset,
+                                          currentQuery: controller.currentQuery,
+                                          onRemoveQueryCategory: controller
+                                              .removeAppliedQueryCategory,
+                                          onRemoveQueryPartner: controller
+                                              .removeAppliedQueryPartner,
+                                          onClearQuery:
+                                              controller.clearAppliedQuery,
+                                          focus: controller.focus,
+                                          onClearFocusCategory: () {
+                                            unawaited(
+                                              controller.clearCategoryFocus(),
+                                            );
+                                          },
+                                          onClearFocusPartner: () {
+                                            unawaited(
+                                              controller.clearPartnerFocus(),
+                                            );
+                                          },
+                                          onClearFocus: () {
+                                            unawaited(
+                                              controller
+                                                  .clearAllEphemeralFocus(),
+                                            );
+                                          },
+                                          onAvatarTap: (row) {
+                                            if (row.categoryId.isEmpty) return;
+                                            unawaited(
+                                              controller.requestCategoryFocus(
+                                                DashboardFocusFacet(
+                                                  id: row.categoryId,
+                                                  displayName:
+                                                      row.categoryDisplayName,
+                                                  colorId: row.categoryColorId,
+                                                  iconId: row.categoryIconId,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          partnerSwipe: _partnerSwipe,
+                                          onPartnerFocus: (row) {
+                                            if (row.partnerId.isEmpty) {
+                                              return Future<bool>.value(false);
+                                            }
+                                            return controller
+                                                .requestPartnerFocus(
+                                                  DashboardFocusFacet(
+                                                    id: row.partnerId,
+                                                    displayName:
+                                                        row.partnerDisplayName,
+                                                    colorId:
+                                                        row.categoryColorId,
+                                                    iconId: row.categoryIconId,
+                                                  ),
+                                                );
+                                          },
+                                          onWarmupSurfaceAttached: widget
+                                              .onLogBoxWarmupSurfaceAttached,
+                                          onWarmupSurfaceLaidOut: widget
+                                              .onLogBoxWarmupSurfaceLaidOut,
+                                          onWarmupTextLayoutsPrepared: (viewportId) {
+                                            controller
+                                                .recordInitialSceneWindowActivation(
+                                                  controller
+                                                      .renderCriticalLogBoxSceneWindow(),
+                                                );
+                                            widget
+                                                .onLogBoxWarmupTextLayoutsPrepared
+                                                ?.call(viewportId);
+                                          },
+                                          onWarmupError:
+                                              widget.onLogBoxWarmupError,
+                                          onTextLayoutsPrepared: controller
+                                              .recordLogBoxTextLayoutCache,
+                                        ),
+                                      ),
+                                    ),
+                                    _FramePosition(
+                                      bounds: geometry.collapseHandleBounds,
+                                      child: DashboardCollapseHandle(
+                                        bounds: geometry.collapseHandleBounds,
+                                        isDragging: frame.isExpansionDragging,
+                                        onTap: controller.expansion.toggle,
                                         onVerticalDragStart: (_) =>
                                             _upperVerticalGestures.begin(),
                                         onVerticalDragUpdate: (details) =>
@@ -664,271 +924,36 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _upperVerticalGestures.end(),
                                       ),
                                     ),
-                                  ),
-                                  _FramePosition(
-                                    bounds: geometry.summaryBounds,
-                                    child: _DashboardSummaryRegion(
-                                      bounds: geometry.summaryBounds,
-                                      controller: controller,
+                                    _DashboardHeaderVisualTunerOverlay(
+                                      controller: _headerVisualController,
                                       summaryPillVariants:
                                           _summaryPillVariantController,
+                                      bodyOrder: _bodyOrderController,
+                                      budgetContentCardStyle:
+                                          _budgetContentCardStyle,
+                                      budgetSectionOrder:
+                                          _budgetSectionOrderController,
                                       summaryPresentation:
                                           _summaryPresentationController,
-                                      motionController:
-                                          _summaryMotionController,
-                                      onMotionActiveChanged: (active) =>
-                                          controller.setMotionLaneActive(
-                                            DashboardMotionLane.summaryShell,
-                                            active,
-                                          ),
-                                      onAmountMotionActiveChanged: (active) =>
-                                          controller.setMotionLaneActive(
-                                            DashboardMotionLane.amount,
-                                            active,
-                                          ),
-                                      autoResetController:
-                                          _summaryAutoResetController,
-                                      autoResetMotions:
-                                          _summaryAutoResetMotions,
-                                      upperVerticalGestures:
-                                          _upperVerticalGestures,
+                                      cornerRoundness:
+                                          _cornerRoundnessController,
+                                      shadowStyle: _shadowStyleController,
+                                      border: _borderController,
+                                      logBoxHeight: _logBoxHeightController,
+                                      amountPalette:
+                                          _logBoxAmountPaletteController,
+                                      searchPillVisibility:
+                                          _logBoxSearchPillController,
+                                      budgetHeaderPresentation:
+                                          _budgetHeaderPresentationController,
+                                      budgetRingPresentation:
+                                          _budgetRingPresentationController,
+                                      shellPresentation:
+                                          widget.shellPresentation,
+                                      headerBounds: geometry.headerBounds,
                                     ),
-                                  ),
-                                  _FramePosition(
-                                    bounds: geometry.railBounds,
-                                    child: ValueListenableBuilder<SummaryPillVariant>(
-                                      valueListenable:
-                                          _summaryPillVariantController,
-                                      builder: (context, variant, _) {
-                                        if (variant !=
-                                            SummaryPillVariant.legacy) {
-                                          // DAY remains the canonical month child query in
-                                          // an experiment, but its legacy rail must not add
-                                          // a second visible control surface.
-                                          return const SizedBox.expand();
-                                        }
-                                        return Opacity(
-                                          opacity: frame.railReveal,
-                                          child: IgnorePointer(
-                                            ignoring: !geometry.isRailExpanded,
-                                            child: profileRenderProbe(
-                                              layoutMetric:
-                                                  DashboardPerformanceMetric
-                                                      .railLayout,
-                                              paintMetric:
-                                                  DashboardPerformanceMetric
-                                                      .railPaint,
-                                              layoutDurationMetric:
-                                                  DashboardPerformanceMetric
-                                                      .railLayoutMicros,
-                                              paintDurationMetric:
-                                                  DashboardPerformanceMetric
-                                                      .railPaintMicros,
-                                              child: TimeRefinementRail(
-                                                bounds: geometry.railBounds,
-                                                motion: controller.motion,
-                                                onPreviewLogicalIndexChanged:
-                                                    (oldIndex, newIndex) =>
-                                                        _summaryMotionController
-                                                            .triggerRailTick(
-                                                              oldLogicalIndex:
-                                                                  oldIndex,
-                                                              newLogicalIndex:
-                                                                  newIndex,
-                                                            ),
-                                                onMotionBaselineEstablished:
-                                                    _summaryMotionController
-                                                        .resetRailTickBaseline,
-                                                onMotionStarted:
-                                                    controller.beginRailMotion,
-                                                performanceCounters: controller
-                                                    .performanceCounters,
-                                                motionDiagnostics: controller
-                                                    .railFlightRecorder,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  Positioned(
-                                    left: geometry.logBoxHeaderBounds.left,
-                                    top: geometry.logBoxHeaderBounds.top,
-                                    width: geometry.logBoxHeaderBounds.width,
-                                    bottom: 0,
-                                    child: profileRenderProbe(
-                                      layoutMetric:
-                                          DashboardPerformanceMetric.logLayout,
-                                      paintMetric:
-                                          DashboardPerformanceMetric.logPaint,
-                                      layoutDurationMetric:
-                                          DashboardPerformanceMetric
-                                              .logLayoutMicros,
-                                      paintDurationMetric:
-                                          DashboardPerformanceMetric
-                                              .logPaintMicros,
-                                      child: DashboardLogBoxViewport(
-                                        bounds: geometry.logBoxHeaderBounds,
-                                        visibleFrames: controller.visibleFrames,
-                                        preparedRasters: logBoxRasters,
-                                        committedViewport:
-                                            controller.committedLogViewport,
-                                        renderCriticalPayloads: controller
-                                            .renderCriticalLogBoxPayloads,
-                                        sceneWindowProvider: controller
-                                            .renderCriticalLogBoxSceneWindow,
-                                        preparedSceneCache: _preparedSceneCache,
-                                        onLoadNextPage:
-                                            (desiredLastReadyOrdinal) {
-                                              unawaited(
-                                                controller
-                                                    .requestForwardPageDemand(
-                                                      desiredLastReadyOrdinal,
-                                                    ),
-                                              );
-                                            },
-                                        onLoadPreviousPage: () {
-                                          unawaited(
-                                            controller.loadPreviousPage(),
-                                          );
-                                        },
-                                        onVerticalPointerDown:
-                                            controller.noteVerticalPointerDown,
-                                        onVerticalPointerIntentStarted: controller
-                                            .noteVerticalPointerIntentStarted,
-                                        onVerticalPointerIntentEnded: controller
-                                            .noteVerticalPointerIntentEnded,
-                                        onVerticalScrollStarted:
-                                            controller.beginVerticalInteraction,
-                                        onVerticalScrollEnded: controller
-                                            .resumeSceneWindowMaintenanceAfterVerticalInput,
-                                        verticalBackgroundWork: () =>
-                                            controller.verticalBackgroundWork,
-                                        performanceCounters:
-                                            controller.performanceCounters,
-                                        renderDiagnostics: controller
-                                            .renderReadinessDiagnostics,
-                                        renderDiagnosticContextProvider: () =>
-                                            controller.renderDiagnosticContext,
-                                        onExtentPublished:
-                                            controller.recordLogBoxRenderExtent,
-                                        onCommittedScopeReset: controller
-                                            .recordVerticalCommittedScopeReset,
-                                        currentQuery: controller.currentQuery,
-                                        onRemoveQueryCategory: controller
-                                            .removeAppliedQueryCategory,
-                                        onRemoveQueryPartner: controller
-                                            .removeAppliedQueryPartner,
-                                        onClearQuery:
-                                            controller.clearAppliedQuery,
-                                        focus: controller.focus,
-                                        onClearFocusCategory: () {
-                                          unawaited(
-                                            controller.clearCategoryFocus(),
-                                          );
-                                        },
-                                        onClearFocusPartner: () {
-                                          unawaited(
-                                            controller.clearPartnerFocus(),
-                                          );
-                                        },
-                                        onClearFocus: () {
-                                          unawaited(
-                                            controller.clearAllEphemeralFocus(),
-                                          );
-                                        },
-                                        onAvatarTap: (row) {
-                                          if (row.categoryId.isEmpty) return;
-                                          unawaited(
-                                            controller.requestCategoryFocus(
-                                              DashboardFocusFacet(
-                                                id: row.categoryId,
-                                                displayName:
-                                                    row.categoryDisplayName,
-                                                colorId: row.categoryColorId,
-                                                iconId: row.categoryIconId,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        partnerSwipe: _partnerSwipe,
-                                        onPartnerFocus: (row) {
-                                          if (row.partnerId.isEmpty) {
-                                            return Future<bool>.value(false);
-                                          }
-                                          return controller.requestPartnerFocus(
-                                            DashboardFocusFacet(
-                                              id: row.partnerId,
-                                              displayName:
-                                                  row.partnerDisplayName,
-                                              colorId: row.categoryColorId,
-                                              iconId: row.categoryIconId,
-                                            ),
-                                          );
-                                        },
-                                        onWarmupSurfaceAttached: widget
-                                            .onLogBoxWarmupSurfaceAttached,
-                                        onWarmupSurfaceLaidOut:
-                                            widget.onLogBoxWarmupSurfaceLaidOut,
-                                        onWarmupTextLayoutsPrepared: (viewportId) {
-                                          controller
-                                              .recordInitialSceneWindowActivation(
-                                                controller
-                                                    .renderCriticalLogBoxSceneWindow(),
-                                              );
-                                          widget
-                                              .onLogBoxWarmupTextLayoutsPrepared
-                                              ?.call(viewportId);
-                                        },
-                                        onWarmupError:
-                                            widget.onLogBoxWarmupError,
-                                        onTextLayoutsPrepared: controller
-                                            .recordLogBoxTextLayoutCache,
-                                      ),
-                                    ),
-                                  ),
-                                  _FramePosition(
-                                    bounds: geometry.collapseHandleBounds,
-                                    child: DashboardCollapseHandle(
-                                      bounds: geometry.collapseHandleBounds,
-                                      isDragging: frame.isExpansionDragging,
-                                      onTap: controller.expansion.toggle,
-                                      onVerticalDragStart: (_) =>
-                                          _upperVerticalGestures.begin(),
-                                      onVerticalDragUpdate: (details) =>
-                                          _upperVerticalGestures.dragByViewport(
-                                            details.delta.dy,
-                                          ),
-                                      onVerticalDragEnd: (_) =>
-                                          _upperVerticalGestures.end(),
-                                    ),
-                                  ),
-                                  _DashboardHeaderVisualTunerOverlay(
-                                    controller: _headerVisualController,
-                                    summaryPillVariants:
-                                        _summaryPillVariantController,
-                                    bodyOrder: _bodyOrderController,
-                                    budgetContentCardStyle:
-                                        _budgetContentCardStyle,
-                                    budgetSectionOrder:
-                                        _budgetSectionOrderController,
-                                    summaryPresentation:
-                                        _summaryPresentationController,
-                                    cornerRoundness: _cornerRoundnessController,
-                                    shadowStyle: _shadowStyleController,
-                                    border: _borderController,
-                                    logBoxHeight: _logBoxHeightController,
-                                    amountPalette:
-                                        _logBoxAmountPaletteController,
-                                    searchPillVisibility:
-                                        _logBoxSearchPillController,
-                                    budgetHeaderPresentation:
-                                        _budgetHeaderPresentationController,
-                                    shellPresentation: widget.shellPresentation,
-                                    headerBounds: geometry.headerBounds,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1154,6 +1179,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     required this.amountPalette,
     required this.searchPillVisibility,
     required this.budgetHeaderPresentation,
+    required this.budgetRingPresentation,
     this.shellPresentation,
     required this.headerBounds,
   });
@@ -1171,6 +1197,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   final DashboardLogBoxAmountPaletteController amountPalette;
   final DashboardLogBoxSearchPillController searchPillVisibility;
   final DashboardBudgetHeaderPresentationController budgetHeaderPresentation;
+  final BudgetRingPresentationController budgetRingPresentation;
   final DashboardShellPresentationController? shellPresentation;
   final DashboardBounds headerBounds;
 
@@ -1239,6 +1266,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                           amountPalette: amountPalette,
                           searchPillVisibility: searchPillVisibility,
                           budgetHeaderPresentation: budgetHeaderPresentation,
+                          budgetRingPresentation: budgetRingPresentation,
                           shellPresentation: shellPresentation,
                         ),
                       ),

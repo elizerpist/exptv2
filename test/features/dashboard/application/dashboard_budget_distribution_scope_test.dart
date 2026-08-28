@@ -6,7 +6,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_di
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
-import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_rhythm_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -173,37 +173,55 @@ PreparedBudgetLimitSnapshot _limitSnapshot() {
       ),
     ),
     expenseBank: expense,
-    rhythmSnapshot: PreparedBudgetRhythmSnapshot(
+    spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
       coreRevision: 17,
-      incomeBank: PreparedBudgetRhythmDirectionBank.empty(targetCount: 1),
-      expenseBank: PreparedBudgetRhythmDirectionBank.fromTargetPoints(
-        targetPoints: <List<PreparedBudgetRhythmPoint>>[
-          <PreparedBudgetRhythmPoint>[
-            const PreparedBudgetRhythmPoint(
-              epochDay: 20652,
-              actualScaled100: 100,
-            ),
-            const PreparedBudgetRhythmPoint(
-              epochDay: 20653,
-              actualScaled100: 100,
-            ),
-          ],
-          <PreparedBudgetRhythmPoint>[
-            const PreparedBudgetRhythmPoint(
-              epochDay: 20652,
-              actualScaled100: 100,
-            ),
-            const PreparedBudgetRhythmPoint(
-              epochDay: 20653,
-              actualScaled100: 20,
-            ),
-          ],
-          <PreparedBudgetRhythmPoint>[
-            const PreparedBudgetRhythmPoint(
-              epochDay: 20653,
-              actualScaled100: 80,
-            ),
-          ],
+      incomeBank: PreparedSpendingRhythmDirectionBank.empty(targetCount: 1),
+      expenseBank: PreparedSpendingRhythmDirectionBank(
+        targetCount: 3,
+        targetOffsets: const <int>[0, 2, 4, 5],
+        epochDays: const <int>[20652, 20653, 20652, 20653, 20653],
+        dailyActualScaled100: const <int>[100, 100, 100, 20, 80],
+        dayPartActualScaled100: const <int>[
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          20,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          80,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
         ],
       ),
     ),
