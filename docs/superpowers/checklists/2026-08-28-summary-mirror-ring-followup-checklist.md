@@ -16,7 +16,7 @@ cells. No physical Android acceptance is claimed.
 | YR-02 | User; annual material | Active YEAR material is hue-preserving green/yellow/red only; future/missing is neutral; no category hue shift | source/material/raster tests | DONE |
 | PR-01 | User; protected paths | DAY/MONTH/YEAR/SUM semantics, prepared navigation, controller identities and bounded paint path remain intact | protected suites/source inspection | DONE |
 | DOC-01 | User documentation | Records exact source root causes, formulas/tokens and no false physical claim | plan/checklist review | DONE |
-| DEL-01 | User delivery | Commit/push, matching successful human APK and SHA-256 | command/Actions evidence | NOT DONE |
+| DEL-01 | User delivery | Commit/push, matching successful human APK and SHA-256 | command/Actions evidence | DONE |
 
 **Inherited verification note:** the starting `004bbfc` revision reproduces
 the same `dashboard_scroll_milestone_test.dart:155` `Bad state: No element`,

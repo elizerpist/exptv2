@@ -123,7 +123,7 @@ entirely.
 
 - [x] Update this plan/checklist with final formulas, tokens, tests and
   truthful physical-validation status.
-- [ ] Run targeted/protected suites, analyzer, diff check and online Android
+- [x] Run targeted/protected suites, analyzer, diff check and online Android
   CI for the production commit.
 
 ## Verification record before commit
@@ -152,3 +152,18 @@ all six expected images (6.25–7.98% pixels) and the Core Dashboard test cannot
 find `budget-distribution-pager` at line 173. The same output was reproduced
 before classifying it as inherited. No baseline golden was updated. Physical
 Android validation remains required and has not been claimed.
+
+## Delivery evidence
+
+- Production commit: `ab33fe048dc6b1b9ac12b613f5b9239fc0793249`
+  (`fix(dashboard): mirror summary and correct budget ring`).
+- Pushed remote production SHA: the same `ab33fe0`.
+- GitHub Actions run `33132627613`: success for Flutter, Android/Room core,
+  human diagnostic APK and A–J dashboard profile.
+- Human APK:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_ab33fe0.apk`
+  (79,746,249 bytes), SHA-256
+  `8d92e76b7efc2213b62468c7615ea852d9b6d0b780c8218f107fc052721a579a`.
+
+This is a build artifact for human device validation, not a claim that the
+requested physical checks have been performed.
