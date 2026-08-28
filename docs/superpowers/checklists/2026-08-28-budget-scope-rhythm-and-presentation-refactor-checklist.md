@@ -1,6 +1,6 @@
 # Budget scope rhythm and presentation refactor — acceptance checklist
 
-**Status:** active — all implementation items begin `NOT DONE`.  
+**Status:** implementation verified in CI; physical Android walkthrough remains open.
 **Accepted design:** `docs/superpowers/specs/2026-08-28-budget-scope-rhythm-and-presentation-refactor-design.md`  
 **Baseline:** `3127abc018ddea7694661e25015790dcd773bf9e`; Drive *Fluvi Logs* revision 45.
 
@@ -9,14 +9,14 @@
 | BASE-01 | User prompt | worktree | Branch is `separated-core-modes`; pre-existing prototype work is untouched | status/diff before and after | DONE |
 | ARC-01 | AGENTS architecture gate | dashboard runtime/application/presentation | One indexed prepared fact source, one scope projector, one layout solver, one expansion coordinator, two non-overlapping settings owners | dependency/boundary tests + inspection | DONE |
 | ARC-02 | AGENTS architecture gate | presentation | Widgets contain rendering/intent only; no native/Room/repository rhythm work | boundary test + import inspection | DONE |
-| RHY-DATA-01 | User prompt + approved correction | Kotlin classifier/index + Dart contracts | Exactly eight canonical 3-hour local-time buckets, exhaustive and non-overlapping | native/Dart parity tests, boundary tests | PARTIAL — Dart green; native source awaits CI |
-| RHY-DATA-02 | User prompt | native query, codec, prepared snapshot | Timestamp-faithful day-part values survive preparation; daily total equals the eight values | codec/invariant fixtures | PARTIAL — Dart codec/invariants green; native test awaits CI |
-| RHY-DATA-03 | User prompt | Kotlin/Dart codec | Versioned lockstep transport validates offsets, sort order, length, money range and payload bounds without legacy reinterpretation | codec corruption/parity tests | PARTIAL — Dart reader green; native writer awaits CI |
+| RHY-DATA-01 | User prompt + approved correction | Kotlin classifier/index + Dart contracts | Exactly eight canonical 3-hour local-time buckets, exhaustive and non-overlapping | native/Dart parity tests, boundary tests | DONE — curated Flutter and clean native Core/Room suites green in GitHub Actions run `33163313657` |
+| RHY-DATA-02 | User prompt | native query, codec, prepared snapshot | Timestamp-faithful day-part values survive preparation; daily total equals the eight values | codec/invariant fixtures | DONE — codec/invariant fixtures and native Core/Room suite green in run `33163313657` |
+| RHY-DATA-03 | User prompt | Kotlin/Dart codec | Versioned lockstep transport validates offsets, sort order, length, money range and payload bounds without legacy reinterpretation | codec corruption/parity tests | DONE — lockstep codec reader/writer covered by green Flutter and native suites in run `33163313657` |
 | RHY-DOM-01 | User prompt | `DashboardSpendingRhythmProjector` | DAY creates all eight selected-day parts including zeros | unit fixture | DONE |
 | RHY-DOM-02 | User prompt | projector | MONTH creates every actual selected calendar day; YEAR exactly Jan–Dec | 28/29/30/31 and 12-month tests | DONE |
 | RHY-DOM-03 | User prompt | projector | SUM creates the full continuous concrete-year history span with internal zero years; >31 is not truncated | historical-domain tests | DONE |
 | RHY-DOM-04 | User prompt | controller/projector | No clock, timer, `last N`, or rolling 7-day/6-month/5-year path remains reachable | static/source and historical-context tests | DONE |
-| RHY-PUB-01 | User prompt | controller/visible frame | Every accepted visible temporal or target crossing publishes prepared scope rhythm with no repository/widget scan | controller/cache/preview tests | PARTIAL — binding is implemented; full visible-frame suite awaits CI |
+| RHY-PUB-01 | User prompt | controller/visible frame | Every accepted visible temporal or target crossing publishes prepared scope rhythm with no repository/widget scan | controller/cache/preview tests | DONE — controller/cache tests plus 273-test curated Flutter suite and A–J profile gate green in run `33163313657` |
 | RHY-LAYOUT-01 | User prompt + 3-hour correction | layout token/solver | Existing `11.0` authored rhythm track is the named `maxBarWidth`; eight DAY bars never widen beyond it | source-contract/layout tests | DONE |
 | RHY-LAYOUT-02 | User prompt | layout solver | Named measured `minGap`, supported minimum width and mathematically derived `minBarWidth` make 31 days fit, with equal non-negative gaps | solver matrix | DONE |
 | RHY-LAYOUT-03 | User prompt | chart/layout | Only SUM >31 is horizontally scrollable; it uses persistent controller and fixed 31-slot pitch | widget/controller identity tests | DONE |
@@ -24,8 +24,8 @@
 | RHY-VIS-02 | User prompt | axis model/chart | DAY all labels; MONTH 1/5/10/15/20/25/last; YEAR Jan–Dec; SUM concrete labels move with bars | axis tests | DONE |
 | CARD-01 | User prompt | Partner composition | Partner rhythm uses full usable card width and meaningful lower plot; outer height, donut and row typography remain protected | widget geometry test/screenshot | DONE |
 | CARD-02 | User prompt | Category composition | Category card geometry is unchanged; Partner list stays scrollable | regression widgets | DONE |
-| SUM-01 | User prompt | ring settings/controller | Exactly `current`, `coloredScaleWhiteArc`, `coloredScaleMovingSphere`; default current preserves existing output | settings/painter regression tests | PARTIAL — settings and default-strategy regression green; visual CI pending |
-| SUM-02 | User prompt | shared ring strategy/material | New styles use canonical clockwise shared geometry, smooth scale, white fixed .75/.90 spheres, and correct exclusive moving indicator | geometry/material/painter tests | PARTIAL — geometry/material green; visual CI pending |
+| SUM-01 | User prompt | ring settings/controller | Exactly `current`, `coloredScaleWhiteArc`, `coloredScaleMovingSphere`; default current preserves existing output | settings/painter regression tests | DONE — settings/default-strategy regressions included in green 273-test Flutter suite, run `33163313657` |
+| SUM-02 | User prompt | shared ring strategy/material | New styles use canonical clockwise shared geometry, smooth scale, white fixed .75/.90 spheres, and correct exclusive moving indicator | geometry/material/painter tests | DONE — shared geometry/material/painter regressions green in run `33163313657` |
 | SUM-03 | User prompt | ring state | Visual marker clamps only paint coordinate; raw typical ratio and Budget semantics do not change | state/painter tests | DONE |
 | HEALTH-01 | User prompt | healthy visual resolver | `fixedGreen`/`targetAccent` controls only YEAR healthy and SUM scale healthy material; warning yellow/danger red remain hue-preserved, DAY/MONTH unchanged | resolver/regression tests | DONE |
 | GEST-01 | User report | gesture coordinator/card surfaces | Actual pointer drags on card/heading/donut/chart backgrounds drive the same Header expansion controller/sign mapping as Header/handler | real widget-pointer tests, both directions | PARTIAL — card pointer route green; broader surface matrix awaits CI |
@@ -34,8 +34,8 @@
 | PART-01 | User prompt | Header partition lane/settings | Default-off optional contour paints one thin white outer RRect only, tracks all heights and changes no geometry | painter/settings tests | DONE |
 | TEXT-01 | User prompt | Header contrast primitive/settings | None, sharp opposite shadow and true opposite outline work for black/white foreground with unchanged metrics and single semantics | layout/semantics matrix tests | DONE |
 | TUNER-01 | User prompt | Header visual tuner | SUM, healthy-colour, contour and contrast controls are independent and use existing tuner/persistence convention | controller/widget tests | PARTIAL — focused tuner route green; full widget suite awaits CI |
-| REG-01 | User prompt | protected dashboard | DAY pace, MONTH, YEAR cells, SUM ratio, Summary normal/mirror/reset, LogBox and expansion geometry are unchanged outside scope | protected suites | NOT DONE |
-| DOC-01 | User prompt | docs | Plan/checklist records old rolling evidence, architecture, constants, ownership and physical validation truthfully | docs reread | PARTIAL |
-| VER-01 | User prompt + AGENTS | test/CI | Focused/protected tests, proot analysis, diff check and prescribed GitHub Android build pass; human APK is downloaded and hashed after production push | command/build evidence | NOT DONE |
-| DEL-01 | User prompt | git/remote | Focused buildable commits, final status and pushed SHA are reported without unrelated prototype modification | git diff/status/log | NOT DONE |
+| REG-01 | User prompt | protected dashboard | DAY pace, MONTH, YEAR cells, SUM ratio, Summary normal/mirror/reset, LogBox and expansion geometry are unchanged outside scope | protected suites | PARTIAL — focused regressions, 273 curated Flutter tests and the A–J profile gate are green; the physical device walkthrough remains open |
+| DOC-01 | User prompt | docs | Plan/checklist records old rolling evidence, architecture, constants, ownership and physical validation truthfully | docs reread | DONE — checklist reread and CI/APK evidence recorded below |
+| VER-01 | User prompt + AGENTS | test/CI | Focused/protected tests, proot analysis, diff check and prescribed GitHub Android build pass; human APK is downloaded and hashed after production push | command/build evidence | DONE — run `33163313657` green: Flutter analyze, 273 Flutter tests, Core/Room tests, A–J profile and human APK build; APK SHA-256 `fa4eae8c9da353953b65620de46695650bfb046ed9b9f4f51dda6ec75c52ea4d` |
+| DEL-01 | User prompt | git/remote | Focused buildable commits, final status and pushed SHA are reported without unrelated prototype modification | git diff/status/log | DONE — `1100b014b52ba79631382d3d8543efc52b1c7bbb` is pushed; only the pre-existing prototype remains unstaged |
 | PHYS-01 | User prompt | physical Android | Required SUM/card/header/rhythm visual and gesture walkthrough is performed on a real device | human validation checklist | NOT DONE — no physical acceptance claimed |
