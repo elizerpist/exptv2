@@ -95,27 +95,21 @@ final class DashboardLogBoxPartnerSwipeState {
     required this.target,
     required this.translationX,
     required this.activationThreshold,
-    this.awaitingFocusPublication = false,
   });
 
   final DashboardLogBoxRowHitTarget target;
   final double translationX;
   final double activationThreshold;
-  final bool awaitingFocusPublication;
 
   Rect get translatedGlobalBounds =>
       target.globalRowBounds.translate(translationX, 0);
 
-  DashboardLogBoxPartnerSwipeState copyWith({
-    double? translationX,
-    bool? awaitingFocusPublication,
-  }) => DashboardLogBoxPartnerSwipeState(
-    target: target,
-    translationX: translationX ?? this.translationX,
-    activationThreshold: activationThreshold,
-    awaitingFocusPublication:
-        awaitingFocusPublication ?? this.awaitingFocusPublication,
-  );
+  DashboardLogBoxPartnerSwipeState copyWith({double? translationX}) =>
+      DashboardLogBoxPartnerSwipeState(
+        target: target,
+        translationX: translationX ?? this.translationX,
+        activationThreshold: activationThreshold,
+      );
 }
 
 /// The one owner of the transient row translation.
@@ -148,6 +142,7 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
   ValueListenable<double> get translation => _translation;
   Listenable get structuralChanges => this;
   bool get isActive => _state != null;
+  bool get isReturning => _returnController.isAnimating;
   String? get activeEntryId => _state?.target.row.entryId;
 
   /// Starts primitive-only accounting for a pointer that landed on a possible
@@ -230,7 +225,7 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
 
   void update(double rawTranslationX) {
     final current = _state;
-    if (current == null || current.awaitingFocusPublication) return;
+    if (current == null) return;
     final next = DashboardLogBoxPartnerSwipeKinematics.clampTranslation(
       globalLeft: current.target.globalRowBounds.left,
       rowWidth: current.target.globalRowBounds.width,
@@ -252,9 +247,9 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
     _translation.value = next;
   }
 
-  /// Holds the already-acquired row in place until the application owner has
-  /// atomically published the focused presentation. A failed/superseded focus
-  /// snaps back instead of leaving stale overlay pixels behind.
+  /// Finishes the physical gesture. A committed row reports its prepared
+  /// Partner semantic immediately and begins the bounded local return now;
+  /// filtering/scene preparation must never own this transform's lifetime.
   DashboardLogRowViewModel? finish() {
     final current = _state;
     if (current == null) return null;
@@ -263,14 +258,15 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
       activationThreshold: current.activationThreshold,
     )) {
       _performance?.committed = true;
-      _state = current.copyWith(awaitingFocusPublication: true);
-      notifyListeners();
+      snapBack();
       return current.target.row;
     }
     snapBack();
     return null;
   }
 
+  /// Compatibility hook for tests/legacy callers. Production interaction no
+  /// longer invokes this from an asynchronous publication completion.
   void completeFocusPublication() => _clear();
 
   void rejectFocusPublication() => snapBack();
@@ -303,10 +299,12 @@ final class DashboardLogBoxPartnerSwipeController extends ChangeNotifier {
   void _advanceReturnAnimation() {
     final current = _state;
     if (current == null) return;
-    _state = current.copyWith(
-      translationX: _returnFrom * (1 - _returnController.value),
-      awaitingFocusPublication: false,
-    );
+    final nextTranslation = _returnFrom * (1 - _returnController.value);
+    // `animateTo` synchronously notifies at value 0. That is the exact
+    // existing row translation, so it is not a compositor update and must not
+    // make the direct-manipulation metrics claim a third visual frame.
+    if (nextTranslation == current.translationX) return;
+    _state = current.copyWith(translationX: nextTranslation);
     _translation.value = _state!.translationX;
     final performance = _performance;
     if (performance != null) {

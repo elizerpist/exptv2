@@ -133,6 +133,101 @@ void main() {
     expect(visible.visiblePublishCount, 1);
   });
 
+  testWidgets(
+    'RED: committed amount crossfade keeps the configured left anchor',
+    (tester) async {
+      final visible = DashboardVisibleFrameStore();
+      addTearDown(visible.dispose);
+      visible.publish(
+        _frame(
+          day: 14,
+          amount: '1 Ft',
+          generation: 1,
+          mode: DashboardVisibleMode.committed,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 160,
+              height: 59,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SummaryPillPreparedAmountSlot(
+                  visibleFrames: visible,
+                  performanceCounters: null,
+                  onMotionActiveChanged: null,
+                  alignment: Alignment.centerLeft,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final initialLeft = tester.getRect(find.text('1 Ft')).left;
+
+      visible.publish(
+        _frame(
+          day: 15,
+          amount: '987 654 Ft',
+          generation: 2,
+          mode: DashboardVisibleMode.committed,
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.getRect(find.text('987 654 Ft')).left, initialLeft);
+    },
+  );
+
+  testWidgets(
+    'RED: committed amount crossfade keeps the legacy Summary Row slot width',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+      );
+      final visible = DashboardVisibleFrameStore();
+      final motion = SummaryNavigationMotionController();
+      addTearDown(navigation.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(motion.dispose);
+      visible.publish(
+        _frame(
+          day: 14,
+          amount: '1 Ft',
+          generation: 1,
+          mode: DashboardVisibleMode.committed,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: _pill(navigation, visible, motion))),
+      );
+      final slot = find.byKey(const ValueKey('dashboard-summary-amount-slot'));
+      final initial = tester.getRect(slot);
+
+      visible.publish(
+        _frame(
+          day: 15,
+          amount: '987 654 Ft',
+          generation: 2,
+          mode: DashboardVisibleMode.committed,
+        ),
+      );
+      await tester.pump();
+      expect(tester.getRect(slot), initial);
+
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(tester.getRect(slot), initial);
+
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.getRect(slot), initial);
+    },
+  );
+
   testWidgets('open year rail keeps the live visible month parent-aware', (
     tester,
   ) async {
@@ -454,6 +549,7 @@ DashboardVisibleFrame _frame({
   int month = 7,
   required String amount,
   required int generation,
+  DashboardVisibleMode mode = DashboardVisibleMode.preview,
 }) {
   final parent = CurrentLedgerQueryScope(
     direction: LedgerDirection.income,
@@ -491,7 +587,7 @@ DashboardVisibleFrame _frame({
     navigationEpoch: 0,
     presentationEpoch: 1,
     frameGeneration: generation,
-    mode: DashboardVisibleMode.preview,
+    mode: mode,
   );
 }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
@@ -9,6 +11,14 @@ import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import '../data/dashboard_data_runtime_repository.dart';
 import '../domain/prepared_dashboard_index.dart';
+
+/// Local page source for a focused prepared interaction overlay.
+///
+/// A non-null result has the exact same contract as a repository page, but it
+/// is projected from immutable RAM membership. Returning null delegates the
+/// ordinary committed scope to the native keyset repository.
+typedef DashboardPreparedCommittedPageReader =
+    FutureOr<CommittedLogPage?> Function(DashboardCommittedPageRequest request);
 
 /// Lifecycle metadata for one exact cursor/ordinal acquisition. It is not a
 /// presentation state machine: page resources belong exclusively to
@@ -110,6 +120,7 @@ final class ExplicitCommittedPagingController {
     this.canRunLiveViewportDemand,
     this.canResumeDeferredPagePresentation,
     this.isVerticalPointerIntentActive,
+    this.preparedPageReader,
     this.onPageRequested,
     this.onPageCompleted,
     this.onPagePipelineIdle,
@@ -128,6 +139,7 @@ final class ExplicitCommittedPagingController {
   final bool Function()? isMotionActive;
   final bool Function()? isVerticalInteractionActive;
   final bool Function()? isVerticalPointerIntentActive;
+  final DashboardPreparedCommittedPageReader? preparedPageReader;
   final bool Function()? canRunBackgroundPrewarm;
   final bool Function()? canRunLiveViewportDemand;
   final bool Function()? canResumeDeferredPagePresentation;
@@ -159,6 +171,7 @@ final class ExplicitCommittedPagingController {
       <String, _ForwardRequestRecord>{};
 
   int pageReadCount = 0;
+  int preparedPageReadCount = 0;
   int pageReadCompletedCount = 0;
   int pageCommittedCount = 0;
   int stalePageRejectCount = 0;
@@ -731,10 +744,15 @@ final class ExplicitCommittedPagingController {
     onPageRequested?.call(request);
     _pageInFlight = true;
     _pageRequestInFlight = true;
-    pageReadCount += 1;
     final started = Stopwatch()..start();
     try {
-      final page = await _repository.readCommittedPage(request);
+      final preparedPage = await preparedPageReader?.call(request);
+      if (preparedPage == null) {
+        pageReadCount += 1;
+      } else {
+        preparedPageReadCount += 1;
+      }
+      final page = preparedPage ?? await _repository.readCommittedPage(request);
       _pageRequestInFlight = false;
       pageReadCompletedCount += 1;
       if (!_accepts(page, request: request)) {

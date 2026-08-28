@@ -32,6 +32,7 @@ import '../runtime/data/dashboard_data_runtime_repository.dart';
 import '../runtime/data/empty_dashboard_data_runtime_repository.dart';
 import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/dashboard_ephemeral_focus_deriver.dart';
+import '../runtime/domain/dashboard_focus_membership_seed.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
@@ -48,6 +49,7 @@ import 'dashboard_expansion_controller.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
 import 'dashboard_vertical_background_work_snapshot.dart';
 import 'dashboard_interaction_diagnostics.dart';
+import 'dashboard_live_interaction_coordinator.dart';
 import 'dashboard_performance_counters.dart';
 import 'prepared_query_candidate.dart';
 import 'dashboard_rail_flight_recorder.dart';
@@ -536,6 +538,7 @@ final class DashboardCoreController {
       visibleFrames: presentation.visibleFrames,
       committedViewport: committedLogViewport,
       pageSize: pageSize,
+      preparedPageReader: _readPreparedInteractivePage,
       // Aggregate motion is intentionally still reported to diagnostics and
       // used to gate cache-only work. Committed paging has a narrower safety
       // contract: text/amount decoration cannot invalidate its immutable
@@ -733,6 +736,8 @@ final class DashboardCoreController {
   late final QueryComposerController queryComposer;
   final DashboardEphemeralFocusController focus =
       DashboardEphemeralFocusController();
+  final DashboardLiveInteractionCoordinator liveInteractions =
+      DashboardLiveInteractionCoordinator();
   late final ExplicitCommittedPagingController paging;
   late final CommittedLogViewportCache committedLogViewport;
 
@@ -826,10 +831,10 @@ final class DashboardCoreController {
   int? _committedReadyAheadPriorityKickEpoch;
   final Set<int> _activeVerticalPointerIntents = <int>{};
   PreparedDashboardIndex? _focusBaseIndex;
-  // A focus preview publishes its prepared amount before the complete LogBox
-  // scene is ready. Until that scene commits there is no [focus.state] yet,
-  // so retain the base identity separately: an aggregate tick or base-query
-  // change must still be able to invalidate the in-flight preview.
+  // A live facet publishes its prepared first viewport before rich LogBox
+  // scene augmentation. Retain the base identity separately so aggregate,
+  // close and base-query changes can supersede that background work without
+  // ever revoking an already accepted direct interaction.
   PreparedDashboardIndex? _provisionalFocusBaseIndex;
   CurrentLedgerQueryScope? _provisionalFocusBaseScope;
   _FocusBaseSceneRetention? _focusBaseSceneRetention;
@@ -1217,6 +1222,53 @@ final class DashboardCoreController {
       afterPublish?.call();
       return true;
     }
+    if (isEphemeralFocusPublication) {
+      // A direct Category/Partner interaction has already produced an exact
+      // bounded prepared frame. Make that generation authoritative now. The
+      // rich scene bank is visual augmentation and may not hold the facet,
+      // amount, LogBox membership or a subsequent pointer hostage.
+      final targetState = publicationState ?? navigation.state;
+      final nextBundle = _preparedRevisionBundleFor(
+        index,
+        publicationState: targetState,
+        budgetLimitSnapshot: budgetLimitSnapshot,
+        partnerDistributionSnapshot: partnerDistributionSnapshot,
+      );
+      if (!(shouldPublish?.call() ?? true)) return false;
+      beforePublish?.call();
+      if (!(shouldPublish?.call() ?? true)) return false;
+      _publishIndex(index, preparedRevisionBundle: nextBundle);
+      afterPublish?.call();
+      final targetWindow = nextBundle.structuralPublicationSceneWindow
+          .withCoverage(_coverageFor(targetState, indexOverride: index));
+      final retainedTargetWindow =
+          _retainedSceneWindowLookup?.call(targetWindow) ?? false;
+      if (retainedTargetWindow) {
+        // Restoring a just-retained base scope is already visual-ready. Keep
+        // that exact window active rather than scheduling a second rich scene
+        // prepare behind an interaction that has already been accepted.
+        _activateSceneWindow(targetWindow, activate: activate);
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SCENE_WINDOW_RETAINED_RESTORE_HIT',
+            queryKey: targetWindow.identity,
+            coreRevision: index.coreRevision,
+            entryCount: targetWindow.previewRowCount,
+          ),
+        );
+      } else {
+        unawaited(
+          _prepareLiveFacetSceneAfterPublication(
+            index: index,
+            targetWindow: targetWindow,
+            prepare: prepare,
+            activate: activate,
+            shouldPublish: shouldPublish,
+          ),
+        );
+      }
+      return true;
+    }
     if (_sceneWindowPreparing.value) {
       final queued = _queuedPreparedIndex;
       if (queued == null || index.coreRevision >= queued.coreRevision) {
@@ -1367,6 +1419,64 @@ final class DashboardCoreController {
       _finishSceneWindowPreparation();
     }
     return published;
+  }
+
+  /// Completes non-critical decoration for a live facet generation. It has no
+  /// permission to publish an index, restore a facet, or mutate a newer
+  /// visible frame. The caller supplied predicate is the generation/projection
+  /// guard shared with semantic acceptance.
+  Future<void> _prepareLiveFacetSceneAfterPublication({
+    required PreparedDashboardIndex index,
+    required DashboardLogBoxSceneWindow targetWindow,
+    required DashboardLogBoxSceneWindowPreparer prepare,
+    required DashboardLogBoxSceneWindowActivator activate,
+    bool Function()? shouldPublish,
+  }) async {
+    try {
+      final stagedFromActiveResources =
+          _activeResourceSceneStager?.call(
+            targetWindow,
+            retainViewportId: visibleFrames.value?.logBox.viewportId,
+          ) ??
+          false;
+      if (!stagedFromActiveResources) {
+        await prepare(
+          targetWindow,
+          retainViewportId: visibleFrames.value?.logBox.viewportId,
+        );
+      }
+      if (_disposed ||
+          !(shouldPublish?.call() ?? true) ||
+          !identical(preparedIndex, index)) {
+        if (stagedFromActiveResources) {
+          _activeResourceSceneStagerDiscarder?.call(targetWindow);
+        }
+        return;
+      }
+      _activateSceneWindow(targetWindow, activate: activate);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'LIVE_FACET_SCENE_AUGMENTED',
+          queryKey: targetWindow.identity,
+          coreRevision: index.coreRevision,
+          entryCount: targetWindow.previewRowCount,
+        ),
+      );
+    } on Object catch (error) {
+      // The already-published prepared frame remains authoritative. Scene
+      // failure is diagnostic/background state, never a reason to roll back
+      // direct manipulation or re-add a stale facet.
+      _lastSceneWindowError = '$error';
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'ERROR',
+          message: 'LIVE_FACET_SCENE_AUGMENT_FAILED',
+          queryKey: targetWindow.identity,
+          coreRevision: index.coreRevision,
+          error: '$error',
+        ),
+      );
+    }
   }
 
   void _finishSceneWindowPreparation() {
@@ -3758,6 +3868,10 @@ final class DashboardCoreController {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.parentCandidate(direction);
     if (candidate == null) return Future<void>.value();
+    _acceptLiveInteraction(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      temporalCandidate: candidate,
+    );
     final interaction = railInteractionSceneWindowFor(candidate);
     final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
     // A retained parent hotset is already complete but intentionally invisible.
@@ -3799,6 +3913,10 @@ final class DashboardCoreController {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.parentOffsetCandidate(offset);
     if (candidate == null) return Future<void>.value();
+    _acceptLiveInteraction(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      temporalCandidate: candidate,
+    );
     final interaction = railInteractionSceneWindowFor(candidate);
     final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
     if (retainedHit) _activateSceneWindow(interaction);
@@ -3828,6 +3946,10 @@ final class DashboardCoreController {
   void navigatePlane({required bool finer}) {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.planeCandidate(finer: finer);
+    _acceptLiveInteraction(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      temporalCandidate: candidate,
+    );
     unawaited(
       _commitTimeNavigationWithBudgetDistributionReadiness(
         candidate: candidate,
@@ -3847,6 +3969,10 @@ final class DashboardCoreController {
     if (target == navigation.state.plane) return;
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final candidate = presentation.planeTargetCandidate(target);
+    _acceptLiveInteraction(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      temporalCandidate: candidate,
+    );
     unawaited(
       _commitTimeNavigationWithBudgetDistributionReadiness(
         candidate: candidate,
@@ -3960,6 +4086,10 @@ final class DashboardCoreController {
     // frame contract. A hit commits one canonical temporal target and queues
     // its exact visible frame now; broad scene coverage remains maintenance.
     if (presentation.publishPreparedExperimentalTemporalCandidate(candidate)) {
+      _acceptLiveInteraction(
+        source: DashboardLiveInteractionSource.temporalSelector,
+        temporalCandidate: candidate,
+      );
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SUMMARY_COMPONENT_PREPARED_PUBLICATION',
@@ -4013,6 +4143,10 @@ final class DashboardCoreController {
       return;
     }
     _supersedeAcceptedQueryApplyForDashboardNavigation();
+    _acceptLiveInteraction(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      temporalCandidate: candidate,
+    );
     // This is the same parent-hotset activation used by Legacy sibling
     // navigation. A prepared adjacent scene is made active before the
     // canonical commit, so an experimental discrete crossing never waits for
@@ -4155,6 +4289,10 @@ final class DashboardCoreController {
       template: targetTemplate,
       availability: targetAvailability,
     );
+    _acceptLiveInteraction(
+      source: DashboardLiveInteractionSource.direction,
+      temporalCandidate: candidate,
+    );
     final activeIndex = presentation.index;
     final cacheHit =
         activeIndex != null &&
@@ -4203,6 +4341,35 @@ final class DashboardCoreController {
 
   Future<bool> loadNextPage() => paging.loadNextPage();
 
+  /// Supplies later pages for a prepared Category/Partner/Search overlay from
+  /// the exact same retained ordinal membership as its first visible frame.
+  /// Ordinary committed scopes return null and continue through the native
+  /// keyset repository. This keeps dashboard-local live Search out of Room
+  /// without giving widgets any paging/data capability.
+  CommittedLogPage? _readPreparedInteractivePage(
+    DashboardCommittedPageRequest request,
+  ) {
+    final index = preparedIndex;
+    if (index == null || index.coreRevision != request.coreRevision) {
+      return null;
+    }
+    final prepared = index.preparedLogPageFor(
+      request.scope,
+      after: request.startCursor,
+      pageSize: request.pageSize,
+    );
+    if (prepared == null) return null;
+    return CommittedLogPage(
+      queryKey: request.scope.key,
+      coreRevision: request.coreRevision,
+      generation: request.commitGeneration,
+      ordinal: request.pageOrdinal,
+      startCursor: request.startCursor,
+      previousStartCursor: request.previousStartCursor,
+      payload: prepared.payload,
+    );
+  }
+
   bool get verticalInteractionActive => _verticalInteractionActive;
 
   /// Exact background-work state for one vertical interaction diagnostic.
@@ -4242,18 +4409,21 @@ final class DashboardCoreController {
   /// identity, so this path has neither a repository capability nor an async
   /// lookup before it selects the retained compact membership view.
   Future<bool> requestCategoryFocus(DashboardFocusFacet facet) =>
-      _requestEphemeralFocus(category: facet);
+      _requestEphemeralFocus(
+        category: facet,
+        source: DashboardLiveInteractionSource.logBoxCategory,
+      );
 
-  /// Budget category drill-down is a replacement intent: a previously chosen
-  /// Partner must not survive into a different Category as a transient
-  /// two-step LogBox publication. The existing focus pipeline still performs
-  /// the single atomic prepared-index publication.
+  /// Budget category drill-down replaces only the Category dimension. Partner
+  /// and Search remain orthogonal facets over the new selected target.
   Future<bool> requestBudgetCategoryFocus(
     DashboardFocusFacet facet, {
     bool publishDuringMotion = false,
+    int? targetHandle,
   }) => _requestEphemeralFocus(
     category: facet,
-    clearPartner: true,
+    source: DashboardLiveInteractionSource.budgetAvatar,
+    budgetTargetHandle: targetHandle,
     // A discrete avatar crossing is a foreground presentation target, not a
     // settle-only bookkeeping event.  It may start the bounded scene install
     // during the physical fling; normal programmatic/settled focus keeps the
@@ -4265,18 +4435,52 @@ final class DashboardCoreController {
   /// Requests a transient partner narrowing after the viewport-owned swipe
   /// arbiter has committed one intentional leftward gesture.
   Future<bool> requestPartnerFocus(DashboardFocusFacet facet) =>
-      _requestEphemeralFocus(partner: facet);
+      _requestEphemeralFocus(
+        partner: facet,
+        source: DashboardLiveInteractionSource.partnerSwipe,
+      );
+
+  /// Aggregate Budget target removes only the Budget-driven category overlay.
+  /// Partner and Search remain orthogonal direct-manipulation facets.
+  Future<bool> clearBudgetCategoryFocus({int? targetHandle}) =>
+      _requestEphemeralFocus(
+        clearCategory: true,
+        source: DashboardLiveInteractionSource.budgetAvatar,
+        budgetTargetHandle: targetHandle,
+      );
+
+  /// Applies one live SearchPill edit through the same prepared facet path as
+  /// category and partner interactions. The semantic state is accepted before
+  /// any scene/cache augmentation and never crosses the repository boundary.
+  Future<bool> updateLiveSearch(String raw) {
+    final normalized = DashboardLedgerSearchNormalizer.normalize(raw);
+    final current = focus.state;
+    if (current?.normalizedSearch == normalized) {
+      return Future<bool>.value(true);
+    }
+    return _requestEphemeralFocus(
+      normalizedSearch: normalized,
+      clearSearch: normalized == null,
+      source: DashboardLiveInteractionSource.search,
+    );
+  }
 
   Future<bool> clearCategoryFocus() {
     final current = focus.state;
     if (current == null) return Future<bool>.value(false);
-    return _requestEphemeralFocus(clearCategory: true);
+    return _requestEphemeralFocus(
+      clearCategory: true,
+      source: DashboardLiveInteractionSource.facetClose,
+    );
   }
 
   Future<bool> clearPartnerFocus() {
     final current = focus.state;
     if (current == null) return Future<bool>.value(false);
-    return _requestEphemeralFocus(clearPartner: true);
+    return _requestEphemeralFocus(
+      clearPartner: true,
+      source: DashboardLiveInteractionSource.facetClose,
+    );
   }
 
   Future<bool> clearAllEphemeralFocus({bool deferSceneInstallation = false}) {
@@ -4292,8 +4496,12 @@ final class DashboardCoreController {
   Future<bool> _requestEphemeralFocus({
     DashboardFocusFacet? category,
     DashboardFocusFacet? partner,
+    String? normalizedSearch,
+    required DashboardLiveInteractionSource source,
+    int? budgetTargetHandle,
     bool clearCategory = false,
     bool clearPartner = false,
+    bool clearSearch = false,
     bool deferSceneInstallation = false,
     bool publishDuringMotion = false,
   }) async {
@@ -4324,23 +4532,30 @@ final class DashboardCoreController {
     final nextPartner = clearPartner
         ? null
         : partner ?? (priorIsValid ? prior.partner : null);
-    if (nextCategory == null && nextPartner == null) {
+    final nextSearch = clearSearch
+        ? null
+        : normalizedSearch ?? (priorIsValid ? prior.normalizedSearch : null);
+    if (nextCategory == null && nextPartner == null && nextSearch == null) {
       return _restoreBaseAfterFocus(
         deferSceneInstallation: deferSceneInstallation,
+        source: source,
+        budgetTargetHandle: budgetTargetHandle,
       );
     }
     if (priorIsValid &&
         prior.category?.id == nextCategory?.id &&
-        prior.partner?.id == nextPartner?.id) {
+        prior.partner?.id == nextPartner?.id &&
+        prior.normalizedSearch == nextSearch) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'FOCUS_REQUEST_ALREADY_ACTIVE',
-          queryKey: prior.anchor.baseQueryKey.value,
+          queryKey: baseScope.key.value,
           direction: direction.name,
           coreRevision: baseIndex.coreRevision,
           scope:
               'category=${nextCategory?.id ?? 'none'} '
               'partner=${nextPartner?.id ?? 'none'} '
+              'searchLength=${nextSearch?.length ?? 0} '
               'presentationEpoch=${visibleFrames.value?.presentationEpoch ?? 0}',
         ),
       );
@@ -4354,6 +4569,7 @@ final class DashboardCoreController {
       partnerIds: nextPartner == null
           ? baseScope.partnerIds
           : <String>{nextPartner.id},
+      normalizedSearch: nextSearch,
     );
     final effectiveQueries = currentQuery.queries.replaceDirection(
       direction,
@@ -4374,15 +4590,18 @@ final class DashboardCoreController {
     final started = Stopwatch()..start();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: category == null
+        stage: category != null
+            ? 'CATEGORY_FOCUS_REQUESTED'
+            : partner != null
             ? 'PARTNER_FOCUS_REQUESTED'
-            : 'CATEGORY_FOCUS_REQUESTED',
+            : 'SEARCH_FOCUS_REQUESTED',
         queryKey: baseScope.key.value,
         direction: direction.name,
         coreRevision: baseIndex.coreRevision,
         scope:
             'category=${nextCategory?.id ?? 'none'} '
             'partner=${nextPartner?.id ?? 'none'} generation=$generation '
+            'searchLength=${nextSearch?.length ?? 0} '
             'baseEntryCount=${baseMembership.entryCount} '
             'baseMembershipEstimatedBytes='
             '${baseMembership.estimatedMembershipBytes} '
@@ -4399,6 +4618,7 @@ final class DashboardCoreController {
       focusedDirection: direction,
       categoryFocusId: nextCategory?.id,
       partnerFocusId: nextPartner?.id,
+      normalizedSearch: nextSearch,
       initialYear: initialYear,
       generation: generation,
       initialParentScope: publicationState.parentQueryScope,
@@ -4428,6 +4648,7 @@ final class DashboardCoreController {
         scope:
             'category=${nextCategory?.id ?? 'none'} '
             'partner=${nextPartner?.id ?? 'none'} '
+            'searchLength=${nextSearch?.length ?? 0} '
             'baseEntryCount=${baseMembership.entryCount} '
             'focusedEntryCount='
             '${derived.frameFor(publicationState.parentQueryScope).entryCount} '
@@ -4481,8 +4702,26 @@ final class DashboardCoreController {
         scope:
             'category=${nextCategory?.id ?? 'none'} '
             'partner=${nextPartner?.id ?? 'none'} generation=$generation '
+            'searchLength=${nextSearch?.length ?? 0} '
             'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
       ),
+    );
+    // Direct manipulation owns its semantic facet immediately after the
+    // bounded prepared derivation. A scene/cache future is an augmentation
+    // task, not the authority for chips, close controls or the next input.
+    _focusBaseIndex = baseIndex;
+    _provisionalFocusBaseIndex = null;
+    _provisionalFocusBaseScope = null;
+    focus.replace(
+      baseScope: baseScope,
+      coreRevision: baseIndex.coreRevision,
+      category: nextCategory,
+      partner: nextPartner,
+      normalizedSearch: nextSearch,
+    );
+    final interactionFrame = _acceptLiveInteraction(
+      source: source,
+      budgetTargetHandle: budgetTargetHandle,
     );
     // The amount lane above is an O(1) prepared preview. A physical avatar
     // crossing now also attempts the matching atomic LogBox publication in
@@ -4500,6 +4739,7 @@ final class DashboardCoreController {
           shouldPublish: () =>
               !_disposed &&
               generation == _focusPublicationGeneration &&
+              liveInteractions.isCurrent(interactionFrame) &&
               currentQuery.scopeFor(direction) == baseScope,
           beforePublish: () {
             FluviDiagnosticLogger.log(
@@ -4522,15 +4762,6 @@ final class DashboardCoreController {
             );
           },
           afterPublish: () {
-            _focusBaseIndex = baseIndex;
-            _provisionalFocusBaseIndex = null;
-            _provisionalFocusBaseScope = null;
-            focus.replace(
-              baseScope: baseScope,
-              coreRevision: baseIndex.coreRevision,
-              category: nextCategory,
-              partner: nextPartner,
-            );
             FluviDiagnosticLogger.log(
               FluviDiagnosticEvent(
                 stage: 'FOCUS_PUBLICATION_COMPLETED',
@@ -4666,6 +4897,9 @@ final class DashboardCoreController {
 
   Future<bool> _restoreBaseAfterFocus({
     bool deferSceneInstallation = false,
+    DashboardLiveInteractionSource source =
+        DashboardLiveInteractionSource.facetClose,
+    int? budgetTargetHandle,
   }) async {
     final state = focus.state;
     final baseIndex = _focusBaseIndex;
@@ -4680,6 +4914,14 @@ final class DashboardCoreController {
     }
     final generation = ++_focusPublicationGeneration;
     _cancelDeferredFocusedSceneInstall();
+    // Closing is a direct semantic acceptance. It may not wait for the old
+    // focused scene to restore before removing the chip or accepting another
+    // input. The retained base frame below follows immediately when possible.
+    focus.clearAll();
+    final interactionFrame = _acceptLiveInteraction(
+      source: source,
+      budgetTargetHandle: budgetTargetHandle,
+    );
     final availability = DashboardTemporalAvailability.fromTemporalFilter(
       baseScope.temporalFilter,
     );
@@ -4707,6 +4949,7 @@ final class DashboardCoreController {
           shouldPublish: () =>
               !_disposed &&
               generation == _focusPublicationGeneration &&
+              liveInteractions.isCurrent(interactionFrame) &&
               currentQuery.scopeFor(state.anchor.direction) == baseScope,
           beforePublish: () {
             navigation.replaceAppliedQuery(
@@ -4716,7 +4959,6 @@ final class DashboardCoreController {
             );
           },
           afterPublish: () {
-            focus.clearAll();
             _focusBaseIndex = null;
             _provisionalFocusBaseIndex = null;
             _provisionalFocusBaseScope = null;
@@ -4731,6 +4973,10 @@ final class DashboardCoreController {
               ),
             );
           },
+          // The clear itself is a foreground live interaction. It receives
+          // the same immediate first-viewport path as adding/replacing a
+          // facet; rich base-scene augmentation is never allowed to delay a
+          // close action or later direct input.
           isEphemeralFocusPublication: true,
         );
         if (!published && _focusBaseIndex == null) {
@@ -4805,7 +5051,8 @@ final class DashboardCoreController {
       FluviDiagnosticEvent(
         stage: 'FOCUS_INVALIDATED',
         queryKey:
-            state?.anchor.baseQueryKey.value ?? provisionalScope!.key.value,
+            provisionalScope?.key.value ??
+            currentQuery.scopeFor(state!.anchor.direction).key.value,
         direction:
             state?.anchor.direction.name ?? provisionalScope!.direction.name,
         coreRevision:
@@ -4821,6 +5068,41 @@ final class DashboardCoreController {
     if (deferred != null && !deferred.completion.isCompleted) {
       deferred.completion.complete(false);
     }
+  }
+
+  DashboardLiveInteractionFrame _acceptLiveInteraction({
+    required DashboardLiveInteractionSource source,
+    DashboardNavigationState? temporalCandidate,
+    int? budgetTargetHandle,
+  }) {
+    final candidate = temporalCandidate ?? navigation.state;
+    final facets = focus.state;
+    final frame = liveInteractions.accept(
+      source: source,
+      coreRevision: coreRevision,
+      direction: candidate.parentQueryScope.direction,
+      temporalCandidate: candidate,
+      category: facets?.category,
+      partner: facets?.partner,
+      normalizedSearch: facets?.normalizedSearch,
+      budgetTargetHandle: budgetTargetHandle,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LIVE_INTERACTION_ACCEPTED',
+        queryKey: candidate.parentQueryKey.value,
+        direction: frame.direction.name,
+        coreRevision: frame.coreRevision,
+        scope:
+            'generation=${frame.generation} source=${source.name} '
+            'temporalScope=${candidate.effectiveScope} '
+            'targetHandle=${budgetTargetHandle ?? '-'} '
+            'categoryFacet=${frame.category?.id ?? '-'} '
+            'partnerFacet=${frame.partner?.id ?? '-'} '
+            'searchLength=${frame.normalizedSearch?.length ?? 0}',
+      ),
+    );
+    return frame;
   }
 
   void _retainFocusBaseSceneIfNeeded(PreparedDashboardIndex baseIndex) {
@@ -6933,6 +7215,7 @@ final class DashboardCoreController {
     queryComposer.dispose();
     currentQuery.dispose();
     focus.dispose();
+    liveInteractions.dispose();
     presentation.dispose();
     transactionDirection.dispose();
     expansion.dispose();

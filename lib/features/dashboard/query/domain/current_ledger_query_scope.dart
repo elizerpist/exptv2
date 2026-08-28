@@ -25,6 +25,7 @@ class CurrentLedgerQueryScope {
     Set<String> categoryIds = const <String>{},
     Set<String> partnerIds = const <String>{},
     Map<String, Object?> refinements = const <String, Object?>{},
+    this.normalizedSearch,
     this.temporalFilter = const QueryTemporalFilter.allTime(),
   }) : categoryIds = Set.unmodifiable(categoryIds),
        partnerIds = Set.unmodifiable(partnerIds),
@@ -35,6 +36,11 @@ class CurrentLedgerQueryScope {
   final Set<String> categoryIds;
   final Set<String> partnerIds;
   final Map<String, Object?> refinements;
+
+  /// Dashboard-local interactive search overlay. It is part of the immutable
+  /// prepared projection identity, but deliberately not a committed Query
+  /// Menu/Room filter: the prepared membership seed evaluates it in RAM.
+  final String? normalizedSearch;
 
   /// Applied Query Menu time selection. [timeScope] remains the dashboard's
   /// current structural parent/child navigation scope.
@@ -60,6 +66,7 @@ class CurrentLedgerQueryScope {
       'categories:${categories.join(',')}',
       'partners:${partners.join(',')}',
       'refinements:$refinementValue',
+      'search:${normalizedSearch ?? ''}',
     ];
     if (temporalFilter.isRestrictive) {
       values.add('periods:${temporalFilter.canonicalKey}');
@@ -73,6 +80,8 @@ class CurrentLedgerQueryScope {
     Set<String>? categoryIds,
     Set<String>? partnerIds,
     Map<String, Object?>? refinements,
+    String? normalizedSearch,
+    bool clearNormalizedSearch = false,
     QueryTemporalFilter? temporalFilter,
   }) {
     return CurrentLedgerQueryScope(
@@ -81,6 +90,9 @@ class CurrentLedgerQueryScope {
       categoryIds: categoryIds ?? this.categoryIds,
       partnerIds: partnerIds ?? this.partnerIds,
       refinements: refinements ?? this.refinements,
+      normalizedSearch: clearNormalizedSearch
+          ? null
+          : normalizedSearch ?? this.normalizedSearch,
       temporalFilter: temporalFilter ?? this.temporalFilter,
     );
   }

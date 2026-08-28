@@ -454,7 +454,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   @override
   void dispose() {
     _summaryAutoResetController.cancel();
-    _summaryAutoResetMotions.cancelMountedMotion();
+    _summaryAutoResetMotions.cancelActiveResetMotion();
     _summaryAutoResetController.dispose();
     _upperVerticalGestures.cancel();
     controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
@@ -849,10 +849,22 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               controller.clearPartnerFocus(),
                                             );
                                           },
+                                          onClearFocusSearch: () {
+                                            unawaited(
+                                              controller.updateLiveSearch(''),
+                                            );
+                                          },
                                           onClearFocus: () {
                                             unawaited(
                                               controller
                                                   .clearAllEphemeralFocus(),
+                                            );
+                                          },
+                                          onSearchChanged: (value) {
+                                            unawaited(
+                                              controller.updateLiveSearch(
+                                                value,
+                                              ),
                                             );
                                           },
                                           onAvatarTap: (row) {
@@ -976,7 +988,7 @@ class _CoreDashboardState extends State<CoreDashboard>
 
   void _cancelSummaryAutoReset() {
     _summaryAutoResetController.cancel();
-    _summaryAutoResetMotions.cancelMountedMotion();
+    _summaryAutoResetMotions.cancelActiveResetMotion();
   }
 }
 
@@ -1034,12 +1046,12 @@ class _DashboardSummaryRegion extends StatelessWidget {
                   },
                   onSelectorDirectInputStarted: () {
                     autoResetController.cancel();
-                    autoResetMotions.cancelMountedMotion();
+                    autoResetMotions.cancelActiveResetMotion();
                   },
                   onBackgroundTap: () {
                     // A second background tap supersedes even a reset that
                     // is currently waiting for a selector to mount.
-                    autoResetMotions.cancelMountedMotion();
+                    autoResetMotions.cancelActiveResetMotion();
                     final navigation = controller.navigation.state;
                     final plan = DashboardSummaryAutoResetPlan.resolve(
                       plane: navigation.plane,

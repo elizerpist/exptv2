@@ -36,9 +36,7 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       categoryId: target.category?.id,
     );
     if (target.isAggregate) {
-      return core.clearAllEphemeralFocus(
-        deferSceneInstallation: !publishDuringMotion,
-      );
+      return core.clearBudgetCategoryFocus(targetHandle: target.handle);
     }
     final category = target.category!;
     return core.requestBudgetCategoryFocus(
@@ -49,6 +47,7 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
         iconId: category.iconId,
       ),
       publishDuringMotion: publishDuringMotion,
+      targetHandle: target.handle,
     );
   }
 

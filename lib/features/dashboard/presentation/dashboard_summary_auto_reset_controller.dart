@@ -126,9 +126,11 @@ final class DashboardSummaryAutoResetMotionRegistry {
       >{};
   final Map<DashboardSummaryAutoResetStepKind, Completer<void>> _waiters =
       <DashboardSummaryAutoResetStepKind, Completer<void>>{};
-  final Set<VoidCallback> _cancellers = <VoidCallback>{};
+  final Map<DashboardSummaryAutoResetStepKind, VoidCallback> _cancellers =
+      <DashboardSummaryAutoResetStepKind, VoidCallback>{};
   bool _isExecuting = false;
   int _motionGeneration = 0;
+  VoidCallback? _activeResetCanceller;
 
   bool get isExecuting => _isExecuting;
 
@@ -138,7 +140,7 @@ final class DashboardSummaryAutoResetMotionRegistry {
     required VoidCallback cancelMotion,
   }) {
     _runners[kind] = runner;
-    _cancellers.add(cancelMotion);
+    _cancellers[kind] = cancelMotion;
     _waiters.remove(kind)?.complete();
   }
 
@@ -148,7 +150,12 @@ final class DashboardSummaryAutoResetMotionRegistry {
     required VoidCallback cancelMotion,
   }) {
     if (identical(_runners[kind], runner)) _runners.remove(kind);
-    _cancellers.remove(cancelMotion);
+    if (identical(_cancellers[kind], cancelMotion)) {
+      _cancellers.remove(kind);
+    }
+    if (identical(_activeResetCanceller, cancelMotion)) {
+      _activeResetCanceller = null;
+    }
   }
 
   Future<void> run(DashboardSummaryAutoResetStep step) async {
@@ -165,19 +172,34 @@ final class DashboardSummaryAutoResetMotionRegistry {
       // absent during a mode transition. Never deliver that old command to a
       // later-mounted selector.
       if (runner == null || motionGeneration != _motionGeneration) return;
-      await runner(step);
+      // The selector being run below is the only physical motion this reset
+      // command owns. A foreground pointer may cancel this exact animation,
+      // but must never broadcast a jump to unrelated or user-owned rails.
+      final cancelMotion = _cancellers[step.kind];
+      _activeResetCanceller = cancelMotion;
+      try {
+        await runner(step);
+      } finally {
+        if (motionGeneration == _motionGeneration) {
+          _activeResetCanceller = null;
+        }
+      }
     } finally {
       _isExecuting = false;
     }
   }
 
-  /// A direct foreground action interrupts physical selector animation without
-  /// issuing a synthetic temporal crossing.
-  void cancelMountedMotion() {
+  /// Invalidates a reset command and, only when it is currently running,
+  /// interrupts the one programmatic selector animation that command owns.
+  ///
+  /// This is deliberately not a mounted-selector broadcast. A direct user
+  /// pointer is allowed to start on one of those selectors and therefore must
+  /// never cancel its own newly acquired ScrollActivity.
+  void cancelActiveResetMotion() {
     _motionGeneration += 1;
-    for (final cancel in List<VoidCallback>.of(_cancellers)) {
-      cancel();
-    }
+    final cancel = _activeResetCanceller;
+    _activeResetCanceller = null;
+    cancel?.call();
   }
 }
 

@@ -7,6 +7,8 @@ void main() {
     String id, {
     required String category,
     required String partner,
+    String? partnerName,
+    String? note,
   }) => DashboardLedgerEntry(
     id: id,
     categoryId: category,
@@ -15,6 +17,8 @@ void main() {
     amountMinor: 100,
     bookedLocalEpochDay: 20,
     bookedLocalTimeMinutes: 600,
+    partnerDisplayName: partnerName,
+    note: note,
   );
 
   test(
@@ -36,6 +40,60 @@ void main() {
       );
     },
   );
+
+  test('prepared live search matches partner display name or note in RAM', () {
+    final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+      row('a', category: 'food', partner: 'spar', partnerName: 'SPAR'),
+      row(
+        'b',
+        category: 'food',
+        partner: 'other',
+        partnerName: 'Valami',
+        note: 'SPAR-blokk',
+      ),
+      row(
+        'c',
+        category: 'utilities',
+        partner: 'tesco',
+        partnerName: 'TESCO',
+        note: 'tej',
+      ),
+      row(
+        'd',
+        category: 'food',
+        partner: 'spar-note-boundary',
+        partnerName: 'SPAR',
+        note: 'blokk',
+      ),
+    ]);
+
+    expect(seed.select(normalizedSearch: 'spar').entryIds, <String>[
+      'a',
+      'b',
+      'd',
+    ]);
+    expect(seed.select(normalizedSearch: 'tej').entryIds, <String>['c']);
+    expect(
+      seed.select(categoryId: 'food', normalizedSearch: 'spar').entryIds,
+      <String>['a', 'b', 'd'],
+    );
+    expect(seed.select(normalizedSearch: 'nincs').entryIds, isEmpty);
+    expect(
+      seed.select(normalizedSearch: 'ar b').entryIds,
+      isEmpty,
+      reason:
+          'Partner name and memo match independently; a query cannot span '
+          'their storage boundary.',
+    );
+  });
+
+  test('search normalizer is case-insensitive and preserves accents', () {
+    expect(
+      DashboardLedgerSearchNormalizer.normalize('  ÁRVÍZ\tTŰRŐ '),
+      'árvíz tűrő',
+    );
+    expect(DashboardLedgerSearchNormalizer.normalize(' \n '), isNull);
+  });
 
   test('unknown focus is an exact empty projection, not a base fallback', () {
     final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[

@@ -183,11 +183,16 @@ final class BudgetProgressRingGeometry {
 
   double get capRadius => trackWidth / 2;
 
+  /// Canonical Canvas angle for the circular Budget scale. The seam is
+  /// exactly twelve o'clock; positive Canvas angle advances clockwise.
+  double angleForRatio(double ratio) =>
+      canonicalClockwiseStartAngle + math.pi * 2 * ratio.clamp(0.0, 1.0);
+
   /// The one circular ratio coordinate for every scope renderer. Canvas Y
   /// increases downward, so the positive sweep is the authored clockwise
   /// Budget direction.
   Offset pointForRatio(double ratio) {
-    final angle = canonicalClockwiseStartAngle + math.pi * 2 * ratio;
+    final angle = angleForRatio(ratio);
     return center +
         Offset(math.cos(angle) * trackRadius, math.sin(angle) * trackRadius);
   }
@@ -495,6 +500,72 @@ abstract final class BudgetProgressRingSumColoredScaleMarkers {
         ),
     ],
   );
+}
+
+/// One visual blend policy for the circular SUM health scale. Business
+/// thresholds remain exactly .75/.90; only this named half-window controls
+/// the authored smooth hue transition around them.
+abstract final class BudgetProgressRingSumHealthScale {
+  static const healthyWarningBoundary = .75;
+  static const warningDangerBoundary = .90;
+  static const transitionHalfWidth = .035;
+
+  static SweepGradient gradient({
+    required Color healthy,
+    required double startAngle,
+  }) {
+    final warning = FluviVisualTokens.budgetProgressWarning;
+    final danger = FluviVisualTokens.budgetProgressDanger;
+    return SweepGradient(
+      startAngle: startAngle,
+      endAngle: startAngle + math.pi * 2,
+      colors: <Color>[
+        healthy,
+        Color.lerp(healthy, warning, .5)!,
+        warning,
+        Color.lerp(warning, danger, .5)!,
+        danger,
+        danger,
+      ],
+      stops: const <double>[
+        0,
+        healthyWarningBoundary - transitionHalfWidth,
+        healthyWarningBoundary + transitionHalfWidth,
+        warningDangerBoundary - transitionHalfWidth,
+        warningDangerBoundary + transitionHalfWidth,
+        1,
+      ],
+    );
+  }
+
+  /// Pure color oracle used by tests/diagnostics. This is not a painter hot
+  /// path; Canvas uses [gradient] directly.
+  static Color colorForRatio({required double ratio, required Color healthy}) {
+    final value = ratio.clamp(0.0, 1.0).toDouble();
+    final warning = FluviVisualTokens.budgetProgressWarning;
+    final danger = FluviVisualTokens.budgetProgressDanger;
+    final firstStart = healthyWarningBoundary - transitionHalfWidth;
+    final firstEnd = healthyWarningBoundary + transitionHalfWidth;
+    final secondStart = warningDangerBoundary - transitionHalfWidth;
+    final secondEnd = warningDangerBoundary + transitionHalfWidth;
+    if (value <= firstStart) return healthy;
+    if (value < firstEnd) {
+      return Color.lerp(
+        healthy,
+        warning,
+        (value - firstStart) / (firstEnd - firstStart),
+      )!;
+    }
+    if (value <= secondStart) return warning;
+    if (value < secondEnd) {
+      return Color.lerp(
+        warning,
+        danger,
+        (value - secondStart) / (secondEnd - secondStart),
+      )!;
+    }
+    return danger;
+  }
 }
 
 /// One atomic Budget selection value. It carries both the exact semantic
@@ -1202,7 +1273,7 @@ final class _SelectionChromePainter extends CustomPainter {
       case BudgetLimitProgressChromeGeometry.annualSegments:
         _paintAnnualSegments(canvas, trackRect, startAngle);
       case BudgetLimitProgressChromeGeometry.typicalMarker:
-        _paintTypicalMarker(canvas, trackRect, startAngle);
+        _paintTypicalMarker(canvas, trackRect);
     }
     canvas.restore();
   }
@@ -1262,28 +1333,9 @@ final class _SelectionChromePainter extends CustomPainter {
   }
 
   Gradient _sumScaleGradient(double startAngle) {
-    const transitionHalfWidth = .035;
-    final warning = FluviVisualTokens.budgetProgressWarning;
-    final danger = FluviVisualTokens.budgetProgressDanger;
-    return SweepGradient(
+    return BudgetProgressRingSumHealthScale.gradient(
+      healthy: _healthyColor,
       startAngle: startAngle,
-      endAngle: startAngle + math.pi * 2,
-      colors: <Color>[
-        _healthyColor,
-        Color.lerp(_healthyColor, warning, .5)!,
-        warning,
-        Color.lerp(warning, danger, .5)!,
-        danger,
-        danger,
-      ],
-      stops: const <double>[
-        0,
-        .75 - transitionHalfWidth,
-        .75 + transitionHalfWidth,
-        .90 - transitionHalfWidth,
-        .90 + transitionHalfWidth,
-        1,
-      ],
     );
   }
 
@@ -1439,16 +1491,20 @@ final class _SelectionChromePainter extends CustomPainter {
     }
   }
 
-  void _paintTypicalMarker(Canvas canvas, Rect trackRect, double startAngle) {
+  void _paintTypicalMarker(Canvas canvas, Rect trackRect) {
     if (sumRingStyle != BudgetSumRingStyle.current) {
-      _paintColoredSumMarker(canvas, trackRect, startAngle);
+      _paintColoredSumMarker(canvas, trackRect);
       return;
     }
     final rawPosition = typicalMarkerPosition;
     if (rawPosition != null) {
       const markerSweep = math.pi * 2 * .055;
       final position = rawPosition.clamp(0.0, 1.0).toDouble();
-      final markerStart = startAngle + position * (math.pi * 2 - markerSweep);
+      // The short current marker is centred on its financial coordinate. In
+      // particular ratio 1 wraps back to the twelve-o'clock seam instead of
+      // stopping a marker-width early on the danger side.
+      final markerStart =
+          ringGeometry.angleForRatio(position) - markerSweep / 2;
       _paintActiveArc(canvas, trackRect, markerStart, markerSweep);
     }
     // The current short arc remains the selected typical value. Reference
@@ -1462,11 +1518,7 @@ final class _SelectionChromePainter extends CustomPainter {
     }
   }
 
-  void _paintColoredSumMarker(
-    Canvas canvas,
-    Rect trackRect,
-    double startAngle,
-  ) {
+  void _paintColoredSumMarker(Canvas canvas, Rect trackRect) {
     const markerSweep = math.pi * 2 * .055;
     final boundaries = BudgetProgressRingSumColoredScaleMarkers.resolve(
       geometry: ringGeometry,
@@ -1474,7 +1526,7 @@ final class _SelectionChromePainter extends CustomPainter {
     final rawPosition = typicalMarkerPosition;
     if (rawPosition != null) {
       final position = rawPosition.clamp(0.0, 1.0).toDouble();
-      final center = _centerForRatio(position, startAngle);
+      final center = _centerForRatio(position);
       switch (sumRingStyle) {
         case BudgetSumRingStyle.current:
           break;
@@ -1482,7 +1534,7 @@ final class _SelectionChromePainter extends CustomPainter {
           _paintActiveArcWithColors(
             canvas,
             trackRect,
-            startAngle + position * math.pi * 2 - markerSweep / 2,
+            ringGeometry.angleForRatio(position) - markerSweep / 2,
             markerSweep,
             BudgetProgressRingSphereMaterial.white.highlight,
             BudgetProgressRingSphereMaterial.white.body,
@@ -1508,12 +1560,7 @@ final class _SelectionChromePainter extends CustomPainter {
     }
   }
 
-  Offset _centerForRatio(double ratio, double startAngle) {
-    assert(
-      startAngle == BudgetProgressRingGeometry.canonicalClockwiseStartAngle,
-    );
-    return ringGeometry.pointForRatio(ratio);
-  }
+  Offset _centerForRatio(double ratio) => ringGeometry.pointForRatio(ratio);
 
   @override
   bool shouldRepaint(covariant _SelectionChromePainter oldDelegate) =>

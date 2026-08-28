@@ -5,31 +5,54 @@ import '../../../core/design/dashboard_mode_palette.dart';
 /// Presentation-only visibility of the fixed Ledger SearchPill slot.
 enum DashboardLogBoxSearchPillVisibility { shown, hidden }
 
+/// Presentation-only treatment for active direct-manipulation facets.
+enum DashboardQueryFacetPillStyle { current, solidAvatarColor }
+
+/// The external body strip is the baseline. When the SearchPill is hidden,
+/// `insideSearchPill` deterministically falls back to that strip so a live
+/// filter can never become inaccessible.
+enum DashboardQueryFacetPlacement { bodyTop, insideSearchPill }
+
 @immutable
 final class DashboardLogBoxSearchPillSettings {
   const DashboardLogBoxSearchPillSettings({
     this.visibility = DashboardLogBoxSearchPillVisibility.shown,
+    this.queryFacetPillStyle = DashboardQueryFacetPillStyle.current,
+    this.queryFacetPlacement = DashboardQueryFacetPlacement.bodyTop,
   });
 
   static const defaults = DashboardLogBoxSearchPillSettings();
 
   final DashboardLogBoxSearchPillVisibility visibility;
+  final DashboardQueryFacetPillStyle queryFacetPillStyle;
+  final DashboardQueryFacetPlacement queryFacetPlacement;
 
   bool get isVisible => visibility == DashboardLogBoxSearchPillVisibility.shown;
 
+  bool get facetsInsideVisibleSearchPill =>
+      isVisible &&
+      queryFacetPlacement == DashboardQueryFacetPlacement.insideSearchPill;
+
   DashboardLogBoxSearchPillSettings copyWith({
     DashboardLogBoxSearchPillVisibility? visibility,
+    DashboardQueryFacetPillStyle? queryFacetPillStyle,
+    DashboardQueryFacetPlacement? queryFacetPlacement,
   }) => DashboardLogBoxSearchPillSettings(
     visibility: visibility ?? this.visibility,
+    queryFacetPillStyle: queryFacetPillStyle ?? this.queryFacetPillStyle,
+    queryFacetPlacement: queryFacetPlacement ?? this.queryFacetPlacement,
   );
 
   @override
   bool operator ==(Object other) =>
       other is DashboardLogBoxSearchPillSettings &&
-      other.visibility == visibility;
+      other.visibility == visibility &&
+      other.queryFacetPillStyle == queryFacetPillStyle &&
+      other.queryFacetPlacement == queryFacetPlacement;
 
   @override
-  int get hashCode => visibility.hashCode;
+  int get hashCode =>
+      Object.hash(visibility, queryFacetPillStyle, queryFacetPlacement);
 }
 
 /// The one geometry contract shared by the header and the scroll viewport.
@@ -74,6 +97,16 @@ final class DashboardLogBoxSearchPillController
           ? DashboardLogBoxSearchPillVisibility.shown
           : DashboardLogBoxSearchPillVisibility.hidden,
     );
+    if (next != value) value = next;
+  }
+
+  void selectQueryFacetPillStyle(DashboardQueryFacetPillStyle style) {
+    final next = value.copyWith(queryFacetPillStyle: style);
+    if (next != value) value = next;
+  }
+
+  void selectQueryFacetPlacement(DashboardQueryFacetPlacement placement) {
+    final next = value.copyWith(queryFacetPlacement: placement);
     if (next != value) value = next;
   }
 

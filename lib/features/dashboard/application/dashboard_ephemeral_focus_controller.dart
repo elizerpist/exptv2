@@ -20,29 +20,25 @@ final class DashboardFocusFacet {
   final String? iconId;
 }
 
-/// Identity of a temporary focus relative to one committed directional base.
+/// Compatibility identity of a direct-manipulation Ledger facet.
 ///
-/// The focus is deliberately not a Query draft or an applied Query mutation:
-/// it can only be used while this exact base identity/revision remains valid.
+/// Category and Partner are orthogonal to temporal navigation, so this
+/// identity intentionally has no temporal/base-query key. Direction and
+/// immutable core revision are the only compatibility boundaries.
 @immutable
 final class DashboardEphemeralFocusAnchor {
   const DashboardEphemeralFocusAnchor({
     required this.direction,
-    required this.baseQueryKey,
     required this.coreRevision,
   });
 
   final LedgerDirection direction;
-  final LedgerQueryKey baseQueryKey;
   final int coreRevision;
 
   bool matches({
     required CurrentLedgerQueryScope baseScope,
     required int revision,
-  }) =>
-      direction == baseScope.direction &&
-      baseQueryKey == baseScope.key &&
-      coreRevision == revision;
+  }) => direction == baseScope.direction && coreRevision == revision;
 }
 
 @immutable
@@ -51,27 +47,19 @@ final class DashboardEphemeralFocusState {
     required this.anchor,
     this.category,
     this.partner,
-  }) : assert(category != null || partner != null);
+    this.normalizedSearch,
+  }) : assert(category != null || partner != null || normalizedSearch != null);
 
   final DashboardEphemeralFocusAnchor anchor;
   final DashboardFocusFacet? category;
   final DashboardFocusFacet? partner;
+  final String? normalizedSearch;
 
-  bool get isEmpty => category == null && partner == null;
-
-  DashboardEphemeralFocusState copyWith({
-    DashboardFocusFacet? category,
-    DashboardFocusFacet? partner,
-    bool clearCategory = false,
-    bool clearPartner = false,
-  }) => DashboardEphemeralFocusState(
-    anchor: anchor,
-    category: clearCategory ? null : category ?? this.category,
-    partner: clearPartner ? null : partner ?? this.partner,
-  );
+  bool get isEmpty =>
+      category == null && partner == null && normalizedSearch == null;
 }
 
-/// The single authoritative owner of temporary Category/Partner focus.
+/// The single authoritative owner of composable interactive Ledger facets.
 ///
 /// It contains only the focus overlay. The committed base query remains owned
 /// by [CurrentQueryController], while the dashboard composition root turns an
@@ -81,25 +69,27 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
 
   DashboardEphemeralFocusState? get state => _state;
 
-  /// Atomically publishes the complete two-dimensional overlay after its
-  /// matching immutable presentation has become authoritative. UI never sees
-  /// a focus chip for rows that still belong to the base presentation.
+  /// Atomically publishes the complete direct-manipulation overlay as soon as
+  /// its prepared membership frame is accepted. Rich scenes and paging may
+  /// decorate that frame later, but never own chip visibility, close controls
+  /// or the next user input.
   void replace({
     required CurrentLedgerQueryScope baseScope,
     required int coreRevision,
     required DashboardFocusFacet? category,
     required DashboardFocusFacet? partner,
+    String? normalizedSearch,
   }) {
-    final next = category == null && partner == null
+    final next = category == null && partner == null && normalizedSearch == null
         ? null
         : DashboardEphemeralFocusState(
             anchor: DashboardEphemeralFocusAnchor(
               direction: baseScope.direction,
-              baseQueryKey: baseScope.key,
               coreRevision: coreRevision,
             ),
             category: category,
             partner: partner,
+            normalizedSearch: normalizedSearch,
           );
     if (_state == next) return;
     _state = next;
@@ -130,6 +120,43 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
     );
   }
 
+  /// Writes the live, already-normalized Search dimension without coupling it
+  /// to an exact temporal Query key. Search composes with existing Category
+  /// and Partner facets and clearing it restores only this dimension.
+  void setNormalizedSearch({
+    required CurrentLedgerQueryScope baseScope,
+    required int coreRevision,
+    required String? normalizedSearch,
+  }) {
+    final prior = _state;
+    final compatible =
+        prior != null &&
+        prior.anchor.matches(baseScope: baseScope, revision: coreRevision);
+    final category = compatible ? prior.category : null;
+    final partner = compatible ? prior.partner : null;
+    _state = _stateOrNull(
+      anchor: DashboardEphemeralFocusAnchor(
+        direction: baseScope.direction,
+        coreRevision: coreRevision,
+      ),
+      category: category,
+      partner: partner,
+      normalizedSearch: normalizedSearch,
+    );
+    notifyListeners();
+  }
+
+  void clearSearch() {
+    final current = _state;
+    if (current == null || current.normalizedSearch == null) return;
+    _state = _stateOrNull(
+      anchor: current.anchor,
+      category: current.category,
+      partner: current.partner,
+    );
+    notifyListeners();
+  }
+
   void _replaceDimension({
     required CurrentLedgerQueryScope baseScope,
     required int coreRevision,
@@ -138,20 +165,18 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
   }) {
     final anchor = DashboardEphemeralFocusAnchor(
       direction: baseScope.direction,
-      baseQueryKey: baseScope.key,
       coreRevision: coreRevision,
     );
     final prior = _state;
-    final next =
+    final compatible =
         prior != null &&
-            prior.anchor.matches(baseScope: baseScope, revision: coreRevision)
-        ? prior.copyWith(category: category, partner: partner)
-        : DashboardEphemeralFocusState(
-            anchor: anchor,
-            category: category,
-            partner: partner,
-          );
-    _state = next;
+        prior.anchor.matches(baseScope: baseScope, revision: coreRevision);
+    _state = _stateOrNull(
+      anchor: anchor,
+      category: category ?? (compatible ? prior.category : null),
+      partner: partner ?? (compatible ? prior.partner : null),
+      normalizedSearch: compatible ? prior.normalizedSearch : null,
+    );
     notifyListeners();
   }
 
@@ -170,18 +195,17 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
     if (current == null) return;
     final nextCategory = category ? null : current.category;
     final nextPartner = partner ? null : current.partner;
-    _state = nextCategory == null && nextPartner == null
-        ? null
-        : DashboardEphemeralFocusState(
-            anchor: current.anchor,
-            category: nextCategory,
-            partner: nextPartner,
-          );
+    _state = _stateOrNull(
+      anchor: current.anchor,
+      category: nextCategory,
+      partner: nextPartner,
+      normalizedSearch: current.normalizedSearch,
+    );
     notifyListeners();
   }
 
-  /// Returns true only when a structurally newer committed base made the old
-  /// temporary overlay unsafe to reuse. Focus is never implicitly rebased.
+  /// Returns true only for direction/revision incompatibility. A temporal or
+  /// base-query change is intentionally compositional and keeps the facet.
   bool invalidateIfBaseChanged({
     required CurrentLedgerQueryScope baseScope,
     required int coreRevision,
@@ -196,9 +220,8 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
     return true;
   }
 
-  /// Applies the currently valid overlay as a new immutable scope. Empty or
-  /// stale focus falls through to the exact base object, avoiding accidental
-  /// query-key churn in callers that only need the base presentation.
+  /// Applies the currently valid overlay over any temporal/base scope. Empty
+  /// or incompatible focus falls through to the exact base object.
   CurrentLedgerQueryScope effectiveScopeFor(
     CurrentLedgerQueryScope baseScope, {
     int? coreRevision,
@@ -211,8 +234,7 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
               revision: coreRevision,
             )) ||
         (coreRevision == null &&
-            (current.anchor.direction != baseScope.direction ||
-                current.anchor.baseQueryKey != baseScope.key))) {
+            current.anchor.direction != baseScope.direction)) {
       return baseScope;
     }
     return baseScope.copyWith(
@@ -222,6 +244,29 @@ final class DashboardEphemeralFocusController extends ChangeNotifier {
       partnerIds: current.partner == null
           ? baseScope.partnerIds
           : <String>{current.partner!.id},
+      normalizedSearch: current.normalizedSearch,
+    );
+  }
+
+  static DashboardEphemeralFocusState? _stateOrNull({
+    required DashboardEphemeralFocusAnchor anchor,
+    DashboardFocusFacet? category,
+    DashboardFocusFacet? partner,
+    String? normalizedSearch,
+  }) {
+    if (category == null && partner == null && normalizedSearch == null) {
+      return null;
+    }
+    return DashboardEphemeralFocusState(
+      anchor: anchor,
+      category: category,
+      partner: partner,
+      normalizedSearch: normalizedSearch,
     );
   }
 }
+
+/// Preferred architectural names. The legacy file/class names remain only to
+/// avoid a broad unrelated rename while the dashboard migrates call sites.
+typedef DashboardInteractiveFacetController = DashboardEphemeralFocusController;
+typedef DashboardInteractiveFacetState = DashboardEphemeralFocusState;

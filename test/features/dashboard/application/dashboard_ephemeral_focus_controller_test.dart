@@ -76,6 +76,43 @@ void main() {
     expect(controller.effectiveScopeFor(baseScope), same(baseScope));
   });
 
+  test('search is an orthogonal facet and survives temporal rebasing', () {
+    final controller = DashboardEphemeralFocusController();
+    addTearDown(controller.dispose);
+    final january = base();
+    final february = january.copyWith(timeScope: YearScope(2026));
+
+    controller.setNormalizedSearch(
+      baseScope: january,
+      coreRevision: 7,
+      normalizedSearch: 'tej',
+    );
+
+    expect(controller.effectiveScopeFor(february).normalizedSearch, 'tej');
+    controller.clearSearch();
+    expect(controller.effectiveScopeFor(february).normalizedSearch, isNull);
+  });
+
+  test('clearing the final Search facet becomes a real empty overlay', () {
+    final controller = DashboardEphemeralFocusController();
+    addTearDown(controller.dispose);
+    final scope = base();
+
+    controller.setNormalizedSearch(
+      baseScope: scope,
+      coreRevision: 7,
+      normalizedSearch: 'tej',
+    );
+    controller.setNormalizedSearch(
+      baseScope: scope,
+      coreRevision: 7,
+      normalizedSearch: null,
+    );
+
+    expect(controller.state, isNull);
+    expect(controller.effectiveScopeFor(scope), same(scope));
+  });
+
   test(
     'category focus narrows an unrestricted base and clearing restores it',
     () {
@@ -102,7 +139,7 @@ void main() {
   );
 
   test(
-    'a new base query invalidates a stale focus rather than rebasing it',
+    'RED: an interactive category facet rebases over a new temporal/base scope',
     () {
       final controller = DashboardEphemeralFocusController();
       addTearDown(controller.dispose);
@@ -116,10 +153,12 @@ void main() {
 
       expect(
         controller.invalidateIfBaseChanged(baseScope: newBase, coreRevision: 7),
-        isTrue,
+        isFalse,
       );
-      expect(controller.state, isNull);
-      expect(controller.effectiveScopeFor(newBase), same(newBase));
+      expect(controller.state?.category?.id, 'utilities');
+      expect(controller.effectiveScopeFor(newBase).categoryIds, <String>{
+        'utilities',
+      });
     },
   );
 }

@@ -68,6 +68,10 @@ final class DashboardSummaryPill extends StatefulWidget {
 final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     with SingleTickerProviderStateMixin {
   static const _touchSlop = 8.0;
+  // A persistent amount lane leaves the minimum supported Summary width
+  // enough room for its complete temporal label. It is a layout decision,
+  // not a crossfade-only animation envelope.
+  static const _amountSlotWidthFraction = .20;
   static const _shellDragFactor = .10;
   static const _maximumShellTravel = 8.0;
   static const _maximumSumResistance = 5.0;
@@ -206,13 +210,12 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
               performanceCounters: widget.performanceCounters,
             ),
           ),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: widget.bounds.width * .40),
-            child: SummaryPillPreparedAmountSlot(
-              visibleFrames: widget.visibleFrames,
-              performanceCounters: widget.performanceCounters,
-              onMotionActiveChanged: widget.onAmountMotionActiveChanged,
-            ),
+          SummaryPillPreparedAmountSlot(
+            visibleFrames: widget.visibleFrames,
+            performanceCounters: widget.performanceCounters,
+            onMotionActiveChanged: widget.onAmountMotionActiveChanged,
+            alignment: Alignment.centerRight,
+            slotWidth: widget.bounds.width * _amountSlotWidthFraction,
           ),
           _SummaryChevronSlot(
             navigation: widget.navigation,
@@ -495,21 +498,42 @@ final class SummaryPillPreparedAmountSlot extends StatelessWidget {
     required this.visibleFrames,
     required this.performanceCounters,
     required this.onMotionActiveChanged,
+    this.alignment = Alignment.centerRight,
+    this.slotWidth,
   });
 
   final DashboardVisibleFrameStore visibleFrames;
   final DashboardPerformanceCounters? performanceCounters;
   final ValueChanged<bool>? onMotionActiveChanged;
 
+  /// The outer Summary layout chooses this persistent amount anchor. It is
+  /// intentionally independent from preview/crossfade/motion state.
+  final AlignmentGeometry alignment;
+
+  /// A fixed amount envelope owned by the enclosing Summary layout. When it
+  /// is supplied, idle, preview and committed crossfade all reserve exactly
+  /// this same Row width; [alignment] only controls paint inside the slot.
+  final double? slotWidth;
+
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder(
-    valueListenable: visibleFrames.amountLane,
-    builder: (context, frame, _) => _PreparedAmountCrossfade(
-      frame: frame,
-      performanceCounters: performanceCounters,
-      onMotionActiveChanged: onMotionActiveChanged,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final content = ValueListenableBuilder(
+      valueListenable: visibleFrames.amountLane,
+      builder: (context, frame, _) => _PreparedAmountCrossfade(
+        frame: frame,
+        performanceCounters: performanceCounters,
+        onMotionActiveChanged: onMotionActiveChanged,
+        alignment: alignment,
+      ),
+    );
+    final width = slotWidth;
+    if (width == null) return content;
+    return SizedBox(
+      key: const ValueKey('dashboard-summary-amount-slot'),
+      width: width,
+      child: Align(alignment: alignment, child: content),
+    );
+  }
 }
 
 final class _PreparedAmountCrossfade extends StatefulWidget {
@@ -517,11 +541,13 @@ final class _PreparedAmountCrossfade extends StatefulWidget {
     required this.frame,
     required this.performanceCounters,
     required this.onMotionActiveChanged,
+    required this.alignment,
   });
 
   final DashboardVisibleFrame? frame;
   final DashboardPerformanceCounters? performanceCounters;
   final ValueChanged<bool>? onMotionActiveChanged;
+  final AlignmentGeometry alignment;
 
   @override
   State<_PreparedAmountCrossfade> createState() =>
@@ -608,15 +634,16 @@ final class _PreparedAmountCrossfadeState
         builder: (context, _) {
           final value = Curves.easeOutCubic.transform(_controller.value);
           if (_previous == null) return _amountText(_current);
-          return SizedBox(
-            width: MediaQuery.sizeOf(context).width * .32,
-            child: Stack(
-              alignment: Alignment.centerRight,
-              children: [
-                Opacity(opacity: 1 - value, child: _amountText(_previous!)),
-                Opacity(opacity: value, child: _amountText(_current)),
-              ],
-            ),
+          // A crossfade shares the same bounded, intrinsic layout contract as
+          // the static amount. In particular, do not wrap this in an Align:
+          // Align expands to the parent's finite max width and would make the
+          // Row reserve a different envelope only while crossfading.
+          return Stack(
+            alignment: widget.alignment,
+            children: [
+              Opacity(opacity: 1 - value, child: _amountText(_previous!)),
+              Opacity(opacity: value, child: _amountText(_current)),
+            ],
           );
         },
       ),
@@ -631,7 +658,7 @@ final class _PreparedAmountCrossfadeState
   }
 
   Widget _amountText(String value) => FittedBox(
-    alignment: Alignment.centerRight,
+    alignment: widget.alignment,
     fit: BoxFit.scaleDown,
     child: Text(
       value,

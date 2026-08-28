@@ -82,7 +82,7 @@ void main() {
         const DashboardSummaryAutoResetStep.year(2026),
       );
       await Future<void>.delayed(Duration.zero);
-      registry.cancelMountedMotion();
+      registry.cancelActiveResetMotion();
       registry.attach(
         kind: DashboardSummaryAutoResetStepKind.year,
         runner: (_) async => lateRuns += 1,
@@ -91,6 +91,51 @@ void main() {
       await waiting;
 
       expect(lateRuns, 0);
+    },
+  );
+
+  test(
+    'RED: direct foreground input invalidates reset without cancelling the mounted user selector',
+    () {
+      final registry = DashboardSummaryAutoResetMotionRegistry();
+      var mountedSelectorCancels = 0;
+
+      registry.attach(
+        kind: DashboardSummaryAutoResetStepKind.level,
+        runner: (_) async {},
+        cancelMotion: () => mountedSelectorCancels += 1,
+      );
+
+      // This is the current Core direct-input route. It must invalidate an
+      // auto-reset command, but it must not issue jumpToIndexSilently against
+      // the carousel currently owned by this user pointer.
+      registry.cancelActiveResetMotion();
+
+      expect(mountedSelectorCancels, 0);
+    },
+  );
+
+  test(
+    'direct input cancels only the active programmatic reset motion',
+    () async {
+      final registry = DashboardSummaryAutoResetMotionRegistry();
+      final gate = Completer<void>();
+      var programmaticCancels = 0;
+      registry.attach(
+        kind: DashboardSummaryAutoResetStepKind.month,
+        runner: (_) => gate.future,
+        cancelMotion: () => programmaticCancels += 1,
+      );
+
+      final running = registry.run(
+        const DashboardSummaryAutoResetStep.month(8),
+      );
+      await Future<void>.delayed(Duration.zero);
+      registry.cancelActiveResetMotion();
+
+      expect(programmaticCancels, 1);
+      gate.complete();
+      await running;
     },
   );
 }

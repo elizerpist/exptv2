@@ -778,6 +778,17 @@ abstract interface class DashboardFocusedTemporalOverlay {
 
   DashboardPreparedFrame materializeFrame(CurrentLedgerQueryScope scope);
 
+  /// Returns one exact, locally prepared LogBox page for an interactive
+  /// overlay.  This is intentionally separate from the first-frame preview:
+  /// local dashboard facets (including Search) do not cross the native paging
+  /// boundary, so every later page must come from the same prepared ordinal
+  /// membership as that preview.
+  DashboardPreparedLogPage materializeLogPage(
+    CurrentLedgerQueryScope scope, {
+    required Map<String, Object?>? after,
+    required int pageSize,
+  });
+
   DashboardSemanticCatalog materializeCatalog(
     CurrentLedgerQueryScope parentScope,
   );
@@ -795,6 +806,21 @@ abstract interface class DashboardFocusedTemporalOverlay {
   int get materializedCatalogCount;
 
   Iterable<DashboardPreparedFrame> get materializedFrames;
+}
+
+/// One cursor-sized page projected from an immutable prepared interaction
+/// overlay.  It has no repository capability; the explicit vertical paging
+/// owner remains responsible for page ordering, cache ownership, and stale
+/// request guards.
+@immutable
+final class DashboardPreparedLogPage {
+  const DashboardPreparedLogPage({
+    required this.payload,
+    required this.nextCursor,
+  });
+
+  final DashboardLogViewportState payload;
+  final Map<String, Object?>? nextCursor;
 }
 
 /// Immutable two-map view used by one focus overlay. The focused half and the
@@ -1453,6 +1479,19 @@ final class PreparedDashboardIndex {
     final compactZero = compactZeroFrames[scope.key];
     if (compactZero == null) return _zeroFrame(scope);
     return compactZero.materialize();
+  }
+
+  /// Returns a page only when [scope] is owned by the active prepared focus
+  /// overlay. A null result deliberately delegates ordinary committed scopes
+  /// to the existing native keyset repository.
+  DashboardPreparedLogPage? preparedLogPageFor(
+    CurrentLedgerQueryScope scope, {
+    required Map<String, Object?>? after,
+    required int pageSize,
+  }) {
+    _requireScopeIdentity(scope);
+    final overlay = _focusedOverlayFor(scope);
+    return overlay?.materializeLogPage(scope, after: after, pageSize: pageSize);
   }
 
   DashboardPreparedFrame frameForKey(LedgerQueryKey queryKey) {

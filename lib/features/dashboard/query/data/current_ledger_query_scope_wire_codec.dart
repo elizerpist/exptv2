@@ -18,6 +18,9 @@ final class CurrentLedgerQueryScopeWireCodec {
         'categoryIds': _sorted(scope.categoryIds),
         'partnerIds': _sorted(scope.partnerIds),
         'refinements': scope.refinements,
+        // Search is a prepared dashboard overlay rather than a persisted
+        // Query Menu field. It intentionally does not cross the platform
+        // query boundary as a database predicate.
       };
 
   static Map<String, Object?> encodeDirectionalFilterSet(

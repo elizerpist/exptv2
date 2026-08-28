@@ -1285,6 +1285,54 @@ final class _DashboardSearchPillVisibilitySection extends StatelessWidget {
               value: settings.isVisible,
               onChanged: controller.setVisible,
             ),
+            RadioGroup<DashboardQueryFacetPillStyle>(
+              groupValue: settings.queryFacetPillStyle,
+              onChanged: (value) {
+                if (value != null) controller.selectQueryFacetPillStyle(value);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final style in DashboardQueryFacetPillStyle.values)
+                    RadioListTile<DashboardQueryFacetPillStyle>(
+                      key: ValueKey(
+                        'dashboard-query-facet-style-${style.name}',
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        style == DashboardQueryFacetPillStyle.current
+                            ? 'Query kapszula: Jelenlegi'
+                            : 'Query kapszula: Avatárszín',
+                      ),
+                      value: style,
+                    ),
+                ],
+              ),
+            ),
+            RadioGroup<DashboardQueryFacetPlacement>(
+              groupValue: settings.queryFacetPlacement,
+              onChanged: (value) {
+                if (value != null) controller.selectQueryFacetPlacement(value);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final placement in DashboardQueryFacetPlacement.values)
+                    RadioListTile<DashboardQueryFacetPlacement>(
+                      key: ValueKey(
+                        'dashboard-query-facet-placement-${placement.name}',
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        placement == DashboardQueryFacetPlacement.bodyTop
+                            ? 'Query kapszulák helye: Body teteje'
+                            : 'Query kapszulák helye: SearchPillben',
+                      ),
+                      value: placement,
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       );

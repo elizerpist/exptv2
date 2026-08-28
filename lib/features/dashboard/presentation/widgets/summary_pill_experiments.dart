@@ -415,6 +415,12 @@ final class SummaryPillExperiment extends StatelessWidget {
                 visibleFrames: visibleFrames,
                 performanceCounters: performanceCounters,
                 onMotionActiveChanged: onAmountMotionActiveChanged,
+                slotWidth: amountWidth,
+                alignment:
+                    presentation.segmentedOrientation ==
+                        SummarySegmentedOrientation.normal
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
               ),
             ),
           );
@@ -943,10 +949,8 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       ),
       height: widget.height,
       viewportKey: ValueKey<String>('${widget.key}-viewport'),
+      onDirectPointerDown: widget.onDirectInputStarted,
       onMotionStarted: (origin) {
-        if (origin == CenteredCarouselMotionOrigin.userDrag) {
-          widget.onDirectInputStarted?.call();
-        }
         widget.onMotionActiveChanged?.call(true);
       },
       onSelectedChanged: (index) {
@@ -1173,10 +1177,8 @@ final class _HierarchyValueSelectorState
           ),
           height: widget.height,
           viewportKey: ValueKey<String>('${widget.key}-viewport'),
+          onDirectPointerDown: widget.onDirectInputStarted,
           onMotionStarted: (origin) {
-            if (origin == CenteredCarouselMotionOrigin.userDrag) {
-              widget.onDirectInputStarted?.call();
-            }
             _motionOrigin = widget.navigation.state;
             widget.onMotionActiveChanged?.call(true);
           },

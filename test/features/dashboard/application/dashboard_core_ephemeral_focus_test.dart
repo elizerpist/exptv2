@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_presentati
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_coordinator.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -142,7 +143,7 @@ void main() {
   );
 
   test(
-    'Budget category replacement clears an existing Partner in the one prepared focus publication',
+    'Budget category replacement preserves the orthogonal Partner facet',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -169,7 +170,7 @@ void main() {
       );
 
       expect(core.focus.state?.category?.id, 'utilities');
-      expect(core.focus.state?.partner, isNull);
+      expect(core.focus.state?.partner?.id, 'partner-utility');
       expect(
         repository.prepareCalls,
         1,
@@ -216,6 +217,156 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'live SearchPill text composes through the prepared facet projection',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final baseAmount = core.visibleFrames.amountLane.value!.amount.totalMinor;
+
+      expect(await core.updateLiveSearch('utility'), isTrue);
+      expect(core.focus.state?.normalizedSearch, 'utility');
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 500);
+
+      expect(await core.updateLiveSearch('food'), isTrue);
+      expect(core.focus.state?.normalizedSearch, 'food');
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 700);
+
+      expect(await core.updateLiveSearch('   '), isTrue);
+      expect(core.focus.state, isNull);
+      expect(
+        core.visibleFrames.amountLane.value!.amount.totalMinor,
+        baseAmount,
+      );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'rapid live Search generations reject out-of-order rich scene completions',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final gates = <Completer<void>>[];
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {
+          final gate = Completer<void>();
+          gates.add(gate);
+          await gate.future;
+        },
+        activate: (_) {},
+      );
+
+      for (final query in <String>['f', 'fo', 'foo', 'food']) {
+        expect(await core.updateLiveSearch(query), isTrue);
+      }
+      expect(gates, hasLength(4));
+      expect(core.focus.state?.normalizedSearch, 'food');
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 700);
+
+      for (final gate in gates.reversed) {
+        gate.complete();
+      }
+      await Future<void>.delayed(Duration.zero);
+
+      expect(core.focus.state?.normalizedSearch, 'food');
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 700);
+      expect(core.liveInteractions.frame?.normalizedSearch, 'food');
+    },
+  );
+
+  test(
+    'live Search pages beyond the prepared root stay in RAM and never fall through to native paging',
+    () async {
+      final rows = List<DashboardLedgerEntry>.generate(
+        5,
+        (index) => DashboardLedgerEntry(
+          id: 'needle-$index',
+          partnerId: 'partner-$index',
+          categoryId: 'utilities',
+          direction: 'income',
+          amountMinor: 100 + index,
+          bookedLocalEpochDay: 20635 + index,
+          bookedLocalTimeMinutes: 600,
+          partnerDisplayName: 'Needle partner $index',
+          categoryDisplayName: 'Utilities',
+          categoryColorId: 'fallback',
+          categoryIconId: 'fallback',
+        ),
+      );
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        pageSize: 2,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      expect(await core.updateLiveSearch('needle'), isTrue);
+      final focusedFrame = core.preparedIndex!.frameFor(
+        core.navigation.state.parentQueryScope,
+      );
+      expect(focusedFrame.entryCount, rows.length);
+      expect(focusedFrame.logBox.nextCursor, isNotNull);
+
+      core.committedLogViewport.configureSurfaceWidth(378);
+      expect(await core.requestForwardPageDemand(1), isTrue);
+
+      expect(core.paging.preparedPageReadCount, 1);
+      expect(repository.committedPageReads, 0);
+      final page = core.committedLogViewport.pageForOrdinal(1)!;
+      expect(page.queryKey, core.visibleFrames.value!.queryKey);
+      expect(page.rowCount, 2);
+    },
+  );
+
+  test(
+    'category acceptance publishes one live interaction provenance frame',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        ),
+        isTrue,
+      );
+
+      final frame = core.liveInteractions.frame!;
+      expect(frame.source, DashboardLiveInteractionSource.logBoxCategory);
+      expect(frame.category?.id, 'utilities');
+      expect(frame.direction, LedgerDirection.income);
+      expect(
+        frame.temporalCandidate.effectiveScope,
+        core.navigation.state.effectiveScope,
+      );
+    },
+  );
 
   test(
     'Budget avatar preview crossings publish the shared amount, count and Ledger lanes together',
@@ -291,7 +442,7 @@ void main() {
   );
 
   test(
-    'Budget avatar preview publishes its newest prepared amount before the LogBox scene settles',
+    'Budget avatar preview publishes its newest prepared Ledger frame before a held scene settles',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -359,10 +510,10 @@ void main() {
       );
       expect(
         core.visibleFrames.value!.amount.totalMinor,
-        isNot(700),
+        700,
         reason:
-            'The complete LogBox frame remains atomic and is intentionally '
-            'still waiting for its scene window at this point.',
+            'The bounded prepared LogBox frame is the live interaction '
+            'authority; only rich scene decoration remains asynchronous.',
       );
       expect(
         core.visibleFrames.amountPreviewPublishCount,
@@ -378,17 +529,12 @@ void main() {
       );
       gates[1].complete();
 
-      expect(await previewA, isFalse);
-      expect(await previewB, isFalse);
+      expect(await previewA, isTrue);
+      expect(await previewB, isTrue);
       expect(await previewC, isTrue);
       expect(core.focus.state?.category?.id, 'food');
       expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 700);
-      expect(
-        FluviDiagnosticLogger.entries.any(
-          (event) => event.stage == 'QUERY_APPLY_STALE_PUBLICATION_REJECTED',
-        ),
-        isTrue,
-      );
+      expect(core.visibleFrames.value!.amount.totalMinor, 700);
       expect(repository.prepareCalls, 1);
     },
   );
@@ -495,7 +641,7 @@ void main() {
   );
 
   test(
-    'a stale active-resource scene stage is discarded before the next foreground target',
+    'a stale live generation is rejected before any scene stage starts',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -527,8 +673,8 @@ void main() {
       );
 
       expect(published, isFalse);
-      expect(stages, 1);
-      expect(discards, 1);
+      expect(stages, 0);
+      expect(discards, 0);
       expect(activations, 0);
     },
   );
@@ -582,7 +728,14 @@ void main() {
       );
 
       sceneGate.complete();
-      expect(await categoryPreview, isFalse);
+      expect(
+        await categoryPreview,
+        isTrue,
+        reason:
+            'The accepted category facet published its prepared first frame '
+            'before the held rich scene; the later stale augmentation has no '
+            'authority to overwrite the aggregate interaction.',
+      );
       expect(core.focus.state, isNull);
       expect(
         core.visibleFrames.amountLane.value!.amount.totalMinor,
@@ -592,7 +745,7 @@ void main() {
   );
 
   test(
-    'clearing focus reactivates the retained base scene without a second scene prepare',
+    'clearing focus publishes its retained base frame before one noncritical scene augmentation',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -684,25 +837,20 @@ void main() {
 
       expect(
         baseRestorePrepareCalls,
-        0,
+        1,
         reason:
-            'The exact base root must activate from the retained scene bank; '
-            'any later rail warmup is a separate non-critical domain.',
+            'The direct clear publishes its prepared base frame immediately; '
+            'one later rich-scene augmentation may rebuild after the old '
+            'focused scene is no longer retained.',
       );
       expect(cache.hasRetainedFocusBaseWindow, isFalse);
       expect(cache.activeWindowIdentity, baseWindow.identity);
       expect(repository.prepareCalls, 1);
-      expect(
-        FluviDiagnosticLogger.entries.any(
-          (event) => event.stage == 'SCENE_WINDOW_RETAINED_RESTORE_HIT',
-        ),
-        isTrue,
-      );
     },
   );
 
   test(
-    'a newer committed base Query invalidates focus and cannot restore its old base',
+    'a newer committed base Query clears the temporary overlay before its new base publishes',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -727,13 +875,7 @@ void main() {
 
       expect(core.focus.state, isNull);
       expect(core.currentQuery.scopeFor(LedgerDirection.income), newerBase);
-      expect(
-        await core.clearAllEphemeralFocus(),
-        isFalse,
-        reason:
-            'Clearing stale focus may never reinstall the retained old base '
-            'after a newer Query has become authoritative.',
-      );
+      expect(await core.clearAllEphemeralFocus(), isFalse);
       expect(core.currentQuery.scopeFor(LedgerDirection.income), newerBase);
     },
   );
@@ -782,9 +924,13 @@ DashboardBudgetPresentationState _budgetAggregatePreviewState() =>
     );
 
 final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
+  _FocusSeedRepository({List<DashboardLedgerEntry>? rows}) : _rows = rows;
+
   final EmptyDashboardDataRuntimeRepository _empty =
       const EmptyDashboardDataRuntimeRepository();
+  final List<DashboardLedgerEntry>? _rows;
   var prepareCalls = 0;
+  var committedPageReads = 0;
 
   @override
   Stream<int> watchCoreRevision() => Stream<int>.value(1);
@@ -796,34 +942,36 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   ) async {
     prepareCalls += 1;
     final base = await _empty.prepareIndex(request, token);
-    final rows = <DashboardLedgerEntry>[
-      const DashboardLedgerEntry(
-        id: 'utility-row',
-        partnerId: 'partner-utility',
-        categoryId: 'utilities',
-        direction: 'income',
-        amountMinor: 500,
-        bookedLocalEpochDay: 20636,
-        bookedLocalTimeMinutes: 600,
-        partnerDisplayName: 'Utility partner',
-        categoryDisplayName: 'Utilities',
-        categoryColorId: 'fallback',
-        categoryIconId: 'fallback',
-      ),
-      const DashboardLedgerEntry(
-        id: 'food-row',
-        partnerId: 'partner-food',
-        categoryId: 'food',
-        direction: 'income',
-        amountMinor: 700,
-        bookedLocalEpochDay: 20635,
-        bookedLocalTimeMinutes: 600,
-        partnerDisplayName: 'Food partner',
-        categoryDisplayName: 'Food',
-        categoryColorId: 'fallback',
-        categoryIconId: 'fallback',
-      ),
-    ];
+    final rows =
+        _rows ??
+        <DashboardLedgerEntry>[
+          const DashboardLedgerEntry(
+            id: 'utility-row',
+            partnerId: 'partner-utility',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: 500,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Utility partner',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+          const DashboardLedgerEntry(
+            id: 'food-row',
+            partnerId: 'partner-food',
+            categoryId: 'food',
+            direction: 'income',
+            amountMinor: 700,
+            bookedLocalEpochDay: 20635,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Food partner',
+            categoryDisplayName: 'Food',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+        ];
     return PreparedDashboardIndex.complete(
       key: base.key,
       frames: base.frames,
@@ -853,7 +1001,10 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   @override
   Future<CommittedLogPage> readCommittedPage(
     DashboardCommittedPageRequest request,
-  ) => _empty.readCommittedPage(request);
+  ) {
+    committedPageReads += 1;
+    return _empty.readCommittedPage(request);
+  }
 
   @override
   Map<String, Object?> performanceReport() => _empty.performanceReport();

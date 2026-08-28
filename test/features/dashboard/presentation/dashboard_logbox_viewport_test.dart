@@ -12,6 +12,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -37,6 +38,11 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 import '../../../support/dashboard_render_resources.dart';
+
+Finder _logBoxScrollable() => find.descendant(
+  of: find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+  matching: find.byType(Scrollable),
+);
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
@@ -89,6 +95,29 @@ void main() {
     );
   });
 
+  test(
+    'query facet presentation defaults and hidden SearchPill fallback are stable',
+    () {
+      final controller = DashboardLogBoxSearchPillController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.value.queryFacetPillStyle,
+        DashboardQueryFacetPillStyle.current,
+      );
+      expect(
+        controller.value.queryFacetPlacement,
+        DashboardQueryFacetPlacement.bodyTop,
+      );
+      controller.selectQueryFacetPlacement(
+        DashboardQueryFacetPlacement.insideSearchPill,
+      );
+      expect(controller.value.facetsInsideVisibleSearchPill, isTrue);
+      controller.setVisible(false);
+      expect(controller.value.facetsInsideVisibleSearchPill, isFalse);
+    },
+  );
+
   testWidgets(
     'Ledger chrome orders count, SearchPill, and scroll lane without a result amount',
     (tester) async {
@@ -118,8 +147,67 @@ void main() {
         findsOneWidget,
       );
       final searchSemantics = tester.widget<Semantics>(search);
-      expect(searchSemantics.properties.button, isTrue);
-      expect(searchSemantics.properties.enabled, isFalse);
+      expect(searchSemantics.properties.textField, isTrue);
+      expect(searchSemantics.properties.enabled, isTrue);
+    },
+  );
+
+  testWidgets(
+    'SearchPill owns stable editable focus and keeps text on unfocus',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final text = TextEditingController();
+      final focus = FocusNode();
+      final edits = <String>[];
+      addTearDown(store.dispose);
+      addTearDown(text.dispose);
+      addTearDown(focus.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                children: <Widget>[
+                  SizedBox(
+                    width: 378,
+                    child: DashboardLogBoxHeader(
+                      bounds: const DashboardBounds(
+                        left: 0,
+                        top: 0,
+                        width: 378,
+                        height:
+                            DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+                      ),
+                      visibleFrames: store,
+                      searchController: text,
+                      searchFocusNode: focus,
+                      onSearchChanged: edits.add,
+                    ),
+                  ),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-logbox-search-input')),
+      );
+      await tester.pump();
+      expect(focus.hasFocus, isTrue);
+      await tester.enterText(
+        find.byKey(const ValueKey('dashboard-logbox-search-input')),
+        'spar',
+      );
+      expect(edits, <String>['spar']);
+      await tester.tapAt(const Offset(250, 500));
+      await tester.pump();
+      expect(focus.hasFocus, isFalse);
+      expect(text.text, 'spar');
     },
   );
 
@@ -138,7 +226,7 @@ void main() {
       final scroll = find.byKey(const ValueKey('dashboard-logbox-scroll-view'));
       final oldRect = tester.getRect(scroll);
       final oldPosition = tester
-          .state<ScrollableState>(find.byType(Scrollable))
+          .state<ScrollableState>(_logBoxScrollable())
           .position;
       expect(
         find.byKey(const ValueKey('dashboard-logbox-search-pill')),
@@ -154,7 +242,7 @@ void main() {
       );
       final newRect = tester.getRect(scroll);
       final newPosition = tester
-          .state<ScrollableState>(find.byType(Scrollable))
+          .state<ScrollableState>(_logBoxScrollable())
           .position;
       expect(newRect.height - oldRect.height, 68);
       expect(newRect.top, oldRect.top - 68);
@@ -440,7 +528,7 @@ void main() {
       expect(fixture.cache.contiguousReadyRowCount, 94);
       expect(fixture.cache.highestReadyPageOrdinal, greaterThanOrEqualTo(3));
 
-      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final scrollable = tester.state<ScrollableState>(_logBoxScrollable());
       final surface = find.byKey(
         const ValueKey('dashboard-logbox-stable-render-surface'),
       );
@@ -687,6 +775,145 @@ void main() {
   );
 
   testWidgets(
+    'inside SearchPill facets remove external chrome and hidden SearchPill falls back safely',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      final presentation = DashboardLogBoxSearchPillController()
+        ..selectQueryFacetPlacement(
+          DashboardQueryFacetPlacement.insideSearchPill,
+        );
+      final query = CurrentQueryController(
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: MonthScope(YearMonth(year: 2026, month: 7)),
+          categoryIds: const <String>{'food'},
+        ),
+      );
+      addTearDown(fixture.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(query.dispose);
+      query.apply(
+        query.scope,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(entryCount: 94, amountScaled100: 1),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 0,
+            maximumAmountScaled100: 1,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[
+            QueryMenuCategoryFacet(
+              id: 'food',
+              displayName: 'Étel',
+              colorId: 'color_15',
+              iconId: 'icon_02',
+              entryCount: 94,
+            ),
+          ],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+
+      await tester.pumpWidget(
+        _viewport(
+          store: fixture.store,
+          cache: fixture.cache,
+          railScenes: fixture.railScenes,
+          onLoadNextPage: (_) {},
+          currentQuery: query,
+          searchPillVisibility: presentation,
+        ),
+      );
+      await tester.pump();
+
+      final search = find.byKey(const ValueKey('dashboard-logbox-search-pill'));
+      final chips = find.byKey(const ValueKey('dashboard-query-facet-chips'));
+      expect(
+        find.byKey(const ValueKey('dashboard-query-facets-inside-search')),
+        findsOneWidget,
+      );
+      expect(find.descendant(of: search, matching: chips), findsOneWidget);
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('dashboard-logbox-scroll-view')))
+            .top,
+        closeTo(
+          tester.getRect(search).bottom +
+              DashboardLogBoxTokens.ledgerSearchToListGap,
+          .1,
+        ),
+        reason: 'Moving facets inside does not retain the external chip lane.',
+      );
+
+      presentation.setVisible(false);
+      await tester.pump();
+
+      expect(search, findsNothing);
+      expect(
+        find.byKey(const ValueKey('dashboard-query-facets-inside-search')),
+        findsNothing,
+      );
+      expect(chips, findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'hidden SearchPill exposes an active search facet in the body-top fallback',
+    (tester) async {
+      final fixture = await _readyFixture(tester, totalRows: 94);
+      final presentation = DashboardLogBoxSearchPillController()
+        ..selectQueryFacetPlacement(
+          DashboardQueryFacetPlacement.insideSearchPill,
+        )
+        ..setVisible(false);
+      final query = CurrentQueryController(
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: MonthScope(YearMonth(year: 2026, month: 7)),
+        ),
+      );
+      final focus = DashboardEphemeralFocusController();
+      addTearDown(fixture.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(query.dispose);
+      addTearDown(focus.dispose);
+      focus.replace(
+        baseScope: query.scope,
+        coreRevision: 1,
+        category: null,
+        partner: null,
+        normalizedSearch: 'tej',
+      );
+      var clearSearchCalls = 0;
+
+      await tester.pumpWidget(
+        _viewport(
+          store: fixture.store,
+          cache: fixture.cache,
+          railScenes: fixture.railScenes,
+          onLoadNextPage: (_) {},
+          currentQuery: query,
+          focus: focus,
+          onClearFocusSearch: () => clearSearchCalls += 1,
+          searchPillVisibility: presentation,
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-query-facet-chips')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('dashboard-focus-search')));
+      expect(clearSearchCalls, 1);
+    },
+  );
+
+  testWidgets(
     'RED: an exact virtual extent is authoritative before the first vertical drag',
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 94);
@@ -695,7 +922,7 @@ void main() {
         const ValueKey('dashboard-logbox-scroll-view'),
       );
       final position = tester
-          .state<ScrollableState>(find.byType(Scrollable))
+          .state<ScrollableState>(_logBoxScrollable())
           .position;
       final maxAtRest = position.maxScrollExtent;
       final minAtRest = position.minScrollExtent;
@@ -723,7 +950,7 @@ void main() {
 
       expect(position.maxScrollExtent, maxAtRest);
       final scrollableAfterDrag = tester.state<ScrollableState>(
-        find.byType(Scrollable),
+        _logBoxScrollable(),
       );
       expect(identical(scrollableAfterDrag.position, position), isTrue);
       expect(
@@ -805,7 +1032,7 @@ void main() {
       );
       await tester.pump();
       final position = tester
-          .state<ScrollableState>(find.byType(Scrollable))
+          .state<ScrollableState>(_logBoxScrollable())
           .position;
       final virtualExtent = cache.contentHeight;
       position.jumpTo(cache.pageTopForOrdinal(1) + 12);
@@ -933,7 +1160,7 @@ void main() {
       final scrollView = find.byKey(
         const ValueKey('dashboard-logbox-scroll-view'),
       );
-      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final scrollable = tester.state<ScrollableState>(_logBoxScrollable());
       final position = scrollable.position;
       final physics = position.physics;
       final readsBeforeInteraction =
@@ -1181,7 +1408,7 @@ void main() {
       await tester.fling(scrollView, const Offset(0, -180), 5000);
       await tester.pump(const Duration(milliseconds: 16));
       final position = tester
-          .state<ScrollableState>(find.byType(Scrollable))
+          .state<ScrollableState>(_logBoxScrollable())
           .position;
       final extentBefore = fixture.cache.contentHeight;
       final maxBefore = position.maxScrollExtent;
@@ -1214,7 +1441,7 @@ void main() {
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 192);
       addTearDown(fixture.dispose);
-      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final scrollable = tester.state<ScrollableState>(_logBoxScrollable());
       final position = scrollable.position;
       final controller = scrollable.widget.controller;
       final oldManifest = fixture.cache.geometryManifest!;
@@ -1237,7 +1464,7 @@ void main() {
       expect(fixture.cache.replaceGeometryManifest(nextManifest), isTrue);
       await tester.pump();
 
-      final after = tester.state<ScrollableState>(find.byType(Scrollable));
+      final after = tester.state<ScrollableState>(_logBoxScrollable());
       final nextPage = nextManifest.pageForOrdinal(ordinal)!;
       expect(identical(after.position, position), isTrue);
       expect(identical(after.widget.controller, controller), isTrue);
@@ -1303,7 +1530,7 @@ void main() {
         ),
       );
       await tester.pump();
-      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      final scrollable = tester.state<ScrollableState>(_logBoxScrollable());
       final position = scrollable.position;
       final scrollController = scrollable.widget.controller;
       final physics = position.physics;
@@ -1327,7 +1554,7 @@ void main() {
       );
       await tester.pump();
 
-      final after = tester.state<ScrollableState>(find.byType(Scrollable));
+      final after = tester.state<ScrollableState>(_logBoxScrollable());
       expect(verticalInteractionActive, isTrue);
       expect(cache.pageForOrdinal(1), isNotNull);
       expect(repository.requestedOrdinals, <int>[1]);
@@ -1536,6 +1763,8 @@ Widget _viewport({
   DashboardPerformanceCounters? performanceCounters,
   CurrentQueryController? currentQuery,
   DashboardLogBoxPartnerSwipeController? partnerSwipe,
+  DashboardEphemeralFocusController? focus,
+  VoidCallback? onClearFocusSearch,
   double dashboardLeft = 0,
   double screenWidth = 378,
   DashboardLogBoxSearchPillController? searchPillVisibility,
@@ -1573,10 +1802,12 @@ Widget _viewport({
               onVerticalPointerIntentEnded: onVerticalPointerIntentEnded,
               performanceCounters: performanceCounters,
               currentQuery: currentQuery,
+              focus: focus,
               partnerSwipe: partnerSwipe,
               onRemoveQueryCategory: currentQuery == null ? null : (_) {},
               onRemoveQueryPartner: currentQuery == null ? null : (_) {},
               onClearQuery: currentQuery == null ? null : () {},
+              onClearFocusSearch: onClearFocusSearch,
             ),
           ),
         ],

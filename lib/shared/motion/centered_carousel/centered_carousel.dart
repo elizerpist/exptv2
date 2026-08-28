@@ -31,6 +31,7 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onSelectionSettled,
     this.onMotionStarted,
     this.onMotionIdle,
+    this.onDirectPointerDown,
     this.height,
     this.viewportKey = const ValueKey('centered-carousel-viewport'),
     this.semanticsLabelBuilder,
@@ -55,6 +56,12 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onSelectionSettled;
   final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
   final ValueChanged<int>? onMotionIdle;
+
+  /// Delivers a direct pointer before Scrollable can replace its current
+  /// activity with a user drag. Consumers that need to interrupt an owned
+  /// programmatic command (for example Summary auto-reset) must do it here,
+  /// never from [onMotionStarted] after the drag already owns the position.
+  final VoidCallback? onDirectPointerDown;
   final double? height;
   final Key viewportKey;
   final String Function(T item)? semanticsLabelBuilder;
@@ -298,6 +305,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
 
   void _handlePointerDown(PointerDownEvent event) {
     if (_trackedPointer != null) return;
+    widget.onDirectPointerDown?.call();
     _trackedPointer = event.pointer;
     _pointerDownPosition = event.localPosition;
     _pointerDownScrollPixels = widget.controller.scrollController.hasClients

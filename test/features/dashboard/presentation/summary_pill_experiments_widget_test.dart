@@ -7,6 +7,7 @@ import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_summary_auto_reset_controller.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
@@ -808,6 +809,53 @@ void main() {
     expect(levels, isNotEmpty);
     expect(levels.first, (plane: TimePlane.year, railOpen: false));
   });
+
+  testWidgets(
+    'RED: a direct Mode fling retains multiple crossings when it invalidates auto-reset',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      final resetMotions = DashboardSummaryAutoResetMotionRegistry();
+      final levels = <({TimePlane plane, bool railOpen})>[];
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (plane, railOpen) =>
+                levels.add((plane: plane, railOpen: railOpen)),
+            onComponentCrossed: (_, _) {},
+            autoResetMotionRegistry: resetMotions,
+            // Mirrors the current Core wiring: a real foreground pointer
+            // invalidates reset before it begins carousel motion.
+            onSelectorDirectInputStarted: resetMotions.cancelActiveResetMotion,
+          ),
+        ),
+      );
+
+      await tester.fling(
+        find.byKey(const ValueKey('summary-pill-segmented-mode-selector')),
+        const Offset(0, 235),
+        2500,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        levels.length,
+        greaterThanOrEqualTo(2),
+        reason:
+            'One high-velocity direct Mode fling must publish each physical '
+            'crossing; reset invalidation cannot interrupt its own user '
+            'carousel.',
+      );
+    },
+  );
 
   testWidgets('Summary separator visibility is paint-only', (tester) async {
     final navigation = DashboardNavigationController(

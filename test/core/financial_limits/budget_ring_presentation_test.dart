@@ -38,6 +38,56 @@ void main() {
     );
   });
 
+  test('SUM polar scale starts at twelve and advances clockwise', () {
+    final geometry = BudgetProgressRingGeometry.source;
+    final top = geometry.pointForRatio(0);
+    final right = geometry.pointForRatio(.25);
+    final bottom = geometry.pointForRatio(.50);
+    final left = geometry.pointForRatio(.75);
+    final seam = geometry.pointForRatio(1);
+
+    expect(top.dx, closeTo(geometry.center.dx, .000001));
+    expect(top.dy, lessThan(geometry.center.dy));
+    expect(right.dx, greaterThan(geometry.center.dx));
+    expect(right.dy, closeTo(geometry.center.dy, .000001));
+    expect(bottom.dx, closeTo(geometry.center.dx, .000001));
+    expect(bottom.dy, greaterThan(geometry.center.dy));
+    expect(left.dx, lessThan(geometry.center.dx));
+    expect(left.dy, closeTo(geometry.center.dy, .000001));
+    expect(seam.dx, closeTo(top.dx, .000001));
+    expect(seam.dy, closeTo(top.dy, .000001));
+  });
+
+  test(
+    'SUM scale seam is red ending into healthy green clockwise at twelve',
+    () {
+      final healthy = FluviVisualTokens.budgetProgressHealthy;
+      expect(
+        BudgetProgressRingSumHealthScale.colorForRatio(
+          ratio: .0001,
+          healthy: healthy,
+        ),
+        healthy,
+      );
+      expect(
+        BudgetProgressRingSumHealthScale.colorForRatio(
+          ratio: .82,
+          healthy: healthy,
+        ),
+        FluviVisualTokens.budgetProgressWarning,
+      );
+      expect(
+        BudgetProgressRingSumHealthScale.colorForRatio(
+          ratio: .9999,
+          healthy: healthy,
+        ),
+        FluviVisualTokens.budgetProgressDanger,
+      );
+      expect(BudgetProgressRingSumHealthScale.healthyWarningBoundary, .75);
+      expect(BudgetProgressRingSumHealthScale.warningDangerBoundary, .90);
+    },
+  );
+
   test(
     'SUM style catalogue is closed and coloured boundaries are white track points',
     () {

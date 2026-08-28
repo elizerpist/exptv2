@@ -136,13 +136,15 @@ void main() {
       expect(
         staticBackgrounds,
         contains('_paintGroupMaterialExceptSegment('),
-        reason: 'The stationary remainder must retain the group contour and '
+        reason:
+            'The stationary remainder must retain the group contour and '
             'inner material outside the leased row.',
       );
       expect(
         activeSegment,
         contains('_paintGroupMaterialForActiveSegment('),
-        reason: 'The translated canonical row must carry its source-group '
+        reason:
+            'The translated canonical row must carry its source-group '
             'contour and inner material instead of becoming a fill-only gap.',
       );
       expect(
@@ -347,6 +349,30 @@ void main() {
     expect(summary.message, contains('compositorTransformUpdateCount=2'));
     expect(summary.message, contains('committed=true'));
   });
+
+  test(
+    'RED: committed partner swipe starts its bounded local return without focus publication',
+    () {
+      final controller = DashboardLogBoxPartnerSwipeController(
+        vsync: TestVSync(),
+      );
+      addTearDown(controller.dispose);
+
+      expect(controller.begin(_target()), isTrue);
+      controller.update(-48);
+
+      final row = controller.finish();
+
+      expect(row?.partnerId, 'mvm');
+      expect(
+        controller.isReturning,
+        isTrue,
+        reason:
+            'The visual row must begin its fixed local return immediately; '
+            'a query/scene Future is not a gesture owner.',
+      );
+    },
+  );
 
   testWidgets(
     'RED: only an intentional left-horizontal row gesture acquires partner swipe',

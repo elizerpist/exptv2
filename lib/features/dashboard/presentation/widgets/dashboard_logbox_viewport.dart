@@ -82,7 +82,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.focus,
     this.onClearFocusCategory,
     this.onClearFocusPartner,
+    this.onClearFocusSearch,
     this.onClearFocus,
+    this.onSearchChanged,
   });
 
   final DashboardBounds bounds;
@@ -124,7 +126,9 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardEphemeralFocusController? focus;
   final VoidCallback? onClearFocusCategory;
   final VoidCallback? onClearFocusPartner;
+  final VoidCallback? onClearFocusSearch;
   final VoidCallback? onClearFocus;
+  final ValueChanged<String>? onSearchChanged;
 
   @override
   State<DashboardLogBoxViewport> createState() =>
@@ -144,6 +148,8 @@ final class _DashboardLogBoxViewportState
   late final _VerticalInteractionSessionOwner _verticalSession;
   late final DashboardLogBoxSurfaceHitTestController _surfaceHitTest;
   late final _DashboardLogBoxPointerArbitrationOwner _pointerArbitration;
+  late final TextEditingController _searchController;
+  late final FocusNode _searchFocusNode;
 
   @override
   void initState() {
@@ -151,6 +157,10 @@ final class _DashboardLogBoxViewportState
     _verticalSession = _VerticalInteractionSessionOwner();
     _surfaceHitTest = DashboardLogBoxSurfaceHitTestController();
     _pointerArbitration = _DashboardLogBoxPointerArbitrationOwner();
+    _searchController = TextEditingController(
+      text: widget.focus?.state?.normalizedSearch ?? '',
+    );
+    _searchFocusNode = FocusNode(debugLabel: 'dashboard-logbox-search');
     _scrollController = DashboardVerticalScrollController(
       onBallisticHandoffStarted: _onBallisticHandoffStarted,
       onBallistic: _onBallisticObserved,
@@ -184,6 +194,7 @@ final class _DashboardLogBoxViewportState
       oldWidget.focus?.removeListener(_onFocusChanged);
       widget.focus?.addListener(_onFocusChanged);
     }
+    _syncSearchTextFromFacet();
     if (identical(oldWidget.visibleFrames, widget.visibleFrames)) return;
     oldWidget.visibleFrames.logBoxPresentationLane.removeListener(
       _onPresentationBindingChanged,
@@ -216,6 +227,8 @@ final class _DashboardLogBoxViewportState
       _onCommittedViewportGeometryChanged,
     );
     _scrollController.dispose();
+    _searchFocusNode.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -224,7 +237,18 @@ final class _DashboardLogBoxViewportState
   }
 
   void _onFocusChanged() {
+    _syncSearchTextFromFacet();
     if (mounted) setState(() {});
+  }
+
+  void _syncSearchTextFromFacet() {
+    final search = widget.focus?.state?.normalizedSearch ?? '';
+    if (_searchFocusNode.hasFocus || _searchController.text == search) return;
+    _searchController.value = _searchController.value.copyWith(
+      text: search,
+      selection: TextSelection.collapsed(offset: search.length),
+      composing: TextRange.empty,
+    );
   }
 
   /// A row-height preference produces a fully compiled replacement manifest.
@@ -378,7 +402,10 @@ final class _DashboardLogBoxViewportState
     final activeDirection =
         widget.visibleFrames.value?.direction ?? LedgerDirection.income;
     final focus = widget.focus?.state;
-    if (focus?.anchor.direction == activeDirection && !focus!.isEmpty) {
+    if (focus?.anchor.direction == activeDirection &&
+        (focus!.category != null ||
+            focus.partner != null ||
+            focus.normalizedSearch != null)) {
       return true;
     }
     final facets = query.facetPresentationFor(activeDirection);
@@ -390,15 +417,16 @@ final class _DashboardLogBoxViewportState
         facets.partners.any((item) => scope.partnerIds.contains(item.id));
   }
 
-  double get _facetListGap =>
-      _hasQueryFacets ? DashboardLogBoxTokens.facetListGap : 0;
+  double _facetListGapFor(bool hasExternalFacets) =>
+      hasExternalFacets ? DashboardLogBoxTokens.facetListGap : 0;
 
   double _headerExtentFor({
     required DashboardLogBoxHeaderLayout layout,
     required double layoutScale,
+    required bool hasExternalFacets,
   }) =>
       layout.heightForScale(layoutScale) +
-      (_hasQueryFacets ? DashboardQueryFacetChips.height : 0);
+      (hasExternalFacets ? DashboardQueryFacetChips.height : 0);
 
   void _onPresentationBindingChanged() {
     final nextBinding = widget.visibleFrames.logBoxPresentationLane.value;
@@ -535,6 +563,9 @@ final class _DashboardLogBoxViewportState
             final headerLayout = DashboardLogBoxSearchPillScope.layoutOf(
               context,
             );
+            final hasExternalFacets =
+                _hasQueryFacets &&
+                !headerLayout.settings.facetsInsideVisibleSearchPill;
             final layoutScale =
                 widget.bounds.height /
                 DashboardLogBoxTokens.summaryHeaderHeight;
@@ -544,6 +575,7 @@ final class _DashboardLogBoxViewportState
             final headerExtent = _headerExtentFor(
               layout: headerLayout,
               layoutScale: layoutScale,
+              hasExternalFacets: hasExternalFacets,
             );
             final visibleHeaderHeight = math.min(
               headerExtent,
@@ -553,7 +585,10 @@ final class _DashboardLogBoxViewportState
               0.0,
               constraints.maxHeight - visibleHeaderHeight,
             );
-            final visibleFacetGap = math.min(_facetListGap, remainingHeight);
+            final visibleFacetGap = math.min(
+              _facetListGapFor(hasExternalFacets),
+              remainingHeight,
+            );
             final scrollableHeight = math.max(
               0.0,
               remainingHeight - visibleFacetGap,
@@ -582,7 +617,16 @@ final class _DashboardLogBoxViewportState
                 focus: widget.focus,
                 onClearFocusCategory: widget.onClearFocusCategory,
                 onClearFocusPartner: widget.onClearFocusPartner,
+                onClearFocusSearch: widget.onClearFocusSearch,
                 onClearFocus: widget.onClearFocus,
+                searchController: _searchController,
+                searchFocusNode: _searchFocusNode,
+                onSearchChanged: widget.onSearchChanged,
+                showExternalFacets: hasExternalFacets,
+                showInsideFacets:
+                    _hasQueryFacets &&
+                    headerLayout.settings.facetsInsideVisibleSearchPill,
+                queryFacetStyle: headerLayout.settings.queryFacetPillStyle,
               ),
             );
             return Column(
@@ -2257,22 +2301,13 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     );
     final request = onPartnerFocus;
     if (request == null) {
-      controller?.rejectFocusPublication();
+      controller?.snapBack();
       return;
     }
-    unawaited(_publishPartnerFocus(request, row));
-  }
-
-  Future<void> _publishPartnerFocus(
-    Future<bool> Function(DashboardLogRowViewModel row) request,
-    DashboardLogRowViewModel row,
-  ) async {
-    final published = await request(row);
-    if (published) {
-      partnerSwipe?.completeFocusPublication();
-    } else {
-      partnerSwipe?.rejectFocusPublication();
-    }
+    // Semantic acceptance is owned by the application layer. The local row
+    // has already begun returning and is intentionally never touched by this
+    // asynchronous completion: an older future must not clear a newer swipe.
+    unawaited(request(row));
   }
 
   void _onPartnerSwipeCancelled() {

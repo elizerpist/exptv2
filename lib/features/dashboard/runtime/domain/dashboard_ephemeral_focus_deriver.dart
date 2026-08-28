@@ -33,6 +33,7 @@ abstract final class DashboardEphemeralFocusDeriver {
     required LedgerDirection focusedDirection,
     required String? categoryFocusId,
     required String? partnerFocusId,
+    String? normalizedSearch,
     required int initialYear,
     required int generation,
     CurrentLedgerQueryScope? initialParentScope,
@@ -43,6 +44,7 @@ abstract final class DashboardEphemeralFocusDeriver {
     focusedDirection: focusedDirection,
     categoryFocusId: categoryFocusId,
     partnerFocusId: partnerFocusId,
+    normalizedSearch: normalizedSearch,
     initialYear: initialYear,
     generation: generation,
     initialParentScope: initialParentScope,
@@ -59,6 +61,7 @@ abstract final class DashboardEphemeralFocusDeriver {
     required LedgerDirection focusedDirection,
     required String? categoryFocusId,
     required String? partnerFocusId,
+    String? normalizedSearch,
     required int initialYear,
     required int generation,
     CurrentLedgerQueryScope? initialParentScope,
@@ -68,7 +71,9 @@ abstract final class DashboardEphemeralFocusDeriver {
     if (generation <= 0) {
       throw ArgumentError.value(generation, 'generation', 'must be positive');
     }
-    if (categoryFocusId == null && partnerFocusId == null) {
+    if (categoryFocusId == null &&
+        partnerFocusId == null &&
+        normalizedSearch == null) {
       throw ArgumentError('Ephemeral derivation needs at least one focus.');
     }
     final focusedScope = effectiveQueries.scopeFor(focusedDirection);
@@ -82,6 +87,7 @@ abstract final class DashboardEphemeralFocusDeriver {
     final selected = seed.select(
       categoryId: categoryFocusId,
       partnerId: partnerFocusId,
+      normalizedSearch: normalizedSearch,
     );
 
     final key = PreparedDashboardIndexKey.fromDirectionalQuerySet(
@@ -152,6 +158,7 @@ abstract final class DashboardEphemeralFocusDeriver {
         focusedScope.key,
         categoryFocusId,
         partnerFocusId,
+        normalizedSearch,
         // The exact focused query IDs plus its immutable base index uniquely
         // determine compact membership. Do not walk every selected all-time
         // ordinal merely to create a digest before the root can publish.
@@ -265,6 +272,8 @@ final class _DashboardEphemeralFocusedOverlay
       <LedgerQueryKey, DashboardSemanticCatalog>{};
   final Map<LedgerQueryKey, List<CommittedVerticalGeometryDayBucket>>
   _geometrySeeds = <LedgerQueryKey, List<CommittedVerticalGeometryDayBucket>>{};
+  final Map<LedgerQueryKey, List<DashboardLedgerEntry>> _entriesByScope =
+      <LedgerQueryKey, List<DashboardLedgerEntry>>{};
   int _ordinalsVisited = 0;
 
   @override
@@ -352,33 +361,21 @@ final class _DashboardEphemeralFocusedOverlay
     final canonical = _register(scope);
     final existing = _frames[canonical.key];
     if (existing != null) return existing;
-    final bounds = canonical.timeScope.boundaries;
-    final startEpochDay = bounds == null
-        ? null
-        : _epochDay(bounds.startInclusive);
-    final endEpochDay = bounds == null ? null : _epochDay(bounds.endExclusive);
-    var totalMinor = 0;
-    var entryCount = 0;
-    final preview = <DashboardLedgerEntry>[];
+    final entries = _entriesFor(canonical);
+    final totalMinor = entries.fold<int>(
+      0,
+      (total, entry) => total + entry.amountMinor,
+    );
+    final entryCount = entries.length;
     final dayCounts = <int, int>{};
-    for (final ordinal in selectedOrdinals) {
-      _ordinalsVisited += 1;
-      final entry = seed.entryAt(ordinal);
-      if (entry.direction != direction.name ||
-          (startEpochDay != null &&
-              (entry.bookedLocalEpochDay < startEpochDay ||
-                  entry.bookedLocalEpochDay >= endEpochDay!))) {
-        continue;
-      }
-      entryCount += 1;
-      totalMinor += entry.amountMinor;
+    for (final entry in entries) {
       dayCounts.update(
         entry.bookedLocalEpochDay,
         (count) => count + 1,
         ifAbsent: () => 1,
       );
-      if (preview.length < base.pageSize) preview.add(entry);
     }
+    final preview = entries.take(base.pageSize).toList(growable: false);
     final cursor = entryCount > base.pageSize && preview.isNotEmpty
         ? _cursorFor(preview.last)
         : null;
@@ -409,6 +406,43 @@ final class _DashboardEphemeralFocusedOverlay
     _frames[canonical.key] = frame;
     _geometrySeeds[canonical.key] = _geometryFrom(dayCounts);
     return frame;
+  }
+
+  @override
+  DashboardPreparedLogPage materializeLogPage(
+    CurrentLedgerQueryScope scope, {
+    required Map<String, Object?>? after,
+    required int pageSize,
+  }) {
+    if (pageSize <= 0) {
+      throw ArgumentError.value(pageSize, 'pageSize', 'must be positive');
+    }
+    if (!matchesScope(scope)) {
+      throw StateError('Focused page scope does not match its base overlay.');
+    }
+    final canonical = _register(scope);
+    final entries = _entriesFor(canonical);
+    final start = after == null ? 0 : _firstEntryAfter(entries, after);
+    if (start < 0) {
+      throw StateError(
+        'Focused page cursor is absent from prepared membership.',
+      );
+    }
+    final end = (start + pageSize).clamp(0, entries.length).toInt();
+    final pageEntries = entries.sublist(start, end);
+    final nextCursor = end < entries.length && pageEntries.isNotEmpty
+        ? _cursorFor(pageEntries.last)
+        : null;
+    return DashboardPreparedLogPage(
+      payload: DashboardLogViewModelProjector.presentPreparedOrdered(
+        scope: canonical,
+        revision: base.coreRevision,
+        entries: pageEntries,
+        entryCount: entries.length,
+        nextCursor: nextCursor,
+      ),
+      nextCursor: nextCursor,
+    );
   }
 
   @override
@@ -450,6 +484,73 @@ final class _DashboardEphemeralFocusedOverlay
     if (existing != null) return existing;
     _scopes[scope.key] = scope;
     return scope;
+  }
+
+  List<DashboardLedgerEntry> _entriesFor(CurrentLedgerQueryScope scope) {
+    final existing = _entriesByScope[scope.key];
+    if (existing != null) return existing;
+    final bounds = scope.timeScope.boundaries;
+    final startEpochDay = bounds == null
+        ? null
+        : _epochDay(bounds.startInclusive);
+    final endEpochDay = bounds == null ? null : _epochDay(bounds.endExclusive);
+    final entries = <DashboardLedgerEntry>[];
+    for (final ordinal in selectedOrdinals) {
+      _ordinalsVisited += 1;
+      final entry = seed.entryAt(ordinal);
+      if (entry.direction != direction.name ||
+          (startEpochDay != null &&
+              (entry.bookedLocalEpochDay < startEpochDay ||
+                  entry.bookedLocalEpochDay >= endEpochDay!))) {
+        continue;
+      }
+      entries.add(entry);
+    }
+    entries.sort(_descendingTimelineOrder);
+    return _entriesByScope[scope.key] = List<DashboardLedgerEntry>.unmodifiable(
+      entries,
+    );
+  }
+
+  static int _firstEntryAfter(
+    List<DashboardLedgerEntry> entries,
+    Map<String, Object?> cursor,
+  ) {
+    final cursorDay = _cursorInt(cursor, 'bookedLocalEpochDay');
+    final cursorTime = _cursorInt(cursor, 'bookedLocalTimeMinutes');
+    final cursorId = cursor['entryId'];
+    if (cursorId is! String) {
+      throw FormatException('Focused page cursor entryId must be a String.');
+    }
+    for (var index = 0; index < entries.length; index += 1) {
+      final entry = entries[index];
+      if (entry.bookedLocalEpochDay == cursorDay &&
+          entry.bookedLocalTimeMinutes == cursorTime &&
+          entry.id == cursorId) {
+        return index + 1;
+      }
+    }
+    return -1;
+  }
+
+  static int _cursorInt(Map<String, Object?> cursor, String key) {
+    final value = cursor[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    throw FormatException('Focused page cursor $key must be numeric.');
+  }
+
+  static int _descendingTimelineOrder(
+    DashboardLedgerEntry left,
+    DashboardLedgerEntry right,
+  ) {
+    final day = right.bookedLocalEpochDay.compareTo(left.bookedLocalEpochDay);
+    if (day != 0) return day;
+    final time = right.bookedLocalTimeMinutes.compareTo(
+      left.bookedLocalTimeMinutes,
+    );
+    if (time != 0) return time;
+    return right.id.compareTo(left.id);
   }
 
   static List<CommittedVerticalGeometryDayBucket> _geometryFrom(

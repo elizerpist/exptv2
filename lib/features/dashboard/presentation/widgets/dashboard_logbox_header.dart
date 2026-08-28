@@ -16,6 +16,7 @@ import 'dashboard_query_facet_chips.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
+import '../dashboard_logbox_search_pill_visibility.dart';
 
 /// Stable Ledger chrome above the sole LogBox scroll surface.
 ///
@@ -37,7 +38,14 @@ final class DashboardLogBoxHeader extends StatelessWidget {
     this.focus,
     this.onClearFocusCategory,
     this.onClearFocusPartner,
+    this.onClearFocusSearch,
     this.onClearFocus,
+    this.searchController,
+    this.searchFocusNode,
+    this.onSearchChanged,
+    this.showExternalFacets = true,
+    this.showInsideFacets = false,
+    this.queryFacetStyle = DashboardQueryFacetPillStyle.current,
   });
 
   final DashboardBounds bounds;
@@ -52,7 +60,14 @@ final class DashboardLogBoxHeader extends StatelessWidget {
   final DashboardEphemeralFocusController? focus;
   final VoidCallback? onClearFocusCategory;
   final VoidCallback? onClearFocusPartner;
+  final VoidCallback? onClearFocusSearch;
   final VoidCallback? onClearFocus;
+  final TextEditingController? searchController;
+  final FocusNode? searchFocusNode;
+  final ValueChanged<String>? onSearchChanged;
+  final bool showExternalFacets;
+  final bool showInsideFacets;
+  final DashboardQueryFacetPillStyle queryFacetStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -73,8 +88,34 @@ final class DashboardLogBoxHeader extends StatelessWidget {
               layoutScale: layoutScale,
               showsSearchPill: showsSearchPill,
               performanceCounters: performanceCounters,
+              searchController: searchController,
+              searchFocusNode: searchFocusNode,
+              onSearchChanged: onSearchChanged,
+              insideFacetChips:
+                  showInsideFacets &&
+                      currentQuery != null &&
+                      onRemoveCategory != null &&
+                      onRemovePartner != null &&
+                      onClear != null
+                  ? DashboardQueryFacetChips(
+                      currentQuery: currentQuery!,
+                      visibleFrames: visibleFrames,
+                      focus: focus,
+                      onRemoveCategory: onRemoveCategory!,
+                      onRemovePartner: onRemovePartner!,
+                      onClear: onClear!,
+                      onClearFocusCategory: onClearFocusCategory,
+                      onClearFocusPartner: onClearFocusPartner,
+                      onClearFocusSearch: onClearFocusSearch,
+                      onClearFocus: onClearFocus,
+                      style: queryFacetStyle,
+                      compact: true,
+                      showSearchFacet: false,
+                    )
+                  : null,
             ),
-            if (currentQuery != null &&
+            if (showExternalFacets &&
+                currentQuery != null &&
                 onRemoveCategory != null &&
                 onRemovePartner != null &&
                 onClear != null)
@@ -89,7 +130,9 @@ final class DashboardLogBoxHeader extends StatelessWidget {
                   onClear: onClear!,
                   onClearFocusCategory: onClearFocusCategory,
                   onClearFocusPartner: onClearFocusPartner,
+                  onClearFocusSearch: onClearFocusSearch,
                   onClearFocus: onClearFocus,
+                  style: queryFacetStyle,
                 ),
               ),
           ],
@@ -106,6 +149,10 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
     this.layoutScale,
     required this.showsSearchPill,
     required this.performanceCounters,
+    this.searchController,
+    this.searchFocusNode,
+    this.onSearchChanged,
+    this.insideFacetChips,
   });
 
   final DashboardBounds bounds;
@@ -113,6 +160,10 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
   final double? layoutScale;
   final bool showsSearchPill;
   final DashboardPerformanceCounters? performanceCounters;
+  final TextEditingController? searchController;
+  final FocusNode? searchFocusNode;
+  final ValueChanged<String>? onSearchChanged;
+  final Widget? insideFacetChips;
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +218,10 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
                   child: _DashboardLogBoxSearchPill(
                     scale: scale,
                     bounds: bounds,
+                    controller: searchController,
+                    focusNode: searchFocusNode,
+                    onChanged: onSearchChanged,
+                    insideFacetChips: insideFacetChips,
                   ),
                 ),
                 SizedBox(
@@ -188,16 +243,22 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
   }
 }
 
-/// Presentation scaffold for a later dedicated transaction-search flow.
-///
-/// It intentionally owns no editable state or query action: the existing
-/// Query Menu search edits a different draft-note field and must not be wired
-/// into the committed Ledger pipeline here.
 final class _DashboardLogBoxSearchPill extends StatelessWidget {
-  const _DashboardLogBoxSearchPill({required this.scale, required this.bounds});
+  const _DashboardLogBoxSearchPill({
+    required this.scale,
+    required this.bounds,
+    this.controller,
+    this.focusNode,
+    this.onChanged,
+    this.insideFacetChips,
+  });
 
   final double scale;
   final DashboardBounds bounds;
+  final TextEditingController? controller;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
+  final Widget? insideFacetChips;
 
   @override
   Widget build(BuildContext context) {
@@ -206,51 +267,71 @@ final class _DashboardLogBoxSearchPill extends StatelessWidget {
     ).depthFor(DashboardCornerSurfaceFamily.searchPill);
     return Semantics(
       key: const ValueKey('dashboard-logbox-search-pill'),
-      button: true,
-      enabled: false,
-      label: 'Keresés a tranzakciókban. A keresés hamarosan elérhető.',
-      child: ExcludeSemantics(
-        child: FluviRoundedBox(
-          color: depth.surfaceColor ?? FluviVisualTokens.surface,
-          border: DashboardBorderScope.profileOf(
-            context,
-          ).borderFor(DashboardBorderSurface.searchPill),
-          borderRadius: DashboardCornerRoundnessScope.profileOf(context)
-              .borderRadiusFor(
-                DashboardCornerSurfaceFamily.searchPill,
-                size: Size(
-                  bounds.width,
-                  DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
-                ),
+      textField: controller != null,
+      enabled: controller != null,
+      label: 'Keresés a tranzakciókban',
+      child: FluviRoundedBox(
+        color: depth.surfaceColor ?? FluviVisualTokens.surface,
+        border: DashboardBorderScope.profileOf(
+          context,
+        ).borderFor(DashboardBorderSurface.searchPill),
+        borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+            .borderRadiusFor(
+              DashboardCornerSurfaceFamily.searchPill,
+              size: Size(
+                bounds.width,
+                DashboardLogBoxTokens.ledgerSearchPillHeight * scale,
               ),
-          boxShadow: depth.shadows,
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: FluviVisualTokens.controlHorizontalInset * scale,
             ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search_rounded,
-                  color: FluviVisualTokens.textSecondary,
-                  size: FluviVisualTokens.iconSize * scale,
+        boxShadow: depth.shadows,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: FluviVisualTokens.controlHorizontalInset * scale,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.search_rounded,
+                color: FluviVisualTokens.textSecondary,
+                size: FluviVisualTokens.iconSize * scale,
+              ),
+              SizedBox(width: FluviVisualTokens.controlInnerGap * scale),
+              if (insideFacetChips != null)
+                SizedBox(
+                  key: const ValueKey('dashboard-query-facets-inside-search'),
+                  width: bounds.width * .43,
+                  child: insideFacetChips,
                 ),
+              if (insideFacetChips != null)
                 SizedBox(width: FluviVisualTokens.controlInnerGap * scale),
-                Expanded(
-                  child: FittedBox(
-                    alignment: Alignment.centerLeft,
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      'Keresés a tranzakciókban',
-                      maxLines: 1,
-                      style: FluviVisualTokens.logBoxSearchTextStyle.copyWith(
-                        fontSize: FluviVisualTokens.bodyFontSize * scale,
-                      ),
+              Expanded(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: TextField(
+                    key: const ValueKey('dashboard-logbox-search-input'),
+                    controller: controller,
+                    focusNode: focusNode,
+                    enabled: controller != null,
+                    onChanged: onChanged,
+                    onTapOutside: (_) => focusNode?.unfocus(),
+                    maxLines: 1,
+                    textAlignVertical: TextAlignVertical.center,
+                    style: FluviVisualTokens.logBoxSearchTextStyle.copyWith(
+                      fontSize: FluviVisualTokens.bodyFontSize * scale,
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: 'Keresés a tranzakciókban',
+                      hintStyle: FluviVisualTokens.logBoxSearchTextStyle
+                          .copyWith(
+                            fontSize: FluviVisualTokens.bodyFontSize * scale,
+                          ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
