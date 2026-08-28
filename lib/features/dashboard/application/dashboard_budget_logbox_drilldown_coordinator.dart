@@ -36,7 +36,10 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       categoryId: target.category?.id,
     );
     if (target.isAggregate) {
-      return core.clearBudgetCategoryFocus(targetHandle: target.handle);
+      return core.clearBudgetCategoryFocus(
+        targetHandle: target.handle,
+        publishDuringMotion: publishDuringMotion,
+      );
     }
     final category = target.category!;
     return core.requestBudgetCategoryFocus(

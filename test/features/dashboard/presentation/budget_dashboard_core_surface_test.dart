@@ -226,6 +226,54 @@ void main() {
     },
   );
 
+  testWidgets(
+    'production Budget Card2 opts into opaque-content clipping for every '
+    'cascade reveal state',
+    (tester) async {
+      final geometry = DashboardGeometryResolver.resolve(
+        metrics: DashboardLayoutMetrics.reference,
+        mode: DashboardModeSpec.budget,
+        collapseProgress: 90,
+        isRailExpanded: false,
+        hasPhysicalRail: false,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              children: <Widget>[
+                BudgetDashboardCoreSurface(
+                  presentation: DashboardCoreModePresentation(
+                    geometry: geometry,
+                    palette: DashboardModePaletteResolver.resolve(
+                      DashboardModeSpec.budget,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final card2 = tester.widget<DashboardCoreModeCascadeCard>(
+        find.ancestor(
+          of: find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
+          matching: find.byType(DashboardCoreModeCascadeCard),
+        ),
+      );
+      expect(card2.showPlaceholderSurface, isFalse);
+      expect(
+        card2.clipOpaqueContentDuringReveal,
+        isTrue,
+        reason:
+            'The real Budget Card2 uses the same clipping path exercised by '
+            'the collapse raster regression, so a transient grey rectangle '
+            'cannot be introduced through production composition.',
+      );
+    },
+  );
+
   testWidgets('Budget Header foreground selection recolors only its text', (
     tester,
   ) async {

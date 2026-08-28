@@ -1,6 +1,12 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/header_cascade_motion.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/spending_rhythm_bar_chart.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -143,6 +149,112 @@ void main() {
       semantics.dispose();
     },
   );
+
+  testWidgets(
+    'RED: dense zero slots use discrete outlines, never an opaque neutral '
+    'Rhythm slab',
+    (tester) async {
+      await tester.pumpWidget(_host(_state(const <int>[])));
+
+      final track = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey('spending-rhythm-track-0')),
+      );
+      final decoration = track.decoration as BoxDecoration;
+      expect(decoration.color, Colors.transparent);
+      expect(decoration.border, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'Budget Card2 keeps its authored opaque material through every '
+    'intermediate cascade reveal instead of alpha-blending into a grey slab',
+    (tester) async {
+      final boundary = GlobalKey();
+
+      Future<Color> renderAndSample(double progress) async {
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: RepaintBoundary(
+              key: boundary,
+              child: SizedBox(
+                width: 300,
+                height: 150,
+                child: Stack(
+                  children: <Widget>[
+                    const Positioned.fill(
+                      child: ColoredBox(color: Color(0xff666666)),
+                    ),
+                    DashboardCoreModeCascadeCard(
+                      bounds: const DashboardBounds(
+                        left: 0,
+                        top: 10,
+                        width: 300,
+                        height: 100,
+                      ),
+                      motion: CascadedCardMotion(
+                        top: 10,
+                        left: 0,
+                        right: 0,
+                        opacity: progress,
+                        scale: 1,
+                        progress: progress,
+                      ),
+                      semanticKey: const ValueKey('cascade-card2'),
+                      showPlaceholderSurface: false,
+                      clipOpaqueContentDuringReveal: true,
+                      content: const ColoredBox(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        return _sampleBoundaryColor(tester, boundary, x: 20, y: 20);
+      }
+
+      expect(await renderAndSample(0), const Color(0xff666666));
+      for (final progress in <double>[.25, .50, .75, 1]) {
+        expect(
+          await renderAndSample(progress),
+          Colors.white,
+          reason:
+              'collapse progress $progress must reveal white Card2, '
+              'not a blended grey placeholder.',
+        );
+      }
+    },
+  );
+}
+
+Future<Color> _sampleBoundaryColor(
+  WidgetTester tester,
+  GlobalKey boundary, {
+  required int x,
+  required int y,
+}) async {
+  final renderBoundary =
+      boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = (await tester.runAsync(
+    () => renderBoundary.toImage(pixelRatio: 1),
+  ))!;
+  try {
+    final bytes = await tester.runAsync(
+      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    );
+    if (bytes == null) throw StateError('Cascade raster bytes unavailable.');
+    final offset = (y * image.width + x) * 4;
+    return Color.fromARGB(
+      bytes.getUint8(offset + 3),
+      bytes.getUint8(offset),
+      bytes.getUint8(offset + 1),
+      bytes.getUint8(offset + 2),
+    );
+  } finally {
+    image.dispose();
+  }
 }
 
 Widget _host(DashboardSpendingRhythmState state) => MaterialApp(

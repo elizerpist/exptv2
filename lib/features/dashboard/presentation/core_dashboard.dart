@@ -26,6 +26,7 @@ import '../application/dashboard_spending_rhythm_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
+import '../query/domain/ledger_direction.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -54,7 +55,6 @@ import 'dashboard_upper_vertical_gesture_coordinator.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/year_month.dart';
-import '../visible/domain/dashboard_visible_frame.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
@@ -187,6 +187,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetPresentation = DashboardBudgetPresentationController(
       categoryCollection: widget.categoryCollection,
       visibleFrame: controller.visibleFrames,
+      liveInteractions: controller.liveInteractions,
       transactionDirection: controller.transactionDirection,
       snapshotForCurrentFrame: () =>
           controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
@@ -222,8 +223,6 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
     _budgetRhythm = DashboardSpendingRhythmController(
       presentation: _budgetPresentation,
-      navigation: controller.navigation,
-      visibleFrame: controller.visibleFrames,
       snapshotForCurrentFrame: () =>
           controller.activePreparedRevisionBundle?.budgetLimitSnapshot,
     );
@@ -241,6 +240,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     modeController.addListener(_syncBudgetDistributionTimePublicationPreparer);
     _syncBudgetDistributionTimePublicationPreparer();
     controller.visibleFrames.addListener(_onBudgetDistributionVisibleFrame);
+    controller.liveInteractions.addListener(_onBudgetDistributionVisibleFrame);
+    _budgetPresentation.addListener(_onBudgetDistributionVisibleFrame);
     controller.foregroundInputMotion.addListener(
       _onBudgetDistributionVisibleFrame,
     );
@@ -374,38 +375,41 @@ class _CoreDashboardState extends State<CoreDashboard>
 
   void _onBudgetDistributionVisibleFrame() {
     if (modeController.committedMode != DashboardModeSpec.budget) return;
-    final frame = controller.visibleFrames.value;
     final snapshot =
         controller.activePreparedRevisionBundle?.budgetLimitSnapshot;
-    if (frame == null ||
-        snapshot == null ||
-        frame.coreRevision != snapshot.coreRevision) {
-      return;
-    }
-    final scope = frame.scope.timeScope;
-    if (!controller.foregroundInputMotion.value) {
-      _warmBudgetDistributionPreviewHotset(frame);
-    }
     final budget = _budgetPresentation.value;
-    final partnerId = controller.focus.state?.partner?.id;
-    if (_budgetDistributionDrawables.publishIfReadyForTimeScope(
-      scope,
-      direction: budget.liveSelection.direction,
-      targetHandle: budget.selectedHandle,
-      partnerId: partnerId,
-    )) {
+    final liveAnalysis = budget.liveAnalysis;
+    if (snapshot == null ||
+        !liveAnalysis.isAvailable ||
+        liveAnalysis.coreRevision != snapshot.coreRevision) {
       return;
     }
-    // A cache miss remains cooperative maintenance, but an already-prepared
-    // chart must bind in the same interaction tick as the matching visible
-    // LogBox frame. Do not let a physical fling suppress that O(1) hit.
-    if (controller.foregroundInputMotion.value) return;
-    unawaited(
-      _budgetDistributionDrawables.publishWhenPreparedForTimeScope(
-        scope,
-        direction: budget.liveSelection.direction,
-        targetHandle: budget.selectedHandle,
-        partnerId: partnerId,
+    final scope = liveAnalysis.scope!;
+    if (!controller.foregroundInputMotion.value) {
+      _warmBudgetDistributionPreviewHotset(
+        scope: scope,
+        direction: liveAnalysis.direction,
+      );
+    }
+    final partnerId = controller.focus.state?.partner?.id;
+    final publication = _budgetDistributionDrawables
+        .publishCurrentScopeForeground(
+          scope,
+          direction: budget.liveSelection.direction,
+          targetHandle: budget.selectedHandle,
+          partnerId: partnerId,
+        );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_DISTRIBUTION_BOUND',
+        coreRevision: liveAnalysis.coreRevision,
+        direction: liveAnalysis.direction.name,
+        scope:
+            'generation=${liveAnalysis.interactionGeneration} '
+            'analysisScope=${scope.canonicalKey} '
+            'targetHandle=${budget.selectedHandle} '
+            'cacheHit=${publication.cacheHit} '
+            'published=${publication.published}',
       ),
     );
   }
@@ -425,10 +429,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     }
   }
 
-  void _warmBudgetDistributionPreviewHotset(DashboardVisibleFrame frame) {
+  void _warmBudgetDistributionPreviewHotset({
+    required LedgerTimeScope scope,
+    required LedgerDirection direction,
+  }) {
     final index = controller.activePreparedRevisionBundle?.index;
-    final visibleScope = frame.scope.timeScope;
-    final parentScope = switch (visibleScope) {
+    final parentScope = switch (scope) {
       AllTimeScope() || YearScope() => const AllTimeScope(),
       MonthScope(:final value) => YearScope(value.year),
       DayScope(:final date) => MonthScope(
@@ -436,17 +442,14 @@ class _CoreDashboardState extends State<CoreDashboard>
       ),
     };
     final siblingScopes = index
-        ?.catalogForIdentity(
-          direction: frame.scope.direction,
-          timeScope: parentScope,
-        )
+        ?.catalogForIdentity(direction: direction, timeScope: parentScope)
         ?.entries
         .map((entry) => entry.scope.timeScope)
         .toList(growable: false);
     unawaited(
       _budgetDistributionDrawables.warmHotsetForPreviewScope(
         parentScope: parentScope,
-        siblingScopes: siblingScopes ?? <LedgerTimeScope>[visibleScope],
+        siblingScopes: siblingScopes ?? <LedgerTimeScope>[scope],
       ),
     );
   }
@@ -460,6 +463,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
     controller.setMotionLaneActive(DashboardMotionLane.summaryText, false);
     controller.visibleFrames.removeListener(_onBudgetDistributionVisibleFrame);
+    controller.liveInteractions.removeListener(
+      _onBudgetDistributionVisibleFrame,
+    );
+    _budgetPresentation.removeListener(_onBudgetDistributionVisibleFrame);
     controller.foregroundInputMotion.removeListener(
       _onBudgetDistributionVisibleFrame,
     );

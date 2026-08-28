@@ -107,6 +107,108 @@ void main() {
       february.canonicalKey,
     );
   });
+
+  test('a cold exact current scope publishes in the foreground without waiting '
+      'for optional hotset maintenance', () async {
+    var foregroundMotion = true;
+    final controller = _controller(
+      isForegroundInputActive: () => foregroundMotion,
+    );
+    addTearDown(controller.dispose);
+    const february = MonthScope(YearMonth(year: 2026, month: 2));
+
+    expect(
+      controller.publishIfReadyForTimeScope(february),
+      isFalse,
+      reason: 'The fixture deliberately starts with an exact drawable miss.',
+    );
+
+    final publication = controller.publishCurrentScopeForeground(
+      february,
+      direction: LedgerDirection.expense,
+      targetHandle: 0,
+    );
+
+    expect(publication.published, isTrue);
+    expect(publication.cacheHit, isFalse);
+    expect(
+      controller.value?.semanticBundle.analysisScope.canonicalKey,
+      february.canonicalKey,
+      reason:
+          'A live temporal crossing must bind its exact prepared Card2 '
+          'scope even while sibling-cache maintenance is preempted.',
+    );
+    foregroundMotion = false;
+  });
+
+  test('warm and deliberately cold identical crossings publish the same '
+      'current Card2 semantic frame in the foreground turn', () async {
+    const february = MonthScope(YearMonth(year: 2026, month: 2));
+    final warm = _controller();
+    final cold = _controller();
+    addTearDown(warm.dispose);
+    addTearDown(cold.dispose);
+
+    await warm.prepareForScope(february);
+    final warmPublication = warm.publishCurrentScopeForeground(
+      february,
+      direction: LedgerDirection.expense,
+      targetHandle: 0,
+    );
+    final coldPublication = cold.publishCurrentScopeForeground(
+      february,
+      direction: LedgerDirection.expense,
+      targetHandle: 0,
+    );
+
+    expect(warmPublication.cacheHit, isTrue);
+    expect(coldPublication.cacheHit, isFalse);
+    expect(warmPublication.published, isTrue);
+    expect(coldPublication.published, isTrue);
+    expect(
+      warm.value?.semanticBundle.analysisScope.canonicalKey,
+      cold.value?.semanticBundle.analysisScope.canonicalKey,
+    );
+    expect(
+      warm.value?.partnerSemanticBundle?.analysisScope.canonicalKey,
+      cold.value?.partnerSemanticBundle?.analysisScope.canonicalKey,
+    );
+    expect(
+      cold.value?.semanticBundle.analysisScope.canonicalKey,
+      february.canonicalKey,
+    );
+  });
+
+  test('a newer exact foreground scope preempts an unstarted sibling hotset '
+      'before it can monopolize a calendar domain', () async {
+    final controller = _controller();
+    addTearDown(controller.dispose);
+    const year = YearScope(2026);
+    const january = MonthScope(YearMonth(year: 2026, month: 1));
+    const february = MonthScope(YearMonth(year: 2026, month: 2));
+    const march = MonthScope(YearMonth(year: 2026, month: 3));
+
+    final maintenance = controller.warmHotsetForPreviewScope(
+      parentScope: year,
+      siblingScopes: const <LedgerTimeScope>[january, february, march],
+    );
+    final foreground = controller.publishCurrentScopeForeground(
+      february,
+      direction: LedgerDirection.expense,
+      targetHandle: 0,
+    );
+
+    expect(foreground.published, isTrue);
+    await maintenance;
+    expect(controller.retainedFrameCount, 1);
+    expect(
+      controller.value?.semanticBundle.analysisScope.canonicalKey,
+      february.canonicalKey,
+      reason:
+          'The direct interaction invalidates the old optional maintenance '
+          'epoch before it can build parent and sibling Card2 frames.',
+    );
+  });
 }
 
 DashboardBudgetDistributionDrawableController _controller({

@@ -6,11 +6,9 @@ import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../query/domain/ledger_direction.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_spending_rhythm_snapshot.dart';
-import '../time_navigation/application/dashboard_time_navigation_controller.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
-import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_budget_presentation_controller.dart';
 import 'dashboard_budget_target.dart';
 
@@ -310,40 +308,38 @@ abstract final class DashboardSpendingRhythmProjector {
   ];
 }
 
-/// CoreDashboard-lifetime publication binding. The active visible frame is
-/// the preview authority, so every accepted temporal crossing updates rhythm
-/// through the same prepared cache route as other Budget consumers.
+/// CoreDashboard-lifetime publication binding. The typed Budget live analysis
+/// projection is the preview authority, so a retained LogBox scene is never a
+/// prerequisite for a scope-aware Rhythm update.
 final class DashboardSpendingRhythmController
     extends ValueNotifier<DashboardSpendingRhythmState?> {
   DashboardSpendingRhythmController({
     required DashboardBudgetPresentationController presentation,
-    required DashboardNavigationController navigation,
-    required ValueListenable<DashboardVisibleFrame?> visibleFrame,
     required PreparedBudgetLimitSnapshot? Function() snapshotForCurrentFrame,
   }) : _presentation = presentation,
-       _navigation = navigation,
-       _visibleFrame = visibleFrame,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
        super(null) {
     _presentation.addListener(_refresh);
-    _navigation.addListener(_refresh);
-    _visibleFrame.addListener(_refresh);
     _refresh();
   }
 
   final DashboardBudgetPresentationController _presentation;
-  final DashboardNavigationController _navigation;
-  final ValueListenable<DashboardVisibleFrame?> _visibleFrame;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
   int? _lastDiagnosticSignature;
 
   void _refresh() {
     final snapshot = _snapshotForCurrentFrame();
-    final selection = _presentation.value.liveSelection;
+    final presentation = _presentation.value;
+    final selection = presentation.liveSelection;
+    final liveAnalysis = presentation.liveAnalysis;
     final rhythm = snapshot?.spendingRhythmSnapshot;
     if (snapshot == null ||
         rhythm == null ||
+        !liveAnalysis.isAvailable ||
         !selection.isAvailable ||
+        liveAnalysis.coreRevision != snapshot.coreRevision ||
+        liveAnalysis.direction != selection.direction ||
+        liveAnalysis.targetHandle != selection.target.handle ||
         selection.coreRevision != snapshot.coreRevision ||
         rhythm.coreRevision != snapshot.coreRevision ||
         selection.target.handle >=
@@ -351,9 +347,7 @@ final class DashboardSpendingRhythmController
       if (value != null) value = null;
       return;
     }
-    final scope =
-        _visibleFrame.value?.scope.timeScope ??
-        _navigation.state.parentQueryScope.timeScope;
+    final scope = liveAnalysis.scope!;
     final analysis = DashboardSpendingRhythmProjector.project(
       snapshot: rhythm,
       direction: selection.direction,
@@ -369,6 +363,7 @@ final class DashboardSpendingRhythmController
     );
     if (value == null || !value!.sameAs(next)) value = next;
     final signature = Object.hash(
+      liveAnalysis.interactionGeneration,
       analysis.coreRevision,
       analysis.direction,
       analysis.targetHandle,
@@ -384,6 +379,7 @@ final class DashboardSpendingRhythmController
           direction: analysis.direction.name,
           scope:
               '${analysis.scope.canonicalKey} '
+              'generation=${liveAnalysis.interactionGeneration} '
               'targetHandle=${analysis.targetHandle} '
               'barCount=${analysis.buckets.length} '
               'nonZeroBarCount=${analysis.buckets.where((bucket) => bucket.actualScaled100 > 0).length}',
@@ -415,8 +411,6 @@ final class DashboardSpendingRhythmController
   @override
   void dispose() {
     _presentation.removeListener(_refresh);
-    _navigation.removeListener(_refresh);
-    _visibleFrame.removeListener(_refresh);
     super.dispose();
   }
 }

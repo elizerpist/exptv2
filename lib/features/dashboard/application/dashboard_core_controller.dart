@@ -4289,6 +4289,11 @@ final class DashboardCoreController {
       template: targetTemplate,
       availability: targetAvailability,
     );
+    // Direction is direct user intent for the Budget projection. Its owner
+    // must change before accepting the live frame: structural LogBox scene
+    // coverage below may be held, while Header/Progress/Partition/Rhythm bind
+    // this exact accepted direction in the current turn.
+    transactionDirection.select(direction);
     _acceptLiveInteraction(
       source: DashboardLiveInteractionSource.direction,
       temporalCandidate: candidate,
@@ -4319,7 +4324,6 @@ final class DashboardCoreController {
         reason: 'directionChanged',
         settledQueryKey: candidate.parentQueryKey,
         commit: () {
-          transactionDirection.select(direction);
           presentation.commitDirectionCandidate(
             candidate,
             availability: targetAvailability,
@@ -4442,12 +4446,16 @@ final class DashboardCoreController {
 
   /// Aggregate Budget target removes only the Budget-driven category overlay.
   /// Partner and Search remain orthogonal direct-manipulation facets.
-  Future<bool> clearBudgetCategoryFocus({int? targetHandle}) =>
-      _requestEphemeralFocus(
-        clearCategory: true,
-        source: DashboardLiveInteractionSource.budgetAvatar,
-        budgetTargetHandle: targetHandle,
-      );
+  Future<bool> clearBudgetCategoryFocus({
+    int? targetHandle,
+    bool publishDuringMotion = false,
+  }) => _requestEphemeralFocus(
+    clearCategory: true,
+    source: DashboardLiveInteractionSource.budgetAvatar,
+    budgetTargetHandle: targetHandle,
+    deferSceneInstallation: !publishDuringMotion,
+    publishDuringMotion: publishDuringMotion,
+  );
 
   /// Applies one live SearchPill edit through the same prepared facet path as
   /// category and partner interactions. The semantic state is accepted before
@@ -4540,6 +4548,7 @@ final class DashboardCoreController {
         deferSceneInstallation: deferSceneInstallation,
         source: source,
         budgetTargetHandle: budgetTargetHandle,
+        publishDuringMotion: publishDuringMotion,
       );
     }
     if (priorIsValid &&
@@ -4897,6 +4906,7 @@ final class DashboardCoreController {
 
   Future<bool> _restoreBaseAfterFocus({
     bool deferSceneInstallation = false,
+    bool publishDuringMotion = false,
     DashboardLiveInteractionSource source =
         DashboardLiveInteractionSource.facetClose,
     int? budgetTargetHandle,
@@ -4942,6 +4952,7 @@ final class DashboardCoreController {
     return _scheduleFocusedSceneInstall(
       generation: generation,
       deferUntilIdle: deferSceneInstallation,
+      publishDuringMotion: publishDuringMotion,
       install: () async {
         final published = await installPreparedIndex(
           baseIndex,

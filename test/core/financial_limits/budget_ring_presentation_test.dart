@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -127,4 +131,123 @@ void main() {
       expect(markers[2].material.base, FluviVisualTokens.budgetProgressDanger);
     },
   );
+
+  testWidgets(
+    'RED: the rendered coloured SUM raster starts green at twelve and ends '
+    'red back at the seam',
+    (tester) async {
+      final controller = BudgetRingPresentationController();
+      addTearDown(controller.dispose);
+      final boundary = GlobalKey();
+
+      Future<_RingRaster> render(BudgetSumRingStyle style) async {
+        controller.selectSumRingStyle(style);
+        await tester.pumpWidget(
+          BudgetRingPresentationScope(
+            controller: controller,
+            child: MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: RepaintBoundary(
+                    key: boundary,
+                    child: const BudgetCategoryAvatarSelectionChrome(
+                      categoryColor: Color(0xff8055d4),
+                      geometry: BudgetLimitProgressChromeGeometry.typicalMarker,
+                      typicalMarkerPosition: .40,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        return _captureRingRaster(tester, boundary);
+      }
+
+      for (final style in <BudgetSumRingStyle>[
+        BudgetSumRingStyle.coloredScaleWhiteArc,
+        BudgetSumRingStyle.coloredScaleMovingSphere,
+      ]) {
+        final raster = await render(style);
+        final top = raster.colorForRatio(.02);
+        final right = raster.colorForRatio(.25);
+        final bottom = raster.colorForRatio(.50);
+        final warning = raster.colorForRatio(.82);
+        final danger = raster.colorForRatio(.96);
+        final seam = raster.colorForRatio(.99);
+        expect(_isHealthyGreen(top), isTrue, reason: '$style top=$top');
+        expect(_isHealthyGreen(right), isTrue, reason: '$style right=$right');
+        expect(
+          _isHealthyGreen(bottom),
+          isTrue,
+          reason: '$style bottom=$bottom',
+        );
+        expect(
+          _isWarningYellow(warning),
+          isTrue,
+          reason: '$style warning=$warning',
+        );
+        expect(_isDangerRed(danger), isTrue, reason: '$style danger=$danger');
+        expect(
+          _isDangerRed(seam),
+          isTrue,
+          reason:
+              '$style seam=$seam; red must occupy the final clockwise span before twelve',
+        );
+      }
+    },
+  );
 }
+
+Future<_RingRaster> _captureRingRaster(
+  WidgetTester tester,
+  GlobalKey boundary,
+) async {
+  final renderBoundary =
+      boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+  final image = (await tester.runAsync(
+    () => renderBoundary.toImage(pixelRatio: 3),
+  ))!;
+  try {
+    final bytes = await tester.runAsync(
+      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    );
+    if (bytes == null) throw StateError('SUM ring raster bytes unavailable.');
+    return _RingRaster(bytes, image.width, image.height);
+  } finally {
+    image.dispose();
+  }
+}
+
+final class _RingRaster {
+  const _RingRaster(this.bytes, this.width, this.height);
+
+  final ByteData bytes;
+  final int width;
+  final int height;
+
+  Color colorForRatio(double ratio) {
+    final source = BudgetProgressRingGeometry.source;
+    final point = source.pointForRatio(ratio);
+    final scale = width / source.viewport.width;
+    final x = (point.dx * scale).round().clamp(0, width - 1);
+    final y = (point.dy * scale).round().clamp(0, height - 1);
+    final offset = (y * width + x) * 4;
+    return Color.fromARGB(
+      bytes.getUint8(offset + 3),
+      bytes.getUint8(offset),
+      bytes.getUint8(offset + 1),
+      bytes.getUint8(offset + 2),
+    );
+  }
+}
+
+bool _isHealthyGreen(Color color) =>
+    color.g > color.r * 1.10 && color.g > color.b * 1.10;
+
+bool _isWarningYellow(Color color) =>
+    color.r > color.b * 1.25 && color.g > color.b * 1.25;
+
+bool _isDangerRed(Color color) =>
+    color.r > color.g * 1.25 && color.r > color.b * 1.50;

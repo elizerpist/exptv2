@@ -93,6 +93,8 @@ class BudgetDistributionPageSurface extends StatefulWidget {
     this.leftFooterMinimumHeight = 0,
     this.fullWidthFooter,
     this.fullWidthFooterMinimumHeight = 0,
+    this.fullWidthFooterDividerGap = 3,
+    this.donutVerticalInset = 8,
     this.upperVerticalGestures,
   });
 
@@ -127,6 +129,12 @@ class BudgetDistributionPageSurface extends StatefulWidget {
   /// intermediate dashboard geometry.
   final double leftFooterMinimumHeight;
   final double fullWidthFooterMinimumHeight;
+
+  /// Shared default preserves Category's accepted Card2 geometry. Partner's
+  /// Rhythm-first layout supplies its own measured divider and intentionally
+  /// gives the reclaimed upper lane to its donut instead of a hidden inset.
+  final double fullWidthFooterDividerGap;
+  final double donutVerticalInset;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   /// The first donut/list visual region begins only after this authored
@@ -192,7 +200,7 @@ final class _BudgetDistributionPageSurfaceState
               : Column(
                   children: <Widget>[
                     Expanded(child: _buildUpperRow()),
-                    const SizedBox(height: 3),
+                    SizedBox(height: widget.fullWidthFooterDividerGap),
                     SizedBox(
                       height: widget.fullWidthFooterMinimumHeight,
                       child: widget.fullWidthFooter,
@@ -220,7 +228,7 @@ final class _BudgetDistributionPageSurfaceState
                 ((constraints.maxWidth < availableHeight
                             ? constraints.maxWidth
                             : availableHeight) -
-                        8)
+                        widget.donutVerticalInset)
                     .clamp(0.0, double.infinity)
                     .toDouble();
             final baselineDiameter = widget.expandDonutToFit
@@ -304,6 +312,7 @@ class BudgetDistributionLegendRow extends StatelessWidget {
     required this.color,
     required this.roundedPercent,
     required this.selected,
+    this.height = 22,
     this.stateKey,
     this.onTap,
   });
@@ -313,6 +322,7 @@ class BudgetDistributionLegendRow extends StatelessWidget {
   final Color color;
   final int roundedPercent;
   final bool selected;
+  final double height;
   final Key? stateKey;
   final VoidCallback? onTap;
 
@@ -326,7 +336,7 @@ class BudgetDistributionLegendRow extends StatelessWidget {
           ValueKey(
             'budget-distribution-row-${selected ? 'selected' : 'idle'}-$id',
           ),
-      height: 22,
+      height: height,
       padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
         color: selected ? color.withValues(alpha: .13) : Colors.transparent,

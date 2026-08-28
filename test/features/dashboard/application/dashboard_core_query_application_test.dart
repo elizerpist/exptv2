@@ -83,6 +83,53 @@ void main() {
   });
 
   test(
+    'direction tap updates the live direction owner before held scene coverage commits',
+    () async {
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final sceneGate = Completer<void>();
+      addTearDown(() {
+        if (!sceneGate.isCompleted) sceneGate.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) => sceneGate.future,
+        activate: (_) {},
+      );
+
+      core.selectDirection(TransactionDirection.expense);
+
+      expect(core.liveInteractions.frame?.direction, LedgerDirection.expense);
+      expect(
+        core.transactionDirection.direction,
+        TransactionDirection.expense,
+        reason:
+            'Budget consumers receive the accepted Expense live frame in this '
+            'turn. They must not still read the outgoing Income direction '
+            'while Card2 scene coverage is deliberately held.',
+      );
+      expect(
+        core.presentation.navigation.state.parentQueryScope.direction,
+        LedgerDirection.income,
+        reason:
+            'The structural scene-gated navigation commit remains correctly '
+            'held; only the direct direction owner is immediate.',
+      );
+
+      sceneGate.complete();
+      await pumpEventQueue(times: 20);
+      expect(
+        core.presentation.navigation.state.parentQueryScope.direction,
+        LedgerDirection.expense,
+      );
+    },
+  );
+
+  test(
     'Apply publishes one prepared restricted query scope atomically',
     () async {
       final core = DashboardCoreController(

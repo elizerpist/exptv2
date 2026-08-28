@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_category_d
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
@@ -172,6 +173,91 @@ void main() {
     expect(tester.getRect(donut).width, 135);
     expect(tester.getRect(donut).height, 135);
   });
+
+  testWidgets(
+    'Partner layout reserves a forty dp Rhythm plot before allocating the '
+    'smaller donut and legend',
+    (tester) async {
+      final harness = _PartnerCardHarness();
+      addTearDown(harness.dispose);
+      await harness.pump(
+        tester,
+        height: 300,
+        includeRhythm: true,
+        onCommit:
+            ({required partner, required source, required targetHandle}) =>
+                Future<bool>.value(true),
+      );
+
+      final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
+      final donut = find.byKey(const ValueKey('budget-distribution-donut-120'));
+      expect(plot, findsOneWidget);
+      expect(tester.getSize(plot).height, 40);
+      expect(donut, findsOneWidget);
+      expect(tester.getSize(donut).height, 120);
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+            )
+            .height,
+        62,
+      );
+    },
+  );
+
+  testWidgets(
+    'Partner layout keeps a 110dp donut beside the 40dp Rhythm plot in the '
+    '217dp reference Card2',
+    (tester) async {
+      final harness = _PartnerCardHarness();
+      addTearDown(harness.dispose);
+      await harness.pump(
+        tester,
+        height: 217,
+        includeRhythm: true,
+        onCommit:
+            ({required partner, required source, required targetHandle}) =>
+                Future<bool>.value(true),
+      );
+
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('spending-rhythm-plot-lane')))
+            .height,
+        40,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-distribution-donut-110')),
+        findsOneWidget,
+        reason:
+            'The reference Card2 has enough room for the readable 110dp '
+            'Partner donut after Rhythm receives its fixed 40dp plot lane.',
+      );
+    },
+  );
+
+  testWidgets(
+    'Partner layout keeps the real Rhythm plot above its 32dp floor in a '
+    'shorter Card2 viewport without changing outer-card geometry',
+    (tester) async {
+      final harness = _PartnerCardHarness();
+      addTearDown(harness.dispose);
+      await harness.pump(
+        tester,
+        height: 190,
+        includeRhythm: true,
+        onCommit:
+            ({required partner, required source, required targetHandle}) =>
+                Future<bool>.value(true),
+      );
+
+      final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
+      expect(plot, findsOneWidget);
+      expect(tester.getSize(plot).height, greaterThanOrEqualTo(32));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 final class _PartnerCardHarness {
@@ -221,22 +307,81 @@ final class _PartnerCardHarness {
       DashboardEphemeralFocusController();
   late final DashboardBudgetPresentationController presentation;
   late final ValueNotifier<DashboardBudgetDistributionDrawableFrame?> drawables;
+  final ValueNotifier<DashboardSpendingRhythmState?> rhythm =
+      ValueNotifier<DashboardSpendingRhythmState?>(
+        DashboardSpendingRhythmState(
+          analysis: DaySpendingRhythm(
+            coreRevision: 7,
+            direction: LedgerDirection.expense,
+            targetHandle: 0,
+            scope: const DayScope(LocalDate(year: 2026, month: 7, day: 1)),
+            buckets: const <SpendingRhythmBucket>[
+              SpendingRhythmBucket(
+                label: '0',
+                accessibilityLabel: 'Éjfél',
+                actualScaled100: 10,
+              ),
+              SpendingRhythmBucket(
+                label: '3',
+                accessibilityLabel: 'Hajnal',
+                actualScaled100: 20,
+              ),
+              SpendingRhythmBucket(
+                label: '6',
+                accessibilityLabel: 'Reggel',
+                actualScaled100: 5,
+              ),
+              SpendingRhythmBucket(
+                label: '9',
+                accessibilityLabel: 'Délelőtt',
+                actualScaled100: 0,
+              ),
+              SpendingRhythmBucket(
+                label: '12',
+                accessibilityLabel: 'Kora délután',
+                actualScaled100: 0,
+              ),
+              SpendingRhythmBucket(
+                label: '15',
+                accessibilityLabel: 'Délután',
+                actualScaled100: 0,
+              ),
+              SpendingRhythmBucket(
+                label: '18',
+                accessibilityLabel: 'Este',
+                actualScaled100: 0,
+              ),
+              SpendingRhythmBucket(
+                label: '21',
+                accessibilityLabel: 'Késő este',
+                actualScaled100: 0,
+              ),
+            ],
+          ),
+          startColorArgb: 0xffaa00ff,
+          middleColorArgb: 0xffbb00ff,
+          endColorArgb: 0xffcc00ff,
+        ),
+      );
 
   Future<void> pump(
     WidgetTester tester, {
     required BudgetPartnerFocusCommit onCommit,
+    double height = 208,
+    bool includeRhythm = false,
   }) => tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: Center(
           child: SizedBox(
             width: 378,
-            height: 208,
+            height: height,
             child: BudgetPartnerDistributionCard(
               presentation: presentation,
               drawableFrames: drawables,
               partnerFocusCommit: onCommit,
               focusController: focus,
+              rhythm: includeRhythm ? rhythm : null,
             ),
           ),
         ),
@@ -250,6 +395,7 @@ final class _PartnerCardHarness {
     visible.dispose();
     presentation.dispose();
     drawables.dispose();
+    rhythm.dispose();
   }
 }
 

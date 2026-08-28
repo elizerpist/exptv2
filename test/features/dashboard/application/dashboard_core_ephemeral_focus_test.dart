@@ -515,6 +515,23 @@ void main() {
             'The bounded prepared LogBox frame is the live interaction '
             'authority; only rich scene decoration remains asynchronous.',
       );
+      final focusedViewport = core.visibleFrames.value!;
+      expect(
+        core.focus.state?.category?.id,
+        'food',
+        reason:
+            'The accepted avatar target must expose its Category facet before '
+            'the held rich scene is allowed to finish.',
+      );
+      expect(focusedViewport.count.entryCount, 1);
+      expect(focusedViewport.logBox.entryCount, 1);
+      expect(
+        focusedViewport.logBox.stableRowIdentities,
+        const <String>['food-row'],
+        reason:
+            'The first prepared viewport is already exact and ordered; rich '
+            'row decoration is only a later render resource.',
+      );
       expect(
         core.visibleFrames.amountPreviewPublishCount,
         greaterThanOrEqualTo(2),
@@ -743,6 +760,51 @@ void main() {
       );
     },
   );
+
+  test('RED: an aggregate avatar crossing restores the prepared base LogBox in '
+      'the same active-motion turn', () async {
+    final repository = _FocusSeedRepository();
+    final core = DashboardCoreController(
+      dataRepository: repository,
+      initialDate: DateTime.utc(2026, 7, 1),
+      initialCoreRevision: 1,
+      initialDirection: LedgerDirection.income,
+    );
+    addTearDown(core.dispose);
+    await core.bootstrap();
+    final baseIndex = core.preparedIndex!;
+    final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+
+    expect(
+      await drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      ),
+      isTrue,
+    );
+    expect(core.preparedIndex, isNot(same(baseIndex)));
+
+    core.setMotionLaneActive(DashboardMotionLane.budgetAvatar, true);
+    final aggregate = drilldown.previewBudgetTarget(
+      state: _budgetAggregatePreviewState(),
+    );
+    await Future<void>.microtask(() {});
+
+    expect(core.focus.state, isNull);
+    expect(
+      core.preparedIndex,
+      same(baseIndex),
+      reason:
+          'The active avatar producer may defer rich scene augmentation, '
+          'but it may never keep old category rows authoritative while '
+          'the aggregate target is already selected.',
+    );
+
+    core.setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
+    expect(await aggregate, isTrue);
+  });
 
   test(
     'clearing focus publishes its retained base frame before one noncritical scene augmentation',

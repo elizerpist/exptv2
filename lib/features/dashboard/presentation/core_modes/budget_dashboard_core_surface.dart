@@ -104,6 +104,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   'dashboard-core-mode-budget-card-2',
                 ),
                 showPlaceholderSurface: false,
+                clipOpaqueContentDuringReveal: true,
                 content:
                     presentationController == null ||
                         distributionDrawables == null ||

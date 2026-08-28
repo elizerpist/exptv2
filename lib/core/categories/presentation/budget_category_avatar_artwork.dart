@@ -510,6 +510,14 @@ abstract final class BudgetProgressRingSumHealthScale {
   static const warningDangerBoundary = .90;
   static const transitionHalfWidth = .035;
 
+  /// Native SweepGradient rasterisation has not kept the twelve-o'clock seam
+  /// stable across the Android renderer used by Fluvi. The complete scale is
+  /// therefore painted as small canonical polar spans. This remains a smooth
+  /// gradient (each adjacent span differs by at most one 1/360th sample),
+  /// while its physical orientation comes directly from the one shared ring
+  /// ratio coordinate instead of an engine-local sweep transform.
+  static const canonicalRasterSegmentCount = 360;
+
   static SweepGradient gradient({
     required Color healthy,
     required double startAngle,
@@ -565,6 +573,31 @@ abstract final class BudgetProgressRingSumHealthScale {
       )!;
     }
     return danger;
+  }
+
+  static void paintCanonicalTrack({
+    required Canvas canvas,
+    required Rect trackRect,
+    required BudgetProgressRingGeometry geometry,
+    required Color healthy,
+  }) {
+    const segmentSweep = math.pi * 2 / canonicalRasterSegmentCount;
+    for (var index = 0; index < canonicalRasterSegmentCount; index += 1) {
+      final ratio = (index + .5) / canonicalRasterSegmentCount;
+      canvas.drawArc(
+        trackRect,
+        geometry.angleForRatio(index / canonicalRasterSegmentCount),
+        segmentSweep,
+        false,
+        Paint()
+          ..color = colorForRatio(ratio: ratio, healthy: healthy)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = geometry.trackWidth
+          // The scale is a closed lane, not a collection of rounded blocks.
+          // Butt joins keep the semantic red-end | green-start seam exact.
+          ..strokeCap = StrokeCap.butt,
+      );
+    }
   }
 }
 
@@ -1288,6 +1321,12 @@ final class _SelectionChromePainter extends CustomPainter {
     final usesColoredSumScale =
         geometry == BudgetLimitProgressChromeGeometry.typicalMarker &&
         sumRingStyle != BudgetSumRingStyle.current;
+    // A complete coloured scale has a semantic seam at twelve o'clock. Round
+    // caps on a 2π arc overlap at that seam: the red end cap physically paints
+    // over the green beginning for several source pixels. A closed ring has no
+    // visible endpoints, so a butt cap preserves the shared material while
+    // keeping the raster's red-end | green-start coordinate exact.
+    final trackCap = usesColoredSumScale ? StrokeCap.butt : StrokeCap.round;
     canvas.drawArc(
       trackRect,
       startAngle,
@@ -1297,28 +1336,33 @@ final class _SelectionChromePainter extends CustomPainter {
         ..color = ringGeometry.trackShadowColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = ringGeometry.trackWidth + 4
-        ..strokeCap = StrokeCap.round,
+        ..strokeCap = trackCap,
     );
-    canvas.drawArc(
-      trackRect,
-      startAngle,
-      math.pi * 2,
-      false,
-      Paint()
-        ..shader =
-            (usesColoredSumScale
-                    ? _sumScaleGradient(startAngle)
-                    : LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: ringGeometry.trackGradientColors,
-                        stops: ringGeometry.trackGradientStops,
-                      ))
-                .createShader(trackRect)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = ringGeometry.trackWidth
-        ..strokeCap = StrokeCap.round,
-    );
+    if (usesColoredSumScale) {
+      BudgetProgressRingSumHealthScale.paintCanonicalTrack(
+        canvas: canvas,
+        trackRect: trackRect,
+        geometry: ringGeometry,
+        healthy: _healthyColor,
+      );
+    } else {
+      canvas.drawArc(
+        trackRect,
+        startAngle,
+        math.pi * 2,
+        false,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: ringGeometry.trackGradientColors,
+            stops: ringGeometry.trackGradientStops,
+          ).createShader(trackRect)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = ringGeometry.trackWidth
+          ..strokeCap = trackCap,
+      );
+    }
     canvas.drawArc(
       trackRect,
       startAngle,
@@ -1329,13 +1373,6 @@ final class _SelectionChromePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 5
         ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  Gradient _sumScaleGradient(double startAngle) {
-    return BudgetProgressRingSumHealthScale.gradient(
-      healthy: _healthyColor,
-      startAngle: startAngle,
     );
   }
 

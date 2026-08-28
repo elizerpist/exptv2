@@ -9,9 +9,21 @@ import 'spending_rhythm_bar_layout.dart';
 class SpendingRhythmBarChart extends StatefulWidget {
   const SpendingRhythmBarChart({super.key, required this.state});
 
-  /// Compact enough to preserve the approved Partner donut at the existing
-  /// Card2 height, while retaining a real 16dp plot lane plus title/axis.
-  static const double minimumLayoutHeight = 38;
+  /// The footer is one named geometry contract, not an unexplained minimum.
+  /// A 40dp target plot (32dp absolute floor) makes the temporal rhythm
+  /// legible without changing any bucket, normalization or average semantics.
+  static const double titleLaneHeight = 8;
+  static const double titleToPlotGap = 3;
+  static const double plotToAxisGap = 2;
+  static const double axisLaneHeight = 9;
+  static const double minimumPlotLaneHeight = 32;
+  static const double targetPlotLaneHeight = 40;
+  static const double minimumLayoutHeight =
+      titleLaneHeight +
+      titleToPlotGap +
+      targetPlotLaneHeight +
+      plotToAxisGap +
+      axisLaneHeight;
 
   final DashboardSpendingRhythmState state;
 
@@ -113,19 +125,23 @@ class _RhythmChartContent extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: <Widget>[
-      const Text(
-        'Költési ritmus',
-        textAlign: TextAlign.left,
-        style: TextStyle(
-          color: Color(0xff51617f),
-          fontSize: 8,
-          height: 1,
-          fontWeight: FontWeight.w900,
+      const SizedBox(
+        height: SpendingRhythmBarChart.titleLaneHeight,
+        child: Text(
+          'Költési ritmus',
+          textAlign: TextAlign.left,
+          style: TextStyle(
+            color: Color(0xff51617f),
+            fontSize: 8,
+            height: 1,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ),
-      const SizedBox(height: 3),
+      const SizedBox(height: SpendingRhythmBarChart.titleToPlotGap),
       Expanded(
         child: LayoutBuilder(
+          key: const ValueKey('spending-rhythm-plot-lane'),
           builder: (context, constraints) => Stack(
             fit: StackFit.expand,
             clipBehavior: Clip.none,
@@ -191,9 +207,9 @@ class _RhythmChartContent extends StatelessWidget {
           ),
         ),
       ),
-      const SizedBox(height: 2),
+      const SizedBox(height: SpendingRhythmBarChart.plotToAxisGap),
       SizedBox(
-        height: 9,
+        height: SpendingRhythmBarChart.axisLaneHeight,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -248,7 +264,13 @@ class _RhythmBar extends StatelessWidget {
       builder: (context, constraints) => DecoratedBox(
         key: ValueKey('spending-rhythm-track-$index'),
         decoration: BoxDecoration(
-          color: const Color(0x1651617f),
+          // Dense MONTH charts previously filled every zero-slot track. At
+          // Android density those adjacent muted fills rasterised as a single
+          // opaque grey slab during the cascading-card transform. An outline
+          // still makes zero buckets discoverable, while preserving the card
+          // material between independent bars at every collapse progress.
+          color: Colors.transparent,
+          border: Border.all(color: const Color(0x3651617f), width: .65),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Align(

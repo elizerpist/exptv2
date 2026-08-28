@@ -2,12 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_coordinator.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_month_end_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_scope_analysis.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -19,6 +22,8 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 const _defaultAsOfDate = LocalDate(year: 2026, month: 1, day: 10);
@@ -142,6 +147,212 @@ void main() {
       expect(presentation.value.items.first.title, 'Összbevételi cél');
     },
   );
+
+  test('a live temporal interaction replaces retained scene scope for Budget '
+      'analysis before that scene is covered', () {
+    final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+      _category('food'),
+    ]);
+    final direction = TransactionDirectionController(
+      initialDirection: TransactionDirection.expense,
+    );
+    final visible = ValueNotifier<DashboardVisibleFrame?>(
+      _visibleFrame(scope: const MonthScope(YearMonth(year: 2026, month: 1))),
+    );
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime.utc(2026, 2, 1),
+      initialDirection: LedgerDirection.expense,
+    );
+    final live = DashboardLiveInteractionCoordinator();
+    final presentation = DashboardBudgetPresentationController(
+      categoryCollection: categories,
+      visibleFrame: visible,
+      liveInteractions: live,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: _dayAwareSnapshot,
+      logicalAsOfDate: _defaultAsOfDate,
+    );
+    final rhythm = DashboardSpendingRhythmController(
+      presentation: presentation,
+      snapshotForCurrentFrame: _dayAwareSnapshot,
+    );
+    addTearDown(categories.dispose);
+    addTearDown(direction.dispose);
+    addTearDown(visible.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(live.dispose);
+    addTearDown(rhythm.dispose);
+    addTearDown(presentation.dispose);
+
+    FluviDiagnosticLogger.clear();
+    live.accept(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      coreRevision: 7,
+      direction: LedgerDirection.expense,
+      temporalCandidate: navigation.state,
+      category: null,
+      partner: null,
+      normalizedSearch: null,
+    );
+
+    expect(
+      presentation.value.liveAnalysis.scope?.canonicalKey,
+      'month:2026-02',
+    );
+    expect(presentation.value.liveAnalysis.interactionGeneration, 1);
+    expect(presentation.value.liveAnalysis.isLiveInteraction, isTrue);
+    expect(
+      presentation.value.header.analysisScopeLabel,
+      '2026. február',
+      reason:
+          'The retained January scene remains deliberately unchanged in '
+          'this test, so February proves the live projection is independent '
+          'of scene coverage.',
+    );
+    expect(
+      presentation.value.partition.period,
+      isA<BudgetLimitMonthPeriod>()
+          .having((period) => period.year, 'year', 2026)
+          .having((period) => period.month, 'month', 2),
+      reason:
+          'Partition is the same direct live Budget analysis publication, '
+          'not a retained January-scene consumer.',
+    );
+    expect(
+      presentation.value.selectedLimitVisual.displayNumeratorScaled100,
+      0,
+      reason:
+          'Progress takes February’s prepared dense cell immediately; it '
+          'cannot retain January merely because scene coverage is delayed.',
+    );
+    expect(
+      rhythm.value?.analysis.scope.canonicalKey,
+      'month:2026-02',
+      reason:
+          'Spending Rhythm must take the same live analysis projection; it '
+          'may not wait for the retained January LogBox scene to be covered.',
+    );
+    const expectedBoundLeaves = <String>{
+      'BUDGET_LIVE_ANALYSIS_BOUND',
+      'BUDGET_HEADER_VALUE_BOUND',
+      'BUDGET_PROGRESS_BOUND',
+      'BUDGET_PARTITION_BOUND',
+      'SPENDING_RHYTHM_BOUND',
+    };
+    final boundLeaves = FluviDiagnosticLogger.entries
+        .where((event) => expectedBoundLeaves.contains(event.stage))
+        .toList(growable: false);
+    expect(
+      boundLeaves.map((event) => event.stage).toSet(),
+      expectedBoundLeaves,
+      reason:
+          'All immediate controller leaves must report the shared projection '
+          'rather than minting a visible-frame-local provenance value.',
+    );
+    expect(
+      boundLeaves.map((event) => event.scope),
+      everyElement(contains('generation=1')),
+    );
+  });
+
+  test('live Budget analysis and Rhythm replace a retained scene for every '
+      'DAY/MONTH/YEAR/SUM scope', () {
+    final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+      _category('food'),
+    ]);
+    final direction = TransactionDirectionController(
+      initialDirection: TransactionDirection.expense,
+    );
+    final visible = ValueNotifier<DashboardVisibleFrame?>(
+      _visibleFrame(scope: const MonthScope(YearMonth(year: 2026, month: 1))),
+    );
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime.utc(2026, 2, 1),
+      initialDirection: LedgerDirection.expense,
+    );
+    final live = DashboardLiveInteractionCoordinator();
+    final presentation = DashboardBudgetPresentationController(
+      categoryCollection: categories,
+      visibleFrame: visible,
+      liveInteractions: live,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: _dayAwareSnapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 2, day: 10),
+    );
+    final rhythm = DashboardSpendingRhythmController(
+      presentation: presentation,
+      snapshotForCurrentFrame: _dayAwareSnapshot,
+    );
+    addTearDown(categories.dispose);
+    addTearDown(direction.dispose);
+    addTearDown(visible.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(live.dispose);
+    addTearDown(rhythm.dispose);
+    addTearDown(presentation.dispose);
+    presentation.setTargetHandle(1);
+
+    final candidates = <(String, DashboardNavigationState)>[
+      (
+        'day:2026-01-02',
+        navigation.temporalCandidate(
+          plane: TimePlane.month,
+          isRailOpen: true,
+          year: 2026,
+          month: 1,
+          day: 2,
+          coreRevision: 7,
+        ),
+      ),
+      (
+        'month:2026-02',
+        navigation.temporalCandidate(
+          plane: TimePlane.year,
+          isRailOpen: true,
+          coreRevision: 7,
+        ),
+      ),
+      (
+        'year:2026',
+        navigation.temporalCandidate(
+          plane: TimePlane.sum,
+          isRailOpen: true,
+          coreRevision: 7,
+        ),
+      ),
+      (
+        'all',
+        navigation.temporalCandidate(
+          plane: TimePlane.sum,
+          isRailOpen: false,
+          coreRevision: 7,
+        ),
+      ),
+    ];
+
+    for (var index = 0; index < candidates.length; index += 1) {
+      final candidate = candidates[index];
+      live.accept(
+        source: DashboardLiveInteractionSource.temporalSelector,
+        coreRevision: 7,
+        direction: LedgerDirection.expense,
+        temporalCandidate: candidate.$2,
+        category: null,
+        partner: null,
+        normalizedSearch: null,
+      );
+
+      expect(
+        presentation.value.liveAnalysis.scope?.canonicalKey,
+        candidate.$1,
+        reason:
+            'The retained January visible frame is intentionally unchanged; '
+            'the direct projection must use the accepted ${candidate.$1} scope.',
+      );
+      expect(rhythm.value?.analysis.scope.canonicalKey, candidate.$1);
+      expect(presentation.value.liveAnalysis.interactionGeneration, index + 1);
+    }
+  });
 
   test(
     'one target-bound visual state keeps a partial target from inheriting a full ring',
@@ -1022,6 +1233,13 @@ PreparedBudgetLimitSnapshot _dayAwareSnapshot() {
   final cells = List<PreparedBudgetLimitCell>.filled(
     28,
     const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // SUM's base monthly denominator belongs to the same prepared target bank,
+  // so the all-scope Rhythm regression can use a real selectable category.
+  cells[1] = const PreparedBudgetLimitCell(
+    actualScaled100: 999,
+    limitScaled100: 1000,
+    limitSource: PreparedBudgetLimitSource.base,
   );
   cells[5] = const PreparedBudgetLimitCell(
     actualScaled100: 999,

@@ -138,6 +138,20 @@ final class DashboardBudgetDistributionDrawableFrame {
       (partnerVisualBank?.estimatedRetainedBytes ?? 0);
 }
 
+/// Result of the one exact-scope foreground Card2 publication. A cache hit is
+/// useful diagnostics; it is never permission to make the current scope
+/// visible. On a miss the controller builds only this scope from prepared RAM.
+@immutable
+final class DashboardBudgetDistributionForegroundPublication {
+  const DashboardBudgetDistributionForegroundPublication({
+    required this.published,
+    required this.cacheHit,
+  });
+
+  final bool published;
+  final bool cacheHit;
+}
+
 enum _BudgetDistributionPreparationPriority { foreground, maintenance }
 
 /// Bounded exact analysis-scene owner for Budget Card2. It projects prepared
@@ -193,6 +207,7 @@ final class DashboardBudgetDistributionDrawableController
   int rendererPrewarmCount = 0;
   int pictureDecodeCount = 0;
   int evictionCount = 0;
+  int _maintenanceEpoch = 0;
 
   int get retainedFrameCount => _frames.length;
   int get retainedSceneCount =>
@@ -239,7 +254,12 @@ final class DashboardBudgetDistributionDrawableController
   Future<DashboardBudgetDistributionDrawableFrame> _prepareForScope(
     LedgerTimeScope scope, {
     required _BudgetDistributionPreparationPriority priority,
-  }) async {
+  }) async => _prepareExactScope(scope, priority: priority);
+
+  DashboardBudgetDistributionDrawableFrame _prepareExactScope(
+    LedgerTimeScope scope, {
+    required _BudgetDistributionPreparationPriority priority,
+  }) {
     final snapshot = _snapshotForCurrentFrame();
     if (snapshot == null) {
       throw StateError('No exact prepared Budget snapshot is available.');
@@ -372,6 +392,7 @@ final class DashboardBudgetDistributionDrawableController
     // This cache is an idle-only visual convenience. It has no authority over
     // direct Summary or BudgetAvatar input and it must re-check after yielding
     // because each projection can synchronously build Canvas paths.
+    final maintenanceEpoch = ++_maintenanceEpoch;
     await Future<void>.delayed(Duration.zero);
     if (_isForegroundInputActive?.call() ?? false) return;
     final scopes = <String, LedgerTimeScope>{};
@@ -392,7 +413,10 @@ final class DashboardBudgetDistributionDrawableController
       ),
     );
     for (final scope in scopes.values) {
-      if (_isForegroundInputActive?.call() ?? false) return;
+      if ((_isForegroundInputActive?.call() ?? false) ||
+          maintenanceEpoch != _maintenanceEpoch) {
+        return;
+      }
       try {
         await _prepareForScope(
           scope,
@@ -401,6 +425,63 @@ final class DashboardBudgetDistributionDrawableController
       } on Object {
         return;
       }
+      // Every scope is an optional maintenance grant. Yield before the next
+      // sibling so a 31-day month can never occupy the isolate as one burst.
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  /// Synchronously binds the exact current scope using prepared RAM only.
+  /// It deliberately does not warm siblings and invalidates any optional
+  /// maintenance burst that was started for an older interaction.
+  DashboardBudgetDistributionForegroundPublication
+  publishCurrentScopeForeground(
+    LedgerTimeScope scope, {
+    LedgerDirection? direction,
+    int? targetHandle,
+    String? partnerId,
+  }) {
+    _maintenanceEpoch += 1;
+    final snapshot = _snapshotForCurrentFrame();
+    if (snapshot == null) {
+      return const DashboardBudgetDistributionForegroundPublication(
+        published: false,
+        cacheHit: false,
+      );
+    }
+    final key = DashboardBudgetCategoryDistributionKey.fromScope(
+      coreRevision: snapshot.coreRevision,
+      scope: scope,
+    );
+    final cacheHit = _frames.containsKey(key);
+    try {
+      final frame = _prepareExactScope(
+        scope,
+        priority: _BudgetDistributionPreparationPriority.foreground,
+      );
+      publish(
+        frame,
+        source: cacheHit ? 'foregroundCacheHit' : 'foregroundExactScope',
+        direction: direction,
+        targetHandle: targetHandle,
+        partnerId: partnerId,
+      );
+      return DashboardBudgetDistributionForegroundPublication(
+        published: true,
+        cacheHit: cacheHit,
+      );
+    } on Object catch (error) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_DISTRIBUTION_FOREGROUND_SCOPE_REJECTED',
+          coreRevision: snapshot.coreRevision,
+          scope: 'analysisScope=${scope.canonicalKey} reason=$error',
+        ),
+      );
+      return DashboardBudgetDistributionForegroundPublication(
+        published: false,
+        cacheHit: cacheHit,
+      );
     }
   }
 
@@ -507,6 +588,7 @@ final class DashboardBudgetDistributionDrawableController
 
   void _invalidateForCategoryMetadata() {
     _prepareGeneration += 1;
+    _maintenanceEpoch += 1;
     _categoryCache.clear();
     _partnerCache.clear();
     _frames.clear();
@@ -516,6 +598,7 @@ final class DashboardBudgetDistributionDrawableController
   @override
   void dispose() {
     _prepareGeneration += 1;
+    _maintenanceEpoch += 1;
     _categories.removeListener(_invalidateForCategoryMetadata);
     _frames.clear();
     if (value != null) value = null;

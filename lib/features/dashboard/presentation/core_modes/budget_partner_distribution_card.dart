@@ -27,6 +27,73 @@ typedef BudgetPartnerFocusCommit =
       required int targetHandle,
     });
 
+/// Pure vertical allocation for the Partner-only Card2 composition. The
+/// Rhythm footer receives its meaningful plot lane first; donut and legend
+/// intentionally consume only the remaining upper section. Category Card2
+/// does not use this resolver.
+@immutable
+final class BudgetPartnerDistributionLayout {
+  const BudgetPartnerDistributionLayout._({
+    required this.rhythmFooterHeight,
+    required this.plotLaneHeight,
+    required this.upperSectionHeight,
+    required this.donutDiameter,
+    required this.legendRowHeight,
+  });
+
+  // At the 217dp reference Card2, these two reclaimed pixels give the
+  // Partner donut its readable 110dp floor after Rhythm reserves its 40dp
+  // real plot lane. The list remains the flexible consumer below that lane.
+  static const double dividerGap = 2;
+  static const double upperDonutBreathingRoom = 0;
+  static const double targetDonutDiameter = 120;
+  static const double minimumDonutDiameter = 88;
+  static const double compactLegendRowHeight = 20;
+
+  final double rhythmFooterHeight;
+  final double plotLaneHeight;
+  final double upperSectionHeight;
+  final double donutDiameter;
+  final double legendRowHeight;
+
+  factory BudgetPartnerDistributionLayout.resolve({
+    required Size availableSize,
+  }) {
+    final contentHeight =
+        (availableSize.height -
+                BudgetDistributionPageSurface.outerPadding * 2 -
+                BudgetDistributionPageSurface.headingHeight)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+    const nonPlotHeight =
+        SpendingRhythmBarChart.titleLaneHeight +
+        SpendingRhythmBarChart.titleToPlotGap +
+        SpendingRhythmBarChart.plotToAxisGap +
+        SpendingRhythmBarChart.axisLaneHeight;
+    final plotBudget =
+        (contentHeight - dividerGap - minimumDonutDiameter - nonPlotHeight)
+            .clamp(
+              SpendingRhythmBarChart.minimumPlotLaneHeight,
+              SpendingRhythmBarChart.targetPlotLaneHeight,
+            )
+            .toDouble();
+    final footerHeight = nonPlotHeight + plotBudget;
+    final upperHeight = (contentHeight - dividerGap - footerHeight)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final donutDiameter = (upperHeight - upperDonutBreathingRoom)
+        .clamp(0.0, targetDonutDiameter)
+        .toDouble();
+    return BudgetPartnerDistributionLayout._(
+      rhythmFooterHeight: footerHeight,
+      plotLaneHeight: plotBudget,
+      upperSectionHeight: upperHeight,
+      donutDiameter: donutDiameter,
+      legendRowHeight: compactLegendRowHeight,
+    );
+  }
+}
+
 /// Partner page for Budget Card2. It renders the exact prepared target frame
 /// and forwards only explicit partner intents to the existing ephemeral-focus
 /// owner; it owns neither Query nor Budget-target selection.
@@ -315,61 +382,112 @@ class _BudgetPartnerDistributionCardState
             authoritativePartner: _focus?.state?.partner,
           );
     final selectedPartnerId = selectedPartner?.id;
-    return BudgetDistributionPageSurface(
-      heading: const _PartnerDistributionHeading(),
-      donut: _InteractivePartnerDistributionDonut(
-        scene: visualFrame.scene,
-        selectedSliceIndex: visualFrame.selectedSliceIndexForPartnerId(
-          selectedPartnerId,
-        ),
-        absentSelectionLabel: selectedPartnerId == null
-            ? null
-            : selectedPartner?.displayName,
-        onSliceTap: (index) {
-          if (index < 0 || index >= frame.entries.length) return;
-          _selectPartner(frame.entries[index], source: 'partnerPie');
-        },
-      ),
-      rightHeading: 'Partnerek',
-      listKey: const ValueKey('budget-partner-distribution-list'),
-      emptyLabel: 'Nincs partner',
-      upperVerticalGestures: widget.upperVerticalGestures,
-      rows: <Widget>[
-        for (final entry in frame.entries)
-          BudgetDistributionLegendRow(
-            key: ValueKey('budget-partner-distribution-row-${entry.partnerId}'),
-            id: entry.partnerId,
-            title: entry.title,
-            color: CategoryColorCatalog.resolve(entry.colorId).middleColor,
-            roundedPercent: entry.roundedPercent,
-            selected: entry.partnerId == selectedPartnerId,
-            stateKey: ValueKey(
-              'budget-partner-distribution-row-'
-              '${entry.partnerId == selectedPartnerId ? 'selected' : 'idle'}-'
-              '${entry.partnerId}',
+    Widget surface(BudgetPartnerDistributionLayout layout) =>
+        BudgetDistributionPageSurface(
+          heading: const _PartnerDistributionHeading(),
+          donut: _InteractivePartnerDistributionDonut(
+            scene: visualFrame.scene,
+            selectedSliceIndex: visualFrame.selectedSliceIndexForPartnerId(
+              selectedPartnerId,
             ),
-            onTap: _canCommitPartner
-                ? () => _selectPartner(entry, source: 'partnerList')
-                : null,
+            absentSelectionLabel: selectedPartnerId == null
+                ? null
+                : selectedPartner?.displayName,
+            onSliceTap: (index) {
+              if (index < 0 || index >= frame.entries.length) return;
+              _selectPartner(frame.entries[index], source: 'partnerPie');
+            },
           ),
-      ],
-      donutDiameter: 150,
-      donutScale: .90,
-      expandDonutToFit: widget.expandDonutToFit,
-      fullWidthFooterMinimumHeight: SpendingRhythmBarChart.minimumLayoutHeight,
-      fullWidthFooter: widget.rhythm == null
-          ? null
-          : ValueListenableBuilder<DashboardSpendingRhythmState?>(
-              valueListenable: widget.rhythm!,
-              builder: (context, rhythm, child) => rhythm == null
-                  ? const SizedBox.shrink()
-                  : SpendingRhythmBarChart(
-                      key: const ValueKey('partner-spending-rhythm-chart'),
-                      state: rhythm,
-                    ),
-            ),
+          rightHeading: 'Partnerek',
+          listKey: const ValueKey('budget-partner-distribution-list'),
+          emptyLabel: 'Nincs partner',
+          upperVerticalGestures: widget.upperVerticalGestures,
+          rows: _legendRows(
+            frame.entries,
+            selectedPartnerId,
+            height: layout.legendRowHeight,
+          ),
+          donutDiameter: layout.donutDiameter,
+          donutScale: 1,
+          expandDonutToFit: widget.expandDonutToFit,
+          fullWidthFooterDividerGap: BudgetPartnerDistributionLayout.dividerGap,
+          donutVerticalInset:
+              BudgetPartnerDistributionLayout.upperDonutBreathingRoom,
+          fullWidthFooterMinimumHeight: layout.rhythmFooterHeight,
+          fullWidthFooter: widget.rhythm == null
+              ? null
+              : ValueListenableBuilder<DashboardSpendingRhythmState?>(
+                  valueListenable: widget.rhythm!,
+                  builder: (context, rhythm, child) => rhythm == null
+                      ? const SizedBox.shrink()
+                      : SpendingRhythmBarChart(
+                          key: const ValueKey('partner-spending-rhythm-chart'),
+                          state: rhythm,
+                        ),
+                ),
+        );
+    // The authored no-Rhythm test/skeleton path remains unchanged. Production
+    // Partner Card2 always supplies Rhythm and therefore reserves its plot
+    // lane before assigning the upper donut/list space.
+    if (widget.rhythm == null) {
+      return BudgetDistributionPageSurface(
+        heading: const _PartnerDistributionHeading(),
+        donut: _InteractivePartnerDistributionDonut(
+          scene: visualFrame.scene,
+          selectedSliceIndex: visualFrame.selectedSliceIndexForPartnerId(
+            selectedPartnerId,
+          ),
+          absentSelectionLabel: selectedPartnerId == null
+              ? null
+              : selectedPartner?.displayName,
+          onSliceTap: (index) {
+            if (index < 0 || index >= frame.entries.length) return;
+            _selectPartner(frame.entries[index], source: 'partnerPie');
+          },
+        ),
+        rightHeading: 'Partnerek',
+        listKey: const ValueKey('budget-partner-distribution-list'),
+        emptyLabel: 'Nincs partner',
+        upperVerticalGestures: widget.upperVerticalGestures,
+        rows: _legendRows(frame.entries, selectedPartnerId),
+        donutDiameter: 150,
+        donutScale: .90,
+        expandDonutToFit: widget.expandDonutToFit,
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) => surface(
+        BudgetPartnerDistributionLayout.resolve(
+          availableSize: constraints.biggest,
+        ),
+      ),
     );
   }
+
+  List<Widget> _legendRows(
+    List<DashboardBudgetPartnerDistributionEntry> entries,
+    String? selectedPartnerId, {
+    double height = 22,
+  }) => <Widget>[
+    for (final entry in entries)
+      BudgetDistributionLegendRow(
+        key: ValueKey('budget-partner-distribution-row-${entry.partnerId}'),
+        id: entry.partnerId,
+        title: entry.title,
+        color: CategoryColorCatalog.resolve(entry.colorId).middleColor,
+        roundedPercent: entry.roundedPercent,
+        selected: entry.partnerId == selectedPartnerId,
+        height: height,
+        stateKey: ValueKey(
+          'budget-partner-distribution-row-'
+          '${entry.partnerId == selectedPartnerId ? 'selected' : 'idle'}-'
+          '${entry.partnerId}',
+        ),
+        onTap: _canCommitPartner
+            ? () => _selectPartner(entry, source: 'partnerList')
+            : null,
+      ),
+  ];
 }
 
 final class _PartnerVisualContext {

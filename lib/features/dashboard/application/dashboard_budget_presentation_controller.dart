@@ -12,8 +12,10 @@ import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import '../time_navigation/presentation/time_label_formatter.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
+import 'dashboard_budget_live_analysis_projection.dart';
 import 'dashboard_budget_target.dart';
 import 'dashboard_budget_limit_edit_controller.dart';
+import 'dashboard_live_interaction_coordinator.dart';
 import 'dashboard_budget_month_end_projection.dart';
 import 'dashboard_budget_period.dart';
 import 'dashboard_budget_scope_analysis.dart';
@@ -454,12 +456,17 @@ final class DashboardBudgetPresentationState {
   const DashboardBudgetPresentationState({
     required this.items,
     required this.selectedHandle,
+    this.liveAnalysis = const DashboardBudgetLiveAnalysisProjection.unavailable(
+      direction: LedgerDirection.expense,
+      targetHandle: 0,
+    ),
     required this.liveSelection,
     required this.partition,
   });
 
   final List<DashboardBudgetTargetPresentationItem> items;
   final int selectedHandle;
+  final DashboardBudgetLiveAnalysisProjection liveAnalysis;
   final DashboardBudgetLiveSelectionState liveSelection;
   final DashboardBudgetPartitionPresentation partition;
 
@@ -517,6 +524,7 @@ final class DashboardBudgetPresentationController
   DashboardBudgetPresentationController({
     required ValueListenable<List<FluviCategory>> categoryCollection,
     required ValueListenable<DashboardVisibleFrame?> visibleFrame,
+    DashboardLiveInteractionCoordinator? liveInteractions,
     required TransactionDirectionController transactionDirection,
     required PreparedBudgetLimitSnapshot? Function() snapshotForCurrentFrame,
     required LocalDate logicalAsOfDate,
@@ -524,6 +532,7 @@ final class DashboardBudgetPresentationController
     ValueChanged<int>? onInputUpdated,
   }) : _categoryCollection = categoryCollection,
        _visibleFrame = visibleFrame,
+       _liveInteractions = liveInteractions,
        _transactionDirection = transactionDirection,
        _snapshotForCurrentFrame = snapshotForCurrentFrame,
        _logicalAsOfDate = logicalAsOfDate,
@@ -532,6 +541,7 @@ final class DashboardBudgetPresentationController
        super(_initialState()) {
     _categoryCollection.addListener(_refreshCatalogForCategoryInput);
     _visibleFrame.addListener(_refreshForVisibleFrame);
+    _liveInteractions?.addListener(_refreshForLiveInteraction);
     _transactionDirection.addListener(_refreshCatalogForDirection);
     _limitEditController?.addListener(_refreshForOptimisticLimitEdit);
     _refreshCatalog(notifyCategoryInput: true);
@@ -539,6 +549,7 @@ final class DashboardBudgetPresentationController
 
   final ValueListenable<List<FluviCategory>> _categoryCollection;
   final ValueListenable<DashboardVisibleFrame?> _visibleFrame;
+  final DashboardLiveInteractionCoordinator? _liveInteractions;
   final TransactionDirectionController _transactionDirection;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
   final LocalDate _logicalAsOfDate;
@@ -550,6 +561,10 @@ final class DashboardBudgetPresentationController
     return DashboardBudgetPresentationState(
       items: const <DashboardBudgetTargetPresentationItem>[],
       selectedHandle: 0,
+      liveAnalysis: const DashboardBudgetLiveAnalysisProjection.unavailable(
+        direction: LedgerDirection.expense,
+        targetHandle: 0,
+      ),
       liveSelection: DashboardBudgetLiveSelectionState.unavailable(
         direction: LedgerDirection.expense,
         target: aggregate,
@@ -570,6 +585,7 @@ final class DashboardBudgetPresentationController
   int? _lastHeaderDiagnosticSignature;
   int? _lastProgressDiagnosticSignature;
   int? _lastPartitionDiagnosticSignature;
+  int? _lastLiveAnalysisDiagnosticSignature;
   int? _lastMonthEndProjectionDiagnosticSignature;
   int? _lastDirectionDomainDiagnosticSignature;
   PreparedBudgetLimitSnapshot? _typicalAverageCacheSnapshot;
@@ -616,6 +632,21 @@ final class DashboardBudgetPresentationController
     if (!identical(snapshot, _snapshotUsedForCatalog)) {
       // A new exact revision can carry a changed ordered category domain. Do
       // the structural join once, then keep semantic time ticks list-free.
+      _refreshCatalog();
+      return;
+    }
+    final catalog = _catalog;
+    if (catalog == null) return;
+    _publishHeaderOnly(catalog: catalog, selectedHandle: value.selectedHandle);
+  }
+
+  /// Live direct input owns Budget's foreground temporal projection. A
+  /// [DashboardVisibleFrame] is still kept for initial/revision
+  /// reconciliation, but scene coverage must never decide whether the header,
+  /// ring or partition follows an accepted temporal crossing.
+  void _refreshForLiveInteraction() {
+    final snapshot = _snapshotForCurrentFrame();
+    if (!identical(snapshot, _snapshotUsedForCatalog)) {
       _refreshCatalog();
       return;
     }
@@ -731,18 +762,28 @@ final class DashboardBudgetPresentationController
       for (final target in catalog.targets) _itemFor(target),
     ]);
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
-    final liveSelection = _liveSelectionFor(selectedTarget);
-    final partition = _partitionFor(catalog: catalog);
+    final liveAnalysis = _liveAnalysisFor(selectedHandle);
+    final liveSelection = _liveSelectionFor(selectedTarget, liveAnalysis);
+    final partition = _partitionFor(
+      catalog: catalog,
+      liveAnalysis: liveAnalysis,
+    );
     value = DashboardBudgetPresentationState(
       items: items,
       selectedHandle: selectedHandle,
+      liveAnalysis: liveAnalysis,
       liveSelection: liveSelection,
       partition: partition,
     );
-    _recordHeaderBinding(liveSelection);
-    _recordProgressBinding(liveSelection);
-    _recordMonthEndProjection(liveSelection);
-    _recordPartitionBinding(partition, selectedHandle: selectedHandle);
+    _recordLiveAnalysisBinding(liveAnalysis);
+    _recordHeaderBinding(liveSelection, liveAnalysis);
+    _recordProgressBinding(liveSelection, liveAnalysis);
+    _recordMonthEndProjection(liveSelection, liveAnalysis);
+    _recordPartitionBinding(
+      partition,
+      selectedHandle: selectedHandle,
+      liveAnalysis: liveAnalysis,
+    );
   }
 
   /// The hot semantic tick path: retained catalog + selected dense RAM cell.
@@ -753,18 +794,28 @@ final class DashboardBudgetPresentationController
     required int selectedHandle,
   }) {
     final selectedTarget = catalog.targetAtHandle(selectedHandle);
-    final liveSelection = _liveSelectionFor(selectedTarget);
-    final partition = _partitionFor(catalog: catalog);
+    final liveAnalysis = _liveAnalysisFor(selectedHandle);
+    final liveSelection = _liveSelectionFor(selectedTarget, liveAnalysis);
+    final partition = _partitionFor(
+      catalog: catalog,
+      liveAnalysis: liveAnalysis,
+    );
     value = DashboardBudgetPresentationState(
       items: value.items,
       selectedHandle: selectedHandle,
+      liveAnalysis: liveAnalysis,
       liveSelection: liveSelection,
       partition: partition,
     );
-    _recordHeaderBinding(liveSelection);
-    _recordProgressBinding(liveSelection);
-    _recordMonthEndProjection(liveSelection);
-    _recordPartitionBinding(partition, selectedHandle: selectedHandle);
+    _recordLiveAnalysisBinding(liveAnalysis);
+    _recordHeaderBinding(liveSelection, liveAnalysis);
+    _recordProgressBinding(liveSelection, liveAnalysis);
+    _recordMonthEndProjection(liveSelection, liveAnalysis);
+    _recordPartitionBinding(
+      partition,
+      selectedHandle: selectedHandle,
+      liveAnalysis: liveAnalysis,
+    );
   }
 
   DashboardBudgetTargetPresentationItem _itemFor(DashboardBudgetTarget target) {
@@ -790,15 +841,25 @@ final class DashboardBudgetPresentationController
     );
   }
 
+  DashboardBudgetLiveAnalysisProjection _liveAnalysisFor(int targetHandle) =>
+      DashboardBudgetLiveAnalysisProjection.resolve(
+        liveInteraction: _liveInteractions?.frame,
+        visibleFrame: _visibleFrame.value,
+        preparedCoreRevision: _snapshotForCurrentFrame()?.coreRevision,
+        selectedDirection: _direction,
+        selectedTargetHandle: targetHandle,
+      );
+
   DashboardBudgetLiveSelectionState _liveSelectionFor(
     DashboardBudgetTarget target,
+    DashboardBudgetLiveAnalysisProjection liveAnalysis,
   ) {
-    final frame = _visibleFrame.value;
     final snapshot = _snapshotForCurrentFrame();
     final title = _titleFor(target);
-    if (frame == null ||
+    if (!liveAnalysis.isAvailable ||
         snapshot == null ||
-        snapshot.coreRevision != frame.coreRevision ||
+        snapshot.coreRevision != liveAnalysis.coreRevision ||
+        liveAnalysis.targetHandle != target.handle ||
         target.handle >= snapshot.targetCountFor(_direction)) {
       _limitEditController?.invalidateIfContextChanged(null);
       _limitEditController?.invalidateYearIfContextChanged(null);
@@ -808,7 +869,7 @@ final class DashboardBudgetPresentationController
         title: title,
       );
     }
-    final visibleScope = frame.scope.timeScope;
+    final visibleScope = liveAnalysis.scope!;
     final preparedBudgetPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
       visibleScope,
     );
@@ -1174,18 +1235,18 @@ final class DashboardBudgetPresentationController
 
   DashboardBudgetPartitionPresentation _partitionFor({
     required DashboardBudgetTargetCatalog catalog,
+    required DashboardBudgetLiveAnalysisProjection liveAnalysis,
   }) {
-    final frame = _visibleFrame.value;
     final snapshot = _snapshotForCurrentFrame();
-    if (frame == null ||
+    if (!liveAnalysis.isAvailable ||
         snapshot == null ||
-        snapshot.coreRevision != frame.coreRevision) {
+        snapshot.coreRevision != liveAnalysis.coreRevision) {
       return DashboardBudgetPartitionPresentation.unavailable(
         direction: _direction,
       );
     }
     final period = DashboardBudgetPeriodResolver.fromTimeScope(
-      frame.scope.timeScope,
+      liveAnalysis.scope!,
     );
     final bank = snapshot.directionBank(_direction);
     final aggregate = catalog.targetAtHandle(0);
@@ -1391,12 +1452,42 @@ final class DashboardBudgetPresentationController
       ? const FinancialLimitAggregateTarget()
       : FinancialLimitCategoryTarget(target.category!.id);
 
-  void _recordHeaderBinding(DashboardBudgetLiveSelectionState header) {
-    final frame = _visibleFrame.value;
+  void _recordLiveAnalysisBinding(
+    DashboardBudgetLiveAnalysisProjection liveAnalysis,
+  ) {
     final signature = Object.hash(
-      frame?.coreRevision,
+      liveAnalysis.interactionGeneration,
+      liveAnalysis.coreRevision,
+      liveAnalysis.direction,
+      liveAnalysis.scope?.canonicalKey,
+      liveAnalysis.targetHandle,
+      liveAnalysis.isLiveInteraction,
+    );
+    if (_lastLiveAnalysisDiagnosticSignature == signature) return;
+    _lastLiveAnalysisDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_LIVE_ANALYSIS_BOUND',
+        coreRevision: liveAnalysis.coreRevision,
+        direction: liveAnalysis.direction.name,
+        scope:
+            'generation=${liveAnalysis.interactionGeneration} '
+            'scope=${liveAnalysis.scope?.canonicalKey ?? '-'} '
+            'targetHandle=${liveAnalysis.targetHandle} '
+            'source=${liveAnalysis.isLiveInteraction ? 'liveInteraction' : 'visibleFrame'}',
+      ),
+    );
+  }
+
+  void _recordHeaderBinding(
+    DashboardBudgetLiveSelectionState header,
+    DashboardBudgetLiveAnalysisProjection liveAnalysis,
+  ) {
+    final signature = Object.hash(
+      liveAnalysis.interactionGeneration,
+      liveAnalysis.coreRevision,
       _direction,
-      frame?.scope.timeScope,
+      liveAnalysis.scope,
       header.target.handle,
       header.title,
       header.analysisScopeLabel,
@@ -1410,21 +1501,24 @@ final class DashboardBudgetPresentationController
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'BUDGET_PREPARED_VALUE_MISSING',
-          coreRevision: frame?.coreRevision,
+          coreRevision: liveAnalysis.coreRevision,
           direction: _direction.name,
-          scope: 'targetHandle=${header.target.handle}',
+          scope:
+              'generation=${liveAnalysis.interactionGeneration} '
+              'targetHandle=${header.target.handle}',
         ),
       );
       return;
     }
-    final scope = frame?.scope.timeScope;
+    final scope = liveAnalysis.scope;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_HEADER_VALUE_BOUND',
-        coreRevision: frame?.coreRevision,
+        coreRevision: liveAnalysis.coreRevision,
         direction: _direction.name,
         totalMinor: header.displayNumeratorScaled100,
         scope:
+            'generation=${liveAnalysis.interactionGeneration} '
             'plane=${_planeDiagnosticName(scope)} '
             'targetHandle=${header.target.handle} '
             'displayNumeratorScaled100=${header.displayNumeratorScaled100} '
@@ -1458,10 +1552,13 @@ final class DashboardBudgetPresentationController
     );
   }
 
-  void _recordMonthEndProjection(DashboardBudgetLiveSelectionState selection) {
+  void _recordMonthEndProjection(
+    DashboardBudgetLiveSelectionState selection,
+    DashboardBudgetLiveAnalysisProjection liveAnalysis,
+  ) {
     final projection = selection.monthEndProjection;
     if (projection == null) return;
-    final scope = _visibleFrame.value?.scope.timeScope;
+    final scope = liveAnalysis.scope;
     final selectedDay = scope is DayScope ? scope.date : null;
     final signature = Object.hash(
       projection.key,
@@ -1481,6 +1578,7 @@ final class DashboardBudgetPresentationController
         direction: projection.key.direction.name,
         totalMinor: projection.actualDailyAverageScaled100,
         scope:
+            'generation=${liveAnalysis.interactionGeneration} '
             'targetHandle=${projection.key.targetHandle} '
             'year=${projection.key.year} month=${projection.key.month} '
             'projectionEpoch=${projection.key.coreRevision}:'
@@ -1505,9 +1603,13 @@ final class DashboardBudgetPresentationController
     );
   }
 
-  void _recordProgressBinding(DashboardBudgetLiveSelectionState selection) {
+  void _recordProgressBinding(
+    DashboardBudgetLiveSelectionState selection,
+    DashboardBudgetLiveAnalysisProjection liveAnalysis,
+  ) {
     final visual = selection.visual;
     final signature = Object.hash(
+      liveAnalysis.interactionGeneration,
       visual.targetHandle,
       visual.limitKey,
       visual.displayNumeratorScaled100,
@@ -1524,7 +1626,7 @@ final class DashboardBudgetPresentationController
         totalMinor: visual.displayNumeratorScaled100,
         direction: selection.direction.name,
         scope:
-            'direction=${selection.direction.name} '
+            'generation=${liveAnalysis.interactionGeneration} '
             'targetHandle=${visual.targetHandle} '
             'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
             'displayNumeratorScaled100=${visual.displayNumeratorScaled100 ?? '-'} '
@@ -1550,8 +1652,10 @@ final class DashboardBudgetPresentationController
   void _recordPartitionBinding(
     DashboardBudgetPartitionPresentation partition, {
     required int selectedHandle,
+    required DashboardBudgetLiveAnalysisProjection liveAnalysis,
   }) {
     final signature = Object.hash(
+      liveAnalysis.interactionGeneration,
       partition.direction,
       partition.period,
       partition.periodSliceIndex,
@@ -1578,6 +1682,7 @@ final class DashboardBudgetPresentationController
         direction: partition.direction.name,
         totalMinor: partition.aggregateActualScaled100,
         scope:
+            'generation=${liveAnalysis.interactionGeneration} '
             'period=${_budgetPeriodDiagnosticName(partition.period)} '
             'slice=${partition.periodSliceIndex ?? '-'} '
             'aggregateBudgetLimitScaled100=${partition.effectiveAggregateLimitScaled100 ?? '-'} '
@@ -1620,6 +1725,7 @@ final class DashboardBudgetPresentationController
   void dispose() {
     _categoryCollection.removeListener(_refreshCatalogForCategoryInput);
     _visibleFrame.removeListener(_refreshForVisibleFrame);
+    _liveInteractions?.removeListener(_refreshForLiveInteraction);
     _transactionDirection.removeListener(_refreshCatalogForDirection);
     _limitEditController?.removeListener(_refreshForOptimisticLimitEdit);
     super.dispose();
