@@ -178,7 +178,8 @@ only to the existing edit controller.
   source root causes and truthful statuses.
 - [x] Run all targeted and protected tests in Ubuntu/proot, analyzer and
   `git diff --check`.
-- [ ] Inspect diff/status, commit focused production + tests/docs, push
-  `separated-core-modes`.
-- [ ] Monitor Actions for that exact SHA and download the normal human APK to
-  `/storage/emulated/0/Download/fluvi`; verify SHA-256.
+- [x] Inspect diff/status, commit focused production + tests/docs, push
+  `separated-core-modes` (`78fa52fdc56f6354dc18b2904ebe401f4ede4bf2`).
+- [x] Monitor Actions for that exact SHA and download the normal human APK to
+  `/storage/emulated/0/Download/fluvi`; verify SHA-256
+  (`24d130f4c46e881ce49c1a0556864176a9d38001a1cdffd6a71bc3b6c9e58759`).

@@ -28,7 +28,7 @@ No physical Android acceptance is claimed by this document.
 | NAV-02 | BottomNav compositing | fill and optional border consume one top path; one final non-interactive stroke visible both FAB sides | Stack/raster rounded×straight matrix | DONE |
 | PRF-01 | Milestone contracts | Prepared temporal/data paths, bounded caches, one LogBox controller/position and no hot paint text layout remain intact | protected suites + source inspection | PARTIAL — protected run has one inherited Scroll-milestone failure documented below |
 | DOC-01 | User documentation | Evidence includes r45, source root causes, scope semantics and no false device claim | checklist/plan review | DONE |
-| DEL-01 | User delivery | Fresh verify, commit/push, matching successful human APK and SHA-256 downloaded | commands + Actions evidence | NOT DONE |
+| DEL-01 | User delivery | Fresh verify, commit/push, matching successful human APK and SHA-256 downloaded | commands + Actions evidence | DONE — exact production SHA and full CI evidence recorded below |
 
 ## Factual verification notes
 
@@ -56,3 +56,13 @@ No physical Android acceptance is claimed by this document.
   isolated run failed in the clean `c5f68c4d` reference worktree. It is
   inherited and outside this delivery's files; it remains a required follow-up
   before human physical acceptance.
+- Production implementation commit `78fa52fdc56f6354dc18b2904ebe401f4ede4bf2`
+  was pushed to `origin/separated-core-modes`. GitHub Actions
+  `Fluvi Verification` run `33128004554` completed successfully: curated
+  Flutter tests, native/core tests, human APK build, and the A–J dashboard
+  profile gate (26m06s) all passed.
+- The exact human diagnostic APK for that production SHA was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_78fa52f.apk`.
+  Its SHA-256 is
+  `24d130f4c46e881ce49c1a0556864176a9d38001a1cdffd6a71bc3b6c9e58759`.
+  This is build evidence only; physical Android acceptance remains unclaimed.
