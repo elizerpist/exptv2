@@ -18,8 +18,8 @@ import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
 /// Budget card1's presentation-only five-position target rail. Aggregate and
-/// real-category targets share the same prepared motion/render path, while
-/// only the headless Budget presentation controller owns semantic selection.
+/// real-category targets share the same prepared motion/render path; the
+/// parent semantic-commit coordinator owns their visible selection.
 class BudgetTargetAvatarRail extends StatefulWidget {
   const BudgetTargetAvatarRail({
     super.key,
@@ -39,12 +39,12 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// Consumers may publish the corresponding prepared visible frame, but must
   /// use their existing stale generation gate rather than perform pixel-rate
   /// data work here.
-  final ValueChanged<DashboardBudgetPresentationState>? onTargetPreview;
+  final ValueChanged<int>? onTargetPreview;
 
   /// A committed consumer, such as the LogBox focus/query bridge. This is
   /// intentionally separate from [onTargetPreview]: settlement promotes the
   /// last accepted prepared target and must not manufacture a second query.
-  final ValueChanged<DashboardBudgetPresentationState>? onTargetSettled;
+  final ValueChanged<int>? onTargetSettled;
 
   /// The one Core-owned foreground work gate for physical avatar motion.
   /// The rail remains the only gesture/carousel owner.
@@ -216,8 +216,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _publishPreviewTargetHandle(int targetHandle) {
     if (!mounted) return;
     if (_activeMotionOrigin != null) _motionPreviewPublications += 1;
-    widget.presentation.setTargetHandle(targetHandle);
-    widget.onTargetPreview?.call(widget.presentation.value);
+    widget.onTargetPreview?.call(targetHandle);
   }
 
   void _onMotionStarted(CenteredCarouselMotionOrigin origin) {
@@ -242,7 +241,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (origin != null &&
         !(widget.navigationController?.isExplicitTargetIntentInFlight ??
             false)) {
-      widget.onTargetSettled?.call(widget.presentation.value);
+      widget.onTargetSettled?.call(
+        _items[_modulo(logicalIndex, _items.length)].targetHandle,
+      );
     }
   }
 

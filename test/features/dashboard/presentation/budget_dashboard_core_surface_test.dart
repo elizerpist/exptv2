@@ -221,7 +221,11 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsNothing,
+        findsOneWidget,
+        reason:
+            'G4: the lower moving card keeps its own physical shell; the '
+            'common Budget envelope may be behind it but may not become the '
+            'Card2 interior during cascade motion.',
       );
     },
   );

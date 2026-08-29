@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_scope_analysis.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_cool_source.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
@@ -738,6 +743,118 @@ void main() {
     expect(diagnostics.last.scope, contains('driver=userGlobal'));
     expect(diagnostics.last.scope, contains('positionPct=0'));
     expect(diagnostics.last.scope, contains('windowWidthPct=100'));
+  });
+
+  test('G5: committed Category target owns the V1 Header palette identity', () {
+    final catalog = DashboardBudgetTargetCatalog.fromCategories(
+      const <DashboardBudgetCategoryVisual>[
+        DashboardBudgetCategoryVisual(
+          id: 'food',
+          displayName: 'Food',
+          colorId: 'color_12',
+          iconId: 'food',
+        ),
+        DashboardBudgetCategoryVisual(
+          id: 'travel',
+          displayName: 'Travel',
+          colorId: 'color_03',
+          iconId: 'travel',
+        ),
+      ],
+    );
+    final target = catalog.targetAtHandle(1);
+    DashboardBudgetPresentationState categoryState(
+      DashboardBudgetTarget target, {
+      required int spentScaled100,
+      required int limitScaled100,
+    }) => DashboardBudgetPresentationState(
+      items: const <DashboardBudgetTargetPresentationItem>[],
+      selectedHandle: target.handle,
+      liveSelection: DashboardBudgetLiveSelectionState.available(
+        direction: LedgerDirection.expense,
+        target: target,
+        title: target.category!.displayName,
+        scopeAnalysis: DashboardBudgetMonthAnalysis(
+          monthlyActualScaled100: spentScaled100,
+          resolvedMonthlyLimitScaled100: limitScaled100,
+        ),
+        limitKey: null,
+        editContext: null,
+        coreRevision: 1,
+        analysisScopeLabel: 'MONTH',
+        analysisMode: DashboardBudgetAnalysisMode.actualUtilization,
+      ),
+      partition: const DashboardBudgetPartitionPresentation.unavailable(
+        direction: LedgerDirection.expense,
+      ),
+    );
+    final budget = ValueNotifier<DashboardBudgetPresentationState>(
+      categoryState(target, spentScaled100: 50000, limitScaled100: 100000),
+    );
+    final visual = DashboardHeaderVisualController(vsync: const TestVSync());
+    visual.selectBudgetHeaderColorSource(
+      DashboardBudgetHeaderColorSource.category,
+    );
+    final policy = DashboardBudgetHeaderColorPolicy(
+      tuning: visual.tuning,
+      budgetPresentation: budget,
+    );
+    addTearDown(() {
+      policy.dispose();
+      visual.dispose();
+      budget.dispose();
+    });
+
+    expect(policy.value.budgetCoolWindow, isNull);
+    expect(policy.value.budgetCategoryWindow!.scale.id, 'color_12');
+    expect(
+      policy.value.budgetCategoryWindow!.colorMid,
+      DashboardHeaderCategoryCompressedV1Scale.forColorId(
+        'color_12',
+      ).samplePercent(50),
+    );
+
+    budget.value = categoryState(
+      target,
+      spentScaled100: 0,
+      limitScaled100: 100000,
+    );
+    expect(policy.value.budgetCategoryWindow!.centerPercent, 100);
+
+    final travel = catalog.targetAtHandle(2);
+    budget.value = categoryState(
+      travel,
+      spentScaled100: 100000,
+      limitScaled100: 100000,
+    );
+    expect(policy.value.budgetCategoryWindow!.scale.id, 'color_03');
+    expect(policy.value.budgetCategoryWindow!.centerPercent, 0);
+
+    visual.selectBudgetHeaderColorSource(DashboardBudgetHeaderColorSource.cool);
+    expect(policy.value.budgetCoolWindow, isNotNull);
+    expect(policy.value.budgetCategoryWindow, isNull);
+    visual.selectBudgetHeaderColorSource(
+      DashboardBudgetHeaderColorSource.category,
+    );
+
+    budget.value = DashboardBudgetPresentationState(
+      items: const <DashboardBudgetTargetPresentationItem>[],
+      selectedHandle: 0,
+      liveSelection: DashboardBudgetLiveSelectionState.unavailable(
+        direction: LedgerDirection.expense,
+        target: const DashboardBudgetTarget.aggregate(),
+        title: 'Budget',
+      ),
+      partition: const DashboardBudgetPartitionPresentation.unavailable(
+        direction: LedgerDirection.expense,
+      ),
+    );
+    expect(
+      policy.value.budgetCoolWindow,
+      isNotNull,
+      reason: 'Aggregate retains the approved Cool material.',
+    );
+    expect(policy.value.budgetCategoryWindow, isNull);
   });
   testWidgets('phase ticks repaint only the dedicated Header visual lane', (
     tester,

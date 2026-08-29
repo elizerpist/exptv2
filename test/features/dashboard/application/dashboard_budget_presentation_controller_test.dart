@@ -197,6 +197,67 @@ void main() {
     },
   );
 
+  test(
+    'G2: an uncommitted Budget target/query mismatch cannot replace the last compatible Header frame',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime.utc(2026, 1, 1),
+        initialDirection: LedgerDirection.expense,
+      );
+      final live = DashboardLiveInteractionCoordinator();
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        liveInteractions: live,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
+      );
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(navigation.dispose);
+      addTearDown(live.dispose);
+      addTearDown(presentation.dispose);
+
+      presentation.setTargetHandle(1);
+      final committed = presentation.value;
+      expect(committed.header.target.category?.id, 'food');
+      expect(committed.liveSelection.isAvailable, isTrue);
+
+      // This is the r51 failure shape: a new target authority is accepted,
+      // but the visible Query still represents a different (aggregate) frame.
+      live.accept(
+        source: DashboardLiveInteractionSource.budgetAvatar,
+        coreRevision: 7,
+        direction: LedgerDirection.expense,
+        temporalCandidate: navigation.state,
+        category: null,
+        partner: null,
+        normalizedSearch: null,
+        budgetTargetHandle: 0,
+      );
+
+      expect(
+        presentation.value.header.target.category?.id,
+        'food',
+        reason:
+            'A live frame with an aggregate Query facet may not publish an '
+            'unavailable or different Header target before one compatible '
+            'semantic selection commit exists.',
+      );
+      expect(presentation.value.liveSelection.isAvailable, isTrue);
+      expect(presentation.value.selectedLimitVisual.paintsProgressChrome, isTrue);
+    },
+  );
+
   test('a live temporal interaction replaces retained scene scope for Budget '
       'analysis before that scene is covered', () {
     final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[

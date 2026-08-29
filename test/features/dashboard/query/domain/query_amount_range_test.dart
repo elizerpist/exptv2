@@ -1,0 +1,70 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+
+void main() {
+  const domain = QueryMenuAmountDomain(
+    minimumAmountScaled100: 0,
+    maximumAmountScaled100: 900000,
+  );
+
+  CurrentLedgerQueryScope scope({
+    Map<String, Object?> refinements = const {},
+  }) => CurrentLedgerQueryScope(
+    direction: LedgerDirection.expense,
+    timeScope: const AllTimeScope(),
+    refinements: refinements,
+  );
+
+  test('G3: the two-ended range clamps stored bounds to its data domain', () {
+    final values = QueryAmountRange.resolve(
+      refinements: const <String, Object?>{
+        QueryAmountRange.minimumRefinementKey: 1,
+        QueryAmountRange.maximumRefinementKey: 9999999,
+      },
+      amountDomain: domain,
+    );
+
+    expect(values.minimumScaled100, 100000);
+    expect(values.maximumScaled100, 900000);
+    expect(values.lowerScaled100, 100000);
+    expect(values.upperScaled100, 900000);
+  });
+
+  test(
+    'G3: an open upper end remains absent while a narrow range writes both bounds',
+    () {
+      final allTheWayUp = QueryAmountRange.apply(
+        scope(),
+        values: const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 900000,
+          lowerScaled100: 200000,
+          upperScaled100: 900000,
+        ),
+        amountDomain: domain,
+      );
+      expect(allTheWayUp.refinements, const <String, Object?>{
+        QueryAmountRange.minimumRefinementKey: 200000,
+      });
+
+      final narrowed = QueryAmountRange.apply(
+        allTheWayUp,
+        values: const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 900000,
+          lowerScaled100: 300000,
+          upperScaled100: 600000,
+        ),
+        amountDomain: domain,
+      );
+      expect(narrowed.refinements, const <String, Object?>{
+        QueryAmountRange.minimumRefinementKey: 300000,
+        QueryAmountRange.maximumRefinementKey: 600000,
+      });
+    },
+  );
+}

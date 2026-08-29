@@ -8,11 +8,12 @@ import '../application/query_composer_controller.dart';
 import '../application/query_menu_data_controller.dart';
 import '../application/saved_query_controller.dart';
 import '../domain/current_ledger_query_scope.dart';
-import '../domain/query_amount_threshold.dart';
+import '../domain/query_amount_range.dart';
 import '../domain/query_menu_data.dart';
 import '../domain/query_temporal_presets.dart';
 import '../domain/query_temporal_filter.dart';
 import 'facet_picker_morph_host.dart';
+import 'query_amount_range_control.dart';
 import 'query_menu_formatters.dart';
 import 'query_menu_tokens.dart';
 
@@ -286,29 +287,15 @@ final class _QueryMenuSheetState extends State<QueryMenuSheet> {
                           draft: _draft,
                           onToggle: () =>
                               setState(() => _showAdvanced = !_showAdvanced),
-                          onRangeChanged: (min, max, commit) {
-                            final refinements = <String, Object?>{
-                              ..._draft.refinements,
-                            };
+                          onRangeChanged: (values, commit) {
                             final domain = _data?.amountDomain;
                             if (domain == null) return;
-                            final threshold = QueryAmountThreshold.apply(
+                            final next = QueryAmountRange.apply(
                               _draft,
-                              valueScaled100: min,
+                              values: values,
                               amountDomain: domain,
                             );
-                            refinements
-                              ..clear()
-                              ..addAll(threshold.refinements);
-                            if (max >= domain.maximumAmountScaled100) {
-                              refinements.remove('maximumAmountScaled100');
-                            } else {
-                              refinements['maximumAmountScaled100'] = max;
-                            }
-                            _edit(
-                              _draft.copyWith(refinements: refinements),
-                              refresh: commit,
-                            );
+                            _edit(next, refresh: commit);
                           },
                         ),
                       ],
@@ -1187,21 +1174,16 @@ final class _AdvancedDisclosure extends StatelessWidget {
   final QueryMenuData? data;
   final CurrentLedgerQueryScope draft;
   final VoidCallback onToggle;
-  final void Function(int min, int max, bool commit) onRangeChanged;
+  final void Function(QueryAmountRangeValues values, bool commit)
+  onRangeChanged;
 
   @override
   Widget build(BuildContext context) {
     final domain = data?.amountDomain;
-    final threshold = QueryAmountThreshold.resolve(
-      scope: draft,
+    final range = QueryAmountRange.resolve(
+      refinements: draft.refinements,
       amountDomain: domain,
     );
-    final lower = threshold.valueScaled100;
-    final rawUpper =
-        _refinement(draft, 'maximumAmountScaled100') ??
-        domain?.maximumAmountScaled100 ??
-        threshold.maximumScaled100;
-    final upper = rawUpper.clamp(lower, threshold.maximumScaled100).toInt();
     return Container(
       decoration: const BoxDecoration(
         color: QueryMenuTokens.sectionSurface,
@@ -1273,181 +1255,14 @@ final class _AdvancedDisclosure extends StatelessWidget {
             ),
           ),
           if (open && domain != null)
-            _AmountRange(
-              minimum: threshold.minimumScaled100,
-              maximum: threshold.maximumScaled100,
-              lower: lower,
-              upper: upper,
-              onChangeEnd: (range) =>
-                  onRangeChanged(range.start.round(), range.end.round(), true),
+            QueryAmountRangeControl(
+              values: range,
+              onRangeCommitted: (values) => onRangeChanged(values, true),
             ),
         ],
       ),
     );
   }
-
-  static int? _refinement(CurrentLedgerQueryScope scope, String key) {
-    final value = scope.refinements[key];
-    return value is num ? value.toInt() : null;
-  }
-}
-
-/// Keeps pointer-move feedback frame-local.  The canonical draft is changed
-/// only at the semantic range-end boundary, so slider dragging never causes a
-/// database/facet refresh or a rebuild of the complete query sheet per frame.
-final class _AmountRange extends StatefulWidget {
-  const _AmountRange({
-    required this.minimum,
-    required this.maximum,
-    required this.lower,
-    required this.upper,
-    required this.onChangeEnd,
-  });
-
-  final int minimum;
-  final int maximum;
-  final int lower;
-  final int upper;
-  final ValueChanged<RangeValues> onChangeEnd;
-
-  @override
-  State<_AmountRange> createState() => _AmountRangeState();
-}
-
-final class _AmountRangeState extends State<_AmountRange> {
-  late RangeValues _localValues;
-
-  @override
-  void initState() {
-    super.initState();
-    _localValues = _initialValues(widget);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AmountRange oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // A draft loaded/reset from elsewhere becomes the next local source of
-    // truth.  During a drag the parent does not change, preserving smooth
-    // local feedback.
-    if (oldWidget.minimum != widget.minimum ||
-        oldWidget.maximum != widget.maximum ||
-        oldWidget.lower != widget.lower ||
-        oldWidget.upper != widget.upper) {
-      _localValues = _initialValues(widget);
-    }
-  }
-
-  static RangeValues _initialValues(_AmountRange widget) {
-    final usableMaximum = widget.maximum <= widget.minimum
-        ? widget.minimum + 1
-        : widget.maximum;
-    final lower = widget.lower.clamp(widget.minimum, usableMaximum).toDouble();
-    final upper = widget.upper.clamp(lower, usableMaximum).toDouble();
-    return RangeValues(lower, upper);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final usableMaximum = widget.maximum <= widget.minimum
-        ? widget.minimum + 1
-        : widget.maximum;
-    final values = _localValues;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-      padding: const EdgeInsets.all(14),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.all(Radius.circular(19)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Összeg',
-            style: TextStyle(
-              color: QueryMenuTokens.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _AmountValue(
-                label: 'Minimum',
-                value: QueryMenuFormatters.money(values.start.round()),
-              ),
-              _AmountValue(
-                label: 'Maximum',
-                value: QueryMenuFormatters.money(values.end.round()),
-                alignEnd: true,
-              ),
-            ],
-          ),
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: QueryMenuTokens.selectionEnd,
-              inactiveTrackColor: QueryMenuTokens.controlSurface,
-              rangeThumbShape: const RoundRangeSliderThumbShape(
-                enabledThumbRadius: 10,
-              ),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-            ),
-            child: RangeSlider(
-              values: values,
-              min: widget.minimum.toDouble(),
-              max: usableMaximum.toDouble(),
-              onChanged: (next) => setState(() => _localValues = next),
-              onChangeEnd: widget.onChangeEnd,
-            ),
-          ),
-          const Text(
-            'A két fogantyút befelé húzva szűkítheted az összeghatárt.',
-            style: TextStyle(color: QueryMenuTokens.textSecondary, fontSize: 9),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-final class _AmountValue extends StatelessWidget {
-  const _AmountValue({
-    required this.label,
-    required this.value,
-    this.alignEnd = false,
-  });
-
-  final String label;
-  final String value;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: alignEnd
-        ? CrossAxisAlignment.end
-        : CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          color: QueryMenuTokens.textSecondary,
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        value,
-        style: const TextStyle(
-          color: QueryMenuTokens.textPrimary,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    ],
-  );
 }
 
 final class _SavedQueriesPanel extends StatefulWidget {

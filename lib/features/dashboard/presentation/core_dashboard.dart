@@ -27,7 +27,7 @@ import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import '../query/domain/ledger_direction.dart';
-import '../query/domain/query_amount_threshold.dart';
+import '../query/domain/query_amount_range.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -198,6 +198,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
     _budgetHeaderColorPolicy = DashboardBudgetHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
+      budgetPresentation: _budgetPresentation,
     );
     _mindHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
       DashboardModePaletteResolver.resolve(
@@ -215,6 +216,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
     _budgetDrilldown = DashboardBudgetLogboxDrilldownCoordinator(
       core: controller,
+      presentation: _budgetPresentation,
     );
     _budgetRhythm = DashboardSpendingRhythmController(
       presentation: _budgetPresentation,
@@ -243,8 +245,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     _onBudgetDistributionVisibleFrame();
     _budgetAvatarRailController = BudgetTargetAvatarRailController(
       onExplicitTargetIntent: (request) => unawaited(
-        _budgetDrilldown.commitBudgetTarget(
-          state: _budgetPresentation.value,
+        _budgetDrilldown.commitBudgetTargetHandle(
+          targetHandle: request.targetHandle,
           source: request.source.name,
         ),
       ),
@@ -608,12 +610,12 @@ class _CoreDashboardState extends State<CoreDashboard>
                                           _budgetHeaderColorPolicy,
                                       mindHeaderVisualFrame:
                                           _mindHeaderColorPolicy,
-                                      mindQueryThresholdBounds:
-                                          _mindQueryThresholdBounds,
-                                      mindQueryThresholdChanges:
+                                      mindQueryAmountRange:
+                                          _mindQueryAmountRange,
+                                      mindQueryAmountRangeChanges:
                                           controller.currentQuery,
-                                      onMindQueryThresholdCommitted:
-                                          _commitMindQueryThreshold,
+                                      onMindQueryAmountRangeCommitted:
+                                          _commitMindQueryAmountRange,
                                       budgetPresentation: _budgetPresentation,
                                       budgetLimitEditController:
                                           _budgetLimitEdit,
@@ -998,31 +1000,31 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
   }
 
-  QueryAmountThresholdBounds _mindQueryThresholdBounds() {
+  QueryAmountRangeValues _mindQueryAmountRange() {
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
-    return QueryAmountThreshold.resolve(
-      scope: controller.currentQuery.scopeFor(direction),
+    return QueryAmountRange.resolve(
+      refinements: controller.currentQuery.scopeFor(direction).refinements,
       amountDomain: controller.currentQuery
           .facetPresentationFor(direction)
           ?.amountDomain,
     );
   }
 
-  void _commitMindQueryThreshold(int valueScaled100) {
+  void _commitMindQueryAmountRange(QueryAmountRangeValues values) {
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
     final current = controller.currentQuery.scopeFor(direction);
-    final next = QueryAmountThreshold.apply(
+    final next = QueryAmountRange.apply(
       current,
-      valueScaled100: valueScaled100,
+      values: values,
       amountDomain: controller.currentQuery
           .facetPresentationFor(direction)
           ?.amountDomain,
     );
     if (next == current) return;
     unawaited(
-      controller.applyQuery(next, facetPresentationSource: 'mindThreshold'),
+      controller.applyQuery(next, facetPresentationSource: 'mindAmountRange'),
     );
   }
 

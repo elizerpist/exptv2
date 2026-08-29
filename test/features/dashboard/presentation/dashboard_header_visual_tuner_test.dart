@@ -1,4 +1,5 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
@@ -389,6 +390,12 @@ void main() {
     expect(find.text('Kategória színskálák'), findsNothing);
     expect(controller.tuning.value.budgetCool.positionPercent, 50);
     expect(controller.tuning.value.budgetCool.windowWidthPercent, 28);
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-colour-source-category'),
+      ),
+      findsOneWidget,
+    );
 
     final positionSlider = tester.widget<Slider>(
       find.descendant(
@@ -429,6 +436,37 @@ void main() {
       isNotNull,
       reason: 'Position stays directly controllable at a 100% window.',
     );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-colour-source-category'),
+      ),
+    );
+    await tester.pump();
+    expect(
+      controller.tuning.value.budgetCategory.source,
+      DashboardBudgetHeaderColorSource.category,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-cool-position-slider'),
+      ),
+      findsNothing,
+      reason: 'Category position is data-derived, never a second user value.',
+    );
+    final categoryWidth = tester.widget<Slider>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>(
+            'dashboard-header-category-window-width-slider',
+          ),
+        ),
+        matching: find.byType(Slider),
+      ),
+    );
+    categoryWidth.onChanged!(42);
+    await tester.pump();
+    expect(controller.tuning.value.budgetCategory.windowWidthPercent, 42);
 
     final pulseTrigger = find.byKey(
       const ValueKey<String>('dashboard-header-pulse-trigger'),

@@ -381,8 +381,8 @@ void main() {
               child: BudgetTargetAvatarRail(
                 presentation: presentation,
                 navigationController: distributionRail,
-                onTargetPreview: (state) {
-                  previewIntents.add(state.selectedHandle);
+                onTargetPreview: (targetHandle) {
+                  previewIntents.add(targetHandle);
                 },
               ),
             ),
@@ -397,11 +397,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       await firstRoute;
-      expect(presentation.value.selectedHandle, 7);
-
-      final crossings = <int>[];
-      presentation.addListener(
-        () => crossings.add(presentation.value.selectedHandle),
+      expect(
+        presentation.value.selectedHandle,
+        0,
+        reason:
+            'The rail is presentation-only. Its parent semantic commit owns '
+            'when the Budget Header target may change with the Query frame.',
       );
       final aggregateRoute = distributionRail.animateToTargetHandle(
         0,
@@ -415,7 +416,6 @@ void main() {
       await tester.pumpAndSettle();
       await aggregateRoute;
 
-      expect(crossings, containsAllInOrder(<int>[8, 9, 0]));
       expect(
         previewIntents,
         containsAllInOrder(<int>[8, 9, 0]),
@@ -453,8 +453,8 @@ void main() {
                   height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
                   child: BudgetTargetAvatarRail(
                     presentation: harness.presentation,
-                    onTargetPreview: (state) {
-                      avatarPreviews.add(state.selectedHandle);
+                    onTargetPreview: (targetHandle) {
+                      avatarPreviews.add(targetHandle);
                     },
                     onMotionActiveChanged: (active) {
                       avatarBallisticActive = active;
@@ -565,8 +565,8 @@ void main() {
               height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
               child: BudgetTargetAvatarRail(
                 presentation: presentation,
-                onTargetPreview: (state) => previews.add(state.selectedHandle),
-                onTargetSettled: (state) => committed.add(state.selectedHandle),
+                onTargetPreview: (targetHandle) => previews.add(targetHandle),
+                onTargetSettled: (targetHandle) => committed.add(targetHandle),
               ),
             ),
           ),
@@ -592,7 +592,7 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      expect(committed, <int>[presentation.value.selectedHandle]);
+      expect(committed, <int>[previews.last]);
     },
   );
 
@@ -628,7 +628,7 @@ void main() {
               height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
               child: BudgetTargetAvatarRail(
                 presentation: presentation,
-                onTargetSettled: (state) => committed.add(state.selectedHandle),
+                onTargetSettled: (targetHandle) => committed.add(targetHandle),
               ),
             ),
           ),
@@ -644,7 +644,7 @@ void main() {
       expect(committed, isEmpty);
 
       await tester.pumpAndSettle();
-      expect(committed, <int>[presentation.value.selectedHandle]);
+      expect(committed, hasLength(1));
     },
   );
 
@@ -686,7 +686,7 @@ void main() {
               child: BudgetTargetAvatarRail(
                 presentation: presentation,
                 navigationController: navigation,
-                onTargetSettled: (state) => settled.add(state.selectedHandle),
+                onTargetSettled: (targetHandle) => settled.add(targetHandle),
               ),
             ),
           ),

@@ -10,8 +10,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_controller.d
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
-import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
+import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
@@ -129,13 +129,19 @@ void main() {
         );
         expect(body.top, 374);
         expect(body.bottom, 674);
-        final threshold = find.byKey(const ValueKey('mind-query-threshold'));
-        expect(threshold, findsOneWidget);
+        final range = find.byKey(const ValueKey('mind-query-amount-range'));
+        expect(range, findsOneWidget);
+        expect(tester.widget<QueryAmountRangeControl>(range), isNotNull);
         expect(
-          tester.getRect(threshold).bottom,
+          find.descendant(of: range, matching: find.byType(RangeSlider)),
+          findsOneWidget,
+          reason: 'G3: Mind renders the actual two-ended Query control.',
+        );
+        expect(
+          tester.getRect(range).bottom,
           lessThanOrEqualTo(body.bottom),
           reason:
-              'The shared Query threshold stays inside the first Mind card '
+              'The shared Query amount range stays inside the first Mind card '
               'rather than adding an independent dashboard layer.',
         );
       } else {
@@ -230,13 +236,11 @@ void main() {
       );
       expect(find.byType(BudgetDistributionCardShell), findsOneWidget);
       expect(
-        tester
-            .widget<BudgetDistributionCardShell>(
-              find.byType(BudgetDistributionCardShell),
-            )
-            .contentCardStyle
-            ?.value,
-        BudgetContentLayout.split,
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
+        findsOneWidget,
+        reason:
+            'G4: Card2 owns its physical shell independently of the parent '
+            'Budget composition style.',
       );
       expect(
         find.descendant(

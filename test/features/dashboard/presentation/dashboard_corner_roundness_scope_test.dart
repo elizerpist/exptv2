@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
-import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -116,7 +115,6 @@ void main() {
       final frame = ValueNotifier<DashboardHeaderVisualFrame>(
         DashboardHeaderVisualFrame.staticTone(Colors.blue),
       );
-      final cardStyle = BudgetContentCardStyleController();
       const headerBounds = DashboardBounds(
         left: 0,
         top: 0,
@@ -155,7 +153,6 @@ void main() {
                     width: 320,
                     height: 120,
                     child: BudgetDistributionCardShell(
-                      contentCardStyle: cardStyle,
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -213,7 +210,6 @@ void main() {
       roundness.dispose();
       visual.dispose();
       frame.dispose();
-      cardStyle.dispose();
     },
   );
 }

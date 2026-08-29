@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -15,6 +17,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
@@ -369,6 +372,87 @@ void main() {
   );
 
   test(
+    'G2: Budget Header selection changes only with its matching visible Query frame',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      addTearDown(categories.dispose);
+      final snapshot = _focusBudgetSnapshot();
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      addTearDown(budget.dispose);
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final foodHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'food',
+      );
+      expect(foodHandle, greaterThan(0));
+      expect(budget.value.selectedHandle, 0);
+
+      final visibleCategoriesAtHeaderCommit = <Set<String>>[];
+      budget.addListener(() {
+        if (budget.value.selectedHandle == foodHandle) {
+          visibleCategoriesAtHeaderCommit.add(
+            core.visibleFrames.value!.scope.categoryIds,
+          );
+        }
+      });
+
+      expect(
+        await drilldown.commitBudgetTargetHandle(
+          targetHandle: foodHandle,
+          source: 'test',
+        ),
+        isTrue,
+      );
+
+      expect(core.focus.state?.category?.id, 'food');
+      expect(core.liveInteractions.frame?.category?.id, 'food');
+      expect(core.visibleFrames.value!.scope.categoryIds, <String>{'food'});
+      expect(budget.value.selectedHandle, foodHandle);
+      expect(visibleCategoriesAtHeaderCommit, <Set<String>>[
+        <String>{'food'},
+      ]);
+    },
+  );
+
+  test(
     'Budget avatar preview crossings publish the shared amount, count and Ledger lanes together',
     () async {
       final repository = _FocusSeedRepository();
@@ -557,7 +641,7 @@ void main() {
   );
 
   test(
-    'Budget avatar crossing starts focused LogBox publication while motion is active',
+    'G1: Avatar crossings publish prepared semantic frames without starting rich scene work during motion',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -578,7 +662,19 @@ void main() {
       final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
 
       core.beginBudgetAvatarMotion();
-      final preview = drilldown.previewBudgetTarget(
+      final previewA = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'utilities',
+          displayName: 'Utilities',
+        ),
+      );
+      final previewB = drilldown.previewBudgetTarget(
+        state: _budgetAvatarPreviewState(
+          categoryId: 'food',
+          displayName: 'Food',
+        ),
+      );
+      final previewC = drilldown.previewBudgetTarget(
         state: _budgetAvatarPreviewState(
           categoryId: 'utilities',
           displayName: 'Utilities',
@@ -589,17 +685,25 @@ void main() {
       expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 500);
       expect(
         scenePrepareCalls,
-        greaterThan(0),
+        0,
         reason:
-            'One accepted avatar crossing is foreground interaction. Its '
-            'focused LogBox presentation may prepare and publish while the '
-            'physical carousel is still moving; it must not wait for idle.',
+            'The crossing path may derive and atomically publish a retained '
+            'prepared semantic frame, but it must not occupy the UI isolate '
+            'with rich scene preparation while the Avatar rail is ballistic.',
       );
 
       core.endBudgetAvatarMotion();
       await pumpEventQueue();
 
-      await preview;
+      await Future.wait(<Future<bool>>[previewA, previewB, previewC]);
+      expect(
+        scenePrepareCalls,
+        1,
+        reason:
+            'Motion end admits only the latest bounded scene augmentation, '
+            'rather than one UI-isolate prepare per Avatar crossing.',
+      );
+      expect(core.focus.state?.category?.id, 'utilities');
       expect(repository.prepareCalls, 1);
     },
   );
@@ -984,6 +1088,24 @@ DashboardBudgetPresentationState _budgetAggregatePreviewState() =>
         direction: LedgerDirection.income,
       ),
     );
+
+PreparedBudgetLimitSnapshot _focusBudgetSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    42,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['utilities', 'food'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
 
 final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   _FocusSeedRepository({List<DashboardLedgerEntry>? rows}) : _rows = rows;

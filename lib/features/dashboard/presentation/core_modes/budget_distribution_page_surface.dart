@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -8,21 +7,15 @@ import '../../../../core/design/fluvi_rounded_box.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
-import '../budget_content_card_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 /// The one physical Card2 surface around the persistent PageView. Category and
 /// Partner pages supply only their interior content, so no sibling can own a
 /// competing shadow, border, radius, or opaque material during collapse.
 class BudgetDistributionCardShell extends StatelessWidget {
-  const BudgetDistributionCardShell({
-    super.key,
-    required this.child,
-    this.contentCardStyle,
-  });
+  const BudgetDistributionCardShell({super.key, required this.child});
 
   final Widget child;
-  final ValueListenable<BudgetContentLayout>? contentCardStyle;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -38,20 +31,15 @@ class BudgetDistributionCardShell extends StatelessWidget {
       return Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          ValueListenableBuilder<BudgetContentLayout>(
-            valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
-            builder: (context, layout, _) => layout == BudgetContentLayout.split
-                ? FluviRoundedBox(
-                    key: const ValueKey('budget-distribution-card-shell'),
-                    color: depth.surfaceColor ?? FluviVisualTokens.surface,
-                    border: DashboardBorderScope.profileOf(
-                      context,
-                    ).borderFor(DashboardBorderSurface.budgetContent),
-                    borderRadius: borderRadius,
-                    boxShadow: depth.shadows,
-                    child: const SizedBox.expand(),
-                  )
-                : const SizedBox.expand(),
+          FluviRoundedBox(
+            key: const ValueKey('budget-distribution-card-shell'),
+            color: depth.surfaceColor ?? FluviVisualTokens.surface,
+            border: DashboardBorderScope.profileOf(
+              context,
+            ).borderFor(DashboardBorderSurface.budgetContent),
+            borderRadius: borderRadius,
+            boxShadow: depth.shadows,
+            child: const SizedBox.expand(),
           ),
           ClipRRect(borderRadius: borderRadius, child: child),
         ],
@@ -59,9 +47,6 @@ class BudgetDistributionCardShell extends StatelessWidget {
     },
   );
 }
-
-final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =
-    ValueNotifier<BudgetContentLayout>(BudgetContentLayout.split);
 
 /// Shared Card2 page geometry. Category and Partner supply only their exact
 /// prepared donut, heading and rows; padding, flexes, list ownership and row

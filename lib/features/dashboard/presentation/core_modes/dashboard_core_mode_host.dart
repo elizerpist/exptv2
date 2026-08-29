@@ -9,7 +9,7 @@ import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
-import '../../query/domain/query_amount_threshold.dart';
+import '../../query/domain/query_amount_range.dart';
 import 'balance_dashboard_core_surface.dart';
 import 'budget_dashboard_core_surface.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -51,9 +51,9 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.balanceHeaderVisualFrame,
     this.budgetHeaderVisualFrame,
     this.mindHeaderVisualFrame,
-    this.mindQueryThresholdBounds,
-    this.mindQueryThresholdChanges,
-    this.onMindQueryThresholdCommitted,
+    this.mindQueryAmountRange,
+    this.mindQueryAmountRangeChanges,
+    this.onMindQueryAmountRangeCommitted,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -77,9 +77,9 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? budgetHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? mindHeaderVisualFrame;
-  final QueryAmountThresholdBounds Function()? mindQueryThresholdBounds;
-  final Listenable? mindQueryThresholdChanges;
-  final ValueChanged<int>? onMindQueryThresholdCommitted;
+  final QueryAmountRangeValues Function()? mindQueryAmountRange;
+  final Listenable? mindQueryAmountRangeChanges;
+  final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -294,9 +294,9 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,
-        queryThresholdBounds: widget.mindQueryThresholdBounds,
-        queryThresholdChanges: widget.mindQueryThresholdChanges,
-        onQueryThresholdCommitted: widget.onMindQueryThresholdCommitted,
+        queryAmountRange: widget.mindQueryAmountRange,
+        queryAmountRangeChanges: widget.mindQueryAmountRangeChanges,
+        onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,
       ),

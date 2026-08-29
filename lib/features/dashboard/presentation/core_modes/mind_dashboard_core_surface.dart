@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_border_profile.dart';
-import '../../query/domain/query_amount_threshold.dart';
-import '../../query/presentation/query_amount_threshold_slider.dart';
+import '../../query/domain/query_amount_range.dart';
+import '../../query/presentation/query_amount_range_control.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -14,17 +14,17 @@ class MindDashboardCoreSurface extends StatelessWidget {
   const MindDashboardCoreSurface({
     super.key,
     required this.presentation,
-    this.queryThresholdBounds,
-    this.queryThresholdChanges,
-    this.onQueryThresholdCommitted,
+    this.queryAmountRange,
+    this.queryAmountRangeChanges,
+    this.onQueryAmountRangeCommitted,
     this.headerVisualController,
     this.headerVisualFrame,
   });
 
   final DashboardCoreModePresentation presentation;
-  final QueryAmountThresholdBounds Function()? queryThresholdBounds;
-  final Listenable? queryThresholdChanges;
-  final ValueChanged<int>? onQueryThresholdCommitted;
+  final QueryAmountRangeValues Function()? queryAmountRange;
+  final Listenable? queryAmountRangeChanges;
+  final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
@@ -48,20 +48,20 @@ class MindDashboardCoreSurface extends StatelessWidget {
               semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
               borderSurface: DashboardBorderSurface.mindContent,
               child:
-                  queryThresholdBounds == null ||
-                      queryThresholdChanges == null ||
-                      onQueryThresholdCommitted == null
+                  queryAmountRange == null ||
+                      queryAmountRangeChanges == null ||
+                      onQueryAmountRangeCommitted == null
                   ? null
                   : Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
                         child: AnimatedBuilder(
-                          animation: queryThresholdChanges!,
+                          animation: queryAmountRangeChanges!,
                           builder: (context, child) =>
-                              _MindQueryThresholdBinding(
-                                boundsFor: queryThresholdBounds!,
-                                onValueCommitted: onQueryThresholdCommitted!,
+                              _MindQueryAmountRangeBinding(
+                                valuesFor: queryAmountRange!,
+                                onRangeCommitted: onQueryAmountRangeCommitted!,
                               ),
                         ),
                       ),
@@ -92,20 +92,19 @@ class MindDashboardCoreSurface extends StatelessWidget {
   }
 }
 
-final class _MindQueryThresholdBinding extends StatelessWidget {
-  const _MindQueryThresholdBinding({
-    required this.boundsFor,
-    required this.onValueCommitted,
+final class _MindQueryAmountRangeBinding extends StatelessWidget {
+  const _MindQueryAmountRangeBinding({
+    required this.valuesFor,
+    required this.onRangeCommitted,
   });
 
-  final QueryAmountThresholdBounds Function() boundsFor;
-  final ValueChanged<int> onValueCommitted;
+  final QueryAmountRangeValues Function() valuesFor;
+  final ValueChanged<QueryAmountRangeValues> onRangeCommitted;
 
   @override
-  Widget build(BuildContext context) => QueryAmountThresholdSlider(
-    key: const ValueKey('mind-query-threshold'),
-    bounds: boundsFor(),
-    onValueCommitted: onValueCommitted,
-    semanticPrefix: 'Mind összegküszöb',
+  Widget build(BuildContext context) => QueryAmountRangeControl(
+    key: const ValueKey('mind-query-amount-range'),
+    values: valuesFor(),
+    onRangeCommitted: onRangeCommitted,
   );
 }

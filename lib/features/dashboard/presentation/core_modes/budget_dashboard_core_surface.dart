@@ -28,6 +28,7 @@ import 'budget_allocation_partition_lane.dart';
 import 'dashboard_header_contrast_text.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
+import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -109,14 +110,15 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                         distributionDrawables == null ||
                         avatarRailController == null ||
                         distributionPageController == null
-                    ? const SizedBox.shrink()
+                    ? BudgetDistributionCardShell(
+                        child: const SizedBox.expand(),
+                      )
                     : BudgetDistributionPager(
                         controller: distributionPageController!,
                         presentation: presentationController!,
                         drawableFrames: distributionDrawables!,
                         avatarRailController: avatarRailController!,
                         expandCategoryDonutToFit: !geometry.hasPhysicalRail,
-                        contentCardStyle: contentCardStyle,
                         rhythm: rhythm,
                         drilldown: drilldown,
                         upperVerticalGestures: upperVerticalGestures,
@@ -156,14 +158,16 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                           navigationController: avatarRailController,
                           onTargetPreview: drilldown == null
                               ? null
-                              : (state) => unawaited(
-                                  drilldown!.previewBudgetTarget(state: state),
+                              : (targetHandle) => unawaited(
+                                  drilldown!.previewBudgetTarget(
+                                    targetHandle: targetHandle,
+                                  ),
                                 ),
                           onTargetSettled: drilldown == null
                               ? null
-                              : (state) => unawaited(
-                                  drilldown!.commitBudgetTarget(
-                                    state: state,
+                              : (targetHandle) => unawaited(
+                                  drilldown!.commitBudgetTargetHandle(
+                                    targetHandle: targetHandle,
                                     source: 'avatarSettled',
                                   ),
                                 ),

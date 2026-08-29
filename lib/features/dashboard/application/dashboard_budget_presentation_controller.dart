@@ -621,6 +621,17 @@ final class DashboardBudgetPresentationController
     _publishHeaderOnly(catalog: catalog, selectedHandle: handle);
   }
 
+  /// Resolves an already-prepared target without changing the visible Budget
+  /// selection.  The Query/LogBox semantic commit owns when [setTargetHandle]
+  /// may promote this target.
+  DashboardBudgetTarget? targetForHandle(int handle) {
+    final catalog = _catalog;
+    if (catalog == null || handle < 0 || handle >= catalog.targetCount) {
+      return null;
+    }
+    return catalog.targetAtHandle(handle);
+  }
+
   /// Checks a persistence key against the current visible authority without
   /// consulting the retained Header. It deliberately still works while the
   /// next immutable snapshot is being prepared, so an old direct-edit draft

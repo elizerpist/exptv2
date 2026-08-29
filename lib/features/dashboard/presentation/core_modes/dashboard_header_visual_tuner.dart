@@ -22,6 +22,7 @@ import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
 import '../dashboard_summary_presentation.dart';
 import 'dashboard_header_portal_material_field.dart';
+import 'dashboard_header_category_scale.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
 
@@ -561,36 +562,97 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                       ),
                       children: <Widget>[
                         _TunerSection(
-                          title: 'Budget globális szín',
+                          title: 'Budget Header szín',
                           children: <Widget>[
-                            _TunerSlider(
-                              key: const ValueKey<String>(
-                                'dashboard-header-cool-position-slider',
+                            RadioGroup<DashboardBudgetHeaderColorSource>(
+                              groupValue: tuning.budgetCategory.source,
+                              onChanged: (source) {
+                                if (source != null) {
+                                  controller.selectBudgetHeaderColorSource(
+                                    source,
+                                  );
+                                }
+                              },
+                              child: Column(
+                                children:
+                                    <
+                                      RadioListTile<
+                                        DashboardBudgetHeaderColorSource
+                                      >
+                                    >[
+                                      RadioListTile<
+                                        DashboardBudgetHeaderColorSource
+                                      >(
+                                        key: const ValueKey<String>(
+                                          'dashboard-header-colour-source-cool',
+                                        ),
+                                        dense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text('Cool'),
+                                        value: DashboardBudgetHeaderColorSource
+                                            .cool,
+                                      ),
+                                      RadioListTile<
+                                        DashboardBudgetHeaderColorSource
+                                      >(
+                                        key: const ValueKey<String>(
+                                          'dashboard-header-colour-source-category',
+                                        ),
+                                        dense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text('Kategória'),
+                                        value: DashboardBudgetHeaderColorSource
+                                            .category,
+                                      ),
+                                    ],
                               ),
-                              label: 'Cool pozíció',
-                              valueLabel:
-                                  '${tuning.budgetCool.positionPercent.toStringAsFixed(0)}%',
-                              min: 0,
-                              max: 100,
-                              divisions: 100,
-                              value: tuning.budgetCool.positionPercent,
-                              onChanged:
-                                  controller.setBudgetCoolPositionPercent,
                             ),
-                            _TunerSlider(
-                              key: const ValueKey<String>(
-                                'dashboard-header-cool-window-width-slider',
+                            if (tuning.budgetCategory.source ==
+                                DashboardBudgetHeaderColorSource
+                                    .cool) ...<Widget>[
+                              _TunerSlider(
+                                key: const ValueKey<String>(
+                                  'dashboard-header-cool-position-slider',
+                                ),
+                                label: 'Cool pozíció',
+                                valueLabel:
+                                    '${tuning.budgetCool.positionPercent.toStringAsFixed(0)}%',
+                                min: 0,
+                                max: 100,
+                                divisions: 100,
+                                value: tuning.budgetCool.positionPercent,
+                                onChanged:
+                                    controller.setBudgetCoolPositionPercent,
                               ),
-                              label: 'Ablakszélesség',
-                              valueLabel:
-                                  '${tuning.budgetCool.windowWidthPercent.toStringAsFixed(0)}%',
-                              min: 10,
-                              max: 100,
-                              divisions: 90,
-                              value: tuning.budgetCool.windowWidthPercent,
-                              onChanged:
-                                  controller.setBudgetCoolWindowWidthPercent,
-                            ),
+                              _TunerSlider(
+                                key: const ValueKey<String>(
+                                  'dashboard-header-cool-window-width-slider',
+                                ),
+                                label: 'Ablakszélesség',
+                                valueLabel:
+                                    '${tuning.budgetCool.windowWidthPercent.toStringAsFixed(0)}%',
+                                min: 10,
+                                max: 100,
+                                divisions: 90,
+                                value: tuning.budgetCool.windowWidthPercent,
+                                onChanged:
+                                    controller.setBudgetCoolWindowWidthPercent,
+                              ),
+                            ] else
+                              _TunerSlider(
+                                key: const ValueKey<String>(
+                                  'dashboard-header-category-window-width-slider',
+                                ),
+                                label: 'Ablakszélesség',
+                                valueLabel:
+                                    '${tuning.budgetCategory.windowWidthPercent.toStringAsFixed(0)}%',
+                                min: 10,
+                                max: 100,
+                                divisions: 90,
+                                value: tuning.budgetCategory.windowWidthPercent,
+                                onChanged: controller
+                                    .setBudgetCategoryWindowWidthPercent,
+                              ),
                             _TunerSlider(
                               key: const ValueKey<String>(
                                 'dashboard-header-opacity-slider',

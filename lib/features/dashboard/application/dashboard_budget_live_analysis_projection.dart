@@ -60,7 +60,9 @@ final class DashboardBudgetLiveAnalysisProjection {
     if (live != null &&
         live.coreRevision != null &&
         live.coreRevision == preparedCoreRevision &&
-        live.direction == selectedDirection) {
+        live.direction == selectedDirection &&
+        (live.budgetTargetHandle == null ||
+            live.budgetTargetHandle == selectedTargetHandle)) {
       return DashboardBudgetLiveAnalysisProjection._(
         interactionGeneration: live.generation,
         coreRevision: live.coreRevision,

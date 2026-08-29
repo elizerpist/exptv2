@@ -128,6 +128,19 @@ final class _DeferredFocusSceneInstall {
   final Completer<bool> completion;
 }
 
+/// The rich scene is visual augmentation of an already exact prepared focus
+/// frame. Avatar crossings retain only the latest augmentation until direct
+/// motion releases the foreground lane.
+final class _DeferredLiveFacetSceneAugmentation {
+  const _DeferredLiveFacetSceneAugmentation({
+    required this.focusGeneration,
+    required this.prepare,
+  });
+
+  final int focusGeneration;
+  final Future<void> Function() prepare;
+}
+
 /// Immutable identity for a Query publication before its new committed paging
 /// metadata exists. It makes the pre-publication reservation attributable to
 /// one exact Apply so an older failure can never release a newer barrier.
@@ -844,6 +857,7 @@ final class DashboardCoreController {
   int _focusPublicationGeneration = 0;
   _DeferredFocusSceneInstall? _deferredFocusSceneInstall;
   bool _focusSceneInstallDrainScheduled = false;
+  _DeferredLiveFacetSceneAugmentation? _deferredLiveFacetSceneAugmentation;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
   // records exact demand while the paging owner defers new repository and page
@@ -1176,6 +1190,8 @@ final class DashboardCoreController {
     DashboardNavigationState? publicationState,
     bool Function()? shouldPublish,
     bool isEphemeralFocusPublication = false,
+    bool deferEphemeralSceneAugmentation = false,
+    int? ephemeralFocusGeneration,
   }) async {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
     if (!isEphemeralFocusPublication) {
@@ -1257,15 +1273,36 @@ final class DashboardCoreController {
           ),
         );
       } else {
-        unawaited(
-          _prepareLiveFacetSceneAfterPublication(
-            index: index,
-            targetWindow: targetWindow,
-            prepare: prepare,
-            activate: activate,
-            shouldPublish: shouldPublish,
-          ),
-        );
+        // An active-resource scene is already fully prepared. Promotion is a
+        // synchronous cache/metadata operation, not rich scene realization,
+        // so it remains available during Avatar motion. Only a miss may enter
+        // the deferred latest-only augmentation lane below.
+        if (_tryActivateLiveFacetSceneFromActiveResources(
+          index: index,
+          targetWindow: targetWindow,
+          activate: activate,
+          shouldPublish: shouldPublish,
+        )) {
+          return true;
+        }
+        Future<void> prepareLiveFacetScene() =>
+            _prepareLiveFacetSceneAfterPublication(
+              index: index,
+              targetWindow: targetWindow,
+              prepare: prepare,
+              activate: activate,
+              shouldPublish: shouldPublish,
+            );
+        if (deferEphemeralSceneAugmentation &&
+            ephemeralFocusGeneration != null) {
+          _deferredLiveFacetSceneAugmentation =
+              _DeferredLiveFacetSceneAugmentation(
+                focusGeneration: ephemeralFocusGeneration,
+                prepare: prepareLiveFacetScene,
+              );
+        } else {
+          unawaited(prepareLiveFacetScene());
+        }
       }
       return true;
     }
@@ -1433,24 +1470,13 @@ final class DashboardCoreController {
     bool Function()? shouldPublish,
   }) async {
     try {
-      final stagedFromActiveResources =
-          _activeResourceSceneStager?.call(
-            targetWindow,
-            retainViewportId: visibleFrames.value?.logBox.viewportId,
-          ) ??
-          false;
-      if (!stagedFromActiveResources) {
-        await prepare(
-          targetWindow,
-          retainViewportId: visibleFrames.value?.logBox.viewportId,
-        );
-      }
+      await prepare(
+        targetWindow,
+        retainViewportId: visibleFrames.value?.logBox.viewportId,
+      );
       if (_disposed ||
           !(shouldPublish?.call() ?? true) ||
           !identical(preparedIndex, index)) {
-        if (stagedFromActiveResources) {
-          _activeResourceSceneStagerDiscarder?.call(targetWindow);
-        }
         return;
       }
       _activateSceneWindow(targetWindow, activate: activate);
@@ -1477,6 +1503,41 @@ final class DashboardCoreController {
         ),
       );
     }
+  }
+
+  /// Fast-path promotion for a scene which is already backed by the active
+  /// immutable resources.  This is intentionally outside the deferred rich
+  /// preparation lane: it has no paragraph/layout work and therefore must not
+  /// delay a coherent Avatar crossing until ballistic motion settles.
+  bool _tryActivateLiveFacetSceneFromActiveResources({
+    required PreparedDashboardIndex index,
+    required DashboardLogBoxSceneWindow targetWindow,
+    required DashboardLogBoxSceneWindowActivator activate,
+    bool Function()? shouldPublish,
+  }) {
+    final staged =
+        _activeResourceSceneStager?.call(
+          targetWindow,
+          retainViewportId: visibleFrames.value?.logBox.viewportId,
+        ) ??
+        false;
+    if (!staged) return false;
+    if (_disposed ||
+        !(shouldPublish?.call() ?? true) ||
+        !identical(preparedIndex, index)) {
+      _activeResourceSceneStagerDiscarder?.call(targetWindow);
+      return true;
+    }
+    _activateSceneWindow(targetWindow, activate: activate);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LIVE_FACET_SCENE_AUGMENTED',
+        queryKey: targetWindow.identity,
+        coreRevision: index.coreRevision,
+        entryCount: targetWindow.previewRowCount,
+      ),
+    );
+    return true;
   }
 
   void _finishSceneWindowPreparation() {
@@ -4062,8 +4123,19 @@ final class DashboardCoreController {
     );
   }
 
-  void endBudgetAvatarMotion() =>
-      _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
+  void endBudgetAvatarMotion() {
+    _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
+    _drainDeferredLiveFacetSceneAugmentation();
+  }
+
+  void _drainDeferredLiveFacetSceneAugmentation() {
+    if (_disposed || _activeMotionLanes.isNotEmpty) return;
+    final deferred = _deferredLiveFacetSceneAugmentation;
+    if (deferred == null) return;
+    _deferredLiveFacetSceneAugmentation = null;
+    if (deferred.focusGeneration != _focusPublicationGeneration) return;
+    unawaited(deferred.prepare());
+  }
 
   /// Applies an already-projected experiment target. The projection can be
   /// anchored to one gesture's initial canonical state, so an advancing
@@ -4424,6 +4496,7 @@ final class DashboardCoreController {
     DashboardFocusFacet facet, {
     bool publishDuringMotion = false,
     int? targetHandle,
+    VoidCallback? onVisibleSemanticCommit,
   }) => _requestEphemeralFocus(
     category: facet,
     source: DashboardLiveInteractionSource.budgetAvatar,
@@ -4434,6 +4507,7 @@ final class DashboardCoreController {
     // established coalesced policy.
     deferSceneInstallation: !publishDuringMotion,
     publishDuringMotion: publishDuringMotion,
+    onVisibleSemanticCommit: onVisibleSemanticCommit,
   );
 
   /// Requests a transient partner narrowing after the viewport-owned swipe
@@ -4449,12 +4523,14 @@ final class DashboardCoreController {
   Future<bool> clearBudgetCategoryFocus({
     int? targetHandle,
     bool publishDuringMotion = false,
+    VoidCallback? onVisibleSemanticCommit,
   }) => _requestEphemeralFocus(
     clearCategory: true,
     source: DashboardLiveInteractionSource.budgetAvatar,
     budgetTargetHandle: targetHandle,
     deferSceneInstallation: !publishDuringMotion,
     publishDuringMotion: publishDuringMotion,
+    onVisibleSemanticCommit: onVisibleSemanticCommit,
   );
 
   /// Applies one live SearchPill edit through the same prepared facet path as
@@ -4512,8 +4588,17 @@ final class DashboardCoreController {
     bool clearSearch = false,
     bool deferSceneInstallation = false,
     bool publishDuringMotion = false,
+    VoidCallback? onVisibleSemanticCommit,
   }) async {
     if (_disposed || queryComposer.isOpen) return false;
+    // `publishDuringMotion` describes the producer's capability to publish a
+    // prepared foreground frame before settle.  It is not itself proof that a
+    // physical Avatar motion is active: a discrete preview/tap must still
+    // prepare its rich scene immediately.  Only the live Avatar lane may
+    // defer the non-critical augmentation.
+    final deferAvatarSceneAugmentation =
+        publishDuringMotion &&
+        _activeMotionLanes.contains(DashboardMotionLane.budgetAvatar);
     final direction = navigation.state.parentQueryScope.direction;
     final baseScope = currentQuery.scopeFor(direction);
     final baseIndex = _focusBaseIndex ?? dataRuntime.currentIndex;
@@ -4549,6 +4634,7 @@ final class DashboardCoreController {
         source: source,
         budgetTargetHandle: budgetTargetHandle,
         publishDuringMotion: publishDuringMotion,
+        onVisibleSemanticCommit: onVisibleSemanticCommit,
       );
     }
     if (priorIsValid &&
@@ -4568,6 +4654,7 @@ final class DashboardCoreController {
               'presentationEpoch=${visibleFrames.value?.presentationEpoch ?? 0}',
         ),
       );
+      onVisibleSemanticCommit?.call();
       return true;
     }
     _retainFocusBaseSceneIfNeeded(baseIndex);
@@ -4771,6 +4858,9 @@ final class DashboardCoreController {
             );
           },
           afterPublish: () {
+            // Budget target, Header and palette become visible only once the
+            // matching Query/LogBox generation has committed.
+            onVisibleSemanticCommit?.call();
             FluviDiagnosticLogger.log(
               FluviDiagnosticEvent(
                 stage: 'FOCUS_PUBLICATION_COMPLETED',
@@ -4785,6 +4875,8 @@ final class DashboardCoreController {
             );
           },
           isEphemeralFocusPublication: true,
+          deferEphemeralSceneAugmentation: deferAvatarSceneAugmentation,
+          ephemeralFocusGeneration: generation,
         );
         if (!published && generation == _focusPublicationGeneration) {
           _provisionalFocusBaseIndex = null;
@@ -4910,6 +5002,7 @@ final class DashboardCoreController {
     DashboardLiveInteractionSource source =
         DashboardLiveInteractionSource.facetClose,
     int? budgetTargetHandle,
+    VoidCallback? onVisibleSemanticCommit,
   }) async {
     final state = focus.state;
     final baseIndex = _focusBaseIndex;
@@ -4923,6 +5016,12 @@ final class DashboardCoreController {
       return false;
     }
     final generation = ++_focusPublicationGeneration;
+    // See [_requestEphemeralFocus]: a Budget source can publish during motion
+    // without there actually being an active Avatar ballistic/drag lane.
+    // Preserve immediate retained-base realization for that discrete path.
+    final deferAvatarSceneAugmentation =
+        publishDuringMotion &&
+        _activeMotionLanes.contains(DashboardMotionLane.budgetAvatar);
     _cancelDeferredFocusedSceneInstall();
     // Closing is a direct semantic acceptance. It may not wait for the old
     // focused scene to restore before removing the chip or accepting another
@@ -4970,6 +5069,7 @@ final class DashboardCoreController {
             );
           },
           afterPublish: () {
+            onVisibleSemanticCommit?.call();
             _focusBaseIndex = null;
             _provisionalFocusBaseIndex = null;
             _provisionalFocusBaseScope = null;
@@ -4989,6 +5089,8 @@ final class DashboardCoreController {
           // facet; rich base-scene augmentation is never allowed to delay a
           // close action or later direct input.
           isEphemeralFocusPublication: true,
+          deferEphemeralSceneAugmentation: deferAvatarSceneAugmentation,
+          ephemeralFocusGeneration: generation,
         );
         if (!published && _focusBaseIndex == null) {
           _discardRetainedFocusBaseScene();
@@ -6975,12 +7077,20 @@ final class DashboardCoreController {
       _resumeCommittedPagingAtSafetyBoundary(reason: 'motionIdle');
       _drainDeferredBudgetDistributionWarmup();
       _drainDeferredFocusedSceneInstall();
-      if (_verticalPointerIntentActive || _verticalInteractionActive) return;
-      _drainRequiredSceneCoverageDemand();
-      if (_requiredSceneCoverageDemand == null) {
-        final index = presentation.index ?? preparedIndex;
-        if (index != null) {
-          _startRailInteractionWarmup(index, state: navigation.state);
+      final hadDeferredLiveFacetAugmentation =
+          _deferredLiveFacetSceneAugmentation != null;
+      _drainDeferredLiveFacetSceneAugmentation();
+      // The selected Avatar crossing owns the one newest rich augmentation.
+      // Do not let generic idle coverage/warmup immediately start a second
+      // scene preparation for the same just-published semantic frame.
+      if (!hadDeferredLiveFacetAugmentation) {
+        if (_verticalPointerIntentActive || _verticalInteractionActive) return;
+        _drainRequiredSceneCoverageDemand();
+        if (_requiredSceneCoverageDemand == null) {
+          final index = presentation.index ?? preparedIndex;
+          if (index != null) {
+            _startRailInteractionWarmup(index, state: navigation.state);
+          }
         }
       }
       if (_queryChipPrewarmRequested) _startQueryChipPrewarm();

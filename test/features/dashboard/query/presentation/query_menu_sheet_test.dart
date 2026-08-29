@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_menu_sheet.dart';
+import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 void main() {
@@ -161,6 +162,11 @@ void main() {
     await tester.pump();
 
     final slider = tester.widget<RangeSlider>(find.byType(RangeSlider));
+    expect(
+      find.byType(QueryAmountRangeControl),
+      findsOneWidget,
+      reason: 'G3: Query menu renders the shared two-ended component.',
+    );
     slider.onChanged!(const RangeValues(100000, 200000));
     await tester.pump();
     expect(composer.draft.refinements, isEmpty);

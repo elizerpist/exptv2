@@ -1,6 +1,7 @@
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'dashboard_budget_presentation_controller.dart';
+import 'dashboard_budget_target.dart';
 import 'dashboard_core_controller.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
 
@@ -8,28 +9,56 @@ import 'dashboard_ephemeral_focus_controller.dart';
 /// existing Core ephemeral-focus publication path. It owns no Query, focus
 /// state, repository, paging or carousel selection.
 final class DashboardBudgetLogboxDrilldownCoordinator {
-  const DashboardBudgetLogboxDrilldownCoordinator({required this.core});
+  const DashboardBudgetLogboxDrilldownCoordinator({
+    required this.core,
+    this.presentation,
+  });
 
   final DashboardCoreController core;
+  final DashboardBudgetPresentationController? presentation;
 
   /// Publishes one already-prepared avatar target on the same generation-safe
   /// focus path as settlement. It is invoked only for discrete carousel
   /// crossings; the core publishes its prepared Summary amount immediately
   /// and rejects stale completion before the atomic Ledger scene can rotate.
   Future<bool> previewBudgetTarget({
-    required DashboardBudgetPresentationState state,
-  }) => commitBudgetTarget(
-    state: state,
-    source: 'avatarPreview',
-    publishDuringMotion: true,
-  );
+    int? targetHandle,
+    DashboardBudgetPresentationState? state,
+  }) {
+    final target = targetHandle == null
+        ? state?.liveSelection.target
+        : presentation?.targetForHandle(targetHandle);
+    if (target == null) return Future<bool>.value(false);
+    return _commitTarget(
+      target: target,
+      source: 'avatarPreview',
+      publishDuringMotion: true,
+    );
+  }
 
-  Future<bool> commitBudgetTarget({
-    required DashboardBudgetPresentationState state,
+  /// Derives the Budget target and its Query facet from one prepared target,
+  /// then promotes Budget presentation only in the matching visible Query
+  /// publication callback. No caller may independently publish a Header for a
+  /// target whose LogBox scene still represents another category.
+  Future<bool> commitBudgetTargetHandle({
+    required int targetHandle,
     required String source,
     bool publishDuringMotion = false,
   }) {
-    final target = state.liveSelection.target;
+    final target = presentation?.targetForHandle(targetHandle);
+    if (target == null) return Future<bool>.value(false);
+    return _commitTarget(
+      target: target,
+      source: source,
+      publishDuringMotion: publishDuringMotion,
+    );
+  }
+
+  Future<bool> _commitTarget({
+    required DashboardBudgetTarget target,
+    required String source,
+    required bool publishDuringMotion,
+  }) {
     _record(
       source: source,
       targetHandle: target.handle,
@@ -39,6 +68,9 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       return core.clearBudgetCategoryFocus(
         targetHandle: target.handle,
         publishDuringMotion: publishDuringMotion,
+        onVisibleSemanticCommit: presentation == null
+            ? null
+            : () => presentation!.setTargetHandle(target.handle),
       );
     }
     final category = target.category!;
@@ -51,6 +83,9 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       ),
       publishDuringMotion: publishDuringMotion,
       targetHandle: target.handle,
+      onVisibleSemanticCommit: presentation == null
+          ? null
+          : () => presentation!.setTargetHandle(target.handle),
     );
   }
 

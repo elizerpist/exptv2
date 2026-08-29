@@ -12,7 +12,6 @@ import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
 import 'budget_distribution_page_surface.dart';
 import 'budget_target_avatar_rail_controller.dart';
-import '../budget_content_card_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
 enum BudgetDistributionPage { category, partner }
@@ -88,7 +87,6 @@ class BudgetDistributionPager extends StatefulWidget {
     required this.drawableFrames,
     required this.avatarRailController,
     this.expandCategoryDonutToFit = false,
-    this.contentCardStyle,
     this.rhythm,
     this.drilldown,
     this.upperVerticalGestures,
@@ -100,7 +98,6 @@ class BudgetDistributionPager extends StatefulWidget {
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
   final bool expandCategoryDonutToFit;
-  final ValueListenable<BudgetContentLayout>? contentCardStyle;
   final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
@@ -155,7 +152,6 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
 
   @override
   Widget build(BuildContext context) => BudgetDistributionCardShell(
-    contentCardStyle: widget.contentCardStyle,
     child: PageView.builder(
       key: const ValueKey('budget-distribution-pager'),
       controller: widget.controller.pageController,

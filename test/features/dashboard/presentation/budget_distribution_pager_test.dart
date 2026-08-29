@@ -134,17 +134,45 @@ void main() {
 
       for (final progress in <double>[
         1,
+        .95,
         .90,
+        .85,
+        .80,
         .75,
+        .70,
+        .65,
+        .60,
+        .55,
         .50,
+        .45,
+        .40,
+        .35,
+        .30,
         .25,
+        .20,
+        .15,
         .10,
+        .05,
         0,
+        .05,
         .10,
+        .15,
+        .20,
         .25,
+        .30,
+        .35,
+        .40,
+        .45,
         .50,
+        .55,
+        .60,
+        .65,
+        .70,
         .75,
+        .80,
+        .85,
         .90,
+        .95,
         1,
       ]) {
         revealProgress.value = progress;
@@ -247,17 +275,45 @@ void main() {
 
       for (final progress in <double>[
         1,
+        .95,
         .90,
+        .85,
+        .80,
         .75,
+        .70,
+        .65,
+        .60,
+        .55,
         .50,
+        .45,
+        .40,
+        .35,
+        .30,
         .25,
+        .20,
+        .15,
         .10,
+        .05,
         0,
+        .05,
         .10,
+        .15,
+        .20,
         .25,
+        .30,
+        .35,
+        .40,
+        .45,
         .50,
+        .55,
+        .60,
+        .65,
+        .70,
         .75,
+        .80,
+        .85,
         .90,
+        .95,
         1,
       ]) {
         revealProgress.value = progress;
@@ -454,7 +510,6 @@ void main() {
                 drawableFrames: drawables,
                 avatarRailController: rail,
                 expandCategoryDonutToFit: true,
-                contentCardStyle: cardStyle,
                 rhythm: rhythm,
               ),
             ),
@@ -517,8 +572,12 @@ void main() {
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsNothing,
-        reason: 'Unified composition owns the outer Card2 material itself.',
+        findsOneWidget,
+        reason:
+            'G4: Card2 must retain the same rounded physical shell when its '
+            'parent composition changes. A transparent PageView over a '
+            'separately moving unified surface exposes a neutral slab during '
+            'the real collapse path.',
       );
       expect(
         tester.getRect(
@@ -618,8 +677,10 @@ void main() {
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsNothing,
-        reason: 'Unified composition suppresses the one outer Card2 shell.',
+        findsOneWidget,
+        reason:
+            'G4: Partner must use the same persistent Card2 shell as Daily '
+            'Rhythm, including in unified composition.',
       );
       expect(
         tester.getRect(
