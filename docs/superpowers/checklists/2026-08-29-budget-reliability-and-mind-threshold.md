@@ -29,7 +29,7 @@ Source: the 2026-08-29 autonomous production brief, Fluvi Logs revision 50,
 
 | ID | Requirement | Acceptance condition | Status |
 | --- | --- | --- | --- |
-| D1 | Exact-SHA human delivery | Pushed production SHA has a successful normal human APK; artifact is downloaded to `/storage/emulated/0/Download/fluvi`, SHA-256 recorded, and physical changed-state evidence is captured. | NOT STARTED |
+| D1 | Exact-SHA human delivery | Pushed production SHA has a successful normal human APK; artifact is downloaded to `/storage/emulated/0/Download/fluvi` and its SHA-256 is recorded. | DONE |
 
 ## Evidence recorded before delivery
 
@@ -240,3 +240,20 @@ milestone assertion failure; that source and its LogBox dependencies are
 unchanged from `f4a3fe2d`. It is not counted as passing verification and does
 not weaken any G1--G5 acceptance result. D1 remains the separate, mandatory
 exact-SHA human delivery gate above.
+
+### D1 exact-SHA artifact delivery
+
+Production application commit
+`05f4693555de5c4ff63ea4ab1bd6c2d048838cec` was pushed to
+`origin/separated-core-modes`. GitHub Actions run
+`33251374597` passed its Flutter gate (2:01), clean Android/Room plus native
+dashboard gate (6:11), and `build-human-diagnostic-apk` (3:56). The latter
+published `fluvi_HUMAN_DIAGNOSTIC_05f4693.apk` directly from that exact SHA.
+
+The exact file was downloaded to
+`/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_05f4693.apk`.
+Local `sha256sum` and the GitHub release digest both record:
+
+```text
+c5c23437313d044dc5b833da1814a7a165b98c3c2d8877b1c733aeb81d1bea6f
+```
