@@ -22,12 +22,14 @@ import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../features/dashboard/application/dashboard_core_controller.dart';
 import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
+import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../../features/dashboard/application/dashboard_interaction_readiness.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
 import '../../features/dashboard/query/application/query_menu_data_controller.dart';
+import '../../features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
 import '../../features/dashboard/query/application/saved_query_controller.dart';
 import '../../features/dashboard/query/data/method_channel_query_menu_repository.dart';
 import '../../features/dashboard/query/data/query_menu_repository.dart';
@@ -77,6 +79,7 @@ class FluviAppShell extends StatefulWidget {
     this.dashboardRepository,
     this.categoryRepository,
     this.financialLimitRepository,
+    this.queryRepository,
     this.initialDate,
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
@@ -87,6 +90,7 @@ class FluviAppShell extends StatefulWidget {
   final DashboardDataRuntimeRepository? dashboardRepository;
   final CategoryRepository? categoryRepository;
   final FinancialLimitRepository? financialLimitRepository;
+  final QueryMenuRepository? queryRepository;
   final DateTime? initialDate;
   final TimePlane initialPlane;
   final bool initialRailOpen;
@@ -156,6 +160,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   late final CategoryCollectionController _categoryCollection;
   FinancialLimitRepository? _financialLimitRepository;
   late final QueryMenuDataController _queryData;
+  late final DashboardAppliedQueryFacetLoader _appliedQueryFacets;
   late final SavedQueryController _savedQueries;
   late final DashboardShellPresentationController _shellPresentation;
   late final bool _seedDemo;
@@ -191,9 +196,11 @@ class _FluviAppShellState extends State<FluviAppShell> {
       initialMode: widget.mode,
       onModeSwitched: _recordCoreModeSwitch,
     );
-    _queryRepository = kIsWeb
-        ? const EmptyQueryMenuRepository()
-        : MethodChannelQueryMenuRepository();
+    _queryRepository =
+        widget.queryRepository ??
+        (kIsWeb
+            ? const EmptyQueryMenuRepository()
+            : MethodChannelQueryMenuRepository());
     _categoryRepository =
         widget.categoryRepository ??
         (kIsWeb
@@ -208,6 +215,16 @@ class _FluviAppShellState extends State<FluviAppShell> {
         : widget.financialLimitRepository ??
               MethodChannelFinancialLimitRepository();
     _queryData = QueryMenuDataController(repository: _queryRepository);
+    _appliedQueryFacets = DashboardAppliedQueryFacetLoader(
+      currentQuery: _controller.currentQuery,
+      directionChanges: _controller.transactionDirection,
+      activeDirection: () =>
+          _controller.transactionDirection.direction ==
+              TransactionDirection.income
+          ? LedgerDirection.income
+          : LedgerDirection.expense,
+      repository: _queryRepository,
+    );
     _savedQueries = SavedQueryController(repository: _queryRepository);
     _shellPresentation = DashboardShellPresentationController();
     _readiness = DashboardInteractionReadiness(
@@ -363,6 +380,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
   void _onReadinessChanged() {
     if (_readiness.isReady) {
       _controller.renderReadinessDiagnostics.markReady();
+      unawaited(_appliedQueryFacets.start());
       final attemptGeneration = _activeStartupAttemptGeneration;
       if (attemptGeneration != null &&
           _lastStartupReadyAttemptGeneration != attemptGeneration) {
@@ -511,6 +529,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _readiness.removeListener(_onReadinessChanged);
     _readiness.dispose();
     _categoryCollection.dispose();
+    _appliedQueryFacets.dispose();
     _queryData.dispose();
     _savedQueries.dispose();
     _shellPresentation.dispose();

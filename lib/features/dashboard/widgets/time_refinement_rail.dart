@@ -4,6 +4,8 @@ import '../../../core/design/app_control_metrics.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/design/fluvi_rounded_box.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../application/dashboard_performance_counters.dart';
 import '../motion/dashboard_motion_kernel.dart';
@@ -42,6 +44,8 @@ final class TimeRefinementRail extends StatefulWidget {
 final class _TimeRefinementRailState extends State<TimeRefinementRail> {
   int? _lastMotionLogicalIndex;
   int? _lastSemanticReconciliationEpoch;
+  int? _lastSettledDiagnosticMotionEpoch;
+  int? _lastSettledDiagnosticLogicalIndex;
   DashboardSemanticCatalog? _catalogIdentity;
   Object? _controllerIdentity;
   Object? _physicsIdentity;
@@ -61,6 +65,8 @@ final class _TimeRefinementRailState extends State<TimeRefinementRail> {
       widget.motion.addListener(_onMotionChanged);
       _lastMotionLogicalIndex = null;
       _lastSemanticReconciliationEpoch = null;
+      _lastSettledDiagnosticMotionEpoch = null;
+      _lastSettledDiagnosticLogicalIndex = null;
       _catalogIdentity = null;
     }
   }
@@ -113,7 +119,7 @@ final class _TimeRefinementRailState extends State<TimeRefinementRail> {
           height: widget.bounds.height,
           semanticsLabelBuilder: (entry) => entry.semanticLabel,
           onPreviewChanged: _semanticCrossed,
-          onSelectionSettled: widget.motion.settled,
+          onSelectionSettled: _settled,
           onMotionStarted: _motionStarted,
           motionDiagnostics: widget.motionDiagnostics,
           itemBuilder: (context, entry, metrics) {
@@ -175,13 +181,55 @@ final class _TimeRefinementRailState extends State<TimeRefinementRail> {
     final previous = _lastMotionLogicalIndex;
     _lastMotionLogicalIndex = logicalIndex;
     if (previous != null && previous != logicalIndex) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TM|FLING_SEMANTIC_CROSSING',
+          scope:
+              'fromLogicalIndex=$previous toLogicalIndex=$logicalIndex '
+              'motionActivity=${widget.motion.state.activity.name} '
+              'motionEpoch=${widget.motion.state.motionEpoch}',
+        ),
+      );
       widget.onPreviewLogicalIndexChanged?.call(previous, logicalIndex);
     }
     widget.motion.semanticCrossed(logicalIndex);
   }
 
   void _motionStarted(CenteredCarouselMotionOrigin origin) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TM|FLING_STARTED',
+        scope:
+            'origin=${origin.name} '
+            'logicalIndex=${widget.motion.state.semanticIndex} '
+            'motionEpoch=${widget.motion.state.motionEpoch}',
+      ),
+    );
     widget.onMotionStarted?.call(origin);
+  }
+
+  void _settled(int logicalIndex) {
+    // CenteredCarousel owns physical settling. Record the semantic boundary
+    // immediately after the kernel accepts it so a bounded on-screen capture
+    // can distinguish a smooth flight from a stalled or duplicate commit.
+    widget.motion.settled(logicalIndex);
+    final state = widget.motion.state;
+    if (_lastSettledDiagnosticMotionEpoch == state.motionEpoch &&
+        _lastSettledDiagnosticLogicalIndex == logicalIndex) {
+      return;
+    }
+    _lastSettledDiagnosticMotionEpoch = state.motionEpoch;
+    _lastSettledDiagnosticLogicalIndex = logicalIndex;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TM|FLING_SETTLED',
+        scope:
+            'logicalIndex=$logicalIndex '
+            'semanticIndex=${state.semanticIndex} '
+            'motionActivity=${state.activity.name} '
+            'motionEpoch=${state.motionEpoch}',
+      ),
+    );
   }
 
   void _synchronizeBaseline(DashboardSemanticCatalog catalog) {

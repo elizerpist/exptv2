@@ -6,8 +6,8 @@ import 'package:fluvi/core/diagnostics/fluvi_onscreen_diagnostics.dart';
 void main() {
   setUp(FluviDiagnosticLogger.clear);
 
-  test('keeps the Spendee bounded ring buffer and formats flow metadata', () {
-    for (var index = 0; index < 1100; index += 1) {
+  test('retains 1999 and exactly 2000 chronological diagnostic entries', () {
+    for (var index = 0; index < 1999; index += 1) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'D$index',
@@ -19,12 +19,55 @@ void main() {
       );
     }
 
-    expect(FluviDiagnosticLogger.entries, hasLength(1000));
-    expect(FluviDiagnosticLogger.entries.first.stage, 'D100');
-    expect(FluviDiagnosticLogger.entries.last.stage, 'D1099');
+    expect(FluviDiagnosticLogger.entries, hasLength(1999));
+    expect(FluviDiagnosticLogger.entries.first.stage, 'D0');
+    expect(FluviDiagnosticLogger.entries.last.stage, 'D1998');
+
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(stage: 'D1999', flowId: 'Q-test'),
+    );
+
+    expect(FluviDiagnosticLogger.maxEntries, 2000);
+    expect(FluviDiagnosticLogger.entries, hasLength(2000));
+    expect(FluviDiagnosticLogger.entries.first.stage, 'D0');
+    expect(FluviDiagnosticLogger.entries.last.stage, 'D1999');
     expect(
       FluviDiagnosticLogger.entries.last.toLine(),
-      contains('[FLOW][D1099] flowId=Q-test'),
+      contains('[FLOW][D1999] flowId=Q-test'),
+    );
+  });
+
+  test('evicts exactly the oldest entry at diagnostic entry 2001', () {
+    for (var index = 0; index <= 2000; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
+    }
+
+    final entries = FluviDiagnosticLogger.entries;
+    expect(entries, hasLength(2000));
+    expect(entries.first.stage, 'D1');
+    expect(entries.last.stage, 'D2000');
+    expect(
+      entries.map((event) => event.stage),
+      orderedEquals(List<String>.generate(2000, (index) => 'D${index + 1}')),
+    );
+  });
+
+  test('keeps the exported capture at the same exact 2000-entry boundary', () {
+    FluviDiagnosticLogger.startCapture();
+    for (var index = 0; index < 2000; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'CAPTURE-$index'));
+    }
+
+    final capture = FluviDiagnosticLogger.captureEntries;
+    expect(capture, hasLength(2000));
+    expect(capture.first.stage, 'CAPTURE-0');
+    expect(capture.last.stage, 'CAPTURE-1999');
+    expect(
+      capture.map((event) => event.stage),
+      orderedEquals(List<String>.generate(2000, (index) => 'CAPTURE-$index')),
+      reason:
+          'The copy/export path must expose the same newest 2000 diagnostic '
+          'records as the on-screen history, not a second hidden capacity.',
     );
   });
 
@@ -38,6 +81,23 @@ void main() {
     expect(FluviDiagnosticLogger.entries, isEmpty);
     expect(FluviDiagnosticLogger.allText, isEmpty);
   });
+
+  test(
+    'stamps every retained record with monotonic sequence and elapsed time',
+    () {
+      FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'FIRST'));
+      FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'SECOND'));
+
+      final first = FluviDiagnosticLogger.entries[0];
+      final second = FluviDiagnosticLogger.entries[1];
+      expect(first.sequence, isNotNull);
+      expect(second.sequence, greaterThan(first.sequence!));
+      expect(first.elapsedMicros, isNotNull);
+      expect(second.elapsedMicros, greaterThanOrEqualTo(first.elapsedMicros!));
+      expect(first.toLine(), contains('seq=${first.sequence}'));
+      expect(first.toLine(), contains('elapsedMicros=${first.elapsedMicros}'));
+    },
+  );
 
   test('a frozen capture survives ten thousand general diagnostic events', () {
     final captureId = FluviDiagnosticLogger.startCapture();

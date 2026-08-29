@@ -9,6 +9,7 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/design/header_cascade_motion.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -628,11 +629,34 @@ void main() {
         isTrue,
       );
 
+      FluviDiagnosticLogger.clear();
       await tester.drag(
         find.byKey(const ValueKey('budget-distribution-pager')),
         const Offset(-420, 0),
       );
       await tester.pumpAndSettle();
+      final pagerMilestones = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'HOME|PAGER_MILESTONE')
+          .toList(growable: false);
+      expect(pagerMilestones, isNotEmpty);
+      expect(
+        pagerMilestones.every(
+          (event) => event.scope?.contains('offsetFraction=') ?? false,
+        ),
+        isTrue,
+        reason:
+            'G4 diagnostics must retain the real intermediate PageView offset, '
+            'rather than only a settled page identity.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'HOME|LAYER_CANDIDATES',
+        ),
+        isNotEmpty,
+        reason:
+            'Every recorded intermediate Pager milestone must identify its '
+            'physical surface and clipping candidates for a later slab dump.',
+      );
       expect(pages.value, BudgetDistributionPage.partner);
       expect(find.text('Partnerek eloszlása'), findsOneWidget);
       expect(find.text('Partnerek'), findsOneWidget);

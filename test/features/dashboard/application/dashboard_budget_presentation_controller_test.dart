@@ -254,7 +254,10 @@ void main() {
             'semantic selection commit exists.',
       );
       expect(presentation.value.liveSelection.isAvailable, isTrue);
-      expect(presentation.value.selectedLimitVisual.paintsProgressChrome, isTrue);
+      expect(
+        presentation.value.selectedLimitVisual.paintsProgressChrome,
+        isTrue,
+      );
     },
   );
 
@@ -1180,6 +1183,42 @@ void main() {
         ),
         isTrue,
       );
+    },
+  );
+
+  test(
+    'LIMIT state records the exact canonical reason when a snapshot drops',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      PreparedBudgetLimitSnapshot? snapshot = _confirmedLimitSnapshot();
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      FluviDiagnosticLogger.clear();
+      snapshot = null;
+      visible.value = _visibleFrame();
+
+      final event = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) => entry.stage == 'LIMIT|SELECTION_UNAVAILABLE',
+      );
+      expect(event.scope, contains('reason=snapshotUnavailable'));
+      expect(event.scope, contains('snapshotPresent=false'));
+      expect(event.scope, contains('selectedHandle=0'));
     },
   );
 

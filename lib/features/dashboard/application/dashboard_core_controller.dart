@@ -910,6 +910,11 @@ final class DashboardCoreController {
   final LinkedHashMap<String, _BudgetAvatarFocusHotsetEntry>
   _budgetAvatarFocusHotset =
       LinkedHashMap<String, _BudgetAvatarFocusHotsetEntry>();
+  // The rail may mount before the initial immutable Core index publishes.
+  // Keep only its fixed semantic horizon so the existing Core-owned cache can
+  // prepare it when that canonical base becomes available.
+  List<DashboardFocusFacet> _requestedBudgetAvatarFocusTargets =
+      const <DashboardFocusFacet>[];
   List<_BudgetAvatarFocusHotsetPlan> _pendingBudgetAvatarFocusPlans =
       const <_BudgetAvatarFocusHotsetPlan>[];
   int _budgetAvatarFocusHotsetGeneration = 0;
@@ -1665,6 +1670,9 @@ final class DashboardCoreController {
       context: _diagnosticContext(),
       source: 'dataRuntime',
     );
+    // The Budget rail can mount before the first immutable index arrives.
+    // Replay its bounded semantic request at this canonical index boundary.
+    _primeRequestedBudgetAvatarFocusHotset();
   }
 
   DashboardPreparedRevisionBundle _preparedRevisionBundleFor(
@@ -4623,6 +4631,22 @@ final class DashboardCoreController {
   /// immutable focus index without reconstructing a root frame on the UI
   /// isolate.
   void primeBudgetAvatarFocusHotset(Iterable<DashboardFocusFacet> targets) {
+    final unique = <String, DashboardFocusFacet>{};
+    for (final target in targets) {
+      unique.putIfAbsent(target.id, () => target);
+      if (unique.length == _budgetAvatarFocusHotsetCapacity) break;
+    }
+    _requestedBudgetAvatarFocusTargets = List<DashboardFocusFacet>.unmodifiable(
+      unique.values,
+    );
+    _primeRequestedBudgetAvatarFocusHotset();
+  }
+
+  /// An initial rail build may precede the first installed index. The request
+  /// must remain available for that exact canonical publication rather than
+  /// being silently discarded and turning the first fling into foreground
+  /// derivation work.
+  void _primeRequestedBudgetAvatarFocusHotset() {
     if (_disposed ||
         queryComposer.isOpen ||
         diagnostics.isMotionActive ||
@@ -4647,15 +4671,10 @@ final class DashboardCoreController {
     final partner = priorIsValid ? prior.partner : null;
     final normalizedSearch = priorIsValid ? prior.normalizedSearch : null;
     final publicationState = navigation.state;
-    final unique = <String, DashboardFocusFacet>{};
-    for (final target in targets) {
-      unique.putIfAbsent(target.id, () => target);
-      if (unique.length == _budgetAvatarFocusHotsetCapacity) break;
-    }
-    if (unique.isEmpty) return;
+    if (_requestedBudgetAvatarFocusTargets.isEmpty) return;
 
     final plans = <_BudgetAvatarFocusHotsetPlan>[];
-    for (final target in unique.values) {
+    for (final target in _requestedBudgetAvatarFocusTargets) {
       final effectiveScope = baseScope.copyWith(
         categoryIds: <String>{target.id},
         partnerIds: partner == null
@@ -7439,6 +7458,7 @@ final class DashboardCoreController {
     diagnostics.setMotionActive(anyActive);
     dataRuntime.setMotionActive(anyActive);
     if (!anyActive) {
+      _primeRequestedBudgetAvatarFocusHotset();
       _resumeCommittedPagingAtSafetyBoundary(reason: 'motionIdle');
       _drainDeferredBudgetDistributionWarmup();
       _drainDeferredFocusedSceneInstall();

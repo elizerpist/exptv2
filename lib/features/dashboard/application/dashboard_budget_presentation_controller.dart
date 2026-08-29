@@ -656,6 +656,8 @@ final class DashboardBudgetPresentationController
       <LedgerDirection, DashboardBudgetTargetIdentity?>{};
   List<FluviCategory>? _lastReportedCategoryInput;
   int? _lastHeaderDiagnosticSignature;
+  String? _lastLimitStateDiagnosticSummary;
+  int? _lastLimitUnavailabilityDiagnosticSignature;
   int? _lastProgressDiagnosticSignature;
   int? _lastPartitionDiagnosticSignature;
   int? _lastLiveAnalysisDiagnosticSignature;
@@ -1149,19 +1151,35 @@ final class DashboardBudgetPresentationController
   ) {
     final snapshot = _snapshotForCurrentFrame();
     final title = _titleFor(target);
-    if (!liveAnalysis.isAvailable ||
-        snapshot == null ||
-        snapshot.coreRevision != liveAnalysis.coreRevision ||
-        liveAnalysis.targetHandle != target.handle ||
-        target.handle >= snapshot.targetCountFor(_direction)) {
+    final unavailableReason = snapshot == null
+        ? 'snapshotUnavailable'
+        : !liveAnalysis.isAvailable
+        ? 'liveAnalysisUnavailable'
+        : snapshot.coreRevision != liveAnalysis.coreRevision
+        ? 'snapshotRevisionMismatch'
+        : liveAnalysis.targetHandle != target.handle
+        ? 'targetHandleMismatch'
+        : target.handle >= snapshot.targetCountFor(_direction)
+        ? 'targetHandleOutsideSnapshot'
+        : null;
+    if (unavailableReason != null) {
       _invalidateEditsForResolvedVisibleAuthority();
       final active = _limitEditController?.value;
       final previous = value.liveSelection;
-      if (active != null &&
+      final retainsActiveDraft =
+          active != null &&
           active.targetHandle == target.handle &&
           previous.target.handle == target.handle &&
           previous.limitKey == active.key &&
-          previous.isAvailable) {
+          previous.isAvailable;
+      _recordLimitSelectionUnavailable(
+        reason: unavailableReason,
+        target: target,
+        liveAnalysis: liveAnalysis,
+        snapshot: snapshot,
+        retainsActiveDraft: retainsActiveDraft,
+      );
+      if (retainsActiveDraft) {
         // The selected Header/ring object was already recomputed from this
         // exact draft on the preceding direct tick. Reusing that immutable
         // compatible publication avoids a visible unavailable frame while
@@ -1176,6 +1194,7 @@ final class DashboardBudgetPresentationController
         title: title,
       );
     }
+    final preparedSnapshot = snapshot!;
     final visibleScope = liveAnalysis.scope!;
     final preparedBudgetPeriod = DashboardBudgetPeriodResolver.fromTimeScope(
       visibleScope,
@@ -1184,7 +1203,7 @@ final class DashboardBudgetPresentationController
     _limitEditController?.invalidateIfContextChanged(key);
     late final PreparedBudgetLimitCell cell;
     try {
-      cell = snapshot.cellAt(
+      cell = preparedSnapshot.cellAt(
         direction: _direction,
         period: preparedBudgetPeriod,
         targetHandle: target.handle,
@@ -1192,6 +1211,12 @@ final class DashboardBudgetPresentationController
     } on RangeError {
       // A prepared period outside the exact RAM window is unavailable, never a
       // reason to repair the snapshot through an interaction-time read.
+      _recordLimitSelectionUnavailable(
+        reason: 'periodOutsidePreparedWindow',
+        target: target,
+        liveAnalysis: liveAnalysis,
+        snapshot: preparedSnapshot,
+      );
       return DashboardBudgetLiveSelectionState.unavailable(
         direction: _direction,
         target: target,
@@ -1200,13 +1225,13 @@ final class DashboardBudgetPresentationController
       );
     }
     final effectiveLimitScaled100 = _effectiveLimitForPreparedCell(
-      snapshot: snapshot,
+      snapshot: preparedSnapshot,
       target: target,
       period: preparedBudgetPeriod,
       cell: cell,
     );
     final monthEndProjection = _monthEndProjectionFor(
-      snapshot: snapshot,
+      snapshot: preparedSnapshot,
       direction: _direction,
       targetHandle: target.handle,
       scope: visibleScope,
@@ -1223,18 +1248,24 @@ final class DashboardBudgetPresentationController
         resolvedMonthlyLimitScaled100: effectiveLimitScaled100,
       ),
       YearScope(:final year) => _yearAnalysisFor(
-        snapshot: snapshot,
+        snapshot: preparedSnapshot,
         target: target,
         year: year,
         annualActualScaled100: cell.actualScaled100,
       ),
       AllTimeScope() => _typicalMonthAnalysisFor(
-        snapshot: snapshot,
+        snapshot: preparedSnapshot,
         target: target,
         baseMonthlyLimitScaled100: effectiveLimitScaled100,
       ),
     };
     if (scopeAnalysis.displayNumeratorScaled100 == null) {
+      _recordLimitSelectionUnavailable(
+        reason: 'scopeAnalysisDisplayNumeratorUnavailable',
+        target: target,
+        liveAnalysis: liveAnalysis,
+        snapshot: snapshot,
+      );
       return DashboardBudgetLiveSelectionState.unavailable(
         direction: _direction,
         target: target,
@@ -1263,7 +1294,7 @@ final class DashboardBudgetPresentationController
       visibleScope: visibleScope,
       scopeAnalysis: scopeAnalysis,
       scalarKey: key,
-      coreRevision: snapshot.coreRevision,
+      coreRevision: preparedSnapshot.coreRevision,
     );
     if (editContext != null) _lastDirectInputEditContext = editContext;
     _limitEditController?.invalidateYearIfContextChanged(
@@ -1276,7 +1307,7 @@ final class DashboardBudgetPresentationController
       scopeAnalysis: scopeAnalysis,
       limitKey: key,
       editContext: editContext,
-      coreRevision: snapshot.coreRevision,
+      coreRevision: preparedSnapshot.coreRevision,
       analysisScopeLabel: _analysisScopeLabel(visibleScope),
       analysisMode: analysisMode,
       annualSegments: annualSegments,
@@ -1285,6 +1316,59 @@ final class DashboardBudgetPresentationController
           ? scopeAnalysis.rawRatio
           : null,
       monthEndProjection: monthEndProjection,
+    );
+  }
+
+  /// A physical Header disappearance must be diagnosable from its canonical
+  /// producer inputs. This does not retain or repair a value; it records why
+  /// the selection resolver could not publish one for this exact authority.
+  void _recordLimitSelectionUnavailable({
+    required String reason,
+    required DashboardBudgetTarget target,
+    required DashboardBudgetLiveAnalysisProjection liveAnalysis,
+    required PreparedBudgetLimitSnapshot? snapshot,
+    bool retainsActiveDraft = false,
+  }) {
+    final visible = _visibleFrame.value;
+    final interaction = _liveInteractions?.frame;
+    final signature = Object.hash(
+      reason,
+      target.handle,
+      _direction,
+      liveAnalysis.provenanceKey,
+      snapshot?.coreRevision,
+      snapshot?.targetCountFor(_direction),
+      visible?.navigationEpoch,
+      visible?.presentationEpoch,
+      interaction?.generation,
+      retainsActiveDraft,
+    );
+    if (_lastLimitUnavailabilityDiagnosticSignature == signature) return;
+    _lastLimitUnavailabilityDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LIMIT|SELECTION_UNAVAILABLE',
+        coreRevision: liveAnalysis.coreRevision ?? visible?.coreRevision,
+        direction: _direction.name,
+        queryKey: visible?.scope.key.value,
+        scope:
+            'reason=$reason '
+            'selectedHandle=${value.selectedHandle} '
+            'targetHandle=${target.handle} '
+            'liveTargetHandle=${liveAnalysis.targetHandle} '
+            'liveAnalysisAvailable=${liveAnalysis.isAvailable} '
+            'analysisScope=${liveAnalysis.scope?.canonicalKey ?? '-'} '
+            'interactionGeneration=${liveAnalysis.interactionGeneration} '
+            'interactionFrameGeneration=${interaction?.generation ?? '-'} '
+            'snapshotPresent=${snapshot != null} '
+            'snapshotRevision=${snapshot?.coreRevision ?? '-'} '
+            'snapshotTargetCount=${snapshot?.targetCountFor(_direction) ?? '-'} '
+            'visibleRevision=${visible?.coreRevision ?? '-'} '
+            'navigationEpoch=${visible?.navigationEpoch ?? '-'} '
+            'presentationEpoch=${visible?.presentationEpoch ?? '-'} '
+            'visibleModeEpoch=$_visibleModeEpoch '
+            'activeDraftRetained=$retainsActiveDraft',
+      ),
     );
   }
 
@@ -1804,7 +1888,32 @@ final class DashboardBudgetPresentationController
       header.limitScaled100,
     );
     if (_lastHeaderDiagnosticSignature == signature) return;
+    final previous = _lastLimitStateDiagnosticSummary;
     _lastHeaderDiagnosticSignature = signature;
+    final next =
+        'available=${header.isAvailable};target=${header.target.handle};'
+        'numerator=${header.displayNumeratorScaled100 ?? '-'};'
+        'denominator=${header.displayDenominatorScaled100 ?? '-'};'
+        'limit=${header.limitScaled100 ?? '-'}';
+    _lastLimitStateDiagnosticSummary = next;
+    final snapshot = _snapshotForCurrentFrame();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LIMIT|STATE',
+        coreRevision: liveAnalysis.coreRevision,
+        direction: _direction.name,
+        scope:
+            'previous=${previous ?? 'none'} next=$next '
+            'reason=${header.isAvailable ? 'bound' : 'unavailable'} '
+            'interactionGeneration=${liveAnalysis.interactionGeneration} '
+            'liveAnalysisAvailable=${liveAnalysis.isAvailable} '
+            'analysisScope=${liveAnalysis.scope?.canonicalKey ?? '-'} '
+            'snapshotPresent=${snapshot != null} '
+            'snapshotRevision=${snapshot?.coreRevision ?? '-'} '
+            'selectedHandle=${value.selectedHandle} '
+            'visibleModeEpoch=$_visibleModeEpoch',
+      ),
+    );
     if (!header.isAvailable) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(

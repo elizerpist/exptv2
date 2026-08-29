@@ -136,6 +136,8 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
+  int? _lastMindRangeDiagnosticSignature;
+  int? _lastLayerStackDiagnosticSignature;
 
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
@@ -544,6 +546,7 @@ class _CoreDashboardState extends State<CoreDashboard>
           : 0,
       builder: (context, frame) {
         final geometry = frame.geometry;
+        _recordLayerStack(frame);
         _upperVerticalGestures.updateViewportMapper(
           geometry.mapViewportVerticalDragToController,
         );
@@ -1003,19 +1006,106 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
   }
 
+  /// Records the real production composition order at bounded collapse
+  /// milestones. It deliberately identifies candidates and geometry only; it
+  /// never paints a diagnostic layer or changes pixel ownership.
+  void _recordLayerStack(DashboardVisualFrame frame) {
+    final geometry = frame.geometry;
+    final mode = modeController.committedMode;
+    final pageController = _budgetDistributionPageController.pageController;
+    final page = pageController.hasClients ? pageController.page : null;
+    final lowerMotion = geometry.lowerCardMotion;
+    final collapseMilestone =
+        (geometry.collapseProgress / controller.metrics.collapseTravel * 20)
+            .round();
+    final pagerMilestone = page == null ? null : (page * 4).round();
+    final signature = Object.hash(
+      mode,
+      collapseMilestone,
+      _budgetContentCardStyle.value,
+      _budgetSectionOrderController.value,
+      pagerMilestone,
+    );
+    if (_lastLayerStackDiagnosticSignature == signature) return;
+    _lastLayerStackDiagnosticSignature = signature;
+
+    String bounds(DashboardBounds value) =>
+        '${value.left.toStringAsFixed(1)},${value.top.toStringAsFixed(1)} '
+        '${value.width.toStringAsFixed(1)}x${value.height.toStringAsFixed(1)}';
+
+    final queryScope = controller.currentQuery.scope;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'HOME|LAYER_STACK',
+        queryKey: queryScope.key.value,
+        coreRevision: controller.visibleFrames.value?.coreRevision,
+        direction: queryScope.direction.name,
+        scope:
+            'mode=${mode.mode.name} '
+            'collapseProgress=${geometry.collapseProgress.toStringAsFixed(1)} '
+            'collapseMilestone=$collapseMilestone '
+            'budgetLayout=${_budgetContentCardStyle.value.name} '
+            'budgetOrder=${_budgetSectionOrderController.value.name} '
+            'zone2=${bounds(geometry.zone2Bounds)} '
+            'modeContent=${bounds(geometry.modeContentBounds)} '
+            'collapseHandle=${bounds(geometry.collapseHandleBounds)} '
+            'logBoxHeader=${bounds(geometry.logBoxHeaderBounds)} '
+            'lowerOpacity=${lowerMotion?.opacity.toStringAsFixed(3) ?? '-'} '
+            'lowerScale=${lowerMotion?.scale.toStringAsFixed(3) ?? '-'} '
+            'pagerPage=${page?.toStringAsFixed(3) ?? '-'} '
+            'pagerMilestone=${pagerMilestone ?? '-'} '
+            'pagerControllerIdentity=${identityHashCode(pageController)} '
+            'physicalSurface=${mode == DashboardModeSpec.budget && _budgetContentCardStyle.value == BudgetContentLayout.unifiedCard ? 'BudgetUnifiedContentCard' : 'BudgetDistributionCardShell'} '
+            'contentClip=BudgetDistributionCardShell.ClipRRect '
+            'paintOrder=DashboardCoreModeHost<DashboardLogBoxViewport<DashboardCollapseHandle',
+      ),
+    );
+  }
+
   QueryAmountRangeValues? _mindQueryAmountRange() {
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
+    final scope = controller.currentQuery.scopeFor(direction);
+    final domain = controller.currentQuery
+        .facetPresentationFor(direction)
+        ?.amountDomain;
     final binding = QueryAmountRangeBinding.ready(
-      scope: controller.currentQuery.scopeFor(direction),
-      amountDomain: controller.currentQuery
-          .facetPresentationFor(direction)
-          ?.amountDomain,
+      scope: scope,
+      amountDomain: domain,
     );
+    final values = binding?.values;
+    final signature = Object.hash(
+      modeController.committedMode,
+      direction,
+      scope.key,
+      domain?.minimumAmountScaled100,
+      domain?.maximumAmountScaled100,
+      values,
+    );
+    if (_lastMindRangeDiagnosticSignature != signature) {
+      _lastMindRangeDiagnosticSignature = signature;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND|SLIDER_RENDER_GATE',
+          queryKey: scope.key.value,
+          direction: direction.name,
+          coreRevision: controller.visibleFrames.value?.coreRevision,
+          scope:
+              'mode=${modeController.committedMode.mode.name} '
+              'expectedMode=mind shouldRender=${values != null} '
+              'amountDomain=${domain == null ? 'unavailable' : 'ready'} '
+              'minimum=${domain?.minimumAmountScaled100 ?? '-'} '
+              'maximum=${domain?.maximumAmountScaled100 ?? '-'} '
+              'rangeLower=${values?.lowerScaled100 ?? '-'} '
+              'rangeUpper=${values?.upperScaled100 ?? '-'} '
+              'currentQueryGeneration=${controller.currentQuery.generationFor(direction)}',
+        ),
+      );
+    }
     // Unknown is not the 1,000 HUF floor. Query Menu hides its control until
     // this exact canonical data owner is ready; Mind mirrors that explicit
     // state instead of manufacturing a collapsed disabled RangeSlider.
-    return binding?.values;
+    return values;
   }
 
   void _commitMindQueryAmountRange(QueryAmountRangeValues values) {
@@ -1028,7 +1118,17 @@ class _CoreDashboardState extends State<CoreDashboard>
           .facetPresentationFor(direction)
           ?.amountDomain,
     );
-    if (binding == null) return;
+    if (binding == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND|SLIDER_COMMIT_REJECTED',
+          queryKey: current.key.value,
+          direction: direction.name,
+          scope: 'reason=canonicalAmountDomainUnavailable',
+        ),
+      );
+      return;
+    }
     final next = binding.apply(values);
     if (next == current) return;
     unawaited(

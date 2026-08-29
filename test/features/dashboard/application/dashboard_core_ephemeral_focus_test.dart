@@ -760,6 +760,38 @@ void main() {
   );
 
   test(
+    'RED G2: an Avatar hotset requested before bootstrap is prepared when the initial index installs',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+
+      expect(core.budgetAvatarFocusHotsetDiagnostics['cached'], 0);
+      await core.bootstrap();
+      await pumpEventQueue();
+
+      expect(
+        core.budgetAvatarFocusHotsetDiagnostics['cached'],
+        2,
+        reason:
+            'The rail mounts before the Core installs its first immutable '
+            'index. Its bounded neighbour request must survive that ordering, '
+            'otherwise every first fling takes the expensive derivation path.',
+      );
+    },
+  );
+
+  test(
     'RG-G3: Summary raw input cancels a retained time-neighbour preparation before arena resolution',
     () async {
       final repository = _FocusSeedRepository();

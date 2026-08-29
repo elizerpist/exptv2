@@ -72,8 +72,11 @@ final class _FluviDiagnosticRingBuffer<T> {
 
 /// The single debug-only sink used by the on-screen diagnostic projection.
 abstract final class FluviDiagnosticLogger {
-  static const maxEntries = 1000;
-  static const captureMaxEntries = 2048;
+  static const maxEntries = 2000;
+  // Capture/export is another on-screen diagnostic projection. Keeping this
+  // at the same boundary prevents a hidden second history from exposing a
+  // different retention contract than the panel and its Copy action.
+  static const captureMaxEntries = maxEntries;
   static const _emitStartupSceneTrace = bool.fromEnvironment(
     'FLUVI_ONSCREEN_DIAGNOSTICS',
   );
@@ -88,6 +91,8 @@ abstract final class FluviDiagnosticLogger {
   static final Map<String, FluviDiagnosticEvent> _headerRendererEvidence =
       <String, FluviDiagnosticEvent>{};
   static final _FluviDiagnosticNotifier _version = _FluviDiagnosticNotifier(0);
+  static final Stopwatch _sessionStopwatch = Stopwatch()..start();
+  static var _nextSequence = 0;
   static var _notifyScheduled = false;
   static var _captureId = 0;
   static var _captureActive = false;
@@ -97,9 +102,12 @@ abstract final class FluviDiagnosticLogger {
 
   static void log(FluviDiagnosticEvent event) {
     if (!kFluviOnscreenDiagnosticsEnabled) return;
-    final stamped = event.timestamp == null
-        ? event.withTimestamp(DateTime.now())
-        : event;
+    final stamped =
+        (event.timestamp == null ? event.withTimestamp(DateTime.now()) : event)
+            .withTraceStamp(
+              sequence: ++_nextSequence,
+              elapsedMicros: _sessionStopwatch.elapsedMicroseconds,
+            );
     if (_isHeaderRendererBoundary(stamped.stage) &&
         !(stamped.scope?.contains('captureReplay=true') ?? false)) {
       _headerRendererEvidence[stamped.stage] = stamped;

@@ -11,6 +11,8 @@ class FluviDiagnosticEvent {
     required this.stage,
     this.message,
     this.timestamp,
+    this.sequence,
+    this.elapsedMicros,
     this.flowId,
     this.captureId,
     this.repeatCount = 1,
@@ -31,6 +33,12 @@ class FluviDiagnosticEvent {
   final String stage;
   final String? message;
   final DateTime? timestamp;
+
+  /// Process-local order assigned by [FluviDiagnosticLogger].
+  final int? sequence;
+
+  /// Process-local monotonic elapsed time assigned by the logger.
+  final int? elapsedMicros;
   final String? flowId;
   final int? captureId;
   final int repeatCount;
@@ -52,6 +60,8 @@ class FluviDiagnosticEvent {
       stage: stage,
       message: message,
       timestamp: value,
+      sequence: sequence,
+      elapsedMicros: elapsedMicros,
       flowId: flowId,
       captureId: captureId,
       repeatCount: repeatCount,
@@ -74,6 +84,8 @@ class FluviDiagnosticEvent {
     stage: stage,
     message: message,
     timestamp: timestamp,
+    sequence: sequence,
+    elapsedMicros: elapsedMicros,
     flowId: flowId,
     captureId: value,
     repeatCount: repeatCount,
@@ -95,9 +107,37 @@ class FluviDiagnosticEvent {
     stage: stage,
     message: message,
     timestamp: timestamp,
+    sequence: sequence,
+    elapsedMicros: elapsedMicros,
     flowId: flowId,
     captureId: captureId,
     repeatCount: value,
+    queryKey: queryKey,
+    direction: direction,
+    scope: scope,
+    startInclusive: startInclusive,
+    endExclusive: endExclusive,
+    coreRevision: coreRevision,
+    totalMinor: totalMinor,
+    formattedTotal: formattedTotal,
+    entryCount: entryCount,
+    durationMs: durationMs,
+    isStale: isStale,
+    error: error,
+  );
+
+  FluviDiagnosticEvent withTraceStamp({
+    required int sequence,
+    required int elapsedMicros,
+  }) => FluviDiagnosticEvent(
+    stage: stage,
+    message: message,
+    timestamp: timestamp,
+    sequence: sequence,
+    elapsedMicros: elapsedMicros,
+    flowId: flowId,
+    captureId: captureId,
+    repeatCount: repeatCount,
     queryKey: queryKey,
     direction: direction,
     scope: scope,
@@ -118,6 +158,8 @@ class FluviDiagnosticEvent {
         '[${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}.${(value.millisecond ~/ 10).toString().padLeft(2, '0')}]';
     final fields = <String>[
       if (flowId != null) 'flowId=$flowId',
+      if (sequence != null) 'seq=$sequence',
+      if (elapsedMicros != null) 'elapsedMicros=$elapsedMicros',
       if (captureId != null) 'captureId=$captureId',
       if (repeatCount > 1) 'repeatCount=$repeatCount',
       if (queryKey != null) 'queryKey=$queryKey',
@@ -144,6 +186,8 @@ class FluviDiagnosticEvent {
       stage: raw['stage'] as String? ?? 'NATIVE',
       message: raw['message'] as String?,
       timestamp: _timestamp(raw['timestampMicros']),
+      sequence: intValue(raw['sequence']),
+      elapsedMicros: intValue(raw['elapsedMicros']),
       flowId: raw['flowId'] as String?,
       captureId: intValue(raw['captureId']),
       repeatCount: intValue(raw['repeatCount']) ?? 1,

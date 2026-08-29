@@ -111,6 +111,11 @@ class BudgetDistributionPager extends StatefulWidget {
 
 class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   ScrollPosition? _position;
+  final GlobalKey _shellKey = GlobalKey(
+    debugLabel: 'budget-distribution-shell',
+  );
+  int? _lastPagerMilestone;
+  bool? _lastScrolling;
 
   @override
   void initState() {
@@ -140,16 +145,85 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
     _detachPosition();
     _position = position;
     position.isScrollingNotifier.addListener(_onScrollActivityChanged);
+    position.addListener(_onPagerPositionChanged);
   }
 
   void _detachPosition() {
     _position?.isScrollingNotifier.removeListener(_onScrollActivityChanged);
+    _position?.removeListener(_onPagerPositionChanged);
     _position = null;
   }
 
   void _onScrollActivityChanged() {
-    if (_position?.isScrollingNotifier.value ?? true) return;
-    widget.controller.rebaseAtIdleIfNeeded();
+    final scrolling = _position?.isScrollingNotifier.value ?? false;
+    if (_lastScrolling != scrolling) {
+      _lastScrolling = scrolling;
+      _recordPagerMilestone(
+        stage: scrolling
+            ? 'HOME|PAGER_GESTURE_OR_BALLISTIC'
+            : 'HOME|PAGER_SETTLED',
+      );
+    }
+    if (!scrolling) widget.controller.rebaseAtIdleIfNeeded();
+  }
+
+  void _onPagerPositionChanged() {
+    final controller = widget.controller.pageController;
+    if (!controller.hasClients) return;
+    final page = controller.page;
+    if (page == null) return;
+    // Four semantically meaningful checkpoints per physical page are enough
+    // to reconstruct a partial slide without emitting raw-pixel traffic.
+    final milestone = (page * 4).round();
+    if (_lastPagerMilestone == milestone) return;
+    _lastPagerMilestone = milestone;
+    _recordPagerMilestone(stage: 'HOME|PAGER_MILESTONE', page: page);
+  }
+
+  void _recordPagerMilestone({required String stage, double? page}) {
+    final controller = widget.controller.pageController;
+    final resolvedPage =
+        page ?? (controller.hasClients ? controller.page : null);
+    final lowerIndex = resolvedPage?.floor();
+    final fraction = resolvedPage == null
+        ? null
+        : resolvedPage - resolvedPage.floor();
+    final shell = _shellKey.currentContext?.findRenderObject() as RenderBox?;
+    final origin = shell?.localToGlobal(Offset.zero);
+    final bounds = shell == null || origin == null
+        ? 'unlaidOut'
+        : 'left=${origin.dx.toStringAsFixed(1)} top=${origin.dy.toStringAsFixed(1)} '
+              'width=${shell.size.width.toStringAsFixed(1)} '
+              'height=${shell.size.height.toStringAsFixed(1)}';
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        scope:
+            'surfaceOwner=${widget.surfaceOwner.name} '
+            'page=${resolvedPage?.toStringAsFixed(3) ?? '-'} '
+            'currentVirtualIndex=${lowerIndex ?? '-'} '
+            'currentSemanticPage=${lowerIndex == null ? '-' : BudgetDistributionPageController._pageFor(lowerIndex).name} '
+            'nextSemanticPage=${lowerIndex == null ? '-' : BudgetDistributionPageController._pageFor(lowerIndex + 1).name} '
+            'offsetFraction=${fraction?.toStringAsFixed(3) ?? '-'} '
+            'scrolling=${_position?.isScrollingNotifier.value ?? false} '
+            'pageControllerIdentity=${identityHashCode(controller)} '
+            'scrollPositionIdentity=${_position == null ? '-' : identityHashCode(_position)} '
+            'viewport=$bounds',
+      ),
+    );
+    if (stage == 'HOME|PAGER_MILESTONE') {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'HOME|LAYER_CANDIDATES',
+          scope:
+              'surfaceOwner=${widget.surfaceOwner.name} '
+              'physicalMaterial=${widget.surfaceOwner == BudgetDistributionSurfaceOwner.splitCard2 ? 'BudgetDistributionCardShell' : 'BudgetUnifiedContentCard'} '
+              'contentClip=BudgetDistributionCardShell.ClipRRect '
+              'pageViewport=PageView.clipNone repaintBoundary=perPage '
+              'viewport=$bounds',
+        ),
+      );
+    }
   }
 
   @override
@@ -195,6 +269,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
     // through Split ↔ Unified transitions; rounded clipping is independent of
     // whether the surrounding card paints material.
     return BudgetDistributionCardShell(
+      key: _shellKey,
       surfaceOwner: widget.surfaceOwner,
       child: pageView,
     );

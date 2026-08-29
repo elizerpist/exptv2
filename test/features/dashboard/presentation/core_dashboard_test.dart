@@ -14,6 +14,10 @@ import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
+import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
+import 'package:fluvi/features/dashboard/query/data/query_menu_repository.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
@@ -217,6 +221,54 @@ void main() {
         findsNothing,
         reason:
             'A missing canonical domain is not a disabled 1,000/1,000 slider.',
+      );
+    },
+  );
+
+  testWidgets(
+    'Mind mounts the shared range when the applied Query facet loader becomes ready',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      final direction = ValueNotifier<LedgerDirection>(LedgerDirection.income);
+      final loader = DashboardAppliedQueryFacetLoader(
+        currentQuery: controller.currentQuery,
+        directionChanges: direction,
+        activeDirection: () => direction.value,
+        repository: const _MindFacetRepository(),
+      );
+      addTearDown(controller.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(loader.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.mind),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range-unavailable')),
+        findsOneWidget,
+      );
+
+      await loader.start();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<QueryAmountRangeControl>(
+              find.byKey(const ValueKey('mind-query-amount-range')),
+            )
+            .values
+            .maximumScaled100,
+        860000,
       );
     },
   );
@@ -436,6 +488,39 @@ void main() {
         find.byKey(const ValueKey('budget-unified-content-card-surface')),
         findsNothing,
       );
+    },
+  );
+
+  testWidgets(
+    'HOME layer diagnostics records the full Dashboard paint-order boundary during collapse',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      FluviDiagnosticLogger.clear();
+      controller.expansion.setProgress(90);
+      await tester.pump();
+
+      final event = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) => entry.stage == 'HOME|LAYER_STACK',
+      );
+      expect(event.scope, contains('mode=budget'));
+      expect(
+        event.scope,
+        contains(
+          'paintOrder=DashboardCoreModeHost<DashboardLogBoxViewport<DashboardCollapseHandle',
+        ),
+      );
+      expect(event.scope, contains('collapseProgress=90.0'));
     },
   );
 
@@ -707,6 +792,41 @@ void main() {
     },
   );
 
+  testWidgets(
+    'TM diagnostics records the semantic settle that ends a time-rail flight',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+      await tester.pump();
+      FluviDiagnosticLogger.clear();
+      await tester.fling(
+        find.byKey(const ValueKey('dashboard-time-rail')),
+        const Offset(-320, 0),
+        2400,
+      );
+      await tester.pumpAndSettle();
+
+      final settles = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'TM|FLING_SETTLED')
+          .toList(growable: false);
+      expect(settles, hasLength(1));
+      expect(settles.single.scope, contains('motionActivity=idle'));
+      expect(settles.single.scope, contains('logicalIndex='));
+      expect(settles.single.scope, contains('motionEpoch='));
+    },
+  );
+
   testWidgets('split header lower card reveals from behind the upper card', (
     tester,
   ) async {
@@ -846,3 +966,14 @@ const QueryMenuData _readyMindQueryMenuData = QueryMenuData(
   categories: <QueryMenuCategoryFacet>[],
   partners: <QueryMenuPartnerFacet>[],
 );
+
+final class _MindFacetRepository implements QueryMenuRepository {
+  const _MindFacetRepository();
+
+  @override
+  Future<QueryMenuData> readFacets(CurrentLedgerQueryScope scope) async =>
+      _readyMindQueryMenuData;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}

@@ -231,6 +231,22 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _publishPreviewTargetHandle(int targetHandle) {
     if (!mounted) return;
     if (_activeMotionOrigin != null) _motionPreviewPublications += 1;
+    if (_activeMotionOrigin case final CenteredCarouselMotionOrigin origin) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|FLING_SEMANTIC_PREVIEW',
+          direction: widget.presentation.value.liveSelection.direction.name,
+          coreRevision: widget.presentation.value.liveSelection.coreRevision,
+          scope:
+              'origin=${origin.name} targetHandle=$targetHandle '
+              'previewCount=$_motionPreviewPublications '
+              'crossingCount=$_motionSemanticCrossings '
+              'selectedHandle=${widget.presentation.value.selectedHandle} '
+              'controllerIdentity=${identityHashCode(_controller)} '
+              'scrollPositionIdentity=${_controller.scrollController.hasClients ? identityHashCode(_controller.scrollController.position) : '-'}',
+        ),
+      );
+    }
     widget.onTargetPreview?.call(targetHandle);
   }
 
@@ -238,6 +254,17 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _activeMotionOrigin = origin;
     _motionSemanticCrossings = 0;
     _motionPreviewPublications = 0;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|FLING_STARTED',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'origin=${origin.name} selectedHandle=${widget.presentation.value.selectedHandle} '
+            'controllerIdentity=${identityHashCode(_controller)} '
+            'physicsCreationCount=${_controller.physicsCreationCount}',
+      ),
+    );
     widget.onMotionActiveChanged?.call(true);
   }
 
@@ -249,6 +276,20 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _activeMotionOrigin = null;
     if (origin != null) widget.onMotionActiveChanged?.call(false);
     if (origin != null) _recordMotionSummary(origin);
+    if (origin != null && _items.isNotEmpty) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|FLING_SETTLED',
+          direction: widget.presentation.value.liveSelection.direction.name,
+          coreRevision: widget.presentation.value.liveSelection.coreRevision,
+          scope:
+              'origin=${origin.name} settledLogicalIndex=$logicalIndex '
+              'settledTargetHandle=${_items[_modulo(logicalIndex, _items.length)].targetHandle} '
+              'crossingCount=$_motionSemanticCrossings '
+              'previewCount=$_motionPreviewPublications',
+        ),
+      );
+    }
     _requestPreparedTargetHotset(centerLogicalIndex: logicalIndex);
     // A direct avatar tap is programmatic physical motion but still a user
     // semantic intent, so it commits after settle. Pie/list commands are

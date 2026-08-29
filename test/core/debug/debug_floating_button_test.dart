@@ -47,6 +47,30 @@ void main() {
     expect(FluviDiagnosticLogger.allText, contains('[FLOW][D10]'));
   });
 
+  testWidgets('exposes all retained 2000 diagnostic entries to the panel', (
+    tester,
+  ) async {
+    for (var index = 0; index <= 2000; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
+    }
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('(2000)'), findsOneWidget);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('debug-console-logs')),
+    );
+    expect(field.controller!.text, contains('[FLOW][D1]'));
+    expect(field.controller!.text, contains('[FLOW][D2000]'));
+    expect(field.controller!.text, isNot(contains('[FLOW][D0]')));
+  });
+
   testWidgets('controls an explicit frozen diagnostic capture session', (
     tester,
   ) async {
