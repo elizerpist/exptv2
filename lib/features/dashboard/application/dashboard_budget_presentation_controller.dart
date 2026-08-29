@@ -456,6 +456,7 @@ final class DashboardBudgetPresentationState {
   const DashboardBudgetPresentationState({
     required this.items,
     required this.selectedHandle,
+    this.visibleModeEpoch = 0,
     this.liveAnalysis = const DashboardBudgetLiveAnalysisProjection.unavailable(
       direction: LedgerDirection.expense,
       targetHandle: 0,
@@ -466,6 +467,11 @@ final class DashboardBudgetPresentationState {
 
   final List<DashboardBudgetTargetPresentationItem> items;
   final int selectedHandle;
+
+  /// The dashboard-core visibility epoch that produced this atomic Budget
+  /// frame. It prevents a same-target return to Budget from being collapsed
+  /// into a stale no-op by a renderer or publication observer.
+  final int visibleModeEpoch;
   final DashboardBudgetLiveAnalysisProjection liveAnalysis;
   final DashboardBudgetLiveSelectionState liveSelection;
   final DashboardBudgetPartitionPresentation partition;
@@ -588,6 +594,7 @@ final class DashboardBudgetPresentationController
   int? _lastLiveAnalysisDiagnosticSignature;
   int? _lastMonthEndProjectionDiagnosticSignature;
   int? _lastDirectionDomainDiagnosticSignature;
+  int _visibleModeEpoch = 0;
   PreparedBudgetLimitSnapshot? _typicalAverageCacheSnapshot;
   final Map<_TypicalMonthAverageCacheKey, DashboardBudgetTypicalMonthAverage>
   _typicalAverageByPreparedTarget =
@@ -612,6 +619,68 @@ final class DashboardBudgetPresentationController
       ),
     );
     _publishHeaderOnly(catalog: catalog, selectedHandle: handle);
+  }
+
+  /// Checks a persistence key against the current visible authority without
+  /// consulting the retained Header. It deliberately still works while the
+  /// next immutable snapshot is being prepared, so an old direct-edit draft
+  /// cannot commit after an already-visible target/scope replacement.
+  bool isLimitEditKeyCurrent(FinancialLimitKey key) {
+    final authority = _currentVisibleEditAuthority();
+    if (authority == null) return false;
+    final period = DashboardBudgetPeriodResolver.fromTimeScope(authority.scope);
+    return _financialLimitKeyFor(authority.target, period: period) == key;
+  }
+
+  /// YEAR's derived vector has no scalar key; validate its typed identity
+  /// against the same unprepared visible authority before a batch can write.
+  bool isYearLimitEditContextCurrent(
+    DashboardBudgetYearLimitEditContext context,
+  ) {
+    final authority = _currentVisibleEditAuthority();
+    if (authority == null) return false;
+    final scope = authority.scope;
+    if (scope is! YearScope) return false;
+    return context.direction == _financialLimitDirection &&
+        context.target == _financialLimitTargetFor(authority.target) &&
+        context.year == scope.year &&
+        context.coreRevision == authority.coreRevision;
+  }
+
+  /// Replays the current RAM-resident Budget authority when Budget becomes
+  /// visible again. A mode transition changes the visible publication identity
+  /// even when target, direction, scope and prepared revision are unchanged.
+  ///
+  /// This does no I/O and retains the existing dense catalog/cell hot path.
+  void publishForVisibleBudgetEpoch(int modeEpoch) {
+    if (modeEpoch <= _visibleModeEpoch) return;
+    _visibleModeEpoch = modeEpoch;
+    final snapshot = _snapshotForCurrentFrame();
+    final catalog = _catalog;
+    if (catalog == null || !identical(snapshot, _snapshotUsedForCatalog)) {
+      _refreshCatalog();
+    } else {
+      _publishHeaderOnly(
+        catalog: catalog,
+        selectedHandle: value.selectedHandle,
+      );
+    }
+    final published = value;
+    final live = published.liveAnalysis;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_VISIBLE_PUBLICATION_REPLAYED',
+        coreRevision: live.coreRevision,
+        direction: live.direction.name,
+        scope:
+            'modeEpoch=$modeEpoch '
+            'interactionGeneration=${live.interactionGeneration} '
+            'targetHandle=${published.selectedHandle} '
+            'analysisScope=${live.scope?.canonicalKey ?? '-'} '
+            'available=${published.liveSelection.isAvailable} '
+            'hasLimit=${published.header.hasLimit}',
+      ),
+    );
   }
 
   /// Category collection changes are the only source of rail-item rebuilding.
@@ -771,6 +840,7 @@ final class DashboardBudgetPresentationController
     value = DashboardBudgetPresentationState(
       items: items,
       selectedHandle: selectedHandle,
+      visibleModeEpoch: _visibleModeEpoch,
       liveAnalysis: liveAnalysis,
       liveSelection: liveSelection,
       partition: partition,
@@ -803,6 +873,7 @@ final class DashboardBudgetPresentationController
     value = DashboardBudgetPresentationState(
       items: value.items,
       selectedHandle: selectedHandle,
+      visibleModeEpoch: _visibleModeEpoch,
       liveAnalysis: liveAnalysis,
       liveSelection: liveSelection,
       partition: partition,
@@ -841,14 +912,111 @@ final class DashboardBudgetPresentationController
     );
   }
 
-  DashboardBudgetLiveAnalysisProjection _liveAnalysisFor(int targetHandle) =>
-      DashboardBudgetLiveAnalysisProjection.resolve(
-        liveInteraction: _liveInteractions?.frame,
-        visibleFrame: _visibleFrame.value,
-        preparedCoreRevision: _snapshotForCurrentFrame()?.coreRevision,
-        selectedDirection: _direction,
-        selectedTargetHandle: targetHandle,
+  DashboardBudgetLiveAnalysisProjection _liveAnalysisFor(int targetHandle) {
+    final resolved = DashboardBudgetLiveAnalysisProjection.resolve(
+      liveInteraction: _liveInteractions?.frame,
+      visibleFrame: _visibleFrame.value,
+      preparedCoreRevision: _snapshotForCurrentFrame()?.coreRevision,
+      selectedDirection: _direction,
+      selectedTargetHandle: targetHandle,
+    );
+    if (resolved.isAvailable) return resolved;
+
+    _invalidateEditsForResolvedVisibleAuthority();
+
+    // A direct edit owns its compatible visible draft across a preparation
+    // gap. Retain the last atomic analysis only for its exact selected target
+    // and key; a real target/scope publication below still invalidates it.
+    final active = _limitEditController?.value;
+    final previous = value;
+    if (active != null &&
+        active.targetHandle == targetHandle &&
+        previous.selectedHandle == targetHandle &&
+        previous.liveAnalysis.isAvailable &&
+        previous.liveSelection.limitKey == active.key) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_LIMIT_EDIT_ACTIVE_ANALYSIS_RETAINED',
+          coreRevision: previous.liveAnalysis.coreRevision,
+          direction: previous.liveAnalysis.direction.name,
+          scope:
+              'generation=${active.generation} '
+              'targetHandle=$targetHandle '
+              'analysisScope=${previous.liveAnalysis.scope?.canonicalKey ?? '-'}',
+        ),
       );
+      return previous.liveAnalysis;
+    }
+    return resolved;
+  }
+
+  /// Resolves identity only from the current foreground/visible authority. It
+  /// intentionally does not require the matching prepared Budget snapshot:
+  /// this is the narrow persistence-safety path for a direct edit while that
+  /// snapshot is in flight.
+  ({DashboardBudgetTarget target, LedgerTimeScope scope, int coreRevision})?
+  _currentVisibleEditAuthority() {
+    final live = _liveInteractions?.frame;
+    final visible = _visibleFrame.value;
+    final visibleMatchesDirection =
+        visible != null && visible.direction == _direction;
+    // A retained foreground frame is authoritative only while it is at least
+    // as new as the committed navigation and revision. Core revisions are
+    // deliberately reused across navigation-only preparations, so revision
+    // alone cannot order January against a visible February replacement.
+    // The coordinator intentionally retains its latest accepted frame; it
+    // must never outvote a later visible navigation epoch merely because the
+    // matching Budget snapshot is still preparing.
+    final useLive =
+        live != null &&
+        live.coreRevision != null &&
+        live.direction == _direction &&
+        (!visibleMatchesDirection ||
+            (live.temporalCandidate.navigationEpoch >=
+                    visible.navigationEpoch &&
+                live.coreRevision! >= visible.coreRevision));
+    if (!useLive && !visibleMatchesDirection) {
+      return null;
+    }
+    final targetHandle = useLive
+        ? live.budgetTargetHandle ?? value.selectedHandle
+        : value.selectedHandle;
+    final catalog = _catalog;
+    if (catalog == null ||
+        targetHandle < 0 ||
+        targetHandle >= catalog.targetCount) {
+      return null;
+    }
+    return (
+      target: catalog.targetAtHandle(targetHandle),
+      scope: useLive
+          ? live.temporalCandidate.effectiveScope
+          : visible!.scope.timeScope,
+      coreRevision: useLive ? live.coreRevision! : visible!.coreRevision,
+    );
+  }
+
+  void _invalidateEditsForResolvedVisibleAuthority() {
+    final authority = _currentVisibleEditAuthority();
+    if (authority == null) {
+      _limitEditController?.invalidateIfContextChanged(null);
+      _limitEditController?.invalidateYearIfContextChanged(null);
+      return;
+    }
+    final period = DashboardBudgetPeriodResolver.fromTimeScope(authority.scope);
+    _limitEditController?.invalidateIfResolvedContextChanged(
+      _financialLimitKeyFor(authority.target, period: period),
+    );
+    _limitEditController?.invalidateYearIfResolvedContextChanged(
+      direction: _financialLimitDirection,
+      target: _financialLimitTargetFor(authority.target),
+      year: switch (authority.scope) {
+        YearScope(:final year) => year,
+        _ => null,
+      },
+      coreRevision: authority.coreRevision,
+    );
+  }
 
   DashboardBudgetLiveSelectionState _liveSelectionFor(
     DashboardBudgetTarget target,
@@ -861,8 +1029,20 @@ final class DashboardBudgetPresentationController
         snapshot.coreRevision != liveAnalysis.coreRevision ||
         liveAnalysis.targetHandle != target.handle ||
         target.handle >= snapshot.targetCountFor(_direction)) {
-      _limitEditController?.invalidateIfContextChanged(null);
-      _limitEditController?.invalidateYearIfContextChanged(null);
+      _invalidateEditsForResolvedVisibleAuthority();
+      final active = _limitEditController?.value;
+      final previous = value.liveSelection;
+      if (active != null &&
+          active.targetHandle == target.handle &&
+          previous.target.handle == target.handle &&
+          previous.limitKey == active.key &&
+          previous.isAvailable) {
+        // The selected Header/ring object was already recomputed from this
+        // exact draft on the preceding direct tick. Reusing that immutable
+        // compatible publication avoids a visible unavailable frame while
+        // waiting for the next canonical preparation.
+        return previous;
+      }
       return DashboardBudgetLiveSelectionState.unavailable(
         direction: _direction,
         target: target,

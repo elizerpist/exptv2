@@ -175,8 +175,8 @@ void main() {
   });
 
   testWidgets(
-    'Partner layout reserves a forty dp Rhythm plot before allocating the '
-    'smaller donut and legend',
+    'Partner layout gives Rhythm exactly ten percent more plot height while '
+    'reclaiming the same delta from the chart region',
     (tester) async {
       final harness = _PartnerCardHarness();
       addTearDown(harness.dispose);
@@ -192,7 +192,7 @@ void main() {
       final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
       final donut = find.byKey(const ValueKey('budget-distribution-donut-120'));
       expect(plot, findsOneWidget);
-      expect(tester.getSize(plot).height, 40);
+      expect(tester.getSize(plot).height, 44);
       expect(donut, findsOneWidget);
       expect(tester.getSize(donut).height, 120);
       expect(
@@ -201,13 +201,13 @@ void main() {
               find.byKey(const ValueKey('partner-spending-rhythm-chart')),
             )
             .height,
-        62,
+        66,
       );
     },
   );
 
   testWidgets(
-    'Partner layout keeps a 110dp donut beside the 40dp Rhythm plot in the '
+    'Partner layout keeps a 106dp donut beside the 44dp Rhythm plot in the '
     '217dp reference Card2',
     (tester) async {
       final harness = _PartnerCardHarness();
@@ -225,20 +225,20 @@ void main() {
         tester
             .getSize(find.byKey(const ValueKey('spending-rhythm-plot-lane')))
             .height,
-        40,
+        44,
       );
       expect(
-        find.byKey(const ValueKey('budget-distribution-donut-110')),
+        find.byKey(const ValueKey('budget-distribution-donut-106')),
         findsOneWidget,
         reason:
             'The reference Card2 has enough room for the readable 110dp '
-            'Partner donut after Rhythm receives its fixed 40dp plot lane.',
+            'Partner donut after Rhythm receives its 44dp plot lane.',
       );
     },
   );
 
   testWidgets(
-    'Partner layout keeps the real Rhythm plot above its 32dp floor in a '
+    'Partner layout keeps the real Rhythm plot above its 35.2dp floor in a '
     'shorter Card2 viewport without changing outer-card geometry',
     (tester) async {
       final harness = _PartnerCardHarness();
@@ -254,7 +254,7 @@ void main() {
 
       final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
       expect(plot, findsOneWidget);
-      expect(tester.getSize(plot).height, greaterThanOrEqualTo(32));
+      expect(tester.getSize(plot).height, greaterThanOrEqualTo(35.2));
       expect(tester.takeException(), isNull);
     },
   );

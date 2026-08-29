@@ -830,6 +830,25 @@ final class DashboardBudgetLimitEditController
   void invalidateIfContextChanged(FinancialLimitKey? currentKey) {
     final active = _active;
     if (active == null || active.context.key == currentKey) return;
+    if (currentKey == null) {
+      // A transient unavailable projection does not identify another target or
+      // scope. The direct pointer sequence remains the visible draft owner
+      // until a concrete incompatible key arrives; finishEdit still verifies
+      // isKeyCurrent before any write, so this cannot commit across targets.
+      _diagnose('BUDGET_LIMIT_EDIT_TRANSIENT_CONTEXT_GAP_RETAINED', active);
+      return;
+    }
+    _active = null;
+    _restoreOverlayAfterActiveDrop(active);
+    _publishForCurrentOverlay();
+  }
+
+  /// Drops a scalar draft only when a current visible authority was resolved.
+  /// Unlike [invalidateIfContextChanged], a null [currentKey] here is a known
+  /// non-scalar scope (for example YEAR), not a transient unavailable frame.
+  void invalidateIfResolvedContextChanged(FinancialLimitKey? currentKey) {
+    final active = _active;
+    if (active == null || active.context.key == currentKey) return;
     _active = null;
     _restoreOverlayAfterActiveDrop(active);
     _publishForCurrentOverlay();
@@ -843,9 +862,41 @@ final class DashboardBudgetLimitEditController
   ) {
     final active = _activeYear;
     if (active == null) return;
-    if (currentContext != null &&
-        _yearIdentityFor(active.context) == _yearIdentityFor(currentContext) &&
+    if (currentContext == null) {
+      // Just like the scalar editor, an unavailable prepared projection is
+      // not proof that the direct-input target changed. Retain the local
+      // twelve-month draft until a concrete incompatible context arrives;
+      // finishContext still checks isYearContextCurrent before it can write.
+      _diagnoseYear(
+        'BUDGET_YEAR_LIMIT_EDIT_TRANSIENT_CONTEXT_GAP_RETAINED',
+        active,
+      );
+      return;
+    }
+    if (_yearIdentityFor(active.context) == _yearIdentityFor(currentContext) &&
         active.context.coreRevision == currentContext.coreRevision) {
+      return;
+    }
+    _activeYear = null;
+    notifyListeners();
+  }
+
+  /// Drops a derived YEAR draft only when a concrete visible authority has
+  /// been resolved. A non-YEAR scope is represented by [year] == null and is
+  /// therefore incompatible with every active derived-year gesture.
+  void invalidateYearIfResolvedContextChanged({
+    required FinancialLimitDirection direction,
+    required FinancialLimitTarget target,
+    required int? year,
+    required int coreRevision,
+  }) {
+    final active = _activeYear;
+    if (active == null) return;
+    if (year != null &&
+        active.context.direction == direction &&
+        active.context.target == target &&
+        active.context.year == year &&
+        active.context.coreRevision == coreRevision) {
       return;
     }
     _activeYear = null;

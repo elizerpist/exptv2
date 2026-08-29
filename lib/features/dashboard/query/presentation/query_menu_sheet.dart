@@ -8,6 +8,7 @@ import '../application/query_composer_controller.dart';
 import '../application/query_menu_data_controller.dart';
 import '../application/saved_query_controller.dart';
 import '../domain/current_ledger_query_scope.dart';
+import '../domain/query_amount_threshold.dart';
 import '../domain/query_menu_data.dart';
 import '../domain/query_temporal_presets.dart';
 import '../domain/query_temporal_filter.dart';
@@ -291,11 +292,14 @@ final class _QueryMenuSheetState extends State<QueryMenuSheet> {
                             };
                             final domain = _data?.amountDomain;
                             if (domain == null) return;
-                            if (min <= domain.minimumAmountScaled100) {
-                              refinements.remove('minimumAmountScaled100');
-                            } else {
-                              refinements['minimumAmountScaled100'] = min;
-                            }
+                            final threshold = QueryAmountThreshold.apply(
+                              _draft,
+                              valueScaled100: min,
+                              amountDomain: domain,
+                            );
+                            refinements
+                              ..clear()
+                              ..addAll(threshold.refinements);
                             if (max >= domain.maximumAmountScaled100) {
                               refinements.remove('maximumAmountScaled100');
                             } else {
@@ -1188,14 +1192,16 @@ final class _AdvancedDisclosure extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final domain = data?.amountDomain;
-    final lower =
-        _refinement(draft, 'minimumAmountScaled100') ??
-        domain?.minimumAmountScaled100 ??
-        0;
-    final upper =
+    final threshold = QueryAmountThreshold.resolve(
+      scope: draft,
+      amountDomain: domain,
+    );
+    final lower = threshold.valueScaled100;
+    final rawUpper =
         _refinement(draft, 'maximumAmountScaled100') ??
         domain?.maximumAmountScaled100 ??
-        0;
+        threshold.maximumScaled100;
+    final upper = rawUpper.clamp(lower, threshold.maximumScaled100).toInt();
     return Container(
       decoration: const BoxDecoration(
         color: QueryMenuTokens.sectionSurface,
@@ -1268,8 +1274,8 @@ final class _AdvancedDisclosure extends StatelessWidget {
           ),
           if (open && domain != null)
             _AmountRange(
-              minimum: domain.minimumAmountScaled100,
-              maximum: domain.maximumAmountScaled100,
+              minimum: threshold.minimumScaled100,
+              maximum: threshold.maximumScaled100,
               lower: lower,
               upper: upper,
               onChangeEnd: (range) =>

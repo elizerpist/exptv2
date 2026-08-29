@@ -41,15 +41,15 @@ final class BudgetPartnerDistributionLayout {
     required this.legendRowHeight,
   });
 
-  // At the 217dp reference Card2, these two reclaimed pixels give the
-  // Partner donut its readable 110dp floor after Rhythm reserves its 40dp
+  // At the 217dp reference Card2, this reclaimed geometry gives the
+  // Partner donut its readable 106dp floor after Rhythm reserves its 44dp
   // real plot lane. The list remains the flexible consumer below that lane.
   static const double dividerGap = 2;
   static const double upperDonutBreathingRoom = 0;
   static const double targetDonutDiameter = 120;
   // Keep the normal 208dp Card2 above the readable 105dp floor before the
   // Rhythm plot consumes its optional headroom. On shorter cards the plot
-  // retains its real 32dp minimum and the donut then degrades only as far as
+  // retains its real 35.2dp minimum and the donut then degrades only as far as
   // the physical constraints require.
   static const double preferredDonutDiameter = 105;
   static const double compactLegendRowHeight = 20;

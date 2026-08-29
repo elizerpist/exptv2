@@ -305,12 +305,71 @@ void main() {
         );
         expect(controller.hasYearOverlay, isTrue);
 
-        controller.invalidateYearIfContextChanged(null);
+        controller.invalidateYearIfContextChanged(
+          DashboardBudgetYearLimitEditContext(
+            direction: context.direction,
+            target: context.target,
+            coreRevision: 8,
+            targetHandle: context.targetHandle,
+            year: context.year,
+            monthOverrideKeys: context.monthOverrideKeys,
+            confirmedMonthlyLimitsScaled100:
+                context.confirmedMonthlyLimitsScaled100,
+            canonicalAnnualActualScaled100:
+                context.canonicalAnnualActualScaled100,
+          ),
+        );
 
         expect(controller.hasYearOverlay, isFalse);
         expect(
           controller.effectiveYearLimitsFor(context),
           List<int>.filled(12, 100),
+        );
+        expect(repository.batchCalls, 0);
+      },
+    );
+
+    test(
+      'a transient unavailable presentation cannot steal an active YEAR edit',
+      () {
+        final repository = _CountingFinancialLimitRepository();
+        final context = _yearContext();
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (_) => false,
+          isYearContextCurrent: (_) => true,
+        );
+        addTearDown(controller.dispose);
+
+        final session =
+            controller.startContext(context)!
+                as DashboardBudgetYearLimitEditSession;
+        controller.applyContextSemanticTick(
+          session,
+          direction: 1,
+          amountStepScaled100: 120,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.drag,
+        );
+
+        controller.invalidateYearIfContextChanged(null);
+
+        expect(controller.hasYearOverlay, isTrue);
+        expect(
+          controller.applyContextSemanticTick(
+            session,
+            direction: 1,
+            amountStepScaled100: 120,
+            tickCount: 1,
+            source: DashboardBudgetLimitEditSource.auto,
+          ),
+          isTrue,
+        );
+        expect(
+          controller
+              .effectiveYearLimitsFor(context)
+              .fold<int>(0, (sum, value) => sum + value),
+          1440,
         );
         expect(repository.batchCalls, 0);
       },
@@ -481,6 +540,52 @@ void main() {
       },
     );
 
+    test(
+      'a transient unavailable presentation cannot steal an active first edit',
+      () async {
+        final key = _key();
+        final repository = _CountingFinancialLimitRepository();
+        final controller = DashboardBudgetLimitEditController(
+          repository: repository,
+          isKeyCurrent: (candidate) => candidate == key,
+        );
+        addTearDown(controller.dispose);
+
+        final session = controller.startEdit(_context(key))!;
+        expect(
+          controller.applySemanticTick(
+            session,
+            direction: 1,
+            amountStepScaled100: 100000,
+            tickCount: 1,
+            source: DashboardBudgetLimitEditSource.drag,
+          ),
+          isTrue,
+        );
+
+        // A preparation/publication gap carries no incompatible target. The
+        // direct session must remain the visible limit authority until a real
+        // target/scope replacement is established.
+        controller.invalidateIfContextChanged(null);
+
+        expect(
+          controller.applySemanticTick(
+            session,
+            direction: 1,
+            amountStepScaled100: 100000,
+            tickCount: 1,
+            source: DashboardBudgetLimitEditSource.auto,
+          ),
+          isTrue,
+        );
+        expect(controller.value!.effectiveLimitScaled100, 400000);
+
+        await controller.finishEdit(session);
+        expect(repository.upsertCalls, 1);
+        expect(repository.lastUpsertAmount, 400000);
+      },
+    );
+
     test('persistence failure removes only its own optimistic value', () async {
       final key = _key();
       final repository = _CountingFinancialLimitRepository(failWrites: true);
@@ -574,6 +679,25 @@ DashboardBudgetLimitEditContext _contextFor(
   actualScaled100: 100000,
   confirmedLimitScaled100: confirmedLimitScaled100,
 );
+
+DashboardBudgetYearLimitEditContext _yearContext({int coreRevision = 7}) =>
+    DashboardBudgetYearLimitEditContext(
+      direction: FinancialLimitDirection.expense,
+      target: const FinancialLimitAggregateTarget(),
+      coreRevision: coreRevision,
+      targetHandle: 0,
+      year: 2026,
+      monthOverrideKeys: <FinancialLimitKey>[
+        for (var month = 1; month <= 12; month += 1)
+          FinancialLimitKey(
+            direction: FinancialLimitDirection.expense,
+            target: const FinancialLimitAggregateTarget(),
+            period: FinancialLimitMonthOverridePeriod(2026, month),
+          ),
+      ],
+      confirmedMonthlyLimitsScaled100: List<int>.filled(12, 100),
+      canonicalAnnualActualScaled100: 0,
+    );
 
 final class _CountingFinancialLimitRepository
     implements FinancialLimitRepository {

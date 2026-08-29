@@ -10,14 +10,15 @@ class SpendingRhythmBarChart extends StatefulWidget {
   const SpendingRhythmBarChart({super.key, required this.state});
 
   /// The footer is one named geometry contract, not an unexplained minimum.
-  /// A 40dp target plot (32dp absolute floor) makes the temporal rhythm
-  /// legible without changing any bucket, normalization or average semantics.
+  /// The authored 40dp plot grows by exactly ten percent. The 4dp delta is
+  /// reclaimed by [BudgetPartnerDistributionLayout] from the upper chart
+  /// region, never from the outer Card2 envelope.
   static const double titleLaneHeight = 8;
   static const double titleToPlotGap = 3;
   static const double plotToAxisGap = 2;
   static const double axisLaneHeight = 9;
-  static const double minimumPlotLaneHeight = 32;
-  static const double targetPlotLaneHeight = 40;
+  static const double minimumPlotLaneHeight = 35.2;
+  static const double targetPlotLaneHeight = 44;
   static const double minimumLayoutHeight =
       titleLaneHeight +
       titleToPlotGap +

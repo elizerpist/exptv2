@@ -161,13 +161,13 @@ void main() {
     await tester.pump();
 
     final slider = tester.widget<RangeSlider>(find.byType(RangeSlider));
-    slider.onChanged!(const RangeValues(10000, 200000));
+    slider.onChanged!(const RangeValues(100000, 200000));
     await tester.pump();
     expect(composer.draft.refinements, isEmpty);
 
-    slider.onChangeEnd!(const RangeValues(10000, 200000));
+    slider.onChangeEnd!(const RangeValues(100000, 200000));
     await tester.pump();
-    expect(composer.draft.refinements['minimumAmountScaled100'], 10000);
+    expect(composer.draft.refinements['minimumAmountScaled100'], 100000);
     expect(composer.draft.refinements['maximumAmountScaled100'], 200000);
   });
 

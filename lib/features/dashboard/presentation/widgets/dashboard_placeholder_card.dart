@@ -19,6 +19,7 @@ class DashboardPlaceholderCard extends StatelessWidget {
     this.fillParent = false,
     this.cornerFamily = DashboardCornerSurfaceFamily.contentCard,
     this.borderSurface = DashboardBorderSurface.balanceContent,
+    this.child,
   });
 
   final DashboardBounds bounds;
@@ -27,6 +28,7 @@ class DashboardPlaceholderCard extends StatelessWidget {
   final bool fillParent;
   final DashboardCornerSurfaceFamily cornerFamily;
   final DashboardBorderSurface borderSurface;
+  final Widget? child;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +42,7 @@ class DashboardPlaceholderCard extends StatelessWidget {
         context,
       ).borderRadiusFor(cornerFamily, size: Size(bounds.width, bounds.height)),
       boxShadow: depth.shadows,
-      child: const SizedBox.expand(),
+      child: child ?? const SizedBox.expand(),
     );
 
     if (fillParent) {

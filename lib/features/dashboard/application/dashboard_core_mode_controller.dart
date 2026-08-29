@@ -33,14 +33,20 @@ final class DashboardCoreModeController extends ChangeNotifier {
 
   final DashboardCoreModeSwitchObserver? onModeSwitched;
   DashboardModeSpec _committedMode;
+  int _committedModeEpoch = 0;
 
   DashboardModeSpec get committedMode => _committedMode;
+
+  /// A visibility identity, not a mode value. Returning to the same mode is a
+  /// new rendered surface and must not be treated as a target-selection no-op.
+  int get committedModeEpoch => _committedModeEpoch;
 
   /// Immediately advances to one adjacent logical mode in the fixed ring.
   bool switchMode(DashboardCoreModeDirection direction) {
     final source = _committedMode;
     final target = _neighbourOf(source, direction);
     _committedMode = target;
+    _committedModeEpoch += 1;
     onModeSwitched?.call(
       DashboardCoreModeSwitchEvent(
         fromMode: source,
@@ -57,6 +63,7 @@ final class DashboardCoreModeController extends ChangeNotifier {
     final next = _canonicalMode(mode);
     if (identical(next, _committedMode)) return false;
     _committedMode = next;
+    _committedModeEpoch += 1;
     notifyListeners();
     return true;
   }

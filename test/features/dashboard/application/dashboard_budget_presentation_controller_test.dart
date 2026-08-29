@@ -148,6 +148,55 @@ void main() {
     },
   );
 
+  test(
+    'a new Budget-visible epoch republishes one compatible same-target frame',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      final snapshot = _snapshot();
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      presentation.setTargetHandle(1);
+      final before = presentation.value;
+      var publications = 0;
+      presentation.addListener(() => publications += 1);
+
+      // Mind -> Budget changes visibility, not this canonical target, scope,
+      // direction or prepared snapshot. It must nevertheless yield a new
+      // atomic visible Budget frame.
+      presentation.publishForVisibleBudgetEpoch(1);
+
+      final after = presentation.value;
+      expect(publications, 1);
+      expect(after.visibleModeEpoch, 1);
+      expect(after.selectedHandle, before.selectedHandle);
+      expect(
+        after.liveAnalysis.scope?.canonicalKey,
+        before.liveAnalysis.scope?.canonicalKey,
+      );
+      expect(after.header.limitScaled100, 660);
+      expect(after.header.displayNumeratorScaled100, 330);
+      expect(after.selectedLimitVisual.paintsProgressChrome, isTrue);
+      expect(after.partition.isAvailable, isTrue);
+      expect(after.liveSelection.isAvailable, isTrue);
+    },
+  );
+
   test('a live temporal interaction replaces retained scene scope for Budget '
       'analysis before that scene is covered', () {
     final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
@@ -1007,6 +1056,151 @@ void main() {
     );
   });
 
+  test(
+    'an active first edit retains its header and ring through a stale preparation frame',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+      var snapshot = _confirmedLimitSnapshot();
+      late final DashboardBudgetPresentationController presentation;
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoReadFinancialLimitRepository(),
+        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+      );
+      presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: _defaultAsOfDate,
+        limitEditController: edits,
+      );
+      addTearDown(presentation.dispose);
+      addTearDown(edits.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+
+      presentation.setTargetHandle(1);
+      final session = edits.startEdit(
+        presentation.value.header.limitEditContext!,
+      )!;
+      edits.applySemanticTick(
+        session,
+        direction: 1,
+        amountStepScaled100: 100000,
+        tickCount: 1,
+        source: DashboardBudgetLimitEditSource.drag,
+      );
+
+      // A newer prepared bank can briefly arrive before its matching visible
+      // frame. It carries no different target, so the direct draft remains
+      // authoritative instead of publishing the unavailable placeholder.
+      snapshot = _confirmedLimitSnapshot(coreRevision: 8);
+      visible.value = _visibleFrame(coreRevision: 7);
+
+      expect(presentation.value.header.limitScaled100, 88475000);
+      expect(
+        presentation.value.selectedLimitVisual.paintsProgressChrome,
+        isTrue,
+      );
+      expect(
+        edits.applySemanticTick(
+          session,
+          direction: 1,
+          amountStepScaled100: 100000,
+          tickCount: 1,
+          source: DashboardBudgetLimitEditSource.auto,
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test('a concrete newer scope cannot commit a retained scalar edit after a '
+      'snapshot mismatch', () async {
+    final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+      _category('food'),
+    ]);
+    final direction = TransactionDirectionController(
+      initialDirection: TransactionDirection.expense,
+    );
+    final visible = ValueNotifier<DashboardVisibleFrame?>(_visibleFrame());
+    final navigation = DashboardNavigationController(
+      initialDate: DateTime.utc(2026, 1, 10),
+      initialDirection: LedgerDirection.expense,
+    );
+    final live = DashboardLiveInteractionCoordinator();
+    var snapshot = _confirmedLimitSnapshot();
+    late final DashboardBudgetPresentationController presentation;
+    final repository = _RecordingFinancialLimitRepository();
+    final edits = DashboardBudgetLimitEditController(
+      repository: repository,
+      isKeyCurrent: (key) => presentation.isLimitEditKeyCurrent(key),
+    );
+    presentation = DashboardBudgetPresentationController(
+      categoryCollection: categories,
+      visibleFrame: visible,
+      liveInteractions: live,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: _defaultAsOfDate,
+      limitEditController: edits,
+    );
+    addTearDown(presentation.dispose);
+    addTearDown(edits.dispose);
+    addTearDown(categories.dispose);
+    addTearDown(direction.dispose);
+    addTearDown(visible.dispose);
+    addTearDown(navigation.dispose);
+    addTearDown(live.dispose);
+
+    presentation.setTargetHandle(1);
+    final session = edits.startEdit(
+      presentation.value.header.limitEditContext!,
+    )!;
+    edits.applySemanticTick(
+      session,
+      direction: 1,
+      amountStepScaled100: 100000,
+      tickCount: 1,
+      source: DashboardBudgetLimitEditSource.drag,
+    );
+
+    // The old January live interaction is retained by its coordinator while
+    // a newer visible February navigation epoch arrives. A navigation-only
+    // preparation deliberately keeps core revision 7, so the release guard
+    // must not rely on revision ordering alone.
+    live.accept(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      coreRevision: 7,
+      direction: LedgerDirection.expense,
+      temporalCandidate: navigation.state,
+      category: null,
+      partner: null,
+      normalizedSearch: null,
+    );
+
+    // The visible authority has already moved to February at the same core
+    // revision, but the compatible Budget snapshot is still January. No
+    // retained January Header may authorize a release write in this gap.
+    snapshot = _confirmedLimitSnapshot(coreRevision: 7);
+    visible.value = _visibleFrame(
+      coreRevision: 7,
+      scope: const MonthScope(YearMonth(year: 2026, month: 2)),
+    );
+
+    await edits.finishEdit(session);
+
+    expect(repository.upsertedKeys, isEmpty);
+    expect(edits.value, isNull);
+  });
+
   test('without an overlay the confirmed prepared limit remains visible', () {
     final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
       _category('food'),
@@ -1116,6 +1310,40 @@ final class _NoReadFinancialLimitRepository
   Future<List<FinancialLimit>> upsertBatch(
     List<FinancialLimitMutation> values,
   ) => Future<List<FinancialLimit>>.error(StateError('not used'));
+}
+
+final class _RecordingFinancialLimitRepository
+    implements FinancialLimitRepository {
+  final List<FinancialLimitKey> upsertedKeys = <FinancialLimitKey>[];
+
+  @override
+  Future<bool> delete(FinancialLimitKey key) => Future<bool>.value(true);
+
+  @override
+  Future<FinancialLimit?> get(FinancialLimitKey key) =>
+      Future<FinancialLimit?>.value(null);
+
+  @override
+  Future<List<FinancialLimit>> list() =>
+      Future<List<FinancialLimit>>.value(const <FinancialLimit>[]);
+
+  @override
+  Future<FinancialLimit> upsert(FinancialLimitKey key, int amountScaled100) {
+    upsertedKeys.add(key);
+    return Future<FinancialLimit>.value(
+      FinancialLimit(
+        key: key,
+        amountScaled100: amountScaled100,
+        createdAtUtcMs: 1,
+        updatedAtUtcMs: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<List<FinancialLimit>> upsertBatch(
+    List<FinancialLimitMutation> values,
+  ) => Future<List<FinancialLimit>>.value(const <FinancialLimit>[]);
 }
 
 FluviCategory _category(String id) => FluviCategory(

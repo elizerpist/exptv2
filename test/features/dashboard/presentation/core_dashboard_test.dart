@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/data/empty_category_repository.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
@@ -128,6 +129,15 @@ void main() {
         );
         expect(body.top, 374);
         expect(body.bottom, 674);
+        final threshold = find.byKey(const ValueKey('mind-query-threshold'));
+        expect(threshold, findsOneWidget);
+        expect(
+          tester.getRect(threshold).bottom,
+          lessThanOrEqualTo(body.bottom),
+          reason:
+              'The shared Query threshold stays inside the first Mind card '
+              'rather than adding an independent dashboard layer.',
+        );
       } else {
         expect(
           tester
@@ -152,6 +162,50 @@ void main() {
       }
     });
   }
+
+  testWidgets(
+    'Mind to Budget replays one new visible Budget epoch without an Avatar selection',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(modes.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(modes.setProgrammaticMode(DashboardModeSpec.budget), isTrue);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+        findsOneWidget,
+      );
+
+      modes.setProgrammaticMode(DashboardModeSpec.mind);
+      await tester.pump();
+      modes.setProgrammaticMode(DashboardModeSpec.budget);
+      await tester.pump();
+
+      final replays = FluviDiagnosticLogger.entries
+          .where(
+            (event) => event.stage == 'BUDGET_VISIBLE_PUBLICATION_REPLAYED',
+          )
+          .toList(growable: false);
+      expect(replays, hasLength(2));
+      expect(replays.first.scope, contains('modeEpoch=1'));
+      expect(replays.last.scope, contains('modeEpoch=3'));
+    },
+  );
 
   testWidgets(
     'keeps the SummaryPill amount while rendering Ledger count and SearchPill',

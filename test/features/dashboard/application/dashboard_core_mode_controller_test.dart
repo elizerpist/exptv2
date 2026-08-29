@@ -66,6 +66,25 @@ void main() {
       expect(events.single.toMode, DashboardModeSpec.balance);
     });
 
+    test('advances the visible epoch for every real mode replacement', () {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(controller.dispose);
+
+      expect(controller.committedModeEpoch, 0);
+      controller.switchMode(DashboardCoreModeDirection.backward);
+      expect(controller.committedMode, DashboardModeSpec.budget);
+      expect(controller.committedModeEpoch, 1);
+      controller.switchMode(DashboardCoreModeDirection.forward);
+      expect(controller.committedMode, DashboardModeSpec.mind);
+      expect(
+        controller.committedModeEpoch,
+        2,
+        reason: 'returning to Mind is a new visible surface',
+      );
+    });
+
     test(
       'programmatic mode replacement remains an immediate canonical write',
       () {

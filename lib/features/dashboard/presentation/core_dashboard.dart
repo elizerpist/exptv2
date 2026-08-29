@@ -27,6 +27,7 @@ import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
 import '../query/domain/ledger_direction.dart';
+import '../query/domain/query_amount_threshold.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -173,15 +174,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     if (financialLimitRepository != null) {
       _budgetLimitEdit = DashboardBudgetLimitEditController(
         repository: financialLimitRepository,
-        isKeyCurrent: (key) => _budgetPresentation.value.header.limitKey == key,
-        isYearContextCurrent: (context) {
-          final current = _budgetPresentation.value.header.editContext;
-          return current is DashboardBudgetYearLimitEditContext &&
-              current.direction == context.direction &&
-              current.target == context.target &&
-              current.year == context.year &&
-              current.coreRevision == context.coreRevision;
-        },
+        isKeyCurrent: (key) => _budgetPresentation.isLimitEditKeyCurrent(key),
+        isYearContextCurrent: (context) =>
+            _budgetPresentation.isYearLimitEditContextCurrent(context),
       );
     }
     _budgetPresentation = DashboardBudgetPresentationController(
@@ -356,6 +351,14 @@ class _CoreDashboardState extends State<CoreDashboard>
       controller.detachBudgetDistributionTimePublicationPreparer();
       return;
     }
+    // Distribution warmup was previously the only Budget mode-entry action.
+    // It can make Card2 current while Header/Ring retain an unavailable
+    // previous frame. Replay the one atomic Budget presentation first, using
+    // the mode owner's monotonic visible identity rather than a fake Avatar
+    // selection or delayed retry.
+    _budgetPresentation.publishForVisibleBudgetEpoch(
+      modeController.committedModeEpoch,
+    );
     controller.attachBudgetDistributionTimePublicationPreparer(
       prepare: (candidate) => _budgetDistributionDrawables
           .prepareForTimeScope(candidate.effectiveScope)
@@ -605,6 +608,12 @@ class _CoreDashboardState extends State<CoreDashboard>
                                           _budgetHeaderColorPolicy,
                                       mindHeaderVisualFrame:
                                           _mindHeaderColorPolicy,
+                                      mindQueryThresholdBounds:
+                                          _mindQueryThresholdBounds,
+                                      mindQueryThresholdChanges:
+                                          controller.currentQuery,
+                                      onMindQueryThresholdCommitted:
+                                          _commitMindQueryThreshold,
                                       budgetPresentation: _budgetPresentation,
                                       budgetLimitEditController:
                                           _budgetLimitEdit,
@@ -986,6 +995,34 @@ class _CoreDashboardState extends State<CoreDashboard>
           ),
         );
       },
+    );
+  }
+
+  QueryAmountThresholdBounds _mindQueryThresholdBounds() {
+    final direction =
+        controller.presentation.navigation.state.parentQueryScope.direction;
+    return QueryAmountThreshold.resolve(
+      scope: controller.currentQuery.scopeFor(direction),
+      amountDomain: controller.currentQuery
+          .facetPresentationFor(direction)
+          ?.amountDomain,
+    );
+  }
+
+  void _commitMindQueryThreshold(int valueScaled100) {
+    final direction =
+        controller.presentation.navigation.state.parentQueryScope.direction;
+    final current = controller.currentQuery.scopeFor(direction);
+    final next = QueryAmountThreshold.apply(
+      current,
+      valueScaled100: valueScaled100,
+      amountDomain: controller.currentQuery
+          .facetPresentationFor(direction)
+          ?.amountDomain,
+    );
+    if (next == current) return;
+    unawaited(
+      controller.applyQuery(next, facetPresentationSource: 'mindThreshold'),
     );
   }
 
