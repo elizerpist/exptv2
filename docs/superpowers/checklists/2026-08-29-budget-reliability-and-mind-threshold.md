@@ -15,7 +15,7 @@ Source: the 2026-08-29 autonomous production brief, Fluvi Logs revision 50,
 | B3 | Foreground performance and stale safety (brief B4/B6–B11/B16) | Query publication and Mind slider | Latest semantic threshold wins; raw movement has no repository work or full-dashboard rebuild; LogBox ownership stays stable. | counter/identity/application tests | PARTIAL |
 | B4 | Mind physical integration (brief B10/B12/B13/B14) | First Mind card | Bottom horizontal control reuses Query semantics/style and does not leak or steal vertical/collapse gestures. | widget/Android verification | PARTIAL |
 | V1 | Regression/performance baseline | Dashboard integration | Existing Avatar, Summary, distribution, LogBox and Header contracts remain intact. | focused existing suites, analyze, Android exercise | PARTIAL |
-| D1 | Delivery | docs/git/GitHub Actions | Evidence is documented, source-coherent commits are pushed, exact-SHA human APK is downloaded. | diff/check, CI, file hash | NOT DONE |
+| D1 | Delivery | docs/git/GitHub Actions | Evidence is documented, source-coherent commits are pushed, exact-SHA human APK is downloaded. | diff/check, CI, file hash | DONE |
 
 ## Evidence recorded before delivery
 
@@ -112,3 +112,17 @@ times out after 30 seconds. It was reproduced unchanged in a detached
 worktree at starting SHA `3c719dd4680796e11533831d58058f9a48d055d1`; neither
 that test file nor `DashboardCoreController` changed in this work. Android
 physical repetition remains required before these items can become DONE.
+
+### Delivery
+
+Production commit `ac98fdaf224e1609ebe00523b248ded2947b8a7e` was pushed to
+`origin/separated-core-modes`. GitHub Actions run `33243180357` completed its
+dashboard paths, Flutter, native Room and human physical-device diagnostic APK
+jobs successfully for that exact SHA. The release asset
+`fluvi_HUMAN_DIAGNOSTIC_ac98fda.apk` was downloaded to
+`/storage/emulated/0/Download/fluvi/`; its SHA-256 is
+`89e47271f174e787aeabb2d75270e944df5c67d4b8735e8dbe6a7d0eee8d29de`.
+
+The separate emulated A--J dashboard profile gate was still in progress when
+this delivery evidence was recorded. It is not substituted for manual Android
+physical acceptance.
