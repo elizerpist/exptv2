@@ -47,7 +47,11 @@ final class BudgetPartnerDistributionLayout {
   static const double dividerGap = 2;
   static const double upperDonutBreathingRoom = 0;
   static const double targetDonutDiameter = 120;
-  static const double minimumDonutDiameter = 88;
+  // Keep the normal 208dp Card2 above the readable 105dp floor before the
+  // Rhythm plot consumes its optional headroom. On shorter cards the plot
+  // retains its real 32dp minimum and the donut then degrades only as far as
+  // the physical constraints require.
+  static const double preferredDonutDiameter = 105;
   static const double compactLegendRowHeight = 20;
 
   final double rhythmFooterHeight;
@@ -71,7 +75,7 @@ final class BudgetPartnerDistributionLayout {
         SpendingRhythmBarChart.plotToAxisGap +
         SpendingRhythmBarChart.axisLaneHeight;
     final plotBudget =
-        (contentHeight - dividerGap - minimumDonutDiameter - nonPlotHeight)
+        (contentHeight - dividerGap - preferredDonutDiameter - nonPlotHeight)
             .clamp(
               SpendingRhythmBarChart.minimumPlotLaneHeight,
               SpendingRhythmBarChart.targetPlotLaneHeight,

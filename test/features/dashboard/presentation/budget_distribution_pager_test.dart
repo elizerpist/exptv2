@@ -1,8 +1,14 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
+import 'package:fluvi/core/design/header_cascade_motion.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -16,6 +22,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribu
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -30,6 +37,243 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
+  testWidgets(
+    'RED: collapse reveal keeps the active Partner interior instead of exposing the dashboard background',
+    (tester) async {
+      const partner = Color(0xffe91e63);
+      const category = Color(0xff00c853);
+      const dashboardBackground = Color(0xff37474f);
+      final pages = BudgetDistributionPageController(
+        initialVirtualIndex: 1000001,
+      );
+      final revealProgress = ValueNotifier<double>(1);
+      final repaintBoundaryKey = GlobalKey();
+      addTearDown(pages.dispose);
+      addTearDown(revealProgress.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: repaintBoundaryKey,
+              child: ColoredBox(
+                color: dashboardBackground,
+                child: ValueListenableBuilder<double>(
+                  valueListenable: revealProgress,
+                  builder: (context, progress, _) => Stack(
+                    children: <Widget>[
+                      DashboardCoreModeCascadeCard(
+                        bounds: const DashboardBounds(
+                          left: 10,
+                          top: 10,
+                          width: 180,
+                          height: 120,
+                        ),
+                        motion: CascadedCardMotion(
+                          top: 10,
+                          left: 10,
+                          right: 10,
+                          opacity: 1,
+                          scale: 1,
+                          progress: progress,
+                        ),
+                        semanticKey: const ValueKey<String>(
+                          'controlled-card2-cascade',
+                        ),
+                        showPlaceholderSurface: false,
+                        content: BudgetDistributionCardShell(
+                          child: PageView.builder(
+                            key: const ValueKey<String>(
+                              'controlled-card2-pager',
+                            ),
+                            controller: pages.pageController,
+                            clipBehavior: Clip.none,
+                            onPageChanged: pages.bindVirtualIndex,
+                            itemBuilder: (context, index) => KeyedSubtree(
+                              key: ValueKey<String>(
+                                'controlled-card2-page-$index',
+                              ),
+                              child: ColoredBox(
+                                color: index.isOdd ? partner : category,
+                                child: Text(
+                                  index.isOdd ? 'Partner' : 'Category',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final retainedController = pages.pageController;
+      final retainedPosition = retainedController.position;
+      final semanticEvents = <BudgetDistributionPage>[];
+      pages.addListener(() => semanticEvents.add(pages.value));
+
+      revealProgress.value = .5;
+      await tester.pump();
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(repaintBoundaryKey),
+      );
+      expect(
+        await _pixelAt(tester, boundary, 100, 90),
+        partner,
+        reason:
+            'At intermediate collapse progress the active Partner Card2 '
+            'interior must remain the authored moving content, rather than '
+            'being replaced by the dashboard background.',
+      );
+
+      for (final progress in <double>[
+        1,
+        .90,
+        .75,
+        .50,
+        .25,
+        .10,
+        0,
+        .10,
+        .25,
+        .50,
+        .75,
+        .90,
+        1,
+      ]) {
+        revealProgress.value = progress;
+        await tester.pump();
+        expect(pages.value, BudgetDistributionPage.partner);
+        expect(pages.virtualIndex.isOdd, isTrue);
+        expect(identical(pages.pageController, retainedController), isTrue);
+        expect(
+          identical(retainedController.position, retainedPosition),
+          isTrue,
+        );
+        expect(semanticEvents, isEmpty);
+      }
+    },
+  );
+
+  testWidgets(
+    'RED: collapse reveal keeps the active Category interior and pager identity',
+    (tester) async {
+      const partner = Color(0xffe91e63);
+      const category = Color(0xff00c853);
+      const dashboardBackground = Color(0xff37474f);
+      final pages = BudgetDistributionPageController(
+        initialVirtualIndex: 1000000,
+      );
+      final revealProgress = ValueNotifier<double>(1);
+      final repaintBoundaryKey = GlobalKey();
+      addTearDown(pages.dispose);
+      addTearDown(revealProgress.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: repaintBoundaryKey,
+              child: ColoredBox(
+                color: dashboardBackground,
+                child: ValueListenableBuilder<double>(
+                  valueListenable: revealProgress,
+                  builder: (context, progress, _) => Stack(
+                    children: <Widget>[
+                      DashboardCoreModeCascadeCard(
+                        bounds: const DashboardBounds(
+                          left: 10,
+                          top: 10,
+                          width: 180,
+                          height: 120,
+                        ),
+                        motion: CascadedCardMotion(
+                          top: 10,
+                          left: 10,
+                          right: 10,
+                          opacity: 1,
+                          scale: 1,
+                          progress: progress,
+                        ),
+                        semanticKey: const ValueKey<String>(
+                          'controlled-category-card2-cascade',
+                        ),
+                        showPlaceholderSurface: false,
+                        content: BudgetDistributionCardShell(
+                          child: PageView.builder(
+                            key: const ValueKey<String>(
+                              'controlled-category-card2-pager',
+                            ),
+                            controller: pages.pageController,
+                            clipBehavior: Clip.none,
+                            onPageChanged: pages.bindVirtualIndex,
+                            itemBuilder: (context, index) => KeyedSubtree(
+                              key: ValueKey<String>(
+                                'controlled-category-card2-page-$index',
+                              ),
+                              child: ColoredBox(
+                                color: index.isEven ? category : partner,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final retainedController = pages.pageController;
+      final retainedPosition = retainedController.position;
+      final semanticEvents = <BudgetDistributionPage>[];
+      pages.addListener(() => semanticEvents.add(pages.value));
+      revealProgress.value = .5;
+      await tester.pump();
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(repaintBoundaryKey),
+      );
+      expect(await _pixelAt(tester, boundary, 100, 90), category);
+
+      for (final progress in <double>[
+        1,
+        .90,
+        .75,
+        .50,
+        .25,
+        .10,
+        0,
+        .10,
+        .25,
+        .50,
+        .75,
+        .90,
+        1,
+      ]) {
+        revealProgress.value = progress;
+        await tester.pump();
+        expect(pages.value, BudgetDistributionPage.category);
+        expect(pages.virtualIndex.isEven, isTrue);
+        expect(identical(pages.pageController, retainedController), isTrue);
+        expect(
+          identical(retainedController.position, retainedPosition),
+          isTrue,
+        );
+        expect(semanticEvents, isEmpty);
+      }
+    },
+  );
+
   testWidgets(
     'distribution legend retains its controller and hands boundary overscroll to Header expansion',
     (tester) async {
@@ -223,6 +467,7 @@ void main() {
         find.byKey(const ValueKey('budget-distribution-pager')),
       );
       final stablePageController = pageView.controller;
+      final stablePagePosition = stablePageController!.position;
       final categoryCardBounds = tester.getRect(
         find.byKey(const ValueKey('budget-category-distribution-card')),
       );
@@ -230,9 +475,8 @@ void main() {
         pageView.clipBehavior,
         Clip.none,
         reason:
-            'The travelling FluviRoundedBox owns an elevation shadow outside '
-            'its page slot, so the pager itself must not expose a rectangular '
-            'viewport clip.',
+            'The one outer rounded Card2 shell is the only clip owner; the '
+            'PageView must not add a second rectangular raster boundary.',
       );
       expect(pages.value, BudgetDistributionPage.category);
       expect(find.text('Kategóriák eloszlása'), findsOneWidget);
@@ -245,13 +489,11 @@ void main() {
         find.byKey(const ValueKey('budget-category-distribution-card')),
         findsOneWidget,
         reason:
-            'The Category physical surface must travel with its PageView page.',
+            'The Category renderer remains the active page inside the one '
+            'Card2 physical shell.',
       );
       final categorySurface = tester.widget<FluviRoundedBox>(
-        find.descendant(
-          of: find.byKey(const ValueKey('budget-category-distribution-card')),
-          matching: find.byType(FluviRoundedBox),
-        ),
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
       );
       expect(categorySurface.color, FluviVisualTokens.surface);
       expect(
@@ -263,9 +505,8 @@ void main() {
         categorySurface.decoration.boxShadow,
         FluviVisualTokens.cardSurfaceShadows,
         reason:
-            'The travelling page must keep the standard Fluvi elevation and '
-            'foot shadows; the pager becomes transparent, not a replacement '
-            'card treatment.',
+            'The complete moving Card2 object retains the standard Fluvi '
+            'elevation and foot shadows.',
       );
       expect(
         categorySurface.decoration.borderRadius,
@@ -275,9 +516,9 @@ void main() {
       cardStyle.select(BudgetContentLayout.unifiedCard);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
         findsNothing,
-        reason: 'Unified composition suppresses the nested Card2 shell.',
+        reason: 'Unified composition owns the outer Card2 material itself.',
       );
       expect(
         tester.getRect(
@@ -295,11 +536,17 @@ void main() {
         same(stablePageController),
         reason: 'Changing Card2 chrome must retain the PageController.',
       );
+      expect(
+        identical(stablePageController.position, stablePagePosition),
+        isTrue,
+        reason:
+            'Changing Card2 chrome must retain the attached ScrollPosition.',
+      );
 
       cardStyle.select(BudgetContentLayout.split);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
         findsOneWidget,
       );
 
@@ -313,6 +560,10 @@ void main() {
             .controller,
         same(stablePageController),
         reason: 'an avatar semantic tick may not recreate the local pager',
+      );
+      expect(
+        identical(stablePageController.position, stablePagePosition),
+        isTrue,
       );
 
       await tester.drag(
@@ -357,7 +608,8 @@ void main() {
         find.byKey(const ValueKey('budget-partner-distribution-card')),
         findsOneWidget,
         reason:
-            'The Partner physical surface must travel with its PageView page.',
+            'The Partner content renderer must remain the active child inside '
+            'the one outer Card2 physical shell.',
       );
       final partnerCardBounds = tester.getRect(
         find.byKey(const ValueKey('budget-partner-distribution-card')),
@@ -365,9 +617,9 @@ void main() {
       cardStyle.select(BudgetContentLayout.unifiedCard);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
         findsNothing,
-        reason: 'Unified composition suppresses both nested page shells.',
+        reason: 'Unified composition suppresses the one outer Card2 shell.',
       );
       expect(
         tester.getRect(
@@ -639,4 +891,27 @@ DashboardVisibleFrame _visible() {
     frameGeneration: 1,
     mode: DashboardVisibleMode.committed,
   );
+}
+
+Future<Color> _pixelAt(
+  WidgetTester tester,
+  RenderRepaintBoundary boundary,
+  int x,
+  int y,
+) async {
+  final color = await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final width = image.width;
+    image.dispose();
+    final bytes = Uint8List.view(byteData!.buffer);
+    final offset = (y * width + x) * 4;
+    return Color.fromARGB(
+      bytes[offset + 3],
+      bytes[offset],
+      bytes[offset + 1],
+      bytes[offset + 2],
+    );
+  });
+  return color!;
 }

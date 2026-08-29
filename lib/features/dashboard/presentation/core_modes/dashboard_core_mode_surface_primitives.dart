@@ -43,7 +43,6 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
     required this.semanticKey,
     this.content,
     this.showPlaceholderSurface = true,
-    this.clipOpaqueContentDuringReveal = false,
     this.contentVerticalInputOverflow = 0,
     this.contentVerticalOffset = 0,
     this.borderSurface = DashboardBorderSurface.balanceContent,
@@ -54,14 +53,6 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
   final Key semanticKey;
   final Widget? content;
   final bool showPlaceholderSurface;
-
-  /// A full authored content card must not become a neutral-grey slab merely
-  /// because a partially transparent white material is composited over the
-  /// moving Header/background. Budget Card2 opts into this reveal treatment:
-  /// it stays opaque wherever it is visible and the cascade reveals its
-  /// actual bounds by clipping. Placeholder/other mode cards retain their
-  /// existing opacity choreography.
-  final bool clipOpaqueContentDuringReveal;
   final double contentVerticalInputOverflow;
 
   /// An authored composition offset for a visual/input surface that is
@@ -91,92 +82,50 @@ class DashboardCoreModeCascadeCard extends StatelessWidget {
       child: IgnorePointer(
         ignoring: motion.progress < .98,
         child: Opacity(
-          opacity: clipOpaqueContentDuringReveal && motion.progress > 0
-              ? 1
-              : motion.opacity,
+          opacity: motion.opacity,
           child: Transform.scale(
             scale: motion.scale,
             alignment: Alignment.topCenter,
-            child: _DashboardCascadeRevealClip(
-              progress: clipOpaqueContentDuringReveal ? motion.progress : 1,
-              child: expandedInputSurface
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Positioned(
-                          top: overflow,
-                          left: 0,
-                          right: 0,
-                          height: bounds.height,
-                          child: KeyedSubtree(
-                            key: semanticKey,
-                            child: const SizedBox.expand(),
-                          ),
+            child: expandedInputSurface
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned(
+                        top: overflow,
+                        left: 0,
+                        right: 0,
+                        height: bounds.height,
+                        child: KeyedSubtree(
+                          key: semanticKey,
+                          child: const SizedBox.expand(),
                         ),
-                        content ?? const SizedBox.expand(),
-                      ],
-                    )
-                  : showPlaceholderSurface
-                  ? Stack(
-                      fit: StackFit.expand,
-                      clipBehavior: Clip.none,
-                      children: [
-                        DashboardPlaceholderCard(
-                          bounds: bounds,
-                          fillParent: true,
-                          semanticKey: semanticKey,
-                          borderSurface: borderSurface,
-                        ),
-                        ?content,
-                      ],
-                    )
-                  : KeyedSubtree(
-                      key: semanticKey,
-                      child: content ?? const SizedBox.expand(),
-                    ),
-            ),
+                      ),
+                      content ?? const SizedBox.expand(),
+                    ],
+                  )
+                : showPlaceholderSurface
+                ? Stack(
+                    fit: StackFit.expand,
+                    clipBehavior: Clip.none,
+                    children: [
+                      DashboardPlaceholderCard(
+                        bounds: bounds,
+                        fillParent: true,
+                        semanticKey: semanticKey,
+                        borderSurface: borderSurface,
+                      ),
+                      ?content,
+                    ],
+                  )
+                : KeyedSubtree(
+                    key: semanticKey,
+                    child: content ?? const SizedBox.expand(),
+                  ),
           ),
         ),
       ),
     );
   }
-}
-
-/// Keeps Card2's authored material physically opaque during a cascade while
-/// revealing only the real portion of the card. This avoids alpha-compositing
-/// a white full-card surface into an unrelated grey rectangle at intermediate
-/// header-collapse progress.
-final class _DashboardCascadeRevealClip extends StatelessWidget {
-  const _DashboardCascadeRevealClip({
-    required this.progress,
-    required this.child,
-  });
-
-  final double progress;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (progress >= 1) return child;
-    return ClipRect(
-      clipper: _DashboardCascadeRevealClipper(progress),
-      child: child,
-    );
-  }
-}
-
-final class _DashboardCascadeRevealClipper extends CustomClipper<Rect> {
-  const _DashboardCascadeRevealClipper(this.progress);
-
-  final double progress;
-
-  @override
-  Rect getClip(Size size) =>
-      Rect.fromLTWH(0, 0, size.width, size.height * progress.clamp(0.0, 1.0));
-
-  @override
-  bool shouldReclip(covariant _DashboardCascadeRevealClipper oldClipper) =>
-      oldClipper.progress != progress;
 }
 
 class DashboardCoreModeOpacityPosition extends StatelessWidget {

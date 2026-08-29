@@ -774,6 +774,56 @@ void main() {
     controller.dispose();
   });
 
+  testWidgets(
+    'controlled Header resize retains its one ticker and fragment backend',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final backend = DashboardHeaderFragmentBackend.forTesting();
+      final size = ValueNotifier<Size>(const Size(320, 120));
+      addTearDown(backend.dispose);
+      addTearDown(size.dispose);
+      controller.selectEffect(DashboardHeaderEffectId.dualTide);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ValueListenableBuilder<Size>(
+            valueListenable: size,
+            builder: (context, currentSize, _) => SizedBox(
+              width: currentSize.width,
+              height: currentSize.height,
+              child: DashboardHeaderVisualPaintLayer(
+                controller: controller,
+                frame: _coolFrame(),
+                debugFragmentBackend: backend,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final tickerIdentity = controller.tickerIdentity;
+      final backendIdentity = backend.backendIdentity;
+      for (final currentSize in const <Size>[
+        Size(320, 114),
+        Size(320, 106),
+        Size(320, 96),
+        Size(320, 84),
+        Size(320, 96),
+        Size(320, 120),
+      ]) {
+        size.value = currentSize;
+        await tester.pump();
+        expect(controller.tickerIdentity, same(tickerIdentity));
+        expect(backend.backendIdentity, same(backendIdentity));
+        expect(backend.programCreations, 0);
+        expect(backend.shaderCreations, 0);
+      }
+      controller.dispose();
+    },
+  );
+
   testWidgets('an active Header emits physical backend proof configuration', (
     tester,
   ) async {

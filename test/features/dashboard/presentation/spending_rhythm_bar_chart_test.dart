@@ -166,8 +166,8 @@ void main() {
   );
 
   testWidgets(
-    'Budget Card2 keeps its authored opaque material through every '
-    'intermediate cascade reveal instead of alpha-blending into a grey slab',
+    'Budget Card2 fades its complete authored material without clipping its '
+    'interior away during cascade reveal',
     (tester) async {
       final boundary = GlobalKey();
 
@@ -202,7 +202,6 @@ void main() {
                       ),
                       semanticKey: const ValueKey('cascade-card2'),
                       showPlaceholderSurface: false,
-                      clipOpaqueContentDuringReveal: true,
                       content: const ColoredBox(color: Colors.white),
                     ),
                   ],
@@ -217,13 +216,20 @@ void main() {
 
       expect(await renderAndSample(0), const Color(0xff666666));
       for (final progress in <double>[.25, .50, .75, 1]) {
-        expect(
-          await renderAndSample(progress),
-          Colors.white,
-          reason:
-              'collapse progress $progress must reveal white Card2, '
-              'not a blended grey placeholder.',
+        final actual = await renderAndSample(progress);
+        final expected = Color.alphaBlend(
+          Colors.white.withValues(alpha: progress),
+          const Color(0xff666666),
         );
+        expect(
+          actual.r,
+          closeTo(expected.r, 1 / 255),
+          reason:
+              'collapse progress $progress must fade the complete authored '
+              'Card2 material without clipping its interior away.',
+        );
+        expect(actual.g, closeTo(expected.g, 1 / 255));
+        expect(actual.b, closeTo(expected.b, 1 / 255));
       }
     },
   );

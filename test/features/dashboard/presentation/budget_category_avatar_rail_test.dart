@@ -9,6 +9,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
+import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
@@ -22,6 +23,9 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_qu
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_interaction.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_summary_auto_reset_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -30,6 +34,8 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scop
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
@@ -417,6 +423,112 @@ void main() {
             'A semantic preview crossing emits the paired drill-down intent before motion settlement.',
       );
       expect(presentation.value.selectedHandle, 0);
+    },
+  );
+
+  testWidgets(
+    'RED: real Avatar ballistic motion does not lock direct Summary input',
+    (tester) async {
+      final harness = _Harness(_categories(9));
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 1, 10),
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      final resetMotions = DashboardSummaryAutoResetMotionRegistry();
+      var avatarBallisticActive = false;
+      var directSummaryInputs = 0;
+      final avatarPreviews = <int>[];
+      final summaryCrossings = <TimePlane>[];
+      addTearDown(harness.dispose);
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: <Widget>[
+                SizedBox(
+                  width: 378,
+                  height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                  child: BudgetTargetAvatarRail(
+                    presentation: harness.presentation,
+                    onTargetPreview: (state) {
+                      avatarPreviews.add(state.selectedHandle);
+                    },
+                    onMotionActiveChanged: (active) {
+                      avatarBallisticActive = active;
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 378,
+                  height: 59,
+                  child: SummaryPillExperiment(
+                    variant: SummaryPillVariant.segmented,
+                    bounds: const DashboardBounds(
+                      left: 0,
+                      top: 0,
+                      width: 378,
+                      height: 59,
+                    ),
+                    navigation: navigation,
+                    visibleFrames: visibleFrames,
+                    onLevelCrossed: (plane, _) => summaryCrossings.add(plane),
+                    onComponentCrossed: (_, _) {},
+                    autoResetMotionRegistry: resetMotions,
+                    onSelectorDirectInputStarted: () {
+                      directSummaryInputs += 1;
+                      resetMotions.cancelActiveResetMotion();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-520, 0),
+        2600,
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(avatarBallisticActive, isTrue);
+
+      await tester.fling(
+        find.byKey(const ValueKey('summary-pill-segmented-mode-selector')),
+        const Offset(0, 160),
+        2500,
+      );
+      await tester.pump();
+      expect(
+        directSummaryInputs,
+        greaterThan(0),
+        reason:
+            'Summary pointer-down must be accepted while the real Avatar '
+            'ballistic activity remains active.',
+      );
+      expect(avatarBallisticActive, isTrue);
+
+      final previewsBeforeAvatarReentry = avatarPreviews.length;
+      await tester.drag(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(180, 0),
+      );
+      await tester.pump();
+      expect(
+        avatarPreviews.length,
+        greaterThan(previewsBeforeAvatarReentry),
+        reason:
+            'The later Avatar pointer must immediately reclaim its own '
+            'direct-input lane while Summary reset/ballistic work exists.',
+      );
+
+      await tester.pumpAndSettle();
+      expect(summaryCrossings, isNotEmpty);
     },
   );
 

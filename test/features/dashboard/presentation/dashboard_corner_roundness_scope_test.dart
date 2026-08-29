@@ -154,8 +154,7 @@ void main() {
                     top: 236,
                     width: 320,
                     height: 120,
-                    child: BudgetDistributionPageCard(
-                      cardKey: const ValueKey<String>('roundness-card2'),
+                    child: BudgetDistributionCardShell(
                       contentCardStyle: cardStyle,
                       child: const SizedBox.expand(),
                     ),
@@ -200,9 +199,7 @@ void main() {
         ),
       );
       final card2 = tester.widget<FluviRoundedBox>(
-        find.byKey(
-          const ValueKey<String>('budget-distribution-page-card-surface'),
-        ),
+        find.byKey(const ValueKey<String>('budget-distribution-card-shell')),
       );
       expect(
         card2.decoration.borderRadius,

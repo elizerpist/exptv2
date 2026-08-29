@@ -154,36 +154,32 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   }
 
   @override
-  Widget build(BuildContext context) => PageView.builder(
-    key: const ValueKey('budget-distribution-pager'),
-    controller: widget.controller.pageController,
-    // Card2's page item owns a FluviRoundedBox whose authored elevation and
-    // foot shadows intentionally paint outside its exact child bounds. The
-    // moving card therefore needs an overflow-transparent pager viewport; the
-    // cascade parent already supplies the non-clipping dashboard composition.
-    clipBehavior: Clip.none,
-    onPageChanged: widget.controller.bindVirtualIndex,
-    itemBuilder: (context, virtualIndex) {
-      final page = BudgetDistributionPageController._pageFor(virtualIndex);
-      return RepaintBoundary(
-        child: KeyedSubtree(
-          key: ValueKey('budget-distribution-page-$virtualIndex'),
-          child: switch (page) {
-            BudgetDistributionPage.category => BudgetDistributionPageCard(
-              cardKey: const ValueKey('budget-category-distribution-card'),
-              contentCardStyle: widget.contentCardStyle,
-              child: BudgetCategoryDistributionCard(
+  Widget build(BuildContext context) => BudgetDistributionCardShell(
+    contentCardStyle: widget.contentCardStyle,
+    child: PageView.builder(
+      key: const ValueKey('budget-distribution-pager'),
+      controller: widget.controller.pageController,
+      // BudgetDistributionCardShell owns the one rounded Card2 interior clip.
+      // Keep PageView itself overflow-transparent so it does not add a second,
+      // rectangular raster boundary with a different edge from the shell.
+      clipBehavior: Clip.none,
+      onPageChanged: widget.controller.bindVirtualIndex,
+      itemBuilder: (context, virtualIndex) {
+        final page = BudgetDistributionPageController._pageFor(virtualIndex);
+        return RepaintBoundary(
+          child: KeyedSubtree(
+            key: ValueKey('budget-distribution-page-$virtualIndex'),
+            child: switch (page) {
+              BudgetDistributionPage.category => BudgetCategoryDistributionCard(
+                key: const ValueKey('budget-category-distribution-card'),
                 presentation: widget.presentation,
                 drawableFrames: widget.drawableFrames,
                 avatarRailController: widget.avatarRailController,
                 expandDonutToFit: widget.expandCategoryDonutToFit,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
-            ),
-            BudgetDistributionPage.partner => BudgetDistributionPageCard(
-              cardKey: const ValueKey('budget-partner-distribution-card'),
-              contentCardStyle: widget.contentCardStyle,
-              child: BudgetPartnerDistributionCard(
+              BudgetDistributionPage.partner => BudgetPartnerDistributionCard(
+                key: const ValueKey('budget-partner-distribution-card'),
                 presentation: widget.presentation,
                 drawableFrames: widget.drawableFrames,
                 expandDonutToFit: widget.expandCategoryDonutToFit,
@@ -191,11 +187,11 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 drilldown: widget.drilldown,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
-            ),
-          },
-        ),
-      );
-    },
+            },
+          ),
+        );
+      },
+    ),
   );
 }
 

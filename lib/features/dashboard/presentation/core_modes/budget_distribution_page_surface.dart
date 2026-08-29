@@ -11,63 +11,52 @@ import '../dashboard_border_style.dart';
 import '../budget_content_card_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
-/// The one physical Card2 surface used by both lazily built page items. It is
-/// deliberately inside the PageView so radius and shadow travel with the
-/// semantic Category/Partner page instead of leaving a stationary white card
-/// behind it.
-class BudgetDistributionPageCard extends StatelessWidget {
-  const BudgetDistributionPageCard({
+/// The one physical Card2 surface around the persistent PageView. Category and
+/// Partner pages supply only their interior content, so no sibling can own a
+/// competing shadow, border, radius, or opaque material during collapse.
+class BudgetDistributionCardShell extends StatelessWidget {
+  const BudgetDistributionCardShell({
     super.key,
-    required this.cardKey,
     required this.child,
     this.contentCardStyle,
   });
 
-  final Key cardKey;
   final Widget child;
   final ValueListenable<BudgetContentLayout>? contentCardStyle;
 
   @override
-  Widget build(BuildContext context) => SizedBox.expand(
-    key: cardKey,
-    child: Stack(
-      fit: StackFit.expand,
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        ValueListenableBuilder<BudgetContentLayout>(
-          valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
-          builder: (context, layout, _) => layout == BudgetContentLayout.split
-              ? LayoutBuilder(
-                  builder: (context, constraints) {
-                    final depth = DashboardShadowStyleScope.profileOf(context)
-                        .depthFor(
-                          DashboardCornerSurfaceFamily.budgetDistributionCard,
-                        );
-                    return FluviRoundedBox(
-                      key: const ValueKey(
-                        'budget-distribution-page-card-surface',
-                      ),
-                      color: depth.surfaceColor ?? FluviVisualTokens.surface,
-                      border: DashboardBorderScope.profileOf(
-                        context,
-                      ).borderFor(DashboardBorderSurface.budgetContent),
-                      borderRadius:
-                          DashboardCornerRoundnessScope.profileOf(
-                            context,
-                          ).borderRadiusFor(
-                            DashboardCornerSurfaceFamily.budgetDistributionCard,
-                            size: constraints.biggest,
-                          ),
-                      boxShadow: depth.shadows,
-                      child: const SizedBox.expand(),
-                    );
-                  },
-                )
-              : const SizedBox.shrink(),
-        ),
-        Positioned.fill(child: child),
-      ],
-    ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final depth = DashboardShadowStyleScope.profileOf(
+        context,
+      ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
+      final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
+          .borderRadiusFor(
+            DashboardCornerSurfaceFamily.budgetDistributionCard,
+            size: constraints.biggest,
+          );
+      return Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          ValueListenableBuilder<BudgetContentLayout>(
+            valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+            builder: (context, layout, _) => layout == BudgetContentLayout.split
+                ? FluviRoundedBox(
+                    key: const ValueKey('budget-distribution-card-shell'),
+                    color: depth.surfaceColor ?? FluviVisualTokens.surface,
+                    border: DashboardBorderScope.profileOf(
+                      context,
+                    ).borderFor(DashboardBorderSurface.budgetContent),
+                    borderRadius: borderRadius,
+                    boxShadow: depth.shadows,
+                    child: const SizedBox.expand(),
+                  )
+                : const SizedBox.expand(),
+          ),
+          ClipRRect(borderRadius: borderRadius, child: child),
+        ],
+      );
+    },
   );
 }
 

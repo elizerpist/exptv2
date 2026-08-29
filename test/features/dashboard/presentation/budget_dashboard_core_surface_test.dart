@@ -220,15 +220,15 @@ void main() {
         ),
       );
       expect(
-        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
         findsNothing,
       );
     },
   );
 
   testWidgets(
-    'production Budget Card2 opts into opaque-content clipping for every '
-    'cascade reveal state',
+    'production Budget Card2 keeps one stable cascade subtree for every '
+    'reveal state',
     (tester) async {
       final geometry = DashboardGeometryResolver.resolve(
         metrics: DashboardLayoutMetrics.reference,
@@ -264,12 +264,15 @@ void main() {
       );
       expect(card2.showPlaceholderSurface, isFalse);
       expect(
-        card2.clipOpaqueContentDuringReveal,
-        isTrue,
+        find.descendant(
+          of: find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
+          matching: find.byType(ClipRect),
+        ),
+        findsNothing,
         reason:
-            'The real Budget Card2 uses the same clipping path exercised by '
-            'the collapse raster regression, so a transient grey rectangle '
-            'cannot be introduced through production composition.',
+            'A progress-dependent ClipRect would reparent the persistent '
+            'PageView as collapse starts and expose the dashboard background '
+            'through Card2.',
       );
     },
   );

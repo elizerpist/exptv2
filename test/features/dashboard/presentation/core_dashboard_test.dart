@@ -164,7 +164,7 @@ void main() {
         tester,
         CoreDashboard(
           controller: controller,
-          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
           categoryCollection: emptyTestCategoryCollection,
         ),
       );
@@ -174,11 +174,11 @@ void main() {
         find.byKey(const ValueKey<String>('budget-distribution-pager')),
         findsOneWidget,
       );
-      expect(find.byType(BudgetDistributionPageCard), findsOneWidget);
+      expect(find.byType(BudgetDistributionCardShell), findsOneWidget);
       expect(
         tester
-            .widget<BudgetDistributionPageCard>(
-              find.byType(BudgetDistributionPageCard),
+            .widget<BudgetDistributionCardShell>(
+              find.byType(BudgetDistributionCardShell),
             )
             .contentCardStyle
             ?.value,
@@ -186,7 +186,7 @@ void main() {
       );
       expect(
         find.descendant(
-          of: find.byType(BudgetDistributionPageCard),
+          of: find.byType(BudgetDistributionCardShell),
           matching: find.byType(FluviRoundedBox),
         ),
         findsOneWidget,
@@ -319,7 +319,7 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('budget-distribution-page-card-surface')),
+        find.byKey(const ValueKey('budget-distribution-card-shell')),
         findsOneWidget,
       );
       expect(
