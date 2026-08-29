@@ -193,6 +193,20 @@ final class DashboardMotionKernel extends ChangeNotifier {
     _reconcileState(entry.logicalIndex);
   }
 
+  /// A direct control in the same temporal domain takes ownership before its
+  /// own gesture arena resolves.  This cancels an old rail ballistic without
+  /// creating a semantic crossing, changing controller identity, or allowing
+  /// its late settle callback to publish over the new foreground intent.
+  bool interruptForForegroundTakeover() {
+    final hasPhysicalActivity = carouselController.hasActiveScrollActivity;
+    if (_state.activity == DashboardMotionActivity.idle &&
+        !hasPhysicalActivity) {
+      return false;
+    }
+    reconcileCanonicalSelection(_state.semanticIndex);
+    return true;
+  }
+
   void _reconcileState(int logicalIndex) {
     _acceptSettle = false;
     _semanticReconciliationEpoch += 1;

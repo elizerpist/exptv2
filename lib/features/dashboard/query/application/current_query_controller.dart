@@ -75,11 +75,19 @@ final class CurrentQueryController extends ChangeNotifier {
     }
     final previousScope = scopeFor(direction);
     final previousPresentation = facetPresentationFor(direction);
-    if (nextScope == previousScope && facetPresentation == previousPresentation) {
+    // A renderer-side temporary facet gap is not a new applied Query result.
+    // Keep the exact QueryMenuData that was accepted for this unchanged scope
+    // so every host retains the same canonical amount domain until a new
+    // semantic scope supplies its own presentation.
+    final nextPresentation =
+        facetPresentation ??
+        (nextScope == previousScope ? previousPresentation : null);
+    if (nextScope == previousScope &&
+        nextPresentation == previousPresentation) {
       return false;
     }
     _queries = _queries.replaceDirection(direction, nextScope);
-    _facetPresentations[direction] = facetPresentation;
+    _facetPresentations[direction] = nextPresentation;
     _lastChangedDirection = direction;
     _generation += 1;
     _directionGenerations[direction] = generationFor(direction) + 1;

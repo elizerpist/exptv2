@@ -35,6 +35,7 @@ final class DashboardSummaryPill extends StatefulWidget {
     required this.navigationMotionController,
     this.onMotionActiveChanged,
     this.onAmountMotionActiveChanged,
+    this.onDirectInputStarted,
     required this.horizontalCandidateBuilder,
     required this.onToggleRail,
     required this.onMoveFiner,
@@ -51,6 +52,12 @@ final class DashboardSummaryPill extends StatefulWidget {
   final SummaryNavigationMotionController navigationMotionController;
   final ValueChanged<bool>? onMotionActiveChanged;
   final ValueChanged<bool>? onAmountMotionActiveChanged;
+
+  /// Runs on the raw pointer-down boundary, before the pan recognizer has an
+  /// opportunity to wait on another gesture arena member. The Core uses this
+  /// only to preempt stale maintenance; it does not make the pointer an input
+  /// lock or manufacture a navigation action.
+  final VoidCallback? onDirectInputStarted;
   final SummaryTextContent? Function(SummaryTransitionDirection direction)
   horizontalCandidateBuilder;
   final VoidCallback onToggleRail;
@@ -228,22 +235,26 @@ final class _DashboardSummaryPillState extends State<DashboardSummaryPill>
     return SizedBox(
       width: widget.bounds.width,
       height: widget.bounds.height,
-      child: GestureDetector(
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPanStart: (_) => _beginGesture(),
-        onPanUpdate: _updateGesture,
-        onPanEnd: _finishGesture,
-        onPanCancel: _startShellReturn,
-        child: ValueListenableBuilder<Offset>(
-          valueListenable: _shellOffset,
-          child: RepaintBoundary(
-            key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
-            child: shell,
-          ),
-          builder: (context, offset, child) => Transform.translate(
-            key: const ValueKey('dashboard-summary-shell-transform'),
-            offset: offset,
-            child: child,
+        onPointerDown: (_) => widget.onDirectInputStarted?.call(),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (_) => _beginGesture(),
+          onPanUpdate: _updateGesture,
+          onPanEnd: _finishGesture,
+          onPanCancel: _startShellReturn,
+          child: ValueListenableBuilder<Offset>(
+            valueListenable: _shellOffset,
+            child: RepaintBoundary(
+              key: const ValueKey('dashboard-summary-shell-repaint-boundary'),
+              child: shell,
+            ),
+            builder: (context, offset, child) => Transform.translate(
+              key: const ValueKey('dashboard-summary-shell-transform'),
+              offset: offset,
+              child: child,
+            ),
           ),
         ),
       ),

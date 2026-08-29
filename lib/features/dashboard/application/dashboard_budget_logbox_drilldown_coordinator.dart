@@ -17,6 +17,26 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
   final DashboardCoreController core;
   final DashboardBudgetPresentationController? presentation;
 
+  /// Prepares only the rail's fixed local semantic horizon. This adapter owns
+  /// target-to-facet translation; the Core remains the sole owner of the
+  /// reusable prepared-focus cache and its validity boundary.
+  void primeBudgetTargetHotset(Iterable<int> targetHandles) {
+    final targets = <DashboardFocusFacet>[];
+    for (final handle in targetHandles) {
+      final category = presentation?.targetForHandle(handle)?.category;
+      if (category == null) continue;
+      targets.add(
+        DashboardFocusFacet(
+          id: category.id,
+          displayName: category.displayName,
+          colorId: category.colorId,
+          iconId: category.iconId,
+        ),
+      );
+    }
+    core.primeBudgetAvatarFocusHotset(targets);
+  }
+
   /// Publishes one already-prepared avatar target on the same generation-safe
   /// focus path as settlement. It is invoked only for discrete carousel
   /// crossings; the core publishes its prepared Summary amount immediately

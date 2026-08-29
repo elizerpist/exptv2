@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 
 /// Narrow timer seam for deterministic quick-edit mechanics. The production
@@ -186,8 +188,39 @@ final class BudgetLimitQuickEditGestureController {
   void longPressStarted({required double globalY}) {
     if (_disposed) return;
     _cancelAutoTick();
-    final session = _edits.startContext(_contextForCurrentSelection());
-    if (session == null) return;
+    late final DashboardBudgetEditContext context;
+    try {
+      context = _contextForCurrentSelection();
+    } on Object catch (error) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_LIMIT_EDIT_CONTEXT_REJECTED',
+          message: 'reason=contextResolution:$error',
+        ),
+      );
+      return;
+    }
+    final session = _edits.startContext(context);
+    if (session == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'BUDGET_LIMIT_EDIT_CONTEXT_REJECTED',
+          message: 'reason=canonicalContextNoLongerCurrent',
+        ),
+      );
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_LIMIT_EDIT_CONTEXT_ACCEPTED',
+        scope:
+            'sessionGeneration=${switch (session) {
+              DashboardBudgetLimitEditSession(:final generation) => generation,
+              DashboardBudgetYearLimitEditSession(:final generation) => generation,
+              _ => -1,
+            }}',
+      ),
+    );
     _session = session;
     _activationGlobalY = globalY;
     _resetDirectionalMotion(baselineGlobalY: globalY);

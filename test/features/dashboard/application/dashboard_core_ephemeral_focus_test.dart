@@ -641,7 +641,7 @@ void main() {
   );
 
   test(
-    'G1: Avatar crossings publish prepared semantic frames without starting rich scene work during motion',
+    'RG-G2: Avatar crossings publish prepared semantic frames without starting rich scene work during motion',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -705,6 +705,100 @@ void main() {
       );
       expect(core.focus.state?.category?.id, 'utilities');
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'RG-G2: an eight-crossing Avatar hotset promotes immutable focus roots without UI-isolate derivation',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+      await pumpEventQueue();
+      expect(core.budgetAvatarFocusHotsetDiagnostics['cached'], 2);
+      FluviDiagnosticLogger.clear();
+
+      core.beginBudgetAvatarMotion();
+      for (var index = 0; index < 8; index += 1) {
+        final utilities = index.isEven;
+        expect(
+          await core.requestBudgetCategoryFocus(
+            DashboardFocusFacet(
+              id: utilities ? 'utilities' : 'food',
+              displayName: utilities ? 'Utilities' : 'Food',
+            ),
+            publishDuringMotion: true,
+            targetHandle: index,
+          ),
+          isTrue,
+        );
+      }
+      core.endBudgetAvatarMotion();
+
+      expect(core.budgetAvatarFocusHotsetDiagnostics['promotions'], 8);
+      expect(core.budgetAvatarFocusHotsetDiagnostics['misses'], 0);
+      final derived = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'FOCUS_DERIVED_SCOPE_READY')
+          .toList(growable: false);
+      expect(derived, hasLength(8));
+      for (final event in derived) {
+        expect(event.scope, contains('avatarFocusHotsetHit=true'));
+        expect(event.scope, contains('uiIsolateMicros=0'));
+      }
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'RG-G3: Summary raw input cancels a retained time-neighbour preparation before arena resolution',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final retainedStarted = Completer<void>();
+      final retainedGate = Completer<void>();
+      var cancels = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareRetained:
+            (_, {required retainedKey, required retainViewportId}) {
+              if (!retainedStarted.isCompleted) retainedStarted.complete();
+              return retainedGate.future;
+            },
+        cancel: () => cancels += 1,
+      );
+
+      core.beginVerticalInteraction();
+      core.resumeSceneWindowMaintenanceAfterVerticalInput();
+      await pumpEventQueue();
+      expect(retainedStarted.isCompleted, isTrue);
+      FluviDiagnosticLogger.clear();
+
+      core.noteSummaryDirectPointerDown();
+      expect(cancels, greaterThanOrEqualTo(1));
+      final preemption = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'SUMMARY_DIRECT_POINTER_PREEMPTED',
+      );
+      expect(preemption.scope, contains('cancelledSummaryParentHotset=true'));
+      retainedGate.complete();
+      await pumpEventQueue();
     },
   );
 

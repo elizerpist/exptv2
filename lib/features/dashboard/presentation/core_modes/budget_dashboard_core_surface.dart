@@ -48,6 +48,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.sectionOrder,
     this.rhythm,
     this.drilldown,
+    this.onAvatarDirectInputStarted,
     this.onAvatarMotionActiveChanged,
     this.headerVisualController,
     this.headerVisualFrame,
@@ -65,6 +66,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final ValueListenable<BudgetSectionOrder>? sectionOrder;
   final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
+  final VoidCallback? onAvatarDirectInputStarted;
   final ValueChanged<bool>? onAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
@@ -90,9 +92,13 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
               // a zero-size leaf when Split is selected; it must not become the
               // only non-positioned child and collapse the Budget stack.
               const SizedBox.expand(),
-              _BudgetUnifiedContentCard(
-                geometry: geometry,
-                contentLayout: contentCardStyle,
+              ValueListenableBuilder<BudgetContentLayout>(
+                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+                builder: (context, layout, _) => _BudgetUnifiedContentCard(
+                  geometry: geometry,
+                  section: section,
+                  contentLayout: layout,
+                ),
               ),
               DashboardCoreModeCascadeCard(
                 bounds: section.chartBounds,
@@ -105,24 +111,15 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   'dashboard-core-mode-budget-card-2',
                 ),
                 showPlaceholderSurface: false,
-                content:
-                    presentationController == null ||
-                        distributionDrawables == null ||
-                        avatarRailController == null ||
-                        distributionPageController == null
-                    ? BudgetDistributionCardShell(
-                        child: const SizedBox.expand(),
-                      )
-                    : BudgetDistributionPager(
-                        controller: distributionPageController!,
-                        presentation: presentationController!,
-                        drawableFrames: distributionDrawables!,
-                        avatarRailController: avatarRailController!,
-                        expandCategoryDonutToFit: !geometry.hasPhysicalRail,
-                        rhythm: rhythm,
-                        drilldown: drilldown,
-                        upperVerticalGestures: upperVerticalGestures,
-                      ),
+                content: ValueListenableBuilder<BudgetContentLayout>(
+                  valueListenable:
+                      contentCardStyle ?? _alwaysSplitBudgetContent,
+                  builder: (context, layout, _) => _distributionContent(
+                    surfaceOwner: layout == BudgetContentLayout.unifiedCard
+                        ? BudgetDistributionSurfaceOwner.unifiedParent
+                        : BudgetDistributionSurfaceOwner.splitCard2,
+                  ),
+                ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
                 valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
@@ -148,71 +145,20 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                           order == BudgetSectionOrder.chartThenAvatars
                       ? BudgetTargetAvatarRail.selectedInputVerticalOverflow
                       : 0,
-                  content: presentationController == null
-                      ? const SizedBox(
-                          key: ValueKey<String>('budget-target-avatar-rail'),
-                        )
-                      : BudgetTargetAvatarRail(
-                          presentation: presentationController!,
-                          limitEditController: limitEditController,
-                          navigationController: avatarRailController,
-                          onTargetPreview: drilldown == null
-                              ? null
-                              : (targetHandle) => unawaited(
-                                  drilldown!.previewBudgetTarget(
-                                    targetHandle: targetHandle,
-                                  ),
-                                ),
-                          onTargetSettled: drilldown == null
-                              ? null
-                              : (targetHandle) => unawaited(
-                                  drilldown!.commitBudgetTargetHandle(
-                                    targetHandle: targetHandle,
-                                    source: 'avatarSettled',
-                                  ),
-                                ),
-                          onMotionActiveChanged: onAvatarMotionActiveChanged,
-                        ),
+                  content: _avatarContent(),
                 ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
                 valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
                 builder: (context, layout, _) {
-                  // The source dot gap is 4px. Only Unified Avatar→Chart
-                  // uses it as an extra inner-bottom clearance; Split and
-                  // Chart→Avatar retain their authored indicator geometry.
-                  final bottomClearance =
-                      layout == BudgetContentLayout.unifiedCard &&
-                          order == BudgetSectionOrder.avatarsThenChart
-                      ? DashboardLayoutMetrics.reference.dotGap
-                      : 0.0;
-                  final bounds = DashboardBounds(
-                    left: section.indicatorBounds.left,
-                    top: section.indicatorBounds.top - bottomClearance,
-                    width: section.indicatorBounds.width,
-                    height: section.indicatorBounds.height,
-                  );
+                  final bounds = layout == BudgetContentLayout.unifiedCard
+                      ? _unifiedIndicatorBounds(section, order)
+                      : section.indicatorBounds;
                   return DashboardCoreModeOpacityPosition(
                     bounds: bounds,
                     opacity: geometry.zone2Opacity,
                     offset: Offset(0, geometry.zone2Shift),
-                    child: distributionPageController == null
-                        ? DashboardPlaceholderDots(
-                            bounds: bounds,
-                            semanticKey: const ValueKey(
-                              'dashboard-core-mode-budget-dots',
-                            ),
-                          )
-                        : SizedBox(
-                            key: const ValueKey(
-                              'dashboard-core-mode-budget-dots',
-                            ),
-                            width: bounds.width,
-                            height: bounds.height,
-                            child: BudgetDistributionPageDots(
-                              controller: distributionPageController!,
-                            ),
-                          ),
+                    child: _dotsContent(bounds),
                   );
                 },
               ),
@@ -394,58 +340,145 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
       },
     );
   }
+
+  Widget _distributionContent({
+    required BudgetDistributionSurfaceOwner surfaceOwner,
+  }) {
+    if (presentationController == null ||
+        distributionDrawables == null ||
+        avatarRailController == null ||
+        distributionPageController == null) {
+      return switch (surfaceOwner) {
+        BudgetDistributionSurfaceOwner.splitCard2 =>
+          const BudgetDistributionCardShell(child: SizedBox.expand()),
+        BudgetDistributionSurfaceOwner.unifiedParent =>
+          const BudgetDistributionCardShell(
+            surfaceOwner: BudgetDistributionSurfaceOwner.unifiedParent,
+            child: SizedBox.expand(),
+          ),
+      };
+    }
+    return BudgetDistributionPager(
+      controller: distributionPageController!,
+      presentation: presentationController!,
+      drawableFrames: distributionDrawables!,
+      avatarRailController: avatarRailController!,
+      expandCategoryDonutToFit: !presentation.geometry.hasPhysicalRail,
+      rhythm: rhythm,
+      drilldown: drilldown,
+      upperVerticalGestures: upperVerticalGestures,
+      surfaceOwner: surfaceOwner,
+    );
+  }
+
+  Widget _avatarContent() => presentationController == null
+      ? const SizedBox(key: ValueKey<String>('budget-target-avatar-rail'))
+      : BudgetTargetAvatarRail(
+          presentation: presentationController!,
+          limitEditController: limitEditController,
+          navigationController: avatarRailController,
+          onTargetPreview: drilldown == null
+              ? null
+              : (targetHandle) => unawaited(
+                  drilldown!.previewBudgetTarget(targetHandle: targetHandle),
+                ),
+          onTargetSettled: drilldown == null
+              ? null
+              : (targetHandle) => unawaited(
+                  drilldown!.commitBudgetTargetHandle(
+                    targetHandle: targetHandle,
+                    source: 'avatarSettled',
+                  ),
+                ),
+          onPreparedTargetHotsetRequested: drilldown?.primeBudgetTargetHotset,
+          onMotionActiveChanged: onAvatarMotionActiveChanged,
+          onDirectInputStarted: onAvatarDirectInputStarted,
+        );
+
+  Widget _dotsContent(DashboardBounds bounds) =>
+      distributionPageController == null
+      ? DashboardPlaceholderDots(
+          bounds: bounds,
+          semanticKey: const ValueKey('dashboard-core-mode-budget-dots'),
+        )
+      : SizedBox(
+          key: const ValueKey('dashboard-core-mode-budget-dots'),
+          width: bounds.width,
+          height: bounds.height,
+          child: BudgetDistributionPageDots(
+            controller: distributionPageController!,
+          ),
+        );
 }
 
-/// One purely presentational common shell over the central mode-content
-/// envelope. The avatar rail, pager and dots stay mounted in their existing
-/// cascade slots above it, preserving their controller and gesture ownership.
+/// Unified Budget's physical common surface follows the exact same
+/// top-centred cascade as its persistent Card2 viewport. It therefore stays
+/// behind the transparent Rhythm lane without becoming a second, differently
+/// transformed raster owner, while Avatar and PageView elements retain their
+/// existing tree positions and controllers.
 final class _BudgetUnifiedContentCard extends StatelessWidget {
   const _BudgetUnifiedContentCard({
     required this.geometry,
+    required this.section,
     required this.contentLayout,
   });
 
   final DashboardLayoutFrame geometry;
-  final ValueListenable<BudgetContentLayout>? contentLayout;
+  final _BudgetSectionLayout section;
+  final BudgetContentLayout contentLayout;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<BudgetContentLayout>(
-        valueListenable: contentLayout ?? _alwaysSplitBudgetContent,
-        builder: (context, layout, _) {
-          if (layout != BudgetContentLayout.unifiedCard) {
-            return const SizedBox.shrink();
-          }
-          final bounds = geometry.modeContentBounds;
-          final depth = DashboardShadowStyleScope.profileOf(
+  Widget build(BuildContext context) {
+    if (contentLayout != BudgetContentLayout.unifiedCard) {
+      return const SizedBox.shrink();
+    }
+    final bounds = geometry.modeContentBounds;
+    final motion = section.motionFor(
+      geometry.lowerCardMotion!,
+      from: geometry.zone2Bounds,
+      to: bounds,
+    );
+    final depth = DashboardShadowStyleScope.profileOf(
+      context,
+    ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
+    return DashboardCoreModeOpacityPosition(
+      bounds: bounds,
+      opacity: motion.opacity,
+      offset: Offset(0, motion.top - bounds.top),
+      scale: motion.scale,
+      child: LayoutBuilder(
+        builder: (context, constraints) => FluviRoundedBox(
+          key: const ValueKey<String>('budget-unified-content-card-surface'),
+          color: depth.surfaceColor ?? FluviVisualTokens.surface,
+          border: DashboardBorderScope.profileOf(
             context,
-          ).depthFor(DashboardCornerSurfaceFamily.budgetDistributionCard);
-          return DashboardCoreModeOpacityPosition(
-            bounds: bounds,
-            opacity: geometry.zone2Opacity,
-            offset: Offset(0, geometry.zone2Shift),
-            scale: geometry.zone2Scale,
-            child: LayoutBuilder(
-              builder: (context, constraints) => FluviRoundedBox(
-                key: const ValueKey<String>(
-                  'budget-unified-content-card-surface',
-                ),
-                color: depth.surfaceColor ?? FluviVisualTokens.surface,
-                border: DashboardBorderScope.profileOf(
-                  context,
-                ).borderFor(DashboardBorderSurface.budgetContent),
-                borderRadius: DashboardCornerRoundnessScope.profileOf(context)
-                    .borderRadiusFor(
-                      DashboardCornerSurfaceFamily.budgetDistributionCard,
-                      size: constraints.biggest,
-                    ),
-                boxShadow: depth.shadows,
-                child: const SizedBox.expand(),
+          ).borderFor(DashboardBorderSurface.budgetContent),
+          borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+              .borderRadiusFor(
+                DashboardCornerSurfaceFamily.budgetDistributionCard,
+                size: constraints.biggest,
               ),
-            ),
-          );
-        },
-      );
+          boxShadow: depth.shadows,
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
+}
+
+DashboardBounds _unifiedIndicatorBounds(
+  _BudgetSectionLayout section,
+  BudgetSectionOrder order,
+) {
+  final bottomClearance = order == BudgetSectionOrder.avatarsThenChart
+      ? DashboardLayoutMetrics.reference.dotGap
+      : 0.0;
+  return DashboardBounds(
+    left: section.indicatorBounds.left,
+    top: section.indicatorBounds.top - bottomClearance,
+    width: section.indicatorBounds.width,
+    height: section.indicatorBounds.height,
+  );
 }
 
 final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =

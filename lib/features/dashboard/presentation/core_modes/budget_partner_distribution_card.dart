@@ -41,18 +41,20 @@ final class BudgetPartnerDistributionLayout {
     required this.legendRowHeight,
   });
 
-  // At the 217dp reference Card2, this reclaimed geometry gives the
-  // Partner donut its readable 106dp floor after Rhythm reserves its 44dp
-  // real plot lane. The list remains the flexible consumer below that lane.
+  // At the 217dp reference Card2, the extra 4.4dp belongs to Rhythm, leaving
+  // the Partner donut at 101.6dp. The list remains the flexible consumer.
   static const double dividerGap = 2;
   static const double upperDonutBreathingRoom = 0;
   static const double targetDonutDiameter = 120;
-  // Keep the normal 208dp Card2 above the readable 105dp floor before the
-  // Rhythm plot consumes its optional headroom. On shorter cards the plot
-  // retains its real 35.2dp minimum and the donut then degrades only as far as
-  // the physical constraints require.
+  // These are the previous accepted plot allocations. Resolve that exact
+  // baseline first, then scale the *actual* allocation by 1.10 so the new
+  // Rhythm lane takes space only from the upper Partner region at every
+  // reference Card2 geometry.
   static const double preferredDonutDiameter = 105;
   static const double compactLegendRowHeight = 20;
+  static const double _previousMinimumPlotLaneHeight = 35.2;
+  static const double _previousTargetPlotLaneHeight = 44;
+  static const double _rhythmPlotScale = 1.10;
 
   final double rhythmFooterHeight;
   final double plotLaneHeight;
@@ -74,13 +76,14 @@ final class BudgetPartnerDistributionLayout {
         SpendingRhythmBarChart.titleToPlotGap +
         SpendingRhythmBarChart.plotToAxisGap +
         SpendingRhythmBarChart.axisLaneHeight;
-    final plotBudget =
+    final previousPlotBudget =
         (contentHeight - dividerGap - preferredDonutDiameter - nonPlotHeight)
             .clamp(
-              SpendingRhythmBarChart.minimumPlotLaneHeight,
-              SpendingRhythmBarChart.targetPlotLaneHeight,
+              _previousMinimumPlotLaneHeight,
+              _previousTargetPlotLaneHeight,
             )
             .toDouble();
+    final plotBudget = previousPlotBudget * _rhythmPlotScale;
     final footerHeight = nonPlotHeight + plotBudget;
     final upperHeight = (contentHeight - dividerGap - footerHeight)
         .clamp(0.0, double.infinity)

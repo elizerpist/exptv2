@@ -28,6 +28,8 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.navigationController,
     this.onTargetPreview,
     this.onTargetSettled,
+    this.onPreparedTargetHotsetRequested,
+    this.onDirectInputStarted,
     this.onMotionActiveChanged,
   });
 
@@ -45,6 +47,15 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// intentionally separate from [onTargetPreview]: settlement promotes the
   /// last accepted prepared target and must not manufacture a second query.
   final ValueChanged<int>? onTargetSettled;
+
+  /// Asks the coordinator to prepare a small stable semantic neighbourhood
+  /// while the carousel is idle. This never changes the selected target.
+  final ValueChanged<List<int>>? onPreparedTargetHotsetRequested;
+
+  /// Raw Avatar contact gets the same input-priority boundary as the visual
+  /// rail, but does not itself claim a motion lane. A tap/cancel must not
+  /// become a global motion lock before the carousel recognizer starts.
+  final VoidCallback? onDirectInputStarted;
 
   /// The one Core-owned foreground work gate for physical avatar motion.
   /// The rail remains the only gesture/carousel owner.
@@ -90,6 +101,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     );
     _quickEdit = _createQuickEditController();
     _replaceItems(widget.presentation.value.items, initial: true);
+    _requestPreparedTargetHotset();
     widget.presentation.addListener(_onPresentationChanged);
     widget.navigationController?.attach(this);
   }
@@ -128,6 +140,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   void _onPresentationChanged() {
     if (_replaceItems(widget.presentation.value.items) && mounted) {
+      _requestPreparedTargetHotset();
       setState(() {});
     }
   }
@@ -138,9 +151,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     return BudgetLimitQuickEditGestureController(
       edits: edits,
       contextForCurrentSelection: () {
-        final context = widget.presentation.value.header.editContext;
+        final context = widget.presentation.directInputEditContext();
         if (context == null) {
-          throw StateError('A prepared Budget header is required to edit.');
+          throw StateError(
+            'A canonical selected Budget target and scope are required to edit.',
+          );
         }
         return context;
       },
@@ -234,6 +249,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _activeMotionOrigin = null;
     if (origin != null) widget.onMotionActiveChanged?.call(false);
     if (origin != null) _recordMotionSummary(origin);
+    _requestPreparedTargetHotset(centerLogicalIndex: logicalIndex);
     // A direct avatar tap is programmatic physical motion but still a user
     // semantic intent, so it commits after settle. Pie/list commands are
     // already committed by [BudgetTargetAvatarRailController] after its
@@ -268,6 +284,30 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     );
   }
 
+  void _requestPreparedTargetHotset({int? centerLogicalIndex}) {
+    if (_items.isEmpty) return;
+    final callback = widget.onPreparedTargetHotsetRequested;
+    if (callback == null) return;
+    final center = centerLogicalIndex ?? _controller.selectedLogicalIndex;
+    final handles = <int>[];
+    final seen = <int>{};
+    // 0, -1, +1, -2, +2 ... keeps physical neighbours first while covering
+    // the largest supported eight-crossing fling in either direction.
+    for (
+      var distance = 0;
+      distance <= 8 && handles.length < _items.length;
+      distance += 1
+    ) {
+      for (final offset
+          in distance == 0 ? const <int>[0] : <int>[-distance, distance]) {
+        final handle =
+            _items[_modulo(center + offset, _items.length)].targetHandle;
+        if (seen.add(handle)) handles.add(handle);
+      }
+    }
+    callback(List<int>.unmodifiable(handles));
+  }
+
   @override
   int get logicalIndex => _controller.selectedLogicalIndex;
 
@@ -294,6 +334,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
               height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
               semanticsLabelBuilder: (item) => item.title,
               onPreviewChanged: _onPreviewChanged,
+              onDirectPointerDown: widget.onDirectInputStarted,
               onSelectionSettled: _onSelectionSettled,
               onMotionStarted: _onMotionStarted,
               itemBuilder: (context, item, metrics) {
@@ -312,34 +353,26 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                   ),
                 );
                 final interaction = BudgetTargetAvatarInteraction(
-                  onLongPressStart:
-                      metrics.isSelected &&
-                          _quickEdit != null &&
-                          widget.presentation.value.header.editContext != null
+                  onPointerDown: metrics.isSelected && _quickEdit != null
+                      ? () => _recordQuickEditPointerDown(item.targetHandle)
+                      : null,
+                  onLongPressStart: metrics.isSelected && _quickEdit != null
                       ? (details) => _quickEdit?.longPressStarted(
                           globalY: details.globalPosition.dy,
                         )
                       : null,
                   onLongPressMoveUpdate:
-                      metrics.isSelected &&
-                          _quickEdit != null &&
-                          widget.presentation.value.header.editContext != null
+                      metrics.isSelected && _quickEdit != null
                       ? (details) => _quickEdit?.longPressMoved(
                           globalY: details.globalPosition.dy,
                         )
                       : null,
-                  onLongPressEnd:
-                      metrics.isSelected &&
-                          _quickEdit != null &&
-                          widget.presentation.value.header.editContext != null
+                  onLongPressEnd: metrics.isSelected && _quickEdit != null
                       ? (_) => unawaited(
                           _quickEdit?.longPressEnded() ?? Future<void>.value(),
                         )
                       : null,
-                  onLongPressCancel:
-                      metrics.isSelected &&
-                          _quickEdit != null &&
-                          widget.presentation.value.header.editContext != null
+                  onLongPressCancel: metrics.isSelected && _quickEdit != null
                       ? () => unawaited(
                           _quickEdit?.longPressEnded() ?? Future<void>.value(),
                         )
@@ -374,6 +407,26 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'avatarTargetHandle=$avatarTargetHandle '
             'visualTargetHandle=${visual.targetHandle} '
             'limitKey=${visual.limitKey.runtimeType}',
+      ),
+    );
+  }
+
+  /// One bounded event proves that the selected Avatar remained the raw
+  /// hit-test owner even if a later prepared Header projection is absent. The
+  /// actual GestureArena outcome is represented by the following long-press
+  /// start/acceptance events in [BudgetLimitQuickEditGestureController].
+  void _recordQuickEditPointerDown(int targetHandle) {
+    final context = widget.presentation.directInputEditContext();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_LIMIT_EDIT_POINTER_DOWN',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'hitTargetHandle=$targetHandle '
+            'selectedHandle=${widget.presentation.value.selectedHandle} '
+            'editContextResolved=${context != null} '
+            'headerAvailable=${widget.presentation.value.header.editContext != null}',
       ),
     );
   }

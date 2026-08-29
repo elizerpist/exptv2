@@ -221,11 +221,11 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsOneWidget,
+        findsNothing,
         reason:
-            'G4: the lower moving card keeps its own physical shell; the '
-            'common Budget envelope may be behind it but may not become the '
-            'Card2 interior during cascade motion.',
+            'RG-G6: Unified owns one physical common surface. Card2 may keep '
+            'a rounded content clip, but it may not paint a second card '
+            'background, border or shadow inside that surface.',
       );
     },
   );

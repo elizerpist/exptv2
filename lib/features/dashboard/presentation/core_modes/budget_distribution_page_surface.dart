@@ -9,13 +9,21 @@ import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
+/// Explicitly separates physical material from PageView clipping ownership.
+enum BudgetDistributionSurfaceOwner { splitCard2, unifiedParent }
+
 /// The one physical Card2 surface around the persistent PageView. Category and
 /// Partner pages supply only their interior content, so no sibling can own a
 /// competing shadow, border, radius, or opaque material during collapse.
 class BudgetDistributionCardShell extends StatelessWidget {
-  const BudgetDistributionCardShell({super.key, required this.child});
+  const BudgetDistributionCardShell({
+    super.key,
+    required this.child,
+    this.surfaceOwner = BudgetDistributionSurfaceOwner.splitCard2,
+  });
 
   final Widget child;
+  final BudgetDistributionSurfaceOwner surfaceOwner;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -31,16 +39,17 @@ class BudgetDistributionCardShell extends StatelessWidget {
       return Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          FluviRoundedBox(
-            key: const ValueKey('budget-distribution-card-shell'),
-            color: depth.surfaceColor ?? FluviVisualTokens.surface,
-            border: DashboardBorderScope.profileOf(
-              context,
-            ).borderFor(DashboardBorderSurface.budgetContent),
-            borderRadius: borderRadius,
-            boxShadow: depth.shadows,
-            child: const SizedBox.expand(),
-          ),
+          if (surfaceOwner == BudgetDistributionSurfaceOwner.splitCard2)
+            FluviRoundedBox(
+              key: const ValueKey('budget-distribution-card-shell'),
+              color: depth.surfaceColor ?? FluviVisualTokens.surface,
+              border: DashboardBorderScope.profileOf(
+                context,
+              ).borderFor(DashboardBorderSurface.budgetContent),
+              borderRadius: borderRadius,
+              boxShadow: depth.shadows,
+              child: const SizedBox.expand(),
+            ),
           ClipRRect(borderRadius: borderRadius, child: child),
         ],
       );

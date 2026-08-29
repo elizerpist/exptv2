@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
@@ -45,16 +46,59 @@ void main() {
     expect(controller.scopeFor(LedgerDirection.expense), expenseFood);
   });
 
-  test('reading another direction never mutates the applied query generation', () {
-    final controller = CurrentQueryController(
-      initialScope: scope(LedgerDirection.expense),
-    );
-    addTearDown(controller.dispose);
+  test(
+    'reading another direction never mutates the applied query generation',
+    () {
+      final controller = CurrentQueryController(
+        initialScope: scope(LedgerDirection.expense),
+      );
+      addTearDown(controller.dispose);
 
-    final before = controller.generation;
-    expect(controller.scopeFor(LedgerDirection.income).direction, LedgerDirection.income);
-    expect(controller.scopeFor(LedgerDirection.expense).direction, LedgerDirection.expense);
+      final before = controller.generation;
+      expect(
+        controller.scopeFor(LedgerDirection.income).direction,
+        LedgerDirection.income,
+      );
+      expect(
+        controller.scopeFor(LedgerDirection.expense).direction,
+        LedgerDirection.expense,
+      );
 
-    expect(controller.generation, before);
-  });
+      expect(controller.generation, before);
+    },
+  );
+
+  test(
+    'RG-G5: a transient unavailable projection cannot erase the exact applied amount domain',
+    () {
+      final expense = scope(LedgerDirection.expense);
+      final controller = CurrentQueryController(initialScope: expense);
+      addTearDown(controller.dispose);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 18, amountScaled100: 0),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 8500000,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+
+      controller.replaceDirection(
+        LedgerDirection.expense,
+        expense,
+        facetPresentation: facets,
+      );
+      controller.replaceDirection(LedgerDirection.expense, expense);
+
+      expect(
+        controller.facetPresentationFor(LedgerDirection.expense)?.amountDomain,
+        facets.amountDomain,
+        reason:
+            'Mind and Query Menu must retain the same exact QueryMenuData '
+            'domain during a transient renderer/projection gap.',
+      );
+    },
+  );
 }

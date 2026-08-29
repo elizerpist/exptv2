@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/design/dashboard_layout_metrics.dart';
@@ -139,6 +140,49 @@ final class _DeferredLiveFacetSceneAugmentation {
 
   final int focusGeneration;
   final Future<void> Function() prepare;
+}
+
+/// One bounded, immutable Avatar-focus promotion prepared while the rail is
+/// idle. The key includes every semantic input that shapes the focused root,
+/// so a later temporal/base-query replacement can never reuse this entry.
+final class _BudgetAvatarFocusHotsetEntry {
+  const _BudgetAvatarFocusHotsetEntry({
+    required this.key,
+    required this.derivation,
+  });
+
+  final String key;
+  final DashboardEphemeralFocusDerivation derivation;
+}
+
+/// A concrete ahead-of-input target. It intentionally carries no Widget or
+/// mutable Query state: it is only the prepared focus derivation inputs.
+final class _BudgetAvatarFocusHotsetPlan {
+  const _BudgetAvatarFocusHotsetPlan({
+    required this.key,
+    required this.base,
+    required this.baseScope,
+    required this.effectiveQueries,
+    required this.direction,
+    required this.categoryId,
+    required this.partnerId,
+    required this.normalizedSearch,
+    required this.initialYear,
+    required this.initialParentScope,
+    required this.initialSelectedChildScope,
+  });
+
+  final String key;
+  final PreparedDashboardIndex base;
+  final CurrentLedgerQueryScope baseScope;
+  final DashboardDirectionalQuerySet effectiveQueries;
+  final LedgerDirection direction;
+  final String categoryId;
+  final String? partnerId;
+  final String? normalizedSearch;
+  final int initialYear;
+  final CurrentLedgerQueryScope initialParentScope;
+  final CurrentLedgerQueryScope? initialSelectedChildScope;
 }
 
 /// Immutable identity for a Query publication before its new committed paging
@@ -858,6 +902,22 @@ final class DashboardCoreController {
   _DeferredFocusSceneInstall? _deferredFocusSceneInstall;
   bool _focusSceneInstallDrainScheduled = false;
   _DeferredLiveFacetSceneAugmentation? _deferredLiveFacetSceneAugmentation;
+  // A fixed-size local ring around the selected Avatar. It is deliberately
+  // not a complete category universe: eight crossings in either direction
+  // plus the selected target are the largest direct-manipulation horizon the
+  // physical rail supports before it can yield and replenish at idle.
+  static const _budgetAvatarFocusHotsetCapacity = 17;
+  final LinkedHashMap<String, _BudgetAvatarFocusHotsetEntry>
+  _budgetAvatarFocusHotset =
+      LinkedHashMap<String, _BudgetAvatarFocusHotsetEntry>();
+  List<_BudgetAvatarFocusHotsetPlan> _pendingBudgetAvatarFocusPlans =
+      const <_BudgetAvatarFocusHotsetPlan>[];
+  int _budgetAvatarFocusHotsetGeneration = 0;
+  int _budgetAvatarFocusDerivationGeneration = 0;
+  bool _budgetAvatarFocusHotsetTaskScheduled = false;
+  int _budgetAvatarFocusHotsetPrepared = 0;
+  int _budgetAvatarFocusHotsetPromotions = 0;
+  int _budgetAvatarFocusHotsetMisses = 0;
   // This is deliberately separate from [diagnostics.isMotionActive]. Rail and
   // structural motion may defer committed paging; a vertical drag/ballistic
   // records exact demand while the paging owner defers new repository and page
@@ -1195,6 +1255,7 @@ final class DashboardCoreController {
   }) async {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
     if (!isEphemeralFocusPublication) {
+      _clearBudgetAvatarFocusHotset();
       _invalidateFocusForIndexRevision(index);
       _invalidatePreparedQueryCandidatesForRevision(index.coreRevision);
     }
@@ -4110,6 +4171,43 @@ final class DashboardCoreController {
   void endSegmentedSummaryMotion() =>
       _setMotionLaneActive(DashboardMotionLane.summaryShell, false);
 
+  /// A Summary pointer is foreground intent before its pan recognizer wins a
+  /// gesture arena. It must be able to interrupt speculative time-neighbour
+  /// preparation immediately, while the later recognizer still owns whether
+  /// this becomes a horizontal or vertical Summary action.
+  ///
+  /// This deliberately does not toggle a motion lane. A tap/cancelled pointer
+  /// must not leave a global input gate active; [_setMotionLaneActive] remains
+  /// owned by the actual Summary pan lifecycle.
+  void noteSummaryDirectPointerDown() {
+    if (_disposed) return;
+    final interruptedTimeMotion = motion.interruptForForegroundTakeover();
+    final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
+    final hadSummaryParentHotset = _summaryParentHotsetInFlight;
+    _summaryParentHotsetGeneration += 1;
+    _summaryParentHotsetInFlight = false;
+    // The retained Summary-parent preparation shares one cache staging lane.
+    // Its generation guard prevents publication; cancelling the active slice
+    // also yields the UI isolate to this exact pointer instead of waiting for
+    // a possibly expensive speculative scene to finish.
+    if (!cancelledRailWarmup && hadSummaryParentHotset) {
+      _sceneWindowPreparationCanceller?.call();
+    }
+    _cancelSceneWindowMaintenanceForInput();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_DIRECT_POINTER_PREEMPTED',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'interruptedTimeMotion=$interruptedTimeMotion '
+            'cancelledRailWarmup=$cancelledRailWarmup '
+            'cancelledSummaryParentHotset=$hadSummaryParentHotset '
+            'motionLanes=${_activeMotionLanes.map((lane) => lane.name).join(',')}',
+      ),
+    );
+  }
+
   /// Budget avatar crossings are another direct prepared-data producer. They
   /// receive the same foreground-preemption boundary as Summary motion while
   /// keeping their distinct focus semantics out of the temporal rail lane.
@@ -4126,6 +4224,32 @@ final class DashboardCoreController {
   void endBudgetAvatarMotion() {
     _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
     _drainDeferredLiveFacetSceneAugmentation();
+  }
+
+  /// Like Summary, Avatar raw contact preempts stale lower-priority scene
+  /// work before Flutter's scrolling recognizer reaches its first semantic
+  /// crossing. The actual carousel callback still owns the motion lane, so a
+  /// non-drag touch cannot strand the dashboard in an input-blocking state.
+  void noteBudgetAvatarDirectPointerDown() {
+    if (_disposed) return;
+    final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
+    final hadSummaryParentHotset = _summaryParentHotsetInFlight;
+    _summaryParentHotsetGeneration += 1;
+    _summaryParentHotsetInFlight = false;
+    if (!cancelledRailWarmup && hadSummaryParentHotset) {
+      _sceneWindowPreparationCanceller?.call();
+    }
+    _cancelSceneWindowMaintenanceForInput();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_AVATAR_DIRECT_POINTER_PREEMPTED',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'cancelledRailWarmup=$cancelledRailWarmup '
+            'cancelledSummaryParentHotset=$hadSummaryParentHotset',
+      ),
+    );
   }
 
   void _drainDeferredLiveFacetSceneAugmentation() {
@@ -4492,6 +4616,111 @@ final class DashboardCoreController {
 
   /// Budget category drill-down replaces only the Category dimension. Partner
   /// and Search remain orthogonal facets over the new selected target.
+  ///
+  /// The presentation bridge calls this while the rail is idle with its local
+  /// ±8 semantic neighbourhood. Preparation is intentionally bounded and
+  /// cancellable by any raw pointer; a crossing may then promote one exact
+  /// immutable focus index without reconstructing a root frame on the UI
+  /// isolate.
+  void primeBudgetAvatarFocusHotset(Iterable<DashboardFocusFacet> targets) {
+    if (_disposed ||
+        queryComposer.isOpen ||
+        diagnostics.isMotionActive ||
+        _verticalPointerIntentActive) {
+      return;
+    }
+    final direction = navigation.state.parentQueryScope.direction;
+    final baseScope = currentQuery.scopeFor(direction);
+    final baseIndex = _focusBaseIndex ?? dataRuntime.currentIndex;
+    if (baseIndex == null ||
+        baseIndex.coreRevision != coreRevision ||
+        baseIndex.partitionFor(direction).focusMembershipSeed == null) {
+      return;
+    }
+    final prior = focus.state;
+    final priorIsValid =
+        prior != null &&
+        prior.anchor.matches(
+          baseScope: baseScope,
+          revision: baseIndex.coreRevision,
+        );
+    final partner = priorIsValid ? prior.partner : null;
+    final normalizedSearch = priorIsValid ? prior.normalizedSearch : null;
+    final publicationState = navigation.state;
+    final unique = <String, DashboardFocusFacet>{};
+    for (final target in targets) {
+      unique.putIfAbsent(target.id, () => target);
+      if (unique.length == _budgetAvatarFocusHotsetCapacity) break;
+    }
+    if (unique.isEmpty) return;
+
+    final plans = <_BudgetAvatarFocusHotsetPlan>[];
+    for (final target in unique.values) {
+      final effectiveScope = baseScope.copyWith(
+        categoryIds: <String>{target.id},
+        partnerIds: partner == null
+            ? baseScope.partnerIds
+            : <String>{partner.id},
+        normalizedSearch: normalizedSearch,
+      );
+      final effectiveQueries = currentQuery.queries.replaceDirection(
+        direction,
+        effectiveScope,
+      );
+      final candidate = navigation.appliedQueryCandidate(
+        effectiveScope,
+        availability: DashboardTemporalAvailability.fromTemporalFilter(
+          baseScope.temporalFilter,
+        ),
+        coreRevision: baseIndex.coreRevision,
+      );
+      final parentScope = candidate.parentQueryScope;
+      final childScope = candidate.isRailOpen
+          ? effectiveScope.copyWith(timeScope: candidate.retainedChildScope)
+          : null;
+      final key = _budgetAvatarFocusHotsetKey(
+        base: baseIndex,
+        effectiveScope: effectiveScope,
+        parentScope: parentScope,
+        selectedChildScope: childScope,
+        initialYear: publicationState.yearCursor,
+      );
+      if (_budgetAvatarFocusHotset.containsKey(key)) continue;
+      plans.add(
+        _BudgetAvatarFocusHotsetPlan(
+          key: key,
+          base: baseIndex,
+          baseScope: baseScope,
+          effectiveQueries: effectiveQueries,
+          direction: direction,
+          categoryId: target.id,
+          partnerId: partner?.id,
+          normalizedSearch: normalizedSearch,
+          initialYear: publicationState.yearCursor,
+          initialParentScope: parentScope,
+          initialSelectedChildScope: childScope,
+        ),
+      );
+    }
+    if (plans.isEmpty) return;
+    _budgetAvatarFocusHotsetGeneration += 1;
+    _pendingBudgetAvatarFocusPlans =
+        List<_BudgetAvatarFocusHotsetPlan>.unmodifiable(plans);
+    _drainBudgetAvatarFocusHotset();
+  }
+
+  /// Fixed numeric evidence for profile logs and regression tests. No target
+  /// ids or rows are retained or exported from this direct-manipulation path.
+  Map<String, int> get budgetAvatarFocusHotsetDiagnostics =>
+      Map<String, int>.unmodifiable(<String, int>{
+        'capacity': _budgetAvatarFocusHotsetCapacity,
+        'cached': _budgetAvatarFocusHotset.length,
+        'pending': _pendingBudgetAvatarFocusPlans.length,
+        'prepared': _budgetAvatarFocusHotsetPrepared,
+        'promotions': _budgetAvatarFocusHotsetPromotions,
+        'misses': _budgetAvatarFocusHotsetMisses,
+      });
+
   Future<bool> requestBudgetCategoryFocus(
     DashboardFocusFacet facet, {
     bool publishDuringMotion = false,
@@ -4575,6 +4804,116 @@ final class DashboardCoreController {
     return _restoreBaseAfterFocus(
       deferSceneInstallation: deferSceneInstallation,
     );
+  }
+
+  String _budgetAvatarFocusHotsetKey({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope effectiveScope,
+    required CurrentLedgerQueryScope parentScope,
+    required CurrentLedgerQueryScope? selectedChildScope,
+    required int initialYear,
+  }) =>
+      'base:${identityHashCode(base)}'
+      '|scope:${effectiveScope.key.value}'
+      '|parent:${parentScope.key.value}'
+      '|child:${selectedChildScope?.key.value ?? '-'}'
+      '|year:$initialYear';
+
+  void _drainBudgetAvatarFocusHotset() {
+    if (_disposed ||
+        _budgetAvatarFocusHotsetTaskScheduled ||
+        _pendingBudgetAvatarFocusPlans.isEmpty ||
+        diagnostics.isMotionActive ||
+        _verticalPointerIntentActive) {
+      return;
+    }
+    final generation = _budgetAvatarFocusHotsetGeneration;
+    final plan = _pendingBudgetAvatarFocusPlans.first;
+    _pendingBudgetAvatarFocusPlans =
+        List<_BudgetAvatarFocusHotsetPlan>.unmodifiable(
+          _pendingBudgetAvatarFocusPlans.skip(1),
+        );
+    _budgetAvatarFocusHotsetTaskScheduled = true;
+    try {
+      unawaited(
+        SchedulerBinding.instance
+            .scheduleTask<void>(
+              () => _prepareBudgetAvatarFocusHotsetPlan(plan, generation),
+              Priority.idle,
+              debugLabel: 'DashboardCore.budgetAvatarFocusHotset',
+            )
+            .catchError((Object _) {
+              _budgetAvatarFocusHotsetTaskScheduled = false;
+            }),
+      );
+    } on Object {
+      // The application controller is also used headlessly by deterministic
+      // tests. There is no UI scheduler to compete with there, so execute the
+      // exact same bounded work synchronously rather than making its semantics
+      // depend on a Widget binding existing.
+      _prepareBudgetAvatarFocusHotsetPlan(plan, generation);
+    }
+  }
+
+  void _prepareBudgetAvatarFocusHotsetPlan(
+    _BudgetAvatarFocusHotsetPlan plan,
+    int generation,
+  ) {
+    _budgetAvatarFocusHotsetTaskScheduled = false;
+    if (_disposed ||
+        generation != _budgetAvatarFocusHotsetGeneration ||
+        diagnostics.isMotionActive ||
+        _verticalPointerIntentActive ||
+        !identical(_focusBaseIndex ?? dataRuntime.currentIndex, plan.base) ||
+        currentQuery.scopeFor(plan.direction) != plan.baseScope) {
+      return;
+    }
+    final derivation = DashboardEphemeralFocusDeriver.deriveFast(
+      base: plan.base,
+      effectiveQueries: plan.effectiveQueries,
+      focusedDirection: plan.direction,
+      categoryFocusId: plan.categoryId,
+      partnerFocusId: plan.partnerId,
+      normalizedSearch: plan.normalizedSearch,
+      initialYear: plan.initialYear,
+      generation: ++_budgetAvatarFocusDerivationGeneration,
+      initialParentScope: plan.initialParentScope,
+      initialSelectedChildScope: plan.initialSelectedChildScope,
+    );
+    if (_disposed ||
+        generation != _budgetAvatarFocusHotsetGeneration ||
+        diagnostics.isMotionActive ||
+        _verticalPointerIntentActive ||
+        !identical(_focusBaseIndex ?? dataRuntime.currentIndex, plan.base)) {
+      return;
+    }
+    _budgetAvatarFocusHotset[plan.key] = _BudgetAvatarFocusHotsetEntry(
+      key: plan.key,
+      derivation: derivation,
+    );
+    while (_budgetAvatarFocusHotset.length > _budgetAvatarFocusHotsetCapacity) {
+      _budgetAvatarFocusHotset.remove(_budgetAvatarFocusHotset.keys.first);
+    }
+    _budgetAvatarFocusHotsetPrepared += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_AVATAR_FOCUS_HOTSET_PREPARED',
+        queryKey: plan.initialParentScope.key.value,
+        coreRevision: plan.base.coreRevision,
+        entryCount: derivation.membershipOrdinalCount,
+        scope:
+            'cached=${_budgetAvatarFocusHotset.length} '
+            'pending=${_pendingBudgetAvatarFocusPlans.length} '
+            'uiIsolateMicros=${derivation.currentRootProjectionMicros}',
+      ),
+    );
+    _drainBudgetAvatarFocusHotset();
+  }
+
+  void _clearBudgetAvatarFocusHotset() {
+    _budgetAvatarFocusHotsetGeneration += 1;
+    _pendingBudgetAvatarFocusPlans = const <_BudgetAvatarFocusHotsetPlan>[];
+    _budgetAvatarFocusHotset.clear();
   }
 
   Future<bool> _requestEphemeralFocus({
@@ -4674,15 +5013,33 @@ final class DashboardCoreController {
     final availability = DashboardTemporalAvailability.fromTemporalFilter(
       baseScope.temporalFilter,
     );
+    final initialYear = navigation.state.yearCursor;
     final publicationState = navigation.appliedQueryCandidate(
       effectiveScope,
       availability: availability,
       coreRevision: baseIndex.coreRevision,
     );
+    final initialSelectedChildScope = publicationState.isRailOpen
+        ? effectiveScope.copyWith(
+            timeScope: publicationState.retainedChildScope,
+          )
+        : null;
+    final budgetAvatarHotsetKey =
+        source == DashboardLiveInteractionSource.budgetAvatar
+        ? _budgetAvatarFocusHotsetKey(
+            base: baseIndex,
+            effectiveScope: effectiveScope,
+            parentScope: publicationState.parentQueryScope,
+            selectedChildScope: initialSelectedChildScope,
+            initialYear: initialYear,
+          )
+        : null;
+    final cachedAvatarFocus = budgetAvatarHotsetKey == null
+        ? null
+        : _budgetAvatarFocusHotset[budgetAvatarHotsetKey];
     final generation = ++_focusPublicationGeneration;
     _provisionalFocusBaseIndex = baseIndex;
     _provisionalFocusBaseScope = baseScope;
-    final initialYear = navigation.state.yearCursor;
     final started = Stopwatch()..start();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -4708,22 +5065,28 @@ final class DashboardCoreController {
     // ordinal membership. Do not send that retained base through an isolate:
     // isolate transfer serializes the whole index and turns a tiny category or
     // partner selection into hundreds of milliseconds of worker projection.
-    final derivation = DashboardEphemeralFocusDeriver.deriveFast(
-      base: baseIndex,
-      effectiveQueries: effectiveQueries,
-      focusedDirection: direction,
-      categoryFocusId: nextCategory?.id,
-      partnerFocusId: nextPartner?.id,
-      normalizedSearch: nextSearch,
-      initialYear: initialYear,
-      generation: generation,
-      initialParentScope: publicationState.parentQueryScope,
-      initialSelectedChildScope: publicationState.isRailOpen
-          ? effectiveScope.copyWith(
-              timeScope: publicationState.retainedChildScope,
-            )
-          : null,
-    );
+    final hotsetHit = cachedAvatarFocus != null;
+    final derivation =
+        cachedAvatarFocus?.derivation ??
+        DashboardEphemeralFocusDeriver.deriveFast(
+          base: baseIndex,
+          effectiveQueries: effectiveQueries,
+          focusedDirection: direction,
+          categoryFocusId: nextCategory?.id,
+          partnerFocusId: nextPartner?.id,
+          normalizedSearch: nextSearch,
+          initialYear: initialYear,
+          generation: generation,
+          initialParentScope: publicationState.parentQueryScope,
+          initialSelectedChildScope: initialSelectedChildScope,
+        );
+    if (source == DashboardLiveInteractionSource.budgetAvatar) {
+      if (hotsetHit) {
+        _budgetAvatarFocusHotsetPromotions += 1;
+      } else {
+        _budgetAvatarFocusHotsetMisses += 1;
+      }
+    }
     final derived = derivation.index;
     if (_disposed ||
         generation != _focusPublicationGeneration ||
@@ -4751,6 +5114,7 @@ final class DashboardCoreController {
             'baseMembershipEstimatedBytes='
             '${baseMembership.estimatedMembershipBytes} '
             'preparedMembershipHit=true '
+            'avatarFocusHotsetHit=$hotsetHit '
             'workerDispatched=false '
             'fullBaseRowsScanned=${DashboardEphemeralFocusDerivation.fullBaseRowsScanned} '
             'membershipOrdinalCount=${derivation.membershipOrdinalCount} '
@@ -4759,7 +5123,7 @@ final class DashboardCoreController {
             'semanticUniverseBuildMicros='
             '${derivation.semanticUniverseBuildMicros} '
             'currentRootProjectionMicros='
-            '${derivation.currentRootProjectionMicros} '
+            '${hotsetHit ? 0 : derivation.currentRootProjectionMicros} '
             'publicationCriticalFrameCount='
             '${derivation.publicationCriticalFrameCount} '
             'publicationCriticalRowCount='
@@ -4776,9 +5140,9 @@ final class DashboardCoreController {
             'reusedPreparedRows=${derivation.reusedPreparedRows} '
             'copiedPreparedRows=${DashboardEphemeralFocusDerivation.copiedPreparedRows} '
             'reusedSceneCount=0 newSceneCount=0 '
-            'uiIsolateMicros=${derivation.currentRootProjectionMicros} '
+            'uiIsolateMicros=${hotsetHit ? 0 : derivation.currentRootProjectionMicros} '
             'largestContiguousUiSliceMicros='
-            '${derivation.currentRootProjectionMicros}',
+            '${hotsetHit ? 0 : derivation.currentRootProjectionMicros}',
       ),
     );
     final amountPreviewPublished = presentation
@@ -5150,6 +5514,7 @@ final class DashboardCoreController {
     final provisionalIndex = _provisionalFocusBaseIndex;
     if (state == null && provisionalScope == null) return;
     _focusPublicationGeneration += 1;
+    _clearBudgetAvatarFocusHotset();
     _cancelDeferredFocusedSceneInstall();
     presentation.visibleFrames.clearPreparedAmountPreview(
       previewGeneration: _focusPublicationGeneration,

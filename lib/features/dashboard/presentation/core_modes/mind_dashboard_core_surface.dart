@@ -22,7 +22,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   });
 
   final DashboardCoreModePresentation presentation;
-  final QueryAmountRangeValues Function()? queryAmountRange;
+  final QueryAmountRangeValues? Function()? queryAmountRange;
   final Listenable? queryAmountRangeChanges;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
   final DashboardHeaderVisualController? headerVisualController;
@@ -98,13 +98,22 @@ final class _MindQueryAmountRangeBinding extends StatelessWidget {
     required this.onRangeCommitted,
   });
 
-  final QueryAmountRangeValues Function() valuesFor;
+  final QueryAmountRangeValues? Function() valuesFor;
   final ValueChanged<QueryAmountRangeValues> onRangeCommitted;
 
   @override
-  Widget build(BuildContext context) => QueryAmountRangeControl(
-    key: const ValueKey('mind-query-amount-range'),
-    values: valuesFor(),
-    onRangeCommitted: onRangeCommitted,
-  );
+  Widget build(BuildContext context) {
+    final values = valuesFor();
+    if (values == null) {
+      return const Text(
+        'Az összeg tartomány betöltése folyamatban',
+        key: ValueKey('mind-query-amount-range-unavailable'),
+      );
+    }
+    return QueryAmountRangeControl(
+      key: const ValueKey('mind-query-amount-range'),
+      values: values,
+      onRangeCommitted: onRangeCommitted,
+    );
+  }
 }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 final class BudgetTargetAvatarInteraction extends StatefulWidget {
   const BudgetTargetAvatarInteraction({
     required this.child,
+    this.onPointerDown,
     this.onLongPressStart,
     this.onLongPressMoveUpdate,
     this.onLongPressEnd,
@@ -15,6 +16,7 @@ final class BudgetTargetAvatarInteraction extends StatefulWidget {
   });
 
   final Widget child;
+  final VoidCallback? onPointerDown;
   final GestureLongPressStartCallback? onLongPressStart;
   final GestureLongPressMoveUpdateCallback? onLongPressMoveUpdate;
   final GestureLongPressEndCallback? onLongPressEnd;
@@ -36,7 +38,10 @@ final class _BudgetTargetAvatarInteractionState
 
   @override
   Widget build(BuildContext context) => Listener(
-    onPointerDown: (_) => _setPointerPressed(true),
+    onPointerDown: (_) {
+      _setPointerPressed(true);
+      widget.onPointerDown?.call();
+    },
     onPointerUp: (_) => _setPointerPressed(false),
     onPointerCancel: (_) => _setPointerPressed(false),
     child: GestureDetector(

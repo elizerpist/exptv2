@@ -90,6 +90,7 @@ class BudgetDistributionPager extends StatefulWidget {
     this.rhythm,
     this.drilldown,
     this.upperVerticalGestures,
+    this.surfaceOwner = BudgetDistributionSurfaceOwner.splitCard2,
   });
 
   final BudgetDistributionPageController controller;
@@ -101,6 +102,7 @@ class BudgetDistributionPager extends StatefulWidget {
   final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
+  final BudgetDistributionSurfaceOwner surfaceOwner;
 
   @override
   State<BudgetDistributionPager> createState() =>
@@ -151,8 +153,8 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   }
 
   @override
-  Widget build(BuildContext context) => BudgetDistributionCardShell(
-    child: PageView.builder(
+  Widget build(BuildContext context) {
+    final pageView = PageView.builder(
       key: const ValueKey('budget-distribution-pager'),
       controller: widget.controller.pageController,
       // BudgetDistributionCardShell owns the one rounded Card2 interior clip.
@@ -187,8 +189,16 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
           ),
         );
       },
-    ),
-  );
+    );
+    // Keep one stable viewport element while only the explicit physical
+    // surface owner changes. This retains the attached PageView ScrollPosition
+    // through Split ↔ Unified transitions; rounded clipping is independent of
+    // whether the surrounding card paints material.
+    return BudgetDistributionCardShell(
+      surfaceOwner: widget.surfaceOwner,
+      child: pageView,
+    );
+  }
 }
 
 class BudgetDistributionPageDots extends StatelessWidget {

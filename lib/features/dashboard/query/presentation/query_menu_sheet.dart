@@ -288,13 +288,12 @@ final class _QueryMenuSheetState extends State<QueryMenuSheet> {
                           onToggle: () =>
                               setState(() => _showAdvanced = !_showAdvanced),
                           onRangeChanged: (values, commit) {
-                            final domain = _data?.amountDomain;
-                            if (domain == null) return;
-                            final next = QueryAmountRange.apply(
-                              _draft,
-                              values: values,
-                              amountDomain: domain,
+                            final binding = QueryAmountRangeBinding.ready(
+                              scope: _draft,
+                              amountDomain: _data?.amountDomain,
                             );
+                            if (binding == null) return;
+                            final next = binding.apply(values);
                             _edit(next, refresh: commit);
                           },
                         ),
@@ -1179,10 +1178,9 @@ final class _AdvancedDisclosure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final domain = data?.amountDomain;
-    final range = QueryAmountRange.resolve(
-      refinements: draft.refinements,
-      amountDomain: domain,
+    final binding = QueryAmountRangeBinding.ready(
+      scope: draft,
+      amountDomain: data?.amountDomain,
     );
     return Container(
       decoration: const BoxDecoration(
@@ -1254,9 +1252,9 @@ final class _AdvancedDisclosure extends StatelessWidget {
               ),
             ),
           ),
-          if (open && domain != null)
+          if (open && binding != null)
             QueryAmountRangeControl(
-              values: range,
+              values: binding.values,
               onRangeCommitted: (values) => onRangeChanged(values, true),
             ),
         ],

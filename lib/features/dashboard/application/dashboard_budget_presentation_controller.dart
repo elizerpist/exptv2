@@ -189,6 +189,72 @@ final class DashboardBudgetLiveSelectionState {
   bool get hasLimit => limitScaled100 != null;
   int? get monthlyLimitScaled100 => limitScaled100;
 
+  /// Rebinds a retained, compatible prepared selection to the active scalar
+  /// draft while its next snapshot is unavailable. This preserves the one
+  /// direct-edit authority without inventing a second Budget analysis or
+  /// allowing a Header renderer gap to repaint an older confirmed limit.
+  DashboardBudgetLiveSelectionState withActiveScalarLimit(
+    int effectiveLimitScaled100,
+  ) {
+    final projection = monthEndProjection;
+    final displayDenominator =
+        analysisMode == DashboardBudgetAnalysisMode.dailyPace
+        ? projection == null ||
+                  projection.daysInMonth == 0 ||
+                  effectiveLimitScaled100 <= 0
+              ? null
+              : (effectiveLimitScaled100 + projection.daysInMonth ~/ 2) ~/
+                    projection.daysInMonth
+        : effectiveLimitScaled100;
+    final rawProgress =
+        analysisMode == DashboardBudgetAnalysisMode.dailyPace &&
+            projection != null &&
+            effectiveLimitScaled100 > 0 &&
+            projection.elapsedCalendarDays > 0
+        ? projection.monthToDateActualScaled100 *
+              projection.daysInMonth /
+              (projection.elapsedCalendarDays * effectiveLimitScaled100)
+        : displayNumeratorScaled100 != null &&
+              displayDenominator != null &&
+              displayDenominator > 0
+        ? displayNumeratorScaled100! / displayDenominator
+        : 0.0;
+    return DashboardBudgetLiveSelectionState._(
+      direction: direction,
+      target: target,
+      title: title,
+      displayNumeratorScaled100: displayNumeratorScaled100,
+      displayDenominatorScaled100: displayDenominator,
+      canonicalActualScaled100ForLimitEdit:
+          canonicalActualScaled100ForLimitEdit,
+      limitScaled100: effectiveLimitScaled100,
+      limitKey: limitKey,
+      editContext: editContext,
+      coreRevision: coreRevision,
+      analysisScopeLabel: analysisScopeLabel,
+      analysisMode: analysisMode,
+      scopeAnalysis: scopeAnalysis,
+      monthEndProjection: monthEndProjection,
+      visual: BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: target.handle,
+        limitKey: limitKey,
+        displayNumeratorScaled100: displayNumeratorScaled100!,
+        displayDenominatorScaled100: displayDenominator,
+        rawProgressOverride: rawProgress,
+        chromeGeometry: switch (analysisMode) {
+          DashboardBudgetAnalysisMode.actualUtilization =>
+            BudgetLimitProgressChromeGeometry.circular,
+          DashboardBudgetAnalysisMode.dailyPace =>
+            BudgetLimitProgressChromeGeometry.verticalProjection,
+          DashboardBudgetAnalysisMode.annualSegments =>
+            BudgetLimitProgressChromeGeometry.annualSegments,
+          DashboardBudgetAnalysisMode.typicalMarker =>
+            BudgetLimitProgressChromeGeometry.typicalMarker,
+        },
+      ),
+    );
+  }
+
   DashboardBudgetLimitEditContext? get limitEditContext =>
       editContext is DashboardBudgetLimitEditContext
       ? editContext as DashboardBudgetLimitEditContext
@@ -561,6 +627,7 @@ final class DashboardBudgetPresentationController
   final LocalDate _logicalAsOfDate;
   final DashboardBudgetLimitEditController? _limitEditController;
   final ValueChanged<int>? _onInputUpdated;
+  DashboardBudgetEditContext? _lastDirectInputEditContext;
 
   static DashboardBudgetPresentationState _initialState() {
     const aggregate = DashboardBudgetTarget.aggregate();
@@ -654,9 +721,56 @@ final class DashboardBudgetPresentationController
     if (scope is! YearScope) return false;
     return context.direction == _financialLimitDirection &&
         context.target == _financialLimitTargetFor(authority.target) &&
-        context.year == scope.year &&
-        context.coreRevision == authority.coreRevision;
+        context.year == scope.year;
   }
+
+  /// Returns the last exact selected-target/scope edit context while that
+  /// canonical semantic authority is still current. Header is only a renderer
+  /// of the same selection; a transient Header/snapshot replacement therefore
+  /// cannot remove the Avatar's direct input owner.
+  ///
+  /// The context is retained only for the same scalar FinancialLimit key or
+  /// the same typed YEAR target. A concrete target or temporal replacement
+  /// never reuses it, and [DashboardBudgetLimitEditController] still validates
+  /// the key/context again immediately before persistence.
+  DashboardBudgetEditContext? directInputEditContext() {
+    final authority = _currentVisibleEditAuthority();
+    if (authority == null) return null;
+    final retained = _lastDirectInputEditContext;
+    if (retained != null && _matchesDirectInputAuthority(retained, authority)) {
+      return retained;
+    }
+    final current = value.liveSelection.editContext;
+    if (current == null || !_matchesDirectInputAuthority(current, authority)) {
+      return null;
+    }
+    _lastDirectInputEditContext = current;
+    return current;
+  }
+
+  bool _matchesDirectInputAuthority(
+    DashboardBudgetEditContext context,
+    ({DashboardBudgetTarget target, LedgerTimeScope scope, int coreRevision})
+    authority,
+  ) => switch (context) {
+    DashboardBudgetLimitEditContext(:final key) =>
+      _financialLimitKeyFor(
+            authority.target,
+            period: DashboardBudgetPeriodResolver.fromTimeScope(
+              authority.scope,
+            ),
+          ) ==
+          key,
+    DashboardBudgetYearLimitEditContext(
+      :final direction,
+      :final target,
+      :final year,
+    ) =>
+      authority.scope is YearScope &&
+          direction == _financialLimitDirection &&
+          target == _financialLimitTargetFor(authority.target) &&
+          year == (authority.scope as YearScope).year,
+  };
 
   /// Replays the current RAM-resident Budget authority when Budget becomes
   /// visible again. A mode transition changes the visible publication identity
@@ -1052,7 +1166,9 @@ final class DashboardBudgetPresentationController
         // exact draft on the preceding direct tick. Reusing that immutable
         // compatible publication avoids a visible unavailable frame while
         // waiting for the next canonical preparation.
-        return previous;
+        return previous.withActiveScalarLimit(
+          active.effectiveLimitScaled100 ?? 0,
+        );
       }
       return DashboardBudgetLiveSelectionState.unavailable(
         direction: _direction,
@@ -1149,6 +1265,7 @@ final class DashboardBudgetPresentationController
       scalarKey: key,
       coreRevision: snapshot.coreRevision,
     );
+    if (editContext != null) _lastDirectInputEditContext = editContext;
     _limitEditController?.invalidateYearIfContextChanged(
       editContext is DashboardBudgetYearLimitEditContext ? editContext : null,
     );

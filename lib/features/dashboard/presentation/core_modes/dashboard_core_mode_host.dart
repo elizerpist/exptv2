@@ -46,6 +46,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetSectionOrder,
     this.budgetRhythm,
     this.budgetDrilldown,
+    this.onBudgetAvatarDirectInputStarted,
     this.onBudgetAvatarMotionActiveChanged,
     this.headerVisualController,
     this.balanceHeaderVisualFrame,
@@ -72,12 +73,13 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<BudgetSectionOrder>? budgetSectionOrder;
   final ValueListenable<DashboardSpendingRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
+  final VoidCallback? onBudgetAvatarDirectInputStarted;
   final ValueChanged<bool>? onBudgetAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? budgetHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? mindHeaderVisualFrame;
-  final QueryAmountRangeValues Function()? mindQueryAmountRange;
+  final QueryAmountRangeValues? Function()? mindQueryAmountRange;
   final Listenable? mindQueryAmountRangeChanges;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final VoidCallback onVerticalExpansionStart;
@@ -287,6 +289,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         sectionOrder: widget.budgetSectionOrder,
         rhythm: widget.budgetRhythm,
         drilldown: widget.budgetDrilldown,
+        onAvatarDirectInputStarted: widget.onBudgetAvatarDirectInputStarted,
         onAvatarMotionActiveChanged: widget.onBudgetAvatarMotionActiveChanged,
         upperVerticalGestures: widget.upperVerticalGestures,
         headerVisualController: widget.headerVisualController,

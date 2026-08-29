@@ -23,7 +23,6 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
-import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -486,7 +485,9 @@ void main() {
       final rail = BudgetTargetAvatarRailController()
         ..attach(_FakeRailDelegate(targetCount: 3));
       final pages = BudgetDistributionPageController();
-      final cardStyle = BudgetContentCardStyleController();
+      final surfaceOwner = ValueNotifier<BudgetDistributionSurfaceOwner>(
+        BudgetDistributionSurfaceOwner.splitCard2,
+      );
       final rhythm = ValueNotifier<DashboardSpendingRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
@@ -495,7 +496,7 @@ void main() {
       addTearDown(drawables.dispose);
       addTearDown(rail.dispose);
       addTearDown(pages.dispose);
-      addTearDown(cardStyle.dispose);
+      addTearDown(surfaceOwner.dispose);
       addTearDown(rhythm.dispose);
 
       await tester.pumpWidget(
@@ -504,13 +505,17 @@ void main() {
             body: SizedBox(
               width: 378,
               height: 208,
-              child: BudgetDistributionPager(
-                controller: pages,
-                presentation: presentation,
-                drawableFrames: drawables,
-                avatarRailController: rail,
-                expandCategoryDonutToFit: true,
-                rhythm: rhythm,
+              child: ValueListenableBuilder<BudgetDistributionSurfaceOwner>(
+                valueListenable: surfaceOwner,
+                builder: (context, owner, _) => BudgetDistributionPager(
+                  controller: pages,
+                  presentation: presentation,
+                  drawableFrames: drawables,
+                  avatarRailController: rail,
+                  expandCategoryDonutToFit: true,
+                  rhythm: rhythm,
+                  surfaceOwner: owner,
+                ),
               ),
             ),
           ),
@@ -568,16 +573,14 @@ void main() {
         FluviVisualTokens.roundedBoxRadius,
       );
 
-      cardStyle.select(BudgetContentLayout.unifiedCard);
+      surfaceOwner.value = BudgetDistributionSurfaceOwner.unifiedParent;
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsOneWidget,
+        findsNothing,
         reason:
-            'G4: Card2 must retain the same rounded physical shell when its '
-            'parent composition changes. A transparent PageView over a '
-            'separately moving unified surface exposes a neutral slab during '
-            'the real collapse path.',
+            'RG-G6: Unified keeps the persistent clipped viewport, but its '
+            'common parent is the sole physical card surface.',
       );
       expect(
         tester.getRect(
@@ -602,7 +605,7 @@ void main() {
             'Changing Card2 chrome must retain the attached ScrollPosition.',
       );
 
-      cardStyle.select(BudgetContentLayout.split);
+      surfaceOwner.value = BudgetDistributionSurfaceOwner.splitCard2;
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
@@ -640,7 +643,13 @@ void main() {
                 false),
       );
       expect(partnerDonut, findsOneWidget);
-      expect(tester.getSize(partnerDonut).height, greaterThan(104));
+      expect(
+        tester.getSize(partnerDonut).height,
+        greaterThan(100),
+        reason:
+            'RG-G7: the additional 4.4dp Rhythm plot allocation is reclaimed '
+            'from the Partner upper region without changing Card2 height.',
+      );
       expect(find.text('Költési ritmus'), findsOneWidget);
       final rhythmBounds = tester.getRect(
         find.byKey(const ValueKey('partner-spending-rhythm-chart')),
@@ -673,14 +682,14 @@ void main() {
       final partnerCardBounds = tester.getRect(
         find.byKey(const ValueKey('budget-partner-distribution-card')),
       );
-      cardStyle.select(BudgetContentLayout.unifiedCard);
+      surfaceOwner.value = BudgetDistributionSurfaceOwner.unifiedParent;
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsOneWidget,
+        findsNothing,
         reason:
-            'G4: Partner must use the same persistent Card2 shell as Daily '
-            'Rhythm, including in unified composition.',
+            'RG-G6: Partner keeps its PageView viewport in Unified while the '
+            'common parent remains the sole physical card.',
       );
       expect(
         tester.getRect(
@@ -688,7 +697,7 @@ void main() {
         ),
         partnerCardBounds,
       );
-      cardStyle.select(BudgetContentLayout.split);
+      surfaceOwner.value = BudgetDistributionSurfaceOwner.splitCard2;
       await tester.pump();
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-row-partner-0')),

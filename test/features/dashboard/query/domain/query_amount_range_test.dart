@@ -67,4 +67,52 @@ void main() {
       });
     },
   );
+
+  test(
+    'RG-G5: the one ready binding keeps cross-host domain and mutation parity',
+    () {
+      final query = scope(
+        refinements: const <String, Object?>{
+          QueryAmountRange.minimumRefinementKey: 200000,
+        },
+      );
+      final queryMenuBinding = QueryAmountRangeBinding.ready(
+        scope: query,
+        amountDomain: domain,
+      );
+      final mindBinding = QueryAmountRangeBinding.ready(
+        scope: query,
+        amountDomain: domain,
+      );
+
+      expect(queryMenuBinding, isNotNull);
+      expect(mindBinding, isNotNull);
+      expect(queryMenuBinding!.values, mindBinding!.values);
+      expect(
+        mindBinding.apply(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 900000,
+            lowerScaled100: 300000,
+            upperScaled100: 600000,
+          ),
+        ),
+        queryMenuBinding.apply(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 900000,
+            lowerScaled100: 300000,
+            upperScaled100: 600000,
+          ),
+        ),
+      );
+      expect(
+        QueryAmountRangeBinding.ready(scope: query, amountDomain: null),
+        isNull,
+        reason:
+            'A transient missing canonical domain is explicitly unavailable, '
+            'not a disabled 1,000/1,000 RangeSlider.',
+      );
+    },
+  );
 }

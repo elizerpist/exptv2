@@ -1,5 +1,11 @@
 # Budget reliability and Mind threshold acceptance checklist
 
+> **Invalidated for production closure by physical revision 54 evidence.** The
+> latest Android screenshots and Fluvi Logs revision 54 contradict the former
+> `DONE` states below. The active release checklist is
+> `2026-08-29-r54-dashboard-physical-repair-checklist.md`; neither the tests
+> nor the delivery record in this historical document authorizes a build.
+
 > 2026-08-29 release-closure supersession: the prior delivery evidence is not
 > physical closure. Gates G1–G5 in
 > `docs/superpowers/plans/2026-08-29-dashboard-release-closure.md` are all

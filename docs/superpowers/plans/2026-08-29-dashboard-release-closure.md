@@ -1,5 +1,10 @@
 # Dashboard release-closure implementation plan
 
+> **Superseded as a release plan.** Fluvi Logs revision 54 and the subsequent
+> physical APK screenshots invalidate this plan's prior completed gates. The
+> active no-build release matrix is
+> `../checklists/2026-08-29-r54-dashboard-physical-repair-checklist.md`.
+
 **Goal:** close the five physical Dashboard release gates without weakening the
 accepted foreground-input, retained-Header, or LogBox ownership boundaries.
 

@@ -65,6 +65,41 @@ abstract final class QueryAmountRange {
   }
 }
 
+/// One ready binding between an immutable Query and the exact Query-menu data
+/// revision that owns its amount domain. Hosts may choose placement only; they
+/// cannot separately resolve maxima, clamp values, or mutate refinements.
+/// A missing binding means *not ready*, never a fabricated 1,000/1,000 range.
+@immutable
+final class QueryAmountRangeBinding {
+  const QueryAmountRangeBinding._({
+    required this.scope,
+    required this.amountDomain,
+    required this.values,
+  });
+
+  static QueryAmountRangeBinding? ready({
+    required CurrentLedgerQueryScope scope,
+    required QueryMenuAmountDomain? amountDomain,
+  }) {
+    if (amountDomain == null) return null;
+    return QueryAmountRangeBinding._(
+      scope: scope,
+      amountDomain: amountDomain,
+      values: QueryAmountRange.resolve(
+        refinements: scope.refinements,
+        amountDomain: amountDomain,
+      ),
+    );
+  }
+
+  final CurrentLedgerQueryScope scope;
+  final QueryMenuAmountDomain amountDomain;
+  final QueryAmountRangeValues values;
+
+  CurrentLedgerQueryScope apply(QueryAmountRangeValues next) =>
+      QueryAmountRange.apply(scope, values: next, amountDomain: amountDomain);
+}
+
 /// A finite ordered view of the current Query amount domain.
 @immutable
 final class QueryAmountRangeValues {

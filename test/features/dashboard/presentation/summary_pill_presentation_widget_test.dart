@@ -22,6 +22,60 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
+  testWidgets(
+    'RG-G3: a Summary raw pointer preempts residual time work before its first drag update',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+      );
+      final visible = DashboardVisibleFrameStore();
+      final motion = SummaryNavigationMotionController();
+      var directInputStarts = 0;
+      var moves = 0;
+      addTearDown(navigation.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(motion.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visible,
+              navigationMotionController: motion,
+              onDirectInputStarted: () => directInputStarts += 1,
+              horizontalCandidateBuilder: (_) => null,
+              onToggleRail: () {},
+              onMoveFiner: () => moves += 1,
+              onMoveBroader: () {},
+              onMovePrevious: () {},
+              onMoveNext: () {},
+            ),
+          ),
+        ),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(DashboardSummaryPill)),
+      );
+      await tester.pump();
+      expect(
+        directInputStarts,
+        1,
+        reason:
+            'The foreground preemption must happen at pointer down, before a '
+            'time ballistic or Summary pan recognizer can delay the gesture.',
+      );
+      expect(moves, 0);
+
+      await gesture.up();
+      await tester.pump();
+      expect(moves, 0);
+    },
+  );
+
   testWidgets('legacy shell resolves the same global SummaryPill family', (
     tester,
   ) async {

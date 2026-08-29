@@ -631,6 +631,9 @@ class _CoreDashboardState extends State<CoreDashboard>
                                           _budgetSectionOrderController,
                                       budgetRhythm: _budgetRhythm,
                                       budgetDrilldown: _budgetDrilldown,
+                                      onBudgetAvatarDirectInputStarted:
+                                          controller
+                                              .noteBudgetAvatarDirectPointerDown,
                                       onBudgetAvatarMotionActiveChanged:
                                           (active) {
                                             if (active) {
@@ -1000,28 +1003,33 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
   }
 
-  QueryAmountRangeValues _mindQueryAmountRange() {
+  QueryAmountRangeValues? _mindQueryAmountRange() {
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
-    return QueryAmountRange.resolve(
-      refinements: controller.currentQuery.scopeFor(direction).refinements,
+    final binding = QueryAmountRangeBinding.ready(
+      scope: controller.currentQuery.scopeFor(direction),
       amountDomain: controller.currentQuery
           .facetPresentationFor(direction)
           ?.amountDomain,
     );
+    // Unknown is not the 1,000 HUF floor. Query Menu hides its control until
+    // this exact canonical data owner is ready; Mind mirrors that explicit
+    // state instead of manufacturing a collapsed disabled RangeSlider.
+    return binding?.values;
   }
 
   void _commitMindQueryAmountRange(QueryAmountRangeValues values) {
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
     final current = controller.currentQuery.scopeFor(direction);
-    final next = QueryAmountRange.apply(
-      current,
-      values: values,
+    final binding = QueryAmountRangeBinding.ready(
+      scope: current,
       amountDomain: controller.currentQuery
           .facetPresentationFor(direction)
           ?.amountDomain,
     );
+    if (binding == null) return;
+    final next = binding.apply(values);
     if (next == current) return;
     unawaited(
       controller.applyQuery(next, facetPresentationSource: 'mindAmountRange'),
@@ -1158,6 +1166,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
       navigationMotionController: motionController,
       onMotionActiveChanged: onMotionActiveChanged,
       onAmountMotionActiveChanged: onAmountMotionActiveChanged,
+      onDirectInputStarted: controller.noteSummaryDirectPointerDown,
       horizontalCandidateBuilder: _horizontalCandidate,
       performanceCounters: controller.performanceCounters,
       onToggleRail: controller.toggleRail,

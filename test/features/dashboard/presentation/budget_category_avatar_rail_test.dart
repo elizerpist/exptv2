@@ -533,6 +533,50 @@ void main() {
   );
 
   testWidgets(
+    'RG-G2: Avatar raw pointer preempts maintenance before the carousel starts a semantic crossing',
+    (tester) async {
+      final harness = _Harness(_categories(9));
+      final order = <String>[];
+      addTearDown(harness.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: harness.presentation,
+                onDirectInputStarted: () => order.add('pointerDown'),
+                onMotionActiveChanged: (active) {
+                  if (active) order.add('motionStarted');
+                },
+                onTargetPreview: (_) => order.add('semanticCrossing'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        ),
+      );
+      await tester.pump();
+      expect(order, <String>['pointerDown']);
+
+      await gesture.moveBy(const Offset(-90, 0));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(order.first, 'pointerDown');
+      expect(order, contains('motionStarted'));
+    },
+  );
+
+  testWidgets(
     'a user fling keeps preview live and still reports its final settled target',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
@@ -1478,6 +1522,93 @@ void main() {
     );
   });
 
+  testWidgets(
+    'RG-G1: selected Avatar accepts the first long press through a transient Header projection gap',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+        ),
+      );
+      await tester.pump();
+
+      // The visible target/scope remains the same, but its next prepared
+      // Header projection is not yet available. This is the physical r54
+      // first-contact shape; it must not remove the direct input surface.
+      harness.snapshot.value = null;
+      harness.visibleFrame.value = _interactiveFrame();
+      await tester.pump();
+      expect(harness.presentation.value.header.editContext, isNull);
+
+      final avatar = find.byKey(const ValueKey('budget-target-avatar-center'));
+      final pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+
+      expect(
+        harness.edits.value,
+        isNotNull,
+        reason:
+            'a transient Header renderer gap must not remove the selected '
+            'Avatar recognizer or its canonical edit context',
+      );
+      expect(harness.edits.value!.effectiveLimitScaled100, 200000);
+      await pointer.up();
+    },
+  );
+
+  testWidgets(
+    'RG-G1: an active Avatar draft survives a same-target prepared-frame gap and releases its newest value',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+        ),
+      );
+      await tester.pump();
+
+      final avatar = find.byKey(const ValueKey('budget-target-avatar-center'));
+      final pointer = await tester.startGesture(tester.getCenter(avatar));
+      await tester.pump(kLongPressTimeout);
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+      expect(harness.edits.value!.effectiveLimitScaled100, 200000);
+
+      // Same target/month, newer visible-frame identity, but no prepared
+      // Header projection yet. The direct session—not that renderer gap—owns
+      // the optimistic value under the still-held pointer.
+      harness.snapshot.value = null;
+      harness.visibleFrame.value = _interactiveFrame(coreRevision: 2);
+      await tester.pump();
+      expect(harness.presentation.value.header.editContext, isNotNull);
+      expect(harness.edits.value!.effectiveLimitScaled100, 200000);
+
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+      expect(harness.edits.value!.effectiveLimitScaled100, 300000);
+      expect(
+        harness.presentation.value.liveSelection.limitScaled100,
+        300000,
+        reason:
+            'The live Header must retain the active compatible draft instead '
+            'of reverting to the older confirmed 1,000 HUF value.',
+      );
+
+      await pointer.up();
+      await tester.pump();
+      expect(harness.repository.lastUpsertAmountScaled100, 300000);
+    },
+  );
+
   test('semantic target tick retains the prepared item list', () {
     final harness = _Harness(_categories(3));
     addTearDown(harness.dispose);
@@ -1719,16 +1850,18 @@ final class _InteractiveRailHarness {
       direction = TransactionDirectionController(
         initialDirection: TransactionDirection.expense,
       ),
-      snapshot = _positiveSnapshotForCategories() {
+      snapshot = ValueNotifier<PreparedBudgetLimitSnapshot?>(
+        _positiveSnapshotForCategories(),
+      ) {
     edits = DashboardBudgetLimitEditController(
       repository: repository,
-      isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+      isKeyCurrent: (key) => presentation.isLimitEditKeyCurrent(key),
     );
     presentation = DashboardBudgetPresentationController(
       categoryCollection: categoryCollection,
       visibleFrame: visibleFrame,
       transactionDirection: direction,
-      snapshotForCurrentFrame: () => snapshot,
+      snapshotForCurrentFrame: () => snapshot.value,
       logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       limitEditController: edits,
     );
@@ -1737,7 +1870,7 @@ final class _InteractiveRailHarness {
   final ValueNotifier<List<FluviCategory>> categoryCollection;
   final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
   final TransactionDirectionController direction;
-  final PreparedBudgetLimitSnapshot snapshot;
+  final ValueNotifier<PreparedBudgetLimitSnapshot?> snapshot;
   final _CountingFinancialLimitRepository repository =
       _CountingFinancialLimitRepository();
   late final DashboardBudgetLimitEditController edits;
@@ -1748,6 +1881,7 @@ final class _InteractiveRailHarness {
     edits.dispose();
     categoryCollection.dispose();
     visibleFrame.dispose();
+    snapshot.dispose();
     direction.dispose();
   }
 }
@@ -1796,7 +1930,7 @@ PreparedBudgetLimitSnapshot _positiveSnapshotForCategories() {
   );
 }
 
-DashboardVisibleFrame _interactiveFrame() {
+DashboardVisibleFrame _interactiveFrame({int coreRevision = 1}) {
   final scope = CurrentLedgerQueryScope(
     direction: LedgerDirection.expense,
     timeScope: MonthScope(const YearMonth(year: 2026, month: 1)),
@@ -1804,20 +1938,20 @@ DashboardVisibleFrame _interactiveFrame() {
   final prepared = DashboardPreparedFrame.complete(
     scope: scope,
     parentQueryKey: scope.copyWith(timeScope: const YearScope(2026)).key,
-    coreRevision: 1,
+    coreRevision: coreRevision,
     totalMinor: 0,
     formattedAmount: '0 Ft',
     entryCount: 0,
     formattedEntryCount: '0',
     logBox: DashboardLogViewportState(
       queryKey: scope.key,
-      revision: 1,
+      revision: coreRevision,
       groups: const <DashboardDayLogGroupViewModel>[],
       entryCount: 0,
       nextCursor: null,
       direction: LedgerDirection.expense,
     ),
-    presentationDigest: 1,
+    presentationDigest: coreRevision,
   );
   return DashboardVisibleFrame.fromPrepared(
     prepared,
@@ -1828,7 +1962,7 @@ DashboardVisibleFrame _interactiveFrame() {
     childLabel: 'January',
     navigationEpoch: 1,
     presentationEpoch: 1,
-    frameGeneration: 1,
+    frameGeneration: coreRevision,
     mode: DashboardVisibleMode.committed,
   );
 }
@@ -1871,6 +2005,7 @@ final class _CountingFinancialLimitRepository
     implements FinancialLimitRepository {
   var deleteCalls = 0;
   var upsertCalls = 0;
+  int? lastUpsertAmountScaled100;
 
   @override
   Future<bool> delete(FinancialLimitKey key) async {
@@ -1890,6 +2025,7 @@ final class _CountingFinancialLimitRepository
     int amountScaled100,
   ) async {
     upsertCalls += 1;
+    lastUpsertAmountScaled100 = amountScaled100;
     return FinancialLimit(
       key: key,
       amountScaled100: amountScaled100,

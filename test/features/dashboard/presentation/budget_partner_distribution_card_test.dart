@@ -11,8 +11,10 @@ import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_c
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/spending_rhythm_bar_chart.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -25,6 +27,53 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
+  test(
+    'RG-G7: reference Card2 allocations conserve the envelope while scaling the current plot exactly 1.10x',
+    () {
+      const nonPlot =
+          SpendingRhythmBarChart.titleLaneHeight +
+          SpendingRhythmBarChart.titleToPlotGap +
+          SpendingRhythmBarChart.plotToAxisGap +
+          SpendingRhythmBarChart.axisLaneHeight;
+      for (final height in <double>[208, 217]) {
+        final layout = BudgetPartnerDistributionLayout.resolve(
+          availableSize: Size(378, height),
+        );
+        final content =
+            height -
+            BudgetDistributionPageSurface.outerPadding * 2 -
+            BudgetDistributionPageSurface.headingHeight;
+        final currentHeadPlot =
+            (content -
+                    BudgetPartnerDistributionLayout.dividerGap -
+                    BudgetPartnerDistributionLayout.preferredDonutDiameter -
+                    nonPlot)
+                .clamp(35.2, 44.0)
+                .toDouble();
+        final currentHeadUpper =
+            content -
+            BudgetPartnerDistributionLayout.dividerGap -
+            nonPlot -
+            currentHeadPlot;
+
+        expect(layout.plotLaneHeight, closeTo(currentHeadPlot * 1.10, .000001));
+        expect(
+          layout.upperSectionHeight,
+          closeTo(
+            currentHeadUpper - (layout.plotLaneHeight - currentHeadPlot),
+            .000001,
+          ),
+        );
+        expect(
+          layout.upperSectionHeight +
+              BudgetPartnerDistributionLayout.dividerGap +
+              layout.rhythmFooterHeight,
+          closeTo(content, .000001),
+        );
+      }
+    },
+  );
+
   testWidgets(
     'Partner list paints pending selection before focus acknowledgement',
     (tester) async {
@@ -175,7 +224,7 @@ void main() {
   });
 
   testWidgets(
-    'Partner layout gives Rhythm exactly ten percent more plot height while '
+    'RG-G7: Partner layout gives Rhythm another exact ten percent plot height while '
     'reclaiming the same delta from the chart region',
     (tester) async {
       final harness = _PartnerCardHarness();
@@ -192,7 +241,7 @@ void main() {
       final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
       final donut = find.byKey(const ValueKey('budget-distribution-donut-120'));
       expect(plot, findsOneWidget);
-      expect(tester.getSize(plot).height, 44);
+      expect(tester.getSize(plot).height, closeTo(48.4, .000001));
       expect(donut, findsOneWidget);
       expect(tester.getSize(donut).height, 120);
       expect(
@@ -201,13 +250,13 @@ void main() {
               find.byKey(const ValueKey('partner-spending-rhythm-chart')),
             )
             .height,
-        66,
+        closeTo(70.4, .000001),
       );
     },
   );
 
   testWidgets(
-    'Partner layout keeps a 106dp donut beside the 44dp Rhythm plot in the '
+    'Partner layout reclaims the upper Partner region for the 48.4dp Rhythm plot in the '
     '217dp reference Card2',
     (tester) async {
       final harness = _PartnerCardHarness();
@@ -225,20 +274,20 @@ void main() {
         tester
             .getSize(find.byKey(const ValueKey('spending-rhythm-plot-lane')))
             .height,
-        44,
+        closeTo(48.4, .000001),
       );
       expect(
-        find.byKey(const ValueKey('budget-distribution-donut-106')),
+        find.byKey(const ValueKey('budget-distribution-donut-101')),
         findsOneWidget,
         reason:
-            'The reference Card2 has enough room for the readable 110dp '
-            'Partner donut after Rhythm receives its 44dp plot lane.',
+            'The unchanged reference Card2 transfers the exact 4.4dp delta '
+            'from the upper Partner region to the Rhythm plot lane.',
       );
     },
   );
 
   testWidgets(
-    'Partner layout keeps the real Rhythm plot above its 35.2dp floor in a '
+    'Partner layout keeps the real Rhythm plot above its 38.72dp floor in a '
     'shorter Card2 viewport without changing outer-card geometry',
     (tester) async {
       final harness = _PartnerCardHarness();
@@ -254,7 +303,7 @@ void main() {
 
       final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
       expect(plot, findsOneWidget);
-      expect(tester.getSize(plot).height, greaterThanOrEqualTo(35.2));
+      expect(tester.getSize(plot).height, greaterThanOrEqualTo(38.72));
       expect(tester.takeException(), isNull);
     },
   );

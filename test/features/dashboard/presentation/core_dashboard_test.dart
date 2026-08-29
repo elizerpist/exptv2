@@ -9,8 +9,11 @@ import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
@@ -89,6 +92,14 @@ void main() {
       final controller = DashboardCoreController(initialCoreRevision: 1);
       addTearDown(controller.dispose);
       await controller.bootstrap();
+      if (spec == DashboardModeSpec.mind) {
+        final scope = controller.currentQuery.scope;
+        controller.currentQuery.replaceDirection(
+          scope.direction,
+          scope,
+          facetPresentation: _readyMindQueryMenuData,
+        );
+      }
 
       await pumpDashboardSurface(
         tester,
@@ -131,7 +142,19 @@ void main() {
         expect(body.bottom, 674);
         final range = find.byKey(const ValueKey('mind-query-amount-range'));
         expect(range, findsOneWidget);
-        expect(tester.widget<QueryAmountRangeControl>(range), isNotNull);
+        expect(
+          tester.widget<QueryAmountRangeControl>(range).values,
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 860000,
+            lowerScaled100: 100000,
+            upperScaled100: 860000,
+          ),
+          reason:
+              'RG-G5: the production Mind host binds the exact canonical '
+              'Query-menu domain rather than a presentation-null 1000/1000 '
+              'fallback.',
+        );
         expect(
           find.descendant(of: range, matching: find.byType(RangeSlider)),
           findsOneWidget,
@@ -168,6 +191,35 @@ void main() {
       }
     });
   }
+
+  testWidgets(
+    'RG-G5: Mind represents a genuinely unavailable canonical domain explicitly',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.mind),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range')),
+        findsNothing,
+        reason:
+            'A missing canonical domain is not a disabled 1,000/1,000 slider.',
+      );
+    },
+  );
 
   testWidgets(
     'Mind to Budget replays one new visible Budget epoch without an Avatar selection',
@@ -579,6 +631,82 @@ void main() {
     );
   });
 
+  testWidgets(
+    'RG-G3: a Summary pointer immediately takes over a live time-rail ballistic',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+      await tester.pump();
+      final timeRail = find.byKey(const ValueKey('dashboard-time-rail'));
+      expect(timeRail, findsOneWidget);
+      final summary = find.byKey(
+        const ValueKey('dashboard-summary-shell-transform'),
+      );
+      Future<void> takeOverAfter(Duration delay) async {
+        await tester.fling(timeRail, const Offset(-320, 0), 2400);
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          controller.motion.state.activity,
+          isNot(DashboardMotionActivity.idle),
+          reason: 'The test must begin with a genuine active temporal motion.',
+        );
+        await tester.pump(delay);
+        final summaryGesture = await tester.startGesture(
+          tester.getCenter(summary),
+        );
+        await tester.pump();
+        expect(controller.motion.state.activity, DashboardMotionActivity.idle);
+        expect(
+          controller.motion.carouselController.hasActiveScrollActivity,
+          isFalse,
+          reason:
+              'RG-G3: raw Summary input interrupts the old time ScrollPosition '
+              'before the Summary pan recognizer chooses its own axis.',
+        );
+        await summaryGesture.up();
+        await tester.pump();
+      }
+
+      for (final delay in <Duration>[
+        Duration.zero,
+        const Duration(milliseconds: 16),
+        const Duration(milliseconds: 50),
+        const Duration(milliseconds: 100),
+      ]) {
+        await takeOverAfter(delay);
+      }
+
+      await tester.fling(timeRail, const Offset(-320, 0), 2400);
+      await tester.pumpAndSettle();
+      FluviDiagnosticLogger.clear();
+      final settledGesture = await tester.startGesture(
+        tester.getCenter(summary),
+      );
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_DIRECT_POINTER_PREEMPTED',
+        ),
+        hasLength(1),
+        reason:
+            'A first Summary pointer is still accepted immediately after settle.',
+      );
+      await settledGesture.up();
+      await tester.pump();
+    },
+  );
+
   testWidgets('split header lower card reveals from behind the upper card', (
     tester,
   ) async {
@@ -707,3 +835,14 @@ DashboardCoreModeController _modeControllerFor(DashboardModeSpec mode) {
   addTearDown(controller.dispose);
   return controller;
 }
+
+const QueryMenuData _readyMindQueryMenuData = QueryMenuData(
+  result: QueryMenuResultSummary(entryCount: 18, amountScaled100: 860000),
+  amountDomain: QueryMenuAmountDomain(
+    minimumAmountScaled100: 100000,
+    maximumAmountScaled100: 860000,
+  ),
+  availableMonths: <QueryMenuAvailableMonth>[],
+  categories: <QueryMenuCategoryFacet>[],
+  partners: <QueryMenuPartnerFacet>[],
+);
