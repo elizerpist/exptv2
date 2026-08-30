@@ -65,6 +65,14 @@ PR-01 to `DONE`; their required device evidence is explicit above.
   pixel-owner proof: it did not reproduce the device rectangle. A
   slow/fast/reverse device capture from this source revision is still required
   before CS-01 can be marked `DONE` or any visual repair can be made.
+- The current `SpendingRhythmBarChart` widget regression additionally mounts a
+  31-day Month Rhythm at the exact `355.69512195121956dp` intermediate Card2
+  width. It proves the live chart keeps its authored bars in a content-only
+  horizontal viewport with a non-zero scroll extent and no framework
+  exception. The same layout resolver threw at that width in the source used
+  by the old `9a39981` APK. This is a narrow lower-footer source regression;
+  it does not identify the screenshot's physical pixel layer and therefore
+  does not promote CS-01 or CS-02.
 
 ## Mind lifecycle evidence after instrumentation (automated only; no physical closure)
 
@@ -96,6 +104,18 @@ PR-01 to `DONE`; their required device evidence is explicit above.
   workspace, and Drive revision 56 contains no Mind lifecycle events. MR-01
   and MR-02 remain `PARTIAL` until a physical cold/warm/re-entry capture from
   this source revision proves the actual terminal path and visible control.
+
+## Current source verification after the narrow-Rhythm regression
+
+- `flutter test` over the current AppShell, applied-facet loader, full
+  CoreDashboard, Rhythm layout and Rhythm chart targets passed **57 tests**.
+  This includes the shell's mocked native `readQueryMenuFacets` request through
+  canonical publication and actual Mind `RangeSlider` mount/layout/visible
+  events, the terminal Mind failure/retry surface, and the complete real
+  Partner/Rhythm collapse raster matrix.
+- A current full `flutter analyze` run completed with **No issues found** and
+  `git diff --check` was clean. These local results do not replace the two
+  outstanding physical-device gates.
 
 ## Verification note: inherited full-dashboard suite failure
 
