@@ -643,6 +643,9 @@ void main() {
       final lowerCard = find.byKey(
         const ValueKey('dashboard-core-mode-budget-card-2'),
       );
+      final avatarRail = find.byKey(
+        const ValueKey('budget-target-avatar-rail'),
+      );
       final rhythm = find.byKey(
         const ValueKey('partner-spending-rhythm-chart'),
       );
@@ -655,47 +658,199 @@ void main() {
         find.byKey(boundaryKey),
       );
       final observations = <_G4CollapseObservation>[];
+      final pager = find.byKey(const ValueKey('budget-distribution-pager'));
+      final pageViewBefore = tester.widget<PageView>(pager);
 
-      for (
-        var progress = 0.0;
-        progress <= controller.metrics.collapseTravel;
-        progress += 9
-      ) {
-        controller.expansion.setProgress(progress);
-        await tester.pump();
-        final cardBounds = tester.getRect(lowerCard);
-        final rhythmBounds = tester.getRect(rhythm);
-        final trackBounds = tester.getRect(transparentTrack);
-        final countBounds = tester.getRect(count);
-        final handleBounds = tester.getRect(handle);
-        final sample = await _g4PixelAt(tester, boundary, trackBounds.center);
-        observations.add(
-          _G4CollapseObservation(
-            progress: progress,
-            cardBounds: cardBounds,
-            rhythmBounds: rhythmBounds,
-            countBounds: countBounds,
-            handleBounds: handleBounds,
-            sample: sample,
+      Future<void> assertNoSlabAcrossCollapse(
+        String topology, {
+        required bool chartFirst,
+      }) async {
+        observations.clear();
+        for (
+          var progress = 0.0;
+          progress <= controller.metrics.collapseTravel;
+          progress += 9
+        ) {
+          controller.expansion.setProgress(progress);
+          await tester.pump();
+          final cardBounds = tester.getRect(lowerCard);
+          final rhythmBounds = tester.getRect(rhythm);
+          final trackBounds = tester.getRect(transparentTrack);
+          final countBounds = tester.getRect(count);
+          final handleBounds = tester.getRect(handle);
+          final sample = await _g4PixelAt(tester, boundary, trackBounds.center);
+          observations.add(
+            _G4CollapseObservation(
+              progress: progress,
+              cardBounds: cardBounds,
+              rhythmBounds: rhythmBounds,
+              countBounds: countBounds,
+              handleBounds: handleBounds,
+              sample: sample,
+            ),
+          );
+
+          if (progress == 0) {
+            final avatarRailBounds = tester.getRect(avatarRail);
+            expect(
+              chartFirst
+                  ? cardBounds.top < avatarRailBounds.top
+                  : avatarRailBounds.top < cardBounds.top,
+              isTrue,
+              reason:
+                  '$topology must use the selected authored section order; '
+                  'otherwise a cached/off-screen tuner control could make '
+                  'this full-composition test a false green.',
+            );
+          }
+
+          expect(
+            cardBounds.overlaps(rhythmBounds),
+            isTrue,
+            reason:
+                '$topology Rhythm must remain inside its moving authored '
+                'Budget surface at progress=$progress.',
+          );
+          expect(
+            _isObservedPhysicalSlabColor(sample),
+            isFalse,
+            reason:
+                '$topology must not expose the device-observed opaque neutral '
+                'slab (#E1E2E4 family) at progress=$progress. '
+                'samples=$observations',
+          );
+        }
+      }
+
+      Future<void> selectTunerOption(Finder option) async {
+        await tester.tap(
+          find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        final scrollable = find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('dashboard-header-visual-tuner-list'),
           ),
+          matching: find.byType(Scrollable),
         );
-
+        // Start each production interaction from the top of the panel. This
+        // makes every option selection an actual reachable-tuner path rather
+        // than a test-only controller mutation.
+        await tester.drag(scrollable, const Offset(0, 1200));
+        await tester.pump();
+        // ListView keeps a cache extent, so a finder becoming non-empty does
+        // not yet mean its center can receive a physical pointer. Advance the
+        // real scroll gesture until the complete RadioListTile is on screen;
+        // this deliberately does not rely on scrollUntilVisible's
+        // finder-exists shortcut.
+        var optionIsTouchTarget = false;
+        for (var attempt = 0; attempt < 20; attempt++) {
+          if (option.evaluate().isNotEmpty) {
+            final optionBounds = tester.getRect(option);
+            if (optionBounds.top >= 0 &&
+                optionBounds.bottom <= dashboardTestSurfaceSize.height) {
+              optionIsTouchTarget = true;
+              break;
+            }
+          }
+          await tester.drag(scrollable, const Offset(0, -240));
+          await tester.pump();
+        }
         expect(
-          cardBounds.overlaps(rhythmBounds),
+          optionIsTouchTarget,
           isTrue,
-          reason:
-              'The real Rhythm footer must remain inside the moving Card2 '
-              'composition at progress=$progress.',
+          reason: 'The tuner option must become physically touchable.',
+        );
+        final optionBounds = tester.getRect(option);
+        expect(
+          optionBounds.top,
+          greaterThanOrEqualTo(0),
+          reason: 'The tuner option must be physically touchable.',
         );
         expect(
-          _isObservedPhysicalSlabColor(sample),
-          isFalse,
+          optionBounds.bottom,
+          lessThanOrEqualTo(dashboardTestSurfaceSize.height),
+          reason: 'The tuner option must be physically touchable.',
+        );
+        await tester.tap(option);
+        await tester.pump();
+        await tester.tap(
+          find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      void expectTopology({required bool unified, required String topology}) {
+        expect(
+          find.byKey(const ValueKey('budget-unified-content-card-surface')),
+          unified ? findsOneWidget : findsNothing,
           reason:
-              'The transparent Rhythm-track interior must not become the '
-              'device-observed opaque neutral slab (#E1E2E4 family) at '
-              'progress=$progress. samples=$observations',
+              '$topology must have exactly the physical surface selected by '
+              'the production Budget layout setting.',
+        );
+        expect(
+          find.byKey(const ValueKey('budget-distribution-card-shell')),
+          unified ? findsNothing : findsOneWidget,
+          reason:
+              '$topology must not retain the other layout\'s physical Card2 '
+              'surface.',
+        );
+        expect(
+          tester.widget<PageView>(pager).controller,
+          same(pageViewBefore.controller),
+          reason:
+              '$topology must not recreate the PageView controller or lose '
+              'the selected Partner page.',
+        );
+        expect(
+          find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+          findsOneWidget,
+          reason: '$topology must retain the real Partner Rhythm footer.',
         );
       }
+
+      // Exercise all production-supported surface/order combinations. The
+      // lower Rhythm failure was observed only in the full moving composition,
+      // so each topology receives the same dense collapse samples.
+      expectTopology(unified: false, topology: 'Split avatars→chart');
+      await assertNoSlabAcrossCollapse(
+        'Split avatars→chart',
+        chartFirst: false,
+      );
+
+      await selectTunerOption(
+        find.byKey(
+          const ValueKey<String>(
+            'dashboard-budget-section-order-chartThenAvatars',
+          ),
+        ),
+      );
+      expectTopology(unified: false, topology: 'Split chart→avatars');
+      await assertNoSlabAcrossCollapse('Split chart→avatars', chartFirst: true);
+
+      await selectTunerOption(
+        find.byKey(
+          const ValueKey<String>('dashboard-budget-content-unifiedCard'),
+        ),
+      );
+      expectTopology(unified: true, topology: 'Unified chart→avatars');
+      await assertNoSlabAcrossCollapse(
+        'Unified chart→avatars',
+        chartFirst: true,
+      );
+
+      await selectTunerOption(
+        find.byKey(
+          const ValueKey<String>(
+            'dashboard-budget-section-order-avatarsThenChart',
+          ),
+        ),
+      );
+      expectTopology(unified: true, topology: 'Unified avatars→chart');
+      await assertNoSlabAcrossCollapse(
+        'Unified avatars→chart',
+        chartFirst: false,
+      );
     },
   );
 
