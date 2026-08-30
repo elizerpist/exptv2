@@ -83,3 +83,18 @@ PR-01 to `DONE`; their required device evidence is explicit above.
   workspace, and Drive revision 56 contains no Mind lifecycle events. MR-01
   and MR-02 remain `PARTIAL` until a physical cold/warm/re-entry capture from
   this source revision proves the actual terminal path and visible control.
+
+## Verification note: inherited full-dashboard suite failure
+
+- The current-repository equivalent of the requested missing `test/homev2`
+  path is `flutter test test/features/dashboard --reporter expanded`.
+  That broad run reached
+  `dashboard_logbox_stable_render_surface_test.dart` and failed at its
+  pre-existing `find.byType(Scrollable)` single-element assumption with
+  `Bad state: Too many elements`.
+- The exact focused test was then run in a temporary clean worktree at the
+  initial local SHA `a2bfe74604c96ce5505347ab16f2e15aa044f189`; it failed at
+  the identical file, line 87, and error. It is therefore inherited rather
+  than silently attributed to the post-checkpoint changes. The interrupted
+  broad run also emitted shutdown stream errors after the first failure; those
+  are not counted as independent product failures.
