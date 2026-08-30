@@ -122,12 +122,20 @@ current source checkpoints:
   geometry/layout suite: **33 tests**;
 - immediate first-Avatar-fling focus-hotset gate and the combined G1/G2/G3
   affected suite: **95 tests**.
+- the complete current `core_dashboard_test.dart` production-parent suite:
+  **24 tests**, including G3 live-ballistic takeover, G4 every-5%-step
+  collapse proxy, G5 ready/unavailable Mind hosts, and the unified/split
+  surface checks.
 
 The current exact G3 production-parent ballistic-takeover gate is also green.
 The former failed runs that named obsolete test paths did not execute a failing
 test; they were rerun using the repository's actual paths. The unrelated
 complete-Dashboard-directory failure recorded below remains inherited. None of
 these automated results changes a physical gate to `DONE`.
+
+`flutter analyze` over all **13** production Dart files changed since the
+remote baseline reported no issues. `git diff --check` is re-run before each
+source-coherent commit.
 
 After the G4 source/raster repair, the current focused full-composition run
 (`spending_rhythm_bar_layout`, `spending_rhythm_bar_chart`,
