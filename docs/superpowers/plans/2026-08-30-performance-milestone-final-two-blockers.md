@@ -51,7 +51,7 @@ tests, `FluviDiagnosticLogger`, Android physical diagnostics.
 - [x] Add the smallest session/bucket signature owner; do not format an event
   string on an unchanged vsync.
 - [x] Re-run the test and existing FIFO logger tests.
-- [ ] Commit this diagnostic-only change separately after `flutter analyze`
+- [x] Commit this diagnostic-only change separately after `flutter analyze`
   and `git diff --check`.
 
 ### Task 2: Prove the intermediate collapse pixel owner
@@ -76,6 +76,9 @@ tests, `FluviDiagnosticLogger`, Android physical diagnostics.
 - [x] Run it against the current checkpoint and record whether it exposes a
   structural failure; if no deterministic pixel reproduction exists, retain a
   debug-only owner probe rather than guessing.
+- [x] Extend the same bounded probe scope through the LogBox viewport and
+  collapse-handle stack, because the original physical rectangle overlaps the
+  transaction-count boundary as well as the lower Partner area.
 - [ ] Capture slow/fast/reverse Android evidence, identify one owner, then add
   the narrow failing regression matching that owner.
 - [ ] Implement one structural owner fix, re-run intermediate and full Budget
@@ -97,15 +100,17 @@ tests, `FluviDiagnosticLogger`, Android physical diagnostics.
   then render gate/mount/layout/visible facts; it does not introduce a Mind
   domain cache or a copied slider.
 
-- [ ] Write a red lifecycle test for every completed request terminal state
+- [x] Write a red lifecycle test for every completed request terminal state
   (ready, stale rejection, failure) and assert a visible canonical state or
   explicit error—not eternal loading.
-- [ ] Run the test and observe the pre-change failure.
-- [ ] Add bounded `MIND|RANGE_*` and `MIND|SLIDER_*` events at component
+- [x] Run the test and observe the pre-change failure.
+- [x] Add bounded `MIND|RANGE_*` and `MIND|SLIDER_*` events at component
   boundaries, with exact generation/scope/rejection reasons and layout data.
-- [ ] Re-run cold, warm, direction/scope replacement and rapid re-entry tests.
-- [ ] Use a device dump to classify the broken pipeline edge before any
-  functional repair.
+- [x] Re-run available ready/failure/retry and direction/scope-replacement
+  lifecycle tests; retain rapid physical Mind re-entry for the device matrix.
+- [ ] Capture a device dump from this source revision to classify any residual
+  native pipeline failure and prove physical visibility; do not promote the
+  automated state/error repair to physical closure without it.
 
 ### Task 4: Repair only proven owner and close evidence
 

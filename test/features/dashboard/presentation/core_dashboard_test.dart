@@ -279,6 +279,68 @@ void main() {
             .maximumScaled100,
         860000,
       );
+      await tester.pump();
+      final sliderStages = FluviDiagnosticLogger.entries
+          .map((entry) => entry.stage)
+          .toList(growable: false);
+      expect(
+        sliderStages,
+        containsAll(<String>[
+          'MIND|SLIDER_MOUNT',
+          'MIND|SLIDER_LAYOUT',
+          'MIND|SLIDER_VISIBLE',
+        ]),
+        reason:
+            'MR-01: a canonical ready range is not accepted until the real '
+            'Mind host has mounted, laid out, and exposed the shared control.',
+      );
+    },
+  );
+
+  testWidgets(
+    'MR-02: Mind renders an explicit retryable terminal range failure',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      final direction = ValueNotifier<LedgerDirection>(LedgerDirection.income);
+      final loader = DashboardAppliedQueryFacetLoader(
+        currentQuery: controller.currentQuery,
+        directionChanges: direction,
+        activeDirection: () => direction.value,
+        repository: const _FailMindFacetRepository(),
+      );
+      addTearDown(controller.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(loader.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.mind),
+          categoryCollection: emptyTestCategoryCollection,
+          mindQueryFacetLoader: loader,
+        ),
+      );
+
+      await loader.start();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range-error')),
+        findsOneWidget,
+        reason:
+            'A completed canonical request failure must not continue to claim '
+            'that loading is in progress.',
+      );
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range-unavailable')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range-retry')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -558,6 +620,26 @@ void main() {
       expect(viewportProbe.scope, contains('paintBounds='));
       expect(viewportProbe.scope, contains('clip=ClipRRect'));
       expect(viewportProbe.scope, contains('surfaceOwner=splitCard2'));
+
+      final logBoxProbe = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) =>
+            entry.stage == 'COLLAPSE|LAYER' &&
+            entry.scope?.contains('candidate=dashboardLogBoxViewport') == true,
+      );
+      expect(logBoxProbe.scope, contains('globalBounds='));
+      expect(logBoxProbe.scope, contains('paintBounds='));
+      expect(logBoxProbe.scope, contains('zOrder=modeContent<logBoxViewport'));
+
+      final collapseHandleProbe = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) =>
+            entry.stage == 'COLLAPSE|LAYER' &&
+            entry.scope?.contains('candidate=collapseHandle') == true,
+      );
+      expect(collapseHandleProbe.scope, contains('globalBounds='));
+      expect(
+        collapseHandleProbe.scope,
+        contains('zOrder=modeContent<logBoxViewport<collapseHandle'),
+      );
     },
   );
 
@@ -1349,6 +1431,17 @@ final class _MindFacetRepository implements QueryMenuRepository {
   @override
   Future<QueryMenuData> readFacets(CurrentLedgerQueryScope scope) async =>
       _readyMindQueryMenuData;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _FailMindFacetRepository implements QueryMenuRepository {
+  const _FailMindFacetRepository();
+
+  @override
+  Future<QueryMenuData> readFacets(CurrentLedgerQueryScope scope) =>
+      Future<QueryMenuData>.error(StateError('native facets unavailable'));
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

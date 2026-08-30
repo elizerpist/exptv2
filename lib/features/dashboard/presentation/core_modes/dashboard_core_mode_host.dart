@@ -10,6 +10,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../query/domain/query_amount_range.dart';
+import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import 'balance_dashboard_core_surface.dart';
 import 'budget_dashboard_core_surface.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -54,6 +55,10 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindHeaderVisualFrame,
     this.mindQueryAmountRange,
     this.mindQueryAmountRangeChanges,
+    this.mindQueryAmountRangeLifecycleChanges,
+    this.mindQueryAmountRangeState,
+    this.mindQueryAmountRangeError,
+    this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
@@ -81,6 +86,11 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<DashboardHeaderVisualFrame>? mindHeaderVisualFrame;
   final QueryAmountRangeValues? Function()? mindQueryAmountRange;
   final Listenable? mindQueryAmountRangeChanges;
+  final Listenable? mindQueryAmountRangeLifecycleChanges;
+  final DashboardAppliedQueryFacetLoadState Function()?
+  mindQueryAmountRangeState;
+  final Object? Function()? mindQueryAmountRangeError;
+  final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
@@ -299,6 +309,11 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         presentation: presentation,
         queryAmountRange: widget.mindQueryAmountRange,
         queryAmountRangeChanges: widget.mindQueryAmountRangeChanges,
+        queryAmountRangeLifecycleChanges:
+            widget.mindQueryAmountRangeLifecycleChanges,
+        queryAmountRangeState: widget.mindQueryAmountRangeState,
+        queryAmountRangeError: widget.mindQueryAmountRangeError,
+        onQueryAmountRangeRetry: widget.onMindQueryAmountRangeRetry,
         onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,

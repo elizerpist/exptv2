@@ -715,6 +715,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                                 _recordBudgetCategoryRailInputUpdated,
                             preparedLogBoxRasters: _preparedLogBoxRasters!,
                             shellPresentation: _shellPresentation,
+                            mindQueryFacetLoader: _appliedQueryFacets,
                             onLogBoxWarmupSurfaceAttached: (viewportId) {
                               _readiness.markLogBoxSurfaceAttached(
                                 viewportId: viewportId,
