@@ -168,9 +168,16 @@ ended above the widget at y=721, and the Mode-nav case leaked a pending Card2
 maintenance timer. The trace harness now uses an 800×900 physical test root;
 the Card2 owner uses the shared cancellable input-fair scheduler. The focused
 Card2/Mode-nav/rail matrix passed **22 tests** after that repair. The full
-Dashboard directory has not yet been rerun after this latest source change;
-the remaining earlier failures are not hidden and the directory is still **not
-green** for release proof.
+Dashboard directory was rerun through
+`5759aa444979278c91cfa9f3385d978b0a52f577` and improved to **1,046 passing
+tests and 22 failures**: LogBox stable surface (1), Header Deep Drift (3),
+Header classic parity (1), Header Space Fabric temporal (8), geometry goldens
+(6), Summary experiments (2), and one Core Query idle-resume case (1). The
+four former rail-density/Mode-nav failures are absent. The exact Core Query
+idle-resume test was immediately rerun alone and passed **1/1**, so its
+full-suite-only failure is an unresolved parallel-test interference, not a
+proven Core regression or an inherited failure. The remaining failures are not
+hidden and the directory is still **not green** for release proof.
 
 ## Continued G2 first-fling evidence
 
