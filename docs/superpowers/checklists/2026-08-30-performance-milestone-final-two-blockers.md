@@ -53,11 +53,18 @@ PR-01 to `DONE`; their required device evidence is explicit above.
   records existing render-object global bounds, paint bounds, declared
   material/clip/z-order and ancestry only at semantic collapse buckets. It
   neither paints nor clips nor changes hit testing.
-- The real Partner/Rhythm collapse widget composition passed its intermediate
-  split/unified/order proxy after proving all five probe candidates are present.
-  This is **not** physical pixel-owner proof: a slow/fast/reverse device
-  capture from this source revision is still required before CS-01 can be
-  marked `DONE` or any visual repair can be made.
+- The real Partner/Rhythm collapse widget composition now walks every 9 logical
+  units of collapse in Split/Unified and both section orders. At each state it
+  captures one raster and samples the footer's top, middle, bottom, side
+  insets, bar interior, inter-bar gap and a point beside the real collapse
+  handle. The probe rejects both screenshot-observed slab families
+  `#D3D4D5` and `#E1E2E4` (with bounded raster tolerance). The centre point
+  was deliberately moved out of the actual 42x4 handle's antialiased/shadow
+  footprint after it correctly identified that authored control as a false
+  positive. The local composition test passes, but this is **not** physical
+  pixel-owner proof: it did not reproduce the device rectangle. A
+  slow/fast/reverse device capture from this source revision is still required
+  before CS-01 can be marked `DONE` or any visual repair can be made.
 
 ## Mind lifecycle evidence after instrumentation (automated only; no physical closure)
 

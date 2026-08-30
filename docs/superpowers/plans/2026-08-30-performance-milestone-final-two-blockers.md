@@ -79,6 +79,9 @@ tests, `FluviDiagnosticLogger`, Android physical diagnostics.
 - [x] Extend the same bounded probe scope through the LogBox viewport and
   collapse-handle stack, because the original physical rectangle overlaps the
   transaction-count boundary as well as the lower Partner area.
+- [x] Strengthen the real-composition raster proxy to sample eight footer
+  points outside the authored handle material and reject both observed
+  `#D3D4D5` and `#E1E2E4` slab families with one capture per geometry.
 - [ ] Capture slow/fast/reverse Android evidence, identify one owner, then add
   the narrow failing regression matching that owner.
 - [ ] Implement one structural owner fix, re-run intermediate and full Budget

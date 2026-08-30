@@ -764,6 +764,9 @@ void main() {
       final transparentTrack = find.byKey(
         const ValueKey('spending-rhythm-track-2'),
       );
+      final previousTrack = find.byKey(
+        const ValueKey('spending-rhythm-track-1'),
+      );
       final boundary = tester.renderObject<RenderRepaintBoundary>(
         find.byKey(boundaryKey),
       );
@@ -786,9 +789,48 @@ void main() {
           final cardBounds = tester.getRect(lowerCard);
           final rhythmBounds = tester.getRect(rhythm);
           final trackBounds = tester.getRect(transparentTrack);
+          final previousTrackBounds = tester.getRect(previousTrack);
           final countBounds = tester.getRect(count);
           final handleBounds = tester.getRect(handle);
-          final sample = await _g4PixelAt(tester, boundary, trackBounds.center);
+          // The centered 42x4 collapse affordance legitimately crosses the
+          // Rhythm lane at late collapse progress. Sample the lower-card
+          // material beside that authored control instead of treating the
+          // handle's own antialiased top edge or shadow as the reported slab.
+          // A slab with the device-observed rectangular extent still reaches
+          // this point, while an intended handle never does.
+          final centerAwayFromHandle = Offset(
+            rhythmBounds.left + rhythmBounds.width * .75,
+            rhythmBounds.center.dy,
+          );
+          final handleAdjacentRhythm = Offset(
+            (handleBounds.center.dx + 70)
+                .clamp(rhythmBounds.left + 1, rhythmBounds.right - 1)
+                .toDouble(),
+            trackBounds.center.dy,
+          );
+          final samplePoints = <String, Offset>{
+            'top': Offset(centerAwayFromHandle.dx, rhythmBounds.top + 1),
+            'middleAwayFromHandle': centerAwayFromHandle,
+            'bottom': Offset(centerAwayFromHandle.dx, rhythmBounds.bottom - 1),
+            'leftInset': Offset(rhythmBounds.left + 1, rhythmBounds.center.dy),
+            'rightInset': Offset(
+              rhythmBounds.right - 1,
+              rhythmBounds.center.dy,
+            ),
+            'barInterior': trackBounds.center,
+            'betweenBars': Offset(
+              (previousTrackBounds.right + trackBounds.left) / 2,
+              trackBounds.center.dy,
+            ),
+            // This is immediately beside the real handle, far enough beyond
+            // its 42dp bar and bounded blur that it cannot confuse the
+            // handle's intentional material with an exposed footer slab.
+            'handleAdjacentRhythm': handleAdjacentRhythm,
+          };
+          // Rendering a RepaintBoundary is comparatively expensive. One
+          // image per collapse geometry preserves eight spatial samples while
+          // keeping this forensic regression off the interaction hot path.
+          final samples = await _g4PixelsAt(tester, boundary, samplePoints);
           observations.add(
             _G4CollapseObservation(
               progress: progress,
@@ -796,7 +838,7 @@ void main() {
               rhythmBounds: rhythmBounds,
               countBounds: countBounds,
               handleBounds: handleBounds,
-              sample: sample,
+              samples: samples,
             ),
           );
 
@@ -821,14 +863,17 @@ void main() {
                 '$topology Rhythm must remain inside its moving authored '
                 'Budget surface at progress=$progress.',
           );
-          expect(
-            _isObservedPhysicalSlabColor(sample),
-            isFalse,
-            reason:
-                '$topology must not expose the device-observed opaque neutral '
-                'slab (#E1E2E4 family) at progress=$progress. '
-                'samples=$observations',
-          );
+          for (final entry in samples.entries) {
+            expect(
+              _isObservedPhysicalSlabColor(entry.value),
+              isFalse,
+              reason:
+                  '$topology must not expose the device-observed opaque '
+                  'neutral slab (#D3D4D5/#E1E2E4 families) at '
+                  'progress=$progress, '
+                  'sample=${entry.key}. samples=$observations',
+            );
+          }
         }
       }
 
@@ -1568,34 +1613,55 @@ PreparedBudgetPartnerDistributionSnapshot _g4PartnerSnapshot() {
 int _g4EpochDay(int year, int month, int day) =>
     DateTime.utc(year, month, day).difference(DateTime.utc(1970)).inDays;
 
-Future<Color> _g4PixelAt(
+Future<Map<String, Color>> _g4PixelsAt(
   WidgetTester tester,
   RenderRepaintBoundary boundary,
-  Offset point,
+  Map<String, Offset> points,
 ) async {
-  final color = await tester.runAsync(() async {
+  final colors = await tester.runAsync(() async {
     final image = await boundary.toImage(pixelRatio: 1);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    final x = point.dx.floor().clamp(0, image.width - 1);
-    final y = point.dy.floor().clamp(0, image.height - 1);
     final rgba = Uint8List.view(bytes!.buffer);
-    final offset = (y * image.width + x) * 4;
-    final result = Color.fromARGB(
-      rgba[offset + 3],
-      rgba[offset],
-      rgba[offset + 1],
-      rgba[offset + 2],
-    );
+    final result = <String, Color>{
+      for (final entry in points.entries)
+        entry.key: _g4RgbaAt(rgba, image.width, image.height, entry.value),
+    };
     image.dispose();
     return result;
   });
-  return color!;
+  return colors!;
 }
 
+Color _g4RgbaAt(Uint8List rgba, int width, int height, Offset point) {
+  final x = point.dx.floor().clamp(0, width - 1);
+  final y = point.dy.floor().clamp(0, height - 1);
+  final offset = (y * width + x) * 4;
+  return Color.fromARGB(
+    rgba[offset + 3],
+    rgba[offset],
+    rgba[offset + 1],
+    rgba[offset + 2],
+  );
+}
+
+/// Device screenshots captured both the opaque #D3D4D5 rectangle itself and
+/// its lighter #E1E2E4-family edge/composite. Neither is an authored Rhythm
+/// material. Keep both observed physical signatures in the production-parent
+/// probe; it must not turn green merely because the same slab rasterises one
+/// shade darker at a different collapse fraction or device scale.
 bool _isObservedPhysicalSlabColor(Color color) =>
-    ((color.r * 255).round() - 225).abs() <= 8 &&
-    ((color.g * 255).round() - 226).abs() <= 8 &&
-    ((color.b * 255).round() - 228).abs() <= 8;
+    _isNearRgb(color, red: 211, green: 212, blue: 213) ||
+    _isNearRgb(color, red: 225, green: 226, blue: 228);
+
+bool _isNearRgb(
+  Color color, {
+  required int red,
+  required int green,
+  required int blue,
+}) =>
+    ((color.r * 255).round() - red).abs() <= 8 &&
+    ((color.g * 255).round() - green).abs() <= 8 &&
+    ((color.b * 255).round() - blue).abs() <= 8;
 
 final class _G4CollapseObservation {
   const _G4CollapseObservation({
@@ -1604,7 +1670,7 @@ final class _G4CollapseObservation {
     required this.rhythmBounds,
     required this.countBounds,
     required this.handleBounds,
-    required this.sample,
+    required this.samples,
   });
 
   final double progress;
@@ -1612,10 +1678,10 @@ final class _G4CollapseObservation {
   final Rect rhythmBounds;
   final Rect countBounds;
   final Rect handleBounds;
-  final Color sample;
+  final Map<String, Color> samples;
 
   @override
   String toString() =>
       'p=${progress.toStringAsFixed(1)} card=$cardBounds rhythm=$rhythmBounds '
-      'count=$countBounds handle=$handleBounds sample=$sample';
+      'count=$countBounds handle=$handleBounds samples=$samples';
 }
