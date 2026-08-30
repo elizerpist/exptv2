@@ -964,7 +964,7 @@ void main() {
   );
 
   test(
-    'an experimental fixed MONTH crossing activates the retained parent hotset before commit',
+    'an experimental fixed MONTH crossing stays visual until one retained-hotset settle',
     () async {
       final displayFrames = _DisplayFrameScheduler();
       final core = DashboardCoreController(
@@ -1034,15 +1034,39 @@ void main() {
         offset: -1,
       );
 
+      expect(
+        core.navigation.state.monthCursor.month,
+        7,
+        reason:
+            'A semantic carousel crossing is presentation-only while the '
+            'gesture is active; it must not publish a navigation frame.',
+      );
+      expect(
+        genericPrepareCalls,
+        genericPrepareCallsBeforeCross,
+        reason:
+            'A transient crossing must not request foreground scene work.',
+      );
+
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.month,
+      );
+      await pumpEventQueue(times: 20);
+
       expect(core.navigation.state.monthCursor.month, 6);
       for (final payload in candidateInteraction.payloads) {
-        expect(cache.railCriticalSceneFor(payload), isNotNull);
+        expect(
+          cache.railCriticalSceneFor(payload),
+          isNotNull,
+          reason: 'Settle must activate every retained rail-critical scene.',
+        );
       }
       expect(
         genericPrepareCalls,
         genericPrepareCallsBeforeCross,
         reason:
-            'A prepared experimental target is promoted from the retained '
+            'The single settled publication promotes the already-retained '
             'hotset rather than requesting post-selection foreground work.',
       );
     },

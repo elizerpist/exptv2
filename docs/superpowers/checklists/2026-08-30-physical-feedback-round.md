@@ -34,9 +34,9 @@ an agent-side pre-build PASS condition; the strongest handoff is
 | T1 | Time hot-path cause | Summary/time selector and prepared temporal navigation | Cache/scene misses cannot synchronously turn a visual transient crossing into a heavy navigation transaction; settle commits latest target | multi-crossing/reverse/interruption tests + counters | DONE |
 | T2 | Time flight evidence | bounded flight recorder | Independent summary reports cadence/work counts | unit/widget tests | DONE |
 | G1 | Random gray Rhythm slab forensics | Rhythm slot/card/scene lifecycle | Exact current owner is fixed only if proven; otherwise durable low-frequency owner/state diagnostics and marker snapshot are present without a cosmetic patch | source audit + widget/state tests | DONE |
-| G2 | Preserve collapse repair | full Budget composition | Existing intermediate-collapse regression remains green | targeted regression | NOT DONE |
+| G2 | Preserve collapse repair | full Budget composition | Existing intermediate-collapse regression remains green | targeted regression | DONE |
 | B1 | Budget/limit audit | Query/index/Budget lifecycle | Three logs are deduplicated and anomalies classified; no behavior change without causal proof | forensic record + targeted invariant tests if justified | DONE |
-| P1 | Protected Header/category behavior | Header palette/render engine | Existing dynamic category colors, ticker/backend identity, and palette behavior unchanged | existing regression tests | NOT DONE |
+| P1 | Protected Header/category behavior | Header palette/render engine | Existing dynamic category colors, ticker/backend identity, and palette behavior unchanged | existing regression tests | DONE |
 | V1 | Static and targeted validation | all affected paths | Diff clean; affected analyze/tests green; any inherited suite failure reproduced at starting SHA and reported | exact commands/results | NOT DONE |
 | V2 | Evidence-backed commits | Git history | Only coherent, tested changes committed; required commit-body evidence and `PENDING — USER ONLY` present | `git show`, status | NOT DONE |
 | V3 | One exact-SHA Android artifact | GitHub Actions | Build only after R1–V2 agent-authority gates are DONE; exact committed SHA pushed once, human APK downloaded and SHA-256 verified | Actions run + local hash | NOT DONE |
@@ -182,3 +182,41 @@ mixed-interaction reproduction, collapse regression, and budget/limit stress.
   verification section; physical non-reproduction is not called a fix.
 - Status: audit complete; Budget disappearance remains not reproduced and not
   root-caused.
+
+### [STEP 07] Broad-suite failure classification
+
+- Question: did the task introduce the 21 failures reported by the broad
+  1,182-test dashboard/performance/regression command?
+- Evidence: the unchanged LogBox and scroll-milestone tests fail on both the
+  task head and detached starting SHA `0810f0ca` because an unscoped
+  `find.byType(Scrollable)` matches multiple elements. The three Deep Drift
+  source-parser failures, classic catalog `14` versus `18` expectation,
+  Space Fabric threshold/ticker-cleanup failures, and all six geometry-golden
+  differences also reproduce on that exact detached starting SHA.
+- Conclusion: those 20 failures are inherited baseline failures under the
+  current Flutter/test environment. One failure was task-related: the scene
+  rotation test still asserted the superseded per-crossing temporal commit.
+- Decision: do not update goldens or unrelated baseline tests. Strengthen the
+  temporal test to assert no navigation/scene transaction at crossing and one
+  exact retained-hotset publication at settle.
+- Validation: detached starting-SHA commands reproduce every classified
+  baseline failure; the strengthened temporal contract test passes on the task
+  head. The full affected scene test remains part of final validation.
+- Status: confirmed.
+
+### [STEP 08] Protected visual and collapse boundaries
+
+- Question: did the Mind/rail/forensic work alter the accepted category Header
+  renderer or regress the prior collapse-slab repair?
+- Evidence: no Header/palette/shader production file changed from the starting
+  SHA. Six focused Header fragment-backend, palette-transport, renderer,
+  static-color, visual-engine, and tuner files pass 102 tests. The full
+  production G4 collapse proxy drives real Partner Rhythm through dense
+  intermediate states and passes.
+- Conclusion: the protected Header identity/palette contract and the previous
+  collapse-path repair remain intact under automated coverage.
+- Decision: mark G2 and P1 complete without changing Header or collapse code.
+- Validation: 102 protected Header tests pass; the exact G4 full-composition
+  proxy passes.
+- Status: confirmed; random settled slab ownership remains user-capture
+  dependent and is not called fixed.
