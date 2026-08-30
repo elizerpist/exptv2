@@ -60,6 +60,7 @@ import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
 import 'widgets/dashboard_logbox_viewport.dart';
 import 'widgets/dashboard_render_phase_probe.dart';
+import 'widgets/dashboard_render_diagnostic_probe.dart';
 import 'widgets/dashboard_summary_pill.dart';
 import 'widgets/summary_pill_experiments.dart';
 import 'widgets/fluvi_brand_lockup.dart';
@@ -546,6 +547,15 @@ class _CoreDashboardState extends State<CoreDashboard>
           : 0,
       builder: (context, frame) {
         final geometry = frame.geometry;
+        final collapseTravel = controller.metrics.collapseTravel;
+        final normalizedCollapseProgress = collapseTravel == 0
+            ? 0.0
+            : (geometry.collapseProgress / collapseTravel)
+                  .clamp(0.0, 1.0)
+                  .toDouble();
+        final collapseProgressBucket = collapseTravel == 0
+            ? 0
+            : (geometry.collapseProgress / collapseTravel * 20).round();
         _recordLayerStack(frame);
         _upperVerticalGestures.updateViewportMapper(
           geometry.mapViewportVerticalDragToController,
@@ -603,60 +613,66 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         bounds: geometry.brandLockupBounds,
                                       ),
                                     ),
-                                    DashboardCoreModeHost(
-                                      controller: modeController,
-                                      headerVisualController:
-                                          _headerVisualController,
-                                      balanceHeaderVisualFrame:
-                                          _balanceHeaderColorPolicy,
-                                      budgetHeaderVisualFrame:
-                                          _budgetHeaderColorPolicy,
-                                      mindHeaderVisualFrame:
-                                          _mindHeaderColorPolicy,
-                                      mindQueryAmountRange:
-                                          _mindQueryAmountRange,
-                                      mindQueryAmountRangeChanges:
-                                          controller.currentQuery,
-                                      onMindQueryAmountRangeCommitted:
-                                          _commitMindQueryAmountRange,
-                                      budgetPresentation: _budgetPresentation,
-                                      budgetLimitEditController:
-                                          _budgetLimitEdit,
-                                      budgetDistributionDrawables:
-                                          _budgetDistributionDrawables,
-                                      budgetAvatarRailController:
-                                          _budgetAvatarRailController,
-                                      budgetDistributionPageController:
-                                          _budgetDistributionPageController,
-                                      budgetContentCardStyle:
-                                          _budgetContentCardStyle,
-                                      budgetSectionOrder:
-                                          _budgetSectionOrderController,
-                                      budgetRhythm: _budgetRhythm,
-                                      budgetDrilldown: _budgetDrilldown,
-                                      onBudgetAvatarDirectInputStarted:
-                                          controller
-                                              .noteBudgetAvatarDirectPointerDown,
-                                      onBudgetAvatarMotionActiveChanged:
-                                          (active) {
-                                            if (active) {
-                                              _cancelSummaryAutoReset();
-                                              controller
-                                                  .beginBudgetAvatarMotion();
-                                            } else {
-                                              controller
-                                                  .endBudgetAvatarMotion();
-                                            }
-                                          },
-                                      presentationFor: frame.presentationFor,
-                                      onVerticalExpansionStart:
-                                          _upperVerticalGestures.begin,
-                                      onVerticalExpansionDragBy:
-                                          _upperVerticalGestures.dragByViewport,
-                                      onVerticalExpansionEnd:
-                                          _upperVerticalGestures.end,
-                                      upperVerticalGestures:
-                                          _upperVerticalGestures,
+                                    DashboardCollapseDiagnosticScope.wrap(
+                                      normalizedProgress:
+                                          normalizedCollapseProgress,
+                                      progressBucket: collapseProgressBucket,
+                                      child: DashboardCoreModeHost(
+                                        controller: modeController,
+                                        headerVisualController:
+                                            _headerVisualController,
+                                        balanceHeaderVisualFrame:
+                                            _balanceHeaderColorPolicy,
+                                        budgetHeaderVisualFrame:
+                                            _budgetHeaderColorPolicy,
+                                        mindHeaderVisualFrame:
+                                            _mindHeaderColorPolicy,
+                                        mindQueryAmountRange:
+                                            _mindQueryAmountRange,
+                                        mindQueryAmountRangeChanges:
+                                            controller.currentQuery,
+                                        onMindQueryAmountRangeCommitted:
+                                            _commitMindQueryAmountRange,
+                                        budgetPresentation: _budgetPresentation,
+                                        budgetLimitEditController:
+                                            _budgetLimitEdit,
+                                        budgetDistributionDrawables:
+                                            _budgetDistributionDrawables,
+                                        budgetAvatarRailController:
+                                            _budgetAvatarRailController,
+                                        budgetDistributionPageController:
+                                            _budgetDistributionPageController,
+                                        budgetContentCardStyle:
+                                            _budgetContentCardStyle,
+                                        budgetSectionOrder:
+                                            _budgetSectionOrderController,
+                                        budgetRhythm: _budgetRhythm,
+                                        budgetDrilldown: _budgetDrilldown,
+                                        onBudgetAvatarDirectInputStarted:
+                                            controller
+                                                .noteBudgetAvatarDirectPointerDown,
+                                        onBudgetAvatarMotionActiveChanged:
+                                            (active) {
+                                              if (active) {
+                                                _cancelSummaryAutoReset();
+                                                controller
+                                                    .beginBudgetAvatarMotion();
+                                              } else {
+                                                controller
+                                                    .endBudgetAvatarMotion();
+                                              }
+                                            },
+                                        presentationFor: frame.presentationFor,
+                                        onVerticalExpansionStart:
+                                            _upperVerticalGestures.begin,
+                                        onVerticalExpansionDragBy:
+                                            _upperVerticalGestures
+                                                .dragByViewport,
+                                        onVerticalExpansionEnd:
+                                            _upperVerticalGestures.end,
+                                        upperVerticalGestures:
+                                            _upperVerticalGestures,
+                                      ),
                                     ),
                                     _FramePosition(
                                       bounds: geometry.actionBounds,
@@ -1058,6 +1074,39 @@ class _CoreDashboardState extends State<CoreDashboard>
             'physicalSurface=${mode == DashboardModeSpec.budget && _budgetContentCardStyle.value == BudgetContentLayout.unifiedCard ? 'BudgetUnifiedContentCard' : 'BudgetDistributionCardShell'} '
             'contentClip=BudgetDistributionCardShell.ClipRRect '
             'paintOrder=DashboardCoreModeHost<DashboardLogBoxViewport<DashboardCollapseHandle',
+      ),
+    );
+    // This is the geometry owner for a collapse. Header and Card2 resize on
+    // this same bounded semantic bucket, while their renderer/material paths
+    // deliberately do not emit per-size events. Keeping this record separate
+    // makes a future pixel-owner probe correlate the moving Header, chart
+    // envelope, collapse handle and LogBox boundary without consuming the
+    // 2,000-entry capture on every vsync.
+    final normalizedProgress = controller.metrics.collapseTravel == 0
+        ? 0.0
+        : (geometry.collapseProgress / controller.metrics.collapseTravel)
+              .clamp(0.0, 1.0)
+              .toDouble();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'COLLAPSE|GEOMETRY',
+        queryKey: queryScope.key.value,
+        coreRevision: controller.visibleFrames.value?.coreRevision,
+        direction: queryScope.direction.name,
+        scope:
+            'mode=${mode.mode.name} '
+            'collapseProgress=${geometry.collapseProgress.toStringAsFixed(1)} '
+            'normalizedProgress=${normalizedProgress.toStringAsFixed(3)} '
+            'progressBucket=$collapseMilestone '
+            'header=${bounds(geometry.headerBounds)} '
+            'chart=${bounds(geometry.zone2Bounds)} '
+            'modeContent=${bounds(geometry.modeContentBounds)} '
+            'collapseHandle=${bounds(geometry.collapseHandleBounds)} '
+            'logBoxHeader=${bounds(geometry.logBoxHeaderBounds)} '
+            'lowerOpacity=${lowerMotion?.opacity.toStringAsFixed(3) ?? '-'} '
+            'lowerScale=${lowerMotion?.scale.toStringAsFixed(3) ?? '-'} '
+            'surfaceOwner=${mode == DashboardModeSpec.budget && _budgetContentCardStyle.value == BudgetContentLayout.unifiedCard ? 'BudgetUnifiedContentCard' : 'BudgetDistributionCardShell'} '
+            'pageViewportClip=BudgetDistributionCardShell.ClipRRect',
       ),
     );
   }

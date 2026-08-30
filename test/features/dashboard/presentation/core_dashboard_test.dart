@@ -530,6 +530,34 @@ void main() {
         ),
       );
       expect(event.scope, contains('collapseProgress=90.0'));
+
+      final collapseGeometry = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) => entry.stage == 'COLLAPSE|GEOMETRY',
+      );
+      expect(collapseGeometry.scope, contains('mode=budget'));
+      expect(collapseGeometry.scope, contains('progressBucket=10'));
+      expect(
+        collapseGeometry.scope,
+        contains('header='),
+        reason:
+            'The intermediate collapse record must carry the moving Header '
+            'bounds separately from the lower Chart/Rhythm candidate area.',
+      );
+      expect(collapseGeometry.scope, contains('chart='));
+      expect(collapseGeometry.scope, contains('collapseHandle='));
+
+      await tester.pump();
+      final viewportProbe = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) =>
+            entry.stage == 'COLLAPSE|LAYER' &&
+            entry.scope?.contains('candidate=budgetDistributionViewport') ==
+                true,
+      );
+      expect(viewportProbe.scope, contains('renderObject='));
+      expect(viewportProbe.scope, contains('globalBounds='));
+      expect(viewportProbe.scope, contains('paintBounds='));
+      expect(viewportProbe.scope, contains('clip=ClipRRect'));
+      expect(viewportProbe.scope, contains('surfaceOwner=splitCard2'));
     },
   );
 
@@ -851,6 +879,24 @@ void main() {
         'Unified avatars→chart',
         chartFirst: false,
       );
+
+      for (final candidate in <String>[
+        'budgetChartCascadeCard',
+        'budgetDistributionViewport',
+        'budgetDistributionPageContent',
+        'partnerRhythmFooterLane',
+        'spendingRhythmChart',
+      ]) {
+        final event = FluviDiagnosticLogger.entries.lastWhere(
+          (entry) =>
+              entry.stage == 'COLLAPSE|LAYER' &&
+              entry.scope?.contains('candidate=$candidate') == true,
+        );
+        expect(event.scope, contains('globalBounds='));
+        expect(event.scope, contains('paintBounds='));
+        expect(event.scope, contains('clip='));
+        expect(event.scope, contains('zOrder='));
+      }
     },
   );
 

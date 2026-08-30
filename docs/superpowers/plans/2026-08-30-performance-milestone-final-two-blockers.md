@@ -44,13 +44,13 @@ tests, `FluviDiagnosticLogger`, Android physical diagnostics.
 - Produces sparse `COLLAPSE|...`, Header session, and unchanged 2,000-entry
   diagnostic retention behavior.
 
-- [ ] Write a red test that changes only Header size within one collapse bucket
+- [x] Write a red test that changes only Header size within one collapse bucket
   and asserts that fidelity/touch records are not repeated; change bucket or
   render backend and assert one new record.
-- [ ] Run the isolated test and observe its expected pre-change failure.
-- [ ] Add the smallest session/bucket signature owner; do not format an event
+- [x] Run the isolated test and observe its expected pre-change failure.
+- [x] Add the smallest session/bucket signature owner; do not format an event
   string on an unchanged vsync.
-- [ ] Re-run the test and existing FIFO logger tests.
+- [x] Re-run the test and existing FIFO logger tests.
 - [ ] Commit this diagnostic-only change separately after `flutter analyze`
   and `git diff --check`.
 
@@ -70,10 +70,10 @@ tests, `FluviDiagnosticLogger`, Android physical diagnostics.
 - Produces bounded `COLLAPSE|...` / `CHART|...` owner facts and, only after
   proof, one correctly clipped/transformed physical composition.
 
-- [ ] Extend a production-parent intermediate-progress test (0.20, 0.50,
+- [x] Extend a production-parent intermediate-progress test (0.20, 0.50,
   0.75 and reversal) to assert the suspected owner’s exact geometry once the
   probe identifies it; do not write a color-mask test.
-- [ ] Run it against the current checkpoint and record whether it exposes a
+- [x] Run it against the current checkpoint and record whether it exposes a
   structural failure; if no deterministic pixel reproduction exists, retain a
   debug-only owner probe rather than guessing.
 - [ ] Capture slow/fast/reverse Android evidence, identify one owner, then add

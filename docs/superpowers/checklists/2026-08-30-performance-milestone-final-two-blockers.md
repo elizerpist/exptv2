@@ -9,8 +9,8 @@ automated-only physical rows to `DONE`.
 | ID | Requirement source | Intended owner / code area | Acceptance condition | Verification | Status |
 |---|---|---|---|---|---|
 | PM-01 | User: accepted physical performance must be checkpointed first | Git history and `MILESTONE_COMMITS.md` | The accepted interaction state has an immutable source checkpoint, exact SHA, rollback anchor, known-open defects, and no experimental repair in that commit. | Preflight records, focused regression run, commit/readback. | DONE |
-| PM-02 | User: retain current 2,000-line diagnostic capacity, stop frame-level noise | `FluviDiagnosticLogger`, Header visual engine, diagnostics tests | Header fidelity/touch facts are recorded only on session/backend/error or sparse collapse milestones; one reproduction preserves both new collapse and Mind causal chains without altering performance. | Red-to-green sparse-emission unit/widget tests, logger FIFO tests, source review, device dump. | NOT DONE |
-| CS-01 | Current screenshot/log: gray slab during collapse/expand | Full Budget core composition: cascade, unified/split shell, page viewport, Partner upper, Rhythm footer, collapse handle and LogBox boundary | A real intermediate-collapse capture identifies the exact RenderObject/layer that owns the slab's pixels, including bounds, fill, clip, opacity, transform and z-order. | Production-parent intermediate geometry test plus temporary debug-only owner probe and device slow/fast/reverse capture. | NOT DONE |
+| PM-02 | User: retain current 2,000-line diagnostic capacity, stop frame-level noise | `FluviDiagnosticLogger`, Header visual engine, diagnostics tests | Header fidelity/touch facts are recorded only on session/backend/error or sparse collapse milestones; one reproduction preserves both new collapse and Mind causal chains without altering performance. | Red-to-green sparse-emission unit/widget tests, logger FIFO tests, source review, device dump. | PARTIAL |
+| CS-01 | Current screenshot/log: gray slab during collapse/expand | Full Budget core composition: cascade, unified/split shell, page viewport, Partner upper, Rhythm footer, collapse handle and LogBox boundary | A real intermediate-collapse capture identifies the exact RenderObject/layer that owns the slab's pixels, including bounds, fill, clip, opacity, transform and z-order. | Production-parent intermediate geometry test plus temporary debug-only owner probe and device slow/fast/reverse capture. | PARTIAL |
 | CS-02 | User: no cosmetic sixth attempt | The proven CS-01 owner only | The structural owner is repaired; upper Partner remains intact for the proven reason; no mask, fade-out, screenshot dimensions, broad shadow removal, or arbitrary clip is used. | Regression fails before repair, passes after; physical complete collapse/expand matrix in Split and Unified layouts. | NOT DONE |
 | MR-01 | Current screenshot: Mind remains at `Az összeg tartomány betöltése folyamatban` | `DashboardAppliedQueryFacetLoader` → `CurrentQueryController` → Core host → Mind binding → `QueryAmountRangeControl` | The full request → result/rejection → canonical publication → render gate → mount/layout/visible chain is observable for the active exact scope/generation. | Red-to-green lifecycle diagnostics tests, cold/warm/replacement navigation tests, device capture. | NOT DONE |
 | MR-02 | User: no fabricated slider or stale fallback | Canonical Query amount-domain owner and shared control | No indefinite false loading after a request completes or fails; the shared control is visible only when canonical state says it is ready, with explicit error/loading semantics otherwise. | Failure-path and ready-path tests; physical cold/warm/rapid re-entry verification. | NOT DONE |
@@ -37,3 +37,24 @@ PR-01 to `DONE`; their required device evidence is explicit above.
 - The latest local screenshots were inspected directly. They show the accepted
   Budget presentation/Rhythm settled state; no settled screenshot is used as
   evidence against the intermediate-only gray slab.
+
+## Evidence after diagnostic hardening (automated only; no physical closure)
+
+- PM-02 red-to-green evidence: a controlled sequence of six Header size-only
+  collapse frames produced six `HEADER_RENDER_FIDELITY_CONFIG` records before
+  the signature change and one after it. The binding now keys only renderer
+  contract facts; Header bounds remain available through sparse
+  `COLLAPSE|GEOMETRY` records.
+- The existing `FluviDiagnosticLogger` FIFO/export tests still prove the exact
+  1,999 / 2,000 / 2,001 behavior. The capacity remains exactly 2,000.
+- CS-01 now has a debug-only, post-layout probe for the real full composition:
+  cascade card, physical/viewport shell, page content, Partner Rhythm footer,
+  Rhythm chart, and unified surface. It records existing render-object global
+  bounds, paint bounds, declared material/clip/z-order and ancestry only at
+  semantic collapse buckets. It neither paints nor clips nor changes hit
+  testing.
+- The real Partner/Rhythm collapse widget composition passed its intermediate
+  split/unified/order proxy after proving all five probe candidates are present.
+  This is **not** physical pixel-owner proof: a slow/fast/reverse device
+  capture from this source revision is still required before CS-01 can be
+  marked `DONE` or any visual repair can be made.

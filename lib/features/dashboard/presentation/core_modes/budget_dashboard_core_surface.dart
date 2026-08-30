@@ -16,6 +16,7 @@ import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../widgets/dashboard_render_diagnostic_probe.dart';
 import '../budget_content_card_style.dart';
 import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
@@ -100,24 +101,30 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   contentLayout: layout,
                 ),
               ),
-              DashboardCoreModeCascadeCard(
-                bounds: section.chartBounds,
-                motion: section.motionFor(
-                  geometry.lowerCardMotion!,
-                  from: geometry.zone2Bounds,
-                  to: section.chartBounds,
-                ),
-                semanticKey: const ValueKey(
-                  'dashboard-core-mode-budget-card-2',
-                ),
-                showPlaceholderSurface: false,
-                content: ValueListenableBuilder<BudgetContentLayout>(
-                  valueListenable:
-                      contentCardStyle ?? _alwaysSplitBudgetContent,
-                  builder: (context, layout, _) => _distributionContent(
-                    surfaceOwner: layout == BudgetContentLayout.unifiedCard
-                        ? BudgetDistributionSurfaceOwner.unifiedParent
-                        : BudgetDistributionSurfaceOwner.splitCard2,
+              DashboardRenderDiagnosticProbe(
+                candidate: 'budgetChartCascadeCard',
+                material: 'contentOnly DashboardCoreModeCascadeCard',
+                clip: 'none at cascade; child owns rounded viewport clip',
+                zOrder: 'unifiedSurface<chartCascade<avatarCascade<dots',
+                child: DashboardCoreModeCascadeCard(
+                  bounds: section.chartBounds,
+                  motion: section.motionFor(
+                    geometry.lowerCardMotion!,
+                    from: geometry.zone2Bounds,
+                    to: section.chartBounds,
+                  ),
+                  semanticKey: const ValueKey(
+                    'dashboard-core-mode-budget-card-2',
+                  ),
+                  showPlaceholderSurface: false,
+                  content: ValueListenableBuilder<BudgetContentLayout>(
+                    valueListenable:
+                        contentCardStyle ?? _alwaysSplitBudgetContent,
+                    builder: (context, layout, _) => _distributionContent(
+                      surfaceOwner: layout == BudgetContentLayout.unifiedCard
+                          ? BudgetDistributionSurfaceOwner.unifiedParent
+                          : BudgetDistributionSurfaceOwner.splitCard2,
+                    ),
                   ),
                 ),
               ),
@@ -447,19 +454,28 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
       offset: Offset(0, motion.top - bounds.top),
       scale: motion.scale,
       child: LayoutBuilder(
-        builder: (context, constraints) => FluviRoundedBox(
-          key: const ValueKey<String>('budget-unified-content-card-surface'),
-          color: depth.surfaceColor ?? FluviVisualTokens.surface,
-          border: DashboardBorderScope.profileOf(
-            context,
-          ).borderFor(DashboardBorderSurface.budgetContent),
-          borderRadius: DashboardCornerRoundnessScope.profileOf(context)
-              .borderRadiusFor(
-                DashboardCornerSurfaceFamily.budgetDistributionCard,
-                size: constraints.biggest,
-              ),
-          boxShadow: depth.shadows,
-          child: const SizedBox.expand(),
+        builder: (context, constraints) => DashboardRenderDiagnosticProbe(
+          candidate: 'budgetUnifiedContentSurface',
+          material:
+              'surface=FluviRoundedBox color=${depth.surfaceColor ?? FluviVisualTokens.surface} '
+              'shadowCount=${depth.shadows.length}',
+          clip:
+              'none; descendant BudgetDistributionCardShell owns viewport clip',
+          zOrder: 'unifiedSurface<chartCascade<avatarCascade<dots',
+          child: FluviRoundedBox(
+            key: const ValueKey<String>('budget-unified-content-card-surface'),
+            color: depth.surfaceColor ?? FluviVisualTokens.surface,
+            border: DashboardBorderScope.profileOf(
+              context,
+            ).borderFor(DashboardBorderSurface.budgetContent),
+            borderRadius: DashboardCornerRoundnessScope.profileOf(context)
+                .borderRadiusFor(
+                  DashboardCornerSurfaceFamily.budgetDistributionCard,
+                  size: constraints.biggest,
+                ),
+            boxShadow: depth.shadows,
+            child: const SizedBox.expand(),
+          ),
         ),
       ),
     );

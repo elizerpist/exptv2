@@ -4708,9 +4708,14 @@ final class _DashboardHeaderVisualPaintResources {
             plan.backend == DashboardHeaderRenderBackend.fragmentShader)) {
       return;
     }
+    // Resizing the Dashboard during collapse is a geometry event owned by the
+    // outer composition. It does not change the Header renderer's backend,
+    // shader readiness, or offscreen contract. Including physical size here
+    // therefore turned one meaningful renderer proof into one diagnostic per
+    // display frame and evicted the evidence needed for Mind/collapse traces.
+    // Keep the initial bounds as context in the emitted record, but only emit
+    // again when the actual render-path contract changes.
     final signature = Object.hash(
-      plan.logicalSize,
-      plan.physicalSize,
       plan.renderScale,
       plan.backend,
       plan.fieldEvaluation,
@@ -4741,7 +4746,9 @@ final class _DashboardHeaderVisualPaintResources {
             'shaderFailure=${fragment.failure != null}',
       ),
     );
-    final touchSignature = Object.hash(plan.logicalSize, plan.physicalSize);
+    // The analytic touch overlay has the same topology as the field renderer;
+    // its size follows the parent Header geometry and is not a new render path.
+    final touchSignature = Object.hash(plan.backend, plan.fieldEvaluation);
     if (_lastTouchRenderPathSignature != touchSignature) {
       _lastTouchRenderPathSignature = touchSignature;
       FluviDiagnosticLogger.log(

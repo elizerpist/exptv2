@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../application/dashboard_spending_rhythm_controller.dart';
+import '../widgets/dashboard_render_diagnostic_probe.dart';
 import 'spending_rhythm_bar_layout.dart';
 
 /// Full-width, scope-aware Partner Spending Rhythm renderer. Its immutable
@@ -71,36 +72,42 @@ class _SpendingRhythmBarChartState extends State<SpendingRhythmBarChart> {
         Color(widget.state.endColorArgb),
       ],
     );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final layout = SpendingRhythmBarLayout.resolve(
-          availableWidth: constraints.maxWidth,
-          barCount: buckets.length,
-          allowsHorizontalScroll: analysis is SumSpendingRhythm,
-        );
-        final content = _RhythmChartContent(
-          analysis: analysis,
-          buckets: buckets,
-          layout: layout,
-          maximum: maximum,
-          averageFraction: average,
-          gradient: gradient,
-        );
-        return Semantics(
-          label:
-              'Költési ritmus ${analysis.scope.canonicalKey}; '
-              'maximum $maximum; '
-              '${average == null ? 'nincs átlag' : 'átlag ${analysis.averageActualScaled100}'}',
-          child: layout.scrollsHorizontally
-              ? SingleChildScrollView(
-                  key: const ValueKey('spending-rhythm-sum-scroll'),
-                  controller: _sumYearsController,
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(width: layout.contentWidth, child: content),
-                )
-              : content,
-        );
-      },
+    return DashboardRenderDiagnosticProbe(
+      candidate: 'spendingRhythmChart',
+      material: 'transparent tracks; gradient bars; average divider',
+      clip: 'inherited partnerFooter and BudgetDistributionCardShell.ClipRRect',
+      zOrder: 'partnerFooter>rhythmChart>bars+average',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final layout = SpendingRhythmBarLayout.resolve(
+            availableWidth: constraints.maxWidth,
+            barCount: buckets.length,
+            allowsHorizontalScroll: analysis is SumSpendingRhythm,
+          );
+          final content = _RhythmChartContent(
+            analysis: analysis,
+            buckets: buckets,
+            layout: layout,
+            maximum: maximum,
+            averageFraction: average,
+            gradient: gradient,
+          );
+          return Semantics(
+            label:
+                'Költési ritmus ${analysis.scope.canonicalKey}; '
+                'maximum $maximum; '
+                '${average == null ? 'nincs átlag' : 'átlag ${analysis.averageActualScaled100}'}',
+            child: layout.scrollsHorizontally
+                ? SingleChildScrollView(
+                    key: const ValueKey('spending-rhythm-sum-scroll'),
+                    controller: _sumYearsController,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(width: layout.contentWidth, child: content),
+                  )
+                : content,
+          );
+        },
+      ),
     );
   }
 }

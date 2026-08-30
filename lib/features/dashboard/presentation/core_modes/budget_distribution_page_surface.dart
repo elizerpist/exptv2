@@ -8,6 +8,7 @@ import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
+import '../widgets/dashboard_render_diagnostic_probe.dart';
 
 /// Explicitly separates physical material from PageView clipping ownership.
 enum BudgetDistributionSurfaceOwner { splitCard2, unifiedParent }
@@ -36,22 +37,33 @@ class BudgetDistributionCardShell extends StatelessWidget {
             DashboardCornerSurfaceFamily.budgetDistributionCard,
             size: constraints.biggest,
           );
-      return Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          if (surfaceOwner == BudgetDistributionSurfaceOwner.splitCard2)
-            FluviRoundedBox(
-              key: const ValueKey('budget-distribution-card-shell'),
-              color: depth.surfaceColor ?? FluviVisualTokens.surface,
-              border: DashboardBorderScope.profileOf(
-                context,
-              ).borderFor(DashboardBorderSurface.budgetContent),
-              borderRadius: borderRadius,
-              boxShadow: depth.shadows,
-              child: const SizedBox.expand(),
-            ),
-          ClipRRect(borderRadius: borderRadius, child: child),
-        ],
+      return DashboardRenderDiagnosticProbe(
+        candidate: 'budgetDistributionViewport',
+        material: surfaceOwner == BudgetDistributionSurfaceOwner.splitCard2
+            ? 'surfaceOwner=splitCard2 physicalMaterial=FluviRoundedBox '
+                  'surface=${depth.surfaceColor ?? FluviVisualTokens.surface} '
+                  'shadowCount=${depth.shadows.length}'
+            : 'surfaceOwner=unifiedParent '
+                  'physicalMaterial=BudgetUnifiedContentCard',
+        clip: 'ClipRRect',
+        zOrder: 'physicalMaterial<viewportClip<PageView',
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (surfaceOwner == BudgetDistributionSurfaceOwner.splitCard2)
+              FluviRoundedBox(
+                key: const ValueKey('budget-distribution-card-shell'),
+                color: depth.surfaceColor ?? FluviVisualTokens.surface,
+                border: DashboardBorderScope.profileOf(
+                  context,
+                ).borderFor(DashboardBorderSurface.budgetContent),
+                borderRadius: borderRadius,
+                boxShadow: depth.shadows,
+                child: const SizedBox.expand(),
+              ),
+            ClipRRect(borderRadius: borderRadius, child: child),
+          ],
+        ),
       );
     },
   );
@@ -169,29 +181,41 @@ final class _BudgetDistributionPageSurfaceState
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(BudgetDistributionPageSurface.outerPadding),
-    child: Column(
-      children: <Widget>[
-        SizedBox(
-          height: BudgetDistributionPageSurface.headingHeight,
-          child: widget.heading,
-        ),
-        Expanded(
-          child: widget.fullWidthFooter == null
-              ? _buildUpperRow()
-              : Column(
-                  children: <Widget>[
-                    Expanded(child: _buildUpperRow()),
-                    SizedBox(height: widget.fullWidthFooterDividerGap),
-                    SizedBox(
-                      height: widget.fullWidthFooterMinimumHeight,
-                      child: widget.fullWidthFooter,
-                    ),
-                  ],
-                ),
-        ),
-      ],
+  Widget build(BuildContext context) => DashboardRenderDiagnosticProbe(
+    candidate: 'budgetDistributionPageContent',
+    material: 'transparent page content',
+    clip: 'inherited BudgetDistributionCardShell.ClipRRect',
+    zOrder: 'viewportClip<PageView>pageContent>partnerFooter',
+    child: Padding(
+      padding: const EdgeInsets.all(BudgetDistributionPageSurface.outerPadding),
+      child: Column(
+        children: <Widget>[
+          SizedBox(
+            height: BudgetDistributionPageSurface.headingHeight,
+            child: widget.heading,
+          ),
+          Expanded(
+            child: widget.fullWidthFooter == null
+                ? _buildUpperRow()
+                : Column(
+                    children: <Widget>[
+                      Expanded(child: _buildUpperRow()),
+                      SizedBox(height: widget.fullWidthFooterDividerGap),
+                      DashboardRenderDiagnosticProbe(
+                        candidate: 'partnerRhythmFooterLane',
+                        material: 'transparent fullWidthFooter lane',
+                        clip: 'inherited BudgetDistributionCardShell.ClipRRect',
+                        zOrder: 'pageContent>partnerFooter>rhythmChart',
+                        child: SizedBox(
+                          height: widget.fullWidthFooterMinimumHeight,
+                          child: widget.fullWidthFooter,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     ),
   );
 

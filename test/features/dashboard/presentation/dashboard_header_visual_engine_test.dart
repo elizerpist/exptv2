@@ -994,6 +994,72 @@ void main() {
   });
 
   testWidgets(
+    'RED PM-02: collapse-only Header resize does not evict forensic history with per-frame renderer proof',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final size = ValueNotifier<Size>(const Size(320, 120));
+      addTearDown(size.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: ValueListenableBuilder<Size>(
+              valueListenable: size,
+              builder: (context, currentSize, _) => SizedBox(
+                width: currentSize.width,
+                height: currentSize.height,
+                child: DashboardHeaderVisualPaintLayer(
+                  controller: controller,
+                  frame: DashboardHeaderVisualFrame.staticTone(Colors.blue),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      for (final currentSize in const <Size>[
+        Size(320, 118),
+        Size(320, 116),
+        Size(320, 114),
+        Size(320, 112),
+        Size(320, 110),
+      ]) {
+        size.value = currentSize;
+        await tester.pump();
+      }
+
+      final stages = FluviDiagnosticLogger.entries
+          .where(
+            (event) =>
+                event.stage == 'HEADER_RENDER_FIDELITY_CONFIG' ||
+                event.stage == 'HEADER_TOUCH_RENDER_PATH_BOUND',
+          )
+          .toList(growable: false);
+      expect(
+        stages.where((event) => event.stage == 'HEADER_RENDER_FIDELITY_CONFIG'),
+        hasLength(1),
+        reason:
+            'A collapse changes bounds, not the Header renderer/backend. Its '
+            'unchanged physical-path proof must not consume one record per '
+            'vsync-size update.',
+      );
+      expect(
+        stages.where(
+          (event) => event.stage == 'HEADER_TOUCH_RENDER_PATH_BOUND',
+        ),
+        hasLength(1),
+      );
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
     'a pure static Header binds the Spendee native base without requiring the FragmentProgram',
     (tester) async {
       FluviDiagnosticLogger.clear();
