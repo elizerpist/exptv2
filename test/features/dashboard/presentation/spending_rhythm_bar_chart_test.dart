@@ -72,6 +72,43 @@ void main() {
   );
 
   testWidgets(
+    'Month keeps its authored 31-day Rhythm through the known narrow Card2 '
+    'collapse viewport',
+    (tester) async {
+      // This is the intermediate physical Card2 viewport measured in the
+      // collapse path.  It is narrower than the 358dp content needed for 31
+      // bars and 2dp gaps, but is not permission to throw the lower footer
+      // away while the upper Partner content remains visible.
+      await tester.pumpWidget(
+        _host(_state(<int>[5000, 20000, 10000]), width: 355.69512195121956),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('spending-rhythm-sum-scroll')),
+        findsOneWidget,
+        reason:
+            'A temporary narrow viewport owns only clipping/scrolling; it '
+            'must not remove the Month Rhythm content or replace it with an '
+            'unowned footer surface.',
+      );
+      expect(
+        find.byKey(const ValueKey('spending-rhythm-fill-0')),
+        findsOneWidget,
+      );
+      final position = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byKey(const ValueKey('spending-rhythm-sum-scroll')),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+      expect(position.maxScrollExtent, greaterThan(0));
+    },
+  );
+
+  testWidgets(
     'DAY exposes all eight compact hours with full bucket semantics',
     (tester) async {
       await tester.pumpWidget(
@@ -263,15 +300,16 @@ Future<Color> _sampleBoundaryColor(
   }
 }
 
-Widget _host(DashboardSpendingRhythmState state) => MaterialApp(
-  home: Scaffold(
-    body: SizedBox(
-      width: 358,
-      height: 120,
-      child: SpendingRhythmBarChart(state: state),
-    ),
-  ),
-);
+Widget _host(DashboardSpendingRhythmState state, {double width = 358}) =>
+    MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: width,
+          height: 120,
+          child: SpendingRhythmBarChart(state: state),
+        ),
+      ),
+    );
 
 DashboardSpendingRhythmState _state(List<int> values) =>
     DashboardSpendingRhythmState(
