@@ -43,8 +43,17 @@ final class SpendingRhythmBarLayout {
         'Spending Rhythm layout needs positive bounds/count.',
       );
     }
+    final minimumContentWidth =
+        barCount * minBarWidth + (barCount - 1) * minimumGap;
+    // A cascading Card2 deliberately becomes narrower at intermediate
+    // collapse progress. That transient viewport is not permission to throw
+    // away the Month/Day footer or squeeze its authored 2dp bar separation.
+    // Keep the immutable bar geometry and make the *content viewport* (not a
+    // new card surface) horizontally scrollable until the normal width
+    // returns. SUM retains its existing long-domain scroll policy.
     final scrolls =
-        allowsHorizontalScroll && barCount > maximumNonScrollableBarCount;
+        (allowsHorizontalScroll && barCount > maximumNonScrollableBarCount) ||
+        availableWidth < minimumContentWidth;
     if (scrolls) {
       final pitch = minBarWidth + minimumGap;
       return SpendingRhythmBarLayout._(

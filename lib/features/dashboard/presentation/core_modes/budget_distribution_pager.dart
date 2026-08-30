@@ -116,6 +116,8 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
   );
   int? _lastPagerMilestone;
   bool? _lastScrolling;
+  bool _viewportSnapshotScheduled = false;
+  String _lastViewportBounds = 'unlaidOut';
 
   @override
   void initState() {
@@ -188,13 +190,12 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
     final fraction = resolvedPage == null
         ? null
         : resolvedPage - resolvedPage.floor();
-    final shell = _shellKey.currentContext?.findRenderObject() as RenderBox?;
-    final origin = shell?.localToGlobal(Offset.zero);
-    final bounds = shell == null || origin == null
-        ? 'unlaidOut'
-        : 'left=${origin.dx.toStringAsFixed(1)} top=${origin.dy.toStringAsFixed(1)} '
-              'width=${shell.size.width.toStringAsFixed(1)} '
-              'height=${shell.size.height.toStringAsFixed(1)}';
+    // A ScrollPosition can notify while the transformed PageView is being
+    // laid out. Reading localToGlobal/size from that listener violates the
+    // RenderBox layout contract and can turn a diagnostic event into a
+    // rendering failure. Milestones carry the last frame-safe viewport; the
+    // current bounds are refreshed once after this frame below.
+    final bounds = _lastViewportBounds;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: stage,
@@ -224,6 +225,23 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
         ),
       );
     }
+    _scheduleViewportSnapshot();
+  }
+
+  void _scheduleViewportSnapshot() {
+    if (_viewportSnapshotScheduled) return;
+    _viewportSnapshotScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportSnapshotScheduled = false;
+      if (!mounted) return;
+      final shell = _shellKey.currentContext?.findRenderObject();
+      if (shell is! RenderBox || !shell.hasSize) return;
+      final origin = shell.localToGlobal(Offset.zero);
+      _lastViewportBounds =
+          'left=${origin.dx.toStringAsFixed(1)} top=${origin.dy.toStringAsFixed(1)} '
+          'width=${shell.size.width.toStringAsFixed(1)} '
+          'height=${shell.size.height.toStringAsFixed(1)}';
+    });
   }
 
   @override

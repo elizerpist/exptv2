@@ -1,6 +1,11 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/data/empty_category_repository.dart';
+import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
@@ -20,11 +25,15 @@ import 'package:fluvi/features/dashboard/query/application/dashboard_applied_que
 import 'package:fluvi/features/dashboard/query/data/query_menu_repository.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../support/test_pump.dart';
 import '../../../support/dashboard_render_resources.dart';
 import '../../../support/test_category_collection.dart';
+import '../runtime/dashboard_runtime_test_fixtures.dart';
 
 void main() {
   setUpAll(prepareDashboardTestRenderResources);
@@ -524,6 +533,172 @@ void main() {
     },
   );
 
+  testWidgets(
+    'G4 forensic proxy drives the real Partner Rhythm through every Dashboard collapse frame',
+    (tester) async {
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'color_01',
+              iconId: 'icon_01',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      final controller = DashboardCoreController(
+        initialCoreRevision: 7,
+        initialDate: DateTime(2026, 7, 14),
+        initialDirection: LedgerDirection.expense,
+        yearWindowRadius: 1,
+      );
+      final boundaryKey = GlobalKey();
+      addTearDown(categories.dispose);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await controller.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 7,
+          initialYear: 2026,
+          yearWindowRadius: 1,
+        ),
+        budgetLimitSnapshot: _g4LimitSnapshot(),
+        partnerDistributionSnapshot: _g4PartnerSnapshot(),
+      );
+
+      FluviDiagnosticLogger.clear();
+      await pumpDashboardSurface(
+        tester,
+        RepaintBoundary(
+          key: boundaryKey,
+          child: CoreDashboard(
+            controller: controller,
+            modeController: _modeControllerFor(DashboardModeSpec.budget),
+            categoryCollection: categories,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final rhythmStates = FluviDiagnosticLogger.entries
+          .where((entry) => entry.stage == 'SPENDING_RHYTHM|STATE')
+          .toList(growable: false);
+      expect(
+        rhythmStates,
+        isNotEmpty,
+        reason:
+            'G4 needs the real snapshot-to-footer state boundary. Without '
+            'this event a missing Rhythm body cannot be distinguished from a '
+            'clipped or overpainted one.',
+      );
+      expect(
+        rhythmStates.last.scope,
+        contains('availability=available'),
+        reason:
+            'The full Dashboard fixture provides a compatible prepared '
+            'snapshot, visible frame and selected target. If this is not '
+            'available, the lower Rhythm surface cannot be used to find the '
+            'grey pixel owner. state=${rhythmStates.last.scope}',
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('budget-distribution-pager')),
+        const Offset(-360, 0),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      final afterPagerRhythmState = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) => entry.stage == 'SPENDING_RHYTHM|STATE',
+      );
+      expect(
+        afterPagerRhythmState.scope,
+        contains('availability=available'),
+        reason:
+            'A page transition may not clear the Partner footer input. '
+            'state=${afterPagerRhythmState.scope}',
+      );
+      expect(
+        find.byKey(const ValueKey('budget-partner-distribution-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-partner-distribution-preparing')),
+        findsNothing,
+        reason:
+            'The real Partner page must be drawable before its footer can be '
+            'sampled for G4 provenance.',
+      );
+      expect(
+        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+        findsOneWidget,
+        reason:
+            'This is a production-parent composition gate: a synthetic '
+            'Card2 without the Partner footer cannot prove the reported slab.',
+      );
+
+      final lowerCard = find.byKey(
+        const ValueKey('dashboard-core-mode-budget-card-2'),
+      );
+      final rhythm = find.byKey(
+        const ValueKey('partner-spending-rhythm-chart'),
+      );
+      final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
+      final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
+      final transparentTrack = find.byKey(
+        const ValueKey('spending-rhythm-track-2'),
+      );
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(boundaryKey),
+      );
+      final observations = <_G4CollapseObservation>[];
+
+      for (
+        var progress = 0.0;
+        progress <= controller.metrics.collapseTravel;
+        progress += 9
+      ) {
+        controller.expansion.setProgress(progress);
+        await tester.pump();
+        final cardBounds = tester.getRect(lowerCard);
+        final rhythmBounds = tester.getRect(rhythm);
+        final trackBounds = tester.getRect(transparentTrack);
+        final countBounds = tester.getRect(count);
+        final handleBounds = tester.getRect(handle);
+        final sample = await _g4PixelAt(tester, boundary, trackBounds.center);
+        observations.add(
+          _G4CollapseObservation(
+            progress: progress,
+            cardBounds: cardBounds,
+            rhythmBounds: rhythmBounds,
+            countBounds: countBounds,
+            handleBounds: handleBounds,
+            sample: sample,
+          ),
+        );
+
+        expect(
+          cardBounds.overlaps(rhythmBounds),
+          isTrue,
+          reason:
+              'The real Rhythm footer must remain inside the moving Card2 '
+              'composition at progress=$progress.',
+        );
+        expect(
+          _isObservedPhysicalSlabColor(sample),
+          isFalse,
+          reason:
+              'The transparent Rhythm-track interior must not become the '
+              'device-observed opaque neutral slab (#E1E2E4 family) at '
+              'progress=$progress. samples=$observations',
+        );
+      }
+    },
+  );
+
   for (final spec in DashboardModeSpec.values) {
     testWidgets(
       'Segmented keeps ${spec.mode.name} content above the Ledger boundary without a physical rail',
@@ -976,4 +1151,177 @@ final class _MindFacetRepository implements QueryMenuRepository {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+PreparedBudgetLimitSnapshot _g4LimitSnapshot() {
+  const yearWindowStart = 2025;
+  const yearWindowEndInclusive = 2027;
+  const periodSliceCount = 40;
+  const targetCount = 2;
+  const july2026Slice = 22;
+  List<PreparedBudgetLimitCell> cells() {
+    final values = List<PreparedBudgetLimitCell>.filled(
+      periodSliceCount * targetCount,
+      const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+    );
+    values[july2026Slice * targetCount] = const PreparedBudgetLimitCell(
+      actualScaled100: 750000,
+      limitScaled100: 1000000,
+      limitSource: PreparedBudgetLimitSource.base,
+    );
+    values[july2026Slice * targetCount + 1] = const PreparedBudgetLimitCell(
+      actualScaled100: 750000,
+      limitScaled100: 1000000,
+      limitSource: PreparedBudgetLimitSource.base,
+    );
+    return values;
+  }
+
+  final julyFirst = _g4EpochDay(2026, 7, 1);
+  final julyThird = _g4EpochDay(2026, 7, 3);
+  PreparedSpendingRhythmDirectionBank rhythm() =>
+      PreparedSpendingRhythmDirectionBank(
+        targetCount: targetCount,
+        targetOffsets: const <int>[0, 2, 4],
+        epochDays: <int>[julyFirst, julyThird, julyFirst, julyThird],
+        dailyActualScaled100: const <int>[500000, 250000, 500000, 250000],
+        dayPartActualScaled100: const <int>[
+          500000,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          250000,
+          0,
+          0,
+          0,
+          0,
+          500000,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          250000,
+          0,
+          0,
+          0,
+          0,
+        ],
+      );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['food'],
+    cells: cells(),
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 7,
+    yearWindowStart: yearWindowStart,
+    yearWindowEndInclusive: yearWindowEndInclusive,
+    incomeBank: bank(),
+    expenseBank: bank(),
+    spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
+      coreRevision: 7,
+      incomeBank: rhythm(),
+      expenseBank: rhythm(),
+    ),
+  );
+}
+
+PreparedBudgetPartnerDistributionSnapshot _g4PartnerSnapshot() {
+  const periodSliceCount = 40;
+  const july2026Slice = 22;
+  PreparedBudgetPartnerDistributionDirectionBank bank() {
+    final cells = List<PreparedBudgetPartnerDistributionCell>.filled(
+      periodSliceCount,
+      const PreparedBudgetPartnerDistributionCell(
+        actualScaled100: 0,
+        dominantCategoryId: '',
+      ),
+    );
+    cells[july2026Slice] = const PreparedBudgetPartnerDistributionCell(
+      actualScaled100: 750000,
+      dominantCategoryId: 'food',
+    );
+    return PreparedBudgetPartnerDistributionDirectionBank(
+      orderedPartnerIds: const <String>['fixture-partner'],
+      orderedPartnerTitles: const <String>['Fixture partner'],
+      cells: cells,
+      orderedCategoryIds: const <String>['food'],
+      categoryContributionOffsets: List<int>.filled(periodSliceCount + 1, 0),
+    );
+  }
+
+  return PreparedBudgetPartnerDistributionSnapshot(
+    coreRevision: 7,
+    yearWindowStart: 2025,
+    yearWindowEndInclusive: 2027,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
+int _g4EpochDay(int year, int month, int day) =>
+    DateTime.utc(year, month, day).difference(DateTime.utc(1970)).inDays;
+
+Future<Color> _g4PixelAt(
+  WidgetTester tester,
+  RenderRepaintBoundary boundary,
+  Offset point,
+) async {
+  final color = await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final x = point.dx.floor().clamp(0, image.width - 1);
+    final y = point.dy.floor().clamp(0, image.height - 1);
+    final rgba = Uint8List.view(bytes!.buffer);
+    final offset = (y * image.width + x) * 4;
+    final result = Color.fromARGB(
+      rgba[offset + 3],
+      rgba[offset],
+      rgba[offset + 1],
+      rgba[offset + 2],
+    );
+    image.dispose();
+    return result;
+  });
+  return color!;
+}
+
+bool _isObservedPhysicalSlabColor(Color color) =>
+    ((color.r * 255).round() - 225).abs() <= 8 &&
+    ((color.g * 255).round() - 226).abs() <= 8 &&
+    ((color.b * 255).round() - 228).abs() <= 8;
+
+final class _G4CollapseObservation {
+  const _G4CollapseObservation({
+    required this.progress,
+    required this.cardBounds,
+    required this.rhythmBounds,
+    required this.countBounds,
+    required this.handleBounds,
+    required this.sample,
+  });
+
+  final double progress;
+  final Rect cardBounds;
+  final Rect rhythmBounds;
+  final Rect countBounds;
+  final Rect handleBounds;
+  final Color sample;
+
+  @override
+  String toString() =>
+      'p=${progress.toStringAsFixed(1)} card=$cardBounds rhythm=$rhythmBounds '
+      'count=$countBounds handle=$handleBounds sample=$sample';
 }

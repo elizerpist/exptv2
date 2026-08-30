@@ -10,6 +10,7 @@ import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import 'dashboard_budget_presentation_controller.dart';
+import 'dashboard_budget_live_analysis_projection.dart';
 import 'dashboard_budget_target.dart';
 
 @immutable
@@ -326,6 +327,7 @@ final class DashboardSpendingRhythmController
   final DashboardBudgetPresentationController _presentation;
   final PreparedBudgetLimitSnapshot? Function() _snapshotForCurrentFrame;
   int? _lastDiagnosticSignature;
+  int? _lastStateDiagnosticSignature;
 
   void _refresh() {
     final snapshot = _snapshotForCurrentFrame();
@@ -333,23 +335,44 @@ final class DashboardSpendingRhythmController
     final selection = presentation.liveSelection;
     final liveAnalysis = presentation.liveAnalysis;
     final rhythm = snapshot?.spendingRhythmSnapshot;
-    if (snapshot == null ||
-        rhythm == null ||
-        !liveAnalysis.isAvailable ||
-        !selection.isAvailable ||
-        liveAnalysis.coreRevision != snapshot.coreRevision ||
-        liveAnalysis.direction != selection.direction ||
-        liveAnalysis.targetHandle != selection.target.handle ||
-        selection.coreRevision != snapshot.coreRevision ||
-        rhythm.coreRevision != snapshot.coreRevision ||
-        selection.target.handle >=
-            rhythm.directionBank(selection.direction).targetCount) {
+    final unavailableReason = snapshot == null
+        ? 'snapshotAbsent'
+        : rhythm == null
+        ? 'rhythmSnapshotAbsent'
+        : !liveAnalysis.isAvailable
+        ? 'liveAnalysisUnavailable'
+        : !selection.isAvailable
+        ? 'selectionUnavailable'
+        : liveAnalysis.coreRevision != snapshot.coreRevision
+        ? 'analysisRevisionMismatch'
+        : liveAnalysis.direction != selection.direction
+        ? 'directionMismatch'
+        : liveAnalysis.targetHandle != selection.target.handle
+        ? 'targetMismatch'
+        : selection.coreRevision != snapshot.coreRevision
+        ? 'selectionRevisionMismatch'
+        : rhythm.coreRevision != snapshot.coreRevision
+        ? 'rhythmRevisionMismatch'
+        : selection.target.handle >=
+              rhythm.directionBank(selection.direction).targetCount
+        ? 'targetOutsideRhythmBank'
+        : null;
+    if (unavailableReason != null) {
+      _recordState(
+        availability: 'unavailable',
+        reason: unavailableReason,
+        snapshot: snapshot,
+        liveAnalysis: liveAnalysis,
+        selection: selection,
+        rhythm: rhythm,
+      );
       if (value != null) value = null;
       return;
     }
+    final resolvedRhythm = rhythm!;
     final scope = liveAnalysis.scope!;
     final analysis = DashboardSpendingRhythmProjector.project(
-      snapshot: rhythm,
+      snapshot: resolvedRhythm,
       direction: selection.direction,
       targetHandle: selection.target.handle,
       scope: scope,
@@ -362,6 +385,14 @@ final class DashboardSpendingRhythmController
       endColorArgb: colors.$3,
     );
     if (value == null || !value!.sameAs(next)) value = next;
+    _recordState(
+      availability: 'available',
+      reason: 'bound',
+      snapshot: snapshot,
+      liveAnalysis: liveAnalysis,
+      selection: selection,
+      rhythm: resolvedRhythm,
+    );
     final signature = Object.hash(
       liveAnalysis.interactionGeneration,
       analysis.coreRevision,
@@ -386,6 +417,48 @@ final class DashboardSpendingRhythmController
         ),
       );
     }
+  }
+
+  void _recordState({
+    required String availability,
+    required String reason,
+    required PreparedBudgetLimitSnapshot? snapshot,
+    required DashboardBudgetLiveAnalysisProjection liveAnalysis,
+    required DashboardBudgetLiveSelectionState selection,
+    required PreparedSpendingRhythmSnapshot? rhythm,
+  }) {
+    final signature = Object.hash(
+      availability,
+      reason,
+      snapshot?.coreRevision,
+      rhythm?.coreRevision,
+      liveAnalysis.provenanceKey,
+      selection.coreRevision,
+      selection.target.handle,
+      selection.direction,
+    );
+    if (_lastStateDiagnosticSignature == signature) return;
+    _lastStateDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SPENDING_RHYTHM|STATE',
+        coreRevision: liveAnalysis.coreRevision ?? snapshot?.coreRevision,
+        direction: selection.direction.name,
+        scope:
+            'availability=$availability reason=$reason '
+            'snapshotRevision=${snapshot?.coreRevision ?? '-'} '
+            'rhythmRevision=${rhythm?.coreRevision ?? '-'} '
+            'analysisAvailable=${liveAnalysis.isAvailable} '
+            'analysisRevision=${liveAnalysis.coreRevision ?? '-'} '
+            'analysisDirection=${liveAnalysis.direction.name} '
+            'analysisTarget=${liveAnalysis.targetHandle} '
+            'analysisScope=${liveAnalysis.scope?.canonicalKey ?? '-'} '
+            'selectionAvailable=${selection.isAvailable} '
+            'selectionRevision=${selection.coreRevision ?? '-'} '
+            'selectionTarget=${selection.target.handle} '
+            'rhythmTargetCount=${rhythm == null ? '-' : rhythm.directionBank(selection.direction).targetCount}',
+      ),
+    );
   }
 
   (int, int, int) _colorsFor(

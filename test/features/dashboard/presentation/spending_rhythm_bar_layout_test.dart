@@ -42,6 +42,25 @@ void main() {
     });
 
     test(
+      'keeps a Month Rhythm renderable during a narrower cascading Card2 frame',
+      () {
+        final layout = SpendingRhythmBarLayout.resolve(
+          availableWidth: 355.69512195121956,
+          barCount: 31,
+          allowsHorizontalScroll: false,
+        );
+
+        expect(layout.scrollsHorizontally, isTrue);
+        expect(layout.barWidth, SpendingRhythmBarLayout.minBarWidth);
+        expect(layout.gap, SpendingRhythmBarLayout.minimumGap);
+        expect(
+          layout.contentWidth,
+          SpendingRhythmBarLayout.supportedMinimumChartWidth,
+        );
+      },
+    );
+
+    test(
       'keeps a SUM domain beyond 31 years scrollable instead of shrinking bars',
       () {
         final layout = SpendingRhythmBarLayout.resolve(

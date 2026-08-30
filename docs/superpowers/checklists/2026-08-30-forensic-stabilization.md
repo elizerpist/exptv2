@@ -55,7 +55,18 @@ to `DONE` without its listed physical evidence.
   actual Dashboard paint order, surface/clip topology, cascade opacity/scale,
   and the relevant physical bounds. The instrumentation deliberately does not
   paint a test cover or alter pixel ownership. It still needs an intermediate
-  device capture to identify the actual gray-pixel owner.
+  device capture to identify the actual gray-pixel owner. The new full-parent
+  Partner/Rhythm collapse gate did, however, reproduce a concrete lower-only
+  failure: at an intermediate Card2 width of `355.69512195121956dp`, the
+  non-scrollable 31-day Rhythm resolver threw `Unsupported non-scrollable
+  Spending Rhythm viewport`. The upper Partner donut/list does not use that
+  resolver, explaining why it remained intact. The resolver now retains the
+  minimum bar/gap geometry in a content-only horizontal viewport during that
+  temporary narrow frame; it never throws, hides the footer, or adds a second
+  card surface. The same full-parent test also exposed a diagnostic-only
+  `RenderBox.localToGlobal` read during layout; pager diagnostics now use a
+  post-frame viewport snapshot instead. This is source/raster evidence, not
+  yet a physical gray-pixel ownership proof.
 - **FS-C:** `LIMIT|STATE` records semantic visibility transitions and the new
   `LIMIT|SELECTION_UNAVAILABLE` event reports the first exact canonical
   rejection reason (`snapshotUnavailable`, stale revision/target mismatch,
@@ -86,7 +97,7 @@ APK/device acceptance result.
 | G1 | The selected Avatar always installs its long-press recognizer when the direct input controller exists. Its context is resolved through `directInputEditContext()`, which retains only an exact selected-target/scope authority and is not gated by `header.editContext`. Targeted first-contact and draft-survival widget tests are green. | Physical first edit, repeated ticks, reverse, release, revisit, and stale-write races on the actual device. | PARTIAL |
 | G2 | A rail hotset request made before bootstrap was silently lost because there was no index yet. Core now retains the bounded semantic horizon and primes it at canonical index publication/idle. The pre-bootstrap red test and the 22-test focus suite are green. | Measured time-vs-Avatar delta and repeated/reverse physical fling with no visible semantic-tick hitch. | PARTIAL |
 | G3 | Summary raw pointer-down preempts the time motion lane and pending neighbour work before gesture resolution. The real Summary-after-live-time-ballistic test is green. | Device pointer-down-to-action timing while active and immediately after a time fling; exact remaining lock owner if any. | PARTIAL |
-| G4 | The screenshot proves the slab. Isolated Card2/Rhythm raster coverage is green, but it does not include the real Dashboard, LogBox, collapse-handle and composition stack. | Identify the actual intermediate gray-pixel RenderObject/layer; then prove Split and Unified slow/fast/reverse/interrupted collapse without the slab. | NOT DONE |
+| G4 | Full-parent split Budget coverage now mounts a real Partner/Rhythm frame and drives collapse in 5% steps. It reproduced and repaired the lower-only intermediate-width Rhythm layout exception and the layout-unsafe pager diagnostic, without a visual mask. The device screenshot's exact gray-pixel owner still needs capture. | Identify the actual intermediate gray-pixel RenderObject/layer; then prove Split and Unified slow/fast/reverse/interrupted collapse without the slab. | PARTIAL |
 | G5 | The canonical applied-query facet loader gives Mind and Query Menu the same `CurrentQueryController` domain owner. Ready/loading/latest-wins and two-endpoint tests are green. | Device parity: two visible draggable endpoints and matching values after navigation/change in both hosts. | PARTIAL |
 | G6 | Unified now has only `budget-unified-content-card-surface`; `BudgetDistributionCardShell` becomes content clipping only. The topology/controller-identity tests are green. | Device Split → Unified → Split verification with selected Avatar/page retained and no nested physical card. | PARTIAL |
 | G7 | The resolved plot target is 48.4dp and compact floor 38.72dp; conservation and Card2/Rhythm tests are green. | Device inspection at reference Split/Unified geometries: outer Card2 unchanged and upper Partner space reclaimed. | PARTIAL |
@@ -105,9 +116,20 @@ The following targeted suites were re-run after the current source changes:
   **29 tests passed**.
 - Directional applied-Query retention, facet-loader latest-wins behavior, and
   both shared amount-range hosts: **15 tests passed**.
+- Full-parent Partner/Rhythm collapse provenance gate and the constrained
+  narrow-viewport Rhythm-layout regression: **5 tests passed** (the full
+  parent test covers every 5% collapse step).
 
 `flutter analyze` over the 11 affected production files reported no issues and
 `git diff --check` passed. The former failed run that named obsolete test paths
 did not execute a failing test; it was re-run with the repository's actual
 paths above. None of these automated results changes a physical gate to
 `DONE`.
+
+After the G4 source/raster repair, the current focused full-composition run
+(`spending_rhythm_bar_layout`, `spending_rhythm_bar_chart`,
+`budget_distribution_pager`, `budget_partner_distribution_card`, and
+`core_dashboard`) passed **48 tests**. A fresh analyzer run over all three
+changed production files and both changed test files reported no issues, and a
+fresh `git diff --check` passed. This is still not a replacement for the
+required device intermediate-frame evidence.
