@@ -920,6 +920,7 @@ final class DashboardCoreController {
   int _budgetAvatarFocusHotsetGeneration = 0;
   int _budgetAvatarFocusDerivationGeneration = 0;
   bool _budgetAvatarFocusHotsetTaskScheduled = false;
+  bool _budgetAvatarFocusHotsetPrimingSynchronously = false;
   int _budgetAvatarFocusHotsetPrepared = 0;
   int _budgetAvatarFocusHotsetPromotions = 0;
   int _budgetAvatarFocusHotsetMisses = 0;
@@ -4725,7 +4726,23 @@ final class DashboardCoreController {
     _budgetAvatarFocusHotsetGeneration += 1;
     _pendingBudgetAvatarFocusPlans =
         List<_BudgetAvatarFocusHotsetPlan>.unmodifiable(plans);
-    _drainBudgetAvatarFocusHotset();
+    // The rail may receive its first pointer in the same ready frame in which
+    // it publishes this bounded ±8 horizon. An idle task would leave that
+    // first physical fling with no promotable immutable root and force the
+    // direct crossing back through deriveFast. Complete this fixed (at most
+    // 17-target) semantic preparation before direct input can begin; later
+    // replenishment still uses the cancellable idle scheduler below.
+    final requiresFirstInputReadyHotset = _budgetAvatarFocusHotset.isEmpty;
+    if (requiresFirstInputReadyHotset) {
+      _budgetAvatarFocusHotsetPrimingSynchronously = true;
+      try {
+        _drainBudgetAvatarFocusHotset();
+      } finally {
+        _budgetAvatarFocusHotsetPrimingSynchronously = false;
+      }
+    } else {
+      _drainBudgetAvatarFocusHotset();
+    }
   }
 
   /// Fixed numeric evidence for profile logs and regression tests. No target
@@ -4852,6 +4869,10 @@ final class DashboardCoreController {
         List<_BudgetAvatarFocusHotsetPlan>.unmodifiable(
           _pendingBudgetAvatarFocusPlans.skip(1),
         );
+    if (_budgetAvatarFocusHotsetPrimingSynchronously) {
+      _prepareBudgetAvatarFocusHotsetPlan(plan, generation);
+      return;
+    }
     _budgetAvatarFocusHotsetTaskScheduled = true;
     try {
       unawaited(

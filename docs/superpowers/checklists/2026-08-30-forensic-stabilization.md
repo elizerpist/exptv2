@@ -95,7 +95,7 @@ APK/device acceptance result.
 | ID | Current source evidence | Acceptance still required | Status |
 |---|---|---|---|
 | G1 | The selected Avatar always installs its long-press recognizer when the direct input controller exists. Its context is resolved through `directInputEditContext()`, which retains only an exact selected-target/scope authority and is not gated by `header.editContext`. Targeted first-contact and draft-survival widget tests are green. | Physical first edit, repeated ticks, reverse, release, revisit, and stale-write races on the actual device. | PARTIAL |
-| G2 | A rail hotset request made before bootstrap was silently lost because there was no index yet. Core now retains the bounded semantic horizon and primes it at canonical index publication/idle. The pre-bootstrap red test and the 22-test focus suite are green. | Measured time-vs-Avatar delta and repeated/reverse physical fling with no visible semantic-tick hitch. | PARTIAL |
+| G2 | A rail hotset request made before bootstrap was silently lost because there was no index yet. Core now retains the bounded semantic horizon and primes it at canonical index publication. A second reproduced gap was that the first ready-frame fling could begin before the `Priority.idle` hotset task ran, causing direct `deriveFast` misses. The Core now completes its fixed ≤17 target semantic horizon before direct Avatar input; later replenishment stays cancellable/idle. The pre-bootstrap and immediate-first-fling red tests are green. | Measured time-vs-Avatar delta and repeated/reverse physical fling with no visible semantic-tick hitch. | PARTIAL |
 | G3 | Summary raw pointer-down preempts the time motion lane and pending neighbour work before gesture resolution. The real Summary-after-live-time-ballistic test is green. | Device pointer-down-to-action timing while active and immediately after a time fling; exact remaining lock owner if any. | PARTIAL |
 | G4 | Full-parent split Budget coverage now mounts a real Partner/Rhythm frame and drives collapse in 5% steps. It reproduced and repaired the lower-only intermediate-width Rhythm layout exception and the layout-unsafe pager diagnostic, without a visual mask. The device screenshot's exact gray-pixel owner still needs capture. | Identify the actual intermediate gray-pixel RenderObject/layer; then prove Split and Unified slow/fast/reverse/interrupted collapse without the slab. | PARTIAL |
 | G5 | The canonical applied-query facet loader gives Mind and Query Menu the same `CurrentQueryController` domain owner. Ready/loading/latest-wins and two-endpoint tests are green. | Device parity: two visible draggable endpoints and matching values after navigation/change in both hosts. | PARTIAL |
@@ -142,3 +142,17 @@ was then run at both this pass's G4 checkpoint and the pre-G4 starting SHA
 on both. It is therefore recorded as an inherited unrelated regression, not
 silently hidden or attributed to the Rhythm repair. The complete Dashboard
 directory is consequently **not green** and it is not used as release proof.
+
+## Continued G2 first-fling evidence
+
+The new deterministic test
+`RED G2: the first Avatar fling cannot fall through a pending idle hotset to
+UI-isolate derivation` deliberately starts an eight-crossing Avatar motion in
+the exact ready frame after the Core accepts the local horizon, without an
+event-loop/idle yield. Before the repair the test recorded **2 hotset misses**;
+the matching crossings fell through to the direct derivation path. The Core
+now makes the existing fixed-capacity (maximum 17) immutable focus cache ready
+at this no-input boundary. The same test now records **0 misses**, eight
+hotset promotions, and `uiIsolateMicros=0` for every active-motion crossing.
+This is a source-level critical-path closure only: no device is connected, so
+G2 remains `PARTIAL` pending the required visible time-vs-Avatar fling matrix.

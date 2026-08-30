@@ -792,6 +792,64 @@ void main() {
   );
 
   test(
+    'RED G2: the first Avatar fling cannot fall through a pending idle hotset to UI-isolate derivation',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+      // Deliberately do not yield to an event-loop turn. The fixed local
+      // horizon must already be available before the first real rail fling
+      // can start from the newly-ready Dashboard frame.
+      expect(core.budgetAvatarFocusHotsetDiagnostics['cached'], 2);
+      FluviDiagnosticLogger.clear();
+
+      core.beginBudgetAvatarMotion();
+      for (var index = 0; index < 8; index += 1) {
+        final utilities = index.isEven;
+        expect(
+          await core.requestBudgetCategoryFocus(
+            DashboardFocusFacet(
+              id: utilities ? 'utilities' : 'food',
+              displayName: utilities ? 'Utilities' : 'Food',
+            ),
+            publishDuringMotion: true,
+            targetHandle: index,
+          ),
+          isTrue,
+        );
+      }
+      core.endBudgetAvatarMotion();
+
+      expect(
+        core.budgetAvatarFocusHotsetDiagnostics['misses'],
+        0,
+        reason:
+            'A bounded preparation request may not leave the first user fling '
+            'on the direct deriveFast path just because the idle task has not '
+            'received a turn yet.',
+      );
+      final derived = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'FOCUS_DERIVED_SCOPE_READY')
+          .toList(growable: false);
+      expect(derived, hasLength(8));
+      for (final event in derived) {
+        expect(event.scope, contains('avatarFocusHotsetHit=true'));
+        expect(event.scope, contains('uiIsolateMicros=0'));
+      }
+    },
+  );
+
+  test(
     'RG-G3: Summary raw input cancels a retained time-neighbour preparation before arena resolution',
     () async {
       final repository = _FocusSeedRepository();
