@@ -43,14 +43,15 @@ void main() {
 
     expect(find.byKey(const ValueKey('debug-console-dialog')), findsOneWidget);
     expect(find.text('Debug Console'), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(ListView), findsOneWidget);
     expect(FluviDiagnosticLogger.allText, contains('[FLOW][D10]'));
   });
 
-  testWidgets('exposes all retained 2000 diagnostic entries to the panel', (
+  testWidgets('virtualizes the latest 1000 retained entries in the panel', (
     tester,
   ) async {
-    for (var index = 0; index <= 2000; index += 1) {
+    for (var index = 0; index <= 1000; index += 1) {
       FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
     }
     await tester.pumpWidget(
@@ -62,13 +63,77 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('(2000)'), findsOneWidget);
-    final field = tester.widget<TextField>(
-      find.byKey(const ValueKey('debug-console-logs')),
+    expect(find.textContaining('1000 retained'), findsOneWidget);
+    expect(find.byKey(const ValueKey('debug-console-logs')), findsOneWidget);
+    expect(find.textContaining('[FLOW][D1000]'), findsOneWidget);
+    expect(find.textContaining('[FLOW][D0]'), findsNothing);
+    expect(find.byType(SelectableText).evaluate().length, lessThan(1000));
+  });
+
+  testWidgets('manual review pauses follow and jump-to-live clears unseen', (
+    tester,
+  ) async {
+    for (var index = 0; index < 120; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
+    }
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+      ),
     );
-    expect(field.controller!.text, contains('[FLOW][D1]'));
-    expect(field.controller!.text, contains('[FLOW][D2000]'));
-    expect(field.controller!.text, isNot(contains('[FLOW][D0]')));
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('debug-console-logs')),
+      const Offset(0, 320),
+    );
+    await tester.pump();
+    expect(find.textContaining('REVIEWING'), findsOneWidget);
+
+    for (var index = 120; index < 127; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
+    }
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('+7 new'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('debug-console-jump-live')));
+    await tester.pump();
+    expect(find.textContaining('LIVE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('debug-console-jump-live')), findsNothing);
+  });
+
+  testWidgets('quick bug marker appends structured current context', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              DebugFloatingButton(
+                diagnosticStatusProvider: () => const <String, Object?>{
+                  'mode': 'mind',
+                  'direction': 'expense',
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('debug-console-mark-bug')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mind slider'));
+    await tester.pump();
+
+    final marker = FluviDiagnosticLogger.entries.last;
+    expect(marker.stage, 'USER_MARK');
+    expect(marker.scope, contains('issue=mind_slider'));
+    expect(marker.scope, contains('mode=mind'));
   });
 
   testWidgets('controls an explicit frozen diagnostic capture session', (

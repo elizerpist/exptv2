@@ -24,10 +24,16 @@ class DebugConsoleDialog extends StatefulWidget {
 enum _DebugConsoleSection { logs, report }
 
 class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
-  final TextEditingController _logsController = TextEditingController();
+  static const _followThreshold = 36.0;
+  final ScrollController _logsScrollController = ScrollController();
   final TextEditingController _reportController = TextEditingController();
   _DebugConsoleSection _section = _DebugConsoleSection.logs;
+  var _following = true;
+  var _unseenCount = 0;
+  var _lastSessionEventCount = 0;
+  var _liveJumpScheduled = false;
   bool _copied = false;
+  bool _captureCopied = false;
   bool _physicalReportCopied = false;
   bool _copyingPhysicalReport = false;
   String? _physicalReportError;
@@ -35,26 +41,64 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   @override
   void initState() {
     super.initState();
-    _logsController.text = FluviDiagnosticLogger.allText;
+    _lastSessionEventCount = FluviDiagnosticLogger.sessionEventCount;
+    _logsScrollController.addListener(_handleLogScroll);
     FluviDiagnosticLogger.notifier.addListener(_refreshLogs);
+    _scheduleJumpToLive();
   }
 
   @override
   void dispose() {
     FluviDiagnosticLogger.notifier.removeListener(_refreshLogs);
-    _logsController.dispose();
+    _logsScrollController
+      ..removeListener(_handleLogScroll)
+      ..dispose();
     _reportController.dispose();
     super.dispose();
   }
 
   void _refreshLogs() {
     if (!mounted) return;
-    final text = FluviDiagnosticLogger.allText;
-    _logsController.value = TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-    setState(() {});
+    final currentSessionCount = FluviDiagnosticLogger.sessionEventCount;
+    final added = currentSessionCount >= _lastSessionEventCount
+        ? currentSessionCount - _lastSessionEventCount
+        : currentSessionCount;
+    _lastSessionEventCount = currentSessionCount;
+    setState(() {
+      _copied = false;
+      if (!_following) _unseenCount += added;
+    });
+    if (_following) _scheduleJumpToLive();
+  }
+
+  void _handleLogScroll() {
+    if (!_logsScrollController.hasClients) return;
+    final atLiveEnd = _logsScrollController.offset <= _followThreshold;
+    if (atLiveEnd == _following) return;
+    setState(() {
+      _following = atLiveEnd;
+      if (atLiveEnd) _unseenCount = 0;
+    });
+  }
+
+  void _scheduleJumpToLive() {
+    if (_liveJumpScheduled) return;
+    _liveJumpScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _liveJumpScheduled = false;
+      if (!mounted || !_following || !_logsScrollController.hasClients) {
+        return;
+      }
+      _logsScrollController.jumpTo(0);
+    });
+  }
+
+  void _returnToLive() {
+    setState(() {
+      _following = true;
+      _unseenCount = 0;
+    });
+    _scheduleJumpToLive();
   }
 
   void _showReport() {
@@ -83,14 +127,34 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   }
 
   Future<void> _copyAll() async {
-    if (_logsController.text.isEmpty) return;
+    if (FluviDiagnosticLogger.retainedEntryCount == 0) return;
     try {
-      await Clipboard.setData(ClipboardData(text: _logsController.text));
+      await Clipboard.setData(
+        ClipboardData(text: FluviDiagnosticLogger.latestText()),
+      );
       if (mounted) setState(() => _copied = true);
     } on Object catch (_) {
       // The physical-report tab contains explicit copy diagnostics. Logs stay
       // non-disruptive because they are an auxiliary projection.
     }
+  }
+
+  Future<void> _copyCapture() async {
+    if (FluviDiagnosticLogger.captureEntries.isEmpty) return;
+    try {
+      await Clipboard.setData(
+        ClipboardData(text: FluviDiagnosticLogger.captureText()),
+      );
+      if (mounted) setState(() => _captureCopied = true);
+    } on Object catch (_) {
+      // The frozen capture remains intact when the platform clipboard fails.
+    }
+  }
+
+  void _markBug(String issue) {
+    final status =
+        widget.diagnosticStatusProvider?.call() ?? const <String, Object?>{};
+    FluviDiagnosticLogger.markUserBug(issue, context: status);
   }
 
   Future<void> _copyPhysicalReport() async {
@@ -117,7 +181,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final count = FluviDiagnosticLogger.entries.length;
+    final count = FluviDiagnosticLogger.retainedEntryCount;
     final status =
         widget.diagnosticStatusProvider?.call() ?? const <String, Object?>{};
     return Dialog(
@@ -153,12 +217,36 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                       ),
                     ),
                   ),
-                  Text(
-                    '($count)',
-                    style: const TextStyle(
-                      color: Color(0xFF6C7086),
-                      fontSize: 12,
-                    ),
+                  PopupMenuButton<String>(
+                    key: const ValueKey('debug-console-mark-bug'),
+                    tooltip: 'MARK BUG NOW',
+                    onSelected: _markBug,
+                    itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                      PopupMenuItem(
+                        value: 'gray_rectangle',
+                        child: Text('Gray rectangle'),
+                      ),
+                      PopupMenuItem(
+                        value: 'mind_slider',
+                        child: Text('Mind slider'),
+                      ),
+                      PopupMenuItem(
+                        value: 'avatar_fling',
+                        child: Text('Avatar fling'),
+                      ),
+                      PopupMenuItem(
+                        value: 'time_fling',
+                        child: Text('Time fling'),
+                      ),
+                      PopupMenuItem(
+                        value: 'budget_limit',
+                        child: Text('Budget / limit'),
+                      ),
+                      PopupMenuItem(value: 'other', child: Text('Other')),
+                    ],
+                    icon: const Icon(Icons.flag_outlined, size: 16),
+                    color: const Color(0xFF313244),
+                    iconColor: const Color(0xFFF9E2AF),
                   ),
                   IconButton(
                     key: const ValueKey('debug-console-copy'),
@@ -180,7 +268,15 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   ),
                   IconButton(
                     key: const ValueKey('debug-console-clear'),
-                    onPressed: count == 0 ? null : FluviDiagnosticLogger.clear,
+                    onPressed: count == 0
+                        ? null
+                        : () {
+                            FluviDiagnosticLogger.clearLive();
+                            setState(() {
+                              _unseenCount = 0;
+                              _following = true;
+                            });
+                          },
                     constraints: const BoxConstraints.tightFor(
                       width: 34,
                       height: 34,
@@ -204,6 +300,21 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     color: const Color(0xFF94A3B8),
                   ),
                 ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${_following ? 'LIVE' : 'REVIEWING'} · $count retained · '
+                  '${FluviDiagnosticLogger.sessionEventCount} session events',
+                  key: const ValueKey('debug-console-tail-status'),
+                  style: const TextStyle(
+                    color: Color(0xFF6C7086),
+                    fontSize: 9.5,
+                  ),
+                ),
               ),
             ),
             if (status.isNotEmpty)
@@ -262,6 +373,21 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     },
                     icon: const Icon(Icons.delete_sweep_outlined, size: 15),
                     label: const Text('CLEAR CAPTURE'),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    key: const ValueKey('debug-console-copy-capture'),
+                    tooltip: 'COPY FROZEN CAPTURE',
+                    onPressed: FluviDiagnosticLogger.captureEntries.isEmpty
+                        ? null
+                        : _copyCapture,
+                    icon: Icon(
+                      _captureCopied ? Icons.check : Icons.copy_outlined,
+                      size: 16,
+                    ),
+                    color: _captureCopied
+                        ? const Color(0xFF22C55E)
+                        : const Color(0xFF89B4FA),
                   ),
                   const Spacer(),
                   Text(
@@ -335,9 +461,58 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                 style: TextStyle(color: Color(0xFF94A3B8)),
               ),
             )
-          : _readOnlyText(
-              _logsController,
-              key: const ValueKey('debug-console-logs'),
+          : Stack(
+              children: [
+                ListView.builder(
+                  key: const ValueKey('debug-console-logs'),
+                  controller: _logsScrollController,
+                  reverse: true,
+                  itemCount: count,
+                  cacheExtent: 320,
+                  findChildIndexCallback: (key) {
+                    if (key is! ValueKey<int>) return null;
+                    for (var index = count - 1; index >= 0; index -= 1) {
+                      if (FluviDiagnosticLogger.entryAt(index).sequence ==
+                          key.value) {
+                        return count - 1 - index;
+                      }
+                    }
+                    return null;
+                  },
+                  itemBuilder: (context, reverseIndex) {
+                    final event = FluviDiagnosticLogger.entryAt(
+                      count - 1 - reverseIndex,
+                    );
+                    return Padding(
+                      key: ValueKey<int>(event.sequence ?? reverseIndex),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 2,
+                      ),
+                      child: SelectableText(
+                        event.toLine(),
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11.5,
+                          height: 1.35,
+                          color: Color(0xFFCDD6F4),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (!_following && _unseenCount > 0)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: FilledButton.icon(
+                      key: const ValueKey('debug-console-jump-live'),
+                      onPressed: _returnToLive,
+                      icon: const Icon(Icons.south, size: 15),
+                      label: Text('+$_unseenCount new'),
+                    ),
+                  ),
+              ],
             );
     }
     return Column(

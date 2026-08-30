@@ -6,8 +6,8 @@ import 'package:fluvi/core/diagnostics/fluvi_onscreen_diagnostics.dart';
 void main() {
   setUp(FluviDiagnosticLogger.clear);
 
-  test('retains 1999 and exactly 2000 chronological diagnostic entries', () {
-    for (var index = 0; index < 1999; index += 1) {
+  test('retains 999 and exactly 1000 chronological diagnostic entries', () {
+    for (var index = 0; index < 999; index += 1) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'D$index',
@@ -19,56 +19,126 @@ void main() {
       );
     }
 
-    expect(FluviDiagnosticLogger.entries, hasLength(1999));
+    expect(FluviDiagnosticLogger.entries, hasLength(999));
     expect(FluviDiagnosticLogger.entries.first.stage, 'D0');
-    expect(FluviDiagnosticLogger.entries.last.stage, 'D1998');
+    expect(FluviDiagnosticLogger.entries.last.stage, 'D998');
 
     FluviDiagnosticLogger.log(
-      const FluviDiagnosticEvent(stage: 'D1999', flowId: 'Q-test'),
+      const FluviDiagnosticEvent(stage: 'D999', flowId: 'Q-test'),
     );
 
-    expect(FluviDiagnosticLogger.maxEntries, 2000);
-    expect(FluviDiagnosticLogger.entries, hasLength(2000));
+    expect(FluviDiagnosticLogger.maxEntries, 1000);
+    expect(FluviDiagnosticLogger.entries, hasLength(1000));
     expect(FluviDiagnosticLogger.entries.first.stage, 'D0');
-    expect(FluviDiagnosticLogger.entries.last.stage, 'D1999');
+    expect(FluviDiagnosticLogger.entries.last.stage, 'D999');
     expect(
       FluviDiagnosticLogger.entries.last.toLine(),
-      contains('[FLOW][D1999] flowId=Q-test'),
+      contains('[FLOW][D999] flowId=Q-test'),
     );
   });
 
-  test('evicts exactly the oldest entry at diagnostic entry 2001', () {
-    for (var index = 0; index <= 2000; index += 1) {
+  test('evicts exactly the oldest entry at diagnostic entry 1001', () {
+    for (var index = 0; index <= 1000; index += 1) {
       FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
     }
 
     final entries = FluviDiagnosticLogger.entries;
-    expect(entries, hasLength(2000));
+    expect(entries, hasLength(1000));
     expect(entries.first.stage, 'D1');
-    expect(entries.last.stage, 'D2000');
+    expect(entries.last.stage, 'D1000');
     expect(
       entries.map((event) => event.stage),
-      orderedEquals(List<String>.generate(2000, (index) => 'D${index + 1}')),
+      orderedEquals(List<String>.generate(1000, (index) => 'D${index + 1}')),
     );
   });
 
-  test('keeps the exported capture at the same exact 2000-entry boundary', () {
+  test('keeps the exported capture at the same exact 1000-entry boundary', () {
     FluviDiagnosticLogger.startCapture();
-    for (var index = 0; index < 2000; index += 1) {
+    for (var index = 0; index < 1000; index += 1) {
       FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'CAPTURE-$index'));
     }
 
     final capture = FluviDiagnosticLogger.captureEntries;
-    expect(capture, hasLength(2000));
+    expect(capture, hasLength(1000));
     expect(capture.first.stage, 'CAPTURE-0');
-    expect(capture.last.stage, 'CAPTURE-1999');
+    expect(capture.last.stage, 'CAPTURE-999');
     expect(
       capture.map((event) => event.stage),
-      orderedEquals(List<String>.generate(2000, (index) => 'CAPTURE-$index')),
+      orderedEquals(List<String>.generate(1000, (index) => 'CAPTURE-$index')),
       reason:
-          'The copy/export path must expose the same newest 2000 diagnostic '
+          'The copy/export path must expose the same newest 1000 diagnostic '
           'records as the on-screen history, not a second hidden capacity.',
     );
+  });
+
+  test('multiple wraparounds stay bounded and preserve session totals', () {
+    for (var index = 0; index < 3507; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
+    }
+
+    expect(FluviDiagnosticLogger.retainedEntryCount, 1000);
+    expect(FluviDiagnosticLogger.sessionEventCount, 3507);
+    expect(FluviDiagnosticLogger.entryAt(0).stage, 'D2507');
+    expect(FluviDiagnosticLogger.entryAt(999).stage, 'D3506');
+    expect(
+      FluviDiagnosticLogger.entryAt(999).sequence,
+      greaterThan(FluviDiagnosticLogger.entryAt(0).sequence!),
+    );
+  });
+
+  test('latest export describes the retained rolling window', () {
+    for (var index = 0; index <= 1000; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'D$index'));
+    }
+
+    final text = FluviDiagnosticLogger.latestText();
+    expect(text, contains('LIVE_TAIL'));
+    expect(text, contains('sessionEventCount=1001'));
+    expect(text, contains('retainedCount=1000'));
+    expect(text, contains('firstRetainedSequence='));
+    expect(text, contains('[FLOW][D1]'));
+    expect(text, isNot(contains('[FLOW][D0]')));
+    expect(text, contains('[FLOW][D1000]'));
+  });
+
+  test('user marker is an ordered timestamped event with context', () {
+    FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'BEFORE'));
+    FluviDiagnosticLogger.markUserBug(
+      'mind_slider',
+      context: const <String, Object?>{'mode': 'mind', 'direction': 'expense'},
+    );
+
+    final marker = FluviDiagnosticLogger.entries.last;
+    expect(marker.stage, 'USER_MARK');
+    expect(marker.scope, contains('issue=mind_slider'));
+    expect(marker.scope, contains('mode=mind'));
+    expect(
+      marker.sequence,
+      greaterThan(FluviDiagnosticLogger.entries.first.sequence!),
+    );
+    expect(marker.timestamp, isNotNull);
+    expect(marker.elapsedMicros, isNotNull);
+  });
+
+  testWidgets('rapid bursts batch UI publication without dropping events', (
+    tester,
+  ) async {
+    var notifications = 0;
+    void listener() => notifications += 1;
+    FluviDiagnosticLogger.notifier.addListener(listener);
+    addTearDown(() => FluviDiagnosticLogger.notifier.removeListener(listener));
+    final beforePublications = FluviDiagnosticLogger.uiPublicationCount;
+
+    for (var index = 0; index < 400; index += 1) {
+      FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'BURST-$index'));
+    }
+    expect(FluviDiagnosticLogger.retainedEntryCount, 400);
+    expect(notifications, 0);
+
+    await tester.pump();
+    expect(notifications, 1);
+    expect(FluviDiagnosticLogger.uiPublicationCount - beforePublications, 1);
+    expect(FluviDiagnosticLogger.entries.last.stage, 'BURST-399');
   });
 
   test('clear removes entries without retaining business state', () {
@@ -80,6 +150,16 @@ void main() {
 
     expect(FluviDiagnosticLogger.entries, isEmpty);
     expect(FluviDiagnosticLogger.allText, isEmpty);
+  });
+
+  test('clear live preserves the monotonic process-session event count', () {
+    FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'FIRST'));
+    FluviDiagnosticLogger.clearLive();
+
+    expect(FluviDiagnosticLogger.retainedEntryCount, 0);
+    expect(FluviDiagnosticLogger.sessionEventCount, 1);
+    FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'SECOND'));
+    expect(FluviDiagnosticLogger.sessionEventCount, 2);
   });
 
   test(

@@ -37,6 +37,11 @@ final class _FluviDiagnosticRingBuffer<T> {
   int _length = 0;
 
   int get length => _length;
+  T operator [](int index) {
+    RangeError.checkValidIndex(index, this, 'index', _length);
+    return _values[(_head + index) % capacity] as T;
+  }
+
   T? get last =>
       _length == 0 ? null : _values[(_head + _length - 1) % capacity];
 
@@ -72,7 +77,7 @@ final class _FluviDiagnosticRingBuffer<T> {
 
 /// The single debug-only sink used by the on-screen diagnostic projection.
 abstract final class FluviDiagnosticLogger {
-  static const maxEntries = 2000;
+  static const maxEntries = 1000;
   // Capture/export is another on-screen diagnostic projection. Keeping this
   // at the same boundary prevents a hidden second history from exposing a
   // different retention contract than the panel and its Copy action.
@@ -92,7 +97,11 @@ abstract final class FluviDiagnosticLogger {
       <String, FluviDiagnosticEvent>{};
   static final _FluviDiagnosticNotifier _version = _FluviDiagnosticNotifier(0);
   static final Stopwatch _sessionStopwatch = Stopwatch()..start();
+  static final String _sessionId =
+      'fluvi-${DateTime.now().toUtc().microsecondsSinceEpoch}';
   static var _nextSequence = 0;
+  static var _sessionEventCount = 0;
+  static var _uiPublicationCount = 0;
   static var _notifyScheduled = false;
   static var _captureId = 0;
   static var _captureActive = false;
@@ -108,6 +117,7 @@ abstract final class FluviDiagnosticLogger {
               sequence: ++_nextSequence,
               elapsedMicros: _sessionStopwatch.elapsedMicroseconds,
             );
+    _sessionEventCount += 1;
     if (_isHeaderRendererBoundary(stamped.stage) &&
         !(stamped.scope?.contains('captureReplay=true') ?? false)) {
       _headerRendererEvidence[stamped.stage] = stamped;
@@ -175,12 +185,29 @@ abstract final class FluviDiagnosticLogger {
   static void clear() {
     _entries.clear();
     _headerRendererEvidence.clear();
+    _sessionEventCount = 0;
     _clearCapture(notify: false);
+    _scheduleNotify();
+  }
+
+  /// Clears the rolling projection without disturbing an explicitly frozen
+  /// capture. Sequence identity remains process-monotonic while the displayed
+  /// session counter starts a new user-visible tail.
+  static void clearLive() {
+    _entries.clear();
+    _headerRendererEvidence.clear();
     _scheduleNotify();
   }
 
   static List<FluviDiagnosticEvent> get entries =>
       List<FluviDiagnosticEvent>.unmodifiable(_entries.snapshot());
+  static int get retainedEntryCount => _entries.length;
+  static int get sessionEventCount => _sessionEventCount;
+  static int get uiPublicationCount => _uiPublicationCount;
+  static String get sessionId => _sessionId;
+
+  /// Indexed access lets the virtualized console build only visible rows.
+  static FluviDiagnosticEvent entryAt(int index) => _entries[index];
 
   static int get captureId => _captureId;
   static bool get captureActive => _captureActive;
@@ -288,6 +315,10 @@ abstract final class FluviDiagnosticLogger {
       'startedAt': _captureStartedAt?.toIso8601String(),
       'stoppedAt': _captureStoppedAt?.toIso8601String(),
       'eventCount': _capture.length,
+      'sessionId': _sessionId,
+      'sessionEventCount': _sessionEventCount,
+      'firstRetainedSequence': events.isEmpty ? null : events.first.sequence,
+      'lastRetainedSequence': events.isEmpty ? null : events.last.sequence,
       'stageCounts': stageCounts,
       'counters': <String, int>{
         'requests': requests,
@@ -303,6 +334,49 @@ abstract final class FluviDiagnosticLogger {
 
   static String get allText =>
       entries.map((event) => event.toLine()).join('\n');
+
+  /// Materializes the rolling tail only for an explicit copy/export action.
+  static String latestText() =>
+      _exportText(label: 'LIVE_TAIL', events: _entries.snapshot());
+
+  /// Materializes the independent bounded capture only on explicit copy.
+  static String captureText() => _exportText(
+    label: 'FROZEN_CAPTURE',
+    events: _capture.snapshot(),
+    captureId: _captureId,
+  );
+
+  static void markUserBug(
+    String issue, {
+    Map<String, Object?> context = const <String, Object?>{},
+  }) {
+    if (!kFluviOnscreenDiagnosticsEnabled) return;
+    final fields = <String, Object?>{'issue': issue, ...context}.entries
+        .where((entry) => entry.value != null)
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join(' ');
+    log(FluviDiagnosticEvent(stage: 'USER_MARK', scope: fields));
+  }
+
+  static String _exportText({
+    required String label,
+    required List<FluviDiagnosticEvent> events,
+    int? captureId,
+  }) {
+    final firstSequence = events.isEmpty ? null : events.first.sequence;
+    final lastSequence = events.isEmpty ? null : events.last.sequence;
+    final header = <String>[
+      'FLUVI_DIAGNOSTICS $label',
+      'sessionId=$_sessionId',
+      'sessionEventCount=$_sessionEventCount',
+      if (captureId != null) 'captureId=$captureId',
+      'retainedCount=${events.length}',
+      'firstRetainedSequence=${firstSequence ?? '-'}',
+      'lastRetainedSequence=${lastSequence ?? '-'}',
+    ].join(' ');
+    if (events.isEmpty) return header;
+    return '$header\n${events.map((event) => event.toLine()).join('\n')}';
+  }
 
   static ValueNotifier<int> get notifier => _version;
 
@@ -351,6 +425,7 @@ abstract final class FluviDiagnosticLogger {
     _notifyScheduled = true;
     binding.addPostFrameCallback((_) {
       _notifyScheduled = false;
+      _uiPublicationCount += 1;
       _version.value += 1;
     });
     binding.scheduleFrame();
