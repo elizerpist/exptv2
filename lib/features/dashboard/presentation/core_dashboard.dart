@@ -141,6 +141,8 @@ class _CoreDashboardState extends State<CoreDashboard>
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
   int? _lastMindRangeDiagnosticSignature;
+  int? _mindAmountPreviewPrimeSignature;
+  bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
 
   DashboardCoreController get controller => widget.controller;
@@ -241,6 +243,7 @@ class _CoreDashboardState extends State<CoreDashboard>
           isForegroundInputActive: () => controller.foregroundInputMotion.value,
         );
     modeController.addListener(_syncBudgetDistributionTimePublicationPreparer);
+    modeController.addListener(_onCoreModeChanged);
     _syncBudgetDistributionTimePublicationPreparer();
     controller.visibleFrames.addListener(_onBudgetDistributionVisibleFrame);
     controller.liveInteractions.addListener(_onBudgetDistributionVisibleFrame);
@@ -376,6 +379,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     _onBudgetDistributionVisibleFrame();
   }
 
+  void _onCoreModeChanged() {
+    if (modeController.committedMode == DashboardModeSpec.mind) return;
+    _mindAmountInteractionActive = false;
+    controller.clearMindAmountRangePreview();
+  }
+
   void _recordSceneCacheMetrics() {
     controller.recordLogBoxTextLayoutCache(
       preparedRowCount: _preparedSceneCache.preparedRowCount,
@@ -484,6 +493,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     modeController.removeListener(
       _syncBudgetDistributionTimePublicationPreparer,
     );
+    modeController.removeListener(_onCoreModeChanged);
     controller.detachBudgetDistributionTimePublicationPreparer();
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
@@ -657,6 +667,12 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               ),
                                         onMindQueryAmountRangeCommitted:
                                             _commitMindQueryAmountRange,
+                                        onMindQueryAmountRangePreviewChanged:
+                                            _previewMindQueryAmountRange,
+                                        onMindQueryAmountRangeInteractionStarted:
+                                            _beginMindQueryAmountRangeInteraction,
+                                        onMindQueryAmountRangeInteractionEnded:
+                                            _endMindQueryAmountRangeInteraction,
                                         budgetPresentation: _budgetPresentation,
                                         budgetLimitEditController:
                                             _budgetLimitEdit,
@@ -1184,9 +1200,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
     final scope = controller.currentQuery.scopeFor(direction);
-    final domain = controller.currentQuery
-        .facetPresentationFor(direction)
-        ?.amountDomain;
+    final domain = controller.currentQuery.amountDomainFor(direction);
     final binding = QueryAmountRangeBinding.ready(
       scope: scope,
       amountDomain: domain,
@@ -1237,10 +1251,35 @@ class _CoreDashboardState extends State<CoreDashboard>
         ),
       );
     }
+    if (values != null) {
+      final primeSignature = Object.hash(
+        direction,
+        QueryAmountRange.domainScope(scope),
+        controller.coreRevision,
+      );
+      if (_mindAmountPreviewPrimeSignature != primeSignature) {
+        _mindAmountPreviewPrimeSignature = primeSignature;
+        unawaited(controller.primeMindAmountPreviewDomain());
+      }
+    }
     // Unknown is not the 1,000 HUF floor. Query Menu hides its control until
     // this exact canonical data owner is ready; Mind mirrors that explicit
     // state instead of manufacturing a collapsed disabled RangeSlider.
     return values;
+  }
+
+  void _beginMindQueryAmountRangeInteraction() {
+    _mindAmountInteractionActive = true;
+    controller.beginMindAmountRangeInteraction();
+  }
+
+  void _previewMindQueryAmountRange(QueryAmountRangeValues values) {
+    if (!_mindAmountInteractionActive) return;
+    controller.previewMindAmountRange(values);
+  }
+
+  void _endMindQueryAmountRangeInteraction() {
+    _mindAmountInteractionActive = false;
   }
 
   void _commitMindQueryAmountRange(QueryAmountRangeValues values) {
@@ -1249,11 +1288,11 @@ class _CoreDashboardState extends State<CoreDashboard>
     final current = controller.currentQuery.scopeFor(direction);
     final binding = QueryAmountRangeBinding.ready(
       scope: current,
-      amountDomain: controller.currentQuery
-          .facetPresentationFor(direction)
-          ?.amountDomain,
+      amountDomain: controller.currentQuery.amountDomainFor(direction),
     );
     if (binding == null) {
+      controller.endMindAmountRangeInteraction(committed: false);
+      controller.clearMindAmountRangePreview();
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'MIND|SLIDER_COMMIT_REJECTED',
@@ -1265,9 +1304,18 @@ class _CoreDashboardState extends State<CoreDashboard>
       return;
     }
     final next = binding.apply(values);
-    if (next == current) return;
+    if (next == current) {
+      controller.endMindAmountRangeInteraction(committed: false);
+      controller.clearMindAmountRangePreview();
+      return;
+    }
+    controller.endMindAmountRangeInteraction(committed: true);
     unawaited(
-      controller.applyQuery(next, facetPresentationSource: 'mindAmountRange'),
+      controller
+          .applyQuery(next, facetPresentationSource: 'mindAmountRange')
+          .then((published) {
+            if (!published) controller.clearMindAmountRangePreview();
+          }),
     );
   }
 

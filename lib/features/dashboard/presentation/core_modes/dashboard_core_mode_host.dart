@@ -60,6 +60,9 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindQueryAmountRangeError,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
+    this.onMindQueryAmountRangePreviewChanged,
+    this.onMindQueryAmountRangeInteractionStarted,
+    this.onMindQueryAmountRangeInteractionEnded,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -92,6 +95,10 @@ class DashboardCoreModeHost extends StatefulWidget {
   final Object? Function()? mindQueryAmountRangeError;
   final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
+  final ValueChanged<QueryAmountRangeValues>?
+  onMindQueryAmountRangePreviewChanged;
+  final VoidCallback? onMindQueryAmountRangeInteractionStarted;
+  final VoidCallback? onMindQueryAmountRangeInteractionEnded;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -315,6 +322,12 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         queryAmountRangeError: widget.mindQueryAmountRangeError,
         onQueryAmountRangeRetry: widget.onMindQueryAmountRangeRetry,
         onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,
+        onQueryAmountRangePreviewChanged:
+            widget.onMindQueryAmountRangePreviewChanged,
+        onQueryAmountRangeInteractionStarted:
+            widget.onMindQueryAmountRangeInteractionStarted,
+        onQueryAmountRangeInteractionEnded:
+            widget.onMindQueryAmountRangeInteractionEnded,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,
       ),

@@ -15,6 +15,9 @@ void main() {
         upperScaled100: 700000,
       );
       final committed = <QueryAmountRangeValues>[];
+      final previews = <QueryAmountRangeValues>[];
+      var starts = 0;
+      var ends = 0;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -22,6 +25,9 @@ void main() {
             body: QueryAmountRangeControl(
               values: range,
               onRangeCommitted: committed.add,
+              onRangePreviewChanged: previews.add,
+              onInteractionStarted: () => starts += 1,
+              onInteractionEnded: () => ends += 1,
             ),
           ),
         ),
@@ -31,17 +37,30 @@ void main() {
         find.byKey(const ValueKey('query-amount-range-slider')),
       );
       expect(slider.values, const RangeValues(200000, 700000));
+      slider.onChangeStart!(const RangeValues(200000, 700000));
       slider.onChanged!(const RangeValues(300000, 600000));
+      slider.onChanged!(const RangeValues(400000, 500000));
+      expect(previews, isEmpty);
       await tester.pump();
+      expect(previews, const <QueryAmountRangeValues>[
+        QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 900000,
+          lowerScaled100: 400000,
+          upperScaled100: 500000,
+        ),
+      ]);
       expect(committed, isEmpty);
 
-      slider.onChangeEnd!(const RangeValues(300000, 600000));
+      slider.onChangeEnd!(const RangeValues(400000, 500000));
+      expect(starts, 1);
+      expect(ends, 1);
       expect(committed, const <QueryAmountRangeValues>[
         QueryAmountRangeValues(
           minimumScaled100: 100000,
           maximumScaled100: 900000,
-          lowerScaled100: 300000,
-          upperScaled100: 600000,
+          lowerScaled100: 400000,
+          upperScaled100: 500000,
         ),
       ]);
     },

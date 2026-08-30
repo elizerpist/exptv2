@@ -155,6 +155,42 @@ void main() {
     },
   );
 
+  test('prepared amount preview derives an exact in-memory range', () {
+    final base = _baseIndex();
+    final scope = CurrentLedgerQueryScope(
+      direction: LedgerDirection.income,
+      timeScope: const AllTimeScope(),
+      refinements: const <String, Object?>{
+        'minimumAmountScaled100': 250,
+        'maximumAmountScaled100': 350,
+      },
+    );
+    final derived = DashboardEphemeralFocusDeriver.deriveFast(
+      base: base,
+      effectiveQueries: DashboardDirectionalQuerySet(
+        income: scope,
+        expense: CurrentLedgerQueryScope(
+          direction: LedgerDirection.expense,
+          timeScope: const AllTimeScope(),
+        ),
+      ),
+      focusedDirection: LedgerDirection.income,
+      categoryFocusId: null,
+      partnerFocusId: null,
+      minimumAmountScaled100: 250,
+      maximumAmountScaled100: 350,
+      initialYear: 2026,
+      generation: 14,
+    );
+
+    final frame = derived.index.frameFor(scope);
+    expect(frame.entryCount, 1);
+    expect(frame.amount.totalMinor, 300);
+    expect(derived.membershipOrdinalCount, 1);
+    expect(DashboardEphemeralFocusDerivation.workerDispatched, 0);
+    expect(DashboardEphemeralFocusDerivation.fullBaseRowsScanned, 0);
+  });
+
   test(
     'prepared focus materializes only its current root and lazily resolves a later temporal frame',
     () {

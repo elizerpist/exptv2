@@ -14,10 +14,16 @@ final class QueryAmountRangeControl extends StatefulWidget {
     super.key,
     required this.values,
     required this.onRangeCommitted,
+    this.onRangePreviewChanged,
+    this.onInteractionStarted,
+    this.onInteractionEnded,
   });
 
   final QueryAmountRangeValues values;
   final ValueChanged<QueryAmountRangeValues> onRangeCommitted;
+  final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
+  final VoidCallback? onInteractionStarted;
+  final VoidCallback? onInteractionEnded;
 
   @override
   State<QueryAmountRangeControl> createState() =>
@@ -28,6 +34,9 @@ final class _QueryAmountRangeControlState
     extends State<QueryAmountRangeControl> {
   late RangeValues _localValues;
   var _dragActive = false;
+  QueryAmountRangeValues? _pendingPreview;
+  var _previewScheduled = false;
+  var _previewGeneration = 0;
 
   @override
   void initState() {
@@ -48,6 +57,35 @@ final class _QueryAmountRangeControlState
         values.lowerScaled100.toDouble(),
         values.upperScaled100.toDouble(),
       );
+
+  void _schedulePreview(QueryAmountRangeValues values) {
+    if (widget.onRangePreviewChanged == null) return;
+    _pendingPreview = values;
+    if (_previewScheduled) return;
+    _previewScheduled = true;
+    final generation = ++_previewGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _previewGeneration) return;
+      _previewScheduled = false;
+      final pending = _pendingPreview;
+      _pendingPreview = null;
+      if (pending != null) widget.onRangePreviewChanged?.call(pending);
+    });
+  }
+
+  void _flushPreview(QueryAmountRangeValues values) {
+    _previewGeneration += 1;
+    _previewScheduled = false;
+    final pending = _pendingPreview;
+    _pendingPreview = null;
+    widget.onRangePreviewChanged?.call(pending ?? values);
+  }
+
+  @override
+  void dispose() {
+    _previewGeneration += 1;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,20 +156,32 @@ final class _QueryAmountRangeControlState
                 min: values.minimumScaled100.toDouble(),
                 max: maximum,
                 onChangeStart: values.isActionable
-                    ? (_) => _dragActive = true
+                    ? (_) {
+                        _dragActive = true;
+                        widget.onInteractionStarted?.call();
+                      }
                     : null,
                 onChanged: values.isActionable
-                    ? (next) => setState(() => _localValues = next)
-                    : null,
-                onChangeEnd: values.isActionable
                     ? (next) {
-                        _dragActive = false;
-                        widget.onRangeCommitted(
+                        setState(() => _localValues = next);
+                        _schedulePreview(
                           values.fromRawRange(
                             lower: next.start.round(),
                             upper: next.end.round(),
                           ),
                         );
+                      }
+                    : null,
+                onChangeEnd: values.isActionable
+                    ? (next) {
+                        _dragActive = false;
+                        final committed = values.fromRawRange(
+                          lower: next.start.round(),
+                          upper: next.end.round(),
+                        );
+                        _flushPreview(committed);
+                        widget.onInteractionEnded?.call();
+                        widget.onRangeCommitted(committed);
                       }
                     : null,
               ),

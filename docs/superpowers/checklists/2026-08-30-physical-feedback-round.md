@@ -25,10 +25,10 @@ an agent-side pre-build PASS condition; the strongest handoff is
 | R2 | Follow/review UX | debug console | At-bottom follows; manual review is not pulled; unseen count and jump-to-live work | widget tests | DONE |
 | R3 | Quick bug marker and bounded copy/capture | logger + console | Marker captures compact context; live/frozen copy is ordered and explicitly latest-1000 | unit + widget tests | DONE |
 | R4 | Low-noise diagnostics | Header/rail/Mind/Rhythm instrumentation | Stable config logs are change/bucket/summary driven; no whole-buffer formatting while closed | counter tests + source audit | DONE |
-| M1 | Stable amount-domain identity | Query amount-domain binding/loader/current query | Amount-only edits do not invalidate the same non-amount domain; non-amount changes do | unit/controller tests | NOT DONE |
-| M2 | Stable Mind control during warm edit | Mind surface + range control | No unmount/loading replacement/reset after a valid domain exists | widget/controller tests | NOT DONE |
-| M3 | Live transient Mind preview | shared prepared index/focus/presentation path | Thumb and visible rows/count follow the newest frame-coalesced preview while pointer remains down; no repository/full-index work per raw update | operation-count + widget/integration tests | NOT DONE |
-| M4 | One canonical commit | Query application | One final exact commit per completed changed gesture; no commit for no-op/cancel; preview reconciles without rollback | interaction tests | NOT DONE |
+| M1 | Stable amount-domain identity | Query amount-domain binding/loader/current query | Amount-only edits do not invalidate the same non-amount domain; non-amount changes do | unit/controller tests | DONE |
+| M2 | Stable Mind control during warm edit | Mind surface + range control | No unmount/loading replacement/reset after a valid domain exists | widget/controller tests | DONE |
+| M3 | Live transient Mind preview | shared prepared index/focus/presentation path | Thumb and visible rows/count follow the newest frame-coalesced preview while pointer remains down; no repository/full-index work per raw update | operation-count + widget/integration tests | DONE |
+| M4 | One canonical commit | Query application | One final exact commit per completed changed gesture; no commit for no-op/cancel; preview reconciles without rollback | interaction tests | DONE |
 | A1 | Avatar hot-path cause | Avatar rail/coordinator/core focus | Full focus/index/publication storm is removed from transient crossings while visual preview and final semantic target remain correct | 1/8-crossing/reverse tests + counters | NOT DONE |
 | A2 | Avatar flight evidence | bounded flight recorder | One summary reports raw/tick cadence and expensive-work counts without per-frame string logging | unit/widget tests | NOT DONE |
 | T1 | Time hot-path cause | Summary/time selector and prepared temporal navigation | Cache/scene misses cannot synchronously turn a visual transient crossing into a heavy navigation transaction; settle commits latest target | multi-crossing/reverse/interruption tests + counters | NOT DONE |
@@ -57,3 +57,36 @@ mixed-interaction reproduction, collapse regression, and budget/limit stress.
 - screenshot: inspected at original resolution; the slab is a sharp-edged
   approximately sRGB `(196,196,196)` region below a valid donut, but source and
   current logs do not yet prove its painter.
+
+## Engineering journal
+
+### [STEP 01] Mind amount-domain invalidation
+
+- Question: why did an amount adjustment repeatedly unmount the ready slider?
+- Evidence: `Fluvi logs 3` seq 16065–16781 showed the applied Query entering
+  loading and republishing the same 50,000–26,000,000 domain after every
+  amount-only change; CURRENT HEAD keyed the canonical domain by the complete
+  amount-refined scope.
+- Conclusion: the control's own refinement recursively invalidated its source
+  domain.
+- Decision: key and request the domain by the exact Query with only the two
+  amount refinements removed, while retaining every independent filter.
+- Validation: domain/controller/loader tests pass; amount-only changes perform
+  no refetch/loading transition and non-amount changes still invalidate.
+- Status: confirmed.
+
+### [STEP 02] Mind live list preview
+
+- Question: can the list follow the thumb without a repository/index apply per
+  pointer sample?
+- Evidence: the prepared directional index already retains immutable ledger
+  membership rows; no amount-sorted membership projection existed.
+- Conclusion: a compact amount-sorted ordinal index can derive an exact preview
+  over resident rows without mutating the committed Query or navigation.
+- Decision: add binary-bound amount membership, frame-coalesce raw slider
+  updates, and publish amount/count/LogBox presentation lanes together. Keep
+  the full Query apply as the one release commit.
+- Validation: 64 focused tests pass; the Core operation-count test asserts one
+  resident preview row, unchanged committed navigation/Query, zero additional
+  repository calls, and zero index builds during drag.
+- Status: confirmed; physical perception remains user-only pending.

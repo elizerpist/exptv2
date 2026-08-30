@@ -34,6 +34,8 @@ abstract final class DashboardEphemeralFocusDeriver {
     required String? categoryFocusId,
     required String? partnerFocusId,
     String? normalizedSearch,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
     required int initialYear,
     required int generation,
     CurrentLedgerQueryScope? initialParentScope,
@@ -45,6 +47,8 @@ abstract final class DashboardEphemeralFocusDeriver {
     categoryFocusId: categoryFocusId,
     partnerFocusId: partnerFocusId,
     normalizedSearch: normalizedSearch,
+    minimumAmountScaled100: minimumAmountScaled100,
+    maximumAmountScaled100: maximumAmountScaled100,
     initialYear: initialYear,
     generation: generation,
     initialParentScope: initialParentScope,
@@ -62,6 +66,8 @@ abstract final class DashboardEphemeralFocusDeriver {
     required String? categoryFocusId,
     required String? partnerFocusId,
     String? normalizedSearch,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
     required int initialYear,
     required int generation,
     CurrentLedgerQueryScope? initialParentScope,
@@ -73,7 +79,9 @@ abstract final class DashboardEphemeralFocusDeriver {
     }
     if (categoryFocusId == null &&
         partnerFocusId == null &&
-        normalizedSearch == null) {
+        normalizedSearch == null &&
+        minimumAmountScaled100 == null &&
+        maximumAmountScaled100 == null) {
       throw ArgumentError('Ephemeral derivation needs at least one focus.');
     }
     final focusedScope = effectiveQueries.scopeFor(focusedDirection);
@@ -88,6 +96,8 @@ abstract final class DashboardEphemeralFocusDeriver {
       categoryId: categoryFocusId,
       partnerId: partnerFocusId,
       normalizedSearch: normalizedSearch,
+      minimumAmountScaled100: minimumAmountScaled100,
+      maximumAmountScaled100: maximumAmountScaled100,
     );
 
     final key = PreparedDashboardIndexKey.fromDirectionalQuerySet(
@@ -159,6 +169,8 @@ abstract final class DashboardEphemeralFocusDeriver {
         categoryFocusId,
         partnerFocusId,
         normalizedSearch,
+        minimumAmountScaled100,
+        maximumAmountScaled100,
         // The exact focused query IDs plus its immutable base index uniquely
         // determine compact membership. Do not walk every selected all-time
         // ordinal merely to create a digest before the root can publish.

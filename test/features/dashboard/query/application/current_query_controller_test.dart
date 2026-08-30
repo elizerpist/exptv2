@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/application/current_query_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_temporal_filter.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -99,6 +100,48 @@ void main() {
             'Mind and Query Menu must retain the same exact QueryMenuData '
             'domain during a transient renderer/projection gap.',
       );
+    },
+  );
+
+  test(
+    'amount-only replacement retains its canonical domain while other facets may refresh',
+    () {
+      final expense = scope(LedgerDirection.expense);
+      final controller = CurrentQueryController(initialScope: expense);
+      addTearDown(controller.dispose);
+      const facets = QueryMenuData(
+        result: QueryMenuResultSummary(entryCount: 18, amountScaled100: 0),
+        amountDomain: QueryMenuAmountDomain(
+          minimumAmountScaled100: 50000,
+          maximumAmountScaled100: 26000000,
+        ),
+        availableMonths: <QueryMenuAvailableMonth>[],
+        categories: <QueryMenuCategoryFacet>[],
+        partners: <QueryMenuPartnerFacet>[],
+      );
+      controller.replaceDirection(
+        LedgerDirection.expense,
+        expense,
+        facetPresentation: facets,
+      );
+
+      final narrowed = expense.copyWith(
+        refinements: const <String, Object?>{
+          QueryAmountRange.minimumRefinementKey: 400000,
+          QueryAmountRange.maximumRefinementKey: 900000,
+        },
+      );
+      controller.replaceDirection(LedgerDirection.expense, narrowed);
+
+      expect(
+        controller.amountDomainFor(LedgerDirection.expense),
+        same(facets.amountDomain),
+      );
+      controller.replaceDirection(
+        LedgerDirection.expense,
+        narrowed.copyWith(categoryIds: const <String>{'food'}),
+      );
+      expect(controller.amountDomainFor(LedgerDirection.expense), isNull);
     },
   );
 }

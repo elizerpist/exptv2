@@ -14,6 +14,8 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_g
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
@@ -133,7 +135,9 @@ void main() {
         published,
         isTrue,
         reason: FluviDiagnosticLogger.entries
-            .where((event) => event.message == 'INDEX_SCENE_WINDOW_PREPARE_FAILED')
+            .where(
+              (event) => event.message == 'INDEX_SCENE_WINDOW_PREPARE_FAILED',
+            )
             .map((event) => event.error)
             .join('\n'),
       );
@@ -422,6 +426,87 @@ void main() {
       expect(
         frame.temporalCandidate.effectiveScope,
         core.navigation.state.effectiveScope,
+      );
+    },
+  );
+
+  test(
+    'Mind amount drag publishes an exact resident preview without a Query build or committed navigation mutation',
+    () async {
+      final rows = <DashboardLedgerEntry>[
+        for (final (index, amount) in <int>[100000, 200000, 300000].indexed)
+          DashboardLedgerEntry(
+            id: 'amount-$amount',
+            partnerId: 'partner-$index',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: amount,
+            bookedLocalEpochDay: 20636 - index,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Partner $index',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+      ];
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final committed = core.visibleFrames.value!;
+      final navigation = core.navigation.state;
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 100000,
+            maximumAmountScaled100: 300000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(repository.prepareCalls, 1);
+
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 300000,
+            lowerScaled100: 150000,
+            upperScaled100: 250000,
+          ),
+        ),
+        isTrue,
+      );
+
+      expect(core.visibleFrames.value, same(committed));
+      expect(core.navigation.state, same(navigation));
+      expect(core.currentQuery.scopeFor(LedgerDirection.income), applied);
+      expect(core.visibleFrames.countLane.value!.count.entryCount, 1);
+      expect(
+        core.visibleFrames.logBoxLane.value!.preparedFrame.stableRowIdentities,
+        <String>['amount-200000'],
+      );
+      expect(repository.prepareCalls, 1);
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere((event) => event.stage == 'MIND|PREVIEW_FRAME')
+            .scope,
+        contains('repositoryRequests=0 indexBuilds=0 canonicalCommits=0'),
       );
     },
   );

@@ -115,4 +115,38 @@ void main() {
       );
     },
   );
+
+  test('Mind domain identity excludes only the edited amount refinement', () {
+    final applied = CurrentLedgerQueryScope(
+      direction: LedgerDirection.expense,
+      timeScope: const AllTimeScope(),
+      categoryIds: const <String>{'housing'},
+      partnerIds: const <String>{'landlord'},
+      refinements: const <String, Object?>{
+        QueryAmountRange.minimumRefinementKey: 200000,
+        QueryAmountRange.maximumRefinementKey: 700000,
+        'noteContains': 'rent',
+      },
+    );
+
+    final domainScope = QueryAmountRange.domainScope(applied);
+    expect(domainScope.direction, applied.direction);
+    expect(domainScope.timeScope, applied.timeScope);
+    expect(domainScope.categoryIds, applied.categoryIds);
+    expect(domainScope.partnerIds, applied.partnerIds);
+    expect(domainScope.refinements, const <String, Object?>{
+      'noteContains': 'rent',
+    });
+    expect(
+      QueryAmountRange.hasSameDomainIdentity(applied, domainScope),
+      isTrue,
+    );
+    expect(
+      QueryAmountRange.hasSameDomainIdentity(
+        applied,
+        domainScope.copyWith(categoryIds: const <String>{'food'}),
+      ),
+      isFalse,
+    );
+  });
 }

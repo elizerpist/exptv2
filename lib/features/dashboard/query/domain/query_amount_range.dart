@@ -13,6 +13,25 @@ abstract final class QueryAmountRange {
   static const String maximumRefinementKey = 'maximumAmountScaled100';
   static const int minimumScaled100 = 100000; // 1000 HUF
 
+  /// Canonical data identity for the range controlled by this refinement.
+  /// The control's own bounds cannot recursively redefine its source domain;
+  /// every other semantic filter remains part of the identity.
+  static CurrentLedgerQueryScope domainScope(CurrentLedgerQueryScope scope) {
+    if (!scope.refinements.containsKey(minimumRefinementKey) &&
+        !scope.refinements.containsKey(maximumRefinementKey)) {
+      return scope;
+    }
+    final refinements = <String, Object?>{...scope.refinements}
+      ..remove(minimumRefinementKey)
+      ..remove(maximumRefinementKey);
+    return scope.copyWith(refinements: refinements);
+  }
+
+  static bool hasSameDomainIdentity(
+    CurrentLedgerQueryScope first,
+    CurrentLedgerQueryScope second,
+  ) => domainScope(first) == domainScope(second);
+
   static QueryAmountRangeValues resolve({
     required Map<String, Object?> refinements,
     required QueryMenuAmountDomain? amountDomain,

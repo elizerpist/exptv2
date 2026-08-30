@@ -58,6 +58,9 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   int amountPreviewPublishCount = 0;
   int staleAmountPreviewRejectCount = 0;
   int _amountPreviewGeneration = 0;
+  int interactionPreviewPublishCount = 0;
+  int staleInteractionPreviewRejectCount = 0;
+  int _interactionPreviewGeneration = 0;
 
   /// These remain explicit proof counters: neither operation belongs here.
   int logRebindCount = 0;
@@ -110,6 +113,56 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     if (visible == null) return;
     _amountLane.stage(visible, visible.amountPresentationId);
     _amountLane.flush();
+  }
+
+  /// Publishes one complete RAM-derived filter preview to the narrow content
+  /// lanes without replacing structural navigation or the committed frame.
+  /// This is the Mind drag boundary: rows/count/amount move together while a
+  /// later release remains the sole canonical Query/index publication.
+  bool publishPreparedInteractionPreview(
+    DashboardVisibleFrame frame, {
+    required int previewGeneration,
+  }) {
+    if (previewGeneration < _interactionPreviewGeneration) {
+      staleInteractionPreviewRejectCount += 1;
+      return false;
+    }
+    if (previewGeneration == _interactionPreviewGeneration &&
+        _logBoxLane.value?.logBoxPresentationId == frame.logBoxPresentationId) {
+      return false;
+    }
+    _interactionPreviewGeneration = previewGeneration;
+    _amountLane.stage(frame, frame.amountPresentationId);
+    _countLane.stage(frame, frame.countPresentationId);
+    _logBoxPresentationLane.stage(
+      DashboardLogBoxPresentationBinding.fromFrame(frame),
+    );
+    _logBoxLane.stage(frame, frame.logBoxPresentationId);
+    final amountChanged = _amountLane.flush();
+    final countChanged = _countLane.flush();
+    _flushLogBoxPresentationLane();
+    final logBoxChanged = _logBoxLane.flush();
+    if (logBoxChanged) logBoxPayloadNotifyCount += 1;
+    final published = amountChanged || countChanged || logBoxChanged;
+    if (published) interactionPreviewPublishCount += 1;
+    return published;
+  }
+
+  void clearPreparedInteractionPreview({required int previewGeneration}) {
+    if (previewGeneration < _interactionPreviewGeneration) return;
+    _interactionPreviewGeneration = previewGeneration;
+    final committed = _value;
+    if (committed == null) return;
+    _amountLane.stage(committed, committed.amountPresentationId);
+    _countLane.stage(committed, committed.countPresentationId);
+    _logBoxPresentationLane.stage(
+      DashboardLogBoxPresentationBinding.fromFrame(committed),
+    );
+    _logBoxLane.stage(committed, committed.logBoxPresentationId);
+    _amountLane.flush();
+    _countLane.flush();
+    _flushLogBoxPresentationLane();
+    if (_logBoxLane.flush()) logBoxPayloadNotifyCount += 1;
   }
 
   bool publish(

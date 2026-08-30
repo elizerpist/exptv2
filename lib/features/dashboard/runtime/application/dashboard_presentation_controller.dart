@@ -440,6 +440,37 @@ final class DashboardPresentationController {
     );
   }
 
+  /// Stages an exact prepared filter preview into amount/count/LogBox lanes
+  /// without replacing the installed index, navigation, or committed frame.
+  bool publishPreparedInteractionPreview({
+    required PreparedDashboardIndex index,
+    required DashboardNavigationState state,
+    required int previewGeneration,
+  }) {
+    final catalog = index.catalogForKey(state.parentQueryKey);
+    final selectedIndex = _selectedIndex(state, catalog);
+    final selectedEntry = catalog.entryAtLogicalIndex(selectedIndex);
+    final queryKey = state.isRailOpen
+        ? selectedEntry.queryKey
+        : state.parentQueryKey;
+    final frame = DashboardVisibleFrame.fromPrepared(
+      index.materializeFrameForPreparation(queryKey),
+      parentQueryKey: state.parentQueryKey,
+      plane: state.plane,
+      railOpen: state.isRailOpen,
+      semanticIndex: selectedIndex,
+      childLabel: selectedEntry.label,
+      navigationEpoch: state.navigationEpoch,
+      presentationEpoch: _presentationEpoch,
+      frameGeneration: visibleFrames.nextFrameGeneration(),
+      mode: DashboardVisibleMode.preview,
+    );
+    return visibleFrames.publishPreparedInteractionPreview(
+      frame,
+      previewGeneration: previewGeneration,
+    );
+  }
+
   void selectDirection(LedgerDirection direction) {
     if (direction == navigation.state.parentQueryScope.direction) return;
     commitDirectionCandidate(directionCandidate(direction));

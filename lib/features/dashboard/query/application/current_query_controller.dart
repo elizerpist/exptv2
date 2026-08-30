@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/dashboard_directional_query_set.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
+import '../domain/query_amount_range.dart';
 import '../domain/query_menu_data.dart';
 
 /// The single owner of the applied dashboard Query Menu configuration.
@@ -18,6 +19,8 @@ final class CurrentQueryController extends ChangeNotifier {
   DashboardDirectionalQuerySet _queries;
   final Map<LedgerDirection, QueryMenuData?> _facetPresentations =
       <LedgerDirection, QueryMenuData?>{};
+  final Map<LedgerDirection, _AmountDomainBinding> _amountDomains =
+      <LedgerDirection, _AmountDomainBinding>{};
   LedgerDirection _lastChangedDirection;
   int _generation = 0;
   final Map<LedgerDirection, int> _directionGenerations =
@@ -41,6 +44,15 @@ final class CurrentQueryController extends ChangeNotifier {
 
   QueryMenuData? facetPresentationFor(LedgerDirection direction) =>
       _facetPresentations[direction];
+
+  QueryMenuAmountDomain? amountDomainFor(LedgerDirection direction) {
+    final binding = _amountDomains[direction];
+    if (binding == null ||
+        binding.scope != QueryAmountRange.domainScope(scopeFor(direction))) {
+      return null;
+    }
+    return binding.domain;
+  }
 
   int get generation => _generation;
   int generationFor(LedgerDirection direction) =>
@@ -75,6 +87,7 @@ final class CurrentQueryController extends ChangeNotifier {
     }
     final previousScope = scopeFor(direction);
     final previousPresentation = facetPresentationFor(direction);
+    final previousDomain = _amountDomains[direction];
     // A renderer-side temporary facet gap is not a new applied Query result.
     // Keep the exact QueryMenuData that was accepted for this unchanged scope
     // so every host retains the same canonical amount domain until a new
@@ -82,16 +95,48 @@ final class CurrentQueryController extends ChangeNotifier {
     final nextPresentation =
         facetPresentation ??
         (nextScope == previousScope ? previousPresentation : null);
+    final domainScope = QueryAmountRange.domainScope(nextScope);
+    final nextDomain = facetPresentation != null
+        ? _AmountDomainBinding(
+            scope: domainScope,
+            domain: facetPresentation.amountDomain,
+          )
+        : previousDomain?.scope == domainScope
+        ? previousDomain
+        : null;
     if (nextScope == previousScope &&
-        nextPresentation == previousPresentation) {
+        nextPresentation == previousPresentation &&
+        nextDomain == previousDomain) {
       return false;
     }
     _queries = _queries.replaceDirection(direction, nextScope);
     _facetPresentations[direction] = nextPresentation;
+    if (nextDomain == null) {
+      _amountDomains.remove(direction);
+    } else {
+      _amountDomains[direction] = nextDomain;
+    }
     _lastChangedDirection = direction;
     _generation += 1;
     _directionGenerations[direction] = generationFor(direction) + 1;
     notifyListeners();
     return true;
   }
+}
+
+@immutable
+final class _AmountDomainBinding {
+  const _AmountDomainBinding({required this.scope, required this.domain});
+
+  final CurrentLedgerQueryScope scope;
+  final QueryMenuAmountDomain domain;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _AmountDomainBinding &&
+      other.scope == scope &&
+      identical(other.domain, domain);
+
+  @override
+  int get hashCode => Object.hash(scope, identityHashCode(domain));
 }

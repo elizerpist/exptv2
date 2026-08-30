@@ -241,6 +241,50 @@ void main() {
       );
     },
   );
+
+  test(
+    'amount-only applied changes reuse one non-amount domain without loading or refetch',
+    () async {
+      final direction = ValueNotifier<LedgerDirection>(LedgerDirection.expense);
+      addTearDown(direction.dispose);
+      final initial = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: AllTimeScope(),
+        refinements: const <String, Object?>{'minimumAmountScaled100': 200000},
+      );
+      final queries = CurrentQueryController(initialScope: initial);
+      addTearDown(queries.dispose);
+      final repository = _DeferredRepository();
+      final loader = DashboardAppliedQueryFacetLoader(
+        currentQuery: queries,
+        directionChanges: direction,
+        activeDirection: () => direction.value,
+        repository: repository,
+      );
+      addTearDown(loader.dispose);
+
+      final first = loader.start();
+      expect(repository.requestedScopes.single.refinements, isEmpty);
+      repository.completeNext(_data(maximum: 26000000));
+      await first;
+      expect(loader.state, DashboardAppliedQueryFacetLoadState.ready);
+
+      queries.replaceDirection(
+        LedgerDirection.expense,
+        initial.copyWith(
+          refinements: const <String, Object?>{
+            'minimumAmountScaled100': 700000,
+            'maximumAmountScaled100': 1500000,
+          },
+        ),
+      );
+      await Future<void>.microtask(() {});
+
+      expect(repository.requestedScopes, hasLength(1));
+      expect(loader.state, DashboardAppliedQueryFacetLoadState.ready);
+      expect(queries.amountDomainFor(LedgerDirection.expense), isNotNull);
+    },
+  );
 }
 
 QueryMenuData _data({required int maximum}) => QueryMenuData(

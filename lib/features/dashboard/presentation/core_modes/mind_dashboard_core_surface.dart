@@ -25,6 +25,9 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.queryAmountRangeError,
     this.onQueryAmountRangeRetry,
     this.onQueryAmountRangeCommitted,
+    this.onQueryAmountRangePreviewChanged,
+    this.onQueryAmountRangeInteractionStarted,
+    this.onQueryAmountRangeInteractionEnded,
     this.headerVisualController,
     this.headerVisualFrame,
   });
@@ -37,6 +40,9 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final Object? Function()? queryAmountRangeError;
   final VoidCallback? onQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
+  final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangePreviewChanged;
+  final VoidCallback? onQueryAmountRangeInteractionStarted;
+  final VoidCallback? onQueryAmountRangeInteractionEnded;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
@@ -76,6 +82,12 @@ class MindDashboardCoreSurface extends StatelessWidget {
                           errorFor: queryAmountRangeError,
                           onRetry: onQueryAmountRangeRetry,
                           onRangeCommitted: onQueryAmountRangeCommitted!,
+                          onRangePreviewChanged:
+                              onQueryAmountRangePreviewChanged,
+                          onInteractionStarted:
+                              onQueryAmountRangeInteractionStarted,
+                          onInteractionEnded:
+                              onQueryAmountRangeInteractionEnded,
                         ),
                       ),
                     ),
@@ -114,6 +126,9 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
     required this.errorFor,
     required this.onRetry,
     required this.onRangeCommitted,
+    required this.onRangePreviewChanged,
+    required this.onInteractionStarted,
+    required this.onInteractionEnded,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -123,6 +138,9 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
   final Object? Function()? errorFor;
   final VoidCallback? onRetry;
   final ValueChanged<QueryAmountRangeValues> onRangeCommitted;
+  final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
+  final VoidCallback? onInteractionStarted;
+  final VoidCallback? onInteractionEnded;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +150,9 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
       errorFor: errorFor,
       onRetry: onRetry,
       onRangeCommitted: onRangeCommitted,
+      onRangePreviewChanged: onRangePreviewChanged,
+      onInteractionStarted: onInteractionStarted,
+      onInteractionEnded: onInteractionEnded,
     );
     final lifecycle = lifecycleChanges;
     if (lifecycle == null) {
@@ -157,6 +178,9 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
     required this.errorFor,
     required this.onRetry,
     required this.onRangeCommitted,
+    required this.onRangePreviewChanged,
+    required this.onInteractionStarted,
+    required this.onInteractionEnded,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -164,6 +188,9 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
   final Object? Function()? errorFor;
   final VoidCallback? onRetry;
   final ValueChanged<QueryAmountRangeValues> onRangeCommitted;
+  final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
+  final VoidCallback? onInteractionStarted;
+  final VoidCallback? onInteractionEnded;
 
   @override
   State<_MindQueryAmountRangeBinding> createState() =>
@@ -228,6 +255,9 @@ final class _MindQueryAmountRangeBindingState
       child: QueryAmountRangeControl(
         key: const ValueKey('mind-query-amount-range'),
         values: values,
+        onRangePreviewChanged: widget.onRangePreviewChanged,
+        onInteractionStarted: widget.onInteractionStarted,
+        onInteractionEnded: widget.onInteractionEnded,
         onRangeCommitted: widget.onRangeCommitted,
       ),
     );

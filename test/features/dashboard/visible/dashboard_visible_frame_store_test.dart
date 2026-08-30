@@ -198,6 +198,34 @@ void main() {
     );
   });
 
+  test(
+    'Mind interaction preview updates content lanes without replacing committed navigation',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final preview = _frame(day: 8, epoch: 3, generation: 21);
+      store.publish(committed);
+
+      expect(
+        store.publishPreparedInteractionPreview(preview, previewGeneration: 7),
+        isTrue,
+      );
+      expect(store.value, same(committed));
+      expect(store.navigationLane.value, same(committed));
+      expect(store.amountLane.value, same(preview));
+      expect(store.countLane.value, same(preview));
+      expect(store.logBoxLane.value, same(preview));
+      expect(store.interactionPreviewPublishCount, 1);
+
+      store.clearPreparedInteractionPreview(previewGeneration: 8);
+      expect(store.value, same(committed));
+      expect(store.amountLane.value, same(committed));
+      expect(store.countLane.value, same(committed));
+      expect(store.logBoxLane.value, same(committed));
+    },
+  );
+
   test('settle promotion requires the exact visible key and epoch', () {
     final store = DashboardVisibleFrameStore();
     final preview = _frame(day: 8, epoch: 11, generation: 20);

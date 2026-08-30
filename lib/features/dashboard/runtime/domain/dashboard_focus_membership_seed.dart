@@ -17,6 +17,7 @@ final class DashboardFocusMembershipSeed {
     : entries = List<DashboardLedgerEntry>.unmodifiable(entries),
       _categoryIndices = _index(entries, (entry) => entry.categoryId),
       _partnerIndices = _index(entries, (entry) => entry.partnerId),
+      _amountIndex = _DashboardPreparedAmountIndex(entries),
       _searchIndex = DashboardPreparedLedgerSearchIndex(entries),
       _allOrdinals = DashboardFocusOrdinalSet.range(entries.length) {
     final ids = entries.map((entry) => entry.id).toSet();
@@ -28,6 +29,7 @@ final class DashboardFocusMembershipSeed {
   final List<DashboardLedgerEntry> entries;
   final Map<String, DashboardFocusOrdinalSet> _categoryIndices;
   final Map<String, DashboardFocusOrdinalSet> _partnerIndices;
+  final _DashboardPreparedAmountIndex _amountIndex;
   final DashboardPreparedLedgerSearchIndex _searchIndex;
   final DashboardFocusOrdinalSet _allOrdinals;
 
@@ -43,15 +45,22 @@ final class DashboardFocusMembershipSeed {
         0,
         (sum, indices) => sum + indices.length * 4,
       ) +
+      _amountIndex.estimatedBytes +
       _searchIndex.estimatedBytes;
 
   DashboardFocusMembershipProjection select({
     String? categoryId,
     String? partnerId,
     String? normalizedSearch,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
   }) {
     final lookup = Stopwatch()..start();
-    if (categoryId == null && partnerId == null && normalizedSearch == null) {
+    if (categoryId == null &&
+        partnerId == null &&
+        normalizedSearch == null &&
+        minimumAmountScaled100 == null &&
+        maximumAmountScaled100 == null) {
       lookup.stop();
       return DashboardFocusMembershipProjection._(
         seed: this,
@@ -61,6 +70,13 @@ final class DashboardFocusMembershipSeed {
     }
     final category = categoryId == null ? null : _categoryIndices[categoryId];
     final partner = partnerId == null ? null : _partnerIndices[partnerId];
+    final amount =
+        minimumAmountScaled100 == null && maximumAmountScaled100 == null
+        ? null
+        : _amountIndex.select(
+            minimumScaled100: minimumAmountScaled100,
+            maximumScaled100: maximumAmountScaled100,
+          );
     if ((categoryId != null && category == null) ||
         (partnerId != null && partner == null)) {
       lookup.stop();
@@ -70,11 +86,17 @@ final class DashboardFocusMembershipSeed {
         membershipLookupMicros: lookup.elapsedMicroseconds,
       );
     }
-    DashboardFocusOrdinalSet selected = category ?? partner ?? _allOrdinals;
+    DashboardFocusOrdinalSet selected =
+        category ?? partner ?? amount ?? _allOrdinals;
     var intersectionMicros = 0;
-    if (category != null && partner != null) {
+    for (final dimension in <DashboardFocusOrdinalSet?>[
+      category,
+      partner,
+      amount,
+    ]) {
+      if (dimension == null || identical(dimension, selected)) continue;
       final intersection = Stopwatch()..start();
-      selected = DashboardFocusOrdinalSet.intersection(category, partner);
+      selected = DashboardFocusOrdinalSet.intersection(selected, dimension);
       intersection.stop();
       intersectionMicros += intersection.elapsedMicroseconds;
     }
@@ -118,6 +140,85 @@ final class DashboardFocusMembershipSeed {
       ),
     );
   }
+}
+
+/// Amount-sorted immutable membership. Boundary lookup is logarithmic and
+/// materializes only matching ordinals; the final ordinal sort preserves the
+/// prepared timeline order required by every other focus dimension.
+final class _DashboardPreparedAmountIndex {
+  _DashboardPreparedAmountIndex(List<DashboardLedgerEntry> entries)
+    : _values = List<_DashboardAmountOrdinal>.unmodifiable(
+        <_DashboardAmountOrdinal>[
+          for (var ordinal = 0; ordinal < entries.length; ordinal += 1)
+            _DashboardAmountOrdinal(
+              amountScaled100: entries[ordinal].amountMinor,
+              ordinal: ordinal,
+            ),
+        ]..sort((left, right) {
+          final amount = left.amountScaled100.compareTo(right.amountScaled100);
+          return amount != 0 ? amount : left.ordinal.compareTo(right.ordinal);
+        }),
+      );
+
+  final List<_DashboardAmountOrdinal> _values;
+
+  int get estimatedBytes => _values.length * 12;
+
+  DashboardFocusOrdinalSet select({
+    int? minimumScaled100,
+    int? maximumScaled100,
+  }) {
+    if (minimumScaled100 != null &&
+        maximumScaled100 != null &&
+        minimumScaled100 > maximumScaled100) {
+      return DashboardFocusOrdinalSet.empty;
+    }
+    final start = _lowerBound(minimumScaled100 ?? -0x7FFFFFFFFFFFFFFF);
+    final end = _upperBound(maximumScaled100 ?? 0x7FFFFFFFFFFFFFFF);
+    if (start >= end) return DashboardFocusOrdinalSet.empty;
+    final ordinals = <int>[
+      for (var index = start; index < end; index += 1) _values[index].ordinal,
+    ]..sort();
+    return DashboardFocusOrdinalSet.fromSorted(ordinals);
+  }
+
+  int _lowerBound(int value) {
+    var low = 0;
+    var high = _values.length;
+    while (low < high) {
+      final middle = low + ((high - low) >> 1);
+      if (_values[middle].amountScaled100 < value) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
+  }
+
+  int _upperBound(int value) {
+    var low = 0;
+    var high = _values.length;
+    while (low < high) {
+      final middle = low + ((high - low) >> 1);
+      if (_values[middle].amountScaled100 <= value) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
+  }
+}
+
+final class _DashboardAmountOrdinal {
+  const _DashboardAmountOrdinal({
+    required this.amountScaled100,
+    required this.ordinal,
+  });
+
+  final int amountScaled100;
+  final int ordinal;
 }
 
 /// Central text normalization for prepared Ledger search.

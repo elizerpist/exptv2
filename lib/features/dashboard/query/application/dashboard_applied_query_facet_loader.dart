@@ -7,6 +7,7 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../data/query_menu_repository.dart';
 import '../domain/current_ledger_query_scope.dart';
 import '../domain/ledger_direction.dart';
+import '../domain/query_amount_range.dart';
 import '../domain/query_menu_data.dart';
 import 'current_query_controller.dart';
 
@@ -94,7 +95,8 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
     if (_disposed) return Future<void>.value();
     final direction = _activeDirection();
     final scope = _currentQuery.scopeFor(direction);
-    final existing = _currentQuery.facetPresentationFor(direction);
+    final domainScope = QueryAmountRange.domainScope(scope);
+    final existing = _currentQuery.amountDomainFor(direction);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MIND|RANGE_REQUIRED',
@@ -104,6 +106,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         scope:
             'reason=$reason requestGeneration=$_generation '
             'currentQueryGeneration=${_currentQuery.generationFor(direction)} '
+            'domainQueryKey=${domainScope.key.value} '
             'canonicalDomain=${existing == null ? 'absent' : 'present'}',
       ),
     );
@@ -116,8 +119,8 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
           scope:
               'source=currentQuery reason=$reason '
               'currentQueryGeneration=${_currentQuery.generationFor(direction)} '
-              'minimum=${existing.amountDomain.minimumAmountScaled100} '
-              'maximum=${existing.amountDomain.maximumAmountScaled100}',
+              'minimum=${existing.minimumAmountScaled100} '
+              'maximum=${existing.maximumAmountScaled100}',
         ),
       );
       _setState(
@@ -126,13 +129,13 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         direction: direction,
         generation: _generation,
         reason: 'canonicalAlreadyReady:$reason',
-        data: existing,
+        amountDomain: existing,
       );
       return Future<void>.value();
     }
     final active = _activeOperation;
     if (active != null &&
-        _activeScope == scope &&
+        _activeScope == domainScope &&
         _activeRequestDirection == direction) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -146,7 +149,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
       return active;
     }
     final generation = ++_generation;
-    _activeScope = scope;
+    _activeScope = domainScope;
     _activeRequestDirection = direction;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -180,7 +183,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         _load(
           generation: generation,
           direction: direction,
-          scope: scope,
+          scope: domainScope,
         ).whenComplete(() {
           if (identical(_activeOperation, operation)) {
             _activeOperation = null;
@@ -217,16 +220,22 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
       if (_disposed ||
           generation != _generation ||
           _activeDirection() != direction ||
-          _currentQuery.scopeFor(direction) != scope ||
-          _currentQuery.facetPresentationFor(direction) != null) {
+          !QueryAmountRange.hasSameDomainIdentity(
+            _currentQuery.scopeFor(direction),
+            scope,
+          ) ||
+          _currentQuery.amountDomainFor(direction) != null) {
         final rejectionReason = _disposed
             ? 'disposed'
             : generation != _generation
             ? 'superseded'
             : _activeDirection() != direction
             ? 'directionChanged'
-            : _currentQuery.scopeFor(direction) != scope
-            ? 'scopeChanged'
+            : !QueryAmountRange.hasSameDomainIdentity(
+                _currentQuery.scopeFor(direction),
+                scope,
+              )
+            ? 'domainScopeChanged'
             : 'canonicalAlreadyReady';
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -242,7 +251,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
       }
       final published = _currentQuery.replaceDirection(
         direction,
-        scope,
+        _currentQuery.scopeFor(direction),
         facetPresentation: data,
       );
       FluviDiagnosticLogger.log(
@@ -260,7 +269,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
               'entryCount=${data.result.entryCount}',
         ),
       );
-      if (published || _currentQuery.facetPresentationFor(direction) != null) {
+      if (published || _currentQuery.amountDomainFor(direction) != null) {
         _setState(
           DashboardAppliedQueryFacetLoadState.ready,
           scope: scope,
@@ -312,6 +321,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
     required int generation,
     required String reason,
     QueryMenuData? data,
+    QueryMenuAmountDomain? amountDomain,
     Object? error,
   }) {
     final changed =
@@ -334,8 +344,8 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         scope:
             'state=${next.name} reason=$reason '
             'loading=${next == DashboardAppliedQueryFacetLoadState.loading} '
-            'minimum=${data?.amountDomain.minimumAmountScaled100 ?? '-'} '
-            'maximum=${data?.amountDomain.maximumAmountScaled100 ?? '-'} '
+            'minimum=${amountDomain?.minimumAmountScaled100 ?? data?.amountDomain.minimumAmountScaled100 ?? '-'} '
+            'maximum=${amountDomain?.maximumAmountScaled100 ?? data?.amountDomain.maximumAmountScaled100 ?? '-'} '
             'currentQueryGeneration=${_currentQuery.generationFor(direction)}',
         error: error == null ? null : '$error',
       ),

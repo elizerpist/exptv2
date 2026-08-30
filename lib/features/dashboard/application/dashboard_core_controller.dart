@@ -23,6 +23,7 @@ import '../motion/dashboard_semantic_catalog.dart';
 import '../query/domain/ledger_direction.dart';
 import '../query/domain/current_ledger_query_scope.dart';
 import '../query/domain/dashboard_directional_query_set.dart';
+import '../query/domain/query_amount_range.dart';
 import '../query/application/current_query_controller.dart';
 import '../query/application/query_composer_controller.dart';
 import '../query/domain/query_menu_data.dart';
@@ -887,6 +888,13 @@ final class DashboardCoreController {
   int _committedReadyAheadPriorityEpoch = 0;
   int? _committedReadyAheadPriorityKickEpoch;
   final Set<int> _activeVerticalPointerIntents = <int>{};
+  PreparedDashboardIndex? _mindAmountPreviewBaseIndex;
+  CurrentLedgerQueryScope? _mindAmountPreviewDomainScope;
+  int _mindAmountPreviewPrimeGeneration = 0;
+  int _mindAmountPreviewGeneration = 0;
+  int _mindAmountInteractionGeneration = 0;
+  int _mindAmountInteractionPreviewCount = 0;
+  int _mindAmountInteractionPublishedCount = 0;
   PreparedDashboardIndex? _focusBaseIndex;
   // A live facet publishes its prepared first viewport before rich LogBox
   // scene augmentation. Retain the base identity separately so aggregate,
@@ -1263,8 +1271,9 @@ final class DashboardCoreController {
     var focusInvalidatedForIncomingIndex = false;
     if (!isEphemeralFocusPublication) {
       _clearBudgetAvatarFocusHotset();
-      focusInvalidatedForIncomingIndex =
-          _invalidateFocusForIndexRevision(index);
+      focusInvalidatedForIncomingIndex = _invalidateFocusForIndexRevision(
+        index,
+      );
       _invalidatePreparedQueryCandidatesForRevision(index.coreRevision);
     }
     // A database revision is a new immutable base.  If it retired a transient
@@ -1297,6 +1306,7 @@ final class DashboardCoreController {
       }
       beforePublish?.call();
     }
+
     final activeIndexBeforeInstall = preparedIndex;
     if (activeIndexBeforeInstall != null &&
         activeIndexBeforeInstall.coreRevision != index.coreRevision) {
@@ -3253,6 +3263,213 @@ final class DashboardCoreController {
   /// publication-critical scenes exist. Noncritical bank completion remains
   /// cancellable background maintenance; the callbacks make navigation, index
   /// and applied-query pointer switch at one publication boundary.
+  Future<bool> primeMindAmountPreviewDomain() async {
+    if (_disposed) return false;
+    final direction = navigation.state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final installed = dataRuntime.currentIndex;
+    if (installed != null &&
+        installed.coreRevision == coreRevision &&
+        installed.key.matchesScope(domainScope)) {
+      _mindAmountPreviewBaseIndex = installed;
+      _mindAmountPreviewDomainScope = domainScope;
+      return true;
+    }
+    final retained = _mindAmountPreviewBaseIndex;
+    if (retained != null &&
+        retained.coreRevision == coreRevision &&
+        _mindAmountPreviewDomainScope == domainScope) {
+      return true;
+    }
+
+    final primeGeneration = ++_mindAmountPreviewPrimeGeneration;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|PREVIEW_BASE_REQUIRED',
+        flowId: 'generation:$primeGeneration',
+        queryKey: domainScope.key.value,
+        direction: direction.name,
+        scope: 'source=nonAmountPreparedQuery',
+      ),
+    );
+    final candidate = await prepareQueryDraft(domainScope);
+    if (_disposed ||
+        primeGeneration != _mindAmountPreviewPrimeGeneration ||
+        !QueryAmountRange.hasSameDomainIdentity(
+          currentQuery.scopeFor(direction),
+          domainScope,
+        ) ||
+        candidate == null) {
+      return false;
+    }
+    _mindAmountPreviewBaseIndex = candidate.index;
+    _mindAmountPreviewDomainScope = domainScope;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|PREVIEW_BASE_READY',
+        flowId: 'generation:$primeGeneration',
+        queryKey: domainScope.key.value,
+        direction: direction.name,
+        coreRevision: candidate.index.coreRevision,
+        scope:
+            'preparedRows=${candidate.index.buildMetrics.uniquePreviewRowCount} '
+            'repositoryWorkDuringDrag=false',
+      ),
+    );
+    return true;
+  }
+
+  void beginMindAmountRangeInteraction() {
+    _mindAmountInteractionGeneration += 1;
+    _mindAmountInteractionPreviewCount = 0;
+    _mindAmountInteractionPublishedCount = 0;
+    final direction = navigation.state.parentQueryScope.direction;
+    final scope = currentQuery.scopeFor(direction);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|DRAG_START',
+        flowId: 'interaction:$_mindAmountInteractionGeneration',
+        queryKey: scope.key.value,
+        direction: direction.name,
+        scope:
+            'baseReady=${_compatibleMindAmountPreviewBase(scope) != null} '
+            'repositoryRequestsDuringDrag=0 indexBuildsDuringDrag=0',
+      ),
+    );
+  }
+
+  /// Publishes one latest-value-wins amount filter over an immutable resident
+  /// index. It does not mutate the applied Query, install an index, read a
+  /// repository, or rotate the structural navigation owner.
+  bool previewMindAmountRange(QueryAmountRangeValues values) {
+    if (_disposed) return false;
+    final direction = navigation.state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    final domain = currentQuery.amountDomainFor(direction);
+    final binding = QueryAmountRangeBinding.ready(
+      scope: appliedScope,
+      amountDomain: domain,
+    );
+    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    if (binding == null || base == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND|PREVIEW_REJECTED',
+          flowId: 'interaction:$_mindAmountInteractionGeneration',
+          queryKey: appliedScope.key.value,
+          direction: direction.name,
+          scope:
+              'reason=${binding == null ? 'domainUnavailable' : 'baseUnavailable'}',
+        ),
+      );
+      return false;
+    }
+    final previewScope = binding.apply(values);
+    final previewQueries = currentQuery.queries.replaceDirection(
+      direction,
+      previewScope,
+    );
+    final availability = DashboardTemporalAvailability.fromTemporalFilter(
+      previewScope.temporalFilter,
+    );
+    final candidate = navigation.appliedQueryCandidate(
+      previewScope,
+      availability: availability,
+      coreRevision: base.coreRevision,
+    );
+    final selectedChildScope = candidate.isRailOpen
+        ? previewScope.copyWith(timeScope: candidate.retainedChildScope)
+        : null;
+    final previewGeneration = ++_mindAmountPreviewGeneration;
+    final derived = DashboardEphemeralFocusDeriver.deriveFast(
+      base: base,
+      effectiveQueries: previewQueries,
+      focusedDirection: direction,
+      categoryFocusId: null,
+      partnerFocusId: null,
+      minimumAmountScaled100: values.lowerScaled100,
+      maximumAmountScaled100: values.upperScaled100,
+      initialYear: candidate.yearCursor,
+      generation: previewGeneration,
+      initialParentScope: candidate.parentQueryScope,
+      initialSelectedChildScope: selectedChildScope,
+    );
+    _mindAmountInteractionPreviewCount += 1;
+    final published = presentation.publishPreparedInteractionPreview(
+      index: derived.index,
+      state: candidate,
+      previewGeneration: previewGeneration,
+    );
+    if (published) _mindAmountInteractionPublishedCount += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|PREVIEW_FRAME',
+        flowId: 'interaction:$_mindAmountInteractionGeneration',
+        queryKey: previewScope.key.value,
+        direction: direction.name,
+        coreRevision: base.coreRevision,
+        entryCount: derived.membershipOrdinalCount,
+        scope:
+            'previewGeneration=$previewGeneration published=$published '
+            'lower=${values.lowerScaled100} upper=${values.upperScaled100} '
+            'membershipMicros=${derived.membershipLookupMicros} '
+            'intersectionMicros=${derived.intersectionMicros} '
+            'rootProjectionMicros=${derived.currentRootProjectionMicros} '
+            'repositoryRequests=0 indexBuilds=0 canonicalCommits=0',
+      ),
+    );
+    return published;
+  }
+
+  void endMindAmountRangeInteraction({required bool committed}) {
+    final direction = navigation.state.parentQueryScope.direction;
+    final scope = currentQuery.scopeFor(direction);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|SLIDER_STABILITY_SUMMARY',
+        flowId: 'interaction:$_mindAmountInteractionGeneration',
+        queryKey: scope.key.value,
+        direction: direction.name,
+        scope:
+            'previewFrames=$_mindAmountInteractionPreviewCount '
+            'previewPublications=$_mindAmountInteractionPublishedCount '
+            'canonicalCommitCount=${committed ? 1 : 0} '
+            'repositoryRequestsDuringDrag=0 indexBuildsDuringDrag=0 '
+            'domainInvalidationCount=0 sliderUnmountCount=0 '
+            'loadingExposureCount=0',
+      ),
+    );
+  }
+
+  void clearMindAmountRangePreview() {
+    final previewGeneration = ++_mindAmountPreviewGeneration;
+    visibleFrames.clearPreparedInteractionPreview(
+      previewGeneration: previewGeneration,
+    );
+  }
+
+  PreparedDashboardIndex? _compatibleMindAmountPreviewBase(
+    CurrentLedgerQueryScope scope,
+  ) {
+    final domainScope = QueryAmountRange.domainScope(scope);
+    final retained = _mindAmountPreviewBaseIndex;
+    if (retained != null &&
+        retained.coreRevision == coreRevision &&
+        _mindAmountPreviewDomainScope == domainScope) {
+      return retained;
+    }
+    final installed = dataRuntime.currentIndex;
+    if (installed == null ||
+        installed.coreRevision != coreRevision ||
+        !installed.key.matchesScope(domainScope)) {
+      return null;
+    }
+    _mindAmountPreviewBaseIndex = installed;
+    _mindAmountPreviewDomainScope = domainScope;
+    return installed;
+  }
+
   Future<bool> applyQuery(
     CurrentLedgerQueryScope draft, {
     QueryMenuData? facetPresentation,

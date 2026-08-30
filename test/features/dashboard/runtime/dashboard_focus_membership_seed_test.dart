@@ -9,12 +9,13 @@ void main() {
     required String partner,
     String? partnerName,
     String? note,
+    int amount = 100,
   }) => DashboardLedgerEntry(
     id: id,
     categoryId: category,
     partnerId: partner,
     direction: 'expense',
-    amountMinor: 100,
+    amountMinor: amount,
     bookedLocalEpochDay: 20,
     bookedLocalTimeMinutes: 600,
     partnerDisplayName: partnerName,
@@ -101,6 +102,32 @@ void main() {
     ]);
 
     expect(seed.select(categoryId: 'utilities').entryIndices, isEmpty);
+  });
+
+  test('amount lookup is inclusive, ordered, and composes with facets', () {
+    final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+      row('a', category: 'food', partner: 'market', amount: 900),
+      row('b', category: 'utilities', partner: 'mvm', amount: 300),
+      row('c', category: 'utilities', partner: 'market', amount: 700),
+      row('d', category: 'food', partner: 'mvm', amount: 500),
+    ]);
+
+    expect(
+      seed
+          .select(minimumAmountScaled100: 400, maximumAmountScaled100: 800)
+          .entryIds,
+      <String>['c', 'd'],
+    );
+    expect(
+      seed
+          .select(
+            categoryId: 'utilities',
+            minimumAmountScaled100: 400,
+            maximumAmountScaled100: 800,
+          )
+          .entryIds,
+      <String>['c'],
+    );
   });
 
   test(
