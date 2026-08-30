@@ -121,13 +121,16 @@ current source checkpoints:
 - Budget core-surface, distribution pager, Partner distribution, and Rhythm
   geometry/layout suite: **33 tests**;
 - immediate first-Avatar-fling focus-hotset gate and the combined G1/G2/G3
-  affected suite: **95 tests**.
+  affected suite: **96 tests**.
 - the complete current `core_dashboard_test.dart` production-parent suite:
   **24 tests**, including G3 live-ballistic takeover, G4 every-5%-step
   collapse proxy, G5 ready/unavailable Mind hosts, and the unified/split
   surface checks.
 - motion-density, zero-I/O navigation, carousel ballistic diagnostics/physics,
   and time-navigation target suite: **43 tests**.
+- the latest post-r56 combined Avatar/quick-edit/Budget-presentation,
+  Core ephemeral-focus, Core Query-application, and production-parent Core
+  Dashboard run: **172 tests**.
 
 The current exact G3 production-parent ballistic-takeover gate is also green.
 The former failed runs that named obsolete test paths did not execute a failing
@@ -169,3 +172,34 @@ at this no-input boundary. The same test now records **0 misses**, eight
 hotset promotions, and `uiIsolateMicros=0` for every active-motion crossing.
 This is a source-level critical-path closure only: no device is connected, so
 G2 remains `PARTIAL` pending the required visible time-vs-Avatar fling matrix.
+
+## Continued G2 revision-boundary evidence (Fluvi Logs r56)
+
+The newest Drive revision is **56** (2026-08-29 21:16 UTC); it supersedes the
+previous r54 reference. It contains an `INDEX_SCENE_WINDOW_PREPARE_FAILED`
+with `Prepared index has no catalog for ...categories:utilities...` after
+`FOCUS_INVALIDATED reason=coreRevisionChanged`.
+
+The new real-controller regression
+`RG-G2: a new base revision cannot request a focused catalog from the retired
+ephemeral index` first failed on the prior current source with exactly that
+error and `published=false`. The cause was proven: `installPreparedIndex`
+cleared an obsolete ephemeral focus but still derived its next scene bank from
+the old focused `navigation.state`.
+
+The repair derives a base-query `DashboardNavigationState` through the
+existing `DashboardNavigationController.appliedQueryCandidate` owner, prepares
+that bank before publication, then commits the same base query through
+`replaceAppliedQuery` at the existing atomic publication boundary. It creates
+no second navigation or Query state. The regression now asserts successful
+publication, no catalog-preparation error, cleared focus/category filter, and
+the new visible revision. The combined current ephemeral-focus and
+scene-window-rotation suites passed **58 tests**; the full Core Query
+application suite passed **52 tests**; the G1/G2/G3 affected suite passed
+**96 tests**; the full current CoreDashboard parent suite passed **24 tests**;
+the latest six-file combined regression run passed **172 tests**; focused
+analyzer passed.
+
+This closes this specific r56 source path only. G2 remains `PARTIAL` until the
+required physical Avatar motion matrix proves smoothness and the absence of
+crossing-scaled work on a device.

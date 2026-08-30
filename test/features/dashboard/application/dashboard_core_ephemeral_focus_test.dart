@@ -24,6 +24,8 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_sce
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 
+import '../runtime/dashboard_runtime_test_fixtures.dart';
+
 void main() {
   test(
     'focus publication narrows a derived index and clearing restores the retained base without a repository read',
@@ -95,6 +97,59 @@ void main() {
       expect(ready.scope, contains('fullBaseRowsScanned=0'));
       expect(ready.scope, contains('copiedPreparedRows=0'));
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'RG-G2: a new base revision cannot request a focused catalog from the retired ephemeral index',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        ),
+        isTrue,
+      );
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+      );
+      FluviDiagnosticLogger.clear();
+
+      final published = await core.installPreparedIndex(
+        buildRuntimeTestIndex(revision: 2, generation: 2),
+        publicationState: core.navigation.state,
+      );
+
+      expect(
+        published,
+        isTrue,
+        reason: FluviDiagnosticLogger.entries
+            .where((event) => event.message == 'INDEX_SCENE_WINDOW_PREPARE_FAILED')
+            .map((event) => event.error)
+            .join('\n'),
+      );
+      expect(core.focus.state, isNull);
+      expect(core.navigation.state.parentQueryScope.categoryIds, isEmpty);
+      expect(core.visibleFrames.value!.coreRevision, 2);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.message == 'INDEX_SCENE_WINDOW_PREPARE_FAILED',
+        ),
+        isEmpty,
+        reason:
+            'A revision activation may retire the ephemeral focus, but the '
+            'new base scene bank must never ask its index for that retired '
+            'category catalog.',
+      );
     },
   );
 

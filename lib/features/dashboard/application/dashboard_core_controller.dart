@@ -1260,10 +1260,42 @@ final class DashboardCoreController {
     int? ephemeralFocusGeneration,
   }) async {
     if (_disposed || !(shouldPublish?.call() ?? true)) return false;
+    var focusInvalidatedForIncomingIndex = false;
     if (!isEphemeralFocusPublication) {
       _clearBudgetAvatarFocusHotset();
-      _invalidateFocusForIndexRevision(index);
+      focusInvalidatedForIncomingIndex =
+          _invalidateFocusForIndexRevision(index);
       _invalidatePreparedQueryCandidatesForRevision(index.coreRevision);
+    }
+    // A database revision is a new immutable base.  If it retired a transient
+    // Avatar focus, [navigation.state] still describes that old focused
+    // Query until the new scene bank is ready.  Never derive the new bank
+    // from that retired scope: derive the exact base candidate first, then
+    // commit it only at this publication's existing atomic boundary.
+    final incomingBaseScope = focusInvalidatedForIncomingIndex
+        ? currentQuery.scopeFor(navigation.state.parentQueryScope.direction)
+        : null;
+    final incomingBaseAvailability = incomingBaseScope == null
+        ? null
+        : DashboardTemporalAvailability.fromTemporalFilter(
+            incomingBaseScope.temporalFilter,
+          );
+    final targetState = incomingBaseScope == null
+        ? publicationState ?? navigation.state
+        : navigation.appliedQueryCandidate(
+            incomingBaseScope,
+            availability: incomingBaseAvailability!,
+            coreRevision: index.coreRevision,
+          );
+    void publishAtIncomingIndexBoundary() {
+      if (incomingBaseScope != null) {
+        navigation.replaceAppliedQuery(
+          incomingBaseScope,
+          availability: incomingBaseAvailability!,
+          coreRevision: index.coreRevision,
+        );
+      }
+      beforePublish?.call();
     }
     final activeIndexBeforeInstall = preparedIndex;
     if (activeIndexBeforeInstall != null &&
@@ -1291,13 +1323,13 @@ final class DashboardCoreController {
     final activate = _sceneWindowActivator;
     if (prepare == null || activate == null) {
       if (!(shouldPublish?.call() ?? true)) return false;
-      beforePublish?.call();
+      publishAtIncomingIndexBoundary();
       if (!(shouldPublish?.call() ?? true)) return false;
       _publishIndex(
         index,
         preparedRevisionBundle: _preparedRevisionBundleFor(
           index,
-          publicationState: publicationState ?? navigation.state,
+          publicationState: targetState,
           budgetLimitSnapshot: budgetLimitSnapshot,
           partnerDistributionSnapshot: partnerDistributionSnapshot,
         ),
@@ -1310,7 +1342,6 @@ final class DashboardCoreController {
       // bounded prepared frame. Make that generation authoritative now. The
       // rich scene bank is visual augmentation and may not hold the facet,
       // amount, LogBox membership or a subsequent pointer hostage.
-      final targetState = publicationState ?? navigation.state;
       final nextBundle = _preparedRevisionBundleFor(
         index,
         publicationState: targetState,
@@ -1318,7 +1349,7 @@ final class DashboardCoreController {
         partnerDistributionSnapshot: partnerDistributionSnapshot,
       );
       if (!(shouldPublish?.call() ?? true)) return false;
-      beforePublish?.call();
+      publishAtIncomingIndexBoundary();
       if (!(shouldPublish?.call() ?? true)) return false;
       _publishIndex(index, preparedRevisionBundle: nextBundle);
       afterPublish?.call();
@@ -1381,9 +1412,9 @@ final class DashboardCoreController {
           index: index,
           budgetLimitSnapshot: budgetLimitSnapshot,
           partnerDistributionSnapshot: partnerDistributionSnapshot,
-          beforePublish: beforePublish,
+          beforePublish: publishAtIncomingIndexBoundary,
           afterPublish: afterPublish,
-          publicationState: publicationState,
+          publicationState: targetState,
           shouldPublish: shouldPublish,
           isEphemeralFocusPublication: isEphemeralFocusPublication,
         );
@@ -1399,7 +1430,6 @@ final class DashboardCoreController {
       );
       return false;
     }
-    final targetState = publicationState ?? navigation.state;
     final nextBundle = _preparedRevisionBundleFor(
       index,
       publicationState: targetState,
@@ -1476,7 +1506,7 @@ final class DashboardCoreController {
       }
       _activateSceneWindow(targetWindow, activate: activate);
       stagedFromActiveResources = false;
-      beforePublish?.call();
+      publishAtIncomingIndexBoundary();
       if (!(shouldPublish?.call() ?? true)) {
         discardStaleActiveResourceStage();
         FluviDiagnosticLogger.log(
@@ -5531,21 +5561,22 @@ final class DashboardCoreController {
     _clearFocusWithoutRestoration(reason: 'baseQueryChanged');
   }
 
-  void _invalidateFocusForIndexRevision(PreparedDashboardIndex index) {
+  bool _invalidateFocusForIndexRevision(PreparedDashboardIndex index) {
     final state = focus.state;
     if (state == null) {
       final provisionalIndex = _provisionalFocusBaseIndex;
       if (provisionalIndex == null ||
           provisionalIndex.coreRevision == index.coreRevision) {
-        return;
+        return false;
       }
       _clearFocusWithoutRestoration(reason: 'coreRevisionChanged');
-      return;
+      return true;
     }
     if (state.anchor.coreRevision == index.coreRevision) {
-      return;
+      return false;
     }
     _clearFocusWithoutRestoration(reason: 'coreRevisionChanged');
+    return true;
   }
 
   void _clearFocusWithoutRestoration({required String reason}) {
