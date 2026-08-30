@@ -255,6 +255,36 @@ void main() {
     );
   });
 
+  test(
+    'motion isolation gate permits one structural LogBox bind but rejects a rebuild stream',
+    () {
+      final reports = <String, Map<String, Object?>>{
+        'I': _motionGateReport(buildMisses: 0, rasterMisses: 0),
+      };
+      final railFlight = Map<String, Object?>.from(
+        reports['I']!['rail_flight']! as Map,
+      )..['log_viewport_rebuild_count'] = 1;
+      reports['I']!['rail_flight'] = railFlight;
+
+      expect(
+        () => DashboardProfileReport.validateMotionIsolationGate(reports),
+        returnsNormally,
+      );
+
+      railFlight['log_viewport_rebuild_count'] = 2;
+      expect(
+        () => DashboardProfileReport.validateMotionIsolationGate(reports),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('I'), contains('log_viewport_rebuild_count')),
+          ),
+        ),
+      );
+    },
+  );
+
   test('physical frame targets report and reject exact p95/p99 lanes', () {
     final passing = <String, Map<String, Object?>>{'A': _physicalFrameReport()};
     expect(

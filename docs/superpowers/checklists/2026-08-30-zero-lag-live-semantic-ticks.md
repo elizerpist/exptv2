@@ -289,6 +289,30 @@ already-visible target and record `settleVisualDeltaCount=0`.
 
 Status: confirmed; implementation DONE.
 
+### D11 — The A–J gate must bound, not forbid, one LogBox viewport bind
+
+Question: Did the exact-commit profile failure prove a new per-tick rebuild
+storm?
+
+Evidence inspected: GitHub runs `33334246246` and `33310008901`, their profile
+artifacts, scenario I/J rail-flight counters and
+`DashboardProfileReport.railFlightIsolationZeroKeys`.
+
+Conclusion: Rejected. The new run failed only because scenario I reported one
+`log_viewport_rebuild_count`; the exact `0fe4d8e2` baseline artifact contains
+the same value. That earlier workflow appeared green only because the A–J test
+timed out at 20 minutes and its driver returned success. Root and rail rebuild,
+repository/native/SQL work, text fallback and critical cache misses remained
+zero. The current run completed all scenarios in 18:56 and exposed the stale
+zero-only assertion.
+
+Decision: Keep root/rail/IO counters at exact zero, allow at most one structural
+LogBox viewport bind per complete flight, and reject two or more as a rebuild
+stream. Per-tick live data continues through prepared render-surface updates;
+the limit does not permit a rebuild per semantic crossing.
+
+Status: confirmed; harness correction DONE, exact-commit rerun pending.
+
 ## Validation log
 
 - PASS — changed-Dart format check: 16 files, 0 changes.
@@ -314,5 +338,11 @@ Status: confirmed; implementation DONE.
   Fabric ticker contracts. Four additional Header transport timing failures
   appeared only under the 137-file parallel load; the task does not modify
   their tests or Header visual-engine source.
+- FAIL, ROOT-CAUSED — GitHub run `33334246246`, A–J profile gate: scenario I
+  had `log_viewport_rebuild_count=1` against an obsolete exact-zero harness
+  assertion. The `0fe4d8e2` baseline profile artifact has the same count; its
+  earlier CI run timed out before the assertion while the driver returned
+  success. New test coverage requires `0..1` and rejects `2+` while preserving
+  zero root/rail/IO/cache/text-layout work.
 - PENDING — exact committed GitHub profile build and artifact hash.
 - PENDING — physical validation by the user only.

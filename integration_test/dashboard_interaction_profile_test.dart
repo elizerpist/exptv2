@@ -797,13 +797,21 @@ void _expectEquivalentRailFlight(
       'metric_change_count',
       'root_rebuild_count',
       'rail_rebuild_count',
-      'log_viewport_rebuild_count',
       'data_io_count',
       'platform_call_count',
       'sql_count',
     ]) {
       expect(flight[key], 0, reason: '$label rail_flight.$key');
     }
+    expect(
+      number(flight, 'log_viewport_rebuild_count'),
+      lessThanOrEqualTo(
+        DashboardProfileReport.maximumLogViewportRebuildsPerFlight,
+      ),
+      reason:
+          '$label rail_flight.log_viewport_rebuild_count must remain a '
+          'single structural bind, never a per-tick rebuild stream',
+    );
   }
 }
 

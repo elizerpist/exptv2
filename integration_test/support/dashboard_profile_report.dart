@@ -74,11 +74,16 @@ abstract final class DashboardProfileReport {
     'metric_change_count',
     'root_rebuild_count',
     'rail_rebuild_count',
-    'log_viewport_rebuild_count',
     'data_io_count',
     'platform_call_count',
     'sql_count',
   ];
+
+  /// A live semantic flight may bind the existing LogBox viewport once when
+  /// its first exact prepared root becomes visible. Rebuilding it per tick is
+  /// still forbidden; row paints and render-surface updates own subsequent
+  /// live data changes.
+  static const int maximumLogViewportRebuildsPerFlight = 1;
 
   /// Returns the only completed scene-preparation slice that belongs to a
   /// measured motion window.
@@ -323,6 +328,16 @@ abstract final class DashboardProfileReport {
             'expected 0.',
           );
         }
+      }
+      final logViewportRebuilds = railFlight['log_viewport_rebuild_count'];
+      if (logViewportRebuilds is! num ||
+          logViewportRebuilds < 0 ||
+          logViewportRebuilds > maximumLogViewportRebuildsPerFlight) {
+        throw StateError(
+          'Dashboard profile $scenario has '
+          'rail_flight.log_viewport_rebuild_count=$logViewportRebuilds; '
+          'expected at most $maximumLogViewportRebuildsPerFlight.',
+        );
       }
 
       final physicalRail = report['physical_rail_report'];
