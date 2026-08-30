@@ -85,6 +85,12 @@ PR-01 to `DONE`; their required device evidence is explicit above.
   `betöltése folyamatban`. Mind now observes the loader's transport state and
   renders an explicit, direct user retry state; no range value or slider is
   fabricated. The retry repeats the same canonical scope request.
+- The production `FluviAppShell` path now has a native-channel integration
+  regression: after the real readiness barrier, a `readQueryMenuFacets`
+  response must emit required/request/result/publish and actual
+  mount/layout/visible events for the Mind `RangeSlider`. This proves the
+  normal shell-to-bridge-to-canonical-state path in a widget environment; it
+  does not substitute for the Android device's actual request trace.
 - These results do **not** identify why the physical Android request stayed
   pending/failed in the user's screenshot. No device is attached to this
   workspace, and Drive revision 56 contains no Mind lifecycle events. MR-01

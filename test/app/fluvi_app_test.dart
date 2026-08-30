@@ -88,6 +88,63 @@ void main() {
   });
 
   testWidgets(
+    'MR-01: the production app shell carries a native canonical range to Mind after readiness',
+    (tester) async {
+      const queryChannel = MethodChannel('com.fluvi/query_menu');
+      messenger.setMockMethodCallHandler(queryChannel, (call) async {
+        if (call.method == 'readQueryMenuFacets') {
+          return _queryMenuFacetsResponse();
+        }
+        throw PlatformException(code: 'unexpected', message: call.method);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(queryChannel, null));
+      FluviDiagnosticLogger.clear();
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: FluviAppShell(
+            mode: DashboardModeSpec.mind,
+            dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+          ),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+      await tester.pump();
+      await tester.pump();
+
+      final slider = find.byKey(const ValueKey('mind-query-amount-range'));
+      expect(slider, findsOneWidget);
+      expect(
+        tester
+            .widget<RangeSlider>(
+              find.descendant(of: slider, matching: find.byType(RangeSlider)),
+            )
+            .max,
+        123000,
+        reason:
+            'The native facet response reaches the exact canonical domain, '
+            'not a Mind-local fallback.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        containsAllInOrder(<String>[
+          'MIND|RANGE_REQUIRED',
+          'MIND|RANGE_REQUEST',
+          'MIND|RANGE_RESULT',
+          'MIND|RANGE_PUBLISH',
+          'MIND|SLIDER_MOUNT',
+          'MIND|SLIDER_LAYOUT',
+          'MIND|SLIDER_VISIBLE',
+        ]),
+      );
+      expect(
+        find.byKey(const ValueKey('mind-query-amount-range-unavailable')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'RED: a healthy first cold bootstrap has one traced startup attempt and reaches READY without Retry',
     (tester) async {
       FluviDiagnosticLogger.clear();
