@@ -1087,7 +1087,9 @@ final class _HierarchyValueSelectorState
   late final DashboardSummaryAutoResetMotionRunner _resetRunner = _runResetStep;
   late final VoidCallback _resetCanceller = _cancelResetMotion;
   DashboardNavigationState? _motionOrigin;
-  DashboardNavigationState? _latestCandidate;
+  DashboardNavigationState? _currentSemanticTarget;
+  DashboardNavigationState? _lastEmittedTarget;
+  DashboardNavigationState? _settleTarget;
   DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
 
   DashboardSummaryAutoResetStepKind get _resetStepKind =>
@@ -1224,23 +1226,34 @@ final class _HierarchyValueSelectorState
           motionDiagnostics: widget.motionDiagnostics,
           onDirectPointerDown: widget.onDirectInputStarted,
           onMotionStarted: (origin) {
-            _motionOrigin = widget.navigation.state;
-            _latestCandidate = null;
+            final semanticOrigin = widget.navigation.state;
+            _motionOrigin = semanticOrigin;
+            _currentSemanticTarget = semanticOrigin;
+            _lastEmittedTarget = null;
+            _settleTarget = null;
             widget.onMotionActiveChanged?.call(true);
           },
           onSelectedChanged: (offset) {
-            if (offset == 0) return;
             final origin = _motionOrigin ?? widget.navigation.state;
             final candidate = widget.candidateForOffset(origin, offset);
-            if (candidate != null) {
-              _latestCandidate = candidate;
-              widget.onCrossed(candidate);
+            if (candidate == null ||
+                _sameOwnedSemanticTarget(_currentSemanticTarget, candidate)) {
+              return;
             }
+            _currentSemanticTarget = candidate;
+            _lastEmittedTarget = candidate;
+            _settleTarget = candidate;
+            widget.onCrossed(candidate);
           },
           onMotionIdle: (_) {
-            final settled = _latestCandidate;
-            if (settled != null) widget.onSettled?.call(settled);
-            _latestCandidate = null;
+            final settled = _settleTarget;
+            if (settled != null &&
+                _sameOwnedSemanticTarget(_lastEmittedTarget, settled)) {
+              widget.onSettled?.call(settled);
+            }
+            _currentSemanticTarget = null;
+            _lastEmittedTarget = null;
+            _settleTarget = null;
             _motionOrigin = null;
             _controller.jumpToIndexSilently(0);
             widget.onMotionActiveChanged?.call(false);
@@ -1286,6 +1299,20 @@ final class _HierarchyValueSelectorState
       ],
     ),
   );
+
+  bool _sameOwnedSemanticTarget(
+    DashboardNavigationState? left,
+    DashboardNavigationState right,
+  ) {
+    if (left == null) return false;
+    return switch (widget.component) {
+      DashboardTemporalAnchorComponent.year =>
+        left.yearCursor == right.yearCursor,
+      DashboardTemporalAnchorComponent.month =>
+        left.monthCursor.month == right.monthCursor.month,
+      DashboardTemporalAnchorComponent.day => left.dayCursor == right.dayCursor,
+    };
+  }
 
   @override
   void dispose() {

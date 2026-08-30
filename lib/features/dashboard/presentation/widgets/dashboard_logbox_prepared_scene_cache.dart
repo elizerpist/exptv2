@@ -1994,11 +1994,32 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   ) {
     final snapshot = banks.toList(growable: false);
     final resources = _RetainedCandidateUniqueResources.fromBanks(snapshot);
+    final liveBank = _liveInteractionResourceKey == null
+        ? null
+        : _retainedCandidateBanks[_liveInteractionResourceKey];
+    final liveResources = liveBank == null
+        ? null
+        : _RetainedCandidateUniqueResources.fromBanks(
+            <_DashboardLogBoxStagedSceneBank>[liveBank],
+          );
+    // A live interaction universe may deliberately exceed the normal
+    // speculative-candidate row cap while remaining under its independent
+    // byte bound. A canonical release candidate that borrows only those
+    // immutable layouts adds no retained memory. Treat the already admitted
+    // live universe as the baseline rather than rejecting the second bank
+    // merely because the bank count changed from one to two.
+    final effectiveRowLimit = math.max(
+      maximumRetainedCandidateRows,
+      liveResources?.rowLayouts.length ?? 0,
+    );
+    final effectiveByteLimit = math.max(
+      maximumRetainedCandidateBytes,
+      liveResources?.estimatedBytes ?? 0,
+    );
     return snapshot.length > maximumRetainedCandidateBanks ||
         (snapshot.length > 1 &&
-            resources.rowLayouts.length > maximumRetainedCandidateRows) ||
-        (snapshot.length > 1 &&
-            resources.estimatedBytes > maximumRetainedCandidateBytes);
+            resources.rowLayouts.length > effectiveRowLimit) ||
+        (snapshot.length > 1 && resources.estimatedBytes > effectiveByteLimit);
   }
 
   void _enforceRetainedCandidateBounds() {

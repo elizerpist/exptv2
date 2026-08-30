@@ -1340,6 +1340,101 @@ void main() {
   );
 
   test(
+    'RED REENTRANT-MIND: a borrowing release candidate coexists with an oversized bounded live resource bank',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 3,
+        maximumRetainedCandidateRows: 2,
+      );
+      addTearDown(cache.dispose);
+      final activePayload = _deferredPayload(month: 6, rowCount: 1);
+      final resourcePayload = _deferredPayload(month: 7, rowCount: 3);
+      final releasePayload = _deferredPayload(month: 7, rowCount: 1);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'mind-active-before-drag',
+        payloads: <DashboardLogViewportState>[activePayload],
+      );
+      final resources = DashboardLogBoxSceneWindow(
+        identity: 'mind-live-resource-universe',
+        payloads: <DashboardLogViewportState>[resourcePayload],
+      );
+      final release = DashboardLogBoxSceneWindow(
+        identity: 'mind-canonical-release',
+        payloads: <DashboardLogViewportState>[releasePayload],
+      );
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      await cache.prepareLiveInteractionResourceWindow(
+        resourceKey: 'mind-live-resource',
+        window: resources,
+        surfaceWidth: 378,
+      );
+      expect(cache.hasLiveInteractionResourceBank, isTrue);
+      expect(cache.retainedCandidatePreparedRowCount, 3);
+
+      await cache.prepareCandidateWindow(
+        candidateKey: 'mind-release',
+        window: release,
+        surfaceWidth: 378,
+      );
+
+      expect(
+        cache.hasCandidateWindow(release, candidateKey: 'mind-release'),
+        isTrue,
+      );
+      expect(cache.hasLiveInteractionResourceBank, isTrue);
+      expect(
+        cache.retainedCandidatePreparedRowCount,
+        3,
+        reason:
+            'The canonical subset borrows immutable live row resources and '
+            'must not consume a second copy or evict next-drag readiness.',
+      );
+    },
+  );
+
+  test(
+    'live resource baseline does not admit additional unique rows beyond its bounded footprint',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 3,
+        maximumRetainedCandidateRows: 2,
+      );
+      addTearDown(cache.dispose);
+      final resources = DashboardLogBoxSceneWindow(
+        identity: 'bounded-live-resource-universe',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 7, rowCount: 3),
+        ],
+      );
+      final unrelated = DashboardLogBoxSceneWindow(
+        identity: 'unrelated-canonical-candidate',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 8, rowCount: 1),
+        ],
+      );
+
+      await cache.prepareLiveInteractionResourceWindow(
+        resourceKey: 'bounded-live-resource',
+        window: resources,
+        surfaceWidth: 378,
+      );
+
+      await expectLater(
+        cache.prepareCandidateWindow(
+          candidateKey: 'unrelated-candidate',
+          window: unrelated,
+          surfaceWidth: 378,
+        ),
+        throwsStateError,
+      );
+      expect(cache.retainedCandidatePreparedRowCount, 3);
+      expect(cache.hasLiveInteractionResourceBank, isTrue);
+    },
+  );
+
+  test(
     'discarding a stale active-resource stage releases only its exact bank',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();

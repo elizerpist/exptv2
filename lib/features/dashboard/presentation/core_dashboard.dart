@@ -1331,11 +1331,31 @@ class _CoreDashboardState extends State<CoreDashboard>
       return;
     }
     controller.endMindAmountRangeInteraction(committed: true);
+    final interactionGeneration = controller.mindAmountInteractionGeneration;
     unawaited(
       controller
-          .applyQuery(next, facetPresentationSource: 'mindAmountRange')
+          .applyQuery(
+            next,
+            facetPresentationSource: 'mindAmountRange',
+            expectedMindAmountInteractionGeneration: interactionGeneration,
+          )
           .then((published) {
-            if (!published) controller.clearMindAmountRangePreview();
+            if (published) return;
+            // The live range is already exact and drawable. A stale,
+            // superseded, or capacity-rejected canonical promotion must not
+            // roll the visible list back to the pre-drag Query or gate the
+            // next gesture. A later accepted canonical/live publication owns
+            // normal replacement of this preview.
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'MIND|CANONICAL_COMMIT_REJECTED_PREVIEW_RETAINED',
+                queryKey: next.key.value,
+                direction: direction.name,
+                scope:
+                    'previewRetained=true inputGateHeld=false '
+                    'reason=canonicalPublicationRejected',
+              ),
+            );
           }),
     );
   }

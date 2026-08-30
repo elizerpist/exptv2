@@ -427,7 +427,7 @@ void main() {
   );
 
   testWidgets(
-    'the physical Avatar rail accepts input only after the complete live target hotset is ready',
+    'RED REENTRANT-AVATAR: background hotset readiness never absorbs direct input',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(_categories(3));
       final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
@@ -445,6 +445,9 @@ void main() {
         logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
       );
       final readiness = ValueNotifier<bool>(false);
+      var directPointerCount = 0;
+      var semanticCrossingCount = 0;
+      final motionStates = <bool>[];
       addTearDown(categories.dispose);
       addTearDown(visibleFrame.dispose);
       addTearDown(direction.dispose);
@@ -459,23 +462,44 @@ void main() {
             child: BudgetTargetAvatarRail(
               presentation: presentation,
               liveTargetReadiness: readiness,
+              onDirectInputStarted: () => directPointerCount += 1,
+              onTargetPreview: (_) => semanticCrossingCount += 1,
+              onMotionActiveChanged: motionStates.add,
             ),
           ),
         ),
       );
 
-      final finder = find.byKey(
-        const ValueKey('budget-target-avatar-live-root-readiness'),
+      expect(
+        find.byKey(const ValueKey('budget-target-avatar-live-root-readiness')),
+        findsNothing,
+        reason:
+            'Prepared-target readiness is a publication invariant, not the '
+            'hit-test owner for a subsequent physical pointer.',
       );
-      expect(tester.widget<IgnorePointer>(finder).ignoring, isTrue);
-      readiness.value = true;
-      await tester.pump();
-      expect(tester.widget<IgnorePointer>(finder).ignoring, isFalse);
       expect(
         find.byKey(const ValueKey('budget-target-avatar-carousel')),
         findsOneWidget,
-        reason: 'readiness must not replace the rail/controller subtree',
+        reason: 'readiness churn must not replace the rail/controller subtree',
       );
+
+      final carousel = find.byKey(
+        const ValueKey('budget-target-avatar-carousel'),
+      );
+      for (var interaction = 0; interaction < 20; interaction += 1) {
+        final crossingsBefore = semanticCrossingCount;
+        await tester.drag(carousel, Offset(interaction.isEven ? -120 : 120, 0));
+        await tester.pumpAndSettle();
+        expect(
+          semanticCrossingCount,
+          greaterThan(crossingsBefore),
+          reason:
+              'Interaction ${interaction + 1} must retain semantic input even '
+              'while background readiness is false.',
+        );
+        expect(motionStates.last, isFalse);
+      }
+      expect(directPointerCount, 20);
     },
   );
 

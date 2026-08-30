@@ -748,6 +748,48 @@ void main() {
       expect(snapshot.paintedRowCount, greaterThan(0));
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 300000,
+            lowerScaled100: 250000,
+            upperScaled100: 250000,
+          ),
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      final emptyPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final emptySnapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == emptyPayload.queryKey,
+      );
+      expect(emptyPayload.previewRowCount, 0);
+      expect(emptySnapshot.payloadRowCount, 0);
+      expect(emptySnapshot.drawableRowCount, 0);
+      expect(emptySnapshot.paintedRowCount, 0);
+      expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 300000,
+            lowerScaled100: 150000,
+            upperScaled100: 250000,
+          ),
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      final restoredPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final restoredSnapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == restoredPayload.queryKey,
+      );
+      expect(restoredPayload.stableRowIdentities, <String>['amount-200000']);
+      expect(restoredSnapshot.drawableRowCount, 1);
+      expect(restoredSnapshot.paintedRowCount, greaterThan(0));
     },
   );
 
@@ -959,6 +1001,125 @@ void main() {
       expect(snapshot.paintedRowCount, greaterThan(0));
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.scenePrepareNewCount, prepareCountBeforeCrossing);
+    },
+  );
+
+  testWidgets(
+    'RED REENTRANT-TIME: populated-empty-populated reversal repaints before settle',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _TimeReversalRepository(),
+        initialDate: DateTime.utc(2025, 4, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final origin = core.navigation.state;
+      final empty2024 = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -1,
+        base: origin,
+      )!;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              performanceCounters: core.performanceCounters,
+              renderDiagnostics: core.renderReadinessDiagnostics,
+              renderDiagnosticContextProvider: () =>
+                  core.renderDiagnosticContext,
+              onExtentPublished: snapshots.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final originHotset = core.railInteractionSceneWindowFor(origin);
+      final liveHotset = originHotset.union(
+        core.railInteractionSceneWindowFor(empty2024),
+        coverageIdentity: originHotset.coverageIdentity,
+      );
+      await sceneCache.prepareWindow(
+        window: liveHotset,
+        surfaceWidth: sceneCache.surfaceWidth,
+      );
+      sceneCache.activateWindow(liveHotset);
+      core.recordInitialSceneWindowActivation(liveHotset);
+
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalComponentCandidate(
+        candidate: empty2024,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+      final emptyPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final emptySnapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == emptyPayload.queryKey,
+      );
+      expect(empty2024.yearCursor, 2024);
+      expect(
+        emptyPayload.queryKey,
+        empty2024.temporalAnchor.sourceChildQueryKey,
+      );
+      expect(emptyPayload.previewRowCount, 0);
+      expect(emptySnapshot.drawableRowCount, 0);
+      expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+
+      core.navigateExperimentalTemporalComponentCandidate(
+        candidate: origin,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+      final restoredPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final restoredSnapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == restoredPayload.queryKey,
+      );
+      expect(origin.yearCursor, 2025);
+      expect(
+        restoredPayload.queryKey,
+        origin.temporalAnchor.sourceChildQueryKey,
+      );
+      expect(restoredPayload.previewRowCount, greaterThan(0));
+      expect(
+        restoredSnapshot.drawableRowCount,
+        restoredPayload.previewRowCount,
+      );
+      expect(restoredSnapshot.paintedRowCount, greaterThan(0));
+
+      final visibleBeforeSettle = core.visibleFrames.value;
+      final publishesBeforeSettle = core.visibleFrames.visiblePublishCount;
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: origin,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+      expect(core.visibleFrames.value, same(visibleBeforeSettle));
+      expect(core.visibleFrames.visiblePublishCount, publishesBeforeSettle);
+      expect(sceneCache.textLayoutMissCount, 0);
     },
   );
 
@@ -1391,4 +1552,41 @@ final class _NonEmptyQueryRepository implements DashboardDataRuntimeRepository {
 
   static int _previewRowCountFor(CurrentLedgerQueryScope scope) =>
       _entryCountFor(scope).clamp(0, 24).toInt();
+}
+
+final class _TimeReversalRepository implements DashboardDataRuntimeRepository {
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) async => buildRuntimeTestIndex(
+    revision: request.key.coreRevision,
+    generation: token.generation,
+    directionalQueries: request.directionalQueries,
+    initialYear: request.initialYear,
+    yearWindowRadius: request.key.yearWindowEndInclusive - request.initialYear,
+    entryCountForScope: _entryCountFor,
+    previewRowCountForScope: _entryCountFor,
+    deferredLogBoxes: true,
+  );
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) async =>
+      throw StateError('Prepared reversal roots must not page natively.');
+
+  @override
+  Map<String, Object?> performanceReport() => const <String, Object?>{};
+
+  static int _entryCountFor(CurrentLedgerQueryScope scope) {
+    final time = scope.timeScope;
+    if (time is MonthScope) return time.value.year == 2025 ? 3 : 0;
+    if (time is YearScope) return time.year == 2025 ? 3 : 0;
+    if (time is DayScope) return time.date.year == 2025 ? 3 : 0;
+    return 3;
+  }
 }

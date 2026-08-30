@@ -514,6 +514,104 @@ void main() {
     },
   );
 
+  test(
+    'RED REENTRANT-MIND: an older release cannot overwrite the next drag live rows',
+    () async {
+      final canonicalGate = Completer<void>();
+      final rows = <DashboardLedgerEntry>[
+        for (final (index, amount) in <int>[100000, 200000, 300000].indexed)
+          DashboardLedgerEntry(
+            id: 'amount-$amount',
+            partnerId: 'partner-$index',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: amount,
+            bookedLocalEpochDay: 20636 - index,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Partner $index',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+      ];
+      final repository = _FocusSeedRepository(
+        rows: rows,
+        prepareAfterBootstrapGate: canonicalGate,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      const domain = QueryMenuAmountDomain(
+        minimumAmountScaled100: 100000,
+        maximumAmountScaled100: 300000,
+      );
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: domain,
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      final binding = QueryAmountRangeBinding.ready(
+        scope: applied,
+        amountDomain: domain,
+      )!;
+
+      const firstValues = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 300000,
+        lowerScaled100: 250000,
+        upperScaled100: 250000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(firstValues), isTrue);
+      final firstInteractionGeneration = core.mindAmountInteractionGeneration;
+      final firstCommit = core.applyQuery(
+        binding.apply(firstValues),
+        facetPresentationSource: 'mindAmountRange',
+        expectedMindAmountInteractionGeneration: firstInteractionGeneration,
+      );
+      expect(repository.prepareCalls, 2);
+
+      const secondValues = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 300000,
+        lowerScaled100: 150000,
+        upperScaled100: 250000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(secondValues), isTrue);
+      expect(
+        core.visibleFrames.logBoxLane.value!.preparedFrame.stableRowIdentities,
+        <String>['amount-200000'],
+      );
+
+      canonicalGate.complete();
+      expect(await firstCommit, isFalse);
+      expect(
+        core.visibleFrames.logBoxLane.value!.preparedFrame.stableRowIdentities,
+        <String>['amount-200000'],
+        reason:
+            'The first release belongs to an older interaction generation and '
+            'must not replace the exact rows already published by drag two.',
+      );
+      expect(core.currentQuery.scopeFor(LedgerDirection.income), applied);
+    },
+  );
+
   testWidgets(
     'RED LIVE-TIME: every component crossing publishes its exact visible data before settle',
     (tester) async {
@@ -1709,11 +1807,16 @@ PreparedBudgetLimitSnapshot _focusBudgetSnapshot() {
 }
 
 final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
-  _FocusSeedRepository({List<DashboardLedgerEntry>? rows}) : _rows = rows;
+  _FocusSeedRepository({
+    List<DashboardLedgerEntry>? rows,
+    Completer<void>? prepareAfterBootstrapGate,
+  }) : _rows = rows,
+       _prepareAfterBootstrapGate = prepareAfterBootstrapGate;
 
   final EmptyDashboardDataRuntimeRepository _empty =
       const EmptyDashboardDataRuntimeRepository();
   final List<DashboardLedgerEntry>? _rows;
+  final Completer<void>? _prepareAfterBootstrapGate;
   var prepareCalls = 0;
   var committedPageReads = 0;
 
@@ -1726,6 +1829,9 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
     DashboardIndexPreparationToken token,
   ) async {
     prepareCalls += 1;
+    if (prepareCalls > 1 && _prepareAfterBootstrapGate != null) {
+      await _prepareAfterBootstrapGate.future;
+    }
     final base = await _empty.prepareIndex(request, token);
     final rows =
         _rows ??

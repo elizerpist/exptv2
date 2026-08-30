@@ -73,12 +73,12 @@ final class _QueryAmountRangeControlState
     });
   }
 
-  void _flushPreview(QueryAmountRangeValues values) {
+  void _flushPreview() {
     _previewGeneration += 1;
     _previewScheduled = false;
     final pending = _pendingPreview;
     _pendingPreview = null;
-    widget.onRangePreviewChanged?.call(pending ?? values);
+    if (pending != null) widget.onRangePreviewChanged?.call(pending);
   }
 
   @override
@@ -179,7 +179,7 @@ final class _QueryAmountRangeControlState
                           lower: next.start.round(),
                           upper: next.end.round(),
                         );
-                        _flushPreview(committed);
+                        _flushPreview();
                         widget.onInteractionEnded?.call();
                         widget.onRangeCommitted(committed);
                       }

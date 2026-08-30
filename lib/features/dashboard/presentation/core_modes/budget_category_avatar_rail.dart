@@ -380,8 +380,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   @override
   Widget build(BuildContext context) {
-    final readiness = widget.liveTargetReadiness;
-    final rail = SizedBox.expand(
+    return SizedBox.expand(
       key: const ValueKey('budget-target-avatar-rail'),
       child: _items.isEmpty
           ? const SizedBox.shrink()
@@ -397,7 +396,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                 height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
                 semanticsLabelBuilder: (item) => item.title,
                 onPreviewChanged: _onPreviewChanged,
-                onDirectPointerDown: widget.onDirectInputStarted,
+                onDirectPointerDown: _onDirectPointerDown,
                 onSelectionSettled: _onSelectionSettled,
                 onMotionStarted: _onMotionStarted,
                 itemBuilder: (context, item, metrics) {
@@ -455,16 +454,22 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
               ),
             ),
     );
-    if (readiness == null) return rail;
-    return ValueListenableBuilder<bool>(
-      valueListenable: readiness,
-      child: rail,
-      builder: (context, ready, child) => IgnorePointer(
-        key: const ValueKey('budget-target-avatar-live-root-readiness'),
-        ignoring: !ready,
-        child: child,
+  }
+
+  void _onDirectPointerDown() {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|POINTER_ACCEPTED',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'liveRootReady=${widget.liveTargetReadiness?.value ?? true} '
+            'motionActive=${_activeMotionOrigin != null} '
+            'controllerIdentity=${identityHashCode(_controller)} '
+            'physicsCreationCount=${_controller.physicsCreationCount}',
       ),
     );
+    widget.onDirectInputStarted?.call();
   }
 
   void _recordProgressIdentityMismatch(int avatarTargetHandle) {

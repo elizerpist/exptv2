@@ -869,6 +869,7 @@ final class DashboardCoreController {
   Future<bool>? _queryApplyInFlight;
   QueryComposerApplyIdentity? _activeComposerApplyIdentity;
   String? _activeQueryApplyCacheKey;
+  int? _activeMindAmountInteractionGeneration;
   int _queryDraftPreparationGeneration = 0;
   PreparedQueryCandidatePreparation? _activeQueryCandidatePreparation;
   PreparedQueryCandidate? _stagedQueryCandidate;
@@ -3452,6 +3453,8 @@ final class DashboardCoreController {
     );
   }
 
+  int get mindAmountInteractionGeneration => _mindAmountInteractionGeneration;
+
   /// Publishes one latest-value-wins amount filter over an immutable resident
   /// index. It does not mutate the applied Query, install an index, read a
   /// repository, or rotate the structural navigation owner.
@@ -3646,6 +3649,7 @@ final class DashboardCoreController {
     String facetPresentationSource = 'caller',
     bool facetPresentationExactScopeMatch = false,
     QueryComposerApplyIdentity? composerApplyIdentity,
+    int? expectedMindAmountInteractionGeneration,
   }) {
     final template = draft.copyWith(timeScope: const AllTimeScope());
     final effectiveComposerIdentity =
@@ -3681,7 +3685,9 @@ final class DashboardCoreController {
     final inFlight = _queryApplyInFlight;
     if (inFlight != null) {
       if (_activeComposerApplyIdentity == effectiveComposerIdentity &&
-          _activeQueryApplyCacheKey == applyCacheKey) {
+          _activeQueryApplyCacheKey == applyCacheKey &&
+          _activeMindAmountInteractionGeneration ==
+              expectedMindAmountInteractionGeneration) {
         return inFlight;
       }
       _cancelActiveComposerApply(reason: 'newerApply');
@@ -3689,6 +3695,8 @@ final class DashboardCoreController {
     late final Future<bool> operation;
     _activeComposerApplyIdentity = effectiveComposerIdentity;
     _activeQueryApplyCacheKey = applyCacheKey;
+    _activeMindAmountInteractionGeneration =
+        expectedMindAmountInteractionGeneration;
     operation =
         _applyPreparedQuery(
           template,
@@ -3696,11 +3704,14 @@ final class DashboardCoreController {
           facetPresentationSource: facetPresentationSource,
           facetPresentationExactScopeMatch: facetPresentationExactScopeMatch,
           composerApplyIdentity: effectiveComposerIdentity,
+          expectedMindAmountInteractionGeneration:
+              expectedMindAmountInteractionGeneration,
         ).whenComplete(() {
           if (identical(_queryApplyInFlight, operation)) {
             _queryApplyInFlight = null;
             _activeComposerApplyIdentity = null;
             _activeQueryApplyCacheKey = null;
+            _activeMindAmountInteractionGeneration = null;
             final priority = _committedReadyAheadPriority;
             if (priority?.origin ==
                 _CommittedReadyAheadPriorityOrigin.directQueryPublication) {
@@ -3720,6 +3731,7 @@ final class DashboardCoreController {
     required String facetPresentationSource,
     required bool facetPresentationExactScopeMatch,
     required QueryComposerApplyIdentity? composerApplyIdentity,
+    required int? expectedMindAmountInteractionGeneration,
   }) async {
     final generation = ++_queryApplyGeneration;
     FluviDiagnosticLogger.log(
@@ -3800,6 +3812,8 @@ final class DashboardCoreController {
         !_isCurrentQueryApply(
           generation: generation,
           composerApplyIdentity: composerApplyIdentity,
+          expectedMindAmountInteractionGeneration:
+              expectedMindAmountInteractionGeneration,
         )) {
       _abortAcceptedComposerApply(composerApplyIdentity);
       return false;
@@ -3857,6 +3871,8 @@ final class DashboardCoreController {
     if (!_isCurrentQueryApply(
       generation: generation,
       composerApplyIdentity: composerApplyIdentity,
+      expectedMindAmountInteractionGeneration:
+          expectedMindAmountInteractionGeneration,
     )) {
       return false;
     }
@@ -3876,6 +3892,8 @@ final class DashboardCoreController {
       facetPresentationSource: facetPresentationSource,
       facetPresentationExactScopeMatch: facetPresentationExactScopeMatch,
       composerApplyIdentity: composerApplyIdentity,
+      expectedMindAmountInteractionGeneration:
+          expectedMindAmountInteractionGeneration,
     );
   }
 
@@ -3913,10 +3931,13 @@ final class DashboardCoreController {
     required String facetPresentationSource,
     required bool facetPresentationExactScopeMatch,
     required QueryComposerApplyIdentity? composerApplyIdentity,
+    required int? expectedMindAmountInteractionGeneration,
   }) async {
     if (!_isCurrentQueryApply(
       generation: generation,
       composerApplyIdentity: composerApplyIdentity,
+      expectedMindAmountInteractionGeneration:
+          expectedMindAmountInteractionGeneration,
     )) {
       return false;
     }
@@ -3959,6 +3980,8 @@ final class DashboardCoreController {
       if (!_isCurrentQueryApply(
         generation: generation,
         composerApplyIdentity: composerApplyIdentity,
+        expectedMindAmountInteractionGeneration:
+            expectedMindAmountInteractionGeneration,
       )) {
         _abandonQueryPublicationReservation(identity);
         return false;
@@ -4064,9 +4087,13 @@ final class DashboardCoreController {
   bool _isCurrentQueryApply({
     required int generation,
     required QueryComposerApplyIdentity? composerApplyIdentity,
+    required int? expectedMindAmountInteractionGeneration,
   }) =>
       !_disposed &&
       generation == _queryApplyGeneration &&
+      (expectedMindAmountInteractionGeneration == null ||
+          expectedMindAmountInteractionGeneration ==
+              _mindAmountInteractionGeneration) &&
       (composerApplyIdentity == null ||
           queryComposer.isCurrentApplyIdentity(composerApplyIdentity));
 
@@ -4138,10 +4165,16 @@ final class DashboardCoreController {
   void _cancelActiveComposerApply({required String reason}) {
     final identity = _activeComposerApplyIdentity;
     final applyCacheKey = _activeQueryApplyCacheKey;
-    if (identity == null && applyCacheKey == null) return;
+    final mindInteractionGeneration = _activeMindAmountInteractionGeneration;
+    if (identity == null &&
+        applyCacheKey == null &&
+        mindInteractionGeneration == null) {
+      return;
+    }
     final outgoingPreparation = _activeQueryCandidatePreparation;
     _activeComposerApplyIdentity = null;
     _activeQueryApplyCacheKey = null;
+    _activeMindAmountInteractionGeneration = null;
     _abortAcceptedComposerApply(identity);
     if (identity == null &&
         outgoingPreparation != null &&

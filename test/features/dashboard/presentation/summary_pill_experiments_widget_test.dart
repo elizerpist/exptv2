@@ -585,6 +585,90 @@ void main() {
   );
 
   testWidgets(
+    'RED REENTRANT-TIME: returning to the gesture origin emits a reverse tick and settles there',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2025, 4, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final crossings = <DashboardNavigationState>[];
+      final settled = <DashboardNavigationState>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (_, _) {},
+              onComponentCrossed: (candidate, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  crossings.add(candidate);
+                }
+              },
+              onComponentSettled: (candidate, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  settled.add(candidate);
+                }
+              },
+            ),
+          ),
+        ),
+      );
+
+      final selector = find.byKey(
+        const ValueKey('summary-pill-segmented-year-selector'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(selector));
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(crossings, hasLength(1));
+      expect(crossings.single.yearCursor, 2024);
+
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        crossings.map((candidate) => candidate.yearCursor),
+        <int>[2024, 2025],
+        reason:
+            'Returning to the immutable origin is still a real reverse '
+            'semantic crossing when the live target is 2024.',
+      );
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(settled, hasLength(1));
+      expect(settled.single.yearCursor, 2025);
+
+      final crossingsBeforeReentry = crossings.length;
+      final secondGesture = await tester.startGesture(
+        tester.getCenter(selector),
+      );
+      await secondGesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await secondGesture.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        crossings.length,
+        greaterThan(crossingsBeforeReentry),
+        reason:
+            'The next pointer must emit a semantic tick on the next frame; '
+            'settle promotion cannot own an input cooldown.',
+      );
+      await secondGesture.up();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
     'physical Segmented field flings publish only their own coordinate',
     (tester) async {
       final navigation = DashboardNavigationController(
