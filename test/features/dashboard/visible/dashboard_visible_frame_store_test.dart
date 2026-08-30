@@ -217,6 +217,7 @@ void main() {
       expect(store.countLane.value, same(preview));
       expect(store.logBoxLane.value, same(preview));
       expect(store.interactionPreviewPublishCount, 1);
+      expect(store.mixedProjectionCount, 0);
 
       store.clearPreparedInteractionPreview(previewGeneration: 8);
       expect(store.value, same(committed));

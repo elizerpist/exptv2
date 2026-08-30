@@ -6,6 +6,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
@@ -18,11 +19,16 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_v
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -650,6 +656,411 @@ void main() {
   );
 
   testWidgets(
+    'RED LIVE-MIND: a warm amount drag paints exact production LogBox rows in one frame',
+    (tester) async {
+      final repository = _MindLivePreviewRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 100000,
+            maximumAmountScaled100: 300000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              performanceCounters: core.performanceCounters,
+              renderDiagnostics: core.renderReadinessDiagnostics,
+              renderDiagnosticContextProvider: () =>
+                  core.renderDiagnosticContext,
+              onExtentPublished: snapshots.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(sceneCache.hasLiveInteractionResourceBank, isTrue);
+
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 300000,
+            lowerScaled100: 150000,
+            upperScaled100: 250000,
+          ),
+        ),
+        isTrue,
+        reason: sceneCache.report().toString(),
+      );
+      await tester.pump();
+
+      final payload = core.visibleFrames.logBoxLane.value!.logBox;
+      final scene = sceneCache.railCriticalSceneFor(payload);
+      final snapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == payload.queryKey,
+      );
+      expect(payload.previewRowCount, 1);
+      expect(payload.stableRowIdentities, <String>['amount-200000']);
+      expect(scene, isNotNull);
+      expect(scene!.rowFor(payload.flatItems.single.row), isNotNull);
+      expect(snapshot.payloadRowCount, 1);
+      expect(snapshot.drawableRowCount, 1);
+      expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(sceneCache.textLayoutMissCount, 0);
+      expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+    },
+  );
+
+  testWidgets(
+    'RED LIVE-AVATAR: a prepared target crossing paints its exact production LogBox root in one frame',
+    (tester) async {
+      final repository = _MindLivePreviewRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              performanceCounters: core.performanceCounters,
+              renderDiagnostics: core.renderReadinessDiagnostics,
+              renderDiagnosticContextProvider: () =>
+                  core.renderDiagnosticContext,
+              onExtentPublished: snapshots.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final aggregateQueryKey = core.visibleFrames.logBoxLane.value!.queryKey;
+      const utilities = DashboardFocusFacet(
+        id: 'utilities',
+        displayName: 'Utilities',
+      );
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[utilities]);
+      for (
+        var frame = 0;
+        frame < 20 && !core.budgetAvatarLiveRootReady.value;
+        frame += 1
+      ) {
+        await tester.pump();
+      }
+      expect(sceneCache.hasLiveInteractionResourceBank, isTrue);
+      expect(core.budgetAvatarLiveRootReady.value, isTrue);
+
+      core.beginBudgetAvatarMotion();
+      expect(
+        await core.requestBudgetCategoryFocus(
+          utilities,
+          publishDuringMotion: true,
+          targetHandle: 1,
+        ),
+        isTrue,
+        reason: sceneCache.report().toString(),
+      );
+      await tester.pump();
+
+      final payload = core.visibleFrames.logBoxLane.value!.logBox;
+      final scene = sceneCache.railCriticalSceneFor(payload);
+      final snapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == payload.queryKey,
+      );
+      expect(payload.queryKey.value, contains('categories:utilities'));
+      expect(payload.previewRowCount, greaterThan(0));
+      expect(scene, isNotNull);
+      for (final item in payload.flatItems) {
+        expect(scene!.rowFor(item.row), isNotNull);
+      }
+      expect(snapshot.payloadRowCount, payload.previewRowCount);
+      expect(snapshot.drawableRowCount, payload.previewRowCount);
+      expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(sceneCache.textLayoutMissCount, 0);
+      expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+
+      expect(
+        await core.clearBudgetCategoryFocus(
+          targetHandle: 0,
+          publishDuringMotion: true,
+        ),
+        isTrue,
+        reason: sceneCache.report().toString(),
+      );
+      await tester.pump();
+      final aggregatePayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final aggregateScene = sceneCache.railCriticalSceneFor(aggregatePayload);
+      final aggregateSnapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == aggregatePayload.queryKey,
+      );
+      expect(aggregatePayload.queryKey, aggregateQueryKey);
+      expect(aggregatePayload.previewRowCount, 0);
+      expect(aggregateScene, isNotNull);
+      for (final item in aggregatePayload.flatItems) {
+        expect(aggregateScene!.rowFor(item.row), isNotNull);
+      }
+      expect(
+        aggregateSnapshot.drawableRowCount,
+        aggregatePayload.previewRowCount,
+      );
+      expect(aggregateSnapshot.paintedRowCount, 0);
+      expect(sceneCache.textLayoutMissCount, 0);
+      expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  testWidgets(
+    'RED LIVE-TIME: a segmented component crossing paints exact production LogBox rows in one frame',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _NonEmptyQueryRepository(),
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final origin = core.navigation.state;
+      final candidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              performanceCounters: core.performanceCounters,
+              renderDiagnostics: core.renderReadinessDiagnostics,
+              renderDiagnosticContextProvider: () =>
+                  core.renderDiagnosticContext,
+              onExtentPublished: snapshots.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final liveHotset = core.railInteractionSceneWindowFor(origin);
+      await sceneCache.prepareWindow(
+        window: liveHotset,
+        surfaceWidth: sceneCache.surfaceWidth,
+      );
+      sceneCache.activateWindow(liveHotset);
+      core.recordInitialSceneWindowActivation(liveHotset);
+      final prepareCountBeforeCrossing = sceneCache.scenePrepareNewCount;
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+
+      final payload = core.visibleFrames.logBoxLane.value!.logBox;
+      final scene = sceneCache.railCriticalSceneFor(payload);
+      final snapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == payload.queryKey,
+      );
+      expect(payload.queryKey, candidate.temporalAnchor.sourceChildQueryKey);
+      expect(payload.previewRowCount, greaterThan(0));
+      expect(
+        scene,
+        isNotNull,
+        reason:
+            'payload=${payload.queryKey.value}/${payload.viewportId} '
+            'cache=${sceneCache.report()}',
+      );
+      expect(snapshot.drawableRowCount, payload.previewRowCount);
+      expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(sceneCache.textLayoutMissCount, 0);
+      expect(sceneCache.scenePrepareNewCount, prepareCountBeforeCrossing);
+    },
+  );
+
+  testWidgets(
+    'RED LIVE-LEVEL: a segmented level crossing paints an armed exact production root in one frame',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _NonEmptyQueryRepository(),
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final target = core.presentation.temporalCandidate(
+        plane: TimePlane.year,
+        isRailOpen: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              performanceCounters: core.performanceCounters,
+              renderDiagnostics: core.renderReadinessDiagnostics,
+              renderDiagnosticContextProvider: () =>
+                  core.renderDiagnosticContext,
+              onExtentPublished: snapshots.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      var armedLevels = core.structuralPublicationSceneWindowFor(
+        core.navigation.state,
+      );
+      for (final level in <({TimePlane plane, bool isRailOpen})>[
+        (plane: TimePlane.sum, isRailOpen: false),
+        (plane: TimePlane.year, isRailOpen: false),
+        (plane: TimePlane.month, isRailOpen: false),
+        (plane: TimePlane.month, isRailOpen: true),
+      ]) {
+        final candidate = core.presentation.temporalCandidate(
+          plane: level.plane,
+          isRailOpen: level.isRailOpen,
+        );
+        armedLevels = armedLevels.union(
+          core.structuralPublicationSceneWindowFor(candidate),
+          coverageIdentity: armedLevels.coverageIdentity,
+        );
+      }
+      await sceneCache.prepareWindow(
+        window: armedLevels,
+        surfaceWidth: sceneCache.surfaceWidth,
+      );
+      sceneCache.activateWindow(armedLevels);
+      core.recordInitialSceneWindowActivation(armedLevels);
+      final prepareCountBeforeCrossing = sceneCache.scenePrepareNewCount;
+
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.year,
+        isRailOpen: false,
+      );
+      await tester.pump();
+
+      final payload = core.visibleFrames.logBoxLane.value!.logBox;
+      final scene = sceneCache.railCriticalSceneFor(payload);
+      final snapshot = snapshots.lastWhere(
+        (value) => value.presentation?.queryKey == payload.queryKey,
+      );
+      expect(payload.queryKey, target.parentQueryKey);
+      expect(payload.previewRowCount, greaterThan(0));
+      expect(scene, isNotNull);
+      expect(snapshot.drawableRowCount, payload.previewRowCount);
+      expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(sceneCache.textLayoutMissCount, 0);
+      expect(sceneCache.scenePrepareNewCount, prepareCountBeforeCrossing);
+    },
+  );
+
+  testWidgets(
     'RED: a new non-empty rail-preview presentation epoch repaints without a scroll notification',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -789,10 +1200,116 @@ Future<void> _attachAndActivateInitialScene(
     hasCandidate: cache.hasCandidateWindow,
     setCandidateHotset: cache.setProtectedCandidateKeys,
     planCandidateHotset: cache.admitCandidateHotset,
+    prepareLiveInteractionResources:
+        (window, {required retainedKey, required retainViewportId}) =>
+            cache.prepareLiveInteractionResourceWindow(
+              resourceKey: retainedKey,
+              window: window,
+              retainViewportId: retainViewportId,
+              surfaceWidth: cache.surfaceWidth,
+              devicePixelRatio: cache.devicePixelRatio ?? 1,
+            ),
+    hasLiveInteractionResources: (window, {required candidateKey}) => cache
+        .hasLiveInteractionResourceWindow(window, resourceKey: candidateKey),
+    stageLiveInteractionFromPreparedResources:
+        (window, {required retainViewportId}) =>
+            cache.stageLivePreviewWindowFromPreparedResources(window),
+    stageFromActiveResources: (window, {required retainViewportId}) =>
+        cache.stageWindowFromActiveResources(window),
+    discardStagedActiveResources: cache.discardStagedActiveResourceWindow,
     activate: cache.activateWindow,
     cancel: cache.cancelInFlightPreparation,
     report: cache.report,
   );
+}
+
+final class _MindLivePreviewRepository
+    implements DashboardDataRuntimeRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+
+  static const List<DashboardLedgerEntry> _rows = <DashboardLedgerEntry>[
+    DashboardLedgerEntry(
+      id: 'amount-100000',
+      partnerId: 'partner-1',
+      categoryId: 'utilities',
+      direction: 'income',
+      amountMinor: 100000,
+      bookedLocalEpochDay: 20636,
+      bookedLocalTimeMinutes: 600,
+      partnerDisplayName: 'Partner 1',
+      categoryDisplayName: 'Utilities',
+      categoryColorId: 'fallback',
+      categoryIconId: 'fallback',
+    ),
+    DashboardLedgerEntry(
+      id: 'amount-200000',
+      partnerId: 'partner-2',
+      categoryId: 'utilities',
+      direction: 'income',
+      amountMinor: 200000,
+      bookedLocalEpochDay: 20635,
+      bookedLocalTimeMinutes: 600,
+      partnerDisplayName: 'Partner 2',
+      categoryDisplayName: 'Utilities',
+      categoryColorId: 'fallback',
+      categoryIconId: 'fallback',
+    ),
+    DashboardLedgerEntry(
+      id: 'amount-300000',
+      partnerId: 'partner-3',
+      categoryId: 'utilities',
+      direction: 'income',
+      amountMinor: 300000,
+      bookedLocalEpochDay: 20634,
+      bookedLocalTimeMinutes: 600,
+      partnerDisplayName: 'Partner 3',
+      categoryDisplayName: 'Utilities',
+      categoryColorId: 'fallback',
+      categoryIconId: 'fallback',
+    ),
+  ];
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    final base = await _empty.prepareIndex(request, token);
+    return PreparedDashboardIndex.complete(
+      key: base.key,
+      frames: base.frames,
+      catalogs: base.catalogs,
+      scopes: <LedgerQueryKey, CurrentLedgerQueryScope>{
+        for (final zero in base.compactZeroFrames.values)
+          zero.queryKey: zero.scope,
+        for (final frame in base.frames.values) frame.queryKey: frame.scope,
+      },
+      origins: base.origins,
+      geometrySeedsByDirection: {
+        for (final direction in LedgerDirection.values)
+          direction: base.partitionFor(direction).verticalGeometrySeed,
+      },
+      focusMembershipSeedsByDirection: {
+        LedgerDirection.income: DashboardFocusMembershipSeed(_rows),
+      },
+      generation: base.generation,
+      contentDigest: base.contentDigest,
+      preparedAt: base.preparedAt,
+      buildMetrics: base.buildMetrics,
+    );
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
 }
 
 final class _NonEmptyQueryRepository implements DashboardDataRuntimeRepository {

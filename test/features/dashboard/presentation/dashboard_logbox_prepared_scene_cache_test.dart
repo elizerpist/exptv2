@@ -1306,7 +1306,7 @@ void main() {
   );
 
   test(
-    'a compact focused payload defers to the cooperative scene owner',
+    'RED LIVE-ROOT: a compact focused payload stages from prepared row resources',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache();
       addTearDown(cache.dispose);
@@ -1326,11 +1326,16 @@ void main() {
       final newLayouts = cache.rowLayoutNewCount;
       expect(focusedPayload.isRichProjected, isFalse);
 
-      expect(cache.stageWindowFromActiveResources(focused), isFalse);
-      expect(focusedPayload.isRichProjected, isFalse);
+      expect(
+        cache.stageLivePreviewWindowFromPreparedResources(focused),
+        isTrue,
+      );
+      expect(focusedPayload.isRichProjected, isTrue);
+      cache.activateWindow(focused);
+      expect(cache.sceneFor(focusedPayload), isNotNull);
       expect(cache.rowLayoutNewCount, newLayouts);
       expect(cache.textLayoutMissCount, 0);
-      expect(cache.stagedWindowIdentity, isNull);
+      expect(cache.activeWindowIdentity, focused.identity);
     },
   );
 

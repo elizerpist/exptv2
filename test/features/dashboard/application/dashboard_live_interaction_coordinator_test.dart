@@ -30,6 +30,11 @@ void main() {
       category: const DashboardFocusFacet(id: 'food', displayName: 'Étel'),
       partner: const DashboardFocusFacet(id: 'spar', displayName: 'SPAR'),
       normalizedSearch: null,
+      effectiveQueryKey: 'expense|month:2026-08|categories:food|partners:spar',
+      preparedIndexGeneration: 11,
+      visibleFrameGeneration: 19,
+      minimumAmountScaled100: 100,
+      maximumAmountScaled100: 900,
     );
 
     expect(category.generation, 1);
@@ -38,5 +43,13 @@ void main() {
     expect(coordinator.isCurrent(partner), isTrue);
     expect(partner.projectionKey, contains('category:food'));
     expect(partner.projectionKey, contains('partner:spar'));
+    expect(partner.semanticTickSequence, 2);
+    expect(partner.projectionKey, contains('index:11'));
+    expect(partner.projectionKey, contains('frame:19'));
+    expect(partner.projectionKey, contains('amount:100..900'));
+    expect(
+      partner.projectionKey,
+      contains('query:expense|month:2026-08|categories:food|partners:spar'),
+    );
   });
 }

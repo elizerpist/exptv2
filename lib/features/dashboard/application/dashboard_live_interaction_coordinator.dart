@@ -9,7 +9,9 @@ import 'dashboard_ephemeral_focus_controller.dart';
 /// target and committed-query owners remain the sources of truth.
 enum DashboardLiveInteractionSource {
   temporalSelector,
+  summaryLevel,
   budgetAvatar,
+  mindRange,
   logBoxCategory,
   partnerSwipe,
   search,
@@ -35,6 +37,11 @@ final class DashboardLiveInteractionFrame {
     required this.partner,
     required this.normalizedSearch,
     this.budgetTargetHandle,
+    this.effectiveQueryKey,
+    this.preparedIndexGeneration,
+    this.visibleFrameGeneration,
+    this.minimumAmountScaled100,
+    this.maximumAmountScaled100,
   });
 
   final int generation;
@@ -46,13 +53,25 @@ final class DashboardLiveInteractionFrame {
   final DashboardFocusFacet? partner;
   final String? normalizedSearch;
   final int? budgetTargetHandle;
+  final String? effectiveQueryKey;
+  final int? preparedIndexGeneration;
+  final int? visibleFrameGeneration;
+  final int? minimumAmountScaled100;
+  final int? maximumAmountScaled100;
+
+  int get semanticTickSequence => generation;
 
   String get projectionKey =>
+      'source:${source.name}|tick:$generation|'
       'rev:${coreRevision ?? 0}|dir:${direction.name}|'
       'scope:${temporalCandidate.effectiveScope}|'
+      'query:${effectiveQueryKey ?? temporalCandidate.parentQueryKey.value}|'
       'target:${budgetTargetHandle ?? '-'}|'
       'category:${category?.id ?? '-'}|partner:${partner?.id ?? '-'}|'
-      'search:${normalizedSearch?.length ?? 0}';
+      'search:${normalizedSearch?.length ?? 0}|'
+      'amount:${minimumAmountScaled100 ?? '-'}..${maximumAmountScaled100 ?? '-'}|'
+      'index:${preparedIndexGeneration ?? '-'}|'
+      'frame:${visibleFrameGeneration ?? '-'}';
 }
 
 /// Monotonic latest-wins owner for accepted live dashboard intent.
@@ -72,6 +91,11 @@ final class DashboardLiveInteractionCoordinator extends ChangeNotifier {
     required DashboardFocusFacet? partner,
     required String? normalizedSearch,
     int? budgetTargetHandle,
+    String? effectiveQueryKey,
+    int? preparedIndexGeneration,
+    int? visibleFrameGeneration,
+    int? minimumAmountScaled100,
+    int? maximumAmountScaled100,
   }) {
     final next = DashboardLiveInteractionFrame(
       generation: ++_generation,
@@ -83,6 +107,11 @@ final class DashboardLiveInteractionCoordinator extends ChangeNotifier {
       partner: partner,
       normalizedSearch: normalizedSearch,
       budgetTargetHandle: budgetTargetHandle,
+      effectiveQueryKey: effectiveQueryKey,
+      preparedIndexGeneration: preparedIndexGeneration,
+      visibleFrameGeneration: visibleFrameGeneration,
+      minimumAmountScaled100: minimumAmountScaled100,
+      maximumAmountScaled100: maximumAmountScaled100,
     );
     _frame = next;
     notifyListeners();

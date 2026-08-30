@@ -29,6 +29,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.onTargetPreview,
     this.onTargetSettled,
     this.onPreparedTargetHotsetRequested,
+    this.liveTargetReadiness,
     this.onDirectInputStarted,
     this.onMotionActiveChanged,
   });
@@ -43,14 +44,18 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// data work here.
   final ValueChanged<int>? onTargetPreview;
 
-  /// A committed consumer, such as the LogBox focus/query bridge. This is
-  /// intentionally separate from [onTargetPreview]: settlement promotes the
-  /// last accepted prepared target and must not manufacture a second query.
+  /// Settlement promotes the last already-visible prepared target. It must
+  /// not manufacture a second query or the first matching LogBox frame.
   final ValueChanged<int>? onTargetSettled;
 
   /// Asks the coordinator to prepare a small stable semantic neighbourhood
   /// while the carousel is idle. This never changes the selected target.
   final ValueChanged<List<int>>? onPreparedTargetHotsetRequested;
+
+  /// The finite Avatar target hotset must own complete row/text resources
+  /// before the physical rail accepts a semantic crossing. This readiness
+  /// gate does not replace the controller, physics, or scroll position.
+  final ValueListenable<bool>? liveTargetReadiness;
 
   /// Raw Avatar contact gets the same input-priority boundary as the visual
   /// rail, but does not itself claim a motion lane. A tap/cancel must not
@@ -262,9 +267,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.onMotionActiveChanged?.call(true);
   }
 
-  // The final visual target is flushed at settlement. Only a user-owned
-  // settled motion may enter a committed data bridge; programmatic target
-  // intents retain their existing explicit command seam.
+  // Every crossing has already published its complete prepared visual target.
+  // Settlement only promotes the final target through the existing semantic
+  // seam; the core treats an already-active focus as a no-op publication.
   void _onSelectionSettled(int logicalIndex) {
     final origin = _activeMotionOrigin;
     _activeMotionOrigin = null;
@@ -319,8 +324,13 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'longGapCount=${cadence.longGapCount} '
             'duplicateTickCount=${cadence.duplicateTickCount} '
             'skippedSemanticIndexCount=${cadence.skippedSemanticIndexCount} '
-            'preparedFocusRequestsAtTicks=0 '
-            'canonicalFocusCommitsAtSettle=1 '
+            'acceptedLiveSnapshots=$_motionPreviewPublications '
+            'completeLivePublications=$_motionPreviewPublications '
+            'sameVsyncCoalescedTickCount=${_motionSemanticCrossings - _motionPreviewPublications} '
+            'repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 '
+            'scenePreparesAtTicks=0 canonicalPersistenceCommitsAtTicks=0 '
+            'canonicalFocusCommitsAtSettle=0 settleVisualDeltaCount=0 '
+            'partitionRetainedFromPreviousTarget=false '
             'controllerIdentity=${identityHashCode(_controller)} '
             'scrollPositionIdentity=$positionIdentity '
             'physicsCreationCount=${_controller.physicsCreationCount} '
@@ -369,77 +379,93 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       _controller.animateToIndex(logicalIndex);
 
   @override
-  Widget build(BuildContext context) => SizedBox.expand(
-    key: const ValueKey('budget-target-avatar-rail'),
-    child: _items.isEmpty
-        ? const SizedBox.shrink()
-        : RepaintBoundary(
-            child: CenteredCarousel<_PreparedBudgetTargetAvatar>(
-              key: const ValueKey('budget-target-avatar-carousel'),
-              dataSource: CyclicCarouselDataSource<_PreparedBudgetTargetAvatar>(
-                _items,
+  Widget build(BuildContext context) {
+    final readiness = widget.liveTargetReadiness;
+    final rail = SizedBox.expand(
+      key: const ValueKey('budget-target-avatar-rail'),
+      child: _items.isEmpty
+          ? const SizedBox.shrink()
+          : RepaintBoundary(
+              child: CenteredCarousel<_PreparedBudgetTargetAvatar>(
+                key: const ValueKey('budget-target-avatar-carousel'),
+                dataSource:
+                    CyclicCarouselDataSource<_PreparedBudgetTargetAvatar>(
+                      _items,
+                    ),
+                controller: _controller,
+                spec: _spec,
+                height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                semanticsLabelBuilder: (item) => item.title,
+                onPreviewChanged: _onPreviewChanged,
+                onDirectPointerDown: widget.onDirectInputStarted,
+                onSelectionSettled: _onSelectionSettled,
+                onMotionStarted: _onMotionStarted,
+                itemBuilder: (context, item, metrics) {
+                  final avatar = SizedBox.square(
+                    dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
+                    child: item.avatarFor(
+                      selected: metrics.isSelected,
+                      selectedLiveSelectionListenable: metrics.isSelected
+                          ? widget.presentation
+                          : null,
+                      selectedLimitVisualForLiveSelection: metrics.isSelected
+                          ? () => widget.presentation.value.selectedLimitVisual
+                          : null,
+                      onSelectionVisualIdentityMismatch: () =>
+                          _recordProgressIdentityMismatch(item.targetHandle),
+                    ),
+                  );
+                  final interaction = BudgetTargetAvatarInteraction(
+                    onPointerDown: metrics.isSelected && _quickEdit != null
+                        ? () => _recordQuickEditPointerDown(item.targetHandle)
+                        : null,
+                    onLongPressStart: metrics.isSelected && _quickEdit != null
+                        ? (details) => _quickEdit?.longPressStarted(
+                            globalY: details.globalPosition.dy,
+                          )
+                        : null,
+                    onLongPressMoveUpdate:
+                        metrics.isSelected && _quickEdit != null
+                        ? (details) => _quickEdit?.longPressMoved(
+                            globalY: details.globalPosition.dy,
+                          )
+                        : null,
+                    onLongPressEnd: metrics.isSelected && _quickEdit != null
+                        ? (_) => unawaited(
+                            _quickEdit?.longPressEnded() ??
+                                Future<void>.value(),
+                          )
+                        : null,
+                    onLongPressCancel: metrics.isSelected && _quickEdit != null
+                        ? () => unawaited(
+                            _quickEdit?.longPressEnded() ??
+                                Future<void>.value(),
+                          )
+                        : null,
+                    child: metrics.isSelected ? Center(child: avatar) : avatar,
+                  );
+                  return metrics.isSelected
+                      ? SizedBox(
+                          height:
+                              BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                          child: interaction,
+                        )
+                      : interaction;
+                },
               ),
-              controller: _controller,
-              spec: _spec,
-              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
-              semanticsLabelBuilder: (item) => item.title,
-              onPreviewChanged: _onPreviewChanged,
-              onDirectPointerDown: widget.onDirectInputStarted,
-              onSelectionSettled: _onSelectionSettled,
-              onMotionStarted: _onMotionStarted,
-              itemBuilder: (context, item, metrics) {
-                final avatar = SizedBox.square(
-                  dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,
-                  child: item.avatarFor(
-                    selected: metrics.isSelected,
-                    selectedLiveSelectionListenable: metrics.isSelected
-                        ? widget.presentation
-                        : null,
-                    selectedLimitVisualForLiveSelection: metrics.isSelected
-                        ? () => widget.presentation.value.selectedLimitVisual
-                        : null,
-                    onSelectionVisualIdentityMismatch: () =>
-                        _recordProgressIdentityMismatch(item.targetHandle),
-                  ),
-                );
-                final interaction = BudgetTargetAvatarInteraction(
-                  onPointerDown: metrics.isSelected && _quickEdit != null
-                      ? () => _recordQuickEditPointerDown(item.targetHandle)
-                      : null,
-                  onLongPressStart: metrics.isSelected && _quickEdit != null
-                      ? (details) => _quickEdit?.longPressStarted(
-                          globalY: details.globalPosition.dy,
-                        )
-                      : null,
-                  onLongPressMoveUpdate:
-                      metrics.isSelected && _quickEdit != null
-                      ? (details) => _quickEdit?.longPressMoved(
-                          globalY: details.globalPosition.dy,
-                        )
-                      : null,
-                  onLongPressEnd: metrics.isSelected && _quickEdit != null
-                      ? (_) => unawaited(
-                          _quickEdit?.longPressEnded() ?? Future<void>.value(),
-                        )
-                      : null,
-                  onLongPressCancel: metrics.isSelected && _quickEdit != null
-                      ? () => unawaited(
-                          _quickEdit?.longPressEnded() ?? Future<void>.value(),
-                        )
-                      : null,
-                  child: metrics.isSelected ? Center(child: avatar) : avatar,
-                );
-                return metrics.isSelected
-                    ? SizedBox(
-                        height:
-                            BudgetTargetAvatarRail.selectedInputSurfaceHeight,
-                        child: interaction,
-                      )
-                    : interaction;
-              },
             ),
-          ),
-  );
+    );
+    if (readiness == null) return rail;
+    return ValueListenableBuilder<bool>(
+      valueListenable: readiness,
+      child: rail,
+      builder: (context, ready, child) => IgnorePointer(
+        key: const ValueKey('budget-target-avatar-live-root-readiness'),
+        ignoring: !ready,
+        child: child,
+      ),
+    );
+  }
 
   void _recordProgressIdentityMismatch(int avatarTargetHandle) {
     final visual = widget.presentation.value.selectedLimitVisual;

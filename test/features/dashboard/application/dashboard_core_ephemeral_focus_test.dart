@@ -515,7 +515,7 @@ void main() {
   );
 
   testWidgets(
-    'time component crossings perform zero semantic work and commit only the latest settle candidate',
+    'RED LIVE-TIME: every component crossing publishes its exact visible data before settle',
     (tester) async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -529,7 +529,6 @@ void main() {
       addTearDown(core.dispose);
       await core.bootstrap();
       final origin = core.navigation.state;
-      final visiblePublishes = core.visibleFrames.visiblePublishCount;
       final candidates = <DashboardNavigationState>[];
       for (var offset = 1; offset <= 8; offset += 1) {
         final candidate = core.experimentalTemporalComponentOffsetCandidate(
@@ -545,14 +544,32 @@ void main() {
       core.beginSegmentedSummaryMotion();
       FluviDiagnosticLogger.clear();
       for (final candidate in candidates) {
+        final publishesBefore = core.visibleFrames.visiblePublishCount;
         core.navigateExperimentalTemporalComponentCandidate(
           candidate: candidate,
           component: DashboardTemporalAnchorComponent.day,
         );
+        await tester.pump();
+
+        expect(core.navigation.state.dayCursor, candidate.dayCursor);
+        expect(
+          core.visibleFrames.logBoxLane.value!.queryKey,
+          candidate.temporalAnchor.sourceChildQueryKey,
+          reason:
+              'The production LogBox lane must own the semantic tick before '
+              'the flight settles.',
+        );
+        expect(
+          core.visibleFrames.countLane.value!.queryKey,
+          candidate.temporalAnchor.sourceChildQueryKey,
+        );
+        expect(
+          core.visibleFrames.visiblePublishCount,
+          publishesBefore + 1,
+          reason: 'Each distinct controlled-frame tick publishes live data.',
+        );
       }
 
-      expect(core.navigation.state, same(origin));
-      expect(core.visibleFrames.visiblePublishCount, visiblePublishes);
       expect(repository.prepareCalls, 1);
       expect(
         FluviDiagnosticLogger.entries.where(
@@ -563,6 +580,8 @@ void main() {
         isEmpty,
       );
 
+      final visibleBeforeSettle = core.visibleFrames.value;
+      final publishesBeforeSettle = core.visibleFrames.visiblePublishCount;
       core.settleExperimentalTemporalComponentCandidate(
         candidate: candidates.last,
         component: DashboardTemporalAnchorComponent.day,
@@ -570,13 +589,81 @@ void main() {
       await tester.pump();
 
       expect(core.navigation.state.dayCursor, candidates.last.dayCursor);
+      expect(core.visibleFrames.value, same(visibleBeforeSettle));
+      expect(
+        core.visibleFrames.visiblePublishCount,
+        publishesBeforeSettle,
+        reason:
+            'Settle promotes ownership only; it cannot be the first data '
+            'publication or produce a second visual frame.',
+      );
       final summary = FluviDiagnosticLogger.entries.singleWhere(
         (event) => event.stage == 'TM|FLIGHT_SUMMARY',
       );
       expect(summary.scope, contains('semanticTicks=${candidates.length}'));
       expect(summary.scope, contains('transientScenePrepares=0'));
-      expect(summary.scope, contains('canonicalSettleCommits=1'));
+      expect(
+        summary.scope,
+        contains('acceptedLiveSnapshots=${candidates.length}'),
+      );
+      expect(summary.scope, contains('liveRootMisses=0'));
+      expect(summary.scope, contains('canonicalSettleCommits=0'));
+      expect(summary.scope, contains('settleVisualDeltaCount=0'));
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'RED LIVE-LEVEL: every segmented level crossing publishes exact visible data in one frame',
+    (tester) async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.year,
+        isRailOpen: false,
+      );
+      await tester.pump();
+      expect(core.navigation.state.plane, TimePlane.year);
+      expect(core.navigation.state.isRailOpen, isFalse);
+      expect(
+        core.visibleFrames.logBoxLane.value!.queryKey,
+        core.navigation.state.parentQueryKey,
+      );
+      expect(
+        core.visibleFrames.countLane.value!.queryKey,
+        core.navigation.state.parentQueryKey,
+      );
+
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.sum,
+        isRailOpen: false,
+      );
+      await tester.pump();
+      expect(core.navigation.state.plane, TimePlane.sum);
+      expect(
+        core.visibleFrames.logBoxLane.value!.queryKey,
+        core.navigation.state.parentQueryKey,
+      );
+      expect(repository.prepareCalls, 1);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'SCENE_WINDOW_PREPARE_STARTED' ||
+              event.stage == 'QUERY_APPLY_STARTED',
+        ),
+        isEmpty,
+      );
     },
   );
 
@@ -662,7 +749,7 @@ void main() {
   );
 
   test(
-    'Avatar transient crossings update only the prepared visual target and defer one focus/index publication to settle',
+    'RED LIVE-AVATAR: a real handle crossing publishes one complete focused frame before settle',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -711,7 +798,6 @@ void main() {
       final foodHandle = budget.value.items.indexWhere(
         (item) => item.target.category?.id == 'food',
       );
-      final committedFrame = core.visibleFrames.value;
       final visiblePublishes = core.visibleFrames.visiblePublishCount;
       final indexPublishes = core.dataRuntime.publishedIndexCount;
       FluviDiagnosticLogger.clear();
@@ -722,19 +808,40 @@ void main() {
       );
 
       expect(budget.value.selectedHandle, foodHandle);
-      expect(budget.value.isTransientTargetPreview, isTrue);
-      expect(core.focus.state, isNull);
-      expect(core.visibleFrames.value, same(committedFrame));
-      expect(core.visibleFrames.visiblePublishCount, visiblePublishes);
-      expect(core.dataRuntime.publishedIndexCount, indexPublishes);
+      expect(core.focus.state?.category?.id, 'food');
+      expect(core.visibleFrames.value!.scope.categoryIds, <String>{'food'});
+      expect(
+        core.visibleFrames.amountLane.value!.queryKey,
+        core.visibleFrames.logBoxLane.value!.queryKey,
+      );
+      expect(
+        core.visibleFrames.countLane.value!.queryKey,
+        core.visibleFrames.logBoxLane.value!.queryKey,
+      );
+      expect(core.visibleFrames.visiblePublishCount, visiblePublishes + 1);
+      expect(
+        core.dataRuntime.publishedIndexCount,
+        indexPublishes,
+        reason:
+            'The live focus snapshot comes from the prepared Avatar hotset; '
+            'it does not install a new repository-built canonical index.',
+      );
       expect(repository.prepareCalls, 1);
       expect(
-        FluviDiagnosticLogger.entries
-            .singleWhere((event) => event.stage == 'AV|TARGET_PREVIEW_BOUND')
-            .scope,
-        contains('indexPublished=false'),
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'FOCUS_PUBLICATION_COMPLETED',
+        ),
+        hasLength(1),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|TARGET_PREVIEW_BOUND',
+        ),
+        isEmpty,
       );
 
+      final visibleBeforeSettle = core.visibleFrames.value;
+      final publishesBeforeSettle = core.visibleFrames.visiblePublishCount;
       expect(
         await drilldown.commitBudgetTargetHandle(
           targetHandle: foodHandle,
@@ -742,9 +849,9 @@ void main() {
         ),
         isTrue,
       );
-      expect(budget.value.isTransientTargetPreview, isFalse);
       expect(core.focus.state?.category?.id, 'food');
-      expect(core.visibleFrames.visiblePublishCount, visiblePublishes + 1);
+      expect(core.visibleFrames.value, same(visibleBeforeSettle));
+      expect(core.visibleFrames.visiblePublishCount, publishesBeforeSettle);
       expect(repository.prepareCalls, 1);
     },
   );
@@ -915,7 +1022,10 @@ void main() {
       );
       expect(
         core.visibleFrames.amountPreviewPublishCount,
-        greaterThanOrEqualTo(2),
+        0,
+        reason:
+            'Avatar crossings publish one complete visible generation; they '
+            'must not expose a scalar amount-only notifier first.',
       );
 
       gates.first.complete();
@@ -1026,6 +1136,7 @@ void main() {
       FluviDiagnosticLogger.clear();
 
       core.beginBudgetAvatarMotion();
+      final visiblePublishes = core.visibleFrames.visiblePublishCount;
       for (var index = 0; index < 8; index += 1) {
         final utilities = index.isEven;
         expect(
@@ -1039,9 +1150,18 @@ void main() {
           ),
           isTrue,
         );
+        expect(
+          core.visibleFrames.amountLane.value!.queryKey,
+          core.visibleFrames.logBoxLane.value!.queryKey,
+        );
+        expect(
+          core.visibleFrames.countLane.value!.queryKey,
+          core.visibleFrames.logBoxLane.value!.queryKey,
+        );
       }
       core.endBudgetAvatarMotion();
 
+      expect(core.visibleFrames.visiblePublishCount, visiblePublishes + 8);
       expect(core.budgetAvatarFocusHotsetDiagnostics['promotions'], 8);
       expect(core.budgetAvatarFocusHotsetDiagnostics['misses'], 0);
       final derived = FluviDiagnosticLogger.entries

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'dashboard_budget_presentation_controller.dart';
@@ -16,6 +18,9 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
 
   final DashboardCoreController core;
   final DashboardBudgetPresentationController? presentation;
+
+  ValueListenable<bool> get liveTargetReadiness =>
+      core.budgetAvatarLiveRootReady;
 
   /// Prepares only the rail's fixed local semantic horizon. This adapter owns
   /// target-to-facet translation; the Core remains the sole owner of the
@@ -45,11 +50,6 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
     int? targetHandle,
     DashboardBudgetPresentationState? state,
   }) {
-    final presentation = this.presentation;
-    if (targetHandle != null && presentation != null) {
-      _record(source: 'avatarPreview', targetHandle: targetHandle);
-      return Future<bool>.value(presentation.previewTargetHandle(targetHandle));
-    }
     final target = targetHandle == null
         ? state?.liveSelection.target
         : presentation?.targetForHandle(targetHandle);

@@ -964,7 +964,7 @@ void main() {
   );
 
   test(
-    'an experimental fixed MONTH crossing stays visual until one retained-hotset settle',
+    'RED LIVE-TIME: an experimental MONTH crossing activates its retained root before settle',
     () async {
       final displayFrames = _DisplayFrameScheduler();
       final core = DashboardCoreController(
@@ -1033,21 +1033,33 @@ void main() {
         component: DashboardTemporalAnchorComponent.month,
         offset: -1,
       );
+      displayFrames.flush();
 
       expect(
         core.navigation.state.monthCursor.month,
-        7,
+        6,
         reason:
-            'A semantic carousel crossing is presentation-only while the '
-            'gesture is active; it must not publish a navigation frame.',
+            'A semantic carousel crossing must publish its exact prepared '
+            'visible target while the gesture is still active.',
       );
+      expect(
+        core.visibleFrames.logBoxLane.value!.queryKey,
+        candidate.temporalAnchor.sourceChildQueryKey,
+      );
+      for (final payload in candidateInteraction.payloads) {
+        expect(
+          cache.railCriticalSceneFor(payload),
+          isNotNull,
+          reason: 'The retained exact root must activate in the crossing turn.',
+        );
+      }
       expect(
         genericPrepareCalls,
         genericPrepareCallsBeforeCross,
-        reason:
-            'A transient crossing must not request foreground scene work.',
+        reason: 'A transient crossing must not request foreground scene work.',
       );
 
+      final visibleBeforeSettle = core.visibleFrames.value;
       core.settleExperimentalTemporalComponentCandidate(
         candidate: candidate,
         component: DashboardTemporalAnchorComponent.month,
@@ -1066,9 +1078,10 @@ void main() {
         genericPrepareCalls,
         genericPrepareCallsBeforeCross,
         reason:
-            'The single settled publication promotes the already-retained '
-            'hotset rather than requesting post-selection foreground work.',
+            'Settle promotes the already-visible retained hotset rather than '
+            'requesting foreground work.',
       );
+      expect(core.visibleFrames.value, same(visibleBeforeSettle));
     },
   );
 

@@ -427,6 +427,59 @@ void main() {
   );
 
   testWidgets(
+    'the physical Avatar rail accepts input only after the complete live target hotset is ready',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(3));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final readiness = ValueNotifier<bool>(false);
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(readiness.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+            child: BudgetTargetAvatarRail(
+              presentation: presentation,
+              liveTargetReadiness: readiness,
+            ),
+          ),
+        ),
+      );
+
+      final finder = find.byKey(
+        const ValueKey('budget-target-avatar-live-root-readiness'),
+      );
+      expect(tester.widget<IgnorePointer>(finder).ignoring, isTrue);
+      readiness.value = true;
+      await tester.pump();
+      expect(tester.widget<IgnorePointer>(finder).ignoring, isFalse);
+      expect(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        findsOneWidget,
+        reason: 'readiness must not replace the rail/controller subtree',
+      );
+    },
+  );
+
+  testWidgets(
     'RED: real Avatar ballistic motion does not lock direct Summary input',
     (tester) async {
       final harness = _Harness(_categories(9));

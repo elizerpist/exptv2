@@ -398,6 +398,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   ),
                 ),
           onPreparedTargetHotsetRequested: drilldown?.primeBudgetTargetHotset,
+          liveTargetReadiness: drilldown?.liveTargetReadiness,
           onMotionActiveChanged: onAvatarMotionActiveChanged,
           onDirectInputStarted: onAvatarDirectInputStarted,
         );

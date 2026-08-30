@@ -308,6 +308,26 @@ class _CoreDashboardState extends State<CoreDashboard>
                 yieldToBackground: _yieldScenePreparationToScheduler,
               ),
       hasRetained: _preparedSceneCache.hasRetainedWindow,
+      prepareLiveInteractionResources:
+          (window, {required retainedKey, required retainViewportId}) =>
+              _preparedSceneCache.prepareLiveInteractionResourceWindow(
+                resourceKey: retainedKey,
+                window: window,
+                surfaceWidth: controller.committedLogViewport.surfaceWidth,
+                retainViewportId: retainViewportId,
+                devicePixelRatio: _devicePixelRatio,
+                maxContiguousUiSliceMicros: DashboardLogBoxPreparedSceneCache
+                    .defaultMaxContiguousUiSliceMicros,
+                yieldToBackground: _yieldScenePreparationToScheduler,
+              ),
+      hasLiveInteractionResources: (window, {required candidateKey}) =>
+          _preparedSceneCache.hasLiveInteractionResourceWindow(
+            window,
+            resourceKey: candidateKey,
+          ),
+      stageLiveInteractionFromPreparedResources:
+          (window, {required retainViewportId}) => _preparedSceneCache
+              .stageLivePreviewWindowFromPreparedResources(window),
       retainActive: (window, {required retainedKey}) => _preparedSceneCache
           .retainActiveWindow(retainedKey: retainedKey, window: window),
       discardRetainedFocus: _preparedSceneCache.discardRetainedFocusBaseWindow,
@@ -1256,6 +1276,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         direction,
         QueryAmountRange.domainScope(scope),
         controller.coreRevision,
+        _preparedSceneCache.activeWindowDigest,
       );
       if (_mindAmountPreviewPrimeSignature != primeSignature) {
         _mindAmountPreviewPrimeSignature = primeSignature;

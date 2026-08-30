@@ -120,6 +120,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   final LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>
   _retainedCandidateBanks =
       LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>();
+  String? _liveInteractionResourceKey;
   Set<String> _protectedCandidateKeys = const <String>{};
   int _retainedCandidateAdmissionEpoch = 0;
   int _generation = 0;
@@ -197,6 +198,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   String? get stagedWindowIdentity => _stagedBank?.window.identity;
   int get retainedCandidateBankCount => _retainedCandidateBanks.length;
   bool get hasRetainedFocusBaseWindow => _retainedFocusBaseBank != null;
+  bool get hasLiveInteractionResourceBank =>
+      _liveInteractionResourceKey != null &&
+      _retainedCandidateBanks.containsKey(_liveInteractionResourceKey);
   int get protectedCandidateBankCount => _protectedCandidateKeys.length;
   int get retainedCandidatePreparedRowCount =>
       _retainedCandidateUniqueResources.rowLayouts.length;
@@ -232,6 +236,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 
   double? get surfaceWidth => _surfaceWidth;
+  double? get devicePixelRatio => _devicePixelRatio;
   int get activeWindowDigest => Object.hash(
     _activeWindow?.identity,
     _surfaceWidth,
@@ -257,7 +262,37 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// Budget-avatar crossings use it to keep the visible category LogBox in
   /// the same interaction tick as the already-prepared chart target. A miss
   /// deliberately falls through to [prepareWindow]'s bounded async path.
-  bool stageWindowFromActiveResources(DashboardLogBoxSceneWindow window) {
+  bool stageWindowFromActiveResources(DashboardLogBoxSceneWindow window) =>
+      _stageWindowFromPreparedResources(
+        window,
+        includeRetainedResources: false,
+      );
+
+  /// Materializes only the bounded live first-root projection, then stages it
+  /// from paragraph resources which were prepared before direct manipulation
+  /// began. This path creates no [TextPainter], performs no repository/index
+  /// work and never awaits scene preparation on a semantic tick.
+  ///
+  /// Unlike [stageWindowFromActiveResources], this capability deliberately
+  /// accepts a compact payload: arbitrary Mind ranges have an exact Query key
+  /// that cannot be enumerated ahead of time, while their row paragraphs are
+  /// reusable by immutable row/layout identity.
+  bool stageLivePreviewWindowFromPreparedResources(
+    DashboardLogBoxSceneWindow window,
+  ) {
+    for (final payload in window.payloads) {
+      payload.materializeRichProjection();
+    }
+    return _stageWindowFromPreparedResources(
+      window,
+      includeRetainedResources: true,
+    );
+  }
+
+  bool _stageWindowFromPreparedResources(
+    DashboardLogBoxSceneWindow window, {
+    required bool includeRetainedResources,
+  }) {
     _ensureUsable();
     final activeWindow = _activeWindow;
     final width = _surfaceWidth;
@@ -272,6 +307,12 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       return false;
     }
 
+    final reusableRetainedResources = includeRetainedResources
+        ? _retainedCandidateReusableResources(
+            surfaceWidth: width,
+            devicePixelRatio: devicePixelRatio,
+          )
+        : const _RetainedCandidateReusableResources.empty();
     final scenes = <String, DashboardPreparedLogBoxScene>{};
     final emptyQueryKeys = <String>{};
     final rowLayouts = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
@@ -300,12 +341,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       final sceneHeaders = <String, TextPainter>{};
       for (final item in payload.flatItems) {
         final key = _RowLayoutKey.fromRow(item.row);
-        final layout = _rowLayouts[key];
+        final layout =
+            _rowLayouts[key] ?? reusableRetainedResources.rowLayouts[key];
         if (layout == null) return false;
         rowLayouts[key] = layout;
         sceneRows[item.row.entryId] = layout;
         if (item.dayLabel case final String label) {
-          final header = _dayHeaders[label];
+          final header =
+              _dayHeaders[label] ?? reusableRetainedResources.dayHeaders[label];
           if (header == null) return false;
           dayHeaders[label] = header;
           sceneHeaders[label] = header;
@@ -463,6 +506,72 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     );
   }
 
+  /// Prepares one bounded row-resource universe for arbitrary live filters.
+  ///
+  /// This uses the existing candidate-bank/resource-lease owner, but its key
+  /// has higher admission priority than speculative Query-chip neighbours.
+  /// A Mind amount range cannot enumerate every Query key in advance; it can
+  /// nevertheless guarantee a synchronous first root when every immutable
+  /// source row paragraph is ready before the gesture begins.
+  Future<void> prepareLiveInteractionResourceWindow({
+    required String resourceKey,
+    required DashboardLogBoxSceneWindow window,
+    double? surfaceWidth,
+    double devicePixelRatio = 1,
+    int? retainViewportId,
+    int yieldEveryRows = 64,
+    int maxContiguousUiSliceMicros =
+        DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
+    DashboardLogBoxScenePreparationYield? yieldToBackground,
+  }) async {
+    _ensureUsable();
+    final priorKey = _liveInteractionResourceKey;
+    if (priorKey == resourceKey &&
+        hasCandidateWindow(window, candidateKey: resourceKey)) {
+      return;
+    }
+    if (priorKey != null && priorKey != resourceKey) {
+      _discardRetainedCandidateBank(priorKey);
+    }
+    _liveInteractionResourceKey = resourceKey;
+    try {
+      await prepareCandidateWindow(
+        candidateKey: resourceKey,
+        window: window,
+        surfaceWidth: surfaceWidth,
+        devicePixelRatio: devicePixelRatio,
+        retainViewportId: retainViewportId,
+        yieldEveryRows: yieldEveryRows,
+        maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
+        yieldToBackground: yieldToBackground,
+        intent: DashboardLogBoxScenePreparationIntent.committedMaintenance,
+      );
+    } on Object {
+      if (_liveInteractionResourceKey == resourceKey &&
+          !_retainedCandidateBanks.containsKey(resourceKey)) {
+        _liveInteractionResourceKey = null;
+      }
+      rethrow;
+    }
+  }
+
+  bool hasLiveInteractionResourceWindow(
+    DashboardLogBoxSceneWindow window, {
+    required String resourceKey,
+  }) {
+    if (_liveInteractionResourceKey != resourceKey) return false;
+    final bank = _retainedCandidateBanks[resourceKey];
+    if (bank == null ||
+        bank.surfaceWidth != _surfaceWidth ||
+        bank.devicePixelRatio != _devicePixelRatio ||
+        !_matchesWindow(bank, window)) {
+      return false;
+    }
+    _touchRetainedCandidateBank(resourceKey, bank);
+    return bank.manifest.isComplete &&
+        window.payloads.every(bank.hasCompleteSceneFor);
+  }
+
   bool hasRetainedWindow(DashboardLogBoxSceneWindow window) =>
       _retainedCandidateBankFor(window) != null ||
       _retainedFocusBaseBankFor(window) != null;
@@ -618,6 +727,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// Discards only the invisible bank owned by [candidateKey].  This is used
   /// by Query Cancel and LRU eviction and can never mutate active rendering.
   void discardCandidateWindow(String candidateKey) {
+    if (_liveInteractionResourceKey == candidateKey) {
+      _liveInteractionResourceKey = null;
+    }
     _discardRetainedCandidateBank(candidateKey);
   }
 
@@ -1542,6 +1654,13 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'activeWindow': _activeWindow?.identity,
     'stagedWindow': _stagedBank?.window.identity,
     'retainedCandidateBanks': retainedCandidateBankCount,
+    'liveInteractionResourceBank': hasLiveInteractionResourceBank,
+    'liveInteractionResourceRows': _liveInteractionResourceKey == null
+        ? 0
+        : _retainedCandidateBanks[_liveInteractionResourceKey]
+                  ?.rowLayouts
+                  .length ??
+              0,
     'retainedFocusBaseWindow': hasRetainedFocusBaseWindow,
     'protectedCandidateBanks': protectedCandidateBankCount,
     'retainedCandidatePreparedRows': retainedCandidatePreparedRowCount,
@@ -1801,8 +1920,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         _retainedCandidateBanks.length < maximumRetainedCandidateBanks) {
       return true;
     }
+    if (candidateKey == _liveInteractionResourceKey) {
+      return _retainedCandidateBanks.keys.any(
+        (key) => key != _liveInteractionResourceKey,
+      );
+    }
     return _retainedCandidateBanks.keys.any(
-      (key) => !_protectedCandidateKeys.contains(key),
+      (key) =>
+          key != _liveInteractionResourceKey &&
+          !_protectedCandidateKeys.contains(key),
     );
   }
 
@@ -1850,7 +1976,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     while (_candidateBanksExceedBounds(next.values)) {
       String? evictable;
       for (final key in next.keys) {
-        if (!_protectedCandidateKeys.contains(key)) {
+        final liveCandidate = candidateKey == _liveInteractionResourceKey;
+        if (key != _liveInteractionResourceKey &&
+            (liveCandidate || !_protectedCandidateKeys.contains(key))) {
           evictable = key;
           break;
         }
@@ -1898,7 +2026,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
   String? _evictableRetainedCandidateKey() {
     for (final key in _retainedCandidateBanks.keys) {
-      if (!_protectedCandidateKeys.contains(key)) return key;
+      if (key != _liveInteractionResourceKey &&
+          !_protectedCandidateKeys.contains(key)) {
+        return key;
+      }
     }
     return null;
   }
@@ -1929,15 +2060,26 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _resourceLeases.releaseBank(removed);
   }
 
-  _RetainedCandidateReusableResources _retainedCandidateReusableResources() {
+  _RetainedCandidateReusableResources _retainedCandidateReusableResources({
+    double? surfaceWidth,
+    double? devicePixelRatio,
+  }) {
     final rows = <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{};
     final headers = <String, TextPainter>{};
     final focusBase = _retainedFocusBaseBank;
-    if (focusBase != null) {
+    if (focusBase != null &&
+        (surfaceWidth == null || focusBase.surfaceWidth == surfaceWidth) &&
+        (devicePixelRatio == null ||
+            focusBase.devicePixelRatio == devicePixelRatio)) {
       rows.addAll(focusBase.rowLayouts);
       headers.addAll(focusBase.dayHeaders);
     }
     for (final bank in _retainedCandidateBanks.values) {
+      if ((surfaceWidth != null && bank.surfaceWidth != surfaceWidth) ||
+          (devicePixelRatio != null &&
+              bank.devicePixelRatio != devicePixelRatio)) {
+        continue;
+      }
       for (final entry in bank.rowLayouts.entries) {
         rows.putIfAbsent(entry.key, () => entry.value);
       }
@@ -1987,6 +2129,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _stagedBank = null;
     _privatelyLeasedPreparationBank = null;
     _retainedCandidateBanks.clear();
+    _liveInteractionResourceKey = null;
     _retainedFocusBaseBank = null;
     _retainedFocusBaseKey = null;
     _activeBank = RailCriticalSceneBank.empty();

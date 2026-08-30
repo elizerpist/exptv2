@@ -60,6 +60,7 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   int _amountPreviewGeneration = 0;
   int interactionPreviewPublishCount = 0;
   int staleInteractionPreviewRejectCount = 0;
+  int mixedProjectionCount = 0;
   int _interactionPreviewGeneration = 0;
 
   /// These remain explicit proof counters: neither operation belongs here.
@@ -142,6 +143,16 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     final countChanged = _countLane.flush();
     _flushLogBoxPresentationLane();
     final logBoxChanged = _logBoxLane.flush();
+    final amountKey = _amountLane.value?.queryKey;
+    final countKey = _countLane.value?.queryKey;
+    final logBoxKey = _logBoxLane.value?.queryKey;
+    if (amountKey != countKey || amountKey != logBoxKey) {
+      mixedProjectionCount += 1;
+      throw StateError(
+        'Mixed live projection: amount=$amountKey count=$countKey '
+        'logBox=$logBoxKey previewGeneration=$previewGeneration',
+      );
+    }
     if (logBoxChanged) logBoxPayloadNotifyCount += 1;
     final published = amountChanged || countChanged || logBoxChanged;
     if (published) interactionPreviewPublishCount += 1;
