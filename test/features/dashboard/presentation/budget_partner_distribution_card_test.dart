@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -305,6 +306,86 @@ void main() {
       expect(plot, findsOneWidget);
       expect(tester.getSize(plot).height, greaterThanOrEqualTo(38.72));
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Rhythm slot records its real ready/unavailable owner and contributes it to a bug marker',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final harness = _PartnerCardHarness();
+      addTearDown(harness.dispose);
+      await harness.pump(
+        tester,
+        height: 217,
+        includeRhythm: true,
+        onCommit:
+            ({required partner, required source, required targetHandle}) =>
+                Future<bool>.value(true),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+        findsOneWidget,
+      );
+      final ready = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'RHYTHM|SLOT_STATE',
+      );
+      expect(ready.scope, contains('state=ready'));
+      expect(ready.scope, contains('renderer=SpendingRhythmBarChart'));
+      expect(ready.scope, contains('globalBounds='));
+      expect(ready.scope, contains('paintBounds='));
+      expect(ready.scope, contains('background=transparent'));
+      expect(ready.scope, contains('barCount=8'));
+
+      final readyEventCount = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'RHYTHM|SLOT_STATE')
+          .length;
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'RHYTHM|SLOT_STATE')
+            .length,
+        readyEventCount,
+        reason: 'Unchanged layout frames must not flood the rolling tail.',
+      );
+
+      harness.rhythm.value = null;
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('partner-spending-rhythm-unavailable')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+        findsNothing,
+      );
+      final unavailable = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'RHYTHM|SLOT_STATE',
+      );
+      expect(unavailable.scope, contains('state=rhythmUnavailable'));
+      expect(unavailable.scope, contains('renderer=transparentEmptySlot'));
+      expect(unavailable.scope, contains('background=transparent'));
+
+      FluviDiagnosticLogger.markUserBug('gray_rectangle');
+      final marker = FluviDiagnosticLogger.entries.last;
+      expect(marker.stage, 'USER_MARK');
+      expect(marker.scope, contains('issue=gray_rectangle'));
+      expect(marker.scope, contains('.state=rhythmUnavailable'));
+      expect(marker.scope, contains('.renderer=transparentEmptySlot'));
+      expect(marker.scope, contains('.globalBounds='));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      FluviDiagnosticLogger.markUserBug('other');
+      expect(
+        FluviDiagnosticLogger.entries.last.scope,
+        isNot(contains('rhythmSlot.')),
+        reason: 'Disposed pages must not retain marker context providers.',
+      );
     },
   );
 }

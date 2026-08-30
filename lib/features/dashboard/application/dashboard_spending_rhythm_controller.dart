@@ -133,17 +133,20 @@ final class DashboardSpendingRhythmState {
     required this.startColorArgb,
     required this.middleColorArgb,
     required this.endColorArgb,
+    this.interactionGeneration = 0,
   });
 
   final SpendingRhythmAnalysis analysis;
   final int startColorArgb;
   final int middleColorArgb;
   final int endColorArgb;
+  final int interactionGeneration;
 
   bool sameAs(DashboardSpendingRhythmState other) =>
       startColorArgb == other.startColorArgb &&
       middleColorArgb == other.middleColorArgb &&
       endColorArgb == other.endColorArgb &&
+      interactionGeneration == other.interactionGeneration &&
       analysis.sameProjectionAs(other.analysis);
 }
 
@@ -383,6 +386,7 @@ final class DashboardSpendingRhythmController
       startColorArgb: colors.$1,
       middleColorArgb: colors.$2,
       endColorArgb: colors.$3,
+      interactionGeneration: liveAnalysis.interactionGeneration,
     );
     if (value == null || !value!.sameAs(next)) value = next;
     _recordState(

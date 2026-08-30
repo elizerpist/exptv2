@@ -120,6 +120,54 @@ void main() {
     expect(marker.elapsedMicros, isNotNull);
   });
 
+  test('user marker snapshots registered feature-owner context on demand', () {
+    Map<String, Object?> ownerSnapshot() => const <String, Object?>{
+      'state': 'ready',
+      'renderer': 'SpendingRhythmBarChart',
+      'globalBounds': '12.0,34.0 320.0x70.4',
+    };
+
+    FluviDiagnosticLogger.registerUserMarkerContext(
+      'rhythmSlot.test',
+      ownerSnapshot,
+    );
+    addTearDown(
+      () => FluviDiagnosticLogger.unregisterUserMarkerContext(
+        'rhythmSlot.test',
+        ownerSnapshot,
+      ),
+    );
+
+    FluviDiagnosticLogger.markUserBug(
+      'gray_rectangle',
+      context: const <String, Object?>{'mode': 'budget'},
+    );
+
+    final marker = FluviDiagnosticLogger.entries.last;
+    expect(marker.stage, 'USER_MARK');
+    expect(marker.scope, contains('issue=gray_rectangle'));
+    expect(marker.scope, contains('mode=budget'));
+    expect(marker.scope, contains('rhythmSlot.test.state=ready'));
+    expect(
+      marker.scope,
+      contains('rhythmSlot.test.renderer=SpendingRhythmBarChart'),
+    );
+    expect(
+      marker.scope,
+      contains('rhythmSlot.test.globalBounds=12.0,34.0 320.0x70.4'),
+    );
+
+    FluviDiagnosticLogger.unregisterUserMarkerContext(
+      'rhythmSlot.test',
+      ownerSnapshot,
+    );
+    FluviDiagnosticLogger.markUserBug('other');
+    expect(
+      FluviDiagnosticLogger.entries.last.scope,
+      isNot(contains('rhythmSlot.test.')),
+    );
+  });
+
   testWidgets('rapid bursts batch UI publication without dropping events', (
     tester,
   ) async {

@@ -95,6 +95,8 @@ abstract final class FluviDiagnosticLogger {
   // actual already-bound APK path instead of silently missing startup.
   static final Map<String, FluviDiagnosticEvent> _headerRendererEvidence =
       <String, FluviDiagnosticEvent>{};
+  static final Map<String, Map<String, Object?> Function()>
+  _userMarkerContextProviders = <String, Map<String, Object?> Function()>{};
   static final _FluviDiagnosticNotifier _version = _FluviDiagnosticNotifier(0);
   static final Stopwatch _sessionStopwatch = Stopwatch()..start();
   static final String _sessionId =
@@ -351,11 +353,43 @@ abstract final class FluviDiagnosticLogger {
     Map<String, Object?> context = const <String, Object?>{},
   }) {
     if (!kFluviOnscreenDiagnosticsEnabled) return;
-    final fields = <String, Object?>{'issue': issue, ...context}.entries
-        .where((entry) => entry.value != null)
-        .map((entry) => '${entry.key}=${entry.value}')
-        .join(' ');
+    final providerContext = <String, Object?>{};
+    for (final provider in _userMarkerContextProviders.entries) {
+      try {
+        for (final field in provider.value().entries) {
+          providerContext['${provider.key}.${field.key}'] = field.value;
+        }
+      } on Object catch (error) {
+        providerContext['${provider.key}.snapshotError'] = '$error';
+      }
+    }
+    final fields =
+        <String, Object?>{'issue': issue, ...context, ...providerContext}
+            .entries
+            .where((entry) => entry.value != null)
+            .map((entry) => '${entry.key}=${entry.value}')
+            .join(' ');
     log(FluviDiagnosticEvent(stage: 'USER_MARK', scope: fields));
+  }
+
+  /// Lets a mounted feature contribute its latest already-sampled state to a
+  /// human bug marker. Providers are keyed/replaced, never accumulated, and
+  /// are invoked only by the explicit marker action—not by event ingestion.
+  static void registerUserMarkerContext(
+    String owner,
+    Map<String, Object?> Function() provider,
+  ) {
+    if (!kFluviOnscreenDiagnosticsEnabled) return;
+    _userMarkerContextProviders[owner] = provider;
+  }
+
+  static void unregisterUserMarkerContext(
+    String owner,
+    Map<String, Object?> Function() provider,
+  ) {
+    if (identical(_userMarkerContextProviders[owner], provider)) {
+      _userMarkerContextProviders.remove(owner);
+    }
   }
 
   static String _exportText({

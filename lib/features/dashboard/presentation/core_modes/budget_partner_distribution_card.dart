@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
@@ -372,8 +373,14 @@ class _BudgetPartnerDistributionCardState
     final drawable = widget.drawableFrames.value;
     final bank = drawable?.partnerVisualBank;
     if (drawable == null || bank == null) {
-      return const SizedBox.expand(
-        key: ValueKey('budget-partner-distribution-preparing'),
+      return _rhythmSlotOwnerProbe(
+        visualState: 'partnerDrawablePreparing',
+        mountedRenderer: 'none',
+        direction: _direction,
+        targetHandle: _targetHandle,
+        child: const SizedBox.expand(
+          key: ValueKey('budget-partner-distribution-preparing'),
+        ),
       );
     }
     final visualFrame = bank.frameFor(_direction, targetHandle: _targetHandle);
@@ -389,50 +396,69 @@ class _BudgetPartnerDistributionCardState
             authoritativePartner: _focus?.state?.partner,
           );
     final selectedPartnerId = selectedPartner?.id;
-    Widget surface(BudgetPartnerDistributionLayout layout) =>
-        BudgetDistributionPageSurface(
-          heading: const _PartnerDistributionHeading(),
-          donut: _InteractivePartnerDistributionDonut(
-            scene: visualFrame.scene,
-            selectedSliceIndex: visualFrame.selectedSliceIndexForPartnerId(
-              selectedPartnerId,
+    Widget surface(
+      BudgetPartnerDistributionLayout layout,
+    ) => BudgetDistributionPageSurface(
+      heading: const _PartnerDistributionHeading(),
+      donut: _InteractivePartnerDistributionDonut(
+        scene: visualFrame.scene,
+        selectedSliceIndex: visualFrame.selectedSliceIndexForPartnerId(
+          selectedPartnerId,
+        ),
+        absentSelectionLabel: selectedPartnerId == null
+            ? null
+            : selectedPartner?.displayName,
+        onSliceTap: (index) {
+          if (index < 0 || index >= frame.entries.length) return;
+          _selectPartner(frame.entries[index], source: 'partnerPie');
+        },
+      ),
+      rightHeading: 'Partnerek',
+      listKey: const ValueKey('budget-partner-distribution-list'),
+      emptyLabel: 'Nincs partner',
+      upperVerticalGestures: widget.upperVerticalGestures,
+      rows: _legendRows(
+        frame.entries,
+        selectedPartnerId,
+        height: layout.legendRowHeight,
+      ),
+      donutDiameter: layout.donutDiameter,
+      donutScale: 1,
+      expandDonutToFit: widget.expandDonutToFit,
+      fullWidthFooterDividerGap: BudgetPartnerDistributionLayout.dividerGap,
+      donutVerticalInset:
+          BudgetPartnerDistributionLayout.upperDonutBreathingRoom,
+      fullWidthFooterMinimumHeight: layout.rhythmFooterHeight,
+      fullWidthFooter: widget.rhythm == null
+          ? null
+          : ValueListenableBuilder<DashboardSpendingRhythmState?>(
+              valueListenable: widget.rhythm!,
+              builder: (context, rhythm, child) => _rhythmSlotOwnerProbe(
+                visualState: rhythm == null
+                    ? 'rhythmUnavailable'
+                    : rhythm.analysis is UnavailableSpendingRhythm
+                    ? 'empty'
+                    : 'ready',
+                mountedRenderer: rhythm == null
+                    ? 'transparentEmptySlot'
+                    : 'SpendingRhythmBarChart',
+                direction: _direction,
+                targetHandle: _targetHandle,
+                drawableRevision: bank.semanticBundle.key.coreRevision,
+                drawableScope: bank.semanticBundle.analysisScope.canonicalKey,
+                partnerEntryCount: frame.entries.length,
+                rhythm: rhythm,
+                child: rhythm == null
+                    ? const SizedBox.expand(
+                        key: ValueKey('partner-spending-rhythm-unavailable'),
+                      )
+                    : SpendingRhythmBarChart(
+                        key: const ValueKey('partner-spending-rhythm-chart'),
+                        state: rhythm,
+                      ),
+              ),
             ),
-            absentSelectionLabel: selectedPartnerId == null
-                ? null
-                : selectedPartner?.displayName,
-            onSliceTap: (index) {
-              if (index < 0 || index >= frame.entries.length) return;
-              _selectPartner(frame.entries[index], source: 'partnerPie');
-            },
-          ),
-          rightHeading: 'Partnerek',
-          listKey: const ValueKey('budget-partner-distribution-list'),
-          emptyLabel: 'Nincs partner',
-          upperVerticalGestures: widget.upperVerticalGestures,
-          rows: _legendRows(
-            frame.entries,
-            selectedPartnerId,
-            height: layout.legendRowHeight,
-          ),
-          donutDiameter: layout.donutDiameter,
-          donutScale: 1,
-          expandDonutToFit: widget.expandDonutToFit,
-          fullWidthFooterDividerGap: BudgetPartnerDistributionLayout.dividerGap,
-          donutVerticalInset:
-              BudgetPartnerDistributionLayout.upperDonutBreathingRoom,
-          fullWidthFooterMinimumHeight: layout.rhythmFooterHeight,
-          fullWidthFooter: widget.rhythm == null
-              ? null
-              : ValueListenableBuilder<DashboardSpendingRhythmState?>(
-                  valueListenable: widget.rhythm!,
-                  builder: (context, rhythm, child) => rhythm == null
-                      ? const SizedBox.shrink()
-                      : SpendingRhythmBarChart(
-                          key: const ValueKey('partner-spending-rhythm-chart'),
-                          state: rhythm,
-                        ),
-                ),
-        );
+    );
     // The authored no-Rhythm test/skeleton path remains unchanged. Production
     // Partner Card2 always supplies Rhythm and therefore reserves its plot
     // lane before assigning the upper donut/list space.
@@ -495,6 +521,184 @@ class _BudgetPartnerDistributionCardState
             : null,
       ),
   ];
+
+  Widget _rhythmSlotOwnerProbe({
+    required String visualState,
+    required String mountedRenderer,
+    required LedgerDirection direction,
+    required int targetHandle,
+    required Widget child,
+    int? drawableRevision,
+    String? drawableScope,
+    int? partnerEntryCount,
+    DashboardSpendingRhythmState? rhythm,
+  }) => kFluviOnscreenDiagnosticsEnabled
+      ? _RhythmSlotOwnerProbe(
+          key: const ValueKey('partner-rhythm-slot-owner-probe'),
+          visualState: visualState,
+          mountedRenderer: mountedRenderer,
+          direction: direction,
+          targetHandle: targetHandle,
+          drawableRevision: drawableRevision,
+          drawableScope: drawableScope,
+          partnerEntryCount: partnerEntryCount,
+          rhythm: rhythm,
+          child: child,
+        )
+      : child;
+}
+
+/// Diagnostic-only observer for the lower Partner slot. It adds no paint,
+/// material, clip, opacity, or transform; it samples the existing render owner
+/// after layout and only when semantic ownership changes.
+final class _RhythmSlotOwnerProbe extends StatefulWidget {
+  const _RhythmSlotOwnerProbe({
+    super.key,
+    required this.visualState,
+    required this.mountedRenderer,
+    required this.direction,
+    required this.targetHandle,
+    required this.drawableRevision,
+    required this.drawableScope,
+    required this.partnerEntryCount,
+    required this.rhythm,
+    required this.child,
+  });
+
+  final String visualState;
+  final String mountedRenderer;
+  final LedgerDirection direction;
+  final int targetHandle;
+  final int? drawableRevision;
+  final String? drawableScope;
+  final int? partnerEntryCount;
+  final DashboardSpendingRhythmState? rhythm;
+  final Widget child;
+
+  @override
+  State<_RhythmSlotOwnerProbe> createState() => _RhythmSlotOwnerProbeState();
+}
+
+final class _RhythmSlotOwnerProbeState extends State<_RhythmSlotOwnerProbe> {
+  Object? _lastSignature;
+  late final String _markerOwner;
+  late final Map<String, Object?> Function() _markerProvider;
+
+  Map<String, Object?> _provideMarkerState() => _snapshotState();
+
+  @override
+  void initState() {
+    super.initState();
+    _markerOwner = 'rhythmSlot.${identityHashCode(this)}';
+    _markerProvider = _provideMarkerState;
+    FluviDiagnosticLogger.registerUserMarkerContext(
+      _markerOwner,
+      _markerProvider,
+    );
+    _scheduleRecord();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RhythmSlotOwnerProbe oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _scheduleRecord();
+  }
+
+  void _scheduleRecord() {
+    final analysis = widget.rhythm?.analysis;
+    final signature = Object.hash(
+      widget.visualState,
+      widget.mountedRenderer,
+      widget.direction,
+      widget.targetHandle,
+      widget.drawableRevision,
+      widget.drawableScope,
+      widget.partnerEntryCount,
+      analysis?.runtimeType,
+      analysis?.coreRevision,
+      analysis?.scope.canonicalKey,
+      analysis?.buckets.length,
+      widget.rhythm?.interactionGeneration,
+    );
+    if (_lastSignature == signature) return;
+    _lastSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final analysis = widget.rhythm?.analysis;
+      final markerState = _snapshotState();
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RHYTHM|SLOT_STATE',
+          direction: widget.direction.name,
+          coreRevision: analysis?.coreRevision ?? widget.drawableRevision,
+          entryCount: analysis?.buckets.length,
+          scope: markerState.entries
+              .map((entry) => '${entry.key}=${entry.value}')
+              .join(' '),
+        ),
+      );
+    });
+  }
+
+  Map<String, Object?> _snapshotState() {
+    final renderObject = context.findRenderObject();
+    final renderBox = renderObject is RenderBox && renderObject.hasSize
+        ? renderObject
+        : null;
+    final origin = renderBox?.localToGlobal(Offset.zero);
+    final globalBounds = origin == null ? null : origin & renderBox!.size;
+    final paintBounds = origin == null
+        ? null
+        : renderBox!.paintBounds.shift(origin);
+    final analysis = widget.rhythm?.analysis;
+    return <String, Object?>{
+      'state': widget.visualState,
+      'renderer': widget.mountedRenderer,
+      'direction': widget.direction.name,
+      'target': widget.targetHandle,
+      'drawableRevision': widget.drawableRevision,
+      'drawableScope': widget.drawableScope,
+      'analysisRevision': analysis?.coreRevision,
+      'analysisScope': analysis?.scope.canonicalKey,
+      'interactionGeneration': widget.rhythm?.interactionGeneration,
+      'barCount': analysis?.buckets.length,
+      'partnerEntryCount': widget.partnerEntryCount,
+      'globalBounds': globalBounds == null ? 'unlaidOut' : _rect(globalBounds),
+      'paintBounds': paintBounds == null ? 'unlaidOut' : _rect(paintBounds),
+      'renderObject': renderObject.runtimeType,
+      'background': 'transparent',
+      'opacity': 1,
+      'clip': 'BudgetDistributionCardShell.ClipRRect',
+      'zOrder': 'partnerPage>rhythmFooter>renderer',
+    };
+  }
+
+  static String _rect(Rect value) =>
+      '${value.left.toStringAsFixed(1)},${value.top.toStringAsFixed(1)} '
+      '${value.width.toStringAsFixed(1)}x${value.height.toStringAsFixed(1)}';
+
+  @override
+  void dispose() {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RHYTHM|OWNER_UNMOUNT',
+        direction: widget.direction.name,
+        coreRevision:
+            widget.rhythm?.analysis.coreRevision ?? widget.drawableRevision,
+        scope:
+            'state=${widget.visualState} renderer=${widget.mountedRenderer} '
+            'target=${widget.targetHandle} reason=widgetDisposed',
+      ),
+    );
+    FluviDiagnosticLogger.unregisterUserMarkerContext(
+      _markerOwner,
+      _markerProvider,
+    );
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 final class _PartnerVisualContext {

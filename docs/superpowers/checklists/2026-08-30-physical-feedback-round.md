@@ -33,9 +33,9 @@ an agent-side pre-build PASS condition; the strongest handoff is
 | A2 | Avatar flight evidence | bounded flight recorder | One summary reports raw/tick cadence and expensive-work counts without per-frame string logging | unit/widget tests | DONE |
 | T1 | Time hot-path cause | Summary/time selector and prepared temporal navigation | Cache/scene misses cannot synchronously turn a visual transient crossing into a heavy navigation transaction; settle commits latest target | multi-crossing/reverse/interruption tests + counters | DONE |
 | T2 | Time flight evidence | bounded flight recorder | Independent summary reports cadence/work counts | unit/widget tests | DONE |
-| G1 | Random gray Rhythm slab forensics | Rhythm slot/card/scene lifecycle | Exact current owner is fixed only if proven; otherwise durable low-frequency owner/state diagnostics and marker snapshot are present without a cosmetic patch | source audit + widget/state tests | NOT DONE |
+| G1 | Random gray Rhythm slab forensics | Rhythm slot/card/scene lifecycle | Exact current owner is fixed only if proven; otherwise durable low-frequency owner/state diagnostics and marker snapshot are present without a cosmetic patch | source audit + widget/state tests | DONE |
 | G2 | Preserve collapse repair | full Budget composition | Existing intermediate-collapse regression remains green | targeted regression | NOT DONE |
-| B1 | Budget/limit audit | Query/index/Budget lifecycle | Three logs are deduplicated and anomalies classified; no behavior change without causal proof | forensic record + targeted invariant tests if justified | PARTIAL |
+| B1 | Budget/limit audit | Query/index/Budget lifecycle | Three logs are deduplicated and anomalies classified; no behavior change without causal proof | forensic record + targeted invariant tests if justified | DONE |
 | P1 | Protected Header/category behavior | Header palette/render engine | Existing dynamic category colors, ticker/backend identity, and palette behavior unchanged | existing regression tests | NOT DONE |
 | V1 | Static and targeted validation | all affected paths | Diff clean; affected analyze/tests green; any inherited suite failure reproduced at starting SHA and reported | exact commands/results | NOT DONE |
 | V2 | Evidence-backed commits | Git history | Only coherent, tested changes committed; required commit-body evidence and `PENDING — USER ONLY` present | `git show`, status | NOT DONE |
@@ -131,3 +131,54 @@ mixed-interaction reproduction, collapse regression, and budget/limit stress.
   prove bounded retention, percentiles, long gaps, duplicates, and skips.
 - Status: confirmed by source and automated counters; physical cadence remains
   user-only pending.
+
+### [STEP 05] Random settled Rhythm slab ownership
+
+- Question: which current child paints the screenshot's uniform `(196,196,196)`
+  lower-card slab after mixed interaction?
+- Evidence: the screenshot proves the slab while the upper Partner donut stays
+  valid, but `Fluvi logs 2` has no chart-owner lifecycle. CURRENT source gives
+  the donut and Rhythm separate data/layout owners; the null-Rhythm branch is
+  transparent and the real chart has transparent zero tracks. No production
+  or diagnostic source literal matching the screenshot fill was found.
+- Conclusion: the exact painter is not proven. The strongest source-level lead
+  is a separately invalidated Rhythm slot below an independently ready donut,
+  but recoloring or masking that slot would be speculative.
+- Decision: preserve the visual hierarchy and add a diagnostic-only,
+  state-change-driven Rhythm observer. It reports semantic state, actual
+  renderer, query/revision/generation identity, bounds, paint bounds, clip,
+  background, opacity, and z-order without adding paint. An explicit
+  `gray_rectangle` user marker samples the then-current geometry from every
+  mounted retained page so the visible owner can be identified after random
+  reproduction.
+- Validation: logger and Partner-card tests prove ready/unavailable owner
+  transitions, no unchanged-frame event flood, exact marker context, and
+  provider disposal. The visual defect remains unresolved pending the next
+  user capture; no cosmetic behavior change was made.
+- Status: owner unresolved; durable forensic gate confirmed.
+
+### [STEP 06] Budget/index anomaly classification
+
+- Question: do the retained errors prove the disappearing-limit defect or a
+  causal link to the gray Rhythm slab?
+- Evidence: two logs contain `Prepared index has no catalog` during incoming
+  scene preparation. CURRENT `installPreparedIndex` catches that failure before
+  `_publishIndex`, returns false, and retains the prior complete publication.
+  CURRENT regression coverage prevents a new revision from requesting the
+  retired ephemeral-focus catalog. `LIVE_FACET_SCENE_AUGMENT_FAILED` occurs
+  after the prepared frame is already authoritative. Stale Query/page rejects
+  carry explicit latest-wins generation guards. The observed allocation ratio
+  `2.471` is supported over-allocation semantics: raw ratio stays truthful while
+  visual coverage deliberately clamps to `1.0`.
+- Conclusion: the no-catalog event is a real scene-preparation invariant
+  failure/performance concern in the tested older runtime, but the supplied
+  evidence does not show it clearing a limit, publishing an invalid budget, or
+  painting the slab. The cancellation/rejection events are not independently
+  harmful without a mismatched accepted publication.
+- Decision: make no Budget math, persistence, or last-known-value change. Keep
+  the existing generation/availability diagnostics and verify the current
+  no-retired-catalog and over-allocation invariants.
+- Validation: current targeted regression commands are recorded in the final
+  verification section; physical non-reproduction is not called a fix.
+- Status: audit complete; Budget disappearance remains not reproduced and not
+  root-caused.
