@@ -101,30 +101,33 @@ APK/device acceptance result.
 | G5 | The canonical applied-query facet loader gives Mind and Query Menu the same `CurrentQueryController` domain owner. Ready/loading/latest-wins and two-endpoint tests are green. | Device parity: two visible draggable endpoints and matching values after navigation/change in both hosts. | PARTIAL |
 | G6 | Unified now has only `budget-unified-content-card-surface`; `BudgetDistributionCardShell` becomes content clipping only. The topology/controller-identity tests are green. | Device Split → Unified → Split verification with selected Avatar/page retained and no nested physical card. | PARTIAL |
 | G7 | The resolved plot target is 48.4dp and compact floor 38.72dp; conservation and Card2/Rhythm tests are green. | Device inspection at reference Split/Unified geometries: outer Card2 unchanged and upper Partner space reclaimed. | PARTIAL |
-| P1 | No palette/render-engine source was altered in this pass. The category-scale, palette transport, visual engine, fragment-backend, and renderer-contract suite passed 88 tests. | Verify representative category transitions on device. | PARTIAL |
+| P1 | No palette/render-engine source was altered in this pass. The current category-scale, palette transport, visual-engine, and fragment-backend target suite passed 85 tests. | Verify representative category transitions on device. | PARTIAL |
 
 ## Current automated verification (not physical closure)
 
-The following targeted suites were re-run after the current source changes:
+The following exact targeted suites have exit-code-confirmed green runs on the
+current source checkpoints:
 
-- diagnostics, debug-panel, applied-facet loader, amount-range/control/query
-  sheet, Core ephemeral-focus, Budget presentation, and complete CoreDashboard:
-  **99 tests passed**;
-- Avatar rail/quick-edit plus the protected Header palette/visual/backend/
-  renderer suites: **134 tests passed**;
-- Budget core surface, pager, Partner distribution, and Rhythm geometry:
-  **29 tests passed**.
-- Directional applied-Query retention, facet-loader latest-wins behavior, and
-  both shared amount-range hosts: **15 tests passed**.
-- Full-parent Partner/Rhythm collapse provenance gate and the constrained
-  narrow-viewport Rhythm-layout regression: **5 tests passed** (the full
-  parent test covers every 5% collapse step).
+- diagnostic logger and debug panel: **16 tests** (including 1,999/2,000/2,001
+  FIFO cases);
+- Avatar rail, direct quick-edit gesture, limit edit controller, and Budget
+  presentation controller: **87 tests**;
+- Summary/time-motion controllers and Summary presentation widgets:
+  **54 tests**;
+- Category Header category-scale, palette transport, visual-engine, and
+  fragment-backend regression suite: **85 tests**;
+- shared amount-range/domain/query-menu suite: **12 tests**, plus the two
+  concrete Core Mind ready/unavailable host gates;
+- Budget core-surface, distribution pager, Partner distribution, and Rhythm
+  geometry/layout suite: **33 tests**;
+- immediate first-Avatar-fling focus-hotset gate and the combined G1/G2/G3
+  affected suite: **95 tests**.
 
-`flutter analyze` over the 11 affected production files reported no issues and
-`git diff --check` passed. The former failed run that named obsolete test paths
-did not execute a failing test; it was re-run with the repository's actual
-paths above. None of these automated results changes a physical gate to
-`DONE`.
+The current exact G3 production-parent ballistic-takeover gate is also green.
+The former failed runs that named obsolete test paths did not execute a failing
+test; they were rerun using the repository's actual paths. The unrelated
+complete-Dashboard-directory failure recorded below remains inherited. None of
+these automated results changes a physical gate to `DONE`.
 
 After the G4 source/raster repair, the current focused full-composition run
 (`spending_rhythm_bar_layout`, `spending_rhythm_bar_chart`,
