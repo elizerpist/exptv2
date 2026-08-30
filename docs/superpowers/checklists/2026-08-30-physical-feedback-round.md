@@ -37,8 +37,8 @@ an agent-side pre-build PASS condition; the strongest handoff is
 | G2 | Preserve collapse repair | full Budget composition | Existing intermediate-collapse regression remains green | targeted regression | DONE |
 | B1 | Budget/limit audit | Query/index/Budget lifecycle | Three logs are deduplicated and anomalies classified; no behavior change without causal proof | forensic record + targeted invariant tests if justified | DONE |
 | P1 | Protected Header/category behavior | Header palette/render engine | Existing dynamic category colors, ticker/backend identity, and palette behavior unchanged | existing regression tests | DONE |
-| V1 | Static and targeted validation | all affected paths | Diff clean; affected analyze/tests green; any inherited suite failure reproduced at starting SHA and reported | exact commands/results | NOT DONE |
-| V2 | Evidence-backed commits | Git history | Only coherent, tested changes committed; required commit-body evidence and `PENDING — USER ONLY` present | `git show`, status | NOT DONE |
+| V1 | Static and targeted validation | all affected paths | Diff clean; affected analyze/tests green; any inherited suite failure reproduced at starting SHA and reported | exact commands/results | DONE |
+| V2 | Evidence-backed commits | Git history | Only coherent, tested changes committed; required commit-body evidence and `PENDING — USER ONLY` present | `git show`, status | DONE |
 | V3 | One exact-SHA Android artifact | GitHub Actions | Build only after R1–V2 agent-authority gates are DONE; exact committed SHA pushed once, human APK downloaded and SHA-256 verified | Actions run + local hash | NOT DONE |
 
 Post-build user-only matrix (not an agent PASS claim): log live/review/marker/copy,
@@ -220,3 +220,24 @@ mixed-interaction reproduction, collapse regression, and budget/limit stress.
   proxy passes.
 - Status: confirmed; random settled slab ownership remains user-capture
   dependent and is not called fixed.
+
+### [STEP 09] Final pre-build verification
+
+- Question: is the final committed source state eligible for its single online
+  diagnostic APK build?
+- Evidence: full-repository `flutter analyze` reports no issues. The exact
+  current HEAD passes 159 changed-file tests, 73 Rhythm/Budget/forensic tests,
+  18 performance-contract tests, 102 protected Header tests, 34 scene-window
+  tests, and the dense full-composition collapse proxy. `test/homev2` does not
+  exist in this repository. `git diff --check` is clean.
+- Conclusion: all automated task-owned gates pass. The broad command remains
+  honestly non-green: 1,161 tests pass and 21 fail; detached starting-SHA
+  execution proves 20 failures inherited, while the sole task-related temporal
+  assertion was corrected and its complete 34-test file now passes.
+- Decision: mark V1 and V2 complete, leave V3 as the only build-time gate, and
+  build only the final clean committed SHA through the established GitHub
+  Actions human-diagnostic path.
+- Validation: exact commands and pass counts are retained in commit bodies and
+  the completion report; no golden was regenerated and no baseline failure was
+  hidden.
+- Status: confirmed; physical-device validation remains pending user only.
