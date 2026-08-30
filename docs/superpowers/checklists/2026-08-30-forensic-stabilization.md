@@ -126,6 +126,8 @@ current source checkpoints:
   **24 tests**, including G3 live-ballistic takeover, G4 every-5%-step
   collapse proxy, G5 ready/unavailable Mind hosts, and the unified/split
   surface checks.
+- motion-density, zero-I/O navigation, carousel ballistic diagnostics/physics,
+  and time-navigation target suite: **43 tests**.
 
 The current exact G3 production-parent ballistic-takeover gate is also green.
 The former failed runs that named obsolete test paths did not execute a failing
