@@ -133,3 +133,12 @@ After the G4 source/raster repair, the current focused full-composition run
 changed production files and both changed test files reported no issues, and a
 fresh `git diff --check` passed. This is still not a replacement for the
 required device intermediate-frame evidence.
+
+An attempted complete `test/features/dashboard` run was stopped after the
+independent `dashboard_logbox_stable_render_surface_test` failed at
+`WidgetController.state` with `Bad state: Too many elements`. The exact test
+was then run at both this pass's G4 checkpoint and the pre-G4 starting SHA
+`c0768dda358f1a91054abe30b3680f260a52976d`; it failed identically at line 87
+on both. It is therefore recorded as an inherited unrelated regression, not
+silently hidden or attributed to the Rhythm repair. The complete Dashboard
+directory is consequently **not green** and it is not used as release proof.
