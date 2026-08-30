@@ -12,6 +12,7 @@ import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 
@@ -532,6 +533,58 @@ void main() {
   );
 
   testWidgets(
+    'time hierarchy keeps transient ticks visual and emits one latest settle candidate',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final crossings = <DashboardNavigationState>[];
+      final canonicalDaysObservedAtCrossing = <int>[];
+      final settled = <DashboardNavigationState>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (_, _) {},
+            onComponentCrossed: (candidate, component) {
+              if (component != DashboardTemporalAnchorComponent.day) return;
+              crossings.add(candidate);
+              canonicalDaysObservedAtCrossing.add(navigation.state.dayCursor);
+            },
+            onComponentSettled: (candidate, component) {
+              if (component != DashboardTemporalAnchorComponent.day) return;
+              settled.add(candidate);
+              navigation.commitTemporalCandidate(candidate);
+            },
+          ),
+        ),
+      );
+
+      await tester.fling(
+        find.byKey(const ValueKey('summary-pill-segmented-day-selector')),
+        const Offset(0, -240),
+        1800,
+      );
+      await tester.pumpAndSettle();
+
+      expect(crossings.length, greaterThan(1));
+      expect(canonicalDaysObservedAtCrossing, everyElement(14));
+      expect(settled, hasLength(1));
+      expect(settled.single.dayCursor, crossings.last.dayCursor);
+      expect(navigation.state.dayCursor, crossings.last.dayCursor);
+    },
+  );
+
+  testWidgets(
     'physical Segmented field flings publish only their own coordinate',
     (tester) async {
       final navigation = DashboardNavigationController(
@@ -704,7 +757,7 @@ void main() {
         lessThan(tester.getRect(selectors[0]!).left),
       );
 
-      await tester.fling(selectors[0]!, const Offset(0, 40), 600);
+      await tester.fling(selectors[0]!, const Offset(0, 80), 900);
       await tester.pumpAndSettle();
       expect(levelTicks, isNotEmpty);
 
@@ -801,8 +854,8 @@ void main() {
 
     await tester.fling(
       find.byKey(const ValueKey('summary-pill-segmented-mode-selector')),
-      const Offset(0, 40),
-      600,
+      const Offset(0, 80),
+      900,
     );
     await tester.pumpAndSettle();
 

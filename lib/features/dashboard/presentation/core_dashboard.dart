@@ -1436,6 +1436,12 @@ class _DashboardSummaryRegion extends StatelessWidget {
                         candidate: candidate,
                         component: component,
                       ),
+                  onComponentSettled: (candidate, component) =>
+                      controller.settleExperimentalTemporalComponentCandidate(
+                        candidate: candidate,
+                        component: component,
+                      ),
+                  motionDiagnostics: controller.railFlightRecorder,
                 ),
               },
             ),

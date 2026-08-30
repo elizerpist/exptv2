@@ -25,6 +25,9 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewpo
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
@@ -511,6 +514,72 @@ void main() {
     },
   );
 
+  testWidgets(
+    'time component crossings perform zero semantic work and commit only the latest settle candidate',
+    (tester) async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final origin = core.navigation.state;
+      final visiblePublishes = core.visibleFrames.visiblePublishCount;
+      final candidates = <DashboardNavigationState>[];
+      for (var offset = 1; offset <= 8; offset += 1) {
+        final candidate = core.experimentalTemporalComponentOffsetCandidate(
+          plane: TimePlane.month,
+          isRailOpen: true,
+          component: DashboardTemporalAnchorComponent.day,
+          offset: offset,
+          base: origin,
+        );
+        if (candidate != null) candidates.add(candidate);
+      }
+      expect(candidates.length, greaterThan(1));
+      core.beginSegmentedSummaryMotion();
+      FluviDiagnosticLogger.clear();
+      for (final candidate in candidates) {
+        core.navigateExperimentalTemporalComponentCandidate(
+          candidate: candidate,
+          component: DashboardTemporalAnchorComponent.day,
+        );
+      }
+
+      expect(core.navigation.state, same(origin));
+      expect(core.visibleFrames.visiblePublishCount, visiblePublishes);
+      expect(repository.prepareCalls, 1);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'SCENE_WINDOW_PREPARE_STARTED' ||
+              event.stage == 'QUERY_APPLY_STARTED',
+        ),
+        isEmpty,
+      );
+
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidates.last,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+
+      expect(core.navigation.state.dayCursor, candidates.last.dayCursor);
+      final summary = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'TM|FLIGHT_SUMMARY',
+      );
+      expect(summary.scope, contains('semanticTicks=${candidates.length}'));
+      expect(summary.scope, contains('transientScenePrepares=0'));
+      expect(summary.scope, contains('canonicalSettleCommits=1'));
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
   test(
     'G2: Budget Header selection changes only with its matching visible Query frame',
     () async {
@@ -589,6 +658,94 @@ void main() {
       expect(visibleCategoriesAtHeaderCommit, <Set<String>>[
         <String>{'food'},
       ]);
+    },
+  );
+
+  test(
+    'Avatar transient crossings update only the prepared visual target and defer one focus/index publication to settle',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      addTearDown(categories.dispose);
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: _focusBudgetSnapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      addTearDown(budget.dispose);
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final foodHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'food',
+      );
+      final committedFrame = core.visibleFrames.value;
+      final visiblePublishes = core.visibleFrames.visiblePublishCount;
+      final indexPublishes = core.dataRuntime.publishedIndexCount;
+      FluviDiagnosticLogger.clear();
+
+      expect(
+        await drilldown.previewBudgetTarget(targetHandle: foodHandle),
+        isTrue,
+      );
+
+      expect(budget.value.selectedHandle, foodHandle);
+      expect(budget.value.isTransientTargetPreview, isTrue);
+      expect(core.focus.state, isNull);
+      expect(core.visibleFrames.value, same(committedFrame));
+      expect(core.visibleFrames.visiblePublishCount, visiblePublishes);
+      expect(core.dataRuntime.publishedIndexCount, indexPublishes);
+      expect(repository.prepareCalls, 1);
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere((event) => event.stage == 'AV|TARGET_PREVIEW_BOUND')
+            .scope,
+        contains('indexPublished=false'),
+      );
+
+      expect(
+        await drilldown.commitBudgetTargetHandle(
+          targetHandle: foodHandle,
+          source: 'avatarSettled',
+        ),
+        isTrue,
+      );
+      expect(budget.value.isTransientTargetPreview, isFalse);
+      expect(core.focus.state?.category?.id, 'food');
+      expect(core.visibleFrames.visiblePublishCount, visiblePublishes + 1);
+      expect(repository.prepareCalls, 1);
     },
   );
 

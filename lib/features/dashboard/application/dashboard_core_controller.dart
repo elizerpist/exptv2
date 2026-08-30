@@ -11,6 +11,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../shared/motion/centered_carousel/centered_carousel_controller.dart';
+import '../../../shared/motion/centered_carousel/centered_carousel_motion_diagnostics.dart';
 import '../logbox/application/committed_log_viewport_cache.dart';
 import '../logbox/application/dashboard_logbox_render_domain.dart';
 import '../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
@@ -895,6 +896,10 @@ final class DashboardCoreController {
   int _mindAmountInteractionGeneration = 0;
   int _mindAmountInteractionPreviewCount = 0;
   int _mindAmountInteractionPublishedCount = 0;
+  int _segmentedTimeFlightGeneration = 0;
+  int _segmentedTimePreviewCrossings = 0;
+  final CenteredCarouselSemanticCadenceAccumulator _segmentedTimeCadence =
+      CenteredCarouselSemanticCadenceAccumulator();
   PreparedDashboardIndex? _focusBaseIndex;
   // A live facet publishes its prepared first viewport before rich LogBox
   // scene augmentation. Retain the base identity separately so aggregate,
@@ -4416,6 +4421,9 @@ final class DashboardCoreController {
 
   void beginSegmentedSummaryMotion() {
     _cancelSceneWindowMaintenanceForInput();
+    _segmentedTimeFlightGeneration += 1;
+    _segmentedTimePreviewCrossings = 0;
+    _segmentedTimeCadence.reset();
     _setMotionLaneActive(DashboardMotionLane.summaryShell, true);
     diagnostics.record(
       DashboardInteractionEvent.motionGestureStarted,
@@ -4517,63 +4525,53 @@ final class DashboardCoreController {
     unawaited(deferred.prepare());
   }
 
-  /// Applies an already-projected experiment target. The projection can be
-  /// anchored to one gesture's initial canonical state, so an advancing
-  /// prepared DAY publication cannot make later carousel crossings skip a
-  /// calendar value.
+  /// Records a visual crossing without mutating navigation or starting scene,
+  /// Query, text-layout, or index work. The carousel owns continuous paint;
+  /// [settleExperimentalTemporalComponentCandidate] owns the single semantic
+  /// transaction after motion ends.
   void navigateExperimentalTemporalComponentCandidate({
     required DashboardNavigationState candidate,
     required DashboardTemporalAnchorComponent component,
   }) {
-    // A retained interaction bank is complete but deliberately inactive. Its
-    // activation is synchronous metadata/cache selection, not structural
-    // preparation, so it belongs ahead of the visible prepared-frame commit.
-    // This keeps the direct MONTH/YEAR publication just as render-ready as the
-    // accepted DAY path and the Legacy parent cache-hit control.
-    _supersedeAcceptedQueryApplyForDashboardNavigation();
-    final interaction = railInteractionSceneWindowFor(candidate);
-    final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
-    if (retainedHit) _activateSceneWindow(interaction);
-    // All Segmented YEAR/MONTH/DAY components share the same strict prepared
-    // frame contract. A hit commits one canonical temporal target and queues
-    // its exact visible frame now; broad scene coverage remains maintenance.
-    if (presentation.publishPreparedExperimentalTemporalCandidate(candidate)) {
-      _acceptLiveInteraction(
-        source: DashboardLiveInteractionSource.temporalSelector,
-        temporalCandidate: candidate,
-      );
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SUMMARY_COMPONENT_PREPARED_PUBLICATION',
-          queryKey: candidate.isRailOpen
-              ? candidate.temporalAnchor.sourceChildQueryKey.value
-              : candidate.parentQueryKey.value,
-          coreRevision: preparedIndex?.coreRevision,
-          message:
-              'summaryLayout=segmented component=${component.name} '
-              'candidateScope=${candidate.effectiveScope} '
-              'preparedPublicationHit=true '
-              'structuralCoverageRequired=false retainedSceneHit=$retainedHit '
-              'visibleFramePublished=true',
-        ),
-      );
-      _recordNavigationSelection(switch (component) {
-        DashboardTemporalAnchorComponent.year =>
-          'summaryExperimentPreparedYearCrossed',
-        DashboardTemporalAnchorComponent.month =>
-          'summaryExperimentPreparedMonthCrossed',
-        DashboardTemporalAnchorComponent.day =>
-          'summaryExperimentPreparedDayCrossed',
-      });
-      return;
-    }
+    _segmentedTimePreviewCrossings += 1;
+    _segmentedTimeCadence.recordTick(_segmentedTimePreviewCrossings);
+  }
+
+  void settleExperimentalTemporalComponentCandidate({
+    required DashboardNavigationState candidate,
+    required DashboardTemporalAnchorComponent component,
+  }) {
+    final crossingCount = _segmentedTimePreviewCrossings;
+    final cadence = _segmentedTimeCadence.snapshot();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TM|FLIGHT_SUMMARY',
+        flowId: 'flight:$_segmentedTimeFlightGeneration',
+        queryKey: candidate.isRailOpen
+            ? candidate.temporalAnchor.sourceChildQueryKey.value
+            : candidate.parentQueryKey.value,
+        direction: candidate.parentQueryScope.direction.name,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'component=${component.name} semanticTicks=$crossingCount '
+            'firstTickMicros=${cadence.firstTickLatencyMicros} '
+            'interTickMinMicros=${cadence.interTickMinimumMicros} '
+            'interTickMedianMicros=${cadence.interTickMedianMicros} '
+            'interTickP95Micros=${cadence.interTickP95Micros} '
+            'interTickMaxMicros=${cadence.interTickMaximumMicros} '
+            'longGapCount=${cadence.longGapCount} '
+            'transientNavigationCommits=0 transientQueryApplies=0 '
+            'transientIndexBuilds=0 transientScenePrepares=0 '
+            'canonicalSettleCommits=1',
+      ),
+    );
     _navigateExperimentalTemporalCandidate(
       candidate,
       reason: switch (component) {
-        DashboardTemporalAnchorComponent.year => 'summaryExperimentYearCrossed',
+        DashboardTemporalAnchorComponent.year => 'summaryExperimentYearSettled',
         DashboardTemporalAnchorComponent.month =>
-          'summaryExperimentMonthCrossed',
-        DashboardTemporalAnchorComponent.day => 'summaryExperimentDayCrossed',
+          'summaryExperimentMonthSettled',
+        DashboardTemporalAnchorComponent.day => 'summaryExperimentDaySettled',
       },
     );
   }
@@ -4623,17 +4621,7 @@ final class DashboardCoreController {
             _recordNavigationSelection('summaryExperimentCrossed');
           },
         );
-    if (retainedHit) {
-      // A prepared target keeps Legacy's immediate cache-hit publication.
-      unawaited(commitCandidate());
-    } else {
-      // A legitimate miss remains the scene owner's asynchronous work. Yield
-      // before it can enter a synchronous preparation slice so a ballistic
-      // Segmented selector never waits for data at its crossing boundary.
-      unawaited(
-        Future<void>.delayed(Duration.zero).then((_) => commitCandidate()),
-      );
-    }
+    unawaited(commitCandidate());
   }
 
   Future<void> _commitTimeNavigationWithBudgetDistributionReadiness({

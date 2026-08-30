@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 
 /// Optional, typed observer for proving carousel motion invariants.
@@ -9,6 +11,110 @@ abstract interface class CenteredCarouselMotionDiagnosticSink {
   bool get isEnabled;
 
   void record(CenteredCarouselMotionDiagnosticEvent event);
+}
+
+/// Bounded semantic-tick cadence measurement shared by feature rails.
+///
+/// Raw scroll/pointer evidence remains owned by
+/// [CenteredCarouselMotionDiagnosticSink]. This accumulator records only
+/// discrete semantic crossings and therefore performs no per-pixel logging or
+/// unbounded allocation on the motion path.
+final class CenteredCarouselSemanticCadenceAccumulator {
+  CenteredCarouselSemanticCadenceAccumulator({this.capacity = 64})
+    : assert(capacity > 1);
+
+  final int capacity;
+  final List<int> _tickMicros = <int>[];
+  int _startedAtMicros = 0;
+  int _tickCount = 0;
+  int _duplicateTickCount = 0;
+  int _skippedSemanticIndexCount = 0;
+  int? _lastSemanticIndex;
+
+  void reset({int? startedAtMicros}) {
+    _tickMicros.clear();
+    _startedAtMicros = startedAtMicros ?? developer.Timeline.now;
+    _tickCount = 0;
+    _duplicateTickCount = 0;
+    _skippedSemanticIndexCount = 0;
+    _lastSemanticIndex = null;
+  }
+
+  void recordTick(int semanticIndex, {int? timestampMicros}) {
+    final now = timestampMicros ?? developer.Timeline.now;
+    if (_startedAtMicros == 0) reset(startedAtMicros: now);
+    final previousIndex = _lastSemanticIndex;
+    if (previousIndex != null) {
+      final distance = (semanticIndex - previousIndex).abs();
+      if (distance == 0) {
+        _duplicateTickCount += 1;
+      } else if (distance > 1) {
+        _skippedSemanticIndexCount += distance - 1;
+      }
+    }
+    _lastSemanticIndex = semanticIndex;
+    _tickCount += 1;
+    if (_tickMicros.length == capacity) _tickMicros.removeAt(0);
+    _tickMicros.add(now);
+  }
+
+  CenteredCarouselSemanticCadenceSnapshot snapshot({int? endedAtMicros}) {
+    final ended = endedAtMicros ?? developer.Timeline.now;
+    final intervals = <int>[
+      for (var index = 1; index < _tickMicros.length; index += 1)
+        _tickMicros[index] - _tickMicros[index - 1],
+    ]..sort();
+    int percentile(double fraction) {
+      if (intervals.isEmpty) return 0;
+      final index = ((intervals.length - 1) * fraction).round();
+      return intervals[index];
+    }
+
+    return CenteredCarouselSemanticCadenceSnapshot(
+      tickCount: _tickCount,
+      retainedTickCount: _tickMicros.length,
+      durationMicros: _startedAtMicros == 0 ? 0 : ended - _startedAtMicros,
+      firstTickLatencyMicros: _tickMicros.isEmpty || _startedAtMicros == 0
+          ? 0
+          : _tickMicros.first - _startedAtMicros,
+      interTickMinimumMicros: intervals.isEmpty ? 0 : intervals.first,
+      interTickMedianMicros: percentile(.50),
+      interTickP95Micros: percentile(.95),
+      interTickMaximumMicros: intervals.isEmpty ? 0 : intervals.last,
+      longGapCount: intervals.where((value) => value > 32000).length,
+      duplicateTickCount: _duplicateTickCount,
+      skippedSemanticIndexCount: _skippedSemanticIndexCount,
+    );
+  }
+}
+
+@immutable
+final class CenteredCarouselSemanticCadenceSnapshot {
+  const CenteredCarouselSemanticCadenceSnapshot({
+    required this.tickCount,
+    required this.retainedTickCount,
+    required this.durationMicros,
+    required this.firstTickLatencyMicros,
+    required this.interTickMinimumMicros,
+    required this.interTickMedianMicros,
+    required this.interTickP95Micros,
+    required this.interTickMaximumMicros,
+    required this.longGapCount,
+    required this.duplicateTickCount,
+    required this.skippedSemanticIndexCount,
+  });
+
+  final int tickCount;
+  final int retainedTickCount;
+  final int durationMicros;
+  final int firstTickLatencyMicros;
+  final int interTickMinimumMicros;
+  final int interTickMedianMicros;
+  final int interTickP95Micros;
+  final int interTickMaximumMicros;
+  final int longGapCount;
+  final int duplicateTickCount;
+  final int skippedSemanticIndexCount;
 }
 
 @immutable

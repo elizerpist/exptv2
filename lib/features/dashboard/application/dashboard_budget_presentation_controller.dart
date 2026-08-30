@@ -529,6 +529,7 @@ final class DashboardBudgetPresentationState {
     ),
     required this.liveSelection,
     required this.partition,
+    this.isTransientTargetPreview = false,
   });
 
   final List<DashboardBudgetTargetPresentationItem> items;
@@ -541,6 +542,7 @@ final class DashboardBudgetPresentationState {
   final DashboardBudgetLiveAnalysisProjection liveAnalysis;
   final DashboardBudgetLiveSelectionState liveSelection;
   final DashboardBudgetPartitionPresentation partition;
+  final bool isTransientTargetPreview;
 
   DashboardBudgetHeaderPresentation get header =>
       DashboardBudgetHeaderPresentation(liveSelection);
@@ -674,7 +676,9 @@ final class DashboardBudgetPresentationController
   void setTargetHandle(int handle) {
     final catalog = _catalog;
     if (catalog == null || handle < 0 || handle >= catalog.targetCount) return;
-    if (handle == value.selectedHandle) return;
+    if (handle == value.selectedHandle && !value.isTransientTargetPreview) {
+      return;
+    }
     final target = catalog.targetAtHandle(handle);
     _selectedIdentityByDirection[_direction] = target.identity;
     FluviDiagnosticLogger.log(
@@ -688,6 +692,47 @@ final class DashboardBudgetPresentationController
       ),
     );
     _publishHeaderOnly(catalog: catalog, selectedHandle: handle);
+  }
+
+  /// Publishes only the visual target/header lane for an Avatar crossing.
+  /// The settled coordinator later owns the one canonical focus/index/List
+  /// publication. Retaining the previous partition keeps transient carousel
+  /// motion from rebuilding Card2 and Rhythm for every crossed item.
+  bool previewTargetHandle(int handle) {
+    final catalog = _catalog;
+    if (catalog == null || handle < 0 || handle >= catalog.targetCount) {
+      return false;
+    }
+    if (handle == value.selectedHandle && value.isTransientTargetPreview) {
+      return false;
+    }
+    final target = catalog.targetAtHandle(handle);
+    _selectedIdentityByDirection[_direction] = target.identity;
+    final liveAnalysis = _liveAnalysisFor(handle);
+    final liveSelection = _liveSelectionFor(target, liveAnalysis);
+    value = DashboardBudgetPresentationState(
+      items: value.items,
+      selectedHandle: handle,
+      visibleModeEpoch: _visibleModeEpoch,
+      liveAnalysis: liveAnalysis,
+      liveSelection: liveSelection,
+      partition: value.partition,
+      isTransientTargetPreview: true,
+    );
+    _recordHeaderBinding(liveSelection, liveAnalysis);
+    _recordProgressBinding(liveSelection, liveAnalysis);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|TARGET_PREVIEW_BOUND',
+        direction: _direction.name,
+        coreRevision: liveAnalysis.coreRevision,
+        scope:
+            'targetHandle=$handle categoryId=${target.category?.id ?? '-'} '
+            'canonicalFocusPublished=false indexPublished=false '
+            'partitionRetained=true preparedConsumersMayPromote=true',
+      ),
+    );
+    return true;
   }
 
   /// Resolves an already-prepared target without changing the visible Budget

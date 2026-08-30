@@ -88,11 +88,15 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   CenteredCarouselMotionOrigin? _activeMotionOrigin;
   int _motionSemanticCrossings = 0;
   int _motionPreviewPublications = 0;
+  int _motionRawScrollUpdates = 0;
+  final CenteredCarouselSemanticCadenceAccumulator _semanticCadence =
+      CenteredCarouselSemanticCadenceAccumulator();
 
   @override
   void initState() {
     super.initState();
     _controller = CenteredCarouselController(initialIndex: 0);
+    _controller.scrollController.addListener(_onRawScrollUpdate);
     _spec = CenteredCarouselPresets.budgetCategoryAvatarRail(
       itemExtent: _itemExtent,
     );
@@ -134,6 +138,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.navigationController?.detach(this);
     _quickEdit?.dispose();
     _previewPublisher.dispose();
+    _controller.scrollController.removeListener(_onRawScrollUpdate);
     _controller.dispose();
     super.dispose();
   }
@@ -222,7 +227,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   void _onPreviewChanged(int logicalIndex) {
     if (_items.isEmpty) return;
-    if (_activeMotionOrigin != null) _motionSemanticCrossings += 1;
+    if (_activeMotionOrigin != null) {
+      _motionSemanticCrossings += 1;
+      _semanticCadence.recordTick(logicalIndex);
+    }
     _previewPublisher.submit(
       _items[_modulo(logicalIndex, _items.length)].targetHandle,
     );
@@ -231,22 +239,6 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _publishPreviewTargetHandle(int targetHandle) {
     if (!mounted) return;
     if (_activeMotionOrigin != null) _motionPreviewPublications += 1;
-    if (_activeMotionOrigin case final CenteredCarouselMotionOrigin origin) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'AV|FLING_SEMANTIC_PREVIEW',
-          direction: widget.presentation.value.liveSelection.direction.name,
-          coreRevision: widget.presentation.value.liveSelection.coreRevision,
-          scope:
-              'origin=${origin.name} targetHandle=$targetHandle '
-              'previewCount=$_motionPreviewPublications '
-              'crossingCount=$_motionSemanticCrossings '
-              'selectedHandle=${widget.presentation.value.selectedHandle} '
-              'controllerIdentity=${identityHashCode(_controller)} '
-              'scrollPositionIdentity=${_controller.scrollController.hasClients ? identityHashCode(_controller.scrollController.position) : '-'}',
-        ),
-      );
-    }
     widget.onTargetPreview?.call(targetHandle);
   }
 
@@ -254,6 +246,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _activeMotionOrigin = origin;
     _motionSemanticCrossings = 0;
     _motionPreviewPublications = 0;
+    _motionRawScrollUpdates = 0;
+    _semanticCadence.reset();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|FLING_STARTED',
@@ -308,6 +302,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     final positionIdentity = _controller.scrollController.hasClients
         ? identityHashCode(_controller.scrollController.position)
         : 0;
+    final cadence = _semanticCadence.snapshot();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_AVATAR_MOTION_SUMMARY',
@@ -315,7 +310,17 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'origin=${origin.name} '
             'avatarSemanticCrossings=$_motionSemanticCrossings '
             'avatarPreviewPublishes=$_motionPreviewPublications '
-            'preparedFocusRequestsAtTicks=$_motionPreviewPublications '
+            'rawScrollUpdates=$_motionRawScrollUpdates '
+            'firstTickMicros=${cadence.firstTickLatencyMicros} '
+            'interTickMinMicros=${cadence.interTickMinimumMicros} '
+            'interTickMedianMicros=${cadence.interTickMedianMicros} '
+            'interTickP95Micros=${cadence.interTickP95Micros} '
+            'interTickMaxMicros=${cadence.interTickMaximumMicros} '
+            'longGapCount=${cadence.longGapCount} '
+            'duplicateTickCount=${cadence.duplicateTickCount} '
+            'skippedSemanticIndexCount=${cadence.skippedSemanticIndexCount} '
+            'preparedFocusRequestsAtTicks=0 '
+            'canonicalFocusCommitsAtSettle=1 '
             'controllerIdentity=${identityHashCode(_controller)} '
             'scrollPositionIdentity=$positionIdentity '
             'physicsCreationCount=${_controller.physicsCreationCount} '
@@ -323,6 +328,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'source=preparedCatalog',
       ),
     );
+  }
+
+  void _onRawScrollUpdate() {
+    if (_activeMotionOrigin != null) _motionRawScrollUpdates += 1;
   }
 
   void _requestPreparedTargetHotset({int? centerLogicalIndex}) {

@@ -286,6 +286,8 @@ final class SummaryPillExperiment extends StatelessWidget {
     required this.visibleFrames,
     required this.onLevelCrossed,
     required this.onComponentCrossed,
+    this.onComponentSettled,
+    this.motionDiagnostics,
     this.componentCandidateProjector,
     this.performanceCounters,
     this.onAmountMotionActiveChanged,
@@ -309,6 +311,12 @@ final class SummaryPillExperiment extends StatelessWidget {
     DashboardTemporalAnchorComponent component,
   )
   onComponentCrossed;
+  final void Function(
+    DashboardNavigationState candidate,
+    DashboardTemporalAnchorComponent component,
+  )?
+  onComponentSettled;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
   final DashboardPerformanceCounters? performanceCounters;
   final ValueChanged<bool>? onAmountMotionActiveChanged;
@@ -395,6 +403,8 @@ final class SummaryPillExperiment extends StatelessWidget {
               presentation: presentation,
               onLevelCrossed: onLevelCrossed,
               onComponentCrossed: onComponentCrossed,
+              onComponentSettled: onComponentSettled,
+              motionDiagnostics: motionDiagnostics,
               componentCandidateProjector: componentCandidateProjector,
               onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
               onSelectorDirectInputStarted: onSelectorDirectInputStarted,
@@ -548,6 +558,8 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     required this.presentation,
     required this.onLevelCrossed,
     required this.onComponentCrossed,
+    this.onComponentSettled,
+    this.motionDiagnostics,
     this.componentCandidateProjector,
     this.onSelectorMotionActiveChanged,
     this.onSelectorDirectInputStarted,
@@ -562,6 +574,8 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final DashboardSummaryPresentationSettings presentation;
   final _LevelCrossed onLevelCrossed;
   final _ComponentCrossed onComponentCrossed;
+  final _ComponentCrossed? onComponentSettled;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
   final ValueChanged<bool>? onSelectorMotionActiveChanged;
   final VoidCallback? onSelectorDirectInputStarted;
@@ -589,8 +603,11 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       onMotionActiveChanged: onSelectorMotionActiveChanged,
       onDirectInputStarted: onSelectorDirectInputStarted,
       autoResetMotionRegistry: autoResetMotionRegistry,
+      motionDiagnostics: motionDiagnostics,
     ),
     onComponentCrossed: onComponentCrossed,
+    onComponentSettled: onComponentSettled,
+    motionDiagnostics: motionDiagnostics,
     componentCandidateProjector: componentCandidateProjector,
     onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
     onSelectorDirectInputStarted: onSelectorDirectInputStarted,
@@ -614,6 +631,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     required this.dayTrack,
     required this.modeSelector,
     required this.onComponentCrossed,
+    this.onComponentSettled,
+    this.motionDiagnostics,
     this.componentCandidateProjector,
     this.onSelectorMotionActiveChanged,
     this.onSelectorDirectInputStarted,
@@ -634,6 +653,8 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final int dayTrack;
   final Widget modeSelector;
   final _ComponentCrossed onComponentCrossed;
+  final _ComponentCrossed? onComponentSettled;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
   final ValueChanged<bool>? onSelectorMotionActiveChanged;
   final VoidCallback? onSelectorDirectInputStarted;
@@ -696,8 +717,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.year,
               ),
+              onSettled: (candidate) => onComponentSettled?.call(
+                candidate,
+                DashboardTemporalAnchorComponent.year,
+              ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
               onDirectInputStarted: onSelectorDirectInputStarted,
+              motionDiagnostics: motionDiagnostics,
               presentation: presentation.temporalFlingPresentation,
               component: DashboardTemporalAnchorComponent.year,
               autoResetMotionRegistry: autoResetMotionRegistry,
@@ -738,8 +764,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.month,
               ),
+              onSettled: (candidate) => onComponentSettled?.call(
+                candidate,
+                DashboardTemporalAnchorComponent.month,
+              ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
               onDirectInputStarted: onSelectorDirectInputStarted,
+              motionDiagnostics: motionDiagnostics,
               presentation: presentation.temporalFlingPresentation,
               component: DashboardTemporalAnchorComponent.month,
               autoResetMotionRegistry: autoResetMotionRegistry,
@@ -774,8 +805,13 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.day,
               ),
+              onSettled: (candidate) => onComponentSettled?.call(
+                candidate,
+                DashboardTemporalAnchorComponent.day,
+              ),
               onMotionActiveChanged: onSelectorMotionActiveChanged,
               onDirectInputStarted: onSelectorDirectInputStarted,
+              motionDiagnostics: motionDiagnostics,
               presentation: presentation.temporalFlingPresentation,
               component: DashboardTemporalAnchorComponent.day,
               autoResetMotionRegistry: autoResetMotionRegistry,
@@ -835,6 +871,7 @@ final class _ModeSelector extends StatefulWidget {
     this.onMotionActiveChanged,
     this.autoResetMotionRegistry,
     this.onDirectInputStarted,
+    this.motionDiagnostics,
   });
 
   final double height;
@@ -843,6 +880,7 @@ final class _ModeSelector extends StatefulWidget {
   final ValueChanged<bool>? onMotionActiveChanged;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
   final VoidCallback? onDirectInputStarted;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
 
   @override
   State<_ModeSelector> createState() => _ModeSelectorState();
@@ -949,6 +987,7 @@ final class _ModeSelectorState extends State<_ModeSelector> {
       ),
       height: widget.height,
       viewportKey: ValueKey<String>('${widget.key}-viewport'),
+      motionDiagnostics: widget.motionDiagnostics,
       onDirectPointerDown: widget.onDirectInputStarted,
       onMotionStarted: (origin) {
         widget.onMotionActiveChanged?.call(true);
@@ -1009,11 +1048,13 @@ final class _HierarchyValueSelector extends StatefulWidget {
     required this.candidateForOffset,
     required this.labelForCandidate,
     required this.onCrossed,
+    this.onSettled,
     required this.presentation,
     required this.component,
     this.onMotionActiveChanged,
     this.autoResetMotionRegistry,
     this.onDirectInputStarted,
+    this.motionDiagnostics,
   });
 
   final double height;
@@ -1026,11 +1067,13 @@ final class _HierarchyValueSelector extends StatefulWidget {
   candidateForOffset;
   final String Function(DashboardNavigationState candidate) labelForCandidate;
   final ValueChanged<DashboardNavigationState> onCrossed;
+  final ValueChanged<DashboardNavigationState>? onSettled;
   final SummaryTemporalFlingPresentation presentation;
   final DashboardTemporalAnchorComponent component;
   final ValueChanged<bool>? onMotionActiveChanged;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
   final VoidCallback? onDirectInputStarted;
+  final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
 
   @override
   State<_HierarchyValueSelector> createState() =>
@@ -1044,6 +1087,7 @@ final class _HierarchyValueSelectorState
   late final DashboardSummaryAutoResetMotionRunner _resetRunner = _runResetStep;
   late final VoidCallback _resetCanceller = _cancelResetMotion;
   DashboardNavigationState? _motionOrigin;
+  DashboardNavigationState? _latestCandidate;
   DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
 
   DashboardSummaryAutoResetStepKind get _resetStepKind =>
@@ -1177,18 +1221,26 @@ final class _HierarchyValueSelectorState
           ),
           height: widget.height,
           viewportKey: ValueKey<String>('${widget.key}-viewport'),
+          motionDiagnostics: widget.motionDiagnostics,
           onDirectPointerDown: widget.onDirectInputStarted,
           onMotionStarted: (origin) {
             _motionOrigin = widget.navigation.state;
+            _latestCandidate = null;
             widget.onMotionActiveChanged?.call(true);
           },
           onSelectedChanged: (offset) {
             if (offset == 0) return;
             final origin = _motionOrigin ?? widget.navigation.state;
             final candidate = widget.candidateForOffset(origin, offset);
-            if (candidate != null) widget.onCrossed(candidate);
+            if (candidate != null) {
+              _latestCandidate = candidate;
+              widget.onCrossed(candidate);
+            }
           },
           onMotionIdle: (_) {
+            final settled = _latestCandidate;
+            if (settled != null) widget.onSettled?.call(settled);
+            _latestCandidate = null;
             _motionOrigin = null;
             _controller.jumpToIndexSilently(0);
             widget.onMotionActiveChanged?.call(false);

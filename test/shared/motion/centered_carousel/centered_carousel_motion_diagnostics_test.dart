@@ -3,6 +3,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
+  test('semantic cadence stays bounded and reports gaps/skips', () {
+    final cadence = CenteredCarouselSemanticCadenceAccumulator(capacity: 4)
+      ..reset(startedAtMicros: 1000)
+      ..recordTick(1, timestampMicros: 2000)
+      ..recordTick(2, timestampMicros: 12000)
+      ..recordTick(4, timestampMicros: 52000)
+      ..recordTick(4, timestampMicros: 57000)
+      ..recordTick(5, timestampMicros: 67000);
+
+    final snapshot = cadence.snapshot(endedAtMicros: 70000);
+    expect(snapshot.tickCount, 5);
+    expect(snapshot.retainedTickCount, 4);
+    expect(snapshot.firstTickLatencyMicros, 11000);
+    expect(snapshot.interTickMinimumMicros, 5000);
+    expect(snapshot.interTickMedianMicros, 10000);
+    expect(snapshot.interTickP95Micros, 40000);
+    expect(snapshot.interTickMaximumMicros, 40000);
+    expect(snapshot.longGapCount, 1);
+    expect(snapshot.duplicateTickCount, 1);
+    expect(snapshot.skippedSemanticIndexCount, 1);
+  });
+
   testWidgets(
     'reports one raw gesture, exact ballistic handoff and stable identities',
     (tester) async {

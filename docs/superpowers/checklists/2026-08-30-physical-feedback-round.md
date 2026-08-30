@@ -29,10 +29,10 @@ an agent-side pre-build PASS condition; the strongest handoff is
 | M2 | Stable Mind control during warm edit | Mind surface + range control | No unmount/loading replacement/reset after a valid domain exists | widget/controller tests | DONE |
 | M3 | Live transient Mind preview | shared prepared index/focus/presentation path | Thumb and visible rows/count follow the newest frame-coalesced preview while pointer remains down; no repository/full-index work per raw update | operation-count + widget/integration tests | DONE |
 | M4 | One canonical commit | Query application | One final exact commit per completed changed gesture; no commit for no-op/cancel; preview reconciles without rollback | interaction tests | DONE |
-| A1 | Avatar hot-path cause | Avatar rail/coordinator/core focus | Full focus/index/publication storm is removed from transient crossings while visual preview and final semantic target remain correct | 1/8-crossing/reverse tests + counters | NOT DONE |
-| A2 | Avatar flight evidence | bounded flight recorder | One summary reports raw/tick cadence and expensive-work counts without per-frame string logging | unit/widget tests | NOT DONE |
-| T1 | Time hot-path cause | Summary/time selector and prepared temporal navigation | Cache/scene misses cannot synchronously turn a visual transient crossing into a heavy navigation transaction; settle commits latest target | multi-crossing/reverse/interruption tests + counters | NOT DONE |
-| T2 | Time flight evidence | bounded flight recorder | Independent summary reports cadence/work counts | unit/widget tests | NOT DONE |
+| A1 | Avatar hot-path cause | Avatar rail/coordinator/core focus | Full focus/index/publication storm is removed from transient crossings while visual preview and final semantic target remain correct | 1/8-crossing/reverse tests + counters | DONE |
+| A2 | Avatar flight evidence | bounded flight recorder | One summary reports raw/tick cadence and expensive-work counts without per-frame string logging | unit/widget tests | DONE |
+| T1 | Time hot-path cause | Summary/time selector and prepared temporal navigation | Cache/scene misses cannot synchronously turn a visual transient crossing into a heavy navigation transaction; settle commits latest target | multi-crossing/reverse/interruption tests + counters | DONE |
+| T2 | Time flight evidence | bounded flight recorder | Independent summary reports cadence/work counts | unit/widget tests | DONE |
 | G1 | Random gray Rhythm slab forensics | Rhythm slot/card/scene lifecycle | Exact current owner is fixed only if proven; otherwise durable low-frequency owner/state diagnostics and marker snapshot are present without a cosmetic patch | source audit + widget/state tests | NOT DONE |
 | G2 | Preserve collapse repair | full Budget composition | Existing intermediate-collapse regression remains green | targeted regression | NOT DONE |
 | B1 | Budget/limit audit | Query/index/Budget lifecycle | Three logs are deduplicated and anomalies classified; no behavior change without causal proof | forensic record + targeted invariant tests if justified | PARTIAL |
@@ -90,3 +90,44 @@ mixed-interaction reproduction, collapse regression, and budget/limit stress.
   resident preview row, unchanged committed navigation/Query, zero additional
   repository calls, and zero index builds during drag.
 - Status: confirmed; physical perception remains user-only pending.
+
+### [STEP 03] Avatar transient publication storm
+
+- Question: which Avatar work is required at each crossed target and which
+  work can wait for the selected target to settle?
+- Evidence: the device log recorded 22 target changes/index publications and
+  19 focus publication cycles in one short flight; CURRENT HEAD routed every
+  `onTargetPreview` through the complete ephemeral-focus install path.
+- Conclusion: a discrete crossing was being treated as a mini canonical focus
+  transaction even though the retained rail presentation can bind its target,
+  Header palette, progress, and prepared consumers without replacing the
+  canonical focus/index.
+- Decision: publish the prepared visual target during crossings and perform
+  exactly one canonical focus/index/LogBox transaction for the latest settled
+  target. Keep carousel physics, velocity, crossing count, controller, and
+  `ScrollPosition` unchanged.
+- Validation: the 8-crossing controller test records zero focus/index/visible
+  frame/repository work before settle and exactly one final focus publication;
+  the complete affected rail group passes 114 tests.
+- Status: confirmed by source and automated counters; physical cadence remains
+  user-only pending.
+
+### [STEP 04] Time component crossing transaction storm
+
+- Question: why did a year/month/day carousel crossing start scene rebase,
+  cache/text-layout, Query, and presentation work before the flight settled?
+- Evidence: the time log showed 10–15 navigation transactions and 13 critical
+  cache/text-layout misses in sub-second flights; CURRENT HEAD called the full
+  temporal navigation path from every `onSelectedChanged` callback.
+- Conclusion: the visual selector tick and canonical temporal transaction had
+  the same callback owner.
+- Decision: keep crossed candidates local to the stable carousel, emit the
+  latest candidate once on idle, and run the existing canonical temporal
+  transaction exactly once. Reuse the common typed raw-motion recorder and a
+  bounded shared semantic-cadence accumulator for settle summaries.
+- Validation: the multi-crossing test observes unchanged navigation, visible
+  frame, repository calls, scene starts, and Query applies throughout eight
+  crossings, followed by one exact latest-target commit. Shared cadence tests
+  prove bounded retention, percentiles, long gaps, duplicates, and skips.
+- Status: confirmed by source and automated counters; physical cadence remains
+  user-only pending.

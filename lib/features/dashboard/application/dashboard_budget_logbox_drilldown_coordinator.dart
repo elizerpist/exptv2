@@ -45,6 +45,11 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
     int? targetHandle,
     DashboardBudgetPresentationState? state,
   }) {
+    final presentation = this.presentation;
+    if (targetHandle != null && presentation != null) {
+      _record(source: 'avatarPreview', targetHandle: targetHandle);
+      return Future<bool>.value(presentation.previewTargetHandle(targetHandle));
+    }
     final target = targetHandle == null
         ? state?.liveSelection.target
         : presentation?.targetForHandle(targetHandle);
