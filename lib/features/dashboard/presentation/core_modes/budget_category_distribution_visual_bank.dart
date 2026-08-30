@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import '../../application/dashboard_budget_partner_distribution_controller.dart'
 import '../../query/domain/ledger_direction.dart';
 import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import '../../runtime/application/dashboard_data_runtime.dart';
 import '../../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/domain/year_month.dart';
@@ -168,6 +170,7 @@ final class DashboardBudgetDistributionDrawableController
     Iterable<LedgerTimeScope> Function(DashboardNavigationState state)?
     directChildScopesFor,
     bool Function()? isForegroundInputActive,
+    DashboardSpeculativeWorkScheduler? speculativeWorkScheduler,
     this.maximumFrames = 40,
   }) : assert(snapshot != null || snapshotForCurrentFrame != null),
        assert(maximumFrames > 0),
@@ -176,6 +179,9 @@ final class DashboardBudgetDistributionDrawableController
        _partnerSnapshotForCurrentFrame = partnerSnapshotForCurrentFrame,
        _directChildScopesFor = directChildScopesFor,
        _isForegroundInputActive = isForegroundInputActive,
+       _speculativeWorkScheduler =
+           speculativeWorkScheduler ??
+           const FlutterDashboardSpeculativeWorkScheduler(),
        super(null) {
     _categories.addListener(_invalidateForCategoryMetadata);
   }
@@ -187,6 +193,7 @@ final class DashboardBudgetDistributionDrawableController
   final Iterable<LedgerTimeScope> Function(DashboardNavigationState state)?
   _directChildScopesFor;
   final bool Function()? _isForegroundInputActive;
+  final DashboardSpeculativeWorkScheduler _speculativeWorkScheduler;
   final int maximumFrames;
   final DashboardBudgetCategoryDistributionBundleCache _categoryCache =
       DashboardBudgetCategoryDistributionBundleCache(maximumBundles: 40);
@@ -208,6 +215,10 @@ final class DashboardBudgetDistributionDrawableController
   int pictureDecodeCount = 0;
   int evictionCount = 0;
   int _maintenanceEpoch = 0;
+  DashboardSpeculativeWorkSlot? _pendingMaintenanceSlot;
+  Completer<bool>? _pendingMaintenanceGrant;
+  Object? _pendingMaintenanceGrantToken;
+  bool _disposed = false;
 
   int get retainedFrameCount => _frames.length;
   int get retainedSceneCount =>
@@ -393,8 +404,8 @@ final class DashboardBudgetDistributionDrawableController
     // direct Summary or BudgetAvatar input and it must re-check after yielding
     // because each projection can synchronously build Canvas paths.
     final maintenanceEpoch = ++_maintenanceEpoch;
-    await Future<void>.delayed(Duration.zero);
-    if (_isForegroundInputActive?.call() ?? false) return;
+    if (!await _awaitInputFairMaintenanceGrant()) return;
+    if (_mustAbortMaintenance(maintenanceEpoch)) return;
     final scopes = <String, LedgerTimeScope>{};
     void add(LedgerTimeScope scope) => scopes[scope.canonicalKey] = scope;
     add(parentScope);
@@ -412,11 +423,10 @@ final class DashboardBudgetDistributionDrawableController
             'requiredScopes=${scopes.keys.join(',')}',
       ),
     );
-    for (final scope in scopes.values) {
-      if ((_isForegroundInputActive?.call() ?? false) ||
-          maintenanceEpoch != _maintenanceEpoch) {
-        return;
-      }
+    final requestedScopes = scopes.values.toList(growable: false);
+    for (var index = 0; index < requestedScopes.length; index += 1) {
+      if (_mustAbortMaintenance(maintenanceEpoch)) return;
+      final scope = requestedScopes[index];
       try {
         await _prepareForScope(
           scope,
@@ -427,7 +437,53 @@ final class DashboardBudgetDistributionDrawableController
       }
       // Every scope is an optional maintenance grant. Yield before the next
       // sibling so a 31-day month can never occupy the isolate as one burst.
-      await Future<void>.delayed(Duration.zero);
+      if (index + 1 < requestedScopes.length &&
+          !await _awaitInputFairMaintenanceGrant()) {
+        return;
+      }
+    }
+  }
+
+  bool _mustAbortMaintenance(int epoch) =>
+      _disposed ||
+      epoch != _maintenanceEpoch ||
+      (_isForegroundInputActive?.call() ?? false);
+
+  /// Claims one cancellable event-turn grant from the shared Dashboard
+  /// scheduler. Card2's cache-only preparation must never leave a raw timer
+  /// behind after its owner is replaced or disposed.
+  Future<bool> _awaitInputFairMaintenanceGrant() {
+    if (_disposed) return Future<bool>.value(false);
+    _revokePendingMaintenanceGrant();
+    final completion = Completer<bool>();
+    final token = Object();
+    _pendingMaintenanceGrant = completion;
+    _pendingMaintenanceGrantToken = token;
+    final slot = _speculativeWorkScheduler.scheduleInputFairIdleSlot(() {
+      if (!identical(_pendingMaintenanceGrantToken, token)) return;
+      _pendingMaintenanceSlot = null;
+      _pendingMaintenanceGrant = null;
+      _pendingMaintenanceGrantToken = null;
+      if (!completion.isCompleted) completion.complete(!_disposed);
+    });
+    if (identical(_pendingMaintenanceGrantToken, token)) {
+      _pendingMaintenanceSlot = slot;
+    } else {
+      // A synchronous test scheduler already granted this one-shot slot.
+      slot.cancel();
+    }
+    return completion.future;
+  }
+
+  void _revokePendingMaintenanceGrant() {
+    final slot = _pendingMaintenanceSlot;
+    final completion = _pendingMaintenanceGrant;
+    _pendingMaintenanceSlot = null;
+    _pendingMaintenanceGrant = null;
+    _pendingMaintenanceGrantToken = null;
+    slot?.cancel();
+    if (completion != null && !completion.isCompleted) {
+      completion.complete(false);
     }
   }
 
@@ -442,6 +498,7 @@ final class DashboardBudgetDistributionDrawableController
     String? partnerId,
   }) {
     _maintenanceEpoch += 1;
+    _revokePendingMaintenanceGrant();
     final snapshot = _snapshotForCurrentFrame();
     if (snapshot == null) {
       return const DashboardBudgetDistributionForegroundPublication(
@@ -523,8 +580,10 @@ final class DashboardBudgetDistributionDrawableController
       // Keep cache-miss Canvas projection out of the visible-frame listener
       // that is invoked by a physical Summary/Avatar crossing. A cache hit is
       // already handled synchronously by [publishIfReadyForTimeScope].
-      await Future<void>.delayed(Duration.zero);
-      if (_isForegroundInputActive?.call() ?? false) return;
+      if (!await _awaitInputFairMaintenanceGrant() ||
+          (_isForegroundInputActive?.call() ?? false)) {
+        return;
+      }
       final frame = await prepareForScope(scope);
       final snapshot = _snapshotForCurrentFrame();
       if (snapshot != null &&
@@ -589,6 +648,7 @@ final class DashboardBudgetDistributionDrawableController
   void _invalidateForCategoryMetadata() {
     _prepareGeneration += 1;
     _maintenanceEpoch += 1;
+    _revokePendingMaintenanceGrant();
     _categoryCache.clear();
     _partnerCache.clear();
     _frames.clear();
@@ -597,8 +657,10 @@ final class DashboardBudgetDistributionDrawableController
 
   @override
   void dispose() {
+    _disposed = true;
     _prepareGeneration += 1;
     _maintenanceEpoch += 1;
+    _revokePendingMaintenanceGrant();
     _categories.removeListener(_invalidateForCategoryMetadata);
     _frames.clear();
     if (value != null) value = null;

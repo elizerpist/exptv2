@@ -95,7 +95,7 @@ APK/device acceptance result.
 | ID | Current source evidence | Acceptance still required | Status |
 |---|---|---|---|
 | G1 | The selected Avatar always installs its long-press recognizer when the direct input controller exists. Its context is resolved through `directInputEditContext()`, which retains only an exact selected-target/scope authority and is not gated by `header.editContext`. Targeted first-contact and draft-survival widget tests are green. | Physical first edit, repeated ticks, reverse, release, revisit, and stale-write races on the actual device. | PARTIAL |
-| G2 | A rail hotset request made before bootstrap was silently lost because there was no index yet. Core now retains the bounded semantic horizon and primes it at canonical index publication. A second reproduced gap was that the first ready-frame fling could begin before the `Priority.idle` hotset task ran, causing direct `deriveFast` misses. The Core now completes its fixed ≤17 target semantic horizon before direct Avatar input; later replenishment stays cancellable/idle. The pre-bootstrap and immediate-first-fling red tests are green. | Measured time-vs-Avatar delta and repeated/reverse physical fling with no visible semantic-tick hitch. | PARTIAL |
+| G2 | A rail hotset request made before bootstrap was silently lost because there was no index yet. Core now retains the bounded semantic horizon and primes it at canonical index publication. A second reproduced gap was that the first ready-frame fling could begin before the `Priority.idle` hotset task ran, causing direct `deriveFast` misses. The Core now completes its fixed ≤17 target semantic horizon before direct Avatar input; later replenishment stays cancellable/idle. A third reproduced scheduler leak left a Card2 `Future.delayed(Duration.zero)` hotset timer pending after Avatar input/disposal. Card2 now uses the shared cancellable input-fair scheduler, with one revocable grant per optional scope. The pre-bootstrap, immediate-first-fling, cancellation, and real-pointer matrix tests are green. | Measured time-vs-Avatar delta and repeated/reverse physical fling with no visible semantic-tick hitch. | PARTIAL |
 | G3 | Summary raw pointer-down preempts the time motion lane and pending neighbour work before gesture resolution. The real Summary-after-live-time-ballistic test is green. | Device pointer-down-to-action timing while active and immediately after a time fling; exact remaining lock owner if any. | PARTIAL |
 | G4 | Full-parent split Budget coverage now mounts a real Partner/Rhythm frame and drives collapse in 5% steps. It reproduced and repaired the lower-only intermediate-width Rhythm layout exception and the layout-unsafe pager diagnostic, without a visual mask. The device screenshot's exact gray-pixel owner still needs capture. | Identify the actual intermediate gray-pixel RenderObject/layer; then prove Split and Unified slow/fast/reverse/interrupted collapse without the slab. | PARTIAL |
 | G5 | The canonical applied-query facet loader gives Mind and Query Menu the same `CurrentQueryController` domain owner. Ready/loading/latest-wins and two-endpoint tests are green. | Device parity: two visible draggable endpoints and matching values after navigation/change in both hosts. | PARTIAL |
@@ -128,6 +128,8 @@ current source checkpoints:
   surface checks.
 - motion-density, zero-I/O navigation, carousel ballistic diagnostics/physics,
   and time-navigation target suite: **43 tests**.
+- Card2 drawable input-fair cancellation, Card2 semantic-bank/scope, Budget
+  Mode-nav, and the real 30× physical rail-density matrix: **22 tests**.
 - the latest post-r56 combined Avatar/quick-edit/Budget-presentation,
   Core ephemeral-focus, Core Query-application, and production-parent Core
   Dashboard run: **172 tests**.
@@ -150,14 +152,25 @@ changed production files and both changed test files reported no issues, and a
 fresh `git diff --check` passed. This is still not a replacement for the
 required device intermediate-frame evidence.
 
-An attempted complete `test/features/dashboard` run was stopped after the
-independent `dashboard_logbox_stable_render_surface_test` failed at
-`WidgetController.state` with `Bad state: Too many elements`. The exact test
-was then run at both this pass's G4 checkpoint and the pre-G4 starting SHA
-`c0768dda358f1a91054abe30b3680f260a52976d`; it failed identically at line 87
-on both. It is therefore recorded as an inherited unrelated regression, not
-silently hidden or attributed to the Rhythm repair. The complete Dashboard
-directory is consequently **not green** and it is not used as release proof.
+The first current full `test/features/dashboard` run through
+`e904e0358722cc81cd2e96a00767bd01edd26baf` completed with **1,041 passing
+tests and 25 failures**. The failure list is retained rather than suppressed:
+LogBox stable render surface (1), rail-density trace (3), Budget mode-nav (1),
+Header Deep Drift/classic/Space Fabric (12), geometry goldens (6), and Summary
+experiments (2). The exact LogBox failure is `WidgetController.state` with
+`Bad state: Too many elements` at line 87; it was previously reproduced at
+both this pass's G4 checkpoint and pre-G4
+`c0768dda358f1a91054abe30b3680f260a52976d`.
+
+The four G2-adjacent failures were then independently reproduced: the three
+rail-density cases did not hit their carousel because their 800×600 test root
+ended above the widget at y=721, and the Mode-nav case leaked a pending Card2
+maintenance timer. The trace harness now uses an 800×900 physical test root;
+the Card2 owner uses the shared cancellable input-fair scheduler. The focused
+Card2/Mode-nav/rail matrix passed **22 tests** after that repair. The full
+Dashboard directory has not yet been rerun after this latest source change;
+the remaining earlier failures are not hidden and the directory is still **not
+green** for release proof.
 
 ## Continued G2 first-fling evidence
 
@@ -203,3 +216,26 @@ analyzer passed.
 This closes this specific r56 source path only. G2 remains `PARTIAL` until the
 required physical Avatar motion matrix proves smoothness and the absence of
 crossing-scaled work on a device.
+
+## Continued G2 Card2 scheduling and physical-trace evidence
+
+The current G2 source audit found a concrete second scheduling defect in
+`DashboardBudgetDistributionDrawableController`: optional Card2 sibling
+warming used bare `Future.delayed(Duration.zero)` calls. A real Avatar Card1
+fling could therefore leave a fake-async Timer alive after the Card2 owner was
+disposed; `core_dashboard_mode_navigation_test` reproduced the pending timer
+from `_warmHotsetForScopes`.
+
+The Card2 owner now consumes the existing
+`DashboardSpeculativeWorkScheduler` rather than owning a second event-turn
+mechanism. It has one cancellable idle grant at a time, revokes it on direct
+foreground publication, category invalidation, or dispose, and requires a
+fresh grant before each additional optional sibling. Two deterministic
+regressions verify revocation on foreground promotion and disposal. The
+previous rail-density trace failure was also proven to be a test-input error:
+its carousel center was y=721 outside an 800×600 root. Restoring its real
+800×900 physical surface causes the actual fling lifecycle to run; the full
+30× Month/Year, empty/populated/mixed, dense, and reverse matrix passes.
+
+This eliminates a source-level timer/queue owner and restores a valid physical
+widget stress harness. It is not a device-FPS result, so G2 remains `PARTIAL`.

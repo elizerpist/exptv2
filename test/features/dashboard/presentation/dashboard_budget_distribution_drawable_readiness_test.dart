@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -209,11 +210,67 @@ void main() {
           'epoch before it can build parent and sibling Card2 frames.',
     );
   });
+
+  test(
+    'RG-G2: disposing Card2 revokes its ungranted input-fair hotset slot',
+    () async {
+      final scheduler = _ControlledSpeculativeWorkScheduler();
+      final controller = _controller(speculativeWorkScheduler: scheduler);
+      const year = YearScope(2026);
+      const january = MonthScope(YearMonth(year: 2026, month: 1));
+      const february = MonthScope(YearMonth(year: 2026, month: 2));
+
+      final maintenance = controller.warmHotsetForPreviewScope(
+        parentScope: year,
+        siblingScopes: const <LedgerTimeScope>[january, february],
+      );
+      expect(scheduler.pendingGrantCount, 1);
+
+      controller.dispose();
+      await maintenance;
+
+      expect(scheduler.pendingGrantCount, 0);
+      expect(scheduler.cancelledGrantCount, 1);
+    },
+  );
+
+  test(
+    'RG-G2: foreground Card2 publication revokes an ungranted sibling hotset',
+    () async {
+      final scheduler = _ControlledSpeculativeWorkScheduler();
+      final controller = _controller(speculativeWorkScheduler: scheduler);
+      const year = YearScope(2026);
+      const january = MonthScope(YearMonth(year: 2026, month: 1));
+      const february = MonthScope(YearMonth(year: 2026, month: 2));
+
+      final maintenance = controller.warmHotsetForPreviewScope(
+        parentScope: year,
+        siblingScopes: const <LedgerTimeScope>[january, february],
+      );
+      expect(scheduler.pendingGrantCount, 1);
+
+      final publication = controller.publishCurrentScopeForeground(february);
+      await maintenance;
+
+      expect(publication.published, isTrue);
+      expect(scheduler.pendingGrantCount, 0);
+      expect(scheduler.cancelledGrantCount, 1);
+      expect(
+        controller.retainedFrameCount,
+        1,
+        reason:
+            'The revoked idle hotset must not build its parent/siblings after '
+            'the direct Card2 scope becomes authoritative.',
+      );
+      controller.dispose();
+    },
+  );
 }
 
 DashboardBudgetDistributionDrawableController _controller({
   int maximumFrames = 40,
   bool Function()? isForegroundInputActive,
+  DashboardSpeculativeWorkScheduler? speculativeWorkScheduler,
 }) {
   final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
     _category('food'),
@@ -225,7 +282,52 @@ DashboardBudgetDistributionDrawableController _controller({
     partnerSnapshotForCurrentFrame: _partnerSnapshot,
     maximumFrames: maximumFrames,
     isForegroundInputActive: isForegroundInputActive,
+    speculativeWorkScheduler: speculativeWorkScheduler,
   );
+}
+
+final class _ControlledSpeculativeWorkScheduler
+    implements DashboardSpeculativeWorkScheduler {
+  final List<_ControlledSpeculativeWorkSlot> _pending =
+      <_ControlledSpeculativeWorkSlot>[];
+  var _cancelledGrantCount = 0;
+
+  int get pendingGrantCount => _pending.length;
+  int get cancelledGrantCount => _cancelledGrantCount;
+
+  @override
+  DashboardSpeculativeWorkSlot scheduleInputFairIdleSlot(
+    void Function() callback,
+  ) {
+    final slot = _ControlledSpeculativeWorkSlot(this, callback);
+    _pending.add(slot);
+    return slot;
+  }
+
+  void _cancel(_ControlledSpeculativeWorkSlot slot) {
+    if (_pending.remove(slot)) _cancelledGrantCount += 1;
+  }
+}
+
+final class _ControlledSpeculativeWorkSlot
+    implements DashboardSpeculativeWorkSlot {
+  _ControlledSpeculativeWorkSlot(this._owner, this._callback);
+
+  final _ControlledSpeculativeWorkScheduler _owner;
+  final void Function() _callback;
+  var _cancelled = false;
+
+  @override
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _owner._cancel(this);
+  }
+
+  void grant() {
+    if (_cancelled) return;
+    _callback();
+  }
 }
 
 FluviCategory _category(String id) => FluviCategory(

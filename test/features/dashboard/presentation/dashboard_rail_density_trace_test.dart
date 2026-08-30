@@ -358,6 +358,13 @@ final class _TraceSubject {
     WidgetTester tester, {
     bool yearPlane = false,
   }) async {
+    // This is a physical pointer-stress test. At the default 800×600 test
+    // viewport the Dashboard time carousel is laid out below the root, so a
+    // `tester.fling` would miss it and silently fail to exercise production
+    // gesture ownership. Use the same tall dashboard surface used by the
+    // other real-input Dashboard tests and restore it at test teardown.
+    await tester.binding.setSurfaceSize(const Size(800, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final recorder = DashboardRailFlightRecorder(enabled: true, capacity: 256);
     final controller = DashboardCoreController(
       initialDate: DateTime(2026, 7, 14),
