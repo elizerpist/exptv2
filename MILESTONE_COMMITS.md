@@ -1,5 +1,30 @@
 # Milestone commits
 
+## 2026-08-30 — Home interaction performance physical baseline
+
+- Functional checkpoint: `dfa90b6741108f824244dbc11a3d73a6c5174472` —
+  **milestone: preserve accepted home performance baseline**.
+- Status: **PHYSICALLY ACCEPTED BY THE USER ON ANDROID** for Avatar fling,
+  time fling, general navigation, and collapse/expand responsiveness. This is
+  human physical evidence, not an inferred FPS value or an APK-release claim.
+- Focused source verification at the checkpoint:
+  `flutter test test/features/dashboard/presentation/dashboard_budget_distribution_drawable_readiness_test.dart --reporter expanded`
+  passed **9/9**. An earlier combined widget invocation did not terminate and
+  is deliberately not recorded as green evidence.
+- Rollback anchor: `dfa90b6741108f824244dbc11a3d73a6c5174472`. If a later
+  post-checkpoint commit must be abandoned, the authorized recovery command is
+  `git reset --hard dfa90b6741108f824244dbc11a3d73a6c5174472`; it was **not
+  executed** while recording this milestone.
+- Open defects intentionally excluded from this checkpoint:
+  1. a gray rectangular slab during the intermediate collapse/expand swipe
+     around the Rhythm/bar-chart region;
+  2. Mind's canonical amount-range lifecycle can remain loading and fail to
+     mount the intended shared slider.
+- Regression policy: subsequent work is limited to proving and repairing
+  those two owners. It must not retune fling physics, broad warmup/cache
+  policy, Header fidelity, or accepted direct-manipulation pacing without
+  specific evidence and before/after comparison.
+
 ## 2026-08-26 — Dynamic LogBox geometry generation candidate
 
 - The dashboard permits a stepped presentation row-height preference without
