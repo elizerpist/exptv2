@@ -343,6 +343,13 @@ typedef DashboardLogBoxActiveSceneWindowRetainer =
 typedef DashboardLogBoxRetainedFocusSceneWindowDiscarder =
     void Function(String retainedKey);
 
+/// Releases the one authoritative latest-painted Segmented target snapshot
+/// when that interaction reaches a newer exact paint or is superseded. The
+/// cache retains only immutable scene resources; the Dashboard Core owns the
+/// temporal generation and settlement policy.
+typedef DashboardLogBoxRetainedSegmentedPaintSceneWindowDiscarder =
+    void Function(String retainedKey);
+
 /// Invalidates the current bounded background preparation slice. It does not
 /// discard an already active immutable scene bank.
 typedef DashboardLogBoxSceneWindowPreparationCanceller = void Function();

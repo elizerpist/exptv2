@@ -337,8 +337,9 @@ final class DashboardPresentationController {
   /// work or settle wait; a strict miss returns false for the existing
   /// fail-closed structural path.
   bool publishPreparedExperimentalTemporalCandidate(
-    DashboardNavigationState candidate,
-  ) {
+    DashboardNavigationState candidate, {
+    bool deferCanonicalCommit = false,
+  }) {
     final installed = _index;
     if (installed == null) return false;
     final candidateQueryKey = candidate.isRailOpen
@@ -360,8 +361,9 @@ final class DashboardPresentationController {
     } on StateError {
       return false;
     }
-    navigation.commitTemporalCandidate(candidate);
-    final state = navigation.state;
+    final state = deferCanonicalCommit
+        ? candidate
+        : navigation.commitTemporalCandidate(candidate);
     final semanticIndex = _selectedIndex(state, catalog);
     final selectedEntry = catalog.entryAtLogicalIndex(semanticIndex);
     final queryKey = state.isRailOpen
@@ -377,7 +379,7 @@ final class DashboardPresentationController {
     // Day's old direct path intentionally left the existing child carousel
     // intact. Parent candidates need only a catalog reconciliation; this is
     // synchronous metadata and cannot materialize a scene.
-    if (!state.isRailOpen) {
+    if (!deferCanonicalCommit && !state.isRailOpen) {
       _installCatalog(
         catalog,
         selectedLogicalIndex: semanticIndex,
@@ -395,11 +397,157 @@ final class DashboardPresentationController {
       navigationEpoch: state.navigationEpoch,
       presentationEpoch: _presentationEpoch,
       frameGeneration: visibleFrames.nextFrameGeneration(),
-      mode: DashboardVisibleMode.committed,
+      mode: deferCanonicalCommit
+          ? DashboardVisibleMode.preview
+          : DashboardVisibleMode.committed,
     );
     _queuedPreparedExperimentalTemporalFrame = frame;
     frameCoalescer.request(frame);
     return true;
+  }
+
+  /// Promotes the exact deferred component frame only after the production
+  /// LogBox has acknowledged its paint. This commits navigation metadata and
+  /// render-domain ownership without manufacturing another data frame.
+  bool promotePaintedExperimentalTemporalCandidate({
+    required DashboardNavigationState candidate,
+    required int presentationEpoch,
+    required int frameGeneration,
+  }) {
+    final queued = _queuedPreparedExperimentalTemporalFrame;
+    final installed = _index;
+    final visible = visibleFrames.value;
+    if (queued == null ||
+        installed == null ||
+        visible == null ||
+        queued.mode != DashboardVisibleMode.preview ||
+        visible.mode != DashboardVisibleMode.preview ||
+        visible.queryKey != queued.queryKey ||
+        visible.presentationEpoch != queued.presentationEpoch ||
+        visible.frameGeneration != queued.frameGeneration ||
+        queued.queryKey !=
+            (candidate.isRailOpen
+                ? candidate.temporalAnchor.sourceChildQueryKey
+                : candidate.parentQueryKey) ||
+        queued.coreRevision != installed.coreRevision ||
+        queued.presentationEpoch != presentationEpoch ||
+        queued.frameGeneration != frameGeneration ||
+        navigation.state.navigationEpoch != candidate.navigationEpoch) {
+      return false;
+    }
+    final state = navigation.commitTemporalCandidate(candidate);
+    final catalog = installed.catalogForKey(state.parentQueryKey);
+    if (!state.isRailOpen) {
+      _installCatalog(
+        catalog,
+        selectedLogicalIndex: _selectedIndex(state, catalog),
+        policy: _semanticInstallPolicyFor(state),
+        reason: 'experimentalPreparedTemporalPainted',
+      );
+    }
+    _queuedPreparedExperimentalTemporalFrame = null;
+    if (!visibleFrames.promoteCommitted(
+      expectedKey: queued.queryKey,
+      epoch: queued.presentationEpoch,
+      navigationEpoch: state.navigationEpoch,
+    )) {
+      return false;
+    }
+    final committed = visibleFrames.value;
+    if (committed == null ||
+        committed.mode != DashboardVisibleMode.committed ||
+        committed.queryKey != queued.queryKey ||
+        committed.presentationEpoch != queued.presentationEpoch ||
+        committed.navigationEpoch != state.navigationEpoch) {
+      return false;
+    }
+    _commitMetadata(committed);
+    return true;
+  }
+
+  /// Reclaims the latest target that was physically painted when a new
+  /// foreground pointer interrupts a later, still-unpainted preview.
+  ///
+  /// The deferred preview may already have left [frameCoalescer], so merely
+  /// discarding its pending callback cannot make the last painted target the
+  /// canonical owner again. This stays RAM-only: it rebuilds one existing
+  /// prepared frame and commits it synchronously, without a Query, index or
+  /// scene-preparation path.
+  /// Verifies the RAM-only restore preconditions without mutating navigation
+  /// or the visible lanes. The Core uses this before it swaps the matching
+  /// retained LogBox scene back into the active render bank.
+  bool canRestorePaintedExperimentalTemporalCandidate(
+    DashboardNavigationState candidate,
+  ) {
+    final installed = _index;
+    if (installed == null ||
+        candidate.temporalAnchor.revision != installed.coreRevision ||
+        navigation.state.navigationEpoch != candidate.navigationEpoch) {
+      return false;
+    }
+    final expectedKey = candidate.isRailOpen
+        ? candidate.temporalAnchor.sourceChildQueryKey
+        : candidate.parentQueryKey;
+    try {
+      installed.frameForKey(expectedKey);
+    } on StateError {
+      return false;
+    }
+    return true;
+  }
+
+  bool restoreAndCommitPaintedExperimentalTemporalCandidate(
+    DashboardNavigationState candidate,
+  ) {
+    if (!canRestorePaintedExperimentalTemporalCandidate(candidate)) {
+      return false;
+    }
+    final installed = _index!;
+    final expectedKey = candidate.isRailOpen
+        ? candidate.temporalAnchor.sourceChildQueryKey
+        : candidate.parentQueryKey;
+
+    final queued = _queuedPreparedExperimentalTemporalFrame;
+    if (queued != null) {
+      frameCoalescer.discardPendingTargetWhere(
+        (pending) => identical(pending, queued),
+      );
+    }
+    _queuedPreparedExperimentalTemporalFrame = null;
+    _pendingCommit = null;
+    _presentationEpoch += 1;
+    final state = navigation.commitTemporalCandidate(candidate);
+    final catalog = installed.catalogForKey(state.parentQueryKey);
+    if (!state.isRailOpen) {
+      _installCatalog(
+        catalog,
+        selectedLogicalIndex: _selectedIndex(state, catalog),
+        policy: _semanticInstallPolicyFor(state),
+        reason: 'experimentalPaintedTargetInterrupted',
+      );
+    }
+    final frame = _visibleFor(state, mode: DashboardVisibleMode.committed);
+    _publishCoalescedFrame(frame);
+    final committed = visibleFrames.value;
+    return committed != null &&
+        committed.mode == DashboardVisibleMode.committed &&
+        committed.queryKey == expectedKey &&
+        committed.navigationEpoch == state.navigationEpoch;
+  }
+
+  /// A new foreground pointer may invalidate only its own still-queued
+  /// deferred component target. It cannot erase a newer structural request
+  /// sharing the one display-frame coalescer.
+  bool discardQueuedExperimentalTemporalCandidate() {
+    final queued = _queuedPreparedExperimentalTemporalFrame;
+    if (queued == null || queued.mode != DashboardVisibleMode.preview) {
+      return false;
+    }
+    final discarded = frameCoalescer.discardPendingTargetWhere(
+      (pending) => identical(pending, queued),
+    );
+    if (discarded) _queuedPreparedExperimentalTemporalFrame = null;
+    return discarded;
   }
 
   /// Compatibility entrypoint for the original DAY-only fast path. Keeping

@@ -386,8 +386,9 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
           navigationController: avatarRailController,
           onTargetPreviewAccepted: drilldown == null
               ? null
-              : (targetHandle) =>
-                    drilldown!.previewBudgetTarget(targetHandle: targetHandle),
+              : (targetHandle) => drilldown!.previewBudgetTargetPainted(
+                  targetHandle: targetHandle,
+                ),
           onTargetSettled: drilldown == null
               ? null
               : (targetHandle) => unawaited(

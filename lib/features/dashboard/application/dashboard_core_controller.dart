@@ -306,6 +306,23 @@ final class _FocusBaseSceneRetention {
   final String retainedKey;
 }
 
+/// One immutable scene snapshot for the latest Segmented target that has
+/// already reached LogBox paint. It is separate from the ephemeral-focus base
+/// snapshot because a time gesture may coexist with a focused Budget state;
+/// both use the same cache-owned active-bank retention primitive.
+@immutable
+final class _SegmentedPaintedSceneRetention {
+  const _SegmentedPaintedSceneRetention({
+    required this.target,
+    required this.window,
+    required this.retainedKey,
+  });
+
+  final _SegmentedTemporalPaintTarget target;
+  final DashboardLogBoxSceneWindow window;
+  final String retainedKey;
+}
+
 /// The latest renderability requirement derived from committed navigation.
 ///
 /// Preparation is deliberately cancellable for pointer responsiveness; the
@@ -849,6 +866,10 @@ final class DashboardCoreController {
   DashboardLogBoxActiveSceneWindowRetainer? _activeSceneWindowRetainer;
   DashboardLogBoxRetainedFocusSceneWindowDiscarder?
   _retainedFocusSceneWindowDiscarder;
+  DashboardLogBoxActiveSceneWindowRetainer?
+  _segmentedPaintedSceneWindowRetainer;
+  DashboardLogBoxRetainedSegmentedPaintSceneWindowDiscarder?
+  _retainedSegmentedPaintSceneWindowDiscarder;
   DashboardLogBoxSceneWindowActivator? _sceneWindowActivator;
   DashboardLogBoxSceneWindowPreparationCanceller?
   _sceneWindowPreparationCanceller;
@@ -933,6 +954,8 @@ final class DashboardCoreController {
   _SegmentedTemporalPaintTarget? _segmentedLatestAcceptedPaintTarget;
   _SegmentedTemporalPaintTarget? _segmentedLatestPaintedTarget;
   _SegmentedTemporalPaintTarget? _segmentedPendingSettleTarget;
+  _SegmentedPaintedSceneRetention? _segmentedPaintedSceneRetention;
+  int _segmentedPaintedSceneRetentionGeneration = 0;
   int _segmentedPaintRejectedCount = 0;
   bool _segmentedPaintRejectedForLatestTarget = false;
   PreparedDashboardIndex? _focusBaseIndex;
@@ -1051,6 +1074,9 @@ final class DashboardCoreController {
     stageLiveInteractionFromPreparedResources,
     DashboardLogBoxActiveSceneWindowRetainer? retainActive,
     DashboardLogBoxRetainedFocusSceneWindowDiscarder? discardRetainedFocus,
+    DashboardLogBoxActiveSceneWindowRetainer? retainSegmentedPaintedTarget,
+    DashboardLogBoxRetainedSegmentedPaintSceneWindowDiscarder?
+    discardRetainedSegmentedPaintedTarget,
     DashboardLogBoxSceneWindowPreparationCanceller? cancel,
     DashboardLogBoxSceneWindowRebaseScheduler? scheduleRebase,
     DashboardLogBoxSceneWindowReporter? report,
@@ -1082,6 +1108,9 @@ final class DashboardCoreController {
         stageLiveInteractionFromPreparedResources;
     _activeSceneWindowRetainer = retainActive;
     _retainedFocusSceneWindowDiscarder = discardRetainedFocus;
+    _segmentedPaintedSceneWindowRetainer = retainSegmentedPaintedTarget;
+    _retainedSegmentedPaintSceneWindowDiscarder =
+        discardRetainedSegmentedPaintedTarget;
     _sceneWindowActivator = activate;
     _sceneWindowPreparationCanceller = cancel;
     _sceneWindowRebaseScheduler = scheduleRebase;
@@ -1135,6 +1164,8 @@ final class DashboardCoreController {
     _liveInteractionResourceSceneStager = null;
     _activeSceneWindowRetainer = null;
     _retainedFocusSceneWindowDiscarder = null;
+    _segmentedPaintedSceneWindowRetainer = null;
+    _retainedSegmentedPaintSceneWindowDiscarder = null;
     _sceneWindowActivator = null;
     _sceneWindowPreparationCanceller = null;
     _sceneWindowRebaseScheduler = null;
@@ -4849,6 +4880,7 @@ final class DashboardCoreController {
 
   void beginSegmentedSummaryMotion() {
     _cancelSceneWindowMaintenanceForInput();
+    _discardRetainedSegmentedPaintedScene();
     _segmentedTimeFlightGeneration += 1;
     _segmentedTimePreviewCrossings = 0;
     _segmentedTimeLivePublications = 0;
@@ -4882,6 +4914,43 @@ final class DashboardCoreController {
   void noteSummaryDirectPointerDown() {
     if (_disposed) return;
     final interruptedTimeMotion = motion.interruptForForegroundTakeover();
+    final latestPaintedTarget = _segmentedLatestPaintedTarget;
+    // A new pointer may interrupt an old ballistic flight, but it must not
+    // lose the last target that already reached an exact paint. If a newer
+    // preview is still unpainted, restore that last painted target as the
+    // canonical owner without waiting for a release-time callback.
+    final retainedLatestPaintedTarget =
+        latestPaintedTarget != null &&
+        latestPaintedTarget.interactionGeneration ==
+            _segmentedTimeFlightGeneration;
+    var promotedLatestPaintedTarget = false;
+    if (retainedLatestPaintedTarget) {
+      promotedLatestPaintedTarget =
+          _settlePaintedExperimentalTemporalComponentCandidate(
+            latestPaintedTarget,
+            allowPreparedRestore: true,
+          );
+    }
+    final discardedQueuedTarget = presentation
+        .discardQueuedExperimentalTemporalCandidate();
+    // A frame can have left the display-frame coalescer and still be awaiting
+    // its LogBox paint acknowledgement. Foreground pointer intent must revoke
+    // its settlement ownership in both states: a pending coalescer slot and a
+    // published-but-unpainted preview. A previously painted target has already
+    // been retained/promoted above, so clearing these references cannot strand
+    // a preview/canonical divergence after a tap or cancellation.
+    final invalidatedSegmentedSettleTarget =
+        _segmentedLatestAcceptedPaintTarget != null ||
+        _segmentedLatestPaintedTarget != null ||
+        _segmentedPendingSettleTarget != null;
+    if (invalidatedSegmentedSettleTarget) {
+      _segmentedLatestAcceptedPaintTarget = null;
+      _segmentedLatestPaintedTarget = null;
+      _segmentedPendingSettleTarget = null;
+      _segmentedPaintRejectedForLatestTarget = false;
+      segmentedTargetPainted.value = null;
+      _discardRetainedSegmentedPaintedScene();
+    }
     final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
     final hadSummaryParentHotset = _summaryParentHotsetInFlight;
     _summaryParentHotsetGeneration += 1;
@@ -4901,6 +4970,11 @@ final class DashboardCoreController {
         coreRevision: preparedIndex?.coreRevision,
         scope:
             'interruptedTimeMotion=$interruptedTimeMotion '
+            'discardedQueuedTarget=$discardedQueuedTarget '
+            'retainedLatestPaintedTarget=$retainedLatestPaintedTarget '
+            'promotedLatestPaintedTarget=$promotedLatestPaintedTarget '
+            'invalidatedSegmentedSettleTarget='
+            '$invalidatedSegmentedSettleTarget '
             'cancelledRailWarmup=$cancelledRailWarmup '
             'cancelledSummaryParentHotset=$hadSummaryParentHotset '
             'motionLanes=${_activeMotionLanes.map((lane) => lane.name).join(',')}',
@@ -4959,38 +5033,139 @@ final class DashboardCoreController {
     _primeRequestedBudgetAvatarFocusHotset();
   }
 
+  /// Completes only after the exact Avatar target has passed the production
+  /// LogBox layout-and-paint acknowledgement. The rail may keep moving while
+  /// this is pending; a newer target or foreground interruption resolves the
+  /// older waiter false instead of allowing it to settle stale ownership.
+  Future<bool> awaitBudgetAvatarTargetPaint({required int targetHandle}) {
+    final target = _avatarLiveRenderTarget;
+    if (_disposed || target == null || target.targetHandle != targetHandle) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|LOGBOX_PAINT_WAIT_REJECTED',
+          queryKey: navigation.state.parentQueryScope.key.value,
+          coreRevision: preparedIndex?.coreRevision,
+          scope:
+              'targetHandle=$targetHandle '
+              'actualTargetHandle=${target?.targetHandle ?? '-'} '
+              'disposed=$_disposed',
+        ),
+      );
+      return Future<bool>.value(false);
+    }
+    if (target.logBoxPainted) {
+      final accepted = _isCurrentExactAvatarTargetPainted(target);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: accepted
+              ? 'AV|LOGBOX_PAINT_WAIT_ACCEPTED'
+              : 'AV|LOGBOX_PAINT_WAIT_REJECTED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'targetHandle=$targetHandle '
+              'focusGeneration=${target.focusGeneration} '
+              'alreadyPainted=true',
+        ),
+      );
+      return Future<bool>.value(accepted);
+    }
+    return target.paintCompletion.future.then((painted) {
+      final accepted =
+          painted &&
+          identical(_avatarLiveRenderTarget, target) &&
+          _isCurrentExactAvatarTargetPainted(target);
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: accepted
+              ? 'AV|LOGBOX_PAINT_WAIT_ACCEPTED'
+              : 'AV|LOGBOX_PAINT_WAIT_REJECTED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'targetHandle=$targetHandle '
+              'focusGeneration=${target.focusGeneration} '
+              'painted=$painted '
+              'stillCurrent=${identical(_avatarLiveRenderTarget, target)}',
+        ),
+      );
+      return accepted;
+    });
+  }
+
+  bool _isCurrentExactAvatarTargetPaintedForHandle(int? targetHandle) {
+    final target = _avatarLiveRenderTarget;
+    return target != null &&
+        target.targetHandle == targetHandle &&
+        _isCurrentExactAvatarTargetPainted(target);
+  }
+
   void _recordAvatarLivePublicationAccepted({
     required int? targetHandle,
     required int focusGeneration,
   }) {
     if (targetHandle == null) return;
-    final visible = visibleFrames.logBoxLane.value;
-    if (visible == null) return;
+    final payload = visibleFrames.logBoxLane.value;
+    final presentation = visibleFrames.logBoxPresentationLane.value;
+    if (payload == null || presentation == null) return;
+    _cancelAvatarLivePaintWaiter();
     _avatarLiveRenderTarget = _AvatarLiveRenderTarget(
       targetHandle: targetHandle,
       focusGeneration: focusGeneration,
-      queryKey: visible.queryKey.value,
-      coreRevision: visible.coreRevision,
-      presentationEpoch: visible.presentationEpoch,
-      frameGeneration: visible.frameGeneration,
-      exactEmpty: visible.logBox.previewRowCount == 0,
+      // A same-visual target may only retag its metadata epoch while retaining
+      // the exact payload-lane object. Paint acknowledgement must follow the
+      // authoritative presentation lane, not the intentionally stable payload
+      // reference, or re-entry can wait on an identity the renderer no longer
+      // owns.
+      queryKey: presentation.queryKey.value,
+      coreRevision: presentation.coreRevision,
+      presentationEpoch: presentation.presentationEpoch,
+      frameGeneration: presentation.frameGeneration,
+      exactEmpty: payload.logBox.previewRowCount == 0,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|VISIBLE_PUBLICATION_ACCEPTED',
-        queryKey: visible.queryKey.value,
-        direction: visible.direction.name,
-        coreRevision: visible.coreRevision,
-        entryCount: visible.logBox.previewRowCount,
+        queryKey: presentation.queryKey.value,
+        direction: payload.direction.name,
+        coreRevision: presentation.coreRevision,
+        entryCount: payload.logBox.previewRowCount,
         scope:
             'focusGeneration=$focusGeneration targetHandle=$targetHandle '
-            'presentationEpoch=${visible.presentationEpoch} '
-            'frameGeneration=${visible.frameGeneration} '
-            'exactEmpty=${visible.logBox.previewRowCount == 0} '
+            'presentationEpoch=${presentation.presentationEpoch} '
+            'frameGeneration=${presentation.frameGeneration} '
+            'exactEmpty=${payload.logBox.previewRowCount == 0} '
             'budgetTargetSelected=true mixedProjectionCount='
             '${visibleFrames.mixedProjectionCount}',
       ),
     );
+  }
+
+  bool _isCurrentExactAvatarTargetPainted(_AvatarLiveRenderTarget target) {
+    final presentation = visibleFrames.logBoxPresentationLane.value;
+    return target.logBoxPainted &&
+        presentation != null &&
+        presentation.queryKey.value == target.queryKey &&
+        presentation.coreRevision == target.coreRevision &&
+        presentation.presentationEpoch == target.presentationEpoch &&
+        presentation.frameGeneration == target.frameGeneration;
+  }
+
+  /// Cancels an unresolved exact-paint wait. A target that is already exactly
+  /// visible remains usable for a cyclic crossing after raw pointer re-entry;
+  /// retaining it never authorizes a stale frame because
+  /// [_isCurrentExactAvatarTargetPainted] validates the full visible identity.
+  void _cancelAvatarLivePaintWaiter({
+    bool retainCurrentExactPaintedTarget = false,
+  }) {
+    final target = _avatarLiveRenderTarget;
+    if (target != null &&
+        retainCurrentExactPaintedTarget &&
+        _isCurrentExactAvatarTargetPainted(target)) {
+      return;
+    }
+    _avatarLiveRenderTarget = null;
+    target?.completePaint(false);
   }
 
   /// Like Summary, Avatar raw contact preempts stale lower-priority scene
@@ -4999,6 +5174,15 @@ final class DashboardCoreController {
   /// non-drag touch cannot strand the dashboard in an input-blocking state.
   void noteBudgetAvatarDirectPointerDown() {
     if (_disposed) return;
+    final supersededFocusGeneration = _focusPublicationGeneration;
+    // The new physical pointer becomes the boundary for outstanding Avatar
+    // work even before it crosses a target. Do not clear the currently
+    // painted frame; only invalidate old publication completions so they
+    // cannot overwrite the next generation in that pointer-to-crossing gap.
+    _focusPublicationGeneration += 1;
+    _cancelDeferredFocusedSceneInstall();
+    _deferredLiveFacetSceneAugmentation = null;
+    _cancelAvatarLivePaintWaiter(retainCurrentExactPaintedTarget: true);
     final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
     final hadSummaryParentHotset = _summaryParentHotsetInFlight;
     _summaryParentHotsetGeneration += 1;
@@ -5013,6 +5197,8 @@ final class DashboardCoreController {
         queryKey: navigation.state.parentQueryScope.key.value,
         coreRevision: preparedIndex?.coreRevision,
         scope:
+            'supersededFocusGeneration=$supersededFocusGeneration '
+            'focusGeneration=$_focusPublicationGeneration '
             'cancelledRailWarmup=$cancelledRailWarmup '
             'cancelledSummaryParentHotset=$hadSummaryParentHotset',
       ),
@@ -5098,7 +5284,9 @@ final class DashboardCoreController {
           interactionGeneration: _segmentedTimeFlightGeneration,
           exactEmpty: exactEmpty,
         );
-        _segmentedLatestPaintedTarget = null;
+        // Keep the last real paint until this new accepted target itself is
+        // acknowledged. A raw pointer can then restore that exact last-painted
+        // target if this newer preview is interrupted before paint.
         _segmentedPendingSettleTarget = null;
         _segmentedPaintRejectedForLatestTarget = false;
         return exactEmpty
@@ -5167,12 +5355,25 @@ final class DashboardCoreController {
       );
       return false;
     }
+    // Activating a retained parent-changing candidate replaces the active
+    // cache bank. Preserve the latest target that really painted before that
+    // replacement, otherwise a new foreground pointer could canonically
+    // restore its frame while its rows are no longer drawable.
+    if (retainedHit &&
+        !activeHit &&
+        !_retainLatestPaintedSegmentedSceneBeforeReplacement()) {
+      _segmentedTimeLiveRootMisses += 1;
+      return false;
+    }
     if (retainedHit) {
       _activateSceneWindow(requiredWindow);
     } else if (activeHit) {
       _adoptCoveredActiveSceneWindow(requiredWindow);
     }
-    if (!presentation.publishPreparedExperimentalTemporalCandidate(candidate)) {
+    if (!presentation.publishPreparedExperimentalTemporalCandidate(
+      candidate,
+      deferCanonicalCommit: source != 'level',
+    )) {
       _segmentedTimeLiveRootMisses += 1;
       return false;
     }
@@ -5208,6 +5409,163 @@ final class DashboardCoreController {
     _desiredSceneCoverage = requiredWindow.coverageIdentity;
     _satisfyRequiredSceneCoverageDemand(requiredWindow);
   }
+
+  /// Retains the last exact Segmented paint before a newer retained target
+  /// replaces the active cache bank. This is ownership transfer only: it
+  /// performs no repository work, index construction, scene preparation or
+  /// paragraph layout.
+  bool _retainLatestPaintedSegmentedSceneBeforeReplacement() {
+    final painted = _segmentedLatestPaintedTarget;
+    if (painted == null ||
+        painted.interactionGeneration != _segmentedTimeFlightGeneration) {
+      return true;
+    }
+    final prior = _segmentedPaintedSceneRetention;
+    if (prior != null &&
+        _sameSegmentedPaintTarget(prior.target, painted) &&
+        (_retainedSceneWindowLookup?.call(prior.window) ?? false)) {
+      return true;
+    }
+    final window = railInteractionSceneWindowFor(painted.candidate);
+    if (!_activeSceneWindowCovers(window)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_PAINTED_TARGET_SCENE_RETENTION_REJECTED',
+          queryKey: painted.queryKey,
+          coreRevision: painted.coreRevision,
+          scope:
+              'reason=activeSceneDoesNotMatchLatestPainted '
+              'generation=${painted.interactionGeneration} '
+              'presentationEpoch=${painted.presentationEpoch} '
+              'frameGeneration=${painted.frameGeneration}',
+        ),
+      );
+      return false;
+    }
+    final retain = _segmentedPaintedSceneWindowRetainer;
+    if (retain == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_PAINTED_TARGET_SCENE_RETENTION_REJECTED',
+          queryKey: painted.queryKey,
+          coreRevision: painted.coreRevision,
+          scope:
+              'reason=retentionCapabilityUnavailable '
+              'generation=${painted.interactionGeneration}',
+        ),
+      );
+      return false;
+    }
+    _discardRetainedSegmentedPaintedScene();
+    final retainedKey =
+        'summary-painted:rev:${painted.coreRevision}|'
+        'generation:${painted.interactionGeneration}|'
+        'presentation:${painted.presentationEpoch}|'
+        'frame:${painted.frameGeneration}|'
+        'lease:${++_segmentedPaintedSceneRetentionGeneration}';
+    if (!retain(window, retainedKey: retainedKey)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_PAINTED_TARGET_SCENE_RETENTION_REJECTED',
+          queryKey: painted.queryKey,
+          coreRevision: painted.coreRevision,
+          scope:
+              'reason=cacheRejectedActiveSnapshot '
+              'generation=${painted.interactionGeneration}',
+        ),
+      );
+      return false;
+    }
+    _segmentedPaintedSceneRetention = _SegmentedPaintedSceneRetention(
+      target: painted,
+      window: window,
+      retainedKey: retainedKey,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_PAINTED_TARGET_SCENE_RETENTION_ACCEPTED',
+        queryKey: painted.queryKey,
+        coreRevision: painted.coreRevision,
+        scope:
+            'generation=${painted.interactionGeneration} '
+            'presentationEpoch=${painted.presentationEpoch} '
+            'frameGeneration=${painted.frameGeneration}',
+      ),
+    );
+    return true;
+  }
+
+  /// Reactivates the immutable scene snapshot for the latest real paint
+  /// before the presentation controller restores that target's committed
+  /// frame. A retained cache hit is synchronous and never begins foreground
+  /// preparation.
+  bool _restoreLatestPaintedSegmentedScene(
+    _SegmentedTemporalPaintTarget target,
+  ) {
+    if (_sceneWindowActivator == null) return true;
+    final retention = _segmentedPaintedSceneRetention;
+    final window = railInteractionSceneWindowFor(target.candidate);
+    if (_activeSceneWindowCovers(window)) return true;
+    if (retention == null ||
+        !_sameSegmentedPaintTarget(retention.target, target) ||
+        !_sameSceneWindow(retention.window, window) ||
+        !(_retainedSceneWindowLookup?.call(retention.window) ?? false)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_PAINTED_TARGET_SCENE_RESTORE_REJECTED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'generation=${target.interactionGeneration} '
+              'reason=retainedExactSceneUnavailable',
+        ),
+      );
+      return false;
+    }
+    _activateSceneWindow(retention.window);
+    // The cache transfers this lease atomically into its active bank. Do not
+    // call the discarder: it must not release the lease just activated.
+    _segmentedPaintedSceneRetention = null;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_PAINTED_TARGET_SCENE_RESTORED',
+        queryKey: target.queryKey,
+        coreRevision: target.coreRevision,
+        scope:
+            'generation=${target.interactionGeneration} '
+            'presentationEpoch=${target.presentationEpoch} '
+            'frameGeneration=${target.frameGeneration}',
+      ),
+    );
+    return true;
+  }
+
+  void _discardRetainedSegmentedPaintedScene() {
+    final retention = _segmentedPaintedSceneRetention;
+    _segmentedPaintedSceneRetention = null;
+    if (retention == null) return;
+    _retainedSegmentedPaintSceneWindowDiscarder?.call(retention.retainedKey);
+  }
+
+  static bool _sameSegmentedPaintTarget(
+    _SegmentedTemporalPaintTarget left,
+    _SegmentedTemporalPaintTarget right,
+  ) =>
+      left.interactionGeneration == right.interactionGeneration &&
+      left.presentationEpoch == right.presentationEpoch &&
+      left.frameGeneration == right.frameGeneration &&
+      _sameTemporalTarget(left.candidate, right.candidate);
+
+  static bool _sameSceneWindow(
+    DashboardLogBoxSceneWindow left,
+    DashboardLogBoxSceneWindow right,
+  ) =>
+      left.identity == right.identity &&
+      left.payloads.length == right.payloads.length &&
+      left.payloads.every(
+        (payload) =>
+            right.payloads.any((other) => other.queryKey == payload.queryKey),
+      );
 
   void settleExperimentalTemporalComponentCandidate({
     required DashboardNavigationState candidate,
@@ -5261,9 +5619,10 @@ final class DashboardCoreController {
     _settlePaintedExperimentalTemporalComponentCandidate(pending);
   }
 
-  void _settlePaintedExperimentalTemporalComponentCandidate(
-    _SegmentedTemporalPaintTarget target,
-  ) {
+  bool _settlePaintedExperimentalTemporalComponentCandidate(
+    _SegmentedTemporalPaintTarget target, {
+    bool allowPreparedRestore = false,
+  }) {
     final candidate = target.candidate;
     final component = target.component;
     final crossingCount = _segmentedTimePreviewCrossings;
@@ -5300,15 +5659,53 @@ final class DashboardCoreController {
             'settleVisualDeltaCount=0',
       ),
     );
-    _navigateExperimentalTemporalCandidate(
-      candidate,
-      reason: switch (component) {
-        DashboardTemporalAnchorComponent.year => 'summaryExperimentYearSettled',
-        DashboardTemporalAnchorComponent.month =>
-          'summaryExperimentMonthSettled',
-        DashboardTemporalAnchorComponent.day => 'summaryExperimentDaySettled',
-      },
+    final promoted = presentation.promotePaintedExperimentalTemporalCandidate(
+      candidate: candidate,
+      presentationEpoch: target.presentationEpoch,
+      frameGeneration: target.frameGeneration,
     );
+    final canRestore =
+        !promoted &&
+        allowPreparedRestore &&
+        presentation.canRestorePaintedExperimentalTemporalCandidate(candidate);
+    final restored =
+        canRestore &&
+        _restoreLatestPaintedSegmentedScene(target) &&
+        presentation.restoreAndCommitPaintedExperimentalTemporalCandidate(
+          candidate,
+        );
+    if (!promoted && !restored) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_SETTLE_REJECTED_UNPAINTED_OR_SUPERSEDED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'component=${component.name} '
+              'generation=${target.interactionGeneration} '
+              'presentationEpoch=${target.presentationEpoch} '
+              'frameGeneration=${target.frameGeneration}',
+        ),
+      );
+      return false;
+    }
+    if (restored) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_SETTLE_RESTORED_LATEST_PAINTED_TARGET',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'component=${component.name} '
+              'generation=${target.interactionGeneration} '
+              'presentationEpoch=${target.presentationEpoch} '
+              'frameGeneration=${target.frameGeneration}',
+        ),
+      );
+    }
+    _discardRetainedSegmentedPaintedScene();
+    _recordNavigationSelection('summaryExperimentPaintedTargetSettled');
+    return true;
   }
 
   static bool _sameTemporalTarget(
@@ -6206,6 +6603,10 @@ final class DashboardCoreController {
     VoidCallback? onVisibleSemanticCommit,
   }) async {
     if (_disposed || queryComposer.isOpen) return false;
+    if (source == DashboardLiveInteractionSource.budgetAvatar &&
+        publishDuringMotion) {
+      _cancelAvatarLivePaintWaiter(retainCurrentExactPaintedTarget: true);
+    }
     // `publishDuringMotion` describes the producer's capability to publish a
     // prepared foreground frame before settle.  It is not itself proof that a
     // physical Avatar motion is active: a discrete preview/tap must still
@@ -6252,10 +6653,15 @@ final class DashboardCoreController {
         onVisibleSemanticCommit: onVisibleSemanticCommit,
       );
     }
+    final canReuseAlreadyActiveAvatarTarget =
+        source != DashboardLiveInteractionSource.budgetAvatar ||
+        !publishDuringMotion ||
+        _isCurrentExactAvatarTargetPaintedForHandle(budgetTargetHandle);
     if (priorIsValid &&
         prior.category?.id == nextCategory?.id &&
         prior.partner?.id == nextPartner?.id &&
-        prior.normalizedSearch == nextSearch) {
+        prior.normalizedSearch == nextSearch &&
+        canReuseAlreadyActiveAvatarTarget) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'FOCUS_REQUEST_ALREADY_ACTIVE',
@@ -6266,7 +6672,9 @@ final class DashboardCoreController {
               'category=${nextCategory?.id ?? 'none'} '
               'partner=${nextPartner?.id ?? 'none'} '
               'searchLength=${nextSearch?.length ?? 0} '
-              'presentationEpoch=${visibleFrames.value?.presentationEpoch ?? 0}',
+              'presentationEpoch=${visibleFrames.value?.presentationEpoch ?? 0} '
+              'avatarExactPainted='
+              '${source != DashboardLiveInteractionSource.budgetAvatar || !publishDuringMotion || _isCurrentExactAvatarTargetPaintedForHandle(budgetTargetHandle)}',
         ),
       );
       onVisibleSemanticCommit?.call();
@@ -6864,6 +7272,7 @@ final class DashboardCoreController {
     final provisionalIndex = _provisionalFocusBaseIndex;
     if (state == null && provisionalScope == null) return;
     _focusPublicationGeneration += 1;
+    _cancelAvatarLivePaintWaiter();
     _clearBudgetAvatarFocusHotset();
     _cancelDeferredFocusedSceneInstall();
     presentation.visibleFrames.clearPreparedAmountPreview(
@@ -7437,6 +7846,10 @@ final class DashboardCoreController {
         _sameTemporalTarget(alreadyPainted.candidate, accepted.candidate)) {
       return;
     }
+    // A newer exact paint is now active and authoritative. The prior
+    // interruption snapshot must not retain resources or resurrect an older
+    // parent after this point.
+    _discardRetainedSegmentedPaintedScene();
     _segmentedLatestPaintedTarget = accepted;
     segmentedTargetPainted.value = DashboardSegmentedTargetPainted(
       target: accepted.candidate,
@@ -7475,13 +7888,33 @@ final class DashboardCoreController {
   ) {
     final target = _avatarLiveRenderTarget;
     final presentation = snapshot.presentation;
-    if (target == null ||
-        presentation == null ||
-        target.logBoxPainted ||
-        presentation.queryKey.value != target.queryKey ||
-        presentation.coreRevision != target.coreRevision ||
-        presentation.presentationEpoch != target.presentationEpoch ||
-        presentation.frameGeneration != target.frameGeneration) {
+    if (target == null || presentation == null || target.logBoxPainted) {
+      return;
+    }
+    final matchingIdentity =
+        presentation.queryKey.value == target.queryKey &&
+        presentation.coreRevision == target.coreRevision &&
+        presentation.presentationEpoch == target.presentationEpoch &&
+        presentation.frameGeneration == target.frameGeneration;
+    if (!matchingIdentity) {
+      if (target.paintIdentityRejectionReported) return;
+      target.paintIdentityRejectionReported = true;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|LOGBOX_TARGET_PAINT_IDENTITY_REJECTED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'focusGeneration=${target.focusGeneration} '
+              'targetHandle=${target.targetHandle} '
+              'expectedEpoch=${target.presentationEpoch} '
+              'expectedFrameGeneration=${target.frameGeneration} '
+              'actualQueryKey=${presentation.queryKey.value} '
+              'actualRevision=${presentation.coreRevision} '
+              'actualEpoch=${presentation.presentationEpoch} '
+              'actualFrameGeneration=${presentation.frameGeneration}',
+        ),
+      );
       return;
     }
     final exactPaint = target.exactEmpty
@@ -7513,6 +7946,7 @@ final class DashboardCoreController {
       return;
     }
     target.logBoxPainted = true;
+    target.completePaint(true);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|LOGBOX_TARGET_PAINTED',
@@ -9285,11 +9719,13 @@ final class DashboardCoreController {
   void dispose() {
     if (_disposed) return;
     _cancelMindAmountPaintWaiter();
+    _cancelAvatarLivePaintWaiter();
     _cancelActiveComposerApply(reason: 'disposed');
     _supersedeQueryChipPrewarm();
     _cancelBackgroundSceneWarmup();
     _deferredBudgetDistributionWarmup = null;
     _cancelDeferredFocusedSceneInstall();
+    _discardRetainedSegmentedPaintedScene();
     _discardRetainedFocusBaseScene();
     _discardRetainedFocusBasePaging();
     _disposed = true;
@@ -9338,8 +9774,14 @@ final class _AvatarLiveRenderTarget {
   final int presentationEpoch;
   final int frameGeneration;
   final bool exactEmpty;
+  final Completer<bool> paintCompletion = Completer<bool>();
   bool paintRejectionReported = false;
+  bool paintIdentityRejectionReported = false;
   bool logBoxPainted = false;
+
+  void completePaint(bool painted) {
+    if (!paintCompletion.isCompleted) paintCompletion.complete(painted);
+  }
 }
 
 final class _MindAmountRenderTarget {

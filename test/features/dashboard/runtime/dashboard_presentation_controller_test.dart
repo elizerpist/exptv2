@@ -4,10 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_navigation_motion_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_summary_pill.dart';
 import 'package:fluvi/features/dashboard/runtime/application/dashboard_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/time_navigation/presentation/summary_navigation_presentation.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
@@ -422,6 +425,184 @@ void main() {
         candidate.parentQueryKey,
       );
       expect(controller.visibleFrames.visiblePublishCount, publications + 1);
+    },
+  );
+
+  test(
+    'RED POST-df1: an unpainted Segmented target cannot become canonical before its queued display frame',
+    () {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2026, 7, 14),
+        displayFrameScheduler: scheduler,
+      );
+      addTearDown(controller.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(revision: 7),
+        publishImmediately: true,
+      );
+      final origin = controller.navigation.state;
+      final candidate = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: -1,
+        base: origin,
+      );
+      expect(candidate, isNotNull);
+
+      expect(
+        controller.publishPreparedExperimentalTemporalCandidate(
+          candidate!,
+          deferCanonicalCommit: true,
+        ),
+        isTrue,
+      );
+
+      expect(
+        controller.navigation.state,
+        origin,
+        reason:
+            'An interrupt before the queued frame paints must leave the next '
+            'gesture anchored to the last painted canonical target.',
+      );
+      expect(
+        controller.queuedPreparedExperimentalTemporalFrame?.queryKey,
+        candidate.parentQueryKey,
+      );
+
+      scheduler.fireFrame();
+      final paintedPreview = controller.visibleFrames.value!;
+      expect(paintedPreview.mode, DashboardVisibleMode.preview);
+      expect(
+        controller.promotePaintedExperimentalTemporalCandidate(
+          candidate: candidate,
+          presentationEpoch: paintedPreview.presentationEpoch,
+          frameGeneration: paintedPreview.frameGeneration,
+        ),
+        isTrue,
+      );
+      expect(controller.navigation.state.monthCursor.month, 6);
+      expect(
+        controller.visibleFrames.value!.mode,
+        DashboardVisibleMode.committed,
+      );
+      expect(
+        controller.visibleFrames.value!.visualDigest,
+        paintedPreview.visualDigest,
+        reason:
+            'Canonical promotion must retain the already-painted projection.',
+      );
+      expect(
+        controller.visibleFrames.value!.navigationEpoch,
+        controller.navigation.state.navigationEpoch,
+        reason:
+            'Promotion must retag the already-painted frame with the new '
+            'canonical navigation epoch. Otherwise DashboardSummaryPill '
+            'rejects its live rail presentation at settle and falls back to a '
+            'separate canonical projection.',
+      );
+      expect(
+        controller.visibleFrames.navigationLane.value!.navigationEpoch,
+        controller.navigation.state.navigationEpoch,
+        reason:
+            'The Summary-facing lane must share the committed epoch without '
+            'rebinding the unchanged amount/count/LogBox payload lanes.',
+      );
+    },
+  );
+
+  testWidgets(
+    'POST-df1: Segmented painted promotion keeps the real SummaryPill on its exact live child',
+    (tester) async {
+      final scheduler = _DisplayFrameScheduler();
+      final controller = DashboardPresentationController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        displayFrameScheduler: scheduler,
+      );
+      final summaryMotion = SummaryNavigationMotionController();
+      addTearDown(controller.dispose);
+      addTearDown(summaryMotion.dispose);
+      controller.installIndex(
+        buildRuntimeTestIndex(revision: 7),
+        publishImmediately: true,
+      );
+      controller.setRailOpen(true);
+      scheduler.fireFrame();
+      final origin = controller.navigation.state;
+      final candidate = controller.temporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: -1,
+        base: origin,
+      );
+      expect(candidate, isNotNull);
+      expect(
+        controller.publishPreparedExperimentalTemporalCandidate(
+          candidate!,
+          deferCanonicalCommit: true,
+        ),
+        isTrue,
+      );
+      scheduler.fireFrame();
+      final painted = controller.visibleFrames.value!;
+      final exactChildSubtitle =
+          SummaryNavigationProjector.liveRailChildSubtitle(
+            plane: painted.plane,
+            visibleChildScope: painted.scope.timeScope,
+            fallback: painted.childLabel,
+          );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardSummaryPill(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: 59,
+              ),
+              navigation: controller.navigation,
+              visibleFrames: controller.visibleFrames,
+              navigationMotionController: summaryMotion,
+              horizontalCandidateBuilder: (_) => null,
+              onToggleRail: () {},
+              onMoveFiner: () {},
+              onMoveBroader: () {},
+              onMovePrevious: () {},
+              onMoveNext: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final childElement = tester.element(find.text(exactChildSubtitle));
+
+      expect(
+        controller.promotePaintedExperimentalTemporalCandidate(
+          candidate: candidate,
+          presentationEpoch: painted.presentationEpoch,
+          frameGeneration: painted.frameGeneration,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+
+      expect(
+        controller.visibleFrames.value!.navigationEpoch,
+        controller.navigation.state.navigationEpoch,
+      );
+      expect(find.text(exactChildSubtitle), findsOneWidget);
+      expect(
+        tester.element(find.text(exactChildSubtitle)),
+        same(childElement),
+        reason:
+            'Ownership promotion must not replace the already-painted '
+            'SummaryPill child with a separate canonical fallback at settle.',
+      );
     },
   );
 

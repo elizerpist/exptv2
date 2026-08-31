@@ -331,6 +331,13 @@ class _CoreDashboardState extends State<CoreDashboard>
       retainActive: (window, {required retainedKey}) => _preparedSceneCache
           .retainActiveWindow(retainedKey: retainedKey, window: window),
       discardRetainedFocus: _preparedSceneCache.discardRetainedFocusBaseWindow,
+      retainSegmentedPaintedTarget: (window, {required retainedKey}) =>
+          _preparedSceneCache.retainActiveWindowForSegmentedPaintedTarget(
+            retainedKey: retainedKey,
+            window: window,
+          ),
+      discardRetainedSegmentedPaintedTarget:
+          _preparedSceneCache.discardRetainedSegmentedPaintedTargetWindow,
       activate: _preparedSceneCache.activateWindow,
       cancel: _preparedSceneCache.cancelInFlightPreparation,
       scheduleRebase: _scheduleSceneRebaseOnNextFrame,

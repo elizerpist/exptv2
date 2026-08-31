@@ -123,7 +123,11 @@ final class DashboardVisibleFrame {
   final int logBoxPresentationId;
   final int visualDigest;
 
-  DashboardVisibleFrame asCommitted() {
+  /// Promotes ownership without changing the prepared visual payload. A
+  /// deferred temporal settle may advance canonical navigation exactly once;
+  /// carry that new epoch into the already-painted frame so SummaryPill keeps
+  /// selecting the same live rail presentation after the promotion.
+  DashboardVisibleFrame asCommitted({int? navigationEpoch}) {
     if (mode == DashboardVisibleMode.committed) return this;
     return DashboardVisibleFrame._(
       preparedFrame: preparedFrame,
@@ -141,7 +145,7 @@ final class DashboardVisibleFrame {
       logBox: logBox,
       presentationEpoch: presentationEpoch,
       frameGeneration: frameGeneration,
-      navigationEpoch: navigationEpoch,
+      navigationEpoch: navigationEpoch ?? this.navigationEpoch,
       mode: DashboardVisibleMode.committed,
       navigationPresentationId: navigationPresentationId,
       amountPresentationId: amountPresentationId,

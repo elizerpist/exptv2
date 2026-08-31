@@ -17,9 +17,10 @@ import 'budget_target_avatar_interaction.dart';
 import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
-/// Reports whether the production focus/visible-frame coordinator accepted a
-/// discrete Avatar target.  The rail does not await this path before moving;
-/// the result is bounded evidence for the interaction summary only.
+/// Reports whether the production focus/visible-frame coordinator accepted,
+/// selected, laid out and painted one exact discrete Avatar target. The rail
+/// never awaits this path before moving, but settlement may promote only its
+/// latest true result.
 typedef BudgetTargetAvatarPreviewAcceptance =
     Future<bool> Function(int targetHandle);
 
@@ -123,8 +124,15 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   int _ballisticPreviewAccepted = 0;
   int _directPreviewRejected = 0;
   int _ballisticPreviewRejected = 0;
+  int _directMatchingLogBoxPaints = 0;
+  int _ballisticMatchingLogBoxPaints = 0;
   int _stalePreviewCompletions = 0;
   int _untrackedPreviewCompletions = 0;
+  int _settleOnlyFirstVisibleChanges = 0;
+  int? _latestExactPaintedTargetHandle;
+  int? _pendingSettleTargetHandle;
+  bool _terminalSettleAwaitingExactPaint = false;
+  bool _settledTargetCommitted = false;
   final CenteredCarouselSemanticCadenceAccumulator _semanticCadence =
       CenteredCarouselSemanticCadenceAccumulator();
 
@@ -313,6 +321,14 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     final accepted = widget.onTargetPreviewAccepted;
     if (accepted == null) {
       _untrackedPreviewCompletions += 1;
+      // Standalone/presentation-only users retain the historical synchronous
+      // handoff. The production Dashboard always provides the typed callback
+      // below, whose true result means an exact LogBox paint occurred.
+      _markExactTargetPainted(
+        targetHandle: targetHandle,
+        generation: generation,
+        phase: phase,
+      );
       return;
     }
     unawaited(
@@ -381,6 +397,36 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'reason=${error == null ? (accepted ? 'acceptedExact' : 'coordinatorRejected') : 'exception'}',
       ),
     );
+    if (accepted && error == null) {
+      _markExactTargetPainted(
+        targetHandle: targetHandle,
+        generation: generation,
+        phase: phase,
+      );
+    }
+  }
+
+  void _markExactTargetPainted({
+    required int targetHandle,
+    required int generation,
+    required BudgetTargetAvatarMotionPhase? phase,
+  }) {
+    if (!mounted || generation != _motionGeneration) return;
+    if (_activeMotionOrigin == null && !_terminalSettleAwaitingExactPaint) {
+      return;
+    }
+    _latestExactPaintedTargetHandle = targetHandle;
+    switch (phase) {
+      case BudgetTargetAvatarMotionPhase.directDrag:
+        _directMatchingLogBoxPaints += 1;
+      case BudgetTargetAvatarMotionPhase.ballistic:
+        _ballisticMatchingLogBoxPaints += 1;
+      case BudgetTargetAvatarMotionPhase.settling:
+      case BudgetTargetAvatarMotionPhase.interrupted:
+      case null:
+        break;
+    }
+    _tryCommitSettledExactTarget();
   }
 
   void _onMotionStarted(CenteredCarouselMotionOrigin origin) {
@@ -398,8 +444,15 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _ballisticPreviewAccepted = 0;
     _directPreviewRejected = 0;
     _ballisticPreviewRejected = 0;
+    _directMatchingLogBoxPaints = 0;
+    _ballisticMatchingLogBoxPaints = 0;
     _stalePreviewCompletions = 0;
     _untrackedPreviewCompletions = 0;
+    _settleOnlyFirstVisibleChanges = 0;
+    _latestExactPaintedTargetHandle = null;
+    _pendingSettleTargetHandle = null;
+    _terminalSettleAwaitingExactPaint = false;
+    _settledTargetCommitted = false;
     _semanticCadence.reset();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -436,6 +489,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     final origin = _activeMotionOrigin;
     if (origin == null) return;
     _activeMotionPhase = BudgetTargetAvatarMotionPhase.interrupted;
+    _terminalSettleAwaitingExactPaint = false;
+    _pendingSettleTargetHandle = null;
+    _latestExactPaintedTargetHandle = null;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|MOTION_INTERRUPTED_BY_NEW_POINTER',
@@ -451,14 +507,30 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _recordMotionSummary(origin, terminalReason: 'interruptedByNewPointer');
   }
 
-  // Every crossing has already published its complete prepared visual target.
-  // Settlement only promotes the final target through the existing semantic
-  // seam; the core treats an already-active focus as a no-op publication.
+  // Settlement is allowed to promote only the final target that has already
+  // completed the Core's exact paint acknowledgement. A late/failed preview
+  // is intentionally not converted into a canonical focus at pointer-up.
   void _onSelectionSettled(int logicalIndex) {
     final origin = _activeMotionOrigin;
     _activeMotionPhase = BudgetTargetAvatarMotionPhase.settling;
     _activeMotionOrigin = null;
     if (origin != null) widget.onMotionActiveChanged?.call(false);
+    final settledTargetHandle = _items.isEmpty
+        ? null
+        : _items[_modulo(logicalIndex, _items.length)].targetHandle;
+    final explicitTargetIntent =
+        widget.navigationController?.isExplicitTargetIntentInFlight ?? false;
+    _pendingSettleTargetHandle = origin == null || explicitTargetIntent
+        ? null
+        : settledTargetHandle;
+    _terminalSettleAwaitingExactPaint = _pendingSettleTargetHandle != null;
+    if (widget.onTargetPreviewAccepted == null &&
+        _pendingSettleTargetHandle != null) {
+      // Presentation-only consumers have no Core acknowledgement seam. Keep
+      // their existing immediate settled handoff without weakening the real
+      // Dashboard path, which always supplies [onTargetPreviewAccepted].
+      _latestExactPaintedTargetHandle = _pendingSettleTargetHandle;
+    }
     if (origin != null) {
       _recordMotionSummary(origin, terminalReason: 'settled');
     }
@@ -478,17 +550,40 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       );
     }
     _requestPreparedTargetHotset(centerLogicalIndex: logicalIndex);
-    // A direct avatar tap is programmatic physical motion but still a user
-    // semantic intent, so it commits after settle. Pie/list commands are
-    // already committed by [BudgetTargetAvatarRailController] after its
-    // awaited explicit command completes; do not duplicate that focus/query.
-    if (origin != null &&
-        !(widget.navigationController?.isExplicitTargetIntentInFlight ??
-            false)) {
-      widget.onTargetSettled?.call(
-        _items[_modulo(logicalIndex, _items.length)].targetHandle,
+    _tryCommitSettledExactTarget();
+  }
+
+  void _tryCommitSettledExactTarget() {
+    final settledTargetHandle = _pendingSettleTargetHandle;
+    if (settledTargetHandle == null || _settledTargetCommitted) return;
+    if (_latestExactPaintedTargetHandle != settledTargetHandle) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|FLING_SETTLE_AWAITING_EXACT_PAINT',
+          direction: widget.presentation.value.liveSelection.direction.name,
+          coreRevision: widget.presentation.value.liveSelection.coreRevision,
+          scope:
+              'generation=$_motionGeneration settledTargetHandle='
+              '$settledTargetHandle latestExactPaintedTargetHandle='
+              '${_latestExactPaintedTargetHandle ?? '-'}',
+        ),
       );
+      return;
     }
+    _settledTargetCommitted = true;
+    _terminalSettleAwaitingExactPaint = false;
+    widget.onTargetSettled?.call(settledTargetHandle);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|FLING_SETTLED_AFTER_EXACT_PAINT',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'generation=$_motionGeneration settledTargetHandle='
+            '$settledTargetHandle settleVisualDeltaCount='
+            '$_settleOnlyFirstVisibleChanges',
+      ),
+    );
   }
 
   void _recordMotionSummary(
@@ -515,8 +610,13 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'ballisticPreviewAccepted=$_ballisticPreviewAccepted '
             'directPreviewRejected=$_directPreviewRejected '
             'ballisticPreviewRejected=$_ballisticPreviewRejected '
+            'directMatchingLogBoxPaints=$_directMatchingLogBoxPaints '
+            'ballisticMatchingLogBoxPaints=$_ballisticMatchingLogBoxPaints '
             'stalePreviewCompletions=$_stalePreviewCompletions '
             'untrackedPreviewCompletions=$_untrackedPreviewCompletions '
+            'latestExactPaintedTargetHandle='
+            '${_latestExactPaintedTargetHandle ?? '-'} '
+            'settleTargetHandle=${_pendingSettleTargetHandle ?? '-'} '
             'rawScrollUpdates=$_motionRawScrollUpdates '
             'firstTickMicros=${cadence.firstTickLatencyMicros} '
             'interTickMinMicros=${cadence.interTickMinimumMicros} '
@@ -531,7 +631,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'sameVsyncCoalescedTickCount=${_motionSemanticCrossings - _motionPreviewPublications} '
             'repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 '
             'scenePreparesAtTicks=0 canonicalPersistenceCommitsAtTicks=0 '
-            'canonicalFocusCommitsAtSettle=0 settleVisualDeltaCount=0 '
+            'canonicalFocusCommitsAtSettle=0 '
+            'settleVisualDeltaCount=$_settleOnlyFirstVisibleChanges '
             'partitionRetainedFromPreviousTarget=false '
             'controllerIdentity=${identityHashCode(_controller)} '
             'scrollPositionIdentity=$positionIdentity '

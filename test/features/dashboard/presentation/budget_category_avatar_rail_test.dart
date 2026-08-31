@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -816,6 +817,92 @@ void main() {
       );
       expect(summary.scope, contains('ballisticSemanticCrossings='));
       expect(summary.scope, contains('ballisticPreviewAccepted='));
+    },
+  );
+
+  testWidgets(
+    'RED POST-df1: Avatar settle cannot become the first visible publication while its exact paint is pending',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final pendingExactPaint = Completer<bool>();
+      final previewTargets = <int>[];
+      final settled = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                onTargetPreviewAccepted: (targetHandle) {
+                  previewTargets.add(targetHandle);
+                  return pendingExactPaint.future;
+                },
+                onTargetSettled: settled.add,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-420, 0),
+        2600,
+      );
+      try {
+        for (var frame = 0; frame < 180; frame += 1) {
+          await tester.pump(const Duration(milliseconds: 16));
+          if (FluviDiagnosticLogger.entries.any(
+            (event) => event.stage == 'AV|FLING_SETTLED',
+          )) {
+            break;
+          }
+        }
+
+        expect(previewTargets, isNotEmpty);
+        expect(
+          FluviDiagnosticLogger.entries.where(
+            (event) => event.stage == 'AV|FLING_SETTLED',
+          ),
+          isNotEmpty,
+          reason: 'The physical rail must reach its terminal motion state.',
+        );
+        expect(
+          settled,
+          isEmpty,
+          reason:
+              'A target with no accepted-and-painted live identity cannot be '
+              'promoted by the settle callback.',
+        );
+      } finally {
+        if (!pendingExactPaint.isCompleted) pendingExactPaint.complete(true);
+        await tester.pump();
+      }
+      expect(settled, <int>[previewTargets.last]);
     },
   );
 

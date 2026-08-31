@@ -73,6 +73,18 @@ final class DashboardDisplayFrameCoalescer<T extends Object> {
     _scheduled = false;
   }
 
+  /// Invalidates a queued target only when it still belongs to the caller's
+  /// generation/feature. One presentation controller shares this coalescer
+  /// across structural and live lanes, so a new pointer may never discard an
+  /// unrelated newer request.
+  bool discardPendingTargetWhere(bool Function(T target) matches) {
+    final pending = _pending;
+    if (pending == null || !matches(pending)) return false;
+    _pending = null;
+    _scheduled = false;
+    return true;
+  }
+
   void _onDisplayFrame() {
     _scheduled = false;
     final target = _pending;

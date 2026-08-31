@@ -227,6 +227,93 @@ void main() {
   );
 
   testWidgets(
+    'RED POST-df1: a scene becoming drawable republishes its exact LogBox paint acknowledgement',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(cache.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 1,
+        entryCountOverride: 4,
+        previewRowCount: 4,
+      );
+      final frame = _previewFrame(prepared, presentationEpoch: 1);
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 320,
+            child: Stack(
+              children: <Widget>[
+                CustomScrollView(
+                  controller: scrollController,
+                  slivers: const <Widget>[
+                    SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                  ],
+                ),
+                Positioned.fill(
+                  child: DashboardLogBoxRenderSurface(
+                    visibleFrames: store,
+                    scrollController: scrollController,
+                    minimumHeight: 320,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    committedViewport: cache,
+                    preparedSceneCache: sceneCache,
+                    onExtentPublished: snapshots.add,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final first = snapshots.firstWhere(
+        (snapshot) => snapshot.presentation?.queryKey == frame.queryKey,
+      );
+      expect(first.payloadRowCount, 4);
+      expect(first.drawableRowCount, 0);
+      expect(first.paintedRowCount, 0);
+
+      await _prepareAndActivatePreviewScene(sceneCache, prepared.logBox);
+      await tester.pump();
+      await tester.pump();
+
+      final matching = snapshots
+          .where(
+            (snapshot) => snapshot.presentation?.queryKey == frame.queryKey,
+          )
+          .toList(growable: false);
+      expect(
+        matching.length,
+        greaterThan(1),
+        reason:
+            'A CustomPainter-only repaint must still republish extent evidence '
+            'so a held Mind canonical commit cannot wait forever.',
+      );
+      final exact = matching.last;
+      expect(exact.drawableRowCount, 4);
+      expect(exact.paintedRowCount, greaterThan(0));
+    },
+  );
+
+  testWidgets(
     'RED: prepared rail previews ignore old committed pixels across successive Query publications',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -1295,7 +1382,7 @@ void main() {
                   child: BudgetTargetAvatarRail(
                     presentation: budget,
                     onTargetPreviewAccepted: (targetHandle) => drilldown
-                        .previewBudgetTarget(targetHandle: targetHandle),
+                        .previewBudgetTargetPainted(targetHandle: targetHandle),
                     onTargetSettled: (targetHandle) {
                       settled.add(targetHandle);
                       unawaited(
@@ -1561,7 +1648,10 @@ void main() {
               renderDiagnostics: core.renderReadinessDiagnostics,
               renderDiagnosticContextProvider: () =>
                   core.renderDiagnosticContext,
-              onExtentPublished: snapshots.add,
+              onExtentPublished: (snapshot) {
+                core.recordLogBoxRenderExtent(snapshot);
+                snapshots.add(snapshot);
+              },
             ),
           ),
         ),
@@ -1597,6 +1687,7 @@ void main() {
       expect(emptyPayload.previewRowCount, 0);
       expect(emptySnapshot.drawableRowCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+      expect(core.segmentedTargetPainted.value?.target.yearCursor, 2024);
 
       core.navigateExperimentalTemporalComponentCandidate(
         candidate: origin,
@@ -1618,6 +1709,7 @@ void main() {
         restoredPayload.previewRowCount,
       );
       expect(restoredSnapshot.paintedRowCount, greaterThan(0));
+      expect(core.segmentedTargetPainted.value?.target.yearCursor, 2025);
 
       final visibleBeforeSettle = core.visibleFrames.value;
       final publishesBeforeSettle = core.visibleFrames.visiblePublishCount;
@@ -1626,7 +1718,18 @@ void main() {
         component: DashboardTemporalAnchorComponent.year,
       );
       await tester.pump();
-      expect(core.visibleFrames.value, same(visibleBeforeSettle));
+      expect(core.navigation.state.yearCursor, 2025);
+      final visibleAfterSettle = core.visibleFrames.value;
+      expect(visibleAfterSettle?.queryKey, visibleBeforeSettle?.queryKey);
+      expect(
+        visibleAfterSettle?.visualDigest,
+        visibleBeforeSettle?.visualDigest,
+        reason:
+            'Painted-target settlement may change ownership metadata but not '
+            'introduce a first-time visual projection.',
+      );
+      expect(visibleAfterSettle?.logBox, same(visibleBeforeSettle?.logBox));
+      expect(visibleAfterSettle?.mode, DashboardVisibleMode.committed);
       expect(core.visibleFrames.visiblePublishCount, publishesBeforeSettle);
       expect(sceneCache.textLayoutMissCount, 0);
     },

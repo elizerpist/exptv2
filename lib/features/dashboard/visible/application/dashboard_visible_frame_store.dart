@@ -310,15 +310,28 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   bool promoteCommitted({
     required LedgerQueryKey expectedKey,
     required int epoch,
+    int? navigationEpoch,
   }) {
     final current = _value;
     if (current == null ||
         current.queryKey != expectedKey ||
         current.presentationEpoch != epoch ||
-        current.mode == DashboardVisibleMode.committed) {
+        current.mode == DashboardVisibleMode.committed ||
+        (navigationEpoch != null &&
+            navigationEpoch < current.navigationEpoch)) {
       return false;
     }
-    _value = current.asCommitted();
+    _value = current.asCommitted(navigationEpoch: navigationEpoch);
+    // This is an ownership-only retag, not a payload rebind. Still update the
+    // narrow navigation lane before the canonical navigation notifier can
+    // build SummaryPill, otherwise it can observe an old frame epoch and fall
+    // back to a separate canonical presentation at settle. The payload lanes
+    // intentionally retain their exact same frame references: this promotion
+    // is forbidden from rebinding rows, amount, or count for the first time.
+    _navigationLane.stage(_value!, _value!.navigationPresentationId);
+    if (_value!.navigationEpoch != current.navigationEpoch) {
+      _navigationLane.forceFlush();
+    }
     _logBoxPresentationLane.stage(
       DashboardLogBoxPresentationBinding.fromFrame(_value!),
     );
@@ -423,6 +436,11 @@ final class _DashboardPresentationLane extends ChangeNotifier
     _needsNotification = false;
     notifyListeners();
     return true;
+  }
+
+  void forceFlush() {
+    _needsNotification = false;
+    notifyListeners();
   }
 }
 

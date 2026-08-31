@@ -50,6 +50,30 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
     int? targetHandle,
     DashboardBudgetPresentationState? state,
   }) {
+    return _previewBudgetTarget(
+      targetHandle: targetHandle,
+      state: state,
+      awaitExactPaint: false,
+    );
+  }
+
+  /// Production physical-rail counterpart of [previewBudgetTarget]. Its true
+  /// result is intentionally stronger: the selected Budget target and exact
+  /// LogBox root have both reached the shared post-paint acknowledgement.
+  Future<bool> previewBudgetTargetPainted({
+    int? targetHandle,
+    DashboardBudgetPresentationState? state,
+  }) => _previewBudgetTarget(
+    targetHandle: targetHandle,
+    state: state,
+    awaitExactPaint: true,
+  );
+
+  Future<bool> _previewBudgetTarget({
+    int? targetHandle,
+    DashboardBudgetPresentationState? state,
+    required bool awaitExactPaint,
+  }) {
     final target = targetHandle == null
         ? state?.liveSelection.target
         : presentation?.targetForHandle(targetHandle);
@@ -58,6 +82,7 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       target: target,
       source: 'avatarPreview',
       publishDuringMotion: true,
+      awaitExactPaint: awaitExactPaint,
     );
   }
 
@@ -83,35 +108,38 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
     required DashboardBudgetTarget target,
     required String source,
     required bool publishDuringMotion,
-  }) {
+    bool awaitExactPaint = false,
+  }) async {
     _record(
       source: source,
       targetHandle: target.handle,
       categoryId: target.category?.id,
     );
-    if (target.isAggregate) {
-      return core.clearBudgetCategoryFocus(
-        targetHandle: target.handle,
-        publishDuringMotion: publishDuringMotion,
-        onVisibleSemanticCommit: presentation == null
-            ? null
-            : () => presentation!.setTargetHandle(target.handle),
-      );
+    final published = target.isAggregate
+        ? await core.clearBudgetCategoryFocus(
+            targetHandle: target.handle,
+            publishDuringMotion: publishDuringMotion,
+            onVisibleSemanticCommit: presentation == null
+                ? null
+                : () => presentation!.setTargetHandle(target.handle),
+          )
+        : await core.requestBudgetCategoryFocus(
+            DashboardFocusFacet(
+              id: target.category!.id,
+              displayName: target.category!.displayName,
+              colorId: target.category!.colorId,
+              iconId: target.category!.iconId,
+            ),
+            publishDuringMotion: publishDuringMotion,
+            targetHandle: target.handle,
+            onVisibleSemanticCommit: presentation == null
+                ? null
+                : () => presentation!.setTargetHandle(target.handle),
+          );
+    if (!published || !publishDuringMotion || !awaitExactPaint) {
+      return published;
     }
-    final category = target.category!;
-    return core.requestBudgetCategoryFocus(
-      DashboardFocusFacet(
-        id: category.id,
-        displayName: category.displayName,
-        colorId: category.colorId,
-        iconId: category.iconId,
-      ),
-      publishDuringMotion: publishDuringMotion,
-      targetHandle: target.handle,
-      onVisibleSemanticCommit: presentation == null
-          ? null
-          : () => presentation!.setTargetHandle(target.handle),
-    );
+    return core.awaitBudgetAvatarTargetPaint(targetHandle: target.handle);
   }
 
   Future<bool> commitPartner({

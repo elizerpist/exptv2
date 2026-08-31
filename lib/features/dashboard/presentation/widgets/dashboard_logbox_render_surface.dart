@@ -195,6 +195,7 @@ final class _DashboardLogBoxRenderSurfaceState
   bool _surfaceWarmupReported = false;
   bool _layoutWarmupReported = false;
   bool _committedViewportRebuildScheduled = false;
+  bool _sceneCacheRebuildScheduled = false;
   double _devicePixelRatio = 1;
 
   @override
@@ -208,6 +209,7 @@ final class _DashboardLogBoxRenderSurfaceState
     _committedViewport =
         widget.committedViewport ?? CommittedLogViewportCache(pageSize: 24);
     _committedViewport.addListener(_onCommittedViewportChanged);
+    _sceneCache.addListener(_onPreparedSceneCacheChanged);
     widget.performanceCounters?.increment(
       DashboardPerformanceMetric.logRenderSurfaceCreate,
     );
@@ -227,6 +229,7 @@ final class _DashboardLogBoxRenderSurfaceState
   void dispose() {
     widget.hitTestController?.unbind();
     _committedViewport.removeListener(_onCommittedViewportChanged);
+    _sceneCache.removeListener(_onPreparedSceneCacheChanged);
     if (_ownsSceneCache) _sceneCache.dispose();
     if (_ownsCommittedViewport) _committedViewport.dispose();
     _paintResources.dispose();
@@ -274,6 +277,28 @@ final class _DashboardLogBoxRenderSurfaceState
     _committedViewportRebuildScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _committedViewportRebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  /// A prepared scene-cache activation can repaint [CustomPaint] through its
+  /// repaint listenable without rebuilding this surface. That is sufficient
+  /// for pixels, but not for the Core's post-layout acknowledgement: the
+  /// current extent report would otherwise retain the earlier non-drawable
+  /// result forever. Rebuild the stable surface once for this generation so
+  /// [_scheduleExtentPublication] emits the matching post-paint snapshot.
+  void _onPreparedSceneCacheChanged() {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase !=
+        SchedulerPhase.persistentCallbacks) {
+      setState(() {});
+      return;
+    }
+    if (_sceneCacheRebuildScheduled) return;
+    _sceneCacheRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sceneCacheRebuildScheduled = false;
       if (mounted) setState(() {});
     });
     WidgetsBinding.instance.scheduleFrame();
@@ -552,6 +577,7 @@ final class _DashboardLogBoxRenderSurfaceState
       binding.payloadFrame?.mode,
       binding.payload?.viewportId,
       binding.renderDomain,
+      painter.sceneGeneration,
       binding.previewSurfaceHeight,
       binding.terminalBottomInset,
       _committedViewport.drawableExtent,

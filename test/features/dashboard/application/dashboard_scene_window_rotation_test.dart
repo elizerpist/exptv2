@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
@@ -16,6 +18,8 @@ import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_t
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
@@ -1035,13 +1039,16 @@ void main() {
       );
       displayFrames.flush();
 
+      final previewBeforePaint = core.visibleFrames.value!;
       expect(
         core.navigation.state.monthCursor.month,
-        6,
+        7,
         reason:
-            'A semantic carousel crossing must publish its exact prepared '
-            'visible target while the gesture is still active.',
+            'The live crossing is visible before its exact LogBox paint, but '
+            'canonical navigation must not advance until that paint is '
+            'acknowledged.',
       );
+      expect(previewBeforePaint.mode, DashboardVisibleMode.preview);
       expect(
         core.visibleFrames.logBoxLane.value!.queryKey,
         candidate.temporalAnchor.sourceChildQueryKey,
@@ -1059,7 +1066,9 @@ void main() {
         reason: 'A transient crossing must not request foreground scene work.',
       );
 
-      final visibleBeforeSettle = core.visibleFrames.value;
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(previewBeforePaint));
+      expect(core.segmentedTargetPainted.value?.target.monthCursor.month, 6);
+
       core.settleExperimentalTemporalComponentCandidate(
         candidate: candidate,
         component: DashboardTemporalAnchorComponent.month,
@@ -1081,7 +1090,24 @@ void main() {
             'Settle promotes the already-visible retained hotset rather than '
             'requesting foreground work.',
       );
-      expect(core.visibleFrames.value, same(visibleBeforeSettle));
+      final committedAfterSettle = core.visibleFrames.value!;
+      expect(committedAfterSettle.mode, DashboardVisibleMode.committed);
+      expect(
+        committedAfterSettle.logBox,
+        same(previewBeforePaint.logBox),
+        reason:
+            'Paint-gated canonical promotion must retain the exact prepared '
+            'LogBox payload rather than introducing a first settle-time row '
+            'change.',
+      );
+      expect(
+        committedAfterSettle.presentationEpoch,
+        previewBeforePaint.presentationEpoch,
+      );
+      expect(
+        committedAfterSettle.frameGeneration,
+        previewBeforePaint.frameGeneration,
+      );
     },
   );
 
@@ -2268,6 +2294,36 @@ void main() {
             'before the independently animated Summary lane becomes idle.',
       );
     },
+  );
+}
+
+DashboardLogBoxRenderExtentSnapshot _exactPaintSnapshot(
+  DashboardVisibleFrame frame,
+) {
+  final rows = frame.logBox.previewRowCount;
+  return DashboardLogBoxRenderExtentSnapshot(
+    presentation: DashboardLogBoxPresentationBinding.fromFrame(frame),
+    payloadLaneMode: frame.mode,
+    payloadViewportId: frame.logBox.viewportId,
+    renderDomain: DashboardLogBoxRenderDomain.railPreview,
+    renderedRowCount: rows,
+    payloadRowCount: rows,
+    drawableRowCount: rows,
+    paintedRowCount: rows == 0 ? 0 : 1,
+    renderedContentExtent: 120,
+    previewPayloadRows: rows,
+    previewSurfaceHeight: 120,
+    committedCacheQueryKey: null,
+    committedCacheGeneration: null,
+    committedCacheReadyRows: 0,
+    committedCacheDrawableExtent: 0,
+    renderSurfaceHeight: 120,
+    sliverScrollExtent: 120,
+    viewportDimension: 120,
+    minScrollExtent: 0,
+    maxScrollExtent: 0,
+    pixels: 0,
+    isMismatch: false,
   );
 }
 
