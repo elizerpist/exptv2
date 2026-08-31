@@ -110,7 +110,8 @@ final class DashboardPresentationController {
   final DashboardNavigationController navigation;
   late final DashboardMotionKernel motion;
   final DashboardVisibleFrameStore visibleFrames;
-  late final DashboardDisplayFrameCoalescer frameCoalescer;
+  late final DashboardDisplayFrameCoalescer<DashboardVisibleFrame>
+  frameCoalescer;
   final ValueChanged<bool>? onMotionActiveChanged;
   final ValueChanged<DashboardVisibleFrame>? onCommittedFrame;
   final DashboardSemanticCrossing? onSemanticCrossed;
@@ -125,6 +126,11 @@ final class DashboardPresentationController {
   DashboardCommittedState _committedState =
       const DashboardCommittedState.empty();
   _PendingMetadataCommit? _pendingCommit;
+  // A Segmented crossing is accepted synchronously but published at the next
+  // display boundary.  Keep that exact queued frame available to the Core so
+  // it can bind acceptance and later paint acknowledgement to the target that
+  // will actually be selected, rather than to the previous visible lane.
+  DashboardVisibleFrame? _queuedPreparedExperimentalTemporalFrame;
   int _presentationEpoch = 0;
   bool _motionActive = false;
   bool _disposed = false;
@@ -132,6 +138,8 @@ final class DashboardPresentationController {
 
   PreparedDashboardIndex? get index => _index;
   DashboardCommittedState get committedState => _committedState;
+  DashboardVisibleFrame? get queuedPreparedExperimentalTemporalFrame =>
+      _queuedPreparedExperimentalTemporalFrame;
   LedgerQueryKey? get expectedVisibleQueryKey {
     final installed = _index;
     if (installed == null) return null;
@@ -153,6 +161,7 @@ final class DashboardPresentationController {
     _index = index;
     _presentationEpoch += 1;
     _pendingCommit = null;
+    _queuedPreparedExperimentalTemporalFrame = null;
     final state = navigation.state;
     // Index installation occurs only after the controller has built the exact
     // structural/interaction scene requirement.  Make its compact zero frame
@@ -376,20 +385,20 @@ final class DashboardPresentationController {
         reason: 'experimentalPreparedTemporal',
       );
     }
-    frameCoalescer.request(
-      DashboardVisibleFrame.fromPrepared(
-        prepared,
-        parentQueryKey: state.parentQueryKey,
-        plane: state.plane,
-        railOpen: state.isRailOpen,
-        semanticIndex: semanticIndex,
-        childLabel: selectedEntry.label,
-        navigationEpoch: state.navigationEpoch,
-        presentationEpoch: _presentationEpoch,
-        frameGeneration: visibleFrames.nextFrameGeneration(),
-        mode: DashboardVisibleMode.committed,
-      ),
+    final frame = DashboardVisibleFrame.fromPrepared(
+      prepared,
+      parentQueryKey: state.parentQueryKey,
+      plane: state.plane,
+      railOpen: state.isRailOpen,
+      semanticIndex: semanticIndex,
+      childLabel: selectedEntry.label,
+      navigationEpoch: state.navigationEpoch,
+      presentationEpoch: _presentationEpoch,
+      frameGeneration: visibleFrames.nextFrameGeneration(),
+      mode: DashboardVisibleMode.committed,
     );
+    _queuedPreparedExperimentalTemporalFrame = frame;
+    frameCoalescer.request(frame);
     return true;
   }
 
@@ -528,6 +537,7 @@ final class DashboardPresentationController {
     final installed = _requireIndex();
     _presentationEpoch += 1;
     _pendingCommit = null;
+    _queuedPreparedExperimentalTemporalFrame = null;
     final state = navigation.state;
     final catalog = installed.catalogForKey(state.parentQueryKey);
     // This method is a committed structural publication boundary, not a rail
@@ -979,6 +989,8 @@ final class DashboardPresentationController {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    frameCoalescer.discardPendingTarget();
+    _queuedPreparedExperimentalTemporalFrame = null;
     motion.dispose();
     visibleFrames.dispose();
     navigation.dispose();

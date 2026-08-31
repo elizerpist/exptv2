@@ -3,6 +3,7 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -12,6 +13,33 @@ import 'centered_carousel_physics.dart';
 import 'centered_carousel_spec.dart';
 
 enum CenteredCarouselMotionOrigin { userDrag, programmatic }
+
+enum CenteredCarouselPointerDecisionReason { accepted, competingCurrentPointer }
+
+/// Bounded raw-pointer evidence emitted before a carousel's drag arena has
+/// resolved.  It intentionally contains identities rather than object
+/// references so profile logs can correlate a rejection without retaining a
+/// ScrollPosition or physics instance.
+@immutable
+final class CenteredCarouselPointerDownDecision {
+  const CenteredCarouselPointerDownDecision({
+    required this.pointerId,
+    required this.accepted,
+    required this.reason,
+    required this.controllerIdentity,
+    required this.scrollPositionIdentity,
+    required this.physicsIdentity,
+    required this.priorActivity,
+  });
+
+  final int pointerId;
+  final bool accepted;
+  final CenteredCarouselPointerDecisionReason reason;
+  final int controllerIdentity;
+  final int scrollPositionIdentity;
+  final int physicsIdentity;
+  final String priorActivity;
+}
 
 /// Defines whether replacing semantic data may keep the current physical
 /// belt position or must atomically re-establish the canonical center.
@@ -57,6 +85,9 @@ class CenteredCarouselController extends ChangeNotifier {
   Curve _programmaticScrollCurve =
       CenteredCarouselSpec.defaultProgrammaticScrollCurve;
   bool _isScrolling = false;
+  bool _directPointerIsDown = false;
+  bool _terminalActivityCheckScheduled = false;
+  bool _disposed = false;
   bool _isRebasing = false;
   bool _suppressScrollEvents = false;
   bool _suppressSelectionCallbacks = false;
@@ -117,6 +148,25 @@ class CenteredCarouselController extends ChangeNotifier {
   ScrollController get scrollController => _scrollController;
   int get physicsCreationCount => _physicsCreationCount;
 
+  CenteredCarouselPointerDownDecision pointerDownDecision({
+    required int pointerId,
+    required bool accepted,
+    required CenteredCarouselPointerDecisionReason reason,
+  }) {
+    final position = _scrollController.hasClients
+        ? _scrollController.position
+        : null;
+    return CenteredCarouselPointerDownDecision(
+      pointerId: pointerId,
+      accepted: accepted,
+      reason: reason,
+      controllerIdentity: identityHashCode(this),
+      scrollPositionIdentity: position == null ? 0 : identityHashCode(position),
+      physicsIdentity: _physics == null ? 0 : identityHashCode(_physics),
+      priorActivity: position?.activity?.runtimeType.toString() ?? 'detached',
+    );
+  }
+
   void setMotionDiagnostics(CenteredCarouselMotionDiagnosticSink? diagnostics) {
     if (identical(_motionDiagnostics, diagnostics)) return;
     _motionDiagnostics = diagnostics;
@@ -175,6 +225,39 @@ class CenteredCarouselController extends ChangeNotifier {
     _activeMotionCommandId = commandId;
     onMotionStarted?.call(origin);
     return commandId;
+  }
+
+  /// Invalidates an already-moving command at the raw pointer-down boundary.
+  ///
+  /// A [Scrollable] does not notify its drag-start listener until after the
+  /// gesture arena resolves.  Without this boundary, an old ballistic
+  /// command can become idle and invoke its settle callback in the interval
+  /// between a replacement pointer-down and that new drag start.  This method
+  /// preserves the controller, position and physics; Flutter still owns the
+  /// physical interruption of the scroll activity.
+  bool interruptForDirectPointer() {
+    final hasCurrentCommand =
+        _activeMotionCommandId != 0 &&
+        isCurrentMotionCommand(_activeMotionCommandId);
+    if (!hasCurrentCommand && !hasActiveScrollActivity) return false;
+    _invalidateMotionCommandSilently();
+    return true;
+  }
+
+  /// Marks raw contact independently from Flutter's later drag-arena result.
+  /// A ballistic activity commonly enters [HoldScrollActivity] before the
+  /// new drag has won the arena; that hold is an interruption, never a
+  /// terminal settle.
+  void noteDirectPointerDown() {
+    _directPointerIsDown = true;
+  }
+
+  /// Lets a deferred terminal check observe the activity that follows raw
+  /// contact. A replacement fling will become scrolling again; a tap/cancel
+  /// may become truly idle without another isScrolling notifier transition.
+  void noteDirectPointerEnded() {
+    _directPointerIsDown = false;
+    _scheduleTerminalActivityCheck();
   }
 
   bool isCurrentMotionCommand(int commandId) => commandId == _motionCommandId;
@@ -518,11 +601,13 @@ class CenteredCarouselController extends ChangeNotifier {
     ValueChanged<int>? onSelectionSettled,
     ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted,
     ValueChanged<int>? onMotionIdle,
+    ValueChanged<double>? onBallisticStarted,
   }) {
     this.onPreviewChanged = onPreviewChanged;
     this.onSelectionSettled = onSelectionSettled;
     this.onMotionStarted = onMotionStarted;
     this.onMotionIdle = onMotionIdle;
+    this.onBallisticStarted = onBallisticStarted;
   }
 
   void _attachScrollingNotifier() {
@@ -548,11 +633,31 @@ class CenteredCarouselController extends ChangeNotifier {
     _recordDiagnosticActivity(
       CenteredCarouselActivityChangeReason.scrollingIdle,
     );
-    final commandId = _activeMotionCommandId;
-    if (!isCurrentMotionCommand(commandId)) return;
-    rebaseIfNeeded();
-    onMotionIdle?.call(_selectedLogicalIndex);
-    _emitSettledForCommand(commandId);
+    _scheduleTerminalActivityCheck();
+  }
+
+  /// `isScrollingNotifier` treats [HoldScrollActivity] as non-scrolling.
+  /// Deferring the terminal decision until the same command is genuinely idle
+  /// prevents a new pointer-down from promoting the previous ballistic target
+  /// between raw contact and the new drag's [ScrollStartNotification].
+  void _scheduleTerminalActivityCheck() {
+    if (_terminalActivityCheckScheduled) return;
+    _terminalActivityCheckScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _terminalActivityCheckScheduled = false;
+      if (_disposed ||
+          _directPointerIsDown ||
+          _isScrolling ||
+          !_scrollController.hasClients) {
+        return;
+      }
+      final commandId = _activeMotionCommandId;
+      if (!isCurrentMotionCommand(commandId)) return;
+      if (_scrollController.position.activity is! IdleScrollActivity) return;
+      rebaseIfNeeded();
+      onMotionIdle?.call(_selectedLogicalIndex);
+      _emitSettledForCommand(commandId);
+    });
   }
 
   /// Invalidates an in-flight programmatic motion when a new drag starts.
@@ -987,6 +1092,7 @@ class CenteredCarouselController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _scrollingNotifier?.removeListener(_handleScrollingChanged);
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();

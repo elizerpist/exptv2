@@ -75,6 +75,7 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'queryKey': presentation?.queryKey.value,
     'coreRevision': presentation?.coreRevision,
     'presentationEpoch': presentation?.presentationEpoch,
+    'frameGeneration': presentation?.frameGeneration,
     'renderedRowCount': renderedRowCount,
     'payloadRowCount': payloadRowCount,
     'drawableRowCount': drawableRowCount,

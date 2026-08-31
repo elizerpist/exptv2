@@ -804,18 +804,21 @@ final class _VerticalInteractionSession {
   const _VerticalInteractionSession({
     required this.scope,
     required this.presentationEpoch,
+    required this.frameGeneration,
     required this.generation,
   });
 
   final DashboardLogBoxVisibleScopeIdentity scope;
   final int presentationEpoch;
+  final int frameGeneration;
   final int generation;
 
   bool matches(DashboardLogBoxPresentationBinding? binding) =>
       binding != null &&
       binding.mode == DashboardVisibleMode.committed &&
       scope == _visibleScopeFor(binding) &&
-      presentationEpoch == binding.presentationEpoch;
+      presentationEpoch == binding.presentationEpoch &&
+      frameGeneration == binding.frameGeneration;
 }
 
 @immutable
@@ -1025,6 +1028,7 @@ final class _VerticalInteractionSessionOwner {
     final session = _VerticalInteractionSession(
       scope: _visibleScopeFor(binding)!,
       presentationEpoch: binding.presentationEpoch,
+      frameGeneration: binding.frameGeneration,
       generation: ++_generationCursor,
     );
     _active = session;

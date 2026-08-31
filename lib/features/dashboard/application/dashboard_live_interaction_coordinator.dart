@@ -40,6 +40,7 @@ final class DashboardLiveInteractionFrame {
     this.effectiveQueryKey,
     this.preparedIndexGeneration,
     this.visibleFrameGeneration,
+    this.presentationEpoch,
     this.minimumAmountScaled100,
     this.maximumAmountScaled100,
   });
@@ -56,6 +57,7 @@ final class DashboardLiveInteractionFrame {
   final String? effectiveQueryKey;
   final int? preparedIndexGeneration;
   final int? visibleFrameGeneration;
+  final int? presentationEpoch;
   final int? minimumAmountScaled100;
   final int? maximumAmountScaled100;
 
@@ -71,7 +73,8 @@ final class DashboardLiveInteractionFrame {
       'search:${normalizedSearch?.length ?? 0}|'
       'amount:${minimumAmountScaled100 ?? '-'}..${maximumAmountScaled100 ?? '-'}|'
       'index:${preparedIndexGeneration ?? '-'}|'
-      'frame:${visibleFrameGeneration ?? '-'}';
+      'frame:${visibleFrameGeneration ?? '-'}|'
+      'epoch:${presentationEpoch ?? '-'}';
 }
 
 /// Monotonic latest-wins owner for accepted live dashboard intent.
@@ -94,6 +97,7 @@ final class DashboardLiveInteractionCoordinator extends ChangeNotifier {
     String? effectiveQueryKey,
     int? preparedIndexGeneration,
     int? visibleFrameGeneration,
+    int? presentationEpoch,
     int? minimumAmountScaled100,
     int? maximumAmountScaled100,
   }) {
@@ -110,6 +114,7 @@ final class DashboardLiveInteractionCoordinator extends ChangeNotifier {
       effectiveQueryKey: effectiveQueryKey,
       preparedIndexGeneration: preparedIndexGeneration,
       visibleFrameGeneration: visibleFrameGeneration,
+      presentationEpoch: presentationEpoch,
       minimumAmountScaled100: minimumAmountScaled100,
       maximumAmountScaled100: maximumAmountScaled100,
     );

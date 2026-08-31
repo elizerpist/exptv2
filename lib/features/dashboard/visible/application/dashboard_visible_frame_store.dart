@@ -22,6 +22,17 @@ final class DashboardVisibleFramePublishMetrics {
 typedef DashboardVisibleFramePublishObserver =
     void Function(DashboardVisibleFramePublishMetrics metrics);
 
+/// State of the narrow Mind preview while its one canonical Query commit is
+/// reconciling.  The preview remains authoritative until a committed frame
+/// proves the same complete projection; a matching query key alone is not
+/// enough because it can still carry different rows or totals.
+enum DashboardInteractionPreviewReconciliationState {
+  idle,
+  awaitingCanonical,
+  reconciledExact,
+  retainedMismatch,
+}
+
 /// Sole notifier for the complete visible dashboard presentation snapshot.
 ///
 /// Every [value] contains amount, count and LogBox data for one exact
@@ -60,8 +71,14 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   int _amountPreviewGeneration = 0;
   int interactionPreviewPublishCount = 0;
   int staleInteractionPreviewRejectCount = 0;
+  int interactionPreviewCanonicalReconcileCount = 0;
+  int interactionPreviewCanonicalMismatchRetainCount = 0;
   int mixedProjectionCount = 0;
   int _interactionPreviewGeneration = 0;
+  DashboardVisibleFrame? _interactionPreviewFrame;
+  DashboardInteractionPreviewReconciliationState
+  interactionPreviewReconciliationState =
+      DashboardInteractionPreviewReconciliationState.idle;
 
   /// These remain explicit proof counters: neither operation belongs here.
   int logRebindCount = 0;
@@ -133,6 +150,9 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
       return false;
     }
     _interactionPreviewGeneration = previewGeneration;
+    _interactionPreviewFrame = frame;
+    interactionPreviewReconciliationState =
+        DashboardInteractionPreviewReconciliationState.idle;
     _amountLane.stage(frame, frame.amountPresentationId);
     _countLane.stage(frame, frame.countPresentationId);
     _logBoxPresentationLane.stage(
@@ -159,9 +179,31 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     return published;
   }
 
+  /// Arms the release bridge after the newest Mind preview has really painted.
+  /// A later canonical frame may clear the overlay only when it has the same
+  /// full visible projection.  Newer interactions supersede this guard by
+  /// publishing their own [previewGeneration].
+  bool armPreparedInteractionPreviewCanonicalReconciliation({
+    required int previewGeneration,
+    required int frameGeneration,
+  }) {
+    final preview = _interactionPreviewFrame;
+    if (preview == null ||
+        previewGeneration != _interactionPreviewGeneration ||
+        preview.frameGeneration != frameGeneration) {
+      return false;
+    }
+    interactionPreviewReconciliationState =
+        DashboardInteractionPreviewReconciliationState.awaitingCanonical;
+    return true;
+  }
+
   void clearPreparedInteractionPreview({required int previewGeneration}) {
     if (previewGeneration < _interactionPreviewGeneration) return;
     _interactionPreviewGeneration = previewGeneration;
+    _interactionPreviewFrame = null;
+    interactionPreviewReconciliationState =
+        DashboardInteractionPreviewReconciliationState.idle;
     final committed = _value;
     if (committed == null) return;
     _amountLane.stage(committed, committed.amountPresentationId);
@@ -186,6 +228,29 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
       staleFrameRejectCount += 1;
       _reportMeasurement(onMeasured, measureStart, published: false);
       return false;
+    }
+
+    final preview = _interactionPreviewFrame;
+    final reconciliation = interactionPreviewReconciliationState;
+    if (preview != null &&
+        reconciliation != DashboardInteractionPreviewReconciliationState.idle) {
+      if (!_hasExactInteractionProjection(frame, preview)) {
+        // Canonical persistence remains useful to the non-visual owners, but
+        // it must not replace the exact rows/count/amount that were already
+        // painted during the held drag.  Keeping all three live lanes intact
+        // prevents a mixed projection while a stale or divergent canonical
+        // completion is investigated or superseded.
+        _value = frame;
+        interactionPreviewReconciliationState =
+            DashboardInteractionPreviewReconciliationState.retainedMismatch;
+        interactionPreviewCanonicalMismatchRetainCount += 1;
+        _reportMeasurement(onMeasured, measureStart, published: false);
+        return false;
+      }
+      _interactionPreviewFrame = null;
+      interactionPreviewReconciliationState =
+          DashboardInteractionPreviewReconciliationState.reconciledExact;
+      interactionPreviewCanonicalReconcileCount += 1;
     }
 
     if (current != null &&
@@ -282,6 +347,20 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
             candidate.visualDigest != current.visualDigest ||
             candidate.mode != current.mode);
   }
+
+  static bool _hasExactInteractionProjection(
+    DashboardVisibleFrame canonical,
+    DashboardVisibleFrame preview,
+  ) =>
+      canonical.queryKey == preview.queryKey &&
+      canonical.parentQueryKey == preview.parentQueryKey &&
+      canonical.scope == preview.scope &&
+      canonical.direction == preview.direction &&
+      canonical.plane == preview.plane &&
+      canonical.railOpen == preview.railOpen &&
+      canonical.semanticChildIndex == preview.semanticChildIndex &&
+      canonical.coreRevision == preview.coreRevision &&
+      canonical.visualDigest == preview.visualDigest;
 
   void _stageLanes(DashboardVisibleFrame frame) {
     _navigationLane.stage(frame, frame.navigationPresentationId);

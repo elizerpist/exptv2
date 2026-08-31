@@ -31,7 +31,10 @@ class CenteredCarousel<T> extends StatefulWidget {
     this.onSelectionSettled,
     this.onMotionStarted,
     this.onMotionIdle,
+    this.onBallisticStarted,
+    this.onMotionInterrupted,
     this.onDirectPointerDown,
+    this.onPointerDownDecision,
     this.height,
     this.viewportKey = const ValueKey('centered-carousel-viewport'),
     this.semanticsLabelBuilder,
@@ -56,12 +59,25 @@ class CenteredCarousel<T> extends StatefulWidget {
   final ValueChanged<int>? onSelectionSettled;
   final ValueChanged<CenteredCarouselMotionOrigin>? onMotionStarted;
   final ValueChanged<int>? onMotionIdle;
+  final ValueChanged<double>? onBallisticStarted;
+
+  /// Runs at raw pointer-down when it invalidates a prior active command.
+  /// The replacement gesture has not yet claimed the Scrollable, so this is
+  /// the only safe place to prevent an old ballistic idle callback from
+  /// settling over the new user intent.
+  final VoidCallback? onMotionInterrupted;
 
   /// Delivers a direct pointer before Scrollable can replace its current
   /// activity with a user drag. Consumers that need to interrupt an owned
   /// programmatic command (for example Summary auto-reset) must do it here,
   /// never from [onMotionStarted] after the drag already owns the position.
   final VoidCallback? onDirectPointerDown;
+
+  /// Every raw contact is reported with an explicit accept/reject reason.
+  /// Feature owners use this only for bounded diagnostics; the shared
+  /// controller remains the gesture and ScrollPosition owner.
+  final ValueChanged<CenteredCarouselPointerDownDecision>?
+  onPointerDownDecision;
   final double? height;
   final Key viewportKey;
   final String Function(T item)? semanticsLabelBuilder;
@@ -290,6 +306,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
       onSelectionSettled: widget.onSelectionSettled,
       onMotionStarted: widget.onMotionStarted,
       onMotionIdle: widget.onMotionIdle,
+      onBallisticStarted: widget.onBallisticStarted,
     );
     widget.controller.updateConfiguration(
       itemCount: _source.finiteLength ?? 0,
@@ -304,7 +321,27 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    if (_trackedPointer != null) return;
+    if (_trackedPointer != null) {
+      widget.onPointerDownDecision?.call(
+        widget.controller.pointerDownDecision(
+          pointerId: event.pointer,
+          accepted: false,
+          reason: CenteredCarouselPointerDecisionReason.competingCurrentPointer,
+        ),
+      );
+      return;
+    }
+    widget.onPointerDownDecision?.call(
+      widget.controller.pointerDownDecision(
+        pointerId: event.pointer,
+        accepted: true,
+        reason: CenteredCarouselPointerDecisionReason.accepted,
+      ),
+    );
+    widget.controller.noteDirectPointerDown();
+    if (widget.controller.interruptForDirectPointer()) {
+      widget.onMotionInterrupted?.call();
+    }
     widget.onDirectPointerDown?.call();
     _trackedPointer = event.pointer;
     _pointerDownPosition = event.localPosition;
@@ -395,6 +432,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
         }
       }
     }
+    widget.controller.noteDirectPointerEnded();
     _resetPointerTracking();
   }
 
@@ -404,6 +442,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
   void _handlePointerCancel(PointerCancelEvent event) {
     if (event.pointer == _trackedPointer) {
       widget.controller.cancelDiagnosticGesture();
+      widget.controller.noteDirectPointerEnded();
       _resetPointerTracking();
     }
   }

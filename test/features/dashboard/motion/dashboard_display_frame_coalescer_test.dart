@@ -15,7 +15,7 @@ void main() {
   test('same display frame publishes only its last target without backlog', () {
     final scheduler = _FakeScheduler();
     final published = <String>[];
-    final coalescer = DashboardDisplayFrameCoalescer(
+    final coalescer = DashboardDisplayFrameCoalescer<DashboardVisibleFrame>(
       scheduler: scheduler,
       publish: (frame) => published.add(frame.queryKey.value),
     );
@@ -38,7 +38,7 @@ void main() {
   test('crossings in separate display frames are all visible', () {
     final scheduler = _FakeScheduler();
     final published = <int>[];
-    final coalescer = DashboardDisplayFrameCoalescer(
+    final coalescer = DashboardDisplayFrameCoalescer<DashboardVisibleFrame>(
       scheduler: scheduler,
       publish: (frame) => published.add(frame.semanticChildIndex),
     );
@@ -57,8 +57,8 @@ void main() {
   test('request during publication is scheduled for the next frame', () {
     final scheduler = _FakeScheduler();
     final published = <int>[];
-    late DashboardDisplayFrameCoalescer coalescer;
-    coalescer = DashboardDisplayFrameCoalescer(
+    late DashboardDisplayFrameCoalescer<DashboardVisibleFrame> coalescer;
+    coalescer = DashboardDisplayFrameCoalescer<DashboardVisibleFrame>(
       scheduler: scheduler,
       publish: (frame) {
         published.add(frame.semanticChildIndex);

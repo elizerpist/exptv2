@@ -17,6 +17,19 @@ import 'budget_target_avatar_interaction.dart';
 import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
+/// Reports whether the production focus/visible-frame coordinator accepted a
+/// discrete Avatar target.  The rail does not await this path before moving;
+/// the result is bounded evidence for the interaction summary only.
+typedef BudgetTargetAvatarPreviewAcceptance =
+    Future<bool> Function(int targetHandle);
+
+enum BudgetTargetAvatarMotionPhase {
+  directDrag,
+  ballistic,
+  settling,
+  interrupted,
+}
+
 /// Budget card1's presentation-only five-position target rail. Aggregate and
 /// real-category targets share the same prepared motion/render path; the
 /// parent semantic-commit coordinator owns their visible selection.
@@ -27,6 +40,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.limitEditController,
     this.navigationController,
     this.onTargetPreview,
+    this.onTargetPreviewAccepted,
     this.onTargetSettled,
     this.onPreparedTargetHotsetRequested,
     this.liveTargetReadiness,
@@ -43,6 +57,11 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// use their existing stale generation gate rather than perform pixel-rate
   /// data work here.
   final ValueChanged<int>? onTargetPreview;
+
+  /// Production counterpart of [onTargetPreview].  It returns the Core's
+  /// exact live-publication decision so phase-specific diagnostics never
+  /// mistake an emitted carousel callback for accepted visible data.
+  final BudgetTargetAvatarPreviewAcceptance? onTargetPreviewAccepted;
 
   /// Settlement promotes the last already-visible prepared target. It must
   /// not manufacture a second query or the first matching LogBox frame.
@@ -91,9 +110,21 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   BudgetLimitQuickEditGestureController? _quickEdit;
   late final BudgetTargetAvatarPreviewPublisher _previewPublisher;
   CenteredCarouselMotionOrigin? _activeMotionOrigin;
+  BudgetTargetAvatarMotionPhase? _activeMotionPhase;
+  int _motionGeneration = 0;
   int _motionSemanticCrossings = 0;
   int _motionPreviewPublications = 0;
   int _motionRawScrollUpdates = 0;
+  int _directSemanticCrossings = 0;
+  int _ballisticSemanticCrossings = 0;
+  int _directPreviewRequests = 0;
+  int _ballisticPreviewRequests = 0;
+  int _directPreviewAccepted = 0;
+  int _ballisticPreviewAccepted = 0;
+  int _directPreviewRejected = 0;
+  int _ballisticPreviewRejected = 0;
+  int _stalePreviewCompletions = 0;
+  int _untrackedPreviewCompletions = 0;
   final CenteredCarouselSemanticCadenceAccumulator _semanticCadence =
       CenteredCarouselSemanticCadenceAccumulator();
 
@@ -234,6 +265,16 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (_items.isEmpty) return;
     if (_activeMotionOrigin != null) {
       _motionSemanticCrossings += 1;
+      switch (_activeMotionPhase) {
+        case BudgetTargetAvatarMotionPhase.directDrag:
+          _directSemanticCrossings += 1;
+        case BudgetTargetAvatarMotionPhase.ballistic:
+          _ballisticSemanticCrossings += 1;
+        case BudgetTargetAvatarMotionPhase.settling:
+        case BudgetTargetAvatarMotionPhase.interrupted:
+        case null:
+          break;
+      }
       _semanticCadence.recordTick(logicalIndex);
     }
     _previewPublisher.submit(
@@ -243,15 +284,122 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   void _publishPreviewTargetHandle(int targetHandle) {
     if (!mounted) return;
-    if (_activeMotionOrigin != null) _motionPreviewPublications += 1;
+    final phase = _activeMotionPhase;
+    final generation = _motionGeneration;
+    if (_activeMotionOrigin != null) {
+      _motionPreviewPublications += 1;
+      switch (phase) {
+        case BudgetTargetAvatarMotionPhase.directDrag:
+          _directPreviewRequests += 1;
+        case BudgetTargetAvatarMotionPhase.ballistic:
+          _ballisticPreviewRequests += 1;
+        case BudgetTargetAvatarMotionPhase.settling:
+        case BudgetTargetAvatarMotionPhase.interrupted:
+        case null:
+          break;
+      }
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|PREVIEW_REQUESTED',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'generation=$generation phase=${phase?.name ?? 'idle'} '
+            'targetHandle=$targetHandle',
+      ),
+    );
     widget.onTargetPreview?.call(targetHandle);
+    final accepted = widget.onTargetPreviewAccepted;
+    if (accepted == null) {
+      _untrackedPreviewCompletions += 1;
+      return;
+    }
+    unawaited(
+      _recordPreviewAcceptance(
+        acceptance: accepted(targetHandle),
+        targetHandle: targetHandle,
+        generation: generation,
+        phase: phase,
+      ),
+    );
+  }
+
+  Future<void> _recordPreviewAcceptance({
+    required Future<bool> acceptance,
+    required int targetHandle,
+    required int generation,
+    required BudgetTargetAvatarMotionPhase? phase,
+  }) async {
+    var accepted = false;
+    Object? error;
+    try {
+      accepted = await acceptance;
+    } on Object catch (caught) {
+      error = caught;
+    }
+    if (!mounted || generation != _motionGeneration) {
+      _stalePreviewCompletions += 1;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|PREVIEW_COMPLETION_STALE',
+          scope:
+              'generation=$generation activeGeneration=$_motionGeneration '
+              'phase=${phase?.name ?? 'idle'} targetHandle=$targetHandle',
+        ),
+      );
+      return;
+    }
+    switch (phase) {
+      case BudgetTargetAvatarMotionPhase.directDrag:
+        if (accepted && error == null) {
+          _directPreviewAccepted += 1;
+        } else {
+          _directPreviewRejected += 1;
+        }
+      case BudgetTargetAvatarMotionPhase.ballistic:
+        if (accepted && error == null) {
+          _ballisticPreviewAccepted += 1;
+        } else {
+          _ballisticPreviewRejected += 1;
+        }
+      case BudgetTargetAvatarMotionPhase.settling:
+      case BudgetTargetAvatarMotionPhase.interrupted:
+      case null:
+        break;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: accepted && error == null
+            ? 'AV|PREVIEW_ACCEPTED'
+            : 'AV|PREVIEW_REJECTED',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'generation=$generation phase=${phase?.name ?? 'idle'} '
+            'targetHandle=$targetHandle '
+            'reason=${error == null ? (accepted ? 'acceptedExact' : 'coordinatorRejected') : 'exception'}',
+      ),
+    );
   }
 
   void _onMotionStarted(CenteredCarouselMotionOrigin origin) {
     _activeMotionOrigin = origin;
+    _activeMotionPhase = BudgetTargetAvatarMotionPhase.directDrag;
+    _motionGeneration += 1;
     _motionSemanticCrossings = 0;
     _motionPreviewPublications = 0;
     _motionRawScrollUpdates = 0;
+    _directSemanticCrossings = 0;
+    _ballisticSemanticCrossings = 0;
+    _directPreviewRequests = 0;
+    _ballisticPreviewRequests = 0;
+    _directPreviewAccepted = 0;
+    _ballisticPreviewAccepted = 0;
+    _directPreviewRejected = 0;
+    _ballisticPreviewRejected = 0;
+    _stalePreviewCompletions = 0;
+    _untrackedPreviewCompletions = 0;
     _semanticCadence.reset();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -259,6 +407,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         direction: widget.presentation.value.liveSelection.direction.name,
         coreRevision: widget.presentation.value.liveSelection.coreRevision,
         scope:
+            'generation=$_motionGeneration phase=${_activeMotionPhase!.name} '
             'origin=${origin.name} selectedHandle=${widget.presentation.value.selectedHandle} '
             'controllerIdentity=${identityHashCode(_controller)} '
             'physicsCreationCount=${_controller.physicsCreationCount}',
@@ -267,14 +416,52 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.onMotionActiveChanged?.call(true);
   }
 
+  void _onBallisticStarted(double velocity) {
+    if (_activeMotionOrigin == null) return;
+    _activeMotionPhase = BudgetTargetAvatarMotionPhase.ballistic;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|BALLISTIC_STARTED',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'generation=$_motionGeneration velocity=${velocity.round()} '
+            'selectedHandle=${widget.presentation.value.selectedHandle} '
+            'controllerIdentity=${identityHashCode(_controller)}',
+      ),
+    );
+  }
+
+  void _onMotionInterrupted() {
+    final origin = _activeMotionOrigin;
+    if (origin == null) return;
+    _activeMotionPhase = BudgetTargetAvatarMotionPhase.interrupted;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|MOTION_INTERRUPTED_BY_NEW_POINTER',
+        direction: widget.presentation.value.liveSelection.direction.name,
+        coreRevision: widget.presentation.value.liveSelection.coreRevision,
+        scope:
+            'generation=$_motionGeneration origin=${origin.name} '
+            'controllerIdentity=${identityHashCode(_controller)}',
+      ),
+    );
+    _activeMotionOrigin = null;
+    widget.onMotionActiveChanged?.call(false);
+    _recordMotionSummary(origin, terminalReason: 'interruptedByNewPointer');
+  }
+
   // Every crossing has already published its complete prepared visual target.
   // Settlement only promotes the final target through the existing semantic
   // seam; the core treats an already-active focus as a no-op publication.
   void _onSelectionSettled(int logicalIndex) {
     final origin = _activeMotionOrigin;
+    _activeMotionPhase = BudgetTargetAvatarMotionPhase.settling;
     _activeMotionOrigin = null;
     if (origin != null) widget.onMotionActiveChanged?.call(false);
-    if (origin != null) _recordMotionSummary(origin);
+    if (origin != null) {
+      _recordMotionSummary(origin, terminalReason: 'settled');
+    }
     if (origin != null && _items.isNotEmpty) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -283,6 +470,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
           coreRevision: widget.presentation.value.liveSelection.coreRevision,
           scope:
               'origin=${origin.name} settledLogicalIndex=$logicalIndex '
+              'generation=$_motionGeneration phase=${_activeMotionPhase!.name} '
               'settledTargetHandle=${_items[_modulo(logicalIndex, _items.length)].targetHandle} '
               'crossingCount=$_motionSemanticCrossings '
               'previewCount=$_motionPreviewPublications',
@@ -303,7 +491,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     }
   }
 
-  void _recordMotionSummary(CenteredCarouselMotionOrigin origin) {
+  void _recordMotionSummary(
+    CenteredCarouselMotionOrigin origin, {
+    required String terminalReason,
+  }) {
     final positionIdentity = _controller.scrollController.hasClients
         ? identityHashCode(_controller.scrollController.position)
         : 0;
@@ -312,9 +503,20 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       FluviDiagnosticEvent(
         stage: 'BUDGET_AVATAR_MOTION_SUMMARY',
         scope:
-            'origin=${origin.name} '
+            'generation=$_motionGeneration origin=${origin.name} '
+            'terminalReason=$terminalReason '
             'avatarSemanticCrossings=$_motionSemanticCrossings '
             'avatarPreviewPublishes=$_motionPreviewPublications '
+            'directSemanticCrossings=$_directSemanticCrossings '
+            'ballisticSemanticCrossings=$_ballisticSemanticCrossings '
+            'directPreviewRequests=$_directPreviewRequests '
+            'ballisticPreviewRequests=$_ballisticPreviewRequests '
+            'directPreviewAccepted=$_directPreviewAccepted '
+            'ballisticPreviewAccepted=$_ballisticPreviewAccepted '
+            'directPreviewRejected=$_directPreviewRejected '
+            'ballisticPreviewRejected=$_ballisticPreviewRejected '
+            'stalePreviewCompletions=$_stalePreviewCompletions '
+            'untrackedPreviewCompletions=$_untrackedPreviewCompletions '
             'rawScrollUpdates=$_motionRawScrollUpdates '
             'firstTickMicros=${cadence.firstTickLatencyMicros} '
             'interTickMinMicros=${cadence.interTickMinimumMicros} '
@@ -324,8 +526,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'longGapCount=${cadence.longGapCount} '
             'duplicateTickCount=${cadence.duplicateTickCount} '
             'skippedSemanticIndexCount=${cadence.skippedSemanticIndexCount} '
-            'acceptedLiveSnapshots=$_motionPreviewPublications '
-            'completeLivePublications=$_motionPreviewPublications '
+            'acceptedLiveSnapshots=${_directPreviewAccepted + _ballisticPreviewAccepted} '
+            'completeLivePublications=${_directPreviewAccepted + _ballisticPreviewAccepted} '
             'sameVsyncCoalescedTickCount=${_motionSemanticCrossings - _motionPreviewPublications} '
             'repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 '
             'scenePreparesAtTicks=0 canonicalPersistenceCommitsAtTicks=0 '
@@ -399,6 +601,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                 onDirectPointerDown: _onDirectPointerDown,
                 onSelectionSettled: _onSelectionSettled,
                 onMotionStarted: _onMotionStarted,
+                onBallisticStarted: _onBallisticStarted,
+                onMotionInterrupted: _onMotionInterrupted,
                 itemBuilder: (context, item, metrics) {
                   final avatar = SizedBox.square(
                     dimension: BudgetCategoryAvatarGeometry.avatarCanvasSize,

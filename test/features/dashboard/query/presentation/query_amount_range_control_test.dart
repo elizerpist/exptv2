@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
@@ -63,6 +64,136 @@ void main() {
           upperScaled100: 500000,
         ),
       ]);
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED: a pointer-down Mind preview reaches its rendered consumer in the next frame',
+    (tester) async {
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 200000,
+        upperScaled100: 700000,
+      );
+      final renderedPreview = ValueNotifier<QueryAmountRangeValues>(range);
+      addTearDown(renderedPreview.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: <Widget>[
+                QueryAmountRangeControl(
+                  values: range,
+                  onRangeCommitted: _discardRange,
+                  onRangePreviewChanged: (next) => renderedPreview.value = next,
+                ),
+                ValueListenableBuilder<QueryAmountRangeValues>(
+                  valueListenable: renderedPreview,
+                  builder: (context, value, _) => Text(
+                    '${value.lowerScaled100}:${value.upperScaled100}',
+                    key: const ValueKey('mind-live-preview-paint-probe'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChangeStart!(slider.values);
+      slider.onChanged!(const RangeValues(400000, 500000));
+
+      // This is deliberately one display frame while the logical pointer is
+      // still down. A post-frame callback schedules the visible consumer only
+      // after this frame has already painted, which is the physical lag.
+      await tester.pump();
+
+      expect(
+        find.text('400000:500000'),
+        findsOneWidget,
+        reason:
+            'onChanged must publish before the next consumer paint; it may not '
+            'wait for RangeSlider.onChangeEnd.',
+      );
+      expect(slider.onChangeEnd, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'Mind preview ordering is onChanged then pre-frame publication then matching paint then pointer-up',
+    (tester) async {
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 200000,
+        upperScaled100: 700000,
+      );
+      final scheduler = _PreviewFrameScheduler();
+      final rendered = ValueNotifier<QueryAmountRangeValues>(range);
+      final order = <String>[];
+      addTearDown(rendered.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: <Widget>[
+                QueryAmountRangeControl(
+                  values: range,
+                  previewScheduler: scheduler,
+                  onRangeCommitted: _discardRange,
+                  onRangePreviewChanged: (next) {
+                    order.add('publication:${next.lowerScaled100}');
+                    rendered.value = next;
+                  },
+                ),
+                ValueListenableBuilder<QueryAmountRangeValues>(
+                  valueListenable: rendered,
+                  builder: (context, value, _) => SizedBox(
+                    width: 40,
+                    height: 20,
+                    child: CustomPaint(
+                      painter: _PreviewPaintProbe(value, order),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      order.clear();
+      final slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChangeStart!(slider.values);
+      order.add('onChanged:400000');
+      slider.onChanged!(const RangeValues(400000, 500000));
+
+      expect(scheduler.pendingCallbackCount, 1);
+      expect(order, <String>['onChanged:400000']);
+
+      // This is the beginning of the next frame, before its build/layout/
+      // paint phase.  The old addPostFrameCallback implementation cannot
+      // satisfy this order because it publishes after this pump's paint.
+      scheduler.fireFrame();
+      await tester.pump();
+      order.add('pointerUp');
+      slider.onChangeEnd!(const RangeValues(400000, 500000));
+
+      final changed = order.indexOf('onChanged:400000');
+      final published = order.indexOf('publication:400000');
+      final painted = order.indexOf('paint:400000');
+      final pointerUp = order.indexOf('pointerUp');
+      expect(changed, greaterThanOrEqualTo(0));
+      expect(published, greaterThan(changed));
+      expect(painted, greaterThan(published));
+      expect(pointerUp, greaterThan(painted));
     },
   );
 
@@ -160,6 +291,44 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+final class _PreviewFrameScheduler implements DashboardDisplayFrameScheduler {
+  final List<VoidCallback> _callbacks = <VoidCallback>[];
+  var _frameNumber = 0;
+
+  @override
+  int get currentFrameNumber => _frameNumber;
+
+  int get pendingCallbackCount => _callbacks.length;
+
+  @override
+  void scheduleFrame(VoidCallback callback) => _callbacks.add(callback);
+
+  void fireFrame() {
+    _frameNumber += 1;
+    final callbacks = List<VoidCallback>.of(_callbacks);
+    _callbacks.clear();
+    for (final callback in callbacks) {
+      callback();
+    }
+  }
+}
+
+final class _PreviewPaintProbe extends CustomPainter {
+  const _PreviewPaintProbe(this.values, this.order);
+
+  final QueryAmountRangeValues values;
+  final List<String> order;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    order.add('paint:${values.lowerScaled100}');
+  }
+
+  @override
+  bool shouldRepaint(covariant _PreviewPaintProbe oldDelegate) =>
+      oldDelegate.values != values;
 }
 
 void _discardRange(QueryAmountRangeValues _) {}

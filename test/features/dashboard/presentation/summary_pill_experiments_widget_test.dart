@@ -12,6 +12,7 @@ import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
@@ -665,6 +666,222 @@ void main() {
       );
       await secondGesture.up();
       await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED: a new Segmented pointer invalidates an active ballistic settle before its first move',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2025, 4, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final settled = <DashboardNavigationState>[];
+      var replacementCrossings = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (_, _) {},
+              onComponentCrossed: (_, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  replacementCrossings += 1;
+                }
+              },
+              onComponentSettled: (candidate, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  settled.add(candidate);
+                }
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final selector = find.byKey(
+        const ValueKey('summary-pill-segmented-year-selector'),
+      );
+      await tester.fling(selector, const Offset(0, 420), 2600);
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final nextPointer = await tester.startGesture(tester.getCenter(selector));
+      await tester.pump();
+
+      expect(
+        settled,
+        isEmpty,
+        reason:
+            'The old ballistic command must be interrupted at pointer-down; '
+            'it may not settle while the replacement pointer is already down.',
+      );
+
+      await nextPointer.moveBy(const Offset(0, -90));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        replacementCrossings,
+        greaterThan(0),
+        reason:
+            'The replacement pointer must own a semantic crossing on its next '
+            'display frame instead of inheriting an old ballistic cooldown.',
+      );
+      await nextPointer.up();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED: twenty Segmented next-frame re-entries accept every replacement pointer',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2025, 4, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final acceptedPointers = <bool>[];
+      var replacementCrossings = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (_, _) {},
+              onComponentCrossed: (_, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  replacementCrossings += 1;
+                }
+              },
+              onComponentCrossingAccepted: (_, _) =>
+                  DashboardSegmentedTargetAcceptance.acceptedExact,
+              onSelectorPointerDownDecision: (decision) =>
+                  acceptedPointers.add(decision.accepted),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final selector = find.byKey(
+        const ValueKey('summary-pill-segmented-year-selector'),
+      );
+      for (var interaction = 0; interaction < 20; interaction += 1) {
+        await tester.fling(
+          selector,
+          Offset(0, interaction.isEven ? 420 : -420),
+          2600,
+        );
+        // This is intentionally a single display frame of the old ballistic
+        // command, not a settle wait. The very next contact must supersede it.
+        await tester.pump(const Duration(milliseconds: 16));
+        final crossingsBeforeReplacement = replacementCrossings;
+        final pointer = await tester.startGesture(tester.getCenter(selector));
+        await tester.pump();
+        expect(acceptedPointers.last, isTrue);
+
+        // One small move wins the arena; the second is an actual semantic
+        // crossing while the replacement pointer remains down.
+        await pointer.moveBy(const Offset(0, -20));
+        await tester.pump(const Duration(milliseconds: 16));
+        await pointer.moveBy(const Offset(0, -200));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          replacementCrossings,
+          greaterThan(crossingsBeforeReplacement),
+          reason:
+              'interaction=$interaction; every replacement pointer must own '
+              'an exact next-frame crossing; a prior ballistic command cannot '
+              'impose cooldown.',
+        );
+        await pointer.up();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(acceptedPointers, hasLength(40));
+      expect(acceptedPointers, everyElement(isTrue));
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED: an emitted but unaccepted Segmented target cannot own release settlement',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2025, 4, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final emitted = <DashboardNavigationState>[];
+      final settled = <DashboardNavigationState>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (_, _) {},
+              onComponentCrossed: (candidate, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  emitted.add(candidate);
+                }
+                // Production coordinator equivalent: no prepared exact root
+                // was accepted or selected for paint.
+              },
+              onComponentCrossingAccepted: (_, _) =>
+                  DashboardSegmentedTargetAcceptance.rejectedNotPrepared,
+              onComponentSettled: (candidate, component) {
+                if (component == DashboardTemporalAnchorComponent.year) {
+                  settled.add(candidate);
+                }
+              },
+            ),
+          ),
+        ),
+      );
+
+      final selector = find.byKey(
+        const ValueKey('summary-pill-segmented-year-selector'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(selector));
+      // The first delta resolves Flutter's drag arena; the second crosses the
+      // 59px semantic item boundary while this pointer is still down.
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(emitted, isNotEmpty);
+      await gesture.up();
+      for (var frame = 0; frame < 80; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(
+        settled,
+        isEmpty,
+        reason:
+            'A fire-and-forget emitted candidate has no live acceptance or '
+            'paint acknowledgement and therefore cannot become the settle target.',
+      );
     },
   );
 

@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
+import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -16,15 +20,18 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_sce
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_render_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
+import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -710,7 +717,13 @@ void main() {
               renderDiagnostics: core.renderReadinessDiagnostics,
               renderDiagnosticContextProvider: () =>
                   core.renderDiagnosticContext,
-              onExtentPublished: snapshots.add,
+              onExtentPublished: (snapshot) {
+                // Match the production Dashboard parent: the visible viewport
+                // both retains its test evidence and acknowledges the exact
+                // post-layout root to the interaction coordinator.
+                core.recordLogBoxRenderExtent(snapshot);
+                snapshots.add(snapshot);
+              },
             ),
           ),
         ),
@@ -794,6 +807,260 @@ void main() {
   );
 
   testWidgets(
+    'POST-DF1 RED LIVE-MIND: a held production RangeSlider drag paints exact LogBox rows before pointer-up',
+    (tester) async {
+      final canonicalIndexGate = Completer<void>();
+      final repository = _MindLivePreviewRepository(
+        canonicalIndexGate: canonicalIndexGate,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 300000,
+        lowerScaled100: 100000,
+        upperScaled100: 300000,
+      );
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 100000,
+            maximumAmountScaled100: 300000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      var pointerUp = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: Column(
+              children: <Widget>[
+                Expanded(
+                  child: DashboardLogBoxViewport(
+                    bounds: const DashboardBounds(
+                      left: 0,
+                      top: 28,
+                      width: 378,
+                      height: 28,
+                    ),
+                    visibleFrames: core.visibleFrames,
+                    committedViewport: core.committedLogViewport,
+                    preparedSceneCache: sceneCache,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    onLoadNextPage: (_) {},
+                    performanceCounters: core.performanceCounters,
+                    renderDiagnostics: core.renderReadinessDiagnostics,
+                    renderDiagnosticContextProvider: () =>
+                        core.renderDiagnosticContext,
+                    onExtentPublished: (snapshot) {
+                      core.recordLogBoxRenderExtent(snapshot);
+                      snapshots.add(snapshot);
+                    },
+                  ),
+                ),
+                QueryAmountRangeControl(
+                  values: range,
+                  onInteractionStarted: core.beginMindAmountRangeInteraction,
+                  onRangePreviewChanged: core.previewMindAmountRange,
+                  onRangeCommitted: (values) {
+                    pointerUp = true;
+                    unawaited(core.commitMindAmountRange(values));
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+
+      var slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChangeStart!(slider.values);
+      slider.onChanged!(const RangeValues(150000, 250000));
+      await tester.pump();
+
+      final firstPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final firstPaint = snapshots.lastWhere(
+        (snapshot) => snapshot.presentation?.queryKey == firstPayload.queryKey,
+      );
+      expect(pointerUp, isFalse);
+      expect(firstPayload.stableRowIdentities, <String>['amount-200000']);
+      expect(firstPaint.drawableRowCount, 1);
+      expect(firstPaint.paintedRowCount, greaterThan(0));
+      expect(
+        repository.prepareIndexCalls,
+        1,
+        reason:
+            'A held Mind drag derives from the resident prepared base; it may '
+            'not start a canonical index build for a move.',
+      );
+
+      // The physical pointer remains down while the next two semantic values
+      // prove an exact empty result and a reverse crossing before release.
+      slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChanged!(const RangeValues(250000, 250000));
+      await tester.pump();
+      final emptyPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final emptyPaint = snapshots.lastWhere(
+        (snapshot) => snapshot.presentation?.queryKey == emptyPayload.queryKey,
+      );
+      expect(pointerUp, isFalse);
+      expect(emptyPayload.previewRowCount, 0);
+      expect(emptyPaint.drawableRowCount, 0);
+      expect(emptyPaint.paintedRowCount, 0);
+
+      slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChanged!(const RangeValues(150000, 250000));
+      await tester.pump();
+      final reversePayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final reversePaint = snapshots.lastWhere(
+        (snapshot) =>
+            snapshot.presentation?.queryKey == reversePayload.queryKey,
+      );
+      expect(pointerUp, isFalse);
+      expect(reversePayload.stableRowIdentities, <String>['amount-200000']);
+      expect(reversePaint.paintedRowCount, greaterThan(0));
+
+      // Submit two raw values in one display frame. The shared one-slot
+      // scheduler must discard the intermediate all-row value and paint the
+      // newest exact one before the physical release.
+      slider.onChanged!(const RangeValues(100000, 300000));
+      slider.onChanged!(const RangeValues(100000, 100000));
+      FluviDiagnosticLogger.clear();
+      slider.onChangeEnd!(const RangeValues(100000, 100000));
+      expect(pointerUp, isTrue);
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('MIND|CANONICAL_COMMIT_AWAITING_PAINT'),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'QUERY_APPLY_STARTED',
+        ),
+        isEmpty,
+        reason:
+            'The last value was flushed at pointer-up and has not painted yet; '
+            'canonical work may not race it before the next LogBox paint.',
+      );
+
+      await tester.pump();
+      final finalPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final finalPaint = snapshots.lastWhere(
+        (snapshot) => snapshot.presentation?.queryKey == finalPayload.queryKey,
+      );
+      expect(finalPayload.stableRowIdentities, <String>['amount-100000']);
+      expect(finalPaint.paintedRowCount, greaterThan(0));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'MIND|LIVE_TARGET_PAINTED',
+        ),
+        hasLength(1),
+      );
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'QUERY_APPLY_STARTED',
+        ),
+        hasLength(1),
+        reason:
+            'Exactly one canonical commit begins only after the final exact '
+            'range has a matching production LogBox paint acknowledgement.',
+      );
+
+      // Keep canonical Query/index persistence unavailable for the equivalent
+      // of two physical seconds. The exact released preview is already
+      // painted, so neither the visible rows nor the next pointer may wait for
+      // this background gate.
+      expect(repository.prepareIndexCalls, 2);
+      await tester.pump(const Duration(seconds: 2));
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-100000'],
+      );
+      expect(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+        findsOneWidget,
+        reason:
+            'Canonical amount-only reconciliation may not unmount the physical '
+            'Mind control while its range domain is retained.',
+      );
+
+      final reentrantSlider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      reentrantSlider.onChangeStart!(reentrantSlider.values);
+      reentrantSlider.onChanged!(const RangeValues(150000, 250000));
+      await tester.pump();
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-200000'],
+        reason:
+            'The next drag must immediately replace the retained live preview '
+            'while the first canonical index build remains blocked.',
+      );
+      expect(repository.prepareIndexCalls, 2);
+      canonicalIndexGate.complete();
+      await tester.pump();
+      await tester.pump();
+    },
+  );
+
+  test(
+    'POST-DF1 RED: a newer frame generation repaints even when query and epoch return to the same target',
+    () {
+      final previous = DashboardLogBoxPaintIdentity(
+        payloadViewportId: 77,
+        presentationEpoch: 4,
+        presentationFrameGeneration: 10,
+        sceneGeneration: 12,
+        committedGeneration: 9,
+        renderDomain: DashboardLogBoxRenderDomain.railPreview,
+        rasterIdentity: Object(),
+      );
+      final next = DashboardLogBoxPaintIdentity(
+        payloadViewportId: 77,
+        presentationEpoch: 4,
+        presentationFrameGeneration: 12,
+        sceneGeneration: 12,
+        committedGeneration: 9,
+        renderDomain: DashboardLogBoxRenderDomain.railPreview,
+        rasterIdentity: previous.rasterIdentity,
+      );
+
+      expect(next.requiresRepaintFrom(previous), isTrue);
+    },
+  );
+
+  testWidgets(
     'RED LIVE-AVATAR: a prepared target crossing paints its exact production LogBox root in one frame',
     (tester) async {
       final repository = _MindLivePreviewRepository();
@@ -832,7 +1099,13 @@ void main() {
               renderDiagnostics: core.renderReadinessDiagnostics,
               renderDiagnosticContextProvider: () =>
                   core.renderDiagnosticContext,
-              onExtentPublished: snapshots.add,
+              onExtentPublished: (snapshot) {
+                // Match the production Dashboard parent: the visible viewport
+                // both retains its test evidence and acknowledges the exact
+                // post-layout root to the interaction coordinator.
+                core.recordLogBoxRenderExtent(snapshot);
+                snapshots.add(snapshot);
+              },
             ),
           ),
         ),
@@ -853,6 +1126,7 @@ void main() {
       }
       expect(sceneCache.hasLiveInteractionResourceBank, isTrue);
       expect(core.budgetAvatarLiveRootReady.value, isTrue);
+      FluviDiagnosticLogger.clear();
 
       core.beginBudgetAvatarMotion();
       expect(
@@ -882,6 +1156,24 @@ void main() {
       expect(snapshot.paintedRowCount, greaterThan(0));
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|VISIBLE_PUBLICATION_ACCEPTED',
+        ),
+        hasLength(1),
+        reason:
+            'The production focus lane must record the exact accepted Avatar '
+            'identity before its final settle callback.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|LOGBOX_TARGET_PAINTED',
+        ),
+        hasLength(1),
+        reason:
+            'The extent report must distinguish a selected Avatar from its '
+            'matching production LogBox root actually painting.',
+      );
 
       expect(
         await core.clearBudgetCategoryFocus(
@@ -911,6 +1203,217 @@ void main() {
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
       core.endBudgetAvatarMotion();
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED LIVE-AVATAR: a ballistic production rail crossing paints matching Budget and LogBox state before settle',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _MindLivePreviewRepository(),
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      final snapshot = _budgetSnapshotFor(categories.value);
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final renderSnapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      final settled = <int>[];
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(categories.dispose);
+      addTearDown(budget.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: Column(
+              children: <Widget>[
+                Expanded(
+                  child: DashboardLogBoxViewport(
+                    bounds: const DashboardBounds(
+                      left: 0,
+                      top: 28,
+                      width: 378,
+                      height: 28,
+                    ),
+                    visibleFrames: core.visibleFrames,
+                    committedViewport: core.committedLogViewport,
+                    preparedSceneCache: sceneCache,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    onLoadNextPage: (_) {},
+                    performanceCounters: core.performanceCounters,
+                    renderDiagnostics: core.renderReadinessDiagnostics,
+                    renderDiagnosticContextProvider: () =>
+                        core.renderDiagnosticContext,
+                    onExtentPublished: (extent) {
+                      core.recordLogBoxRenderExtent(extent);
+                      renderSnapshots.add(extent);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                  child: BudgetTargetAvatarRail(
+                    presentation: budget,
+                    onTargetPreviewAccepted: (targetHandle) => drilldown
+                        .previewBudgetTarget(targetHandle: targetHandle),
+                    onTargetSettled: (targetHandle) {
+                      settled.add(targetHandle);
+                      unawaited(
+                        drilldown.commitBudgetTargetHandle(
+                          targetHandle: targetHandle,
+                          source: 'avatarSettled',
+                        ),
+                      );
+                    },
+                    onPreparedTargetHotsetRequested:
+                        drilldown.primeBudgetTargetHotset,
+                    liveTargetReadiness: drilldown.liveTargetReadiness,
+                    onMotionActiveChanged: (active) {
+                      if (active) {
+                        core.beginBudgetAvatarMotion();
+                      } else {
+                        core.endBudgetAvatarMotion();
+                      }
+                    },
+                    onDirectInputStarted:
+                        core.noteBudgetAvatarDirectPointerDown,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      for (
+        var frame = 0;
+        frame < 32 && !core.budgetAvatarLiveRootReady.value;
+        frame += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(
+        core.budgetAvatarLiveRootReady.value,
+        isTrue,
+        reason: sceneCache.report().toString(),
+      );
+      FluviDiagnosticLogger.clear();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-240, 0),
+        2600,
+      );
+      for (var frame = 0; frame < 24; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final ballisticAccepted = FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'AV|PREVIEW_ACCEPTED' &&
+              (event.scope?.contains('phase=ballistic') ?? false),
+        );
+        final matchingLogBoxPaint = FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'AV|LOGBOX_TARGET_PAINTED',
+        );
+        if (ballisticAccepted && matchingLogBoxPaint) break;
+      }
+
+      expect(settled, isEmpty);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|BALLISTIC_STARTED',
+        ),
+        isNotEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AV|PREVIEW_ACCEPTED' &&
+              (event.scope?.contains('phase=ballistic') ?? false),
+        ),
+        isNotEmpty,
+        reason:
+            'A semantic crossing must enter the exact production focus lane '
+            'while the Avatar carousel is still ballistic.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|LOGBOX_TARGET_PAINTED',
+        ),
+        isNotEmpty,
+        reason:
+            'The accepted ballistic target must select, lay out and paint its '
+            'own LogBox root before the final settle callback.',
+      );
+      expect(renderSnapshots, isNotEmpty);
+      expect(budget.value.selectedHandle, isNot(0));
+      expect(
+        core.visibleFrames.logBoxLane.value!.scope.categoryIds,
+        isNotEmpty,
+        reason:
+            'Budget Header selection and the LogBox query must share the '
+            'same focused Avatar target before settle.',
+      );
+
+      // Let the remaining ballistic frames finish one at a time. New matching
+      // roots are legitimate while physics is still moving; the assertion is
+      // about the terminal callback and the frames immediately after it.
+      for (var frame = 0; frame < 120 && settled.isEmpty; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(settled, hasLength(1));
+      final paintCountAtSettle = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'AV|LOGBOX_TARGET_PAINTED')
+          .length;
+      await tester.pump();
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'AV|LOGBOX_TARGET_PAINTED')
+            .length,
+        paintCountAtSettle,
+        reason:
+            'Avatar settle may promote ownership but cannot introduce the '
+            'first matching LogBox paint.',
+      );
     },
   );
 
@@ -962,7 +1465,13 @@ void main() {
               renderDiagnostics: core.renderReadinessDiagnostics,
               renderDiagnosticContextProvider: () =>
                   core.renderDiagnosticContext,
-              onExtentPublished: snapshots.add,
+              onExtentPublished: (snapshot) {
+                // Match the production Dashboard parent: the visible viewport
+                // both retains its test evidence and acknowledges the exact
+                // post-layout root to the interaction coordinator.
+                core.recordLogBoxRenderExtent(snapshot);
+                snapshots.add(snapshot);
+              },
             ),
           ),
         ),
@@ -1384,10 +1893,33 @@ Future<void> _attachAndActivateInitialScene(
   );
 }
 
+PreparedBudgetLimitSnapshot _budgetSnapshotFor(List<FluviCategory> categories) {
+  final targetCount = categories.length + 1;
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    14 * targetCount,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: categories.map((category) => category.id).toList(),
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
 final class _MindLivePreviewRepository
     implements DashboardDataRuntimeRepository {
+  _MindLivePreviewRepository({this.canonicalIndexGate});
+
   final EmptyDashboardDataRuntimeRepository _empty =
       const EmptyDashboardDataRuntimeRepository();
+  final Completer<void>? canonicalIndexGate;
+  int prepareIndexCalls = 0;
 
   static const List<DashboardLedgerEntry> _rows = <DashboardLedgerEntry>[
     DashboardLedgerEntry(
@@ -1439,6 +1971,11 @@ final class _MindLivePreviewRepository
     PreparedDashboardIndexRequest request,
     DashboardIndexPreparationToken token,
   ) async {
+    prepareIndexCalls += 1;
+    final gate = canonicalIndexGate;
+    if (prepareIndexCalls > 1 && gate != null) {
+      await gate.future;
+    }
     final base = await _empty.prepareIndex(request, token);
     return PreparedDashboardIndex.complete(
       key: base.key,

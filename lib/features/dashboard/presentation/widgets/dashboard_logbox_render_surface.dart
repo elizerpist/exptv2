@@ -69,6 +69,7 @@ final class DashboardLogBoxPaintIdentity {
   const DashboardLogBoxPaintIdentity({
     required this.payloadViewportId,
     required this.presentationEpoch,
+    this.presentationFrameGeneration,
     required this.sceneGeneration,
     required this.committedGeneration,
     required this.renderDomain,
@@ -84,6 +85,7 @@ final class DashboardLogBoxPaintIdentity {
 
   final int? payloadViewportId;
   final int? presentationEpoch;
+  final int? presentationFrameGeneration;
   final int sceneGeneration;
   final int committedGeneration;
   final DashboardLogBoxRenderDomain renderDomain;
@@ -99,6 +101,7 @@ final class DashboardLogBoxPaintIdentity {
   bool requiresRepaintFrom(DashboardLogBoxPaintIdentity previous) =>
       payloadViewportId != previous.payloadViewportId ||
       presentationEpoch != previous.presentationEpoch ||
+      presentationFrameGeneration != previous.presentationFrameGeneration ||
       sceneGeneration != previous.sceneGeneration ||
       committedGeneration != previous.committedGeneration ||
       renderDomain != previous.renderDomain ||
@@ -398,6 +401,8 @@ final class _DashboardLogBoxRenderSurfaceState
               final painter = _DashboardLogBoxSurfacePainter(
                 payload: binding.payload,
                 presentationEpoch: binding.presentation?.presentationEpoch,
+                presentationFrameGeneration:
+                    binding.presentation?.frameGeneration,
                 resources: _paintResources,
                 sceneCache: _sceneCache,
                 sceneGeneration: _sceneCache.generation,
@@ -1265,6 +1270,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
     required this.presentationEpoch,
+    required this.presentationFrameGeneration,
     required this.resources,
     required this.sceneCache,
     required this.sceneGeneration,
@@ -1296,6 +1302,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
 
   final DashboardLogViewportState? payload;
   final int? presentationEpoch;
+  final int? presentationFrameGeneration;
   final _DashboardLogBoxPaintResources resources;
   final DashboardLogBoxPreparedSceneCache sceneCache;
   final int sceneGeneration;
@@ -1373,6 +1380,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       DashboardLogBoxPaintIdentity(
         payloadViewportId: payload?.viewportId,
         presentationEpoch: presentationEpoch,
+        presentationFrameGeneration: presentationFrameGeneration,
         sceneGeneration: sceneGeneration,
         committedGeneration: committedGeneration,
         renderDomain: renderDomain,

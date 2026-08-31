@@ -22,12 +22,16 @@ import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membersh
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
+import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
@@ -678,6 +682,17 @@ void main() {
         isEmpty,
       );
 
+      // The stable viewport reports actual paint after the matching live
+      // frame has been selected.  Settlement is forbidden before this exact
+      // identity has drawable rows (or explicit exact-empty geometry).
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.value!),
+      );
+      expect(
+        core.segmentedTargetPainted.value?.target.dayCursor,
+        candidates.last.dayCursor,
+      );
+
       final visibleBeforeSettle = core.visibleFrames.value;
       final publishesBeforeSettle = core.visibleFrames.visiblePublishCount;
       core.settleExperimentalTemporalComponentCandidate(
@@ -708,6 +723,78 @@ void main() {
       expect(summary.scope, contains('canonicalSettleCommits=0'));
       expect(summary.scope, contains('settleVisualDeltaCount=0'));
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED: an old same-query render report cannot paint-accept a newer Segmented generation',
+    (tester) async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final oldOriginFrame = core.visibleFrames.logBoxLane.value!;
+      final origin = core.navigation.state;
+      final next = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: next,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: origin,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      final currentOriginFrame = core.visibleFrames.logBoxLane.value!;
+      expect(currentOriginFrame.queryKey, oldOriginFrame.queryKey);
+      expect(
+        currentOriginFrame.frameGeneration,
+        greaterThan(oldOriginFrame.frameGeneration),
+        reason:
+            'A reverse crossing may return to the same Query key but still '
+            'requires a new exact visible-frame identity.',
+      );
+
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(oldOriginFrame));
+      expect(
+        core.segmentedTargetPainted.value,
+        isNull,
+        reason:
+            'A delayed old 2025 report cannot acknowledge the later 2025 '
+            'crossing solely because query/revision/epoch happen to match.',
+      );
+
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(currentOriginFrame));
+      expect(
+        core.segmentedTargetPainted.value?.target.dayCursor,
+        origin.dayCursor,
+      );
     },
   );
 
@@ -1803,6 +1890,36 @@ PreparedBudgetLimitSnapshot _focusBudgetSnapshot() {
     yearWindowEndInclusive: 2026,
     incomeBank: bank(),
     expenseBank: bank(),
+  );
+}
+
+DashboardLogBoxRenderExtentSnapshot _exactPaintSnapshot(
+  DashboardVisibleFrame frame,
+) {
+  final rows = frame.logBox.previewRowCount;
+  return DashboardLogBoxRenderExtentSnapshot(
+    presentation: DashboardLogBoxPresentationBinding.fromFrame(frame),
+    payloadLaneMode: frame.mode,
+    payloadViewportId: frame.logBox.viewportId,
+    renderDomain: DashboardLogBoxRenderDomain.railPreview,
+    renderedRowCount: rows,
+    payloadRowCount: rows,
+    drawableRowCount: rows,
+    paintedRowCount: rows == 0 ? 0 : 1,
+    renderedContentExtent: 120,
+    previewPayloadRows: rows,
+    previewSurfaceHeight: 120,
+    committedCacheQueryKey: null,
+    committedCacheGeneration: null,
+    committedCacheReadyRows: 0,
+    committedCacheDrawableExtent: 0,
+    renderSurfaceHeight: 120,
+    sliverScrollExtent: 120,
+    viewportDimension: 120,
+    minScrollExtent: 0,
+    maxScrollExtent: 0,
+    pixels: 0,
+    isMismatch: false,
   );
 }
 

@@ -15,6 +15,7 @@ final class DashboardLogBoxPresentationBinding {
     required this.queryKey,
     required this.coreRevision,
     required this.presentationEpoch,
+    required this.frameGeneration,
     required this.viewportId,
   });
 
@@ -25,6 +26,7 @@ final class DashboardLogBoxPresentationBinding {
     queryKey: frame.queryKey,
     coreRevision: frame.coreRevision,
     presentationEpoch: frame.presentationEpoch,
+    frameGeneration: frame.frameGeneration,
     viewportId: frame.logBox.viewportId,
   );
 
@@ -32,6 +34,7 @@ final class DashboardLogBoxPresentationBinding {
   final LedgerQueryKey queryKey;
   final int coreRevision;
   final int presentationEpoch;
+  final int frameGeneration;
   final int viewportId;
 
   @override
@@ -41,9 +44,16 @@ final class DashboardLogBoxPresentationBinding {
       queryKey == other.queryKey &&
       coreRevision == other.coreRevision &&
       presentationEpoch == other.presentationEpoch &&
+      frameGeneration == other.frameGeneration &&
       viewportId == other.viewportId;
 
   @override
-  int get hashCode =>
-      Object.hash(mode, queryKey, coreRevision, presentationEpoch, viewportId);
+  int get hashCode => Object.hash(
+    mode,
+    queryKey,
+    coreRevision,
+    presentationEpoch,
+    frameGeneration,
+    viewportId,
+  );
 }

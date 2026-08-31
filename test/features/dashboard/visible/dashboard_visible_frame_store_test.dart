@@ -227,6 +227,78 @@ void main() {
     },
   );
 
+  test(
+    'POST-DF1 RED: an armed Mind canonical handoff retains live lanes when its projection differs',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final preview = _frame(day: 8, epoch: 3, generation: 21);
+      final mismatchedCanonical = _frame(
+        day: 8,
+        epoch: 4,
+        generation: 22,
+        contentSeed: 0,
+      ).asCommitted();
+      store.publish(committed);
+      store.publishPreparedInteractionPreview(preview, previewGeneration: 7);
+
+      expect(
+        store.armPreparedInteractionPreviewCanonicalReconciliation(
+          previewGeneration: 7,
+          frameGeneration: preview.frameGeneration,
+        ),
+        isTrue,
+      );
+      expect(store.publish(mismatchedCanonical), isFalse);
+
+      expect(store.value, same(mismatchedCanonical));
+      expect(store.amountLane.value, same(preview));
+      expect(store.countLane.value, same(preview));
+      expect(store.logBoxLane.value, same(preview));
+      expect(
+        store.interactionPreviewReconciliationState,
+        DashboardInteractionPreviewReconciliationState.retainedMismatch,
+      );
+      expect(store.interactionPreviewCanonicalMismatchRetainCount, 1);
+    },
+  );
+
+  test(
+    'POST-DF1 RED: an armed Mind canonical handoff removes its overlay only after an exact projection match',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final preview = _frame(day: 8, epoch: 3, generation: 21);
+      final exactCanonical = _frame(
+        day: 8,
+        epoch: 4,
+        generation: 22,
+      ).asCommitted();
+      store.publish(committed);
+      store.publishPreparedInteractionPreview(preview, previewGeneration: 7);
+
+      expect(
+        store.armPreparedInteractionPreviewCanonicalReconciliation(
+          previewGeneration: 7,
+          frameGeneration: preview.frameGeneration,
+        ),
+        isTrue,
+      );
+      expect(store.publish(exactCanonical), isTrue);
+
+      expect(store.amountLane.value, same(exactCanonical));
+      expect(store.countLane.value, same(exactCanonical));
+      expect(store.logBoxLane.value, same(exactCanonical));
+      expect(
+        store.interactionPreviewReconciliationState,
+        DashboardInteractionPreviewReconciliationState.reconciledExact,
+      );
+      expect(store.interactionPreviewCanonicalReconcileCount, 1);
+    },
+  );
+
   test('settle promotion requires the exact visible key and epoch', () {
     final store = DashboardVisibleFrameStore();
     final preview = _frame(day: 8, epoch: 11, generation: 20);
@@ -248,7 +320,9 @@ DashboardVisibleFrame _frame({
   required int day,
   required int epoch,
   required int generation,
+  int? contentSeed,
 }) {
+  final content = contentSeed ?? day;
   final parent = _parentScope();
   final scope = parent.copyWith(
     timeScope: DayScope(LocalDate(year: 2026, month: 6, day: day)),
@@ -257,19 +331,19 @@ DashboardVisibleFrame _frame({
     scope: scope,
     parentQueryKey: parent.key,
     coreRevision: 3,
-    totalMinor: day * 100,
-    formattedAmount: '$day,00 Ft',
-    entryCount: day,
-    formattedEntryCount: '$day',
+    totalMinor: content * 100,
+    formattedAmount: '$content,00 Ft',
+    entryCount: content,
+    formattedEntryCount: '$content',
     logBox: DashboardLogViewportState(
       queryKey: scope.key,
       revision: 3,
       groups: const [],
-      entryCount: day,
+      entryCount: content,
       nextCursor: null,
       direction: LedgerDirection.income,
     ),
-    presentationDigest: day,
+    presentationDigest: content,
   );
   return DashboardVisibleFrame.fromPrepared(
     prepared,

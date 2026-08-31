@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
-import '../visible/domain/dashboard_visible_frame.dart';
-
 abstract interface class DashboardDisplayFrameScheduler {
   int get currentFrameNumber;
 
@@ -30,17 +28,17 @@ final class FlutterDashboardDisplayFrameScheduler
 ///
 /// This is deliberately a one-slot frame scheduler: it has no timer, time
 /// window, replay queue or idle/settle dependency.
-final class DashboardDisplayFrameCoalescer {
+final class DashboardDisplayFrameCoalescer<T extends Object> {
   DashboardDisplayFrameCoalescer({
     required DashboardDisplayFrameScheduler scheduler,
-    required ValueChanged<DashboardVisibleFrame> publish,
+    required ValueChanged<T> publish,
   }) : _scheduler = scheduler,
        _publish = publish;
 
   final DashboardDisplayFrameScheduler _scheduler;
-  final ValueChanged<DashboardVisibleFrame> _publish;
+  final ValueChanged<T> _publish;
 
-  DashboardVisibleFrame? _pending;
+  T? _pending;
   bool _scheduled = false;
   int? _lastPublishFrame;
   int _publishesInCurrentFrame = 0;
@@ -53,13 +51,26 @@ final class DashboardDisplayFrameCoalescer {
   bool get hasPendingTarget => _pending != null;
   int get currentFrameNumber => _scheduler.currentFrameNumber;
 
-  void request(DashboardVisibleFrame frame) {
+  void request(T target) {
     requestCount += 1;
     if (_pending != null) coalescedTargetCount += 1;
-    _pending = frame;
+    _pending = target;
     if (_scheduled) return;
     _scheduled = true;
     _scheduler.scheduleFrame(_onDisplayFrame);
+  }
+
+  /// Immediately publishes the newest target and leaves an already requested
+  /// engine callback harmless. Physical pointer-up uses this to ensure the
+  /// final value is visible before its asynchronous canonical handoff starts.
+  void flush() => _onDisplayFrame();
+
+  /// Invalidates a queued target without trying to cancel the engine callback.
+  /// Flutter can still invoke that callback, but it observes an empty slot and
+  /// therefore cannot publish after the owning widget/controller has gone.
+  void discardPendingTarget() {
+    _pending = null;
+    _scheduled = false;
   }
 
   void _onDisplayFrame() {

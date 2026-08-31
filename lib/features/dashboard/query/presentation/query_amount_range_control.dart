@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../motion/dashboard_display_frame_coalescer.dart';
 import '../domain/query_amount_range.dart';
 import 'query_menu_formatters.dart';
 import 'query_menu_tokens.dart';
@@ -17,6 +18,7 @@ final class QueryAmountRangeControl extends StatefulWidget {
     this.onRangePreviewChanged,
     this.onInteractionStarted,
     this.onInteractionEnded,
+    this.previewScheduler,
   });
 
   final QueryAmountRangeValues values;
@@ -24,6 +26,10 @@ final class QueryAmountRangeControl extends StatefulWidget {
   final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
+
+  /// Testable pre-display-frame scheduler. Production defaults to the shared
+  /// Dashboard scheduler; this is not a widget-local timer or post-frame lane.
+  final DashboardDisplayFrameScheduler? previewScheduler;
 
   @override
   State<QueryAmountRangeControl> createState() =>
@@ -33,15 +39,22 @@ final class QueryAmountRangeControl extends StatefulWidget {
 final class _QueryAmountRangeControlState
     extends State<QueryAmountRangeControl> {
   late RangeValues _localValues;
+  late final DashboardDisplayFrameCoalescer<QueryAmountRangeValues>
+  _previewCoalescer;
   var _dragActive = false;
-  QueryAmountRangeValues? _pendingPreview;
-  var _previewScheduled = false;
-  var _previewGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _localValues = _initialValues(widget.values);
+    _previewCoalescer = DashboardDisplayFrameCoalescer<QueryAmountRangeValues>(
+      scheduler:
+          widget.previewScheduler ?? FlutterDashboardDisplayFrameScheduler(),
+      publish: (values) {
+        if (!mounted) return;
+        widget.onRangePreviewChanged?.call(values);
+      },
+    );
   }
 
   @override
@@ -60,30 +73,14 @@ final class _QueryAmountRangeControlState
 
   void _schedulePreview(QueryAmountRangeValues values) {
     if (widget.onRangePreviewChanged == null) return;
-    _pendingPreview = values;
-    if (_previewScheduled) return;
-    _previewScheduled = true;
-    final generation = ++_previewGeneration;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || generation != _previewGeneration) return;
-      _previewScheduled = false;
-      final pending = _pendingPreview;
-      _pendingPreview = null;
-      if (pending != null) widget.onRangePreviewChanged?.call(pending);
-    });
+    _previewCoalescer.request(values);
   }
 
-  void _flushPreview() {
-    _previewGeneration += 1;
-    _previewScheduled = false;
-    final pending = _pendingPreview;
-    _pendingPreview = null;
-    if (pending != null) widget.onRangePreviewChanged?.call(pending);
-  }
+  void _flushPreview() => _previewCoalescer.flush();
 
   @override
   void dispose() {
-    _previewGeneration += 1;
+    _previewCoalescer.discardPendingTarget();
     super.dispose();
   }
 

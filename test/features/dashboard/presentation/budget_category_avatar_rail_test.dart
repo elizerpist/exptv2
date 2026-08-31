@@ -11,6 +11,7 @@ import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit.dart';
 import 'package:fluvi/core/financial_limits/domain/financial_limit_repository.dart';
 import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
@@ -714,6 +715,200 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(committed, <int>[previews.last]);
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 DIAG: a ballistic Avatar crossing records typed accepted publication before settle',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final acceptedTargets = <int>[];
+      final settled = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                onTargetPreviewAccepted: (targetHandle) {
+                  acceptedTargets.add(targetHandle);
+                  return Future<bool>.value(true);
+                },
+                onTargetSettled: settled.add,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-420, 0),
+        2600,
+      );
+      for (var frame = 0; frame < 12; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        final hasBallisticRequest = FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'AV|PREVIEW_REQUESTED' &&
+              (event.scope?.contains('phase=ballistic') ?? false),
+        );
+        if (hasBallisticRequest) break;
+      }
+      await tester.pump();
+
+      expect(acceptedTargets, isNotEmpty);
+      expect(settled, isEmpty);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|BALLISTIC_STARTED',
+        ),
+        isNotEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AV|PREVIEW_REQUESTED' &&
+              (event.scope?.contains('phase=ballistic') ?? false),
+        ),
+        isNotEmpty,
+        reason:
+            'The rail must distinguish a ballistic crossing from a direct '
+            'drag before the final settle callback.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AV|PREVIEW_ACCEPTED' &&
+              (event.scope?.contains('phase=ballistic') ?? false),
+        ),
+        isNotEmpty,
+      );
+
+      await tester.pumpAndSettle();
+      expect(settled, hasLength(1));
+      final summary = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_AVATAR_MOTION_SUMMARY',
+      );
+      expect(summary.scope, contains('ballisticSemanticCrossings='));
+      expect(summary.scope, contains('ballisticPreviewAccepted='));
+    },
+  );
+
+  testWidgets(
+    'POST-DF1 RED: twenty Avatar next-frame re-entries retain direct live publication',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final acceptedTargets = <int>[];
+      var directPointerStarts = 0;
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                onTargetPreviewAccepted: (targetHandle) {
+                  acceptedTargets.add(targetHandle);
+                  return Future<bool>.value(true);
+                },
+                onDirectInputStarted: () => directPointerStarts += 1,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final rail = find.byKey(const ValueKey('budget-target-avatar-carousel'));
+      for (var interaction = 0; interaction < 20; interaction += 1) {
+        await tester.fling(
+          rail,
+          Offset(interaction.isEven ? -420 : 420, 0),
+          2600,
+        );
+        // One ballistic display frame only. The replacement pointer must not
+        // wait for an old simulation, resource warmup, or settlement.
+        await tester.pump(const Duration(milliseconds: 16));
+        final directRequestsBefore = FluviDiagnosticLogger.entries
+            .where(
+              (event) =>
+                  event.stage == 'AV|PREVIEW_REQUESTED' &&
+                  (event.scope?.contains('phase=directDrag') ?? false),
+            )
+            .length;
+        final pointer = await tester.startGesture(tester.getCenter(rail));
+        await tester.pump();
+
+        await pointer.moveBy(const Offset(-20, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+        await pointer.moveBy(const Offset(-200, 0));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          FluviDiagnosticLogger.entries
+              .where(
+                (event) =>
+                    event.stage == 'AV|PREVIEW_REQUESTED' &&
+                    (event.scope?.contains('phase=directDrag') ?? false),
+              )
+              .length,
+          greaterThan(directRequestsBefore),
+          reason:
+              'interaction=$interaction; the next Avatar pointer must enter '
+              'the direct exact-publication lane before old ballistic settle.',
+        );
+        await pointer.up();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      expect(directPointerStarts, 40);
+      expect(acceptedTargets, isNotEmpty);
     },
   );
 

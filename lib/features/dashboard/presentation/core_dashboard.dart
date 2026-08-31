@@ -1304,60 +1304,10 @@ class _CoreDashboardState extends State<CoreDashboard>
   }
 
   void _commitMindQueryAmountRange(QueryAmountRangeValues values) {
-    final direction =
-        controller.presentation.navigation.state.parentQueryScope.direction;
-    final current = controller.currentQuery.scopeFor(direction);
-    final binding = QueryAmountRangeBinding.ready(
-      scope: current,
-      amountDomain: controller.currentQuery.amountDomainFor(direction),
-    );
-    if (binding == null) {
-      controller.endMindAmountRangeInteraction(committed: false);
-      controller.clearMindAmountRangePreview();
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'MIND|SLIDER_COMMIT_REJECTED',
-          queryKey: current.key.value,
-          direction: direction.name,
-          scope: 'reason=canonicalAmountDomainUnavailable',
-        ),
-      );
-      return;
-    }
-    final next = binding.apply(values);
-    if (next == current) {
-      controller.endMindAmountRangeInteraction(committed: false);
-      controller.clearMindAmountRangePreview();
-      return;
-    }
-    controller.endMindAmountRangeInteraction(committed: true);
-    final interactionGeneration = controller.mindAmountInteractionGeneration;
-    unawaited(
-      controller
-          .applyQuery(
-            next,
-            facetPresentationSource: 'mindAmountRange',
-            expectedMindAmountInteractionGeneration: interactionGeneration,
-          )
-          .then((published) {
-            if (published) return;
-            // The live range is already exact and drawable. A stale,
-            // superseded, or capacity-rejected canonical promotion must not
-            // roll the visible list back to the pre-drag Query or gate the
-            // next gesture. A later accepted canonical/live publication owns
-            // normal replacement of this preview.
-            FluviDiagnosticLogger.log(
-              FluviDiagnosticEvent(
-                stage: 'MIND|CANONICAL_COMMIT_REJECTED_PREVIEW_RETAINED',
-                queryKey: next.key.value,
-                direction: direction.name,
-                scope:
-                    'previewRetained=true inputGateHeld=false '
-                    'reason=canonicalPublicationRejected',
-              ),
-            );
-          }),
-    );
+    // The Core owns the multi-step final-preview → paint acknowledgement →
+    // canonical persistence workflow. The widget only ends its physical
+    // recognizer and forwards the immutable range intent.
+    unawaited(controller.commitMindAmountRange(values));
   }
 
   void _onLayoutPresentationChanged() {
@@ -1423,9 +1373,16 @@ class _DashboardSummaryRegion extends StatelessWidget {
                     }
                   },
                   onSelectorDirectInputStarted: () {
+                    // The Segmented selector must receive the exact same
+                    // foreground preemption boundary as Classic.  Otherwise
+                    // a ballistic/scene callback can outlive a new pointer
+                    // until its own asynchronous cleanup happens.
+                    controller.noteSummaryDirectPointerDown();
                     autoResetController.cancel();
                     autoResetMotions.cancelActiveResetMotion();
                   },
+                  onSelectorPointerDownDecision:
+                      controller.recordSegmentedPointerDown,
                   onBackgroundTap: () {
                     // A second background tap supersedes even a reset that
                     // is currently waiting for a selector to mount.
@@ -1472,11 +1429,13 @@ class _DashboardSummaryRegion extends StatelessWidget {
                         plane: plane,
                         isRailOpen: isRailOpen,
                       ),
-                  onComponentCrossed: (candidate, component) =>
+                  onComponentCrossed: (_, _) {},
+                  onComponentCrossingAccepted: (candidate, component) =>
                       controller.navigateExperimentalTemporalComponentCandidate(
                         candidate: candidate,
                         component: component,
                       ),
+                  componentPaintedTarget: controller.segmentedTargetPainted,
                   onComponentSettled: (candidate, component) =>
                       controller.settleExperimentalTemporalComponentCandidate(
                         candidate: candidate,
