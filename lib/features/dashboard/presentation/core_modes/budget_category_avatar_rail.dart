@@ -128,7 +128,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   int _ballisticMatchingLogBoxPaints = 0;
   int _stalePreviewCompletions = 0;
   int _untrackedPreviewCompletions = 0;
-  int _settleOnlyFirstVisibleChanges = 0;
+  int _settleVisualDeltaCount = 0;
   int? _latestExactPaintedTargetHandle;
   int? _pendingSettleTargetHandle;
   bool _terminalSettleAwaitingExactPaint = false;
@@ -448,7 +448,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _ballisticMatchingLogBoxPaints = 0;
     _stalePreviewCompletions = 0;
     _untrackedPreviewCompletions = 0;
-    _settleOnlyFirstVisibleChanges = 0;
+    _settleVisualDeltaCount = 0;
     _latestExactPaintedTargetHandle = null;
     _pendingSettleTargetHandle = null;
     _terminalSettleAwaitingExactPaint = false;
@@ -581,7 +581,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         scope:
             'generation=$_motionGeneration settledTargetHandle='
             '$settledTargetHandle settleVisualDeltaCount='
-            '$_settleOnlyFirstVisibleChanges',
+            '$_settleVisualDeltaCount',
       ),
     );
   }
@@ -632,7 +632,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 '
             'scenePreparesAtTicks=0 canonicalPersistenceCommitsAtTicks=0 '
             'canonicalFocusCommitsAtSettle=0 '
-            'settleVisualDeltaCount=$_settleOnlyFirstVisibleChanges '
+            'settleVisualDeltaCount=$_settleVisualDeltaCount '
             'partitionRetainedFromPreviousTarget=false '
             'controllerIdentity=${identityHashCode(_controller)} '
             'scrollPositionIdentity=$positionIdentity '
