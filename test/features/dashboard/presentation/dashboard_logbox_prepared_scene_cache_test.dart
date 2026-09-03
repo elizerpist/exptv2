@@ -1366,6 +1366,7 @@ void main() {
       await cache.prepareWindow(window: active, surfaceWidth: 378);
       cache.activateWindow(active);
       await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
         resourceKey: 'mind-live-resource',
         window: resources,
         surfaceWidth: 378,
@@ -1395,6 +1396,211 @@ void main() {
   );
 
   test(
+    'b166 regression: Avatar preparation retains a Mind resource and Mind replacement is lane-local',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 32,
+      );
+      addTearDown(cache.dispose);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'active-before-lane-resources',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 6, rowCount: 1),
+        ],
+      );
+      final mindFirst = DashboardLogBoxSceneWindow(
+        identity: 'mind-base-first',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 7, rowCount: 3),
+        ],
+      );
+      final avatar = DashboardLogBoxSceneWindow(
+        identity: 'avatar-base',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 8, rowCount: 4),
+        ],
+      );
+      final mindSecond = DashboardLogBoxSceneWindow(
+        identity: 'mind-base-second',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 9, rowCount: 5),
+        ],
+      );
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        resourceKey: 'mind-first',
+        window: mindFirst,
+        surfaceWidth: 378,
+      );
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: 'avatar',
+        window: avatar,
+        surfaceWidth: 378,
+      );
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          mindFirst,
+          lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+          resourceKey: 'mind-first',
+        ),
+        isTrue,
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          avatar,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: 'avatar',
+        ),
+        isTrue,
+      );
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        resourceKey: 'mind-second',
+        window: mindSecond,
+        surfaceWidth: 378,
+      );
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          mindSecond,
+          lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+          resourceKey: 'mind-second',
+        ),
+        isTrue,
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          avatar,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: 'avatar',
+        ),
+        isTrue,
+      );
+      expect(
+        cache.hasCandidateWindow(mindFirst, candidateKey: 'mind-first'),
+        isFalse,
+      );
+      expect(cache.report()['liveInteractionResourceLanes'], 2);
+      expect(cache.report()['liveInteractionResourcePreparingLanes'], 0);
+    },
+  );
+
+  test(
+    'b166 regression: a superseded Avatar preparation releases only its stale lane candidate',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 32,
+      );
+      addTearDown(cache.dispose);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'active-before-superseded-avatar-resource',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 6, rowCount: 1),
+        ],
+      );
+      final mind = DashboardLogBoxSceneWindow(
+        identity: 'mind-universe-survives-avatar-supersession',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 7, rowCount: 3),
+        ],
+      );
+      final staleAvatar = DashboardLogBoxSceneWindow(
+        identity: 'stale-avatar-target',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 8, rowCount: 4),
+        ],
+      );
+      final newestAvatar = DashboardLogBoxSceneWindow(
+        identity: 'newest-avatar-target',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 9, rowCount: 5),
+        ],
+      );
+      final staleYielded = Completer<void>();
+      final releaseStale = Completer<void>();
+      var firstYield = true;
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        resourceKey: 'mind-resource',
+        window: mind,
+        surfaceWidth: 378,
+      );
+
+      final stalePreparation = cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: 'avatar-stale',
+        window: staleAvatar,
+        surfaceWidth: 378,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          if (firstYield) {
+            firstYield = false;
+            staleYielded.complete();
+            return releaseStale.future;
+          }
+          return Future<void>.value();
+        },
+      );
+      await staleYielded.future;
+      final newestPreparation = cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: 'avatar-newest',
+        window: newestAvatar,
+        surfaceWidth: 378,
+      );
+
+      releaseStale.complete();
+      await Future.wait<void>(<Future<void>>[
+        stalePreparation,
+        newestPreparation,
+      ]);
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          mind,
+          lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+          resourceKey: 'mind-resource',
+        ),
+        isTrue,
+      );
+      expect(
+        cache.hasCandidateWindow(staleAvatar, candidateKey: 'avatar-stale'),
+        isFalse,
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          newestAvatar,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: 'avatar-newest',
+        ),
+        isTrue,
+      );
+      expect(cache.report()['liveInteractionResourceLanes'], 2);
+      expect(cache.report()['liveInteractionResourcePreparingLanes'], 0);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'RESOURCE|REJECT' &&
+              (event.scope?.contains('supersededBeforeRetention') ?? false),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
     'live resource baseline does not admit additional unique rows beyond its bounded footprint',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache(
@@ -1416,6 +1622,7 @@ void main() {
       );
 
       await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
         resourceKey: 'bounded-live-resource',
         window: resources,
         surfaceWidth: 378,

@@ -17,10 +17,9 @@ import 'budget_target_avatar_interaction.dart';
 import 'budget_target_avatar_preview_coalescer.dart';
 import 'budget_target_avatar_rail_controller.dart';
 
-/// Reports whether the production focus/visible-frame coordinator accepted,
-/// selected, laid out and painted one exact discrete Avatar target. The rail
-/// never awaits this path before moving, but settlement may promote only its
-/// latest true result.
+/// Reports whether the production focus/visible-frame coordinator accepted
+/// one exact Phase-A semantic/list frame for a discrete Avatar target. Rich
+/// LogBox paint is deliberately not an admission condition for settlement.
 typedef BudgetTargetAvatarPreviewAcceptance =
     Future<bool> Function(int targetHandle);
 
@@ -59,8 +58,8 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// data work here.
   final ValueChanged<int>? onTargetPreview;
 
-  /// Production counterpart of [onTargetPreview].  It returns the Core's
-  /// exact live-publication decision so phase-specific diagnostics never
+  /// Production counterpart of [onTargetPreview]. It returns the Core's
+  /// exact Phase-A publication decision so phase-specific diagnostics never
   /// mistake an emitted carousel callback for accepted visible data.
   final BudgetTargetAvatarPreviewAcceptance? onTargetPreviewAccepted;
 
@@ -72,9 +71,8 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// while the carousel is idle. This never changes the selected target.
   final ValueChanged<List<int>>? onPreparedTargetHotsetRequested;
 
-  /// The finite Avatar target hotset must own complete row/text resources
-  /// before the physical rail accepts a semantic crossing. This readiness
-  /// gate does not replace the controller, physics, or scroll position.
+  /// Rich resources are a bounded Phase-B enhancement. They are observed for
+  /// diagnostics but never gate the rail's Phase-A semantic crossing.
   final ValueListenable<bool>? liveTargetReadiness;
 
   /// Raw Avatar contact gets the same input-priority boundary as the visual
@@ -129,9 +127,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   int _stalePreviewCompletions = 0;
   int _untrackedPreviewCompletions = 0;
   int _settleVisualDeltaCount = 0;
-  int? _latestExactPaintedTargetHandle;
+  int? _latestSemanticTargetHandle;
   int? _pendingSettleTargetHandle;
-  bool _terminalSettleAwaitingExactPaint = false;
+  bool _terminalSettleAwaitingSemanticFrame = false;
   bool _settledTargetCommitted = false;
   final CenteredCarouselSemanticCadenceAccumulator _semanticCadence =
       CenteredCarouselSemanticCadenceAccumulator();
@@ -322,12 +320,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (accepted == null) {
       _untrackedPreviewCompletions += 1;
       // Standalone/presentation-only users retain the historical synchronous
-      // handoff. The production Dashboard always provides the typed callback
-      // below, whose true result means an exact LogBox paint occurred.
-      _markExactTargetPainted(
+      // handoff. The production Dashboard supplies the typed callback below,
+      // whose true result means an exact Phase-A frame was accepted.
+      _markSemanticTargetAccepted(
         targetHandle: targetHandle,
         generation: generation,
-        phase: phase,
       );
       return;
     }
@@ -398,34 +395,22 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       ),
     );
     if (accepted && error == null) {
-      _markExactTargetPainted(
+      _markSemanticTargetAccepted(
         targetHandle: targetHandle,
         generation: generation,
-        phase: phase,
       );
     }
   }
 
-  void _markExactTargetPainted({
+  void _markSemanticTargetAccepted({
     required int targetHandle,
     required int generation,
-    required BudgetTargetAvatarMotionPhase? phase,
   }) {
     if (!mounted || generation != _motionGeneration) return;
-    if (_activeMotionOrigin == null && !_terminalSettleAwaitingExactPaint) {
+    if (_activeMotionOrigin == null && !_terminalSettleAwaitingSemanticFrame) {
       return;
     }
-    _latestExactPaintedTargetHandle = targetHandle;
-    switch (phase) {
-      case BudgetTargetAvatarMotionPhase.directDrag:
-        _directMatchingLogBoxPaints += 1;
-      case BudgetTargetAvatarMotionPhase.ballistic:
-        _ballisticMatchingLogBoxPaints += 1;
-      case BudgetTargetAvatarMotionPhase.settling:
-      case BudgetTargetAvatarMotionPhase.interrupted:
-      case null:
-        break;
-    }
+    _latestSemanticTargetHandle = targetHandle;
     _tryCommitSettledExactTarget();
   }
 
@@ -449,9 +434,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _stalePreviewCompletions = 0;
     _untrackedPreviewCompletions = 0;
     _settleVisualDeltaCount = 0;
-    _latestExactPaintedTargetHandle = null;
+    _latestSemanticTargetHandle = null;
     _pendingSettleTargetHandle = null;
-    _terminalSettleAwaitingExactPaint = false;
+    _terminalSettleAwaitingSemanticFrame = false;
     _settledTargetCommitted = false;
     _semanticCadence.reset();
     FluviDiagnosticLogger.log(
@@ -489,9 +474,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     final origin = _activeMotionOrigin;
     if (origin == null) return;
     _activeMotionPhase = BudgetTargetAvatarMotionPhase.interrupted;
-    _terminalSettleAwaitingExactPaint = false;
+    _terminalSettleAwaitingSemanticFrame = false;
     _pendingSettleTargetHandle = null;
-    _latestExactPaintedTargetHandle = null;
+    _latestSemanticTargetHandle = null;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|MOTION_INTERRUPTED_BY_NEW_POINTER',
@@ -507,9 +492,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _recordMotionSummary(origin, terminalReason: 'interruptedByNewPointer');
   }
 
-  // Settlement is allowed to promote only the final target that has already
-  // completed the Core's exact paint acknowledgement. A late/failed preview
-  // is intentionally not converted into a canonical focus at pointer-up.
+  // Settlement promotes the final target only after its exact Phase-A
+  // semantic/list frame was accepted. Rich paint may finish later and never
+  // decides which Avatar wins pointer-up.
   void _onSelectionSettled(int logicalIndex) {
     final origin = _activeMotionOrigin;
     _activeMotionPhase = BudgetTargetAvatarMotionPhase.settling;
@@ -523,13 +508,13 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _pendingSettleTargetHandle = origin == null || explicitTargetIntent
         ? null
         : settledTargetHandle;
-    _terminalSettleAwaitingExactPaint = _pendingSettleTargetHandle != null;
+    _terminalSettleAwaitingSemanticFrame = _pendingSettleTargetHandle != null;
     if (widget.onTargetPreviewAccepted == null &&
         _pendingSettleTargetHandle != null) {
       // Presentation-only consumers have no Core acknowledgement seam. Keep
       // their existing immediate settled handoff without weakening the real
       // Dashboard path, which always supplies [onTargetPreviewAccepted].
-      _latestExactPaintedTargetHandle = _pendingSettleTargetHandle;
+      _latestSemanticTargetHandle = _pendingSettleTargetHandle;
     }
     if (origin != null) {
       _recordMotionSummary(origin, terminalReason: 'settled');
@@ -556,26 +541,26 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _tryCommitSettledExactTarget() {
     final settledTargetHandle = _pendingSettleTargetHandle;
     if (settledTargetHandle == null || _settledTargetCommitted) return;
-    if (_latestExactPaintedTargetHandle != settledTargetHandle) {
+    if (_latestSemanticTargetHandle != settledTargetHandle) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'AV|FLING_SETTLE_AWAITING_EXACT_PAINT',
+          stage: 'AV|FLING_SETTLE_AWAITING_SEMANTIC_FRAME',
           direction: widget.presentation.value.liveSelection.direction.name,
           coreRevision: widget.presentation.value.liveSelection.coreRevision,
           scope:
               'generation=$_motionGeneration settledTargetHandle='
-              '$settledTargetHandle latestExactPaintedTargetHandle='
-              '${_latestExactPaintedTargetHandle ?? '-'}',
+              '$settledTargetHandle latestSemanticTargetHandle='
+              '${_latestSemanticTargetHandle ?? '-'}',
         ),
       );
       return;
     }
     _settledTargetCommitted = true;
-    _terminalSettleAwaitingExactPaint = false;
+    _terminalSettleAwaitingSemanticFrame = false;
     widget.onTargetSettled?.call(settledTargetHandle);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'AV|FLING_SETTLED_AFTER_EXACT_PAINT',
+        stage: 'AV|FLING_SETTLED_AFTER_SEMANTIC_FRAME',
         direction: widget.presentation.value.liveSelection.direction.name,
         coreRevision: widget.presentation.value.liveSelection.coreRevision,
         scope:
@@ -614,8 +599,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'ballisticMatchingLogBoxPaints=$_ballisticMatchingLogBoxPaints '
             'stalePreviewCompletions=$_stalePreviewCompletions '
             'untrackedPreviewCompletions=$_untrackedPreviewCompletions '
-            'latestExactPaintedTargetHandle='
-            '${_latestExactPaintedTargetHandle ?? '-'} '
+            'latestSemanticTargetHandle='
+            '${_latestSemanticTargetHandle ?? '-'} '
+            'latestRichPaintedTargetHandle=- '
             'settleTargetHandle=${_pendingSettleTargetHandle ?? '-'} '
             'rawScrollUpdates=$_motionRawScrollUpdates '
             'firstTickMicros=${cadence.firstTickLatencyMicros} '
@@ -627,6 +613,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'duplicateTickCount=${cadence.duplicateTickCount} '
             'skippedSemanticIndexCount=${cadence.skippedSemanticIndexCount} '
             'acceptedLiveSnapshots=${_directPreviewAccepted + _ballisticPreviewAccepted} '
+            'semanticFrameAccepted=${_directPreviewAccepted + _ballisticPreviewAccepted} '
+            'richScenePainted=0 '
             'completeLivePublications=${_directPreviewAccepted + _ballisticPreviewAccepted} '
             'sameVsyncCoalescedTickCount=${_motionSemanticCrossings - _motionPreviewPublications} '
             'repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 '

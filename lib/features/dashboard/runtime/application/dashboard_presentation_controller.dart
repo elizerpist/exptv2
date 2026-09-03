@@ -406,10 +406,10 @@ final class DashboardPresentationController {
     return true;
   }
 
-  /// Promotes the exact deferred component frame only after the production
-  /// LogBox has acknowledged its paint. This commits navigation metadata and
-  /// render-domain ownership without manufacturing another data frame.
-  bool promotePaintedExperimentalTemporalCandidate({
+  /// Promotes the latest accepted exact Phase-A temporal frame.  Rich LogBox
+  /// paint may arrive later as an augmentation, but it never chooses the
+  /// user's semantic release target or authorizes an older month to win.
+  bool promotePreparedExperimentalTemporalCandidate({
     required DashboardNavigationState candidate,
     required int presentationEpoch,
     required int frameGeneration,
@@ -442,7 +442,7 @@ final class DashboardPresentationController {
         catalog,
         selectedLogicalIndex: _selectedIndex(state, catalog),
         policy: _semanticInstallPolicyFor(state),
-        reason: 'experimentalPreparedTemporalPainted',
+        reason: 'experimentalPreparedTemporalAccepted',
       );
     }
     _queuedPreparedExperimentalTemporalFrame = null;
@@ -464,6 +464,19 @@ final class DashboardPresentationController {
     _commitMetadata(committed);
     return true;
   }
+
+  /// Compatibility spelling retained for callers that only observe rich
+  /// paint diagnostics.  New interaction settlement must use
+  /// [promotePreparedExperimentalTemporalCandidate].
+  bool promotePaintedExperimentalTemporalCandidate({
+    required DashboardNavigationState candidate,
+    required int presentationEpoch,
+    required int frameGeneration,
+  }) => promotePreparedExperimentalTemporalCandidate(
+    candidate: candidate,
+    presentationEpoch: presentationEpoch,
+    frameGeneration: frameGeneration,
+  );
 
   /// Reclaims the latest target that was physically painted when a new
   /// foreground pointer interrupts a later, still-unpainted preview.

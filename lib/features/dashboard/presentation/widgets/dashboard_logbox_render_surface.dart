@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
+import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
@@ -23,6 +24,7 @@ import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -1240,11 +1242,19 @@ final class _DashboardLogBoxPaintResources {
     : divider = Paint()..color = FluviVisualTokens.border,
       groupSurface = Paint()..color = FluviVisualTokens.surface,
       editPlaceholder = Paint()
-        ..color = DashboardLogBoxTokens.editPlaceholderBackground;
+        ..color = DashboardLogBoxTokens.editPlaceholderBackground,
+      semanticPreviewAccent = Paint(),
+      semanticPreviewPrimaryLine = Paint()
+        ..color = FluviVisualTokens.surfaceMuted,
+      semanticPreviewSecondaryLine = Paint()
+        ..color = FluviVisualTokens.surfaceInactive;
 
   final Paint divider;
   final Paint groupSurface;
   final Paint editPlaceholder;
+  final Paint semanticPreviewAccent;
+  final Paint semanticPreviewPrimaryLine;
+  final Paint semanticPreviewSecondaryLine;
 
   void dispose() {}
 }
@@ -1463,19 +1473,12 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     }
     final scene = sceneCache.railCriticalSceneFor(state);
     if (scene == null) {
-      _lastDrawableRowCount = 0;
-      _lastPaintedRowCount = 0;
-      if (state.previewRowCount > 0 &&
-          sceneCache.railCriticalSceneBank.isComplete) {
-        sceneCache.recordVisiblePayloadWithoutDrawable();
-        sceneCache.recordVisiblePayloadWithoutPaint();
-      }
-      // Startup may mount behind its readiness surface before an active bank
-      // exists. Once a bank exists, preparation activity cannot suppress a
-      // visible rail correctness violation.
-      if (sceneCache.activeWindowIdentity != null) {
-        _recordTextLayoutMiss();
-      }
+      // Phase A owns the exact semantic list even when its optional rich
+      // scene is still preparing or was cancelled.  Painting these bounded
+      // source-identity slots deliberately avoids `flatItems`, TextPainter
+      // allocation and rich projection on the pointer path; Phase B replaces
+      // the same identity with full prepared row content when available.
+      _paintSemanticPreviewSlots(canvas, size, state);
       _recordPaintDuration(started, measure);
       return;
     }
@@ -1518,6 +1521,164 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       by: resourceCursor,
     );
     _recordPaintDuration(started, measure);
+  }
+
+  void _paintSemanticPreviewSlots(
+    Canvas canvas,
+    Size size,
+    DashboardLogViewportState state,
+  ) {
+    final totalRows = state.previewRowCount;
+    _lastDrawableRowCount = totalRows;
+    if (totalRows == 0) {
+      _lastPaintedRowCount = 0;
+      _paintExactEmptySemanticPreview(canvas, size);
+      return;
+    }
+    final visibleWindow = _visibleWindow(size);
+    final first = math.max(0, (visibleWindow.top / rowHeight).floor());
+    final last = math.min(
+      totalRows,
+      math.max(first + 1, (visibleWindow.bottom / rowHeight).ceil() + 1),
+    );
+    final width = math.max(
+      0.0,
+      size.width - DashboardLogBoxTokens.horizontalGutter * 2,
+    );
+    var painted = 0;
+    for (var ordinal = first; ordinal < last; ordinal += 1) {
+      final top = ordinal * rowHeight;
+      if (top > visibleWindow.bottom) break;
+      if (top + rowHeight < visibleWindow.top) continue;
+      final slot = Rect.fromLTWH(
+        DashboardLogBoxTokens.horizontalGutter,
+        top,
+        width,
+        math.max(0, rowHeight - 2),
+      );
+      if (slot.isEmpty) continue;
+      final body = groupRadius.toRRect(slot);
+      canvas.drawRRect(body, resources.groupSurface);
+      _paintGroupBorder(canvas, slot);
+
+      // This is a compact exact row projection, not a placeholder: every
+      // visual cue below comes from the resident entry at this exact ordinal.
+      // It intentionally avoids rich text/layout work while preserving the
+      // row's identity, category, amount magnitude and local-time position.
+      final entry = state.semanticPreviewLedgerEntryAt(ordinal);
+      final fallbackIdentity =
+          state.semanticPreviewRowIdentityAt(ordinal) ??
+          '${state.viewportId}:$ordinal';
+      final accent = entry == null
+          ? (state.direction == LedgerDirection.expense
+                ? expenseAmountColor
+                : incomeAmountColor)
+          : CategoryColorCatalog.resolve(
+              entry.categoryColorId ?? 'fallback',
+            ).middleColor;
+      final amountMinor = entry?.amountMinor.abs() ?? 0;
+      final normalizedAmount =
+          math
+              .log(amountMinor.toDouble() + 1)
+              .clamp(0.0, math.log(1000001) / math.log(10))
+              .toDouble() /
+          (math.log(1000001) / math.log(10));
+      final localMinutes =
+          (entry?.bookedLocalTimeMinutes ?? fallbackIdentity.hashCode)
+              .clamp(0, (24 * 60) - 1)
+              .toDouble();
+      resources.semanticPreviewAccent.color = accent;
+      final accentWidth = 4.0 + normalizedAmount * 5;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            slot.left + DashboardLogBoxTokens.rowHorizontalInset,
+            slot.top + 13,
+            accentWidth,
+            math.max(0, slot.height - 26),
+          ),
+          const Radius.circular(2),
+        ),
+        resources.semanticPreviewAccent,
+      );
+      final titleWidth = math.max(
+        20.0,
+        slot.width * (0.26 + normalizedAmount * 0.42),
+      );
+      final lineLeft =
+          slot.left + DashboardLogBoxTokens.rowHorizontalInset + 18;
+      final titleTop = slot.top + slot.height * 0.33;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(lineLeft, titleTop, titleWidth, 5),
+          const Radius.circular(3),
+        ),
+        resources.semanticPreviewPrimaryLine,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            lineLeft,
+            titleTop + 13,
+            math.max(16.0, titleWidth * 0.42),
+            4,
+          ),
+          const Radius.circular(2),
+        ),
+        resources.semanticPreviewSecondaryLine,
+      );
+      final timeMarkerLeft =
+          lineLeft +
+          (math.max(0.0, slot.right - 14 - lineLeft) *
+              (localMinutes / ((24 * 60) - 1)));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(timeMarkerLeft, titleTop + 13, 6, 4),
+          const Radius.circular(2),
+        ),
+        resources.semanticPreviewAccent,
+      );
+      painted += 1;
+    }
+    _lastPaintedRowCount = painted;
+    performanceCounters?.increment(
+      DashboardPerformanceMetric.logVisibleSlotPaint,
+      by: painted,
+    );
+  }
+
+  void _paintExactEmptySemanticPreview(Canvas canvas, Size size) {
+    final width = math.max(
+      0.0,
+      size.width - DashboardLogBoxTokens.horizontalGutter * 2,
+    );
+    final height = math.min(56.0, math.max(0.0, size.height - 24));
+    if (width == 0 || height == 0) return;
+    final rect = Rect.fromLTWH(
+      DashboardLogBoxTokens.horizontalGutter,
+      math.max(12, (size.height - height) / 2),
+      width,
+      height,
+    );
+    canvas.drawRRect(groupRadius.toRRect(rect), resources.groupSurface);
+    _paintGroupBorder(canvas, rect);
+    final glyphWidth = math.min(72.0, rect.width * 0.34);
+    final glyphLeft = rect.center.dx - glyphWidth / 2;
+    resources.semanticPreviewAccent.color = FluviVisualTokens.border;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(glyphLeft, rect.center.dy - 7, glyphWidth, 4),
+        const Radius.circular(2),
+      ),
+      resources.semanticPreviewAccent,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(glyphLeft + 12, rect.center.dy + 4, glyphWidth - 24, 4),
+        const Radius.circular(2),
+      ),
+      resources.semanticPreviewSecondaryLine,
+    );
   }
 
   void _paintCommittedViewport(

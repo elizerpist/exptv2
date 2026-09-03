@@ -2,6 +2,19 @@ import 'package:flutter/foundation.dart';
 
 import 'dashboard_log_viewport_state.dart';
 
+/// Independent owners for bounded prepared resources used by direct dashboard
+/// interactions.
+///
+/// A resource is reusable only within its lane.  In particular, an Avatar
+/// focus warmup must not evict the non-amount universe that a subsequent Mind
+/// drag needs, even when both happen to originate from the same committed
+/// Query revision.
+enum DashboardLiveInteractionResourceLane {
+  timePreview,
+  budgetAvatarPreview,
+  mindAmountPreview,
+}
+
 /// Immutable identity of the exact structural payload coverage a prepared
 /// scene bank must contain. A complete bank may contain both directions and
 /// neighbouring plane catalogs, but a Query publication bank is deliberately
@@ -325,6 +338,28 @@ typedef DashboardLogBoxRetainedSceneWindowPreparer =
       DashboardLogBoxSceneWindow window, {
       required String retainedKey,
       required int? retainViewportId,
+    });
+
+/// Prepares one bounded, lane-owned resource bank for a direct interaction.
+///
+/// The cache owns capacity and eviction.  The caller supplies an immutable
+/// semantic key and may replace only an older resource in the same lane.
+typedef DashboardLogBoxLiveInteractionResourcePreparer =
+    Future<void> Function(
+      DashboardLogBoxSceneWindow window, {
+      required DashboardLiveInteractionResourceLane lane,
+      required String retainedKey,
+      required int? retainViewportId,
+    });
+
+/// Verifies that [lane] still owns the exact complete resource bank for one
+/// direct interaction.  A matching bank in another lane is deliberately not
+/// an admission proof.
+typedef DashboardLogBoxLiveInteractionResourceLookup =
+    bool Function(
+      DashboardLogBoxSceneWindow window, {
+      required DashboardLiveInteractionResourceLane lane,
+      required String candidateKey,
     });
 
 typedef DashboardLogBoxRetainedSceneWindowLookup =

@@ -136,6 +136,35 @@ void main() {
     expect(marker.scope, contains('mode=mind'));
   });
 
+  testWidgets(
+    'bug marker menu uses a light surface with legible marker labels',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+      await tester.pumpAndSettle();
+      final markerMenu = tester.widget<PopupMenuButton<String>>(
+        find.byKey(const ValueKey('debug-console-mark-bug')),
+      );
+      expect(markerMenu.color, const Color(0xFFF8FAFC));
+
+      await tester.tap(find.byKey(const ValueKey('debug-console-mark-bug')));
+      await tester.pumpAndSettle();
+      final timeLabel = tester.widget<Text>(find.text('Time target jump'));
+      final avatarLabel = tester.widget<Text>(find.text('Avatar filter stuck'));
+      final mindLabel = tester.widget<Text>(
+        find.text('Mind slider: no live list'),
+      );
+      expect(timeLabel.style?.color, const Color(0xFF1F2937));
+      expect(avatarLabel.style?.color, const Color(0xFF1F2937));
+      expect(mindLabel.style?.color, const Color(0xFF1F2937));
+    },
+  );
+
   testWidgets('controls an explicit frozen diagnostic capture session', (
     tester,
   ) async {

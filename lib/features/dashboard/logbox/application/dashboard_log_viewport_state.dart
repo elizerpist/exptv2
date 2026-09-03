@@ -352,6 +352,25 @@ class DashboardLogViewportState {
       _resolvedProjection.stableAssetIdentities;
   int get previewRowCount =>
       _deferred?.previewRowCount ?? _resolvedProjection.flatItems.length;
+
+  /// Returns one exact source identity without requesting the deferred rich
+  /// row projection. Phase-A interaction paint uses it only to distinguish
+  /// already-resident semantic slots while Phase-B prepares text/layout.
+  String? semanticPreviewRowIdentityAt(int ordinal) {
+    if (ordinal < 0 || ordinal >= previewRowCount) return null;
+    final deferred = _deferred;
+    if (deferred != null) return deferred.rowIdentityAt(ordinal);
+    return _resolvedProjection.flatItems[ordinal].row.entryId;
+  }
+
+  /// Provides the resident immutable ledger entry for the compact Phase-A
+  /// renderer.  It is deliberately unavailable for an already-resolved rich
+  /// projection: that path has a complete row scene and must use it instead.
+  DashboardLedgerEntry? semanticPreviewLedgerEntryAt(int ordinal) {
+    if (ordinal < 0 || ordinal >= previewRowCount) return null;
+    return _deferred?.entryAt(ordinal);
+  }
+
   int get groupCount =>
       _deferred?.groupCount ?? _resolvedProjection.groups.length;
   int get viewportId =>
@@ -501,6 +520,20 @@ final class _DeferredViewportProjection {
     for (final index in _rowIndices) {
       visitor(_entryAt(index).id);
     }
+  }
+
+  String rowIdentityAt(int ordinal) {
+    if (ordinal < 0 || ordinal >= _rowIndices.length) {
+      throw RangeError.index(ordinal, _rowIndices, 'ordinal');
+    }
+    return _entryAt(_rowIndices[ordinal]).id;
+  }
+
+  DashboardLedgerEntry entryAt(int ordinal) {
+    if (ordinal < 0 || ordinal >= _rowIndices.length) {
+      throw RangeError.index(ordinal, _rowIndices, 'ordinal');
+    }
+    return _entryAt(_rowIndices[ordinal]);
   }
 
   int viewportId({

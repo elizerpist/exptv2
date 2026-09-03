@@ -328,8 +328,8 @@ final class SummaryPillExperiment extends StatelessWidget {
   onComponentCrossingAccepted;
 
   /// Production-only post-paint acknowledgement for a previously accepted
-  /// component target.  A non-null notifier changes settlement ownership from
-  /// "accepted for paint" to "actually painted".
+  /// component target. It enriches rich-scene diagnostics only; exact Phase-A
+  /// acceptance remains the semantic settlement authority.
   final ValueListenable<DashboardSegmentedTargetPainted?>?
   componentPaintedTarget;
   final void Function(
@@ -1183,7 +1183,6 @@ final class _HierarchyValueSelectorState
   DashboardNavigationState? _latestDesiredTarget;
   DashboardNavigationState? _latestAcceptedTarget;
   DashboardNavigationState? _latestPaintSelectedTarget;
-  DashboardNavigationState? _latestPaintedTarget;
   DashboardNavigationState? _settleTarget;
   DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
   var _motionIdle = false;
@@ -1229,9 +1228,9 @@ final class _HierarchyValueSelectorState
         !_sameOwnedSemanticTarget(_latestPaintSelectedTarget, painted.target)) {
       return;
     }
-    _latestPaintedTarget = painted.target;
-    _settleTarget = painted.target;
-    _trySettlePaintedTarget();
+    // Rich paint is Phase-B evidence only.  It may enrich diagnostics, but a
+    // delayed/failed scene must not replace the latest accepted month as the
+    // release target.
   }
 
   void _clearMotionTargets() {
@@ -1240,24 +1239,23 @@ final class _HierarchyValueSelectorState
     _latestDesiredTarget = null;
     _latestAcceptedTarget = null;
     _latestPaintSelectedTarget = null;
-    _latestPaintedTarget = null;
     _settleTarget = null;
     _motionOrigin = null;
     _motionIdle = false;
   }
 
-  void _trySettlePaintedTarget() {
-    if (!_motionIdle) return;
+  bool _trySettleAcceptedTarget() {
+    if (!_motionIdle) return false;
     final settled = _settleTarget;
     if (settled == null ||
         !_sameOwnedSemanticTarget(_lastEmittedTarget, settled) ||
         !_sameOwnedSemanticTarget(_latestDesiredTarget, settled) ||
-        !_sameOwnedSemanticTarget(_latestAcceptedTarget, settled) ||
-        !_sameOwnedSemanticTarget(_latestPaintedTarget, settled)) {
-      return;
+        !_sameOwnedSemanticTarget(_latestAcceptedTarget, settled)) {
+      return false;
     }
     widget.onSettled?.call(settled);
     _clearMotionTargets();
+    return true;
   }
 
   void _attachResetRunner() {
@@ -1373,7 +1371,6 @@ final class _HierarchyValueSelectorState
             _latestDesiredTarget = null;
             _latestAcceptedTarget = null;
             _latestPaintSelectedTarget = null;
-            _latestPaintedTarget = null;
             _settleTarget = null;
             _motionIdle = false;
             widget.onMotionActiveChanged?.call(true);
@@ -1400,20 +1397,19 @@ final class _HierarchyValueSelectorState
             // without this acceptance can never own release settlement.
             _latestAcceptedTarget = candidate;
             _latestPaintSelectedTarget = candidate;
-            // Standalone presentation consumers do not own a LogBox surface.
-            // They preserve the historical accepted-for-paint contract.  The
-            // production parent supplies [paintedTargets], which makes the
-            // target wait for exact post-paint evidence instead.
-            if (widget.paintedTargets == null) {
-              _latestPaintedTarget = candidate;
-              _settleTarget = candidate;
-            }
+            // An accepted exact Phase-A frame owns release settlement. Rich
+            // paint remains diagnostic evidence owned by the coordinator.
+            _settleTarget = candidate;
           },
           onMotionIdle: (_) {
             _motionIdle = true;
-            _controller.jumpToIndexSilently(0);
             widget.onMotionActiveChanged?.call(false);
-            _trySettlePaintedTarget();
+            // Commit semantic ownership before recentering. The old order
+            // jumped to zero first, briefly restoring the previous origin
+            // while the rich-paint acknowledgement was still pending.
+            if (_trySettleAcceptedTarget()) {
+              _controller.jumpToIndexSilently(0);
+            }
           },
           itemBuilder: (context, offset, metrics) {
             final origin = _motionOrigin ?? widget.navigation.state;

@@ -21,6 +21,11 @@ import 'dashboard_logbox_text_layout_cache.dart';
 /// maintenance without creating another scene/cache owner.
 enum DashboardLogBoxScenePreparationIntent {
   renderCriticalReadiness(5),
+
+  /// A bounded reusable resource may continue while a different foreground
+  /// gesture starts.  Same-priority input cannot cancel it; Phase-A
+  /// publication remains independent of this optional rich work.
+  liveInteractionResource(4),
   foregroundInteraction(4),
   foregroundNavigation(3),
   committedMaintenance(2),
@@ -139,7 +144,22 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   final LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>
   _retainedCandidateBanks =
       LinkedHashMap<String, _DashboardLogBoxStagedSceneBank>();
-  String? _liveInteractionResourceKey;
+
+  /// One live resource per semantic interaction lane.  A new Mind resource
+  /// may replace an older Mind resource, but it must never evict the Avatar
+  /// resource merely because both are prepared from the current Query.
+  final Map<DashboardLiveInteractionResourceLane, String>
+  _liveInteractionResourceKeys =
+      <DashboardLiveInteractionResourceLane, String>{};
+
+  /// A replacement resource remains pinned only while its predecessor still
+  /// owns the lane.  This makes replacement atomic: a failed/cancelled rich
+  /// preparation cannot discard the last compatible universe used by an
+  /// active Mind or Avatar interaction.  There are only three lanes, and the
+  /// existing candidate-bank cap bounds the combined active + replacing set.
+  final Map<DashboardLiveInteractionResourceLane, String>
+  _preparingLiveInteractionResourceKeys =
+      <DashboardLiveInteractionResourceLane, String>{};
   Set<String> _protectedCandidateKeys = const <String>{};
   int _retainedCandidateAdmissionEpoch = 0;
   int _generation = 0;
@@ -228,9 +248,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   );
   bool get hasRetainedSegmentedPaintedTargetWindow =>
       _retainedSegmentedPaintedTargetBank != null;
-  bool get hasLiveInteractionResourceBank =>
-      _liveInteractionResourceKey != null &&
-      _retainedCandidateBanks.containsKey(_liveInteractionResourceKey);
+  bool get hasLiveInteractionResourceBank => _liveInteractionResourceKeys.values
+      .any(_retainedCandidateBanks.containsKey);
+
+  Set<String> get _liveInteractionResourceKeySet =>
+      Set<String>.unmodifiable(<String>{
+        ..._liveInteractionResourceKeys.values,
+        ..._preparingLiveInteractionResourceKeys.values,
+      });
   int get protectedCandidateBankCount => _protectedCandidateKeys.length;
   int get retainedCandidatePreparedRowCount =>
       _retainedCandidateUniqueResources.rowLayouts.length;
@@ -544,6 +569,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// nevertheless guarantee a synchronous first root when every immutable
   /// source row paragraph is ready before the gesture begins.
   Future<void> prepareLiveInteractionResourceWindow({
+    required DashboardLiveInteractionResourceLane lane,
     required String resourceKey,
     required DashboardLogBoxSceneWindow window,
     double? surfaceWidth,
@@ -555,15 +581,35 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     DashboardLogBoxScenePreparationYield? yieldToBackground,
   }) async {
     _ensureUsable();
-    final priorKey = _liveInteractionResourceKey;
+    final priorKey = _liveInteractionResourceKeys[lane];
     if (priorKey == resourceKey &&
         hasCandidateWindow(window, candidateKey: resourceKey)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RESOURCE|REUSE',
+          queryKey: window.identity,
+          entryCount: window.previewRowCount,
+          scope: 'lane=${lane.name} owner=liveInteraction',
+        ),
+      );
       return;
     }
-    if (priorKey != null && priorKey != resourceKey) {
-      _discardRetainedCandidateBank(priorKey);
-    }
-    _liveInteractionResourceKey = resourceKey;
+    // Replacing a resource is lane-local and atomic.  The old single global
+    // key silently discarded a compatible Mind amount universe while Avatar
+    // preparation ran.  Keep the current lane resource through this bounded
+    // replacement; only a successful complete candidate takes ownership.
+    _preparingLiveInteractionResourceKeys[lane] = resourceKey;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RESOURCE|ACQUIRE',
+        queryKey: window.identity,
+        entryCount: window.previewRowCount,
+        scope:
+            'lane=${lane.name} prior=${priorKey == null ? 'none' : FluviDiagnosticKeyDigest.of(priorKey)} '
+            'activeBorrowers=${_liveInteractionResourceKeys.length} '
+            'boundedBanks=$maximumRetainedCandidateBanks',
+      ),
+    );
     try {
       await prepareCandidateWindow(
         candidateKey: resourceKey,
@@ -574,22 +620,67 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         yieldEveryRows: yieldEveryRows,
         maxContiguousUiSliceMicros: maxContiguousUiSliceMicros,
         yieldToBackground: yieldToBackground,
-        intent: DashboardLogBoxScenePreparationIntent.committedMaintenance,
+        intent: DashboardLogBoxScenePreparationIntent.liveInteractionResource,
       );
     } on Object {
-      if (_liveInteractionResourceKey == resourceKey &&
-          !_retainedCandidateBanks.containsKey(resourceKey)) {
-        _liveInteractionResourceKey = null;
+      if (_preparingLiveInteractionResourceKeys[lane] == resourceKey) {
+        _preparingLiveInteractionResourceKeys.remove(lane);
       }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RESOURCE|CANCEL',
+          queryKey: window.identity,
+          entryCount: window.previewRowCount,
+          scope:
+              'lane=${lane.name} reason=preparationFailedOrCancelled '
+              'priorRetained=${priorKey != null && _retainedCandidateBanks.containsKey(priorKey)}',
+        ),
+      );
       rethrow;
     }
+    if (_preparingLiveInteractionResourceKeys[lane] != resourceKey ||
+        !_retainedCandidateBanks.containsKey(resourceKey)) {
+      // A newer request in this lane replaced this preparation while it was
+      // yielding.  Its completed bank is not an active resource and must not
+      // consume bounded candidate capacity behind the newest user intent.
+      if (!_liveInteractionResourceKeySet.contains(resourceKey)) {
+        _discardRetainedCandidateBank(resourceKey);
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RESOURCE|REJECT',
+          queryKey: window.identity,
+          entryCount: window.previewRowCount,
+          scope:
+              'lane=${lane.name} reason=supersededBeforeRetention '
+              'activeBorrowers=${_liveInteractionResourceKeys.length}',
+        ),
+      );
+      return;
+    }
+    _preparingLiveInteractionResourceKeys.remove(lane);
+    _liveInteractionResourceKeys[lane] = resourceKey;
+    if (priorKey != null && priorKey != resourceKey) {
+      _discardRetainedCandidateBank(priorKey);
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RESOURCE|RETAIN',
+        queryKey: window.identity,
+        entryCount: window.previewRowCount,
+        scope:
+            'lane=${lane.name} activeBorrowers=${_liveInteractionResourceKeys.length} '
+            'retainedBanks=${_retainedCandidateBanks.length}',
+      ),
+    );
   }
 
   bool hasLiveInteractionResourceWindow(
     DashboardLogBoxSceneWindow window, {
+    required DashboardLiveInteractionResourceLane lane,
     required String resourceKey,
   }) {
-    if (_liveInteractionResourceKey != resourceKey) return false;
+    if (_liveInteractionResourceKeys[lane] != resourceKey) return false;
     final bank = _retainedCandidateBanks[resourceKey];
     if (bank == null ||
         bank.surfaceWidth != _surfaceWidth ||
@@ -797,12 +888,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
   /// Discards only the invisible bank owned by [candidateKey].  This is used
   /// by Query Cancel and LRU eviction and can never mutate active rendering.
-  void discardCandidateWindow(String candidateKey) {
-    if (_liveInteractionResourceKey == candidateKey) {
-      _liveInteractionResourceKey = null;
-    }
-    _discardRetainedCandidateBank(candidateKey);
-  }
+  void discardCandidateWindow(String candidateKey) =>
+      _discardRetainedCandidateBank(candidateKey);
 
   /// The controller owns which applied-query chip targets are protected; this
   /// cache owns all banks and physical resource budgeting. A completed hotset
@@ -1742,12 +1829,17 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     'stagedWindow': _stagedBank?.window.identity,
     'retainedCandidateBanks': retainedCandidateBankCount,
     'liveInteractionResourceBank': hasLiveInteractionResourceBank,
-    'liveInteractionResourceRows': _liveInteractionResourceKey == null
-        ? 0
-        : _retainedCandidateBanks[_liveInteractionResourceKey]
-                  ?.rowLayouts
-                  .length ??
-              0,
+    'liveInteractionResourceLanes': _liveInteractionResourceKeys.length,
+    'liveInteractionResourcePreparingLanes':
+        _preparingLiveInteractionResourceKeys.length,
+    'liveInteractionResourceRows': _liveInteractionResourceKeySet.fold<int>(
+      0,
+      (count, key) =>
+          count + (_retainedCandidateBanks[key]?.rowLayouts.length ?? 0),
+    ),
+    'liveInteractionResourceKeys': _liveInteractionResourceKeys.map(
+      (lane, key) => MapEntry(lane.name, FluviDiagnosticKeyDigest.of(key)),
+    ),
     'retainedFocusBaseWindow': hasRetainedFocusBaseWindow,
     'retainedSegmentedPaintedTargetWindow':
         hasRetainedSegmentedPaintedTargetWindow,
@@ -2010,7 +2102,10 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     // A shared TextPainter can therefore never be disposed between old-bank
     // removal and new-bank activation.
     _resourceLeases.retainBank(bank);
-    _discardRetainedCandidateBank(candidateKey);
+    _discardRetainedCandidateBank(
+      candidateKey,
+      preserveLiveResourceOwnership: true,
+    );
     _retainedCandidateBanks[candidateKey] = bank;
     _retainedCandidateAdmissionEpoch += 1;
     _enforceRetainedCandidateBounds();
@@ -2025,14 +2120,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         _retainedCandidateBanks.length < maximumRetainedCandidateBanks) {
       return true;
     }
-    if (candidateKey == _liveInteractionResourceKey) {
+    if (_liveInteractionResourceKeySet.contains(candidateKey)) {
       return _retainedCandidateBanks.keys.any(
-        (key) => key != _liveInteractionResourceKey,
+        (key) => !_liveInteractionResourceKeySet.contains(key),
       );
     }
     return _retainedCandidateBanks.keys.any(
       (key) =>
-          key != _liveInteractionResourceKey &&
+          !_liveInteractionResourceKeySet.contains(key) &&
           !_protectedCandidateKeys.contains(key),
     );
   }
@@ -2078,11 +2173,13 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           )
           ..remove(candidateKey)
           ..[candidateKey] = bank;
-    while (_candidateBanksExceedBounds(next.values)) {
+    while (_candidateBanksExceedBounds(next)) {
       String? evictable;
       for (final key in next.keys) {
-        final liveCandidate = candidateKey == _liveInteractionResourceKey;
-        if (key != _liveInteractionResourceKey &&
+        final liveCandidate = _liveInteractionResourceKeySet.contains(
+          candidateKey,
+        );
+        if (!_liveInteractionResourceKeySet.contains(key) &&
             (liveCandidate || !_protectedCandidateKeys.contains(key))) {
           evictable = key;
           break;
@@ -2095,24 +2192,21 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 
   bool _candidateBanksExceedBounds(
-    Iterable<_DashboardLogBoxStagedSceneBank> banks,
+    Map<String, _DashboardLogBoxStagedSceneBank> banks,
   ) {
-    final snapshot = banks.toList(growable: false);
+    final snapshot = banks.values.toList(growable: false);
     final resources = _RetainedCandidateUniqueResources.fromBanks(snapshot);
-    final liveBank = _liveInteractionResourceKey == null
+    final liveBanks = <_DashboardLogBoxStagedSceneBank>[
+      for (final key in _liveInteractionResourceKeySet) ?banks[key],
+    ];
+    final liveResources = liveBanks.isEmpty
         ? null
-        : _retainedCandidateBanks[_liveInteractionResourceKey];
-    final liveResources = liveBank == null
-        ? null
-        : _RetainedCandidateUniqueResources.fromBanks(
-            <_DashboardLogBoxStagedSceneBank>[liveBank],
-          );
-    // A live interaction universe may deliberately exceed the normal
-    // speculative-candidate row cap while remaining under its independent
-    // byte bound. A canonical release candidate that borrows only those
-    // immutable layouts adds no retained memory. Treat the already admitted
-    // live universe as the baseline rather than rejecting the second bank
-    // merely because the bank count changed from one to two.
+        : _RetainedCandidateUniqueResources.fromBanks(liveBanks);
+    // Each active lane owns one bounded universe.  Treat their combined
+    // immutable layouts as the retained baseline so a compatible second lane
+    // is not rejected merely for existing alongside the first one.  The
+    // number of lanes is finite and the candidate-bank hard bound still
+    // applies, so this never becomes an unbounded cache.
     final effectiveRowLimit = math.max(
       maximumRetainedCandidateRows,
       liveResources?.rowLayouts.length ?? 0,
@@ -2128,7 +2222,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 
   void _enforceRetainedCandidateBounds() {
-    while (_candidateBanksExceedBounds(_retainedCandidateBanks.values)) {
+    while (_candidateBanksExceedBounds(_retainedCandidateBanks)) {
       final oldest = _evictableRetainedCandidateKey();
       if (oldest == null) {
         FluviDiagnosticLogger.log(
@@ -2152,7 +2246,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
 
   String? _evictableRetainedCandidateKey() {
     for (final key in _retainedCandidateBanks.keys) {
-      if (key != _liveInteractionResourceKey &&
+      if (!_liveInteractionResourceKeySet.contains(key) &&
           !_protectedCandidateKeys.contains(key)) {
         return key;
       }
@@ -2175,15 +2269,39 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     }
     if (matchedKey != null) {
       _retainedCandidateBanks.remove(matchedKey);
+      _removeLiveInteractionResourceKey(matchedKey);
       _retainedCandidateAdmissionEpoch += 1;
     }
   }
 
-  void _discardRetainedCandidateBank(String candidateKey) {
+  void _discardRetainedCandidateBank(
+    String candidateKey, {
+    bool preserveLiveResourceOwnership = false,
+  }) {
     final removed = _retainedCandidateBanks.remove(candidateKey);
+    if (!preserveLiveResourceOwnership) {
+      _removeLiveInteractionResourceKey(candidateKey);
+    }
     if (removed == null) return;
     _retainedCandidateAdmissionEpoch += 1;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'RESOURCE|EVICT',
+        queryKey: removed.window.identity,
+        entryCount: removed.window.previewRowCount,
+        scope:
+            'reason=retainedCandidateDiscard '
+            'liveBorrowers=${_liveInteractionResourceKeys.length}',
+      ),
+    );
     _resourceLeases.releaseBank(removed);
+  }
+
+  void _removeLiveInteractionResourceKey(String candidateKey) {
+    _liveInteractionResourceKeys.removeWhere((_, key) => key == candidateKey);
+    _preparingLiveInteractionResourceKeys.removeWhere(
+      (_, key) => key == candidateKey,
+    );
   }
 
   _RetainedCandidateReusableResources _retainedCandidateReusableResources({
@@ -2260,7 +2378,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _stagedBank = null;
     _privatelyLeasedPreparationBank = null;
     _retainedCandidateBanks.clear();
-    _liveInteractionResourceKey = null;
+    _liveInteractionResourceKeys.clear();
+    _preparingLiveInteractionResourceKeys.clear();
     _retainedActiveSceneBanks.clear();
     _retainedActiveSceneKeys.clear();
     _activeBank = RailCriticalSceneBank.empty();

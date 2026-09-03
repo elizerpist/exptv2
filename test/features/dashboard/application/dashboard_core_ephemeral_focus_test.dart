@@ -519,6 +519,180 @@ void main() {
   );
 
   test(
+    'RED b166 Phase-A Mind preview publishes exact rows when the rich stager is unavailable',
+    () async {
+      final rows = <DashboardLedgerEntry>[
+        for (final (index, amount) in <int>[100000, 200000, 300000].indexed)
+          DashboardLedgerEntry(
+            id: 'amount-$amount',
+            partnerId: 'partner-$index',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: amount,
+            bookedLocalEpochDay: 20636 - index,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Partner $index',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+      ];
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 100000,
+            maximumAmountScaled100: 300000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        stageLiveInteractionFromPreparedResources:
+            (_, {required retainViewportId}) => false,
+      );
+
+      core.beginMindAmountRangeInteraction();
+
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 300000,
+            lowerScaled100: 150000,
+            upperScaled100: 250000,
+          ),
+        ),
+        isTrue,
+        reason:
+            'The resident exact amount frame is Phase A. A rich scene miss may '
+            'be recorded, but it cannot suppress the held-drag list preview.',
+      );
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-200000'],
+      );
+      expect(core.visibleFrames.countLane.value!.count.entryCount, 1);
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'RED b166 Phase-A Avatar focus publishes the selected rows when rich staging misses',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        stageLiveInteractionFromPreparedResources:
+            (_, {required retainViewportId}) => false,
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+
+      core.beginBudgetAvatarMotion();
+      expect(
+        await drilldown.previewBudgetTarget(
+          state: _budgetAvatarPreviewState(
+            categoryId: 'food',
+            displayName: 'Food',
+          ),
+        ),
+        isTrue,
+        reason:
+            'Avatar semantic selection/list publication must not wait for the '
+            'optional rich LogBox scene.',
+      );
+      expect(core.focus.state?.category?.id, 'food');
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        const <String>['food-row'],
+      );
+      expect(core.visibleFrames.countLane.value!.count.entryCount, 1);
+      expect(repository.prepareCalls, 1);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  testWidgets(
+    'RED b166 Phase-A time crossing is accepted without an active rich scene',
+    (tester) async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+      );
+      final origin = core.navigation.state;
+      final candidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+        reason:
+            'A retained exact temporal frame is Phase A even when the rich '
+            'scene cache has not admitted its optional rendering bank yet.',
+      );
+      await tester.pump();
+      expect(
+        core.visibleFrames.logBoxLane.value!.queryKey,
+        candidate.temporalAnchor.sourceChildQueryKey,
+      );
+      expect(
+        core.visibleFrames.countLane.value!.queryKey,
+        candidate.temporalAnchor.sourceChildQueryKey,
+      );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
     'RED REENTRANT-MIND: an older release cannot overwrite the next drag live rows',
     () async {
       final canonicalGate = Completer<void>();
@@ -816,7 +990,7 @@ void main() {
   );
 
   testWidgets(
-    'RED POST-df1: a new Summary pointer invalidates an already-published but unpainted settle target',
+    'b166 regression: a new Summary pointer retains an accepted unpainted semantic target while rejecting its stale rich acknowledgement',
     (tester) async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -859,7 +1033,7 @@ void main() {
         candidate: candidate,
         component: DashboardTemporalAnchorComponent.day,
       );
-      expect(core.navigation.state.dayCursor, origin.dayCursor);
+      expect(core.navigation.state.dayCursor, candidate.dayCursor);
 
       // A direct pointer interrupts the old ballistic/settling generation
       // before it crosses a replacement target. A late report for that old
@@ -873,16 +1047,16 @@ void main() {
       expect(core.segmentedTargetPainted.value, isNull);
       expect(
         core.navigation.state.dayCursor,
-        origin.dayCursor,
+        candidate.dayCursor,
         reason:
-            'An interrupted, unpainted target must not canonicalize after a '
-            'new pointer has already claimed foreground intent.',
+            'A richer late paint acknowledgement may not move a semantically '
+            'accepted release target back to the old month.',
       );
     },
   );
 
   testWidgets(
-    'RED POST-df1: Summary pointer interruption restores the latest painted target over a newer unpainted preview',
+    'b166 regression: Summary pointer interruption keeps the latest accepted target over an older rich-painted preview',
     (tester) async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -945,24 +1119,22 @@ void main() {
       );
 
       // The new pointer becomes a cancelled/tap interaction: it never emits
-      // a replacement crossing. The unpainted B preview cannot become the
-      // release owner; the last A target that really painted is restored and
-      // canonicalized without a repository or scene-preparation path.
+      // a replacement crossing. The latest accepted B target remains the
+      // semantic origin; a richer old A paint is diagnostic only.
       core.noteSummaryDirectPointerDown();
       await tester.pump();
 
-      final restored = core.visibleFrames.value!;
-      expect(core.navigation.state.dayCursor, painted.dayCursor);
-      expect(restored.mode, DashboardVisibleMode.committed);
-      expect(restored.queryKey, painted.temporalAnchor.sourceChildQueryKey);
-      expect(restored.visualDigest, paintedFrame.visualDigest);
+      final retained = core.visibleFrames.value!;
+      expect(core.navigation.state.dayCursor, unpainted.dayCursor);
+      expect(retained.mode, DashboardVisibleMode.committed);
+      expect(retained.queryKey, unpainted.temporalAnchor.sourceChildQueryKey);
       expect(core.segmentedTargetPainted.value, isNull);
       expect(repository.prepareCalls, 1);
     },
   );
 
   testWidgets(
-    'RED POST-df1: parent-changing Summary interruption restores the exact painted LogBox scene',
+    'b166 regression: parent-changing Summary interruption retains the latest accepted parent rather than restoring an older rich scene',
     (tester) async {
       final core = DashboardCoreController(
         initialDate: DateTime.utc(2026, 7, 14),
@@ -1099,30 +1271,22 @@ void main() {
       core.noteSummaryDirectPointerDown();
       await tester.pump();
 
-      final restored = core.visibleFrames.value!;
-      expect(core.navigation.state.dayCursor, painted.dayCursor);
-      expect(restored.mode, DashboardVisibleMode.committed);
-      expect(restored.queryKey, painted.temporalAnchor.sourceChildQueryKey);
+      final retained = core.visibleFrames.value!;
+      expect(core.navigation.state.dayCursor, unpainted.dayCursor);
+      expect(retained.mode, DashboardVisibleMode.committed);
+      expect(retained.queryKey, unpainted.temporalAnchor.sourceChildQueryKey);
       expect(
-        cache.railCriticalSceneFor(restored.logBox),
+        cache.railCriticalSceneFor(retained.logBox),
         isNotNull,
         reason:
-            'The parent-changing preview displaced the 2026 scene bank from '
-            'the active cache; interruption must restore its exact prepared '
-            'scene before it commits the restored visible frame.',
-      );
-      expect(
-        cache.hasRetainedSegmentedPaintedTargetWindow,
-        isFalse,
-        reason:
-            'Activation transfers the exact snapshot into the active bank; '
-            'it must not leave a stale second owner behind.',
+            'The selected parent may retain continuity while its rich scene '
+            'is prepared, but it must never restore the previous parent.',
       );
       expect(
         scenePreparationCalls,
         scenePreparationCallsBeforeInterrupt,
         reason:
-            'Restoring a painted target is RAM-only and may not prepare a scene.',
+            'Semantic preemption is RAM-only and may not prepare another scene.',
       );
     },
   );
@@ -1610,7 +1774,7 @@ void main() {
   );
 
   test(
-    'RED POST-df1: an already-painted active Avatar target remains accepted after raw re-entry',
+    'b166 regression: an active Avatar semantic target remains accepted after raw re-entry without rich paint',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -1627,21 +1791,18 @@ void main() {
       );
       FluviDiagnosticLogger.clear();
       final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
-      final first = drilldown.previewBudgetTargetPainted(
+      final first = drilldown.previewBudgetTarget(
         state: _budgetAvatarPreviewState(
           categoryId: 'utilities',
           displayName: 'Utilities',
         ),
       );
       await pumpEventQueue();
-      core.recordLogBoxRenderExtent(
-        _exactPaintSnapshot(core.visibleFrames.value!),
-      );
       expect(await first, isTrue);
 
       core.noteBudgetAvatarDirectPointerDown();
       expect(
-        await drilldown.previewBudgetTargetPainted(
+        await drilldown.previewBudgetTarget(
           state: _budgetAvatarPreviewState(
             categoryId: 'utilities',
             displayName: 'Utilities',
@@ -1649,15 +1810,15 @@ void main() {
         ),
         isTrue,
         reason:
-            'A cyclic crossing that returns to the current exact Avatar '
-            'projection is already accepted and painted; clearing its record '
-            'at raw pointer-down would strand settle forever.',
+            'A cyclic crossing that returns to the current Phase-A Avatar '
+            'projection must be accepted immediately; rich paint may still '
+            'arrive later.',
       );
     },
   );
 
   test(
-    'RED POST-df1: same Avatar crossing after raw re-entry rebinds its unpainted exact-paint target',
+    'b166 regression: same Avatar crossing after raw re-entry accepts its Phase-A frame before rich paint',
     () async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -1679,9 +1840,9 @@ void main() {
         displayName: 'Utilities',
       );
 
-      // The first crossing has atomically selected its exact Budget/LogBox
-      // frame, but render acknowledgement has not arrived yet.
-      final first = drilldown.previewBudgetTargetPainted(state: state);
+      // The first crossing atomically selects its exact Budget/LogBox frame.
+      // Rich render acknowledgement is intentionally not an admission gate.
+      final first = drilldown.previewBudgetTarget(state: state);
       await pumpEventQueue();
       expect(core.focus.state?.category?.id, 'utilities');
       expect(core.visibleFrames.value!.scope.categoryIds, <String>{
@@ -1689,57 +1850,16 @@ void main() {
       });
 
       core.noteBudgetAvatarDirectPointerDown();
-      expect(await first, isFalse);
+      expect(await first, isTrue);
 
-      var reenteredCompleted = false;
-      bool? reenteredValue;
-      final reentered = drilldown.previewBudgetTargetPainted(state: state);
-      reentered.then((value) {
-        reenteredCompleted = true;
-        reenteredValue = value;
-      });
+      final reentered = drilldown.previewBudgetTarget(state: state);
       await pumpEventQueue();
       expect(
-        reenteredCompleted,
-        isFalse,
-        reason:
-            'The same semantic Avatar target is not paint-accepted merely '
-            'because an interrupted predecessor left focus.state selected.',
-      );
-
-      core.recordLogBoxRenderExtent(
-        _exactPaintSnapshot(core.visibleFrames.value!),
-      );
-      final avatarPaintEvents = FluviDiagnosticLogger.entries
-          .where(
-            (event) =>
-                event.stage == 'AV|LOGBOX_TARGET_PAINTED' ||
-                event.stage == 'AV|LOGBOX_TARGET_PAINT_REJECTED' ||
-                event.stage == 'AV|LOGBOX_TARGET_PAINT_IDENTITY_REJECTED',
-          )
-          .toList(growable: false);
-      expect(
-        avatarPaintEvents,
-        hasLength(1),
-        reason: FluviDiagnosticLogger.entries
-            .map((event) => '${event.stage} ${event.scope}')
-            .join('\n'),
-      );
-      await pumpEventQueue();
-      expect(
-        reenteredCompleted,
+        await reentered,
         isTrue,
         reason:
-            'The matching post-paint acknowledgement must release the '
-            'same-target re-entry on the next event turn.\n'
-            '${FluviDiagnosticLogger.entries.map((event) => '${event.stage} ${event.scope}').join('\n')}',
-      );
-      expect(
-        reenteredValue,
-        isTrue,
-        reason: FluviDiagnosticLogger.entries
-            .map((event) => '${event.stage} ${event.scope}')
-            .join('\n'),
+            'The same semantic Avatar target may not wait for a prior rich '
+            'paint acknowledgement after raw pointer re-entry.',
       );
     },
   );

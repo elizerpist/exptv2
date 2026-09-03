@@ -227,7 +227,7 @@ void main() {
   );
 
   testWidgets(
-    'RED POST-df1: a scene becoming drawable republishes its exact LogBox paint acknowledgement',
+    'b166 regression: an exact Phase-A frame paints before its rich scene becomes drawable',
     (tester) async {
       final store = DashboardVisibleFrameStore();
       final cache = CommittedLogViewportCache(pageSize: 24);
@@ -288,8 +288,8 @@ void main() {
         (snapshot) => snapshot.presentation?.queryKey == frame.queryKey,
       );
       expect(first.payloadRowCount, 4);
-      expect(first.drawableRowCount, 0);
-      expect(first.paintedRowCount, 0);
+      expect(first.drawableRowCount, 4);
+      expect(first.paintedRowCount, greaterThan(0));
 
       await _prepareAndActivatePreviewScene(sceneCache, prepared.logBox);
       await tester.pump();
@@ -304,8 +304,8 @@ void main() {
         matching.length,
         greaterThan(1),
         reason:
-            'A CustomPainter-only repaint must still republish extent evidence '
-            'so a held Mind canonical commit cannot wait forever.',
+            'The rich scene may replace the Phase-A fallback, but its cache '
+            'activation must not become the first exact visible list frame.',
       );
       final exact = matching.last;
       expect(exact.drawableRowCount, 4);
@@ -911,7 +911,11 @@ void main() {
       addTearDown(core.dispose);
       addTearDown(sceneCache.dispose);
       await core.bootstrap();
-      await _attachAndActivateInitialScene(core, sceneCache);
+      await _attachAndActivateInitialScene(
+        core,
+        sceneCache,
+        stageLiveInteractionFromPreparedResources: false,
+      );
       final applied = core.currentQuery.scopeFor(LedgerDirection.income);
       const range = QueryAmountRangeValues(
         minimumScaled100: 100000,
@@ -997,6 +1001,13 @@ void main() {
       );
       expect(pointerUp, isFalse);
       expect(firstPayload.stableRowIdentities, <String>['amount-200000']);
+      expect(
+        sceneCache.railCriticalSceneFor(firstPayload),
+        isNull,
+        reason:
+            'This production-parent gesture deliberately denies Phase-B rich '
+            'staging; Phase A must still paint the exact resident row.',
+      );
       expect(firstPaint.drawableRowCount, 1);
       expect(firstPaint.paintedRowCount, greaterThan(0));
       expect(
@@ -1047,16 +1058,14 @@ void main() {
       expect(pointerUp, isTrue);
       expect(
         FluviDiagnosticLogger.entries.map((event) => event.stage),
-        contains('MIND|CANONICAL_COMMIT_AWAITING_PAINT'),
+        contains('MIND|CANONICAL_COMMIT_STARTED'),
+        reason:
+            'The exact Phase-A frame, not optional rich paint, authorizes '
+            'the one canonical release commit.',
       );
       expect(
-        FluviDiagnosticLogger.entries.where(
-          (event) => event.stage == 'QUERY_APPLY_STARTED',
-        ),
-        isEmpty,
-        reason:
-            'The last value was flushed at pointer-up and has not painted yet; '
-            'canonical work may not race it before the next LogBox paint.',
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        isNot(contains('MIND|CANONICAL_COMMIT_REJECTED_PREVIEW_RETAINED')),
       );
 
       await tester.pump();
@@ -1080,7 +1089,7 @@ void main() {
         hasLength(1),
         reason:
             'Exactly one canonical commit begins only after the final exact '
-            'range has a matching production LogBox paint acknowledgement.',
+            'Phase-A range has been accepted; rich LogBox paint is optional.',
       );
 
       // Keep canonical Query/index persistence unavailable for the equivalent
@@ -1382,7 +1391,7 @@ void main() {
                   child: BudgetTargetAvatarRail(
                     presentation: budget,
                     onTargetPreviewAccepted: (targetHandle) => drilldown
-                        .previewBudgetTargetPainted(targetHandle: targetHandle),
+                        .previewBudgetTarget(targetHandle: targetHandle),
                     onTargetSettled: (targetHandle) {
                       settled.add(targetHandle);
                       unawaited(
@@ -1949,8 +1958,9 @@ DashboardVisibleFrame _previewFrame(
 
 Future<void> _attachAndActivateInitialScene(
   DashboardCoreController core,
-  DashboardLogBoxPreparedSceneCache cache,
-) async {
+  DashboardLogBoxPreparedSceneCache cache, {
+  bool stageLiveInteractionFromPreparedResources = true,
+}) async {
   final initial = core.railCriticalSceneWindow();
   await cache.prepareWindow(window: initial, surfaceWidth: 378);
   cache.activateWindow(initial);
@@ -1974,18 +1984,29 @@ Future<void> _attachAndActivateInitialScene(
     setCandidateHotset: cache.setProtectedCandidateKeys,
     planCandidateHotset: cache.admitCandidateHotset,
     prepareLiveInteractionResources:
-        (window, {required retainedKey, required retainViewportId}) =>
-            cache.prepareLiveInteractionResourceWindow(
-              resourceKey: retainedKey,
-              window: window,
-              retainViewportId: retainViewportId,
-              surfaceWidth: cache.surfaceWidth,
-              devicePixelRatio: cache.devicePixelRatio ?? 1,
+        (
+          window, {
+          required lane,
+          required retainedKey,
+          required retainViewportId,
+        }) => cache.prepareLiveInteractionResourceWindow(
+          lane: lane,
+          resourceKey: retainedKey,
+          window: window,
+          retainViewportId: retainViewportId,
+          surfaceWidth: cache.surfaceWidth,
+          devicePixelRatio: cache.devicePixelRatio ?? 1,
+        ),
+    hasLiveInteractionResources:
+        (window, {required lane, required candidateKey}) =>
+            cache.hasLiveInteractionResourceWindow(
+              window,
+              lane: lane,
+              resourceKey: candidateKey,
             ),
-    hasLiveInteractionResources: (window, {required candidateKey}) => cache
-        .hasLiveInteractionResourceWindow(window, resourceKey: candidateKey),
     stageLiveInteractionFromPreparedResources:
         (window, {required retainViewportId}) =>
+            stageLiveInteractionFromPreparedResources &&
             cache.stageLivePreviewWindowFromPreparedResources(window),
     stageFromActiveResources: (window, {required retainViewportId}) =>
         cache.stageWindowFromActiveResources(window),

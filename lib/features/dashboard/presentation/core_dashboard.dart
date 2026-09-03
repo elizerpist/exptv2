@@ -309,22 +309,29 @@ class _CoreDashboardState extends State<CoreDashboard>
               ),
       hasRetained: _preparedSceneCache.hasRetainedWindow,
       prepareLiveInteractionResources:
-          (window, {required retainedKey, required retainViewportId}) =>
-              _preparedSceneCache.prepareLiveInteractionResourceWindow(
-                resourceKey: retainedKey,
-                window: window,
-                surfaceWidth: controller.committedLogViewport.surfaceWidth,
-                retainViewportId: retainViewportId,
-                devicePixelRatio: _devicePixelRatio,
-                maxContiguousUiSliceMicros: DashboardLogBoxPreparedSceneCache
-                    .defaultMaxContiguousUiSliceMicros,
-                yieldToBackground: _yieldScenePreparationToScheduler,
-              ),
-      hasLiveInteractionResources: (window, {required candidateKey}) =>
-          _preparedSceneCache.hasLiveInteractionResourceWindow(
-            window,
-            resourceKey: candidateKey,
+          (
+            window, {
+            required lane,
+            required retainedKey,
+            required retainViewportId,
+          }) => _preparedSceneCache.prepareLiveInteractionResourceWindow(
+            lane: lane,
+            resourceKey: retainedKey,
+            window: window,
+            surfaceWidth: controller.committedLogViewport.surfaceWidth,
+            retainViewportId: retainViewportId,
+            devicePixelRatio: _devicePixelRatio,
+            maxContiguousUiSliceMicros: DashboardLogBoxPreparedSceneCache
+                .defaultMaxContiguousUiSliceMicros,
+            yieldToBackground: _yieldScenePreparationToScheduler,
           ),
+      hasLiveInteractionResources:
+          (window, {required lane, required candidateKey}) =>
+              _preparedSceneCache.hasLiveInteractionResourceWindow(
+                window,
+                lane: lane,
+                resourceKey: candidateKey,
+              ),
       stageLiveInteractionFromPreparedResources:
           (window, {required retainViewportId}) => _preparedSceneCache
               .stageLivePreviewWindowFromPreparedResources(window),

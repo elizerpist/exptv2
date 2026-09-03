@@ -224,28 +224,70 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     itemBuilder: (_) => const <PopupMenuEntry<String>>[
                       PopupMenuItem(
                         value: 'gray_rectangle',
-                        child: Text('Gray rectangle'),
+                        child: Text(
+                          'Gray rectangle',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
                       ),
                       PopupMenuItem(
                         value: 'mind_slider',
-                        child: Text('Mind slider'),
+                        child: Text(
+                          'Mind slider',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'mind_slider_no_live_list',
+                        child: Text(
+                          'Mind slider: no live list',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
                       ),
                       PopupMenuItem(
                         value: 'avatar_fling',
-                        child: Text('Avatar fling'),
+                        child: Text(
+                          'Avatar fling',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'avatar_filter_stuck',
+                        child: Text(
+                          'Avatar filter stuck',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
                       ),
                       PopupMenuItem(
                         value: 'time_fling',
-                        child: Text('Time fling'),
+                        child: Text(
+                          'Time fling',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'time_target_jump',
+                        child: Text(
+                          'Time target jump',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
                       ),
                       PopupMenuItem(
                         value: 'budget_limit',
-                        child: Text('Budget / limit'),
+                        child: Text(
+                          'Budget / limit',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
                       ),
-                      PopupMenuItem(value: 'other', child: Text('Other')),
+                      PopupMenuItem(
+                        value: 'other',
+                        child: Text(
+                          'Other',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
                     ],
                     icon: const Icon(Icons.flag_outlined, size: 16),
-                    color: const Color(0xFF313244),
+                    color: const Color(0xFFF8FAFC),
                     iconColor: const Color(0xFFF9E2AF),
                   ),
                   IconButton(
