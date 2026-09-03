@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "source_head": "7cfc75de2e9d387b661678459ae237aff44b4c11",
+  "source_parent": "b1662045c15c2940e263ff191ca6314c9fc2d72f",
+  "source_ref": "origin/fix/post-df1d-physical-regression-repair-codex-20260831",
+  "scip_dart_version": "1.6.2",
+  "index_sha256": "b668b67db753671d7ce5c4b80729dc8bf6556b262e8707a69cbe2019f16b10d3",
+  "document_count": 428,
+  "occurrence_count": 251358,
+  "defined_symbol_count": 35860,
+  "repository_defined_symbol_count": 9492,
+  "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
+  "artifacts": [
+    {
+      "name": "symbols",
+      "storage": "jsonl_shards",
+      "record_count": 9492,
+      "paths": [
+        "symbols.index.json",
+        "symbols/part-000.jsonl",
+        "symbols/part-001.jsonl",
+        "symbols/part-002.jsonl",
+        "symbols/part-003.jsonl",
+        "symbols/part-004.jsonl"
+      ],
+      "byte_count": 4012852
+    },
+    {
+      "name": "refs",
+      "storage": "jsonl_shards",
+      "record_count": 64218,
+      "paths": [
+        "refs.index.json",
+        "refs/part-000.jsonl",
+        "refs/part-001.jsonl",
+        "refs/part-002.jsonl",
+        "refs/part-003.jsonl",
+        "refs/part-004.jsonl",
+        "refs/part-005.jsonl",
+        "refs/part-006.jsonl",
+        "refs/part-007.jsonl",
+        "refs/part-008.jsonl",
+        "refs/part-009.jsonl",
+        "refs/part-010.jsonl",
+        "refs/part-011.jsonl",
+        "refs/part-012.jsonl",
+        "refs/part-013.jsonl",
+        "refs/part-014.jsonl",
+        "refs/part-015.jsonl",
+        "refs/part-016.jsonl",
+        "refs/part-017.jsonl",
+        "refs/part-018.jsonl",
+        "refs/part-019.jsonl",
+        "refs/part-020.jsonl",
+        "refs/part-021.jsonl",
+        "refs/part-022.jsonl",
+        "refs/part-023.jsonl",
+        "refs/part-024.jsonl",
+        "refs/part-025.jsonl",
+        "refs/part-026.jsonl",
+        "refs/part-027.jsonl",
+        "refs/part-028.jsonl",
+        "refs/part-029.jsonl",
+        "refs/part-030.jsonl",
+        "refs/part-031.jsonl",
+        "refs/part-032.jsonl"
+      ],
+      "byte_count": 20764246
+    },
+    {
+      "name": "edges",
+      "storage": "jsonl_shards",
+      "record_count": 20036,
+      "paths": [
+        "edges.index.json",
+        "edges/part-000.jsonl",
+        "edges/part-001.jsonl",
+        "edges/part-002.jsonl",
+        "edges/part-003.jsonl",
+        "edges/part-004.jsonl",
+        "edges/part-005.jsonl",
+        "edges/part-006.jsonl",
+        "edges/part-007.jsonl",
+        "edges/part-008.jsonl",
+        "edges/part-009.jsonl",
+        "edges/part-010.jsonl"
+      ],
+      "byte_count": 7044639
+    },
+    {
+      "name": "changed-impact",
+      "storage": "json",
+      "record_count": 82,
+      "paths": [
+        "changed-impact.json"
+      ],
+      "byte_count": 928629
+    }
+  ]
+}

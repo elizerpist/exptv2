@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "record_count": 9492,
+  "shards": [
+    {
+      "path": "symbols/part-000.jsonl",
+      "record_count": 2000,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_CommittedReadyAheadPriorityScope#`<constructor>`().",
+      "sha256": "a5acd395df9944b88cef85b9dcedba76310e2f70a299da6e8300d51d629874c4"
+    },
+    {
+      "path": "symbols/part-001.jsonl",
+      "record_count": 2000,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_CommittedReadyAheadPriorityScope#`<get>isBound`.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_clay_donut_scene.dart`/BudgetClayDonutSlice#selectedSidePath.",
+      "sha256": "e390dba9c30144dcbc519f0372d81e1e5336fa0a262ff5ce379ce7cff293b516"
+    },
+    {
+      "path": "symbols/part-002.jsonl",
+      "record_count": 2000,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_clay_donut_scene.dart`/BudgetClayDonutSlice#selectedTopPath.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_query_facet_chips.dart`/DashboardQueryFacetChips#onClearFocusPartner.",
+      "sha256": "85e978494a8c137a7e795a9b9850b40cb9b984df5ba2350c3d61114cf70ea6c2"
+    },
+    {
+      "path": "symbols/part-003.jsonl",
+      "record_count": 2000,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_query_facet_chips.dart`/DashboardQueryFacetChips#onClearFocusSearch.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/domain/`local_date.dart`/LocalDate#month.",
+      "sha256": "23bcd776e78adcdf6d0112ad838f858948be76e85af40061fb62cb3076a70f06"
+    },
+    {
+      "path": "symbols/part-004.jsonl",
+      "record_count": 1492,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/domain/`local_date.dart`/LocalDate#nextDay().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
+      "sha256": "88c76a0f85c2869a7627f1e0e3125f5778f15938dd03efa9edfda087dfa4fe57"
+    }
+  ]
+}

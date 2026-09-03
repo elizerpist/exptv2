@@ -11,3 +11,6 @@ artifacts/
 # Transient files left by the old worktree before it was cleared.
 .dart_tool/
 .flutter-plugins-dependencies
+
+# Generated SCIP protobuf input; compact docs/codegraph artifacts are committed instead.
+/index.scip
