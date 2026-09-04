@@ -2,6 +2,37 @@ import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'ledger_direction.dart';
 import 'query_temporal_filter.dart';
 
+/// One Flutter-side counterpart of the versioned native
+/// `FluviDashboardScopeIdentity` refinement field order.
+///
+/// Known query fields are deliberately not alphabetic: Android serializes the
+/// amount range as minimum then maximum, followed by the note predicate.
+/// Unknown keys retain their former deterministic lexical order so callers
+/// that construct a local-only scope do not become insertion-order dependent.
+abstract final class DashboardQueryRefinementCanonicalizer {
+  static const List<String> nativeFieldOrder = <String>[
+    'minimumAmountScaled100',
+    'maximumAmountScaled100',
+    'noteContains',
+  ];
+
+  static String canonicalValue(Map<String, Object?> refinements) {
+    final known = <String>[
+      for (final key in nativeFieldOrder)
+        if (refinements.containsKey(key)) '$key=${refinements[key]}',
+    ];
+    final unknown =
+        refinements.keys
+            .where((key) => !nativeFieldOrder.contains(key))
+            .toList()
+          ..sort();
+    return <String>[
+      ...known,
+      for (final key in unknown) '$key=${refinements[key]}',
+    ].join(',');
+  }
+}
+
 class LedgerQueryKey {
   const LedgerQueryKey(this.value);
 
@@ -55,11 +86,8 @@ class CurrentLedgerQueryScope {
   String get _canonicalValue {
     final categories = categoryIds.toList()..sort();
     final partners = partnerIds.toList()..sort();
-    final refinementEntries = refinements.entries.toList()
-      ..sort((left, right) => left.key.compareTo(right.key));
-    final refinementValue = refinementEntries
-        .map((entry) => '${entry.key}=${entry.value}')
-        .join(',');
+    final refinementValue =
+        DashboardQueryRefinementCanonicalizer.canonicalValue(refinements);
     final values = [
       direction.name,
       timeScope.canonicalKey,

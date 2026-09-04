@@ -845,6 +845,22 @@ final class DashboardBudgetPresentationController
   /// reconciliation, but scene coverage must never decide whether the header,
   /// ring or partition follows an accepted temporal crossing.
   void _refreshForLiveInteraction() {
+    final live = _liveInteractions?.frame;
+    // Avatar Phase-A has one semantic identity: the exact focused LogBox
+    // frame and its target-handle callback are accepted in the same Core
+    // stack.  The live-interaction notifier fires first, so publishing this
+    // controller with its *previous* selected handle would expose an
+    // intermediate header/partition while the LogBox lanes already carry the
+    // new Avatar target.  Defer that one notifier turn; the matching
+    // onVisibleSemanticCommit callback immediately calls [setTargetHandle],
+    // which now resolves all dependent Budget state from the same accepted
+    // live interaction.  Other producers do not own a Budget target and keep
+    // the established direct refresh path.
+    if (live?.source == DashboardLiveInteractionSource.budgetAvatar &&
+        live?.budgetTargetHandle != null &&
+        live!.budgetTargetHandle != value.selectedHandle) {
+      return;
+    }
     final snapshot = _snapshotForCurrentFrame();
     if (!identical(snapshot, _snapshotUsedForCatalog)) {
       _refreshCatalog();

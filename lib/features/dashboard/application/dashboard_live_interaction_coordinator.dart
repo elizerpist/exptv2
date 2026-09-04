@@ -43,6 +43,8 @@ final class DashboardLiveInteractionFrame {
     this.presentationEpoch,
     this.minimumAmountScaled100,
     this.maximumAmountScaled100,
+    this.interactionPublicationEpoch,
+    this.producerLocalGeneration,
   });
 
   final int generation;
@@ -60,6 +62,8 @@ final class DashboardLiveInteractionFrame {
   final int? presentationEpoch;
   final int? minimumAmountScaled100;
   final int? maximumAmountScaled100;
+  final int? interactionPublicationEpoch;
+  final int? producerLocalGeneration;
 
   int get semanticTickSequence => generation;
 
@@ -74,7 +78,9 @@ final class DashboardLiveInteractionFrame {
       'amount:${minimumAmountScaled100 ?? '-'}..${maximumAmountScaled100 ?? '-'}|'
       'index:${preparedIndexGeneration ?? '-'}|'
       'frame:${visibleFrameGeneration ?? '-'}|'
-      'epoch:${presentationEpoch ?? '-'}';
+      'epoch:${presentationEpoch ?? '-'}|'
+      'publication:${interactionPublicationEpoch ?? '-'}|'
+      'local:${producerLocalGeneration ?? '-'}';
 }
 
 /// Monotonic latest-wins owner for accepted live dashboard intent.
@@ -100,6 +106,8 @@ final class DashboardLiveInteractionCoordinator extends ChangeNotifier {
     int? presentationEpoch,
     int? minimumAmountScaled100,
     int? maximumAmountScaled100,
+    int? interactionPublicationEpoch,
+    int? producerLocalGeneration,
   }) {
     final next = DashboardLiveInteractionFrame(
       generation: ++_generation,
@@ -117,6 +125,8 @@ final class DashboardLiveInteractionCoordinator extends ChangeNotifier {
       presentationEpoch: presentationEpoch,
       minimumAmountScaled100: minimumAmountScaled100,
       maximumAmountScaled100: maximumAmountScaled100,
+      interactionPublicationEpoch: interactionPublicationEpoch,
+      producerLocalGeneration: producerLocalGeneration,
     );
     _frame = next;
     notifyListeners();

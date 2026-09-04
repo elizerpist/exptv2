@@ -16,11 +16,15 @@ final class DashboardLogBoxRenderExtentSnapshot {
     this.payloadRowCount = 0,
     this.drawableRowCount = 0,
     this.paintedRowCount = 0,
+    this.readablePhaseARowCount = 0,
+    this.readablePhaseARowsPainted = 0,
+    this.richPhaseBRowsPainted = 0,
     required this.renderedContentExtent,
     required this.previewPayloadRows,
     required this.previewSurfaceHeight,
     required this.committedCacheQueryKey,
     required this.committedCacheGeneration,
+    this.committedCacheGeometryGeneration,
     required this.committedCacheReadyRows,
     required this.committedCacheDrawableExtent,
     this.committedCacheReadyFrontierOrdinal = -1,
@@ -48,11 +52,24 @@ final class DashboardLogBoxRenderExtentSnapshot {
   final int payloadRowCount;
   final int drawableRowCount;
   final int paintedRowCount;
+
+  /// Explicit Phase-A/Phase-B paint evidence. A non-zero [paintedRowCount]
+  /// alone cannot prove readable transaction content because the old fallback
+  /// drew only bars and a dot from semantic identity.
+  final int readablePhaseARowCount;
+  final int readablePhaseARowsPainted;
+  final int richPhaseBRowsPainted;
   final double renderedContentExtent;
   final int previewPayloadRows;
   final double previewSurfaceHeight;
   final String? committedCacheQueryKey;
   final int? committedCacheGeneration;
+
+  /// Immutable committed-world geometry identity observed by the render
+  /// surface. This is intentionally separate from the paging/resource
+  /// generation so a post-promotion acknowledgement can be diagnosed without
+  /// conflating page readiness with the exact geometry it painted.
+  final int? committedCacheGeometryGeneration;
   final int committedCacheReadyRows;
   final double committedCacheDrawableExtent;
   final int committedCacheReadyFrontierOrdinal;
@@ -80,11 +97,15 @@ final class DashboardLogBoxRenderExtentSnapshot {
     'payloadRowCount': payloadRowCount,
     'drawableRowCount': drawableRowCount,
     'paintedRowCount': paintedRowCount,
+    'readablePhaseARowCount': readablePhaseARowCount,
+    'readablePhaseARowsPainted': readablePhaseARowsPainted,
+    'richPhaseBRowsPainted': richPhaseBRowsPainted,
     'renderedContentExtent': renderedContentExtent,
     'previewPayloadRows': previewPayloadRows,
     'previewSurfaceHeight': previewSurfaceHeight,
     'committedCacheQueryKey': committedCacheQueryKey,
     'committedCacheGeneration': committedCacheGeneration,
+    'committedCacheGeometryGeneration': committedCacheGeometryGeneration,
     'committedCacheReadyRows': committedCacheReadyRows,
     'committedCacheDrawableExtent': committedCacheDrawableExtent,
     'committedCacheReadyFrontierOrdinal': committedCacheReadyFrontierOrdinal,

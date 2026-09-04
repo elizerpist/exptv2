@@ -1340,6 +1340,60 @@ void main() {
   );
 
   test(
+    'RED PHASE-A: an invisible live resource bank exposes exact readable rows without rich-scene activation',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _deferredPayload(month: 7, rowCount: 3);
+      final resources = DashboardLogBoxSceneWindow(
+        identity: 'readable-phase-a-time-resource',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'time-readable-resource',
+        window: resources,
+        surfaceWidth: 378,
+      );
+
+      expect(cache.railCriticalSceneFor(payload), isNull);
+      expect(cache.readablePhaseARowCountFor(payload), 3);
+      final first = cache.readablePhaseARowFor(payload, ordinal: 0);
+      expect(first, isNotNull);
+      expect(first!.entryId, 'deferred-7-0');
+      expect(first.titleText, 'Partner 0');
+      expect(first.amountText, '0,01 Ft');
+      expect(first.secondaryText, 'Category');
+      expect(first.timeText, '10:00');
+      expect(first.textLayout.title.debugDisposed, isFalse);
+
+      final wrongRevision = DashboardLogViewportState.deferredPreparedOrdered(
+        scope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: MonthScope(const YearMonth(year: 2026, month: 7)),
+        ),
+        revision: 2,
+        entries: List<DashboardLedgerEntry>.generate(
+          payload.previewRowCount,
+          (ordinal) => payload.semanticPreviewLedgerEntryAt(ordinal)!,
+          growable: false,
+        ),
+        entryCount: payload.previewRowCount,
+        nextCursor: null,
+      );
+      expect(cache.readablePhaseARowCountFor(wrongRevision), 0);
+      expect(
+        cache.readablePhaseARowFor(wrongRevision, ordinal: 0),
+        isNull,
+        reason:
+            'A retained resource may never decorate a different immutable '
+            'prepared-index revision merely because its entry ID matches.',
+      );
+    },
+  );
+
+  test(
     'RED REENTRANT-MIND: a borrowing release candidate coexists with an oversized bounded live resource bank',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache(

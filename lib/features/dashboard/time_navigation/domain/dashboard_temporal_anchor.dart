@@ -97,10 +97,8 @@ final class DashboardTemporalAnchor {
   static String filtersRefinementsIdentityOf(CurrentLedgerQueryScope scope) {
     final categories = scope.categoryIds.toList()..sort();
     final partners = scope.partnerIds.toList()..sort();
-    final refinements = scope.refinements.entries.toList()
-      ..sort((left, right) => left.key.compareTo(right.key));
     return 'categories:${categories.join(',')}|'
         'partners:${partners.join(',')}|'
-        'refinements:${refinements.map((entry) => '${entry.key}=${entry.value}').join(',')}';
+        'refinements:${DashboardQueryRefinementCanonicalizer.canonicalValue(scope.refinements)}';
   }
 }

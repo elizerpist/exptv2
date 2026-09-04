@@ -596,6 +596,115 @@ void main() {
   );
 
   test(
+    'RED: Mind canonical apply keeps exact amount rows when optional candidate-scene retention is unavailable',
+    () async {
+      final rows = <DashboardLedgerEntry>[
+        for (final (index, amount) in <int>[100000, 200000, 300000].indexed)
+          DashboardLedgerEntry(
+            id: 'amount-$amount',
+            partnerId: 'partner-$index',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: amount,
+            bookedLocalEpochDay: 20636 - index,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Partner $index',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+      ];
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      const domain = QueryMenuAmountDomain(
+        minimumAmountScaled100: 100000,
+        maximumAmountScaled100: 300000,
+      );
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: domain,
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareCandidate:
+            (_, {required candidateKey, required retainViewportId}) async {},
+        hasCandidate: (_, {required candidateKey}) => false,
+      );
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      const values = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 300000,
+        lowerScaled100: 150000,
+        upperScaled100: 250000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(values), isTrue);
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-200000'],
+      );
+
+      FluviDiagnosticLogger.clear();
+
+      expect(
+        await core.commitMindAmountRange(values),
+        isTrue,
+        reason:
+            'An optional candidate-bank miss must not invalidate the exact '
+            'already-published Phase-A Mind query.',
+      );
+      final committed = core.currentQuery.scopeFor(LedgerDirection.income);
+      expect(committed.refinements, <String, Object?>{
+        'minimumAmountScaled100': 150000,
+        'maximumAmountScaled100': 250000,
+      });
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-200000'],
+        reason:
+            'The exact held preview remains visible while rich Phase-B is '
+            'unavailable.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('QUERY_CANDIDATE_SCENE_RETENTION_REJECTED'),
+      );
+
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 300000,
+            lowerScaled100: 100000,
+            upperScaled100: 250000,
+          ),
+        ),
+        isTrue,
+        reason: 'The next physical Mind drag remains immediately reentrant.',
+      );
+    },
+  );
+
+  test(
     'RED b166 Phase-A Avatar focus publishes the selected rows when rich staging misses',
     () async {
       final repository = _FocusSeedRepository();
@@ -639,13 +748,161 @@ void main() {
     },
   );
 
+  test(
+    'RED: a later Avatar target owns the production Phase-A frame after 63 Mind-local previews',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'amount-100000',
+            partnerId: 'partner-0',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: 100000,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Utility partner',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+          DashboardLedgerEntry(
+            id: 'amount-200000',
+            partnerId: 'partner-1',
+            categoryId: 'food',
+            direction: 'income',
+            amountMinor: 200000,
+            bookedLocalEpochDay: 20635,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Food partner',
+            categoryDisplayName: 'Food',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+          DashboardLedgerEntry(
+            id: 'amount-300000',
+            partnerId: 'partner-2',
+            categoryId: 'food',
+            direction: 'income',
+            amountMinor: 300000,
+            bookedLocalEpochDay: 20634,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Food partner',
+            categoryDisplayName: 'Food',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 600000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 100000,
+            maximumAmountScaled100: 300000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      core.beginMindAmountRangeInteraction();
+      const mindValues = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 300000,
+        lowerScaled100: 150000,
+        upperScaled100: 300000,
+      );
+      for (var tick = 0; tick < 63; tick += 1) {
+        core.previewMindAmountRange(mindValues);
+      }
+
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      addTearDown(categories.dispose);
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: _focusBudgetSnapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      addTearDown(budget.dispose);
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final foodHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'food',
+      );
+
+      core.beginBudgetAvatarMotion();
+      expect(
+        await drilldown.previewBudgetTarget(targetHandle: foodHandle),
+        isTrue,
+        reason:
+            'The Avatar producer has its own local generation. A later user '
+            'intent must not be rejected only because the prior Mind drag ran '
+            'through 63 preview ticks in the shared visible-frame store.',
+      );
+      expect(core.focus.state?.category?.id, 'food');
+      expect(budget.value.selectedHandle, foodHandle);
+      expect(
+        core.visibleFrames.amountLane.value!.queryKey,
+        core.visibleFrames.logBoxLane.value!.queryKey,
+      );
+      expect(
+        core.visibleFrames.countLane.value!.queryKey,
+        core.visibleFrames.logBoxLane.value!.queryKey,
+      );
+      expect(core.visibleFrames.logBoxLane.value!.scope.categoryIds, <String>{
+        'food',
+      });
+      core.endBudgetAvatarMotion();
+    },
+  );
+
   testWidgets(
     'RED b166 Phase-A time crossing is accepted without an active rich scene',
     (tester) async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
         dataRepository: repository,
-        initialDate: DateTime.utc(2026, 7, 14),
+        initialDate: DateTime.utc(2026, 7, 1),
         initialCoreRevision: 1,
         initialDirection: LedgerDirection.income,
         initialPlane: TimePlane.month,
@@ -790,6 +1047,146 @@ void main() {
     },
   );
 
+  test(
+    'RED CROSS-PRODUCER: a delayed Mind canonical release cannot overwrite a later accepted Avatar target',
+    () async {
+      final canonicalGate = Completer<void>();
+      final repository = _FocusSeedRepository(
+        prepareAfterBootstrapGate: canonicalGate,
+        rows: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'amount-100000',
+            partnerId: 'partner-utility',
+            categoryId: 'utilities',
+            direction: 'income',
+            amountMinor: 100000,
+            bookedLocalEpochDay: 20636,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Utility partner',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+          DashboardLedgerEntry(
+            id: 'amount-200000',
+            partnerId: 'partner-food',
+            categoryId: 'food',
+            direction: 'income',
+            amountMinor: 200000,
+            bookedLocalEpochDay: 20635,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Food partner',
+            categoryDisplayName: 'Food',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
+      const domain = QueryMenuAmountDomain(
+        minimumAmountScaled100: 100000,
+        maximumAmountScaled100: 200000,
+      );
+      core.currentQuery.apply(
+        applied,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 2,
+            amountScaled100: 300000,
+          ),
+          amountDomain: domain,
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      const mindValues = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 200000,
+        lowerScaled100: 100000,
+        upperScaled100: 100000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(mindValues), isTrue);
+      final mindCommit = core.commitMindAmountRange(mindValues);
+      expect(repository.prepareCalls, 2);
+
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      addTearDown(categories.dispose);
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: _focusBudgetSnapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      addTearDown(budget.dispose);
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final foodHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'food',
+      );
+
+      expect(
+        await drilldown.previewBudgetTarget(targetHandle: foodHandle),
+        isTrue,
+      );
+      expect(core.focus.state?.category?.id, 'food');
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-200000'],
+      );
+
+      canonicalGate.complete();
+
+      expect(
+        await mindCommit,
+        isFalse,
+        reason:
+            'The Mind release is older than the accepted Avatar intent even '
+            'though its query candidate finishes later.',
+      );
+      expect(core.currentQuery.scopeFor(LedgerDirection.income), applied);
+      expect(core.focus.state?.category?.id, 'food');
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        <String>['amount-200000'],
+      );
+    },
+  );
+
   testWidgets(
     'RED LIVE-TIME: every component crossing publishes its exact visible data before settle',
     (tester) async {
@@ -914,6 +1311,94 @@ void main() {
       expect(summary.scope, contains('canonicalSettleCommits=1'));
       expect(summary.scope, contains('settleVisualDeltaCount=0'));
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'RED TIME PROMOTION: a matching committed-vertical acknowledgement accepts the already-visible preview target',
+    (tester) async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      addTearDown(FluviDiagnosticLogger.clear);
+      await core.bootstrap();
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          initialYear: 2026,
+          entryCountOverride: 154,
+          previewRowCountForScope: (_) => 24,
+        ),
+        publicationState: core.navigation.state,
+      );
+      await tester.pump();
+      final candidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: core.navigation.state,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      final preview = core.visibleFrames.value!;
+      expect(preview.mode, DashboardVisibleMode.preview);
+      expect(preview.logBox.previewRowCount, 24);
+
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+      final committed = core.visibleFrames.value!;
+      expect(committed.mode, DashboardVisibleMode.committed);
+      expect(committed.logBox, same(preview.logBox));
+      final publishCount = core.visibleFrames.visiblePublishCount;
+      FluviDiagnosticLogger.clear();
+
+      // This is the physical seq 300/301 shape: the authoritative identity
+      // remains the exact preview target, but committed vertical geometry
+      // reports the full scope (not only its 24-row preview payload).
+      core.recordLogBoxRenderExtent(
+        _committedPromotionPaintSnapshot(
+          committed,
+          drawableRows: committed.logBox.previewRowCount + 130,
+        ),
+      );
+
+      expect(
+        core.segmentedTargetPainted.value?.target.dayCursor,
+        candidate.dayCursor,
+        reason:
+            'A committed-vertical report for the same exact target must not '
+            'be rejected merely because its full drawable scope exceeds the '
+            'preview payload count. diagnostics=${FluviDiagnosticLogger.entries.map((event) => '${event.stage}:${event.scope}').join(' || ')}',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_TARGET_PAINT_REJECTED',
+        ),
+        isEmpty,
+      );
+      expect(core.visibleFrames.visiblePublishCount, publishCount);
     },
   );
 
@@ -1423,6 +1908,110 @@ void main() {
       expect(visibleCategoriesAtHeaderCommit, <Set<String>>[
         <String>{'food'},
       ]);
+    },
+  );
+
+  test(
+    'RED AVATAR ATOMICITY: a live Avatar frame never exposes an old Budget target to dependent surfaces',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      addTearDown(categories.dispose);
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: _focusBudgetSnapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      addTearDown(budget.dispose);
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final foodHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'food',
+      );
+      expect(foodHandle, greaterThan(0));
+
+      final observedAvatarFrames =
+          <
+            ({
+              int selectedHandle,
+              int analysisTargetHandle,
+              int headerTargetHandle,
+              int? liveTargetHandle,
+              String? focusedCategoryId,
+              Set<String> logBoxCategoryIds,
+              Object? amountQueryKey,
+              Object? countQueryKey,
+              Object? logBoxQueryKey,
+            })
+          >[];
+      budget.addListener(() {
+        final live = core.liveInteractions.frame;
+        if (live?.source != DashboardLiveInteractionSource.budgetAvatar) {
+          return;
+        }
+        final logBox = core.visibleFrames.logBoxLane.value;
+        observedAvatarFrames.add((
+          selectedHandle: budget.value.selectedHandle,
+          analysisTargetHandle: budget.value.liveAnalysis.targetHandle,
+          headerTargetHandle: budget.value.liveSelection.target.handle,
+          liveTargetHandle: live?.budgetTargetHandle,
+          focusedCategoryId: core.focus.state?.category?.id,
+          logBoxCategoryIds: logBox?.scope.categoryIds ?? const <String>{},
+          amountQueryKey: core.visibleFrames.amountLane.value?.queryKey,
+          countQueryKey: core.visibleFrames.countLane.value?.queryKey,
+          logBoxQueryKey: logBox?.queryKey,
+        ));
+      });
+
+      expect(
+        await drilldown.previewBudgetTarget(targetHandle: foodHandle),
+        isTrue,
+      );
+
+      expect(observedAvatarFrames, isNotEmpty);
+      for (final frame in observedAvatarFrames) {
+        expect(frame.selectedHandle, foodHandle);
+        expect(frame.analysisTargetHandle, foodHandle);
+        expect(frame.headerTargetHandle, foodHandle);
+        expect(frame.liveTargetHandle, foodHandle);
+        expect(frame.focusedCategoryId, 'food');
+        expect(frame.logBoxCategoryIds, <String>{'food'});
+        expect(frame.amountQueryKey, frame.logBoxQueryKey);
+        expect(frame.countQueryKey, frame.logBoxQueryKey);
+      }
     },
   );
 
@@ -1954,6 +2543,8 @@ void main() {
 
       core.beginBudgetAvatarMotion();
       final visiblePublishes = core.visibleFrames.visiblePublishCount;
+      final liveInteractionPublishes =
+          core.visibleFrames.interactionPreviewPublishCount;
       for (var index = 0; index < 8; index += 1) {
         final utilities = index.isEven;
         expect(
@@ -1978,8 +2569,24 @@ void main() {
       }
       core.endBudgetAvatarMotion();
 
-      expect(core.visibleFrames.visiblePublishCount, visiblePublishes + 8);
-      expect(core.budgetAvatarFocusHotsetDiagnostics['promotions'], 8);
+      expect(
+        core.visibleFrames.visiblePublishCount,
+        visiblePublishes,
+        reason:
+            'Each ballistic crossing must update the atomic Phase-A lanes, '
+            'not replace the committed complete frame before settle.',
+      );
+      expect(
+        core.visibleFrames.interactionPreviewPublishCount,
+        liveInteractionPublishes + 8,
+      );
+      expect(
+        core.budgetAvatarFocusHotsetDiagnostics['promotions'],
+        8,
+        reason:
+            'hotset=${core.budgetAvatarFocusHotsetDiagnostics} '
+            'derived=${FluviDiagnosticLogger.entries.where((event) => event.stage == 'FOCUS_DERIVED_SCOPE_READY').map((event) => event.scope).join(' || ')}',
+      );
       expect(core.budgetAvatarFocusHotsetDiagnostics['misses'], 0);
       final derived = FluviDiagnosticLogger.entries
           .where((event) => event.stage == 'FOCUS_DERIVED_SCOPE_READY')
@@ -2152,6 +2759,7 @@ void main() {
         activate: (_) => activated += 1,
       );
       final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+      final committedAmountBefore = core.visibleFrames.value!.amount.totalMinor;
 
       core.beginBudgetAvatarMotion();
       final published = await drilldown.previewBudgetTarget(
@@ -2166,13 +2774,20 @@ void main() {
       expect(genericPrepareCalls, 0);
       expect(activated, 1);
       expect(core.focus.state?.category?.id, 'utilities');
-      expect(core.visibleFrames.value!.amount.totalMinor, 500);
+      expect(
+        core.visibleFrames.value!.amount.totalMinor,
+        committedAmountBefore,
+        reason:
+            'The committed frame remains structurally stable through the '
+            'ballistic crossing; the exact Phase-A lanes carry the new '
+            'Avatar target atomically.',
+      );
       expect(
         core.visibleFrames.amountLane.value!.amount.totalMinor,
         500,
         reason:
-            'The complete Ledger and the Summary amount have the same '
-            'accepted focused target before the avatar motion ends.',
+            'The LogBox/amount live lanes share the accepted focused target '
+            'before the Avatar motion ends.',
       );
       core.endBudgetAvatarMotion();
       expect(repository.prepareCalls, 1);
@@ -2315,13 +2930,22 @@ void main() {
     await Future<void>.microtask(() {});
 
     expect(core.focus.state, isNull);
+    final aggregateLiveFrame = core.visibleFrames.logBoxLane.value!;
     expect(
-      core.preparedIndex,
-      same(baseIndex),
+      aggregateLiveFrame.preparedFrame.stableRowIdentities,
+      baseIndex.frameFor(aggregateLiveFrame.scope).stableRowIdentities,
       reason:
-          'The active avatar producer may defer rich scene augmentation, '
-          'but it may never keep old category rows authoritative while '
-          'the aggregate target is already selected.',
+          'The active Avatar producer may defer its one canonical index '
+          'install, but the user-visible Phase-A LogBox must immediately '
+          'switch away from the old category rows to the retained base rows.',
+    );
+    expect(
+      core.visibleFrames.amountLane.value!.queryKey,
+      aggregateLiveFrame.queryKey,
+    );
+    expect(
+      core.visibleFrames.countLane.value!.queryKey,
+      aggregateLiveFrame.queryKey,
     );
 
     core.setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
@@ -2550,6 +3174,38 @@ DashboardLogBoxRenderExtentSnapshot _exactPaintSnapshot(
     viewportDimension: 120,
     minScrollExtent: 0,
     maxScrollExtent: 0,
+    pixels: 0,
+    isMismatch: false,
+  );
+}
+
+DashboardLogBoxRenderExtentSnapshot _committedPromotionPaintSnapshot(
+  DashboardVisibleFrame frame, {
+  required int drawableRows,
+}) {
+  final previewRows = frame.logBox.previewRowCount;
+  return DashboardLogBoxRenderExtentSnapshot(
+    presentation: DashboardLogBoxPresentationBinding.fromFrame(frame),
+    payloadLaneMode: DashboardVisibleMode.preview,
+    payloadViewportId: frame.logBox.viewportId,
+    renderDomain: DashboardLogBoxRenderDomain.committedVertical,
+    renderedRowCount: drawableRows,
+    payloadRowCount: previewRows,
+    drawableRowCount: drawableRows,
+    paintedRowCount: previewRows == 0 ? 0 : 8,
+    renderedContentExtent: 9480,
+    previewPayloadRows: previewRows,
+    previewSurfaceHeight: 1490,
+    committedCacheQueryKey: frame.queryKey.value,
+    committedCacheGeneration: 3,
+    committedCacheGeometryGeneration: 7,
+    committedCacheReadyRows: previewRows,
+    committedCacheDrawableExtent: 9480,
+    renderSurfaceHeight: 9480,
+    sliverScrollExtent: 9612,
+    viewportDimension: 458,
+    minScrollExtent: 0,
+    maxScrollExtent: 9153,
     pixels: 0,
     isMismatch: false,
   );

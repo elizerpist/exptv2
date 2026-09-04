@@ -177,6 +177,69 @@ void main() {
     },
   );
 
+  test(
+    'RED: decodes a native amount-refined frame whose canonical refinement order is minimum then maximum',
+    () {
+      final request = _amountRefinedRequest();
+
+      final index = DashboardPreparedIndexBinaryCodec.decode(
+        _payload(request, queryKeyForScope: _nativePreparedQueryKey),
+        request: request,
+        expectedGeneration: 7,
+      );
+
+      final amountScope = request.filterScope.copyWith(
+        direction: LedgerDirection.income,
+        timeScope: const AllTimeScope(),
+      );
+      expect(
+        amountScope.key.value,
+        'income|all|categories:|partners:|refinements:'
+        'minimumAmountScaled100=12000,maximumAmountScaled100=99000',
+        reason:
+            'Dart scope identity must exactly match the fixed native prepared '
+            'frame contract. Otherwise the decoder cannot find the raw frame '
+            'scope and turns a valid Mind release into a draft-prepare failure.',
+      );
+      expect(index.frameFor(amountScope).amount.totalMinor, 12345);
+    },
+  );
+
+  test('rejects a genuinely incompatible native prepared-frame scope', () {
+    final request = _amountRefinedRequest();
+
+    expect(
+      () => DashboardPreparedIndexBinaryCodec.decode(
+        _payload(
+          request,
+          queryKeyForScope: (scope) => '${scope.key.value}|incompatible',
+        ),
+        request: request,
+        expectedGeneration: 7,
+      ),
+      throwsA(
+        isA<PreparedFrameScopeIdentityMismatch>()
+            .having(
+              (error) => error.expectedScope.key,
+              'expected scope key',
+              request.filterScope.key,
+            )
+            .having(
+              (error) => error.actualQueryKey.value,
+              'actual native frame key',
+              contains('|incompatible'),
+            )
+            .having(
+              (error) => error.expectedParentQueryKey,
+              'expected parent scope key',
+              request.filterScope.key,
+            )
+            .having((error) => error.coreRevision, 'core revision', 3)
+            .having((error) => error.indexGeneration, 'index generation', 7),
+      ),
+    );
+  });
+
   test('a directional partition payload excludes the unchanged universe', () {
     final request = _request();
     final index = DashboardPreparedIndexBinaryCodec.decode(
@@ -411,11 +474,35 @@ PreparedDashboardIndexRequest _wideRequest() {
   );
 }
 
+PreparedDashboardIndexRequest _amountRefinedRequest() {
+  final filterScope = CurrentLedgerQueryScope(
+    direction: LedgerDirection.income,
+    timeScope: const AllTimeScope(),
+    refinements: const <String, Object?>{
+      'minimumAmountScaled100': 12000,
+      'maximumAmountScaled100': 99000,
+    },
+  );
+  return PreparedDashboardIndexRequest(
+    key: PreparedDashboardIndexKey.fromScope(
+      scope: filterScope,
+      coreRevision: 3,
+      pageSize: 24,
+      yearWindowStart: 2025,
+      yearWindowEndInclusive: 2027,
+    ),
+    filterScope: filterScope,
+    initialYear: 2026,
+    reason: DataAcquisitionReason.query,
+  );
+}
+
 Uint8List _payload(
   PreparedDashboardIndexRequest request, {
   int dayRowIndex = 0,
   LocalDate day = const LocalDate(year: 2026, month: 6, day: 15),
   bool includeFocusRow = false,
+  String Function(CurrentLedgerQueryScope scope)? queryKeyForScope,
 }) {
   final incomeAll = request.filterScope.copyWith(
     direction: LedgerDirection.income,
@@ -454,13 +541,39 @@ Uint8List _payload(
   }
   writer
     ..int32(2)
-    ..frame(queryKey: incomeAll.key.value, timeScopeKey: 'all', rowIndex: 0)
     ..frame(
-      queryKey: incomeDay.key.value,
+      queryKey: (queryKeyForScope ?? _dartPreparedQueryKey)(incomeAll),
+      timeScopeKey: 'all',
+      rowIndex: 0,
+    )
+    ..frame(
+      queryKey: (queryKeyForScope ?? _dartPreparedQueryKey)(incomeDay),
       timeScopeKey: incomeDay.timeScope.canonicalKey,
       rowIndex: dayRowIndex,
     );
   return writer.takeBytes();
+}
+
+String _dartPreparedQueryKey(CurrentLedgerQueryScope scope) => scope.key.value;
+
+/// Mirrors the fixed field order of `FluviDashboardScopeIdentity` on Android.
+/// This is deliberately a test fixture rather than a second production key
+/// implementation: the regression proves the Flutter-side canonical identity
+/// against the already-versioned native prepared-index contract.
+String _nativePreparedQueryKey(CurrentLedgerQueryScope scope) {
+  final refinements = scope.refinements;
+  final canonicalRefinements = <String>[
+    if (refinements.containsKey('minimumAmountScaled100'))
+      'minimumAmountScaled100=${refinements['minimumAmountScaled100']}',
+    if (refinements.containsKey('maximumAmountScaled100'))
+      'maximumAmountScaled100=${refinements['maximumAmountScaled100']}',
+    if (refinements.containsKey('noteContains'))
+      'noteContains=${refinements['noteContains']}',
+  ].join(',');
+  return '${scope.direction.name}|${scope.timeScope.canonicalKey}|'
+      'categories:${(scope.categoryIds.toList()..sort()).join(',')}|'
+      'partners:${(scope.partnerIds.toList()..sort()).join(',')}|'
+      'refinements:$canonicalRefinements';
 }
 
 Uint8List _heavyPayload(

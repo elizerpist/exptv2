@@ -205,10 +205,18 @@ void main() {
       addTearDown(store.dispose);
       final committed = _frame(day: 4, epoch: 3, generation: 20);
       final preview = _frame(day: 8, epoch: 3, generation: 21);
+      final order = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 7,
+      );
       store.publish(committed);
 
       expect(
-        store.publishPreparedInteractionPreview(preview, previewGeneration: 7),
+        store.publishPreparedInteractionPreview(
+          preview,
+          previewGeneration: 7,
+          order: order,
+        ),
         isTrue,
       );
       expect(store.value, same(committed));
@@ -219,11 +227,373 @@ void main() {
       expect(store.interactionPreviewPublishCount, 1);
       expect(store.mixedProjectionCount, 0);
 
-      store.clearPreparedInteractionPreview(previewGeneration: 8);
+      store.clearPreparedInteractionPreview(order: order);
       expect(store.value, same(committed));
       expect(store.amountLane.value, same(committed));
       expect(store.countLane.value, same(committed));
       expect(store.logBoxLane.value, same(committed));
+    },
+  );
+
+  test('rejects a preview order issued by a different visible-frame store', () {
+    final store = DashboardVisibleFrameStore();
+    final foreignStore = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    addTearDown(foreignStore.dispose);
+    final committed = _frame(day: 4, epoch: 3, generation: 20);
+    final preview = _frame(day: 8, epoch: 3, generation: 21);
+    store.publish(committed);
+    final foreignOrder = foreignStore.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.mindAmount,
+      localGeneration: 1,
+    );
+
+    expect(
+      store.publishPreparedInteractionPreview(
+        preview,
+        previewGeneration: 1,
+        order: foreignOrder,
+      ),
+      isFalse,
+    );
+    expect(
+      store.lastInteractionPreviewRejectionReason,
+      'orderNotIssuedByVisibleFrameStore',
+    );
+    expect(store.interactionPreviewOrder, isNull);
+
+    final localOrder = store.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.mindAmount,
+      localGeneration: 1,
+    );
+    expect(localOrder.interactionEpoch, 1);
+    expect(
+      store.publishPreparedInteractionPreview(
+        preview,
+        previewGeneration: 1,
+        order: localOrder,
+      ),
+      isTrue,
+    );
+  });
+
+  test(
+    'RED: a later Avatar intent is accepted after a high-frequency Mind producer',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final mind = _frame(day: 8, epoch: 3, generation: 21);
+      final avatar = _frame(day: 9, epoch: 3, generation: 22);
+      store.publish(committed);
+      final mindOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 63,
+      );
+
+      expect(
+        store.publishPreparedInteractionPreview(
+          mind,
+          previewGeneration: 63,
+          order: mindOrder,
+        ),
+        isTrue,
+      );
+      final staleMindOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 64,
+      );
+      final avatarOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.budgetAvatar,
+        localGeneration: 2,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          avatar,
+          previewGeneration: 2,
+          order: avatarOrder,
+        ),
+        isTrue,
+        reason:
+            'A later Avatar intent may not be rejected solely because Mind '
+            'used more local preview ticks in the same visible-frame store.',
+      );
+      expect(store.logBoxLane.value, same(avatar));
+
+      expect(
+        store.publishPreparedInteractionPreview(
+          mind,
+          previewGeneration: 64,
+          order: staleMindOrder,
+        ),
+        isFalse,
+        reason:
+            'A delayed completion from the older Mind owner must remain stale '
+            'after the newer Avatar intent is visible.',
+      );
+      expect(store.logBoxLane.value, same(avatar));
+    },
+  );
+
+  test(
+    'an older issued Mind completion stays stale after a later Mind intent',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final currentMind = _frame(day: 8, epoch: 3, generation: 21);
+      final staleMind = _frame(day: 9, epoch: 3, generation: 22);
+      store.publish(committed);
+      final staleMindOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 1,
+      );
+      final currentMindOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 2,
+      );
+
+      expect(
+        store.publishPreparedInteractionPreview(
+          currentMind,
+          previewGeneration: 2,
+          order: currentMindOrder,
+        ),
+        isTrue,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          staleMind,
+          previewGeneration: 1,
+          order: staleMindOrder,
+        ),
+        isFalse,
+        reason:
+            'The shared epoch orders producers, but cannot resurrect a stale '
+            'completion from the same Mind producer with an older local target.',
+      );
+      expect(store.logBoxLane.value, same(currentMind));
+    },
+  );
+
+  test('an earlier Mind cleanup cannot clear the newer Avatar owner', () {
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    final committed = _frame(day: 4, epoch: 3, generation: 20);
+    final mind = _frame(day: 8, epoch: 3, generation: 21);
+    final avatar = _frame(day: 9, epoch: 3, generation: 22);
+    final mindOrder = store.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.mindAmount,
+      localGeneration: 63,
+    );
+    final avatarOrder = store.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.budgetAvatar,
+      localGeneration: 2,
+    );
+    store.publish(committed);
+
+    expect(
+      store.publishPreparedInteractionPreview(
+        mind,
+        previewGeneration: 63,
+        order: mindOrder,
+      ),
+      isTrue,
+    );
+    expect(
+      store.publishPreparedInteractionPreview(
+        avatar,
+        previewGeneration: 2,
+        order: avatarOrder,
+      ),
+      isTrue,
+    );
+
+    store.clearPreparedInteractionPreview(order: mindOrder);
+
+    expect(store.logBoxLane.value, same(avatar));
+    expect(store.amountLane.value, same(avatar));
+    expect(store.countLane.value, same(avatar));
+    expect(store.interactionPreviewOrder, same(avatarOrder));
+  });
+
+  test('accepts a later Mind owner after an earlier Avatar owner', () {
+    final store = DashboardVisibleFrameStore();
+    addTearDown(store.dispose);
+    final committed = _frame(day: 4, epoch: 3, generation: 20);
+    final avatar = _frame(day: 8, epoch: 3, generation: 21);
+    final mind = _frame(day: 9, epoch: 3, generation: 22);
+    store.publish(committed);
+    final avatarOrder = store.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.budgetAvatar,
+      localGeneration: 2,
+    );
+
+    expect(
+      store.publishPreparedInteractionPreview(
+        avatar,
+        previewGeneration: 2,
+        order: avatarOrder,
+      ),
+      isTrue,
+    );
+    final staleAvatarOrder = store.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.budgetAvatar,
+      localGeneration: 3,
+    );
+    final mindOrder = store.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.mindAmount,
+      localGeneration: 64,
+    );
+    expect(
+      store.publishPreparedInteractionPreview(
+        mind,
+        previewGeneration: 64,
+        order: mindOrder,
+      ),
+      isTrue,
+    );
+    expect(
+      store.publishPreparedInteractionPreview(
+        avatar,
+        previewGeneration: 3,
+        order: staleAvatarOrder,
+      ),
+      isFalse,
+    );
+    expect(store.logBoxLane.value, same(mind));
+  });
+
+  test(
+    'orders Mind then Avatar then Summary then Mind by shared intent epoch',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final mindStart = _frame(day: 5, epoch: 3, generation: 21);
+      final avatar = _frame(day: 6, epoch: 3, generation: 22);
+      final summary = _frame(day: 7, epoch: 3, generation: 23);
+      final mindEnd = _frame(day: 8, epoch: 3, generation: 24);
+      store.publish(committed);
+      final mindStartOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 1,
+      );
+
+      expect(
+        store.publishPreparedInteractionPreview(
+          mindStart,
+          previewGeneration: 1,
+          order: mindStartOrder,
+        ),
+        isTrue,
+      );
+      final avatarOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.budgetAvatar,
+        localGeneration: 1,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          avatar,
+          previewGeneration: 1,
+          order: avatarOrder,
+        ),
+        isTrue,
+      );
+      final summaryOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.summaryTime,
+        localGeneration: 1,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          summary,
+          previewGeneration: 1,
+          order: summaryOrder,
+        ),
+        isTrue,
+      );
+      final staleSummaryOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.summaryTime,
+        localGeneration: 2,
+      );
+      final mindEndOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 2,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          mindEnd,
+          previewGeneration: 2,
+          order: mindEndOrder,
+        ),
+        isTrue,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          summary,
+          previewGeneration: 2,
+          order: staleSummaryOrder,
+        ),
+        isFalse,
+      );
+      expect(store.logBoxLane.value, same(mindEnd));
+      expect(
+        store.interactionPreviewOrder!.producer,
+        DashboardInteractionPreviewProducer.mindAmount,
+      );
+      expect(store.interactionPreviewOrder!.interactionEpoch, 5);
+    },
+  );
+
+  test(
+    'RED: a queued Summary intent rejects an older Mind completion before its display frame flushes',
+    () {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(day: 4, epoch: 3, generation: 20);
+      final staleMind = _frame(day: 8, epoch: 3, generation: 21);
+      final summary = _frame(day: 9, epoch: 4, generation: 22);
+      store.publish(committed);
+      final mindOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 63,
+      );
+      final summaryOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.summaryTime,
+        localGeneration: 1,
+      );
+
+      expect(store.claimInteractionPublicationIntent(summaryOrder), isTrue);
+      expect(
+        store.publishPreparedInteractionPreview(
+          staleMind,
+          previewGeneration: 63,
+          order: mindOrder,
+        ),
+        isFalse,
+        reason:
+            'A completion from the prior Mind intent cannot win merely because '
+            'the Summary visual frame is waiting for the next display callback.',
+      );
+      expect(store.publish(summary, interactionOrder: summaryOrder), isTrue);
+      expect(store.value, same(summary));
+      expect(store.logBoxLane.value, same(summary));
+      expect(store.interactionPreviewOrder, same(summaryOrder));
+
+      final nextMind = _frame(day: 10, epoch: 4, generation: 23);
+      final nextMindOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 64,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          nextMind,
+          previewGeneration: 64,
+          order: nextMindOrder,
+        ),
+        isTrue,
+      );
+      expect(store.logBoxLane.value, same(nextMind));
     },
   );
 
@@ -240,12 +610,20 @@ void main() {
         generation: 22,
         contentSeed: 0,
       ).asCommitted();
+      final order = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 7,
+      );
       store.publish(committed);
-      store.publishPreparedInteractionPreview(preview, previewGeneration: 7);
+      store.publishPreparedInteractionPreview(
+        preview,
+        previewGeneration: 7,
+        order: order,
+      );
 
       expect(
         store.armPreparedInteractionPreviewCanonicalReconciliation(
-          previewGeneration: 7,
+          order: order,
           frameGeneration: preview.frameGeneration,
         ),
         isTrue,
@@ -276,12 +654,20 @@ void main() {
         epoch: 4,
         generation: 22,
       ).asCommitted();
+      final order = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 7,
+      );
       store.publish(committed);
-      store.publishPreparedInteractionPreview(preview, previewGeneration: 7);
+      store.publishPreparedInteractionPreview(
+        preview,
+        previewGeneration: 7,
+        order: order,
+      );
 
       expect(
         store.armPreparedInteractionPreviewCanonicalReconciliation(
-          previewGeneration: 7,
+          order: order,
           frameGeneration: preview.frameGeneration,
         ),
         isTrue,

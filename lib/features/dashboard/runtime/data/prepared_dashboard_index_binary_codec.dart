@@ -1,6 +1,7 @@
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../logbox/application/committed_vertical_geometry_manifest.dart';
 import '../../logbox/application/dashboard_log_view_models.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -12,6 +13,49 @@ import '../../query/domain/ledger_direction.dart';
 import '../domain/prepared_dashboard_index.dart';
 import 'dashboard_binary_reader.dart';
 import 'dashboard_data_runtime_repository.dart';
+
+/// Fail-closed evidence for a native prepared frame whose scope identity does
+/// not match the exact Dart universe assembled for the same request.
+///
+/// The native payload carries only a raw frame key, not a parent key or live
+/// interaction metadata. This error therefore reports every bounded tuple
+/// member available at this ownership boundary and intentionally never
+/// normalizes or substitutes the raw key.
+final class PreparedFrameScopeIdentityMismatch extends FormatException {
+  PreparedFrameScopeIdentityMismatch({
+    required this.baseIndexKey,
+    required this.expectedScope,
+    required this.actualQueryKey,
+    required this.actualDirection,
+    required this.coreRevision,
+    required this.indexGeneration,
+  }) : expectedParentQueryKey = dashboardPreparedParentQueryKey(expectedScope),
+       super(
+         'Prepared frame scope identity mismatch: '
+         'operation=preparedIndexDecode '
+         'baseIndex=${FluviDiagnosticKeyDigest.of(baseIndexKey)} '
+         'expectedScope=${FluviDiagnosticKeyDigest.of(expectedScope.key.value)} '
+         'actualScope=${FluviDiagnosticKeyDigest.of(actualQueryKey.value)} '
+         'expectedParent=${FluviDiagnosticKeyDigest.of(dashboardPreparedParentQueryKey(expectedScope).value)} '
+         'expectedDirection=${expectedScope.direction.name} '
+         'actualDirection=${actualDirection.name} '
+         'revision=$coreRevision indexGeneration=$indexGeneration '
+         'categoryCount=${expectedScope.categoryIds.length} '
+         'partnerCount=${expectedScope.partnerIds.length} '
+         'hasSearch=${expectedScope.normalizedSearch != null} '
+         'hasMinimum=${expectedScope.refinements.containsKey('minimumAmountScaled100')} '
+         'hasMaximum=${expectedScope.refinements.containsKey('maximumAmountScaled100')} '
+         'hasNote=${expectedScope.refinements.containsKey('noteContains')}',
+       );
+
+  final String baseIndexKey;
+  final CurrentLedgerQueryScope expectedScope;
+  final LedgerQueryKey actualQueryKey;
+  final LedgerQueryKey expectedParentQueryKey;
+  final LedgerDirection actualDirection;
+  final int coreRevision;
+  final int indexGeneration;
+}
 
 abstract interface class DashboardPreparedIndexDecodeWorker {
   Future<PreparedDashboardIndex> decode(
@@ -290,7 +334,15 @@ abstract final class DashboardPreparedIndexBinaryCodec {
           raw.rowIndices.any(
             (index) => rowTable[index].direction != raw.direction.name,
           )) {
-        throw const FormatException('Prepared frame scope identity mismatch.');
+        throw PreparedFrameScopeIdentityMismatch(
+          baseIndexKey: request.key.diagnosticIdentity,
+          expectedScope:
+              scope ?? request.directionalQueries.scopeFor(raw.direction),
+          actualQueryKey: raw.queryKey,
+          actualDirection: raw.direction,
+          coreRevision: revision,
+          indexGeneration: generation,
+        );
       }
       universe.frames[raw.queryKey] = _projectFrame(
         raw,

@@ -22,6 +22,42 @@ final class DashboardVisibleFramePublishMetrics {
 typedef DashboardVisibleFramePublishObserver =
     void Function(DashboardVisibleFramePublishMetrics metrics);
 
+/// Provenance for a direct-manipulation producer that owns one complete
+/// Phase-A content preview. A producer-local generation is meaningful only
+/// within this producer; it must never be compared directly with another
+/// producer's counter.
+enum DashboardInteractionPreviewProducer {
+  summaryTime,
+  mindAmount,
+  budgetAvatar,
+}
+
+/// One immutable ordering token allocated at user-intent time.
+///
+/// [interactionEpoch] is a process-local shared order across producers,
+/// whereas [localGeneration] remains the latest-wins order inside one
+/// producer. Keeping both fields explicit prevents a high-frequency Mind drag
+/// from making a later low-numbered Avatar target appear stale.
+@immutable
+final class DashboardInteractionPreviewOrder {
+  const DashboardInteractionPreviewOrder._issued({
+    required this.producer,
+    required this.interactionEpoch,
+    required this.localGeneration,
+    required Object issuer,
+  }) : _issuer = issuer;
+
+  final DashboardInteractionPreviewProducer producer;
+  final int interactionEpoch;
+  final int localGeneration;
+  final Object _issuer;
+
+  bool hasSameIdentity(DashboardInteractionPreviewOrder other) =>
+      producer == other.producer &&
+      interactionEpoch == other.interactionEpoch &&
+      localGeneration == other.localGeneration;
+}
+
 /// State of the narrow Mind preview while its one canonical Query commit is
 /// reconciling.  The preview remains authoritative until a committed frame
 /// proves the same complete projection; a matching query key alone is not
@@ -74,8 +110,17 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   int interactionPreviewCanonicalReconcileCount = 0;
   int interactionPreviewCanonicalMismatchRetainCount = 0;
   int mixedProjectionCount = 0;
-  int _interactionPreviewGeneration = 0;
+  int _interactionPreviewEpochCursor = 0;
+  final Object _interactionPreviewOrderIssuer = Object();
+  final Map<
+    DashboardInteractionPreviewProducer,
+    DashboardInteractionPreviewOrder
+  >
+  _latestIssuedInteractionPreviewOrder =
+      <DashboardInteractionPreviewProducer, DashboardInteractionPreviewOrder>{};
+  DashboardInteractionPreviewOrder? _interactionPreviewOrder;
   DashboardVisibleFrame? _interactionPreviewFrame;
+  String? lastInteractionPreviewRejectionReason;
   DashboardInteractionPreviewReconciliationState
   interactionPreviewReconciliationState =
       DashboardInteractionPreviewReconciliationState.idle;
@@ -97,6 +142,78 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     }
     _generationCursor += 1;
     return _generationCursor;
+  }
+
+  /// Allocates the shared intent order before an asynchronous derivation may
+  /// complete. The caller's local generation remains a same-producer guard;
+  /// it is never used as a cross-producer clock.
+  DashboardInteractionPreviewOrder nextInteractionPreviewOrder({
+    required DashboardInteractionPreviewProducer producer,
+    required int localGeneration,
+  }) {
+    if (localGeneration <= 0) {
+      throw ArgumentError.value(
+        localGeneration,
+        'localGeneration',
+        'must be positive',
+      );
+    }
+    final prior = _latestIssuedInteractionPreviewOrder[producer];
+    if (prior != null && localGeneration <= prior.localGeneration) {
+      throw StateError(
+        'Interaction preview local generation did not advance: '
+        'producer=${producer.name} current=${prior.localGeneration} '
+        'candidate=$localGeneration',
+      );
+    }
+    _interactionPreviewEpochCursor += 1;
+    final order = DashboardInteractionPreviewOrder._issued(
+      producer: producer,
+      interactionEpoch: _interactionPreviewEpochCursor,
+      localGeneration: localGeneration,
+      issuer: _interactionPreviewOrderIssuer,
+    );
+    _latestIssuedInteractionPreviewOrder[producer] = order;
+    return order;
+  }
+
+  /// The latest shared owner remains meaningful after its temporary overlay
+  /// has reconciled, so a delayed older result cannot reopen the old lanes.
+  DashboardInteractionPreviewOrder? get interactionPreviewOrder =>
+      _interactionPreviewOrder;
+
+  /// Claims the shared direct-manipulation authority before a deferred
+  /// display-frame callback runs.
+  ///
+  /// Summary/Time uses a coalesced complete-frame publication rather than the
+  /// narrow preview-lane method below. Its user intent must nevertheless
+  /// become the current owner immediately, otherwise an already-derived Mind
+  /// or Avatar callback can publish in the gap before Summary's next display
+  /// frame. Claiming changes no visible lane; it only makes stale rejection
+  /// reflect user-intent order rather than callback completion order.
+  bool claimInteractionPublicationIntent(
+    DashboardInteractionPreviewOrder order,
+  ) {
+    final rejection = _interactionPreviewRejection(order);
+    if (rejection != null) {
+      staleInteractionPreviewRejectCount += 1;
+      lastInteractionPreviewRejectionReason = rejection;
+      return false;
+    }
+    final current = _interactionPreviewOrder;
+    if (current != null && current.hasSameIdentity(order)) {
+      lastInteractionPreviewRejectionReason = null;
+      return true;
+    }
+    _recordInteractionPreviewOrder(order);
+    // The existing lanes remain visibly stable until the new owner flushes
+    // its own exact frame, but no prior overlay may later reconcile or clear
+    // against this newer intent.
+    _interactionPreviewFrame = null;
+    interactionPreviewReconciliationState =
+        DashboardInteractionPreviewReconciliationState.idle;
+    lastInteractionPreviewRejectionReason = null;
+    return true;
   }
 
   /// Publishes a scalar SummaryPill preview from an already-derived focus
@@ -140,16 +257,27 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   bool publishPreparedInteractionPreview(
     DashboardVisibleFrame frame, {
     required int previewGeneration,
+    required DashboardInteractionPreviewOrder order,
   }) {
-    if (previewGeneration < _interactionPreviewGeneration) {
-      staleInteractionPreviewRejectCount += 1;
+    if (previewGeneration != order.localGeneration) {
+      throw StateError(
+        'Interaction preview generation mismatch: '
+        'producer=${order.producer.name} '
+        'previewGeneration=$previewGeneration '
+        'localGeneration=${order.localGeneration}',
+      );
+    }
+    final currentOrder = _interactionPreviewOrder;
+    if (!claimInteractionPublicationIntent(order)) {
       return false;
     }
-    if (previewGeneration == _interactionPreviewGeneration &&
-        _logBoxLane.value?.logBoxPresentationId == frame.logBoxPresentationId) {
+    if (currentOrder != null &&
+        currentOrder.hasSameIdentity(order) &&
+        _interactionPreviewFrame != null) {
+      lastInteractionPreviewRejectionReason = 'duplicateOrder';
       return false;
     }
-    _interactionPreviewGeneration = previewGeneration;
+    lastInteractionPreviewRejectionReason = null;
     _interactionPreviewFrame = frame;
     interactionPreviewReconciliationState =
         DashboardInteractionPreviewReconciliationState.idle;
@@ -170,7 +298,9 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
       mixedProjectionCount += 1;
       throw StateError(
         'Mixed live projection: amount=$amountKey count=$countKey '
-        'logBox=$logBoxKey previewGeneration=$previewGeneration',
+        'logBox=$logBoxKey producer=${order.producer.name} '
+        'interactionEpoch=${order.interactionEpoch} '
+        'localGeneration=${order.localGeneration}',
       );
     }
     if (logBoxChanged) logBoxPayloadNotifyCount += 1;
@@ -184,12 +314,13 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
   /// full visible projection.  Newer interactions supersede this guard by
   /// publishing their own [previewGeneration].
   bool armPreparedInteractionPreviewCanonicalReconciliation({
-    required int previewGeneration,
+    required DashboardInteractionPreviewOrder order,
     required int frameGeneration,
   }) {
     final preview = _interactionPreviewFrame;
     if (preview == null ||
-        previewGeneration != _interactionPreviewGeneration ||
+        _interactionPreviewOrder == null ||
+        !_interactionPreviewOrder!.hasSameIdentity(order) ||
         preview.frameGeneration != frameGeneration) {
       return false;
     }
@@ -198,9 +329,11 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     return true;
   }
 
-  void clearPreparedInteractionPreview({required int previewGeneration}) {
-    if (previewGeneration < _interactionPreviewGeneration) return;
-    _interactionPreviewGeneration = previewGeneration;
+  void clearPreparedInteractionPreview({
+    required DashboardInteractionPreviewOrder order,
+  }) {
+    final currentOrder = _interactionPreviewOrder;
+    if (currentOrder == null || !currentOrder.hasSameIdentity(order)) return;
     _interactionPreviewFrame = null;
     interactionPreviewReconciliationState =
         DashboardInteractionPreviewReconciliationState.idle;
@@ -218,10 +351,62 @@ final class DashboardVisibleFrameStore extends ChangeNotifier
     if (_logBoxLane.flush()) logBoxPayloadNotifyCount += 1;
   }
 
+  String? _interactionPreviewRejection(
+    DashboardInteractionPreviewOrder candidate,
+  ) {
+    if (!identical(candidate._issuer, _interactionPreviewOrderIssuer)) {
+      return 'orderNotIssuedByVisibleFrameStore';
+    }
+    if (candidate.interactionEpoch <= 0 || candidate.localGeneration <= 0) {
+      return 'nonPositiveOrder';
+    }
+    final issued = _latestIssuedInteractionPreviewOrder[candidate.producer];
+    if (issued != null) {
+      if (candidate.localGeneration < issued.localGeneration) {
+        return 'producerLocalGenerationStale';
+      }
+      if (candidate.localGeneration == issued.localGeneration &&
+          candidate.interactionEpoch != issued.interactionEpoch) {
+        return 'producerLocalGenerationIdentityMismatch';
+      }
+      if (candidate.localGeneration > issued.localGeneration &&
+          candidate.interactionEpoch <= issued.interactionEpoch) {
+        return 'producerEpochDidNotAdvance';
+      }
+    }
+    final current = _interactionPreviewOrder;
+    if (current == null) return null;
+    if (candidate.interactionEpoch < current.interactionEpoch) {
+      return 'sharedInteractionEpochStale';
+    }
+    if (candidate.interactionEpoch == current.interactionEpoch &&
+        !candidate.hasSameIdentity(current)) {
+      return 'sharedInteractionEpochCollision';
+    }
+    return null;
+  }
+
+  void _recordInteractionPreviewOrder(DashboardInteractionPreviewOrder order) {
+    if (_interactionPreviewEpochCursor < order.interactionEpoch) {
+      _interactionPreviewEpochCursor = order.interactionEpoch;
+    }
+    final issued = _latestIssuedInteractionPreviewOrder[order.producer];
+    if (issued == null || order.localGeneration > issued.localGeneration) {
+      _latestIssuedInteractionPreviewOrder[order.producer] = order;
+    }
+    _interactionPreviewOrder = order;
+  }
+
   bool publish(
     DashboardVisibleFrame frame, {
     DashboardVisibleFramePublishObserver? onMeasured,
+    DashboardInteractionPreviewOrder? interactionOrder,
   }) {
+    if (interactionOrder != null &&
+        !claimInteractionPublicationIntent(interactionOrder)) {
+      _reportMeasurement(onMeasured, 0, published: false);
+      return false;
+    }
     final measureStart = onMeasured == null ? 0 : developer.Timeline.now;
     final current = _value;
     if (current != null && _isStale(frame, current)) {

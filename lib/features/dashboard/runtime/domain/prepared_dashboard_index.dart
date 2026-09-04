@@ -345,9 +345,7 @@ final class PreparedDashboardIndexKey {
   }
 
   static String canonicalRefinements(Map<String, Object?> refinements) {
-    final entries = refinements.entries.toList()
-      ..sort((left, right) => left.key.compareTo(right.key));
-    return entries.map((entry) => '${entry.key}=${entry.value}').join(',');
+    return DashboardQueryRefinementCanonicalizer.canonicalValue(refinements);
   }
 
   @override

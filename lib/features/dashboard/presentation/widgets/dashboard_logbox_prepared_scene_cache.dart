@@ -308,6 +308,63 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   DashboardLogBoxSceneWindowManifest? get stagedWindowManifest =>
       _stagedBank?.manifest;
 
+  /// Returns an immutable, exact text-and-raster row prepared before direct
+  /// motion. This deliberately reads only source identity and already-owned
+  /// paragraph resources: it never materializes [DashboardLogViewportState]'s
+  /// rich projection or creates a [TextPainter] from the render hot path.
+  ///
+  /// A row ID is revision-local. Requiring the same core revision keeps a
+  /// retained resource from one immutable index from decorating a different
+  /// Phase-A semantic frame that happens to reuse an entry identifier.
+  DashboardPreparedLogBoxReadablePhaseARow? readablePhaseARowFor(
+    DashboardLogViewportState payload, {
+    required int ordinal,
+  }) {
+    final entryId = payload.semanticPreviewRowIdentityAt(ordinal);
+    if (entryId == null) return null;
+
+    DashboardPreparedLogBoxReadablePhaseARow? find(
+      _DashboardLogBoxStagedSceneBank bank,
+    ) => bank.readablePhaseARowFor(payload, entryId);
+
+    final active = _activeBank.readablePhaseARowFor(payload, entryId);
+    if (active != null) return active;
+
+    // Prefer the explicitly live resource lanes. Their retention is the
+    // pre-motion contract for Time, Avatar and Mind, and no lookup mutates
+    // LRU ownership while a painter is running.
+    for (final resourceKey in _liveInteractionResourceKeys.values) {
+      final bank = _retainedCandidateBanks[resourceKey];
+      if (bank == null) continue;
+      final readable = find(bank);
+      if (readable != null) return readable;
+    }
+    // A completed candidate can safely lend the same immutable row resource
+    // to a matching frame. This is still exact revision/source identity, and
+    // it avoids reformatting rows merely because a different Phase-B bank won
+    // a cache slot.
+    for (final bank in _retainedCandidateBanks.values) {
+      final readable = find(bank);
+      if (readable != null) return readable;
+    }
+    for (final bank in _retainedActiveSceneBanks.values) {
+      final readable = find(bank);
+      if (readable != null) return readable;
+    }
+    return null;
+  }
+
+  /// Bounded diagnostic-only availability count. Preview payloads are already
+  /// capped by the prepared frame contract; this performs no rich projection,
+  /// allocation of paragraph resources, or cache mutation.
+  int readablePhaseARowCountFor(DashboardLogViewportState payload) {
+    var count = 0;
+    for (var ordinal = 0; ordinal < payload.previewRowCount; ordinal += 1) {
+      if (readablePhaseARowFor(payload, ordinal: ordinal) != null) count += 1;
+    }
+    return count;
+  }
+
   /// Stages [window] only when its rich payloads and every exact row
   /// layout/header already belong to the active immutable bank. This is the
   /// synchronous cache-hit half of the existing scene owner: it never shapes
@@ -442,6 +499,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       emptyQueryKeys: emptyQueryKeys,
       emptyScene: emptyScene,
       rowLayouts: rowLayouts,
+      readablePhaseARows: _readablePhaseARowsFor(window, rowLayouts),
       dayHeaders: dayHeaders,
       empty: empty,
       surfaceWidth: width,
@@ -746,6 +804,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       emptyQueryKeys: _emptyQueryKeys,
       emptyScene: _activeBank.emptyScene,
       rowLayouts: _rowLayouts,
+      readablePhaseARows: _activeBank.readablePhaseARows,
       dayHeaders: _dayHeaders,
       empty: empty,
       surfaceWidth: _surfaceWidth!,
@@ -850,6 +909,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           .toSet(),
       emptyScene: emptyScene,
       rowLayouts: const <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{},
+      readablePhaseARows:
+          const <String, DashboardPreparedLogBoxReadablePhaseARow>{},
       dayHeaders: const <String, TextPainter>{},
       empty: empty,
       surfaceWidth: surfaceWidth,
@@ -1615,6 +1676,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         emptyQueryKeys: nextEmptyQueryKeys,
         emptyScene: nextEmptyScene,
         rowLayouts: nextRows,
+        readablePhaseARows: _readablePhaseARowsFor(window, nextRows),
         dayHeaders: nextHeaders,
         empty: nextEmpty,
         surfaceWidth: width,
@@ -1792,6 +1854,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       emptyQueryKeys: staged.emptyQueryKeys,
       emptyScene: staged.emptyScene,
       rowLayouts: staged.rowLayouts,
+      readablePhaseARows: staged.readablePhaseARows,
       dayHeaders: staged.dayHeaders,
       empty: staged.empty,
       surfaceWidth: staged.surfaceWidth,
@@ -1837,6 +1900,40 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       (count, key) =>
           count + (_retainedCandidateBanks[key]?.rowLayouts.length ?? 0),
     ),
+    'liveInteractionResourceReadableRows': _liveInteractionResourceKeySet
+        .fold<int>(
+          0,
+          (count, key) =>
+              count +
+              (_retainedCandidateBanks[key]?.readablePhaseARows.length ?? 0),
+        ),
+    'liveInteractionResourceRevisions': _liveInteractionResourceKeys.map(
+      (lane, key) => MapEntry(
+        lane.name,
+        _retainedCandidateBanks[key]?.manifest.coreRevision,
+      ),
+    ),
+    // Diagnostic payloads must remain bounded even when a Time resource
+    // intentionally covers a large ready-ahead window. The count gives the
+    // full cardinality; the fixed sample is only correlation evidence.
+    'liveInteractionResourceReadableRowDigestCounts':
+        _liveInteractionResourceKeys.map(
+          (lane, key) => MapEntry(
+            lane.name,
+            _retainedCandidateBanks[key]?.readablePhaseARows.length ?? 0,
+          ),
+        ),
+    'liveInteractionResourceReadableRowDigestSample':
+        _liveInteractionResourceKeys.map(
+          (lane, key) => MapEntry(
+            lane.name,
+            (_retainedCandidateBanks[key]?.readablePhaseARows.keys ??
+                    const Iterable<String>.empty())
+                .map(FluviDiagnosticKeyDigest.of)
+                .take(16)
+                .toList(growable: false),
+          ),
+        ),
     'liveInteractionResourceKeys': _liveInteractionResourceKeys.map(
       (lane, key) => MapEntry(lane.name, FluviDiagnosticKeyDigest.of(key)),
     ),
@@ -1900,6 +1997,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     required DashboardPreparedLogBoxScene? emptyScene,
     required Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>
     rowLayouts,
+    required Map<String, DashboardPreparedLogBoxReadablePhaseARow>
+    readablePhaseARows,
     required Map<String, TextPainter> dayHeaders,
     required TextPainter empty,
     required double surfaceWidth,
@@ -1915,6 +2014,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       emptyQueryKeys: emptyQueryKeys,
       emptyScene: emptyScene,
       rowLayouts: rowLayouts,
+      readablePhaseARows: readablePhaseARows,
       dayHeaders: dayHeaders,
       empty: empty,
       resourceLeaseOwner: resourceLeaseOwner,
@@ -1925,6 +2025,46 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         !identical(previousLeaseOwner, resourceLeaseOwner)) {
       _resourceLeases.releaseBank(previousLeaseOwner);
     }
+  }
+
+  /// Builds the bounded Phase-A read-only row map immediately after the scene
+  /// owner has completed rich projection and paragraph preparation. The map
+  /// has no independent formatter or paragraph ownership: each value only
+  /// points at the existing immutable normal-LogBox row resource.
+  Map<String, DashboardPreparedLogBoxReadablePhaseARow> _readablePhaseARowsFor(
+    DashboardLogBoxSceneWindow window,
+    Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout> rowLayouts,
+  ) {
+    final readable = <String, DashboardPreparedLogBoxReadablePhaseARow>{};
+    for (final payload in window.payloads) {
+      if (!payload.isRichProjected) {
+        throw StateError(
+          'Readable Phase-A rows require the scene owner to finish rich '
+          'projection before it publishes the resource bank.',
+        );
+      }
+      for (final item in payload.flatItems) {
+        final layout = rowLayouts[_RowLayoutKey.fromRow(item.row)];
+        if (layout == null) {
+          throw StateError(
+            'Readable Phase-A rows require an exact prepared row layout.',
+          );
+        }
+        final next = DashboardPreparedLogBoxReadablePhaseARow.fromPrepared(
+          row: item.row,
+          textLayout: layout,
+        );
+        final previous = readable[item.row.entryId];
+        if (previous != null && !previous.hasSameVisualContent(next)) {
+          throw StateError(
+            'One scene bank cannot publish conflicting readable Phase-A row '
+            'resources for the same entry identity.',
+          );
+        }
+        readable.putIfAbsent(item.row.entryId, () => next);
+      }
+    }
+    return readable;
   }
 
   double _resolveSurfaceWidth(double? supplied) {
@@ -2396,6 +2536,75 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   }
 }
 
+/// One exact normal-LogBox row resource that Phase A may paint when optional
+/// Phase-B scene activation is unavailable.
+///
+/// Its strings are references to the normal row view model, and its paragraph
+/// resource is the exact [DashboardPreparedLogBoxRowTextLayout] prepared by
+/// the existing scene owner. It therefore adds no second transaction
+/// formatter, text shaper, or paint-time allocation path.
+@immutable
+final class DashboardPreparedLogBoxReadablePhaseARow {
+  const DashboardPreparedLogBoxReadablePhaseARow._({
+    required this.entryId,
+    required this.contentIdentity,
+    required this.titleText,
+    required this.secondaryText,
+    required this.amountText,
+    required this.timeText,
+    required this.semanticLabel,
+    required this.amountStyle,
+    required this.categoryColorHandle,
+    required this.categoryIconHandle,
+    required this.textLayout,
+  });
+
+  factory DashboardPreparedLogBoxReadablePhaseARow.fromPrepared({
+    required DashboardLogRowViewModel row,
+    required DashboardPreparedLogBoxRowTextLayout textLayout,
+  }) {
+    if (textLayout.contentIdentity != row.textLayoutId) {
+      throw StateError(
+        'A readable Phase-A row may only borrow its exact normal LogBox '
+        'paragraph layout.',
+      );
+    }
+    return DashboardPreparedLogBoxReadablePhaseARow._(
+      entryId: row.entryId,
+      contentIdentity: row.textLayoutId,
+      titleText: row.displayName,
+      secondaryText: row.categoryDisplayName,
+      amountText: row.formattedAmount,
+      timeText: row.displayTime,
+      semanticLabel: row.semanticLabel,
+      amountStyle: row.amountStyle,
+      categoryColorHandle: row.categoryColorHandle,
+      categoryIconHandle: row.categoryIconHandle,
+      textLayout: textLayout,
+    );
+  }
+
+  final String entryId;
+  final int contentIdentity;
+  final String titleText;
+  final String secondaryText;
+  final String amountText;
+  final String timeText;
+  final String semanticLabel;
+  final LogAmountStyle amountStyle;
+  final int categoryColorHandle;
+  final int categoryIconHandle;
+  final DashboardPreparedLogBoxRowTextLayout textLayout;
+
+  bool hasSameVisualContent(DashboardPreparedLogBoxReadablePhaseARow other) =>
+      entryId == other.entryId &&
+      contentIdentity == other.contentIdentity &&
+      identical(textLayout, other.textLayout) &&
+      categoryColorHandle == other.categoryColorHandle &&
+      categoryIconHandle == other.categoryIconHandle &&
+      amountStyle == other.amountStyle;
+}
+
 /// The sole renderer-visible cache state. All maps are immutable snapshots;
 /// publishing a new complete world means replacing this one pointer.
 @immutable
@@ -2408,6 +2617,8 @@ final class RailCriticalSceneBank {
     required this.emptyScene,
     required Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>
     rowLayouts,
+    required Map<String, DashboardPreparedLogBoxReadablePhaseARow>
+    readablePhaseARows,
     required Map<String, TextPainter> dayHeaders,
     required this.empty,
     required _DashboardLogBoxStagedSceneBank? resourceLeaseOwner,
@@ -2421,6 +2632,10 @@ final class RailCriticalSceneBank {
              _RowLayoutKey,
              DashboardPreparedLogBoxRowTextLayout
            >.unmodifiable(rowLayouts),
+       readablePhaseARows =
+           Map<String, DashboardPreparedLogBoxReadablePhaseARow>.unmodifiable(
+             readablePhaseARows,
+           ),
        dayHeaders = Map<String, TextPainter>.unmodifiable(dayHeaders);
 
   factory RailCriticalSceneBank.empty() => RailCriticalSceneBank._(
@@ -2430,6 +2645,8 @@ final class RailCriticalSceneBank {
     emptyQueryKeys: const <String>{},
     emptyScene: null,
     rowLayouts: const <_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>{},
+    readablePhaseARows:
+        const <String, DashboardPreparedLogBoxReadablePhaseARow>{},
     dayHeaders: const <String, TextPainter>{},
     empty: null,
     resourceLeaseOwner: null,
@@ -2443,6 +2660,8 @@ final class RailCriticalSceneBank {
   final Set<String> emptyQueryKeys;
   final DashboardPreparedLogBoxScene? emptyScene;
   final Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout> _rowLayouts;
+  final Map<String, DashboardPreparedLogBoxReadablePhaseARow>
+  readablePhaseARows;
   final Map<String, TextPainter> dayHeaders;
   final TextPainter? empty;
   final _DashboardLogBoxStagedSceneBank? _resourceLeaseOwner;
@@ -2497,6 +2716,14 @@ final class RailCriticalSceneBank {
     assert(scene.isCompletelyPrepared);
     return scene.isCompletelyPrepared ? scene : null;
   }
+
+  DashboardPreparedLogBoxReadablePhaseARow? readablePhaseARowFor(
+    DashboardLogViewportState payload,
+    String entryId,
+  ) {
+    if (manifest?.coreRevision != payload.revision) return null;
+    return readablePhaseARows[entryId];
+  }
 }
 
 /// Private immutable scene-bank lease token. It has no renderer entry point;
@@ -2510,6 +2737,8 @@ final class _DashboardLogBoxStagedSceneBank {
     required this.emptyScene,
     required Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout>
     rowLayouts,
+    required Map<String, DashboardPreparedLogBoxReadablePhaseARow>
+    readablePhaseARows,
     required Map<String, TextPainter> dayHeaders,
     required this.empty,
     required this.surfaceWidth,
@@ -2518,6 +2747,7 @@ final class _DashboardLogBoxStagedSceneBank {
   }) : scenes = UnmodifiableMapView(scenes),
        emptyQueryKeys = UnmodifiableSetView(emptyQueryKeys),
        rowLayouts = UnmodifiableMapView(rowLayouts),
+       readablePhaseARows = UnmodifiableMapView(readablePhaseARows),
        dayHeaders = UnmodifiableMapView(dayHeaders);
 
   final DashboardLogBoxSceneWindow window;
@@ -2525,6 +2755,8 @@ final class _DashboardLogBoxStagedSceneBank {
   final Set<String> emptyQueryKeys;
   final DashboardPreparedLogBoxScene? emptyScene;
   final Map<_RowLayoutKey, DashboardPreparedLogBoxRowTextLayout> rowLayouts;
+  final Map<String, DashboardPreparedLogBoxReadablePhaseARow>
+  readablePhaseARows;
   final Map<String, TextPainter> dayHeaders;
   final TextPainter empty;
   final double surfaceWidth;
@@ -2568,6 +2800,14 @@ final class _DashboardLogBoxStagedSceneBank {
           devicePixelRatio,
         ) ??
         false;
+  }
+
+  DashboardPreparedLogBoxReadablePhaseARow? readablePhaseARowFor(
+    DashboardLogViewportState payload,
+    String entryId,
+  ) {
+    if (manifest.coreRevision != payload.revision) return null;
+    return readablePhaseARows[entryId];
   }
 }
 

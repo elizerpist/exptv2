@@ -131,6 +131,9 @@ final class DashboardPresentationController {
   // it can bind acceptance and later paint acknowledgement to the target that
   // will actually be selected, rather than to the previous visible lane.
   DashboardVisibleFrame? _queuedPreparedExperimentalTemporalFrame;
+  DashboardInteractionPreviewOrder?
+  _queuedPreparedExperimentalTemporalInteractionOrder;
+  int _summaryInteractionLocalGeneration = 0;
   int _presentationEpoch = 0;
   bool _motionActive = false;
   bool _disposed = false;
@@ -140,6 +143,9 @@ final class DashboardPresentationController {
   DashboardCommittedState get committedState => _committedState;
   DashboardVisibleFrame? get queuedPreparedExperimentalTemporalFrame =>
       _queuedPreparedExperimentalTemporalFrame;
+  DashboardInteractionPreviewOrder?
+  get queuedPreparedExperimentalTemporalInteractionOrder =>
+      _queuedPreparedExperimentalTemporalInteractionOrder;
   LedgerQueryKey? get expectedVisibleQueryKey {
     final installed = _index;
     if (installed == null) return null;
@@ -361,6 +367,17 @@ final class DashboardPresentationController {
     } on StateError {
       return false;
     }
+    // A Summary target is dispatched through the display-frame coalescer, so
+    // its shared order must be claimed before that deferred callback. This
+    // makes a later Avatar/Mind intent win immediately and prevents an older
+    // completion from treating its callback time as user-intent time.
+    final interactionOrder = visibleFrames.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.summaryTime,
+      localGeneration: ++_summaryInteractionLocalGeneration,
+    );
+    if (!visibleFrames.claimInteractionPublicationIntent(interactionOrder)) {
+      return false;
+    }
     final state = deferCanonicalCommit
         ? candidate
         : navigation.commitTemporalCandidate(candidate);
@@ -402,6 +419,7 @@ final class DashboardPresentationController {
           : DashboardVisibleMode.committed,
     );
     _queuedPreparedExperimentalTemporalFrame = frame;
+    _queuedPreparedExperimentalTemporalInteractionOrder = interactionOrder;
     frameCoalescer.request(frame);
     return true;
   }
@@ -616,6 +634,7 @@ final class DashboardPresentationController {
     required PreparedDashboardIndex index,
     required DashboardNavigationState state,
     required int previewGeneration,
+    required DashboardInteractionPreviewOrder order,
   }) {
     final catalog = index.catalogForKey(state.parentQueryKey);
     final selectedIndex = _selectedIndex(state, catalog);
@@ -638,6 +657,7 @@ final class DashboardPresentationController {
     return visibleFrames.publishPreparedInteractionPreview(
       frame,
       previewGeneration: previewGeneration,
+      order: order,
     );
   }
 
@@ -924,6 +944,17 @@ final class DashboardPresentationController {
   }
 
   void _publishCoalescedFrame(DashboardVisibleFrame frame) {
+    final queued = _queuedPreparedExperimentalTemporalFrame;
+    final interactionOrder = queued?.frameGeneration == frame.frameGeneration
+        ? _queuedPreparedExperimentalTemporalInteractionOrder
+        : null;
+    if (interactionOrder != null ||
+        _queuedPreparedExperimentalTemporalInteractionOrder != null) {
+      // One coalescer has one pending target. A different frame means another
+      // structural owner superseded the queued Summary target, so its order
+      // must not linger and accidentally attach to a later publication.
+      _queuedPreparedExperimentalTemporalInteractionOrder = null;
+    }
     final applyObserver = onPresentationApplyCompleted;
     onPresentationApplyStarted?.call(frame);
     final applyStart = applyObserver == null ? 0 : developer.Timeline.now;
@@ -933,6 +964,7 @@ final class DashboardPresentationController {
       onMeasured: applyObserver == null
           ? null
           : (metrics) => publishMetrics = metrics,
+      interactionOrder: interactionOrder,
     );
     if (applyObserver != null) {
       applyObserver(

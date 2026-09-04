@@ -9,7 +9,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
-import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
@@ -24,7 +23,6 @@ import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
-import '../../query/domain/ledger_direction.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -193,6 +191,7 @@ final class _DashboardLogBoxRenderSurfaceState
   int? _lastExtentPublicationSignature;
   int? _lastMismatchSignature;
   int? _lastNonemptyPresentationWithoutPaintSignature;
+  int? _lastReadablePhaseADiagnosticSignature;
   bool _firstFrameReported = false;
   bool _surfaceWarmupReported = false;
   bool _layoutWarmupReported = false;
@@ -618,11 +617,15 @@ final class _DashboardLogBoxRenderSurfaceState
             ? _committedViewport.totalEntryCount
             : painter.lastDrawableRowCount,
         paintedRowCount: painter.lastPaintedRowCount,
+        readablePhaseARowCount: painter.lastReadablePhaseARowCount,
+        readablePhaseARowsPainted: painter.lastReadablePhaseARowsPainted,
+        richPhaseBRowsPainted: painter.lastRichPhaseBRowsPainted,
         renderedContentExtent: binding.surfaceHeight,
         previewPayloadRows: binding.payload?.previewRowCount ?? 0,
         previewSurfaceHeight: binding.previewSurfaceHeight,
         committedCacheQueryKey: _committedViewport.queryKey?.value,
         committedCacheGeneration: _committedViewport.generation,
+        committedCacheGeometryGeneration: _committedViewport.geometryGeneration,
         committedCacheReadyRows: _committedViewport.contiguousReadyRowCount,
         committedCacheDrawableExtent: _committedViewport.drawableExtent,
         committedCacheReadyFrontierOrdinal:
@@ -639,6 +642,7 @@ final class _DashboardLogBoxRenderSurfaceState
         isMismatch: mismatch,
       );
       widget.onExtentPublished?.call(snapshot);
+      _recordReadablePhaseARows(binding: binding, snapshot: snapshot);
       _reportNonemptyPresentationWithoutPaint(
         binding: binding,
         sceneGeneration: painter.sceneGeneration,
@@ -662,11 +666,16 @@ final class _DashboardLogBoxRenderSurfaceState
               'payloadRowCount=${snapshot.payloadRowCount} '
               'drawableRowCount=${snapshot.drawableRowCount} '
               'paintedRowCount=${snapshot.paintedRowCount} '
+              'readablePhaseARowCount=${snapshot.readablePhaseARowCount} '
+              'readablePhaseARowsPainted=${snapshot.readablePhaseARowsPainted} '
+              'richPhaseBRowsPainted=${snapshot.richPhaseBRowsPainted} '
               'renderedContentExtent=${snapshot.renderedContentExtent.round()} '
               'previewPayloadRows=${snapshot.previewPayloadRows} '
               'previewSurfaceHeight=${snapshot.previewSurfaceHeight.round()} '
               'committedCacheQuery=${snapshot.committedCacheQueryKey ?? 'none'} '
               'committedCacheGeneration=${snapshot.committedCacheGeneration ?? -1} '
+              'committedCacheGeometryGeneration='
+              '${snapshot.committedCacheGeometryGeneration ?? -1} '
               'committedCacheReadyRows=${snapshot.committedCacheReadyRows} '
               'committedCacheDrawableExtent=${snapshot.committedCacheDrawableExtent.round()} '
               'readyFrontier=${snapshot.committedCacheReadyFrontierOrdinal} '
@@ -744,6 +753,50 @@ final class _DashboardLogBoxRenderSurfaceState
             'drawableRowCount=${snapshot.drawableRowCount} '
             'paintedRowCount=${snapshot.paintedRowCount} '
             'scrollPixels=${snapshot.pixels.round()}',
+      ),
+    );
+  }
+
+  /// One bounded event per exact visible target. This distinguishes an exact
+  /// semantic selection from readable Phase-A paint and optional rich Phase-B
+  /// paint; a positive legacy painted-row count alone used to hide the gray
+  /// bar/dot fallback from the physical report.
+  void _recordReadablePhaseARows({
+    required _DashboardLogBoxRenderBinding binding,
+    required DashboardLogBoxRenderExtentSnapshot snapshot,
+  }) {
+    if (binding.renderDomain != DashboardLogBoxRenderDomain.railPreview ||
+        snapshot.payloadRowCount == 0) {
+      return;
+    }
+    final presentation = binding.presentation;
+    final signature = Object.hash(
+      presentation?.queryKey ?? binding.payload?.queryKey,
+      presentation?.coreRevision ?? binding.payload?.revision,
+      presentation?.presentationEpoch,
+      presentation?.frameGeneration,
+      binding.payload?.viewportId,
+    );
+    if (_lastReadablePhaseADiagnosticSignature == signature) return;
+    _lastReadablePhaseADiagnosticSignature = signature;
+    final fallbackSource = snapshot.richPhaseBRowsPainted > 0
+        ? 'richPhaseB'
+        : snapshot.readablePhaseARowsPainted > 0
+        ? 'preparedReadablePhaseA'
+        : 'readableResourceMissing';
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LOGBOX_PHASE_A_READABLE_ROWS',
+        queryKey:
+            presentation?.queryKey.value ?? binding.payload?.queryKey.value,
+        coreRevision: presentation?.coreRevision ?? binding.payload?.revision,
+        entryCount: snapshot.payloadRowCount,
+        scope:
+            'targetViewport=${binding.payload?.viewportId ?? -1} '
+            'readablePreparedRows=${snapshot.readablePhaseARowCount} '
+            'readableRowsPainted=${snapshot.readablePhaseARowsPainted} '
+            'richRowsPainted=${snapshot.richPhaseBRowsPainted} '
+            'fallbackSource=$fallbackSource',
       ),
     );
   }
@@ -1244,8 +1297,6 @@ final class _DashboardLogBoxPaintResources {
       editPlaceholder = Paint()
         ..color = DashboardLogBoxTokens.editPlaceholderBackground,
       semanticPreviewAccent = Paint(),
-      semanticPreviewPrimaryLine = Paint()
-        ..color = FluviVisualTokens.surfaceMuted,
       semanticPreviewSecondaryLine = Paint()
         ..color = FluviVisualTokens.surfaceInactive;
 
@@ -1253,7 +1304,6 @@ final class _DashboardLogBoxPaintResources {
   final Paint groupSurface;
   final Paint editPlaceholder;
   final Paint semanticPreviewAccent;
-  final Paint semanticPreviewPrimaryLine;
   final Paint semanticPreviewSecondaryLine;
 
   void dispose() {}
@@ -1362,9 +1412,15 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   bool _reportedVerticalCacheMiss = false;
   int _lastDrawableRowCount = 0;
   int _lastPaintedRowCount = 0;
+  int _lastReadablePhaseARowCount = 0;
+  int _lastReadablePhaseARowsPainted = 0;
+  int _lastRichPhaseBRowsPainted = 0;
 
   int get lastDrawableRowCount => _lastDrawableRowCount;
   int get lastPaintedRowCount => _lastPaintedRowCount;
+  int get lastReadablePhaseARowCount => _lastReadablePhaseARowCount;
+  int get lastReadablePhaseARowsPainted => _lastReadablePhaseARowsPainted;
+  int get lastRichPhaseBRowsPainted => _lastRichPhaseBRowsPainted;
   double get rowHeight => layoutProfile.rowHeight;
 
   double get shadowBottomExtent => groupShadows.fold<double>(
@@ -1463,6 +1519,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (state == null) {
       _lastDrawableRowCount = 0;
       _lastPaintedRowCount = 0;
+      _lastReadablePhaseARowCount = 0;
+      _lastReadablePhaseARowsPainted = 0;
+      _lastRichPhaseBRowsPainted = 0;
       _recordPaintDuration(started, measure);
       return;
     }
@@ -1485,6 +1544,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     if (state.previewRowCount == 0) {
       _lastDrawableRowCount = 0;
       _lastPaintedRowCount = 0;
+      _lastReadablePhaseARowCount = 0;
+      _lastReadablePhaseARowsPainted = 0;
+      _lastRichPhaseBRowsPainted = 0;
       _paintEmpty(canvas, size, scene);
       _recordPaintDuration(started, measure);
       return;
@@ -1513,6 +1575,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       }
     }
     _lastPaintedRowCount = resourceCursor;
+    _lastReadablePhaseARowCount = sceneCache.readablePhaseARowCountFor(state);
+    _lastReadablePhaseARowsPainted = 0;
+    _lastRichPhaseBRowsPainted = resourceCursor;
     if (resourceCursor == 0) {
       sceneCache.recordVisiblePayloadWithoutPaint();
     }
@@ -1530,6 +1595,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   ) {
     final totalRows = state.previewRowCount;
     _lastDrawableRowCount = totalRows;
+    _lastReadablePhaseARowCount = sceneCache.readablePhaseARowCountFor(state);
+    _lastReadablePhaseARowsPainted = 0;
+    _lastRichPhaseBRowsPainted = 0;
     if (totalRows == 0) {
       _lastPaintedRowCount = 0;
       _paintExactEmptySemanticPreview(canvas, size);
@@ -1546,6 +1614,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       size.width - DashboardLogBoxTokens.horizontalGutter * 2,
     );
     var painted = 0;
+    var readablePainted = 0;
     for (var ordinal = first; ordinal < last; ordinal += 1) {
       final top = ordinal * rowHeight;
       if (top > visibleWindow.bottom) break;
@@ -1561,89 +1630,86 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       canvas.drawRRect(body, resources.groupSurface);
       _paintGroupBorder(canvas, slot);
 
-      // This is a compact exact row projection, not a placeholder: every
-      // visual cue below comes from the resident entry at this exact ordinal.
-      // It intentionally avoids rich text/layout work while preserving the
-      // row's identity, category, amount magnitude and local-time position.
-      final entry = state.semanticPreviewLedgerEntryAt(ordinal);
-      final fallbackIdentity =
-          state.semanticPreviewRowIdentityAt(ordinal) ??
-          '${state.viewportId}:$ordinal';
-      final accent = entry == null
-          ? (state.direction == LedgerDirection.expense
-                ? expenseAmountColor
-                : incomeAmountColor)
-          : CategoryColorCatalog.resolve(
-              entry.categoryColorId ?? 'fallback',
-            ).middleColor;
-      final amountMinor = entry?.amountMinor.abs() ?? 0;
-      final normalizedAmount =
-          math
-              .log(amountMinor.toDouble() + 1)
-              .clamp(0.0, math.log(1000001) / math.log(10))
-              .toDouble() /
-          (math.log(1000001) / math.log(10));
-      final localMinutes =
-          (entry?.bookedLocalTimeMinutes ?? fallbackIdentity.hashCode)
-              .clamp(0, (24 * 60) - 1)
-              .toDouble();
-      resources.semanticPreviewAccent.color = accent;
-      final accentWidth = 4.0 + normalizedAmount * 5;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            slot.left + DashboardLogBoxTokens.rowHorizontalInset,
-            slot.top + 13,
-            accentWidth,
-            math.max(0, slot.height - 26),
-          ),
-          const Radius.circular(2),
-        ),
-        resources.semanticPreviewAccent,
-      );
-      final titleWidth = math.max(
-        20.0,
-        slot.width * (0.26 + normalizedAmount * 0.42),
-      );
-      final lineLeft =
-          slot.left + DashboardLogBoxTokens.rowHorizontalInset + 18;
-      final titleTop = slot.top + slot.height * 0.33;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(lineLeft, titleTop, titleWidth, 5),
-          const Radius.circular(3),
-        ),
-        resources.semanticPreviewPrimaryLine,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            lineLeft,
-            titleTop + 13,
-            math.max(16.0, titleWidth * 0.42),
-            4,
-          ),
-          const Radius.circular(2),
-        ),
-        resources.semanticPreviewSecondaryLine,
-      );
-      final timeMarkerLeft =
-          lineLeft +
-          (math.max(0.0, slot.right - 14 - lineLeft) *
-              (localMinutes / ((24 * 60) - 1)));
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(timeMarkerLeft, titleTop + 13, 6, 4),
-          const Radius.circular(2),
-        ),
-        resources.semanticPreviewAccent,
+      final readable = sceneCache.readablePhaseARowFor(state, ordinal: ordinal);
+      if (readable == null) {
+        // This is an explicit invariant-violation appearance, not the normal
+        // Phase-A renderer. A visible exact target is required to have its
+        // readable resource bank before motion begins; keeping this bounded
+        // marker makes a bad host/resource lifecycle diagnosable without
+        // constructing text or projecting rows in paint.
+        _paintUnreadablePhaseAInvariantMarker(canvas, slot);
+        painted += 1;
+        continue;
+      }
+      _paintReadablePhaseARow(
+        canvas,
+        width: size.width,
+        rowTop: top,
+        readable: readable,
       );
       painted += 1;
+      readablePainted += 1;
     }
     _lastPaintedRowCount = painted;
+    _lastReadablePhaseARowsPainted = readablePainted;
     performanceCounters?.increment(
       DashboardPerformanceMetric.logVisibleSlotPaint,
       by: painted,
+    );
+  }
+
+  void _paintReadablePhaseARow(
+    Canvas canvas, {
+    required double width,
+    required double rowTop,
+    required DashboardPreparedLogBoxReadablePhaseARow readable,
+  }) {
+    final badgeTop =
+        rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
+    final badgeRect = Rect.fromLTWH(
+      DashboardLogBoxTokens.rowHorizontalInset,
+      badgeTop,
+      DashboardLogBoxTokens.avatarSize,
+      DashboardLogBoxTokens.avatarSize,
+    );
+    _drawPreparedVectorBadge(
+      canvas,
+      rasters.badge(readable.categoryColorHandle),
+      badgeRect,
+    );
+    _drawPreparedVectorGlyph(
+      canvas,
+      rasters.glyph(readable.categoryIconHandle),
+      Rect.fromCenter(
+        center: badgeRect.center,
+        width: DashboardLogBoxTokens.avatarIconSize,
+        height: DashboardLogBoxTokens.avatarIconSize,
+      ),
+    );
+    readable.textLayout.paint(
+      canvas,
+      rowTop,
+      rowHeight: rowHeight,
+      amountForeground: readable.amountStyle == LogAmountStyle.expense
+          ? expenseAmountColor
+          : incomeAmountColor,
+    );
+    _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
+  }
+
+  void _paintUnreadablePhaseAInvariantMarker(Canvas canvas, Rect slot) {
+    resources.semanticPreviewAccent.color = FluviVisualTokens.border;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          slot.left + DashboardLogBoxTokens.rowHorizontalInset,
+          slot.center.dy - 2,
+          math.min(40, math.max(0, slot.width - 32)),
+          4,
+        ),
+        const Radius.circular(2),
+      ),
+      resources.semanticPreviewAccent,
     );
   }
 
@@ -1689,6 +1755,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final manifest = committedViewport.geometryManifest;
     _lastDrawableRowCount = manifest?.totalEntryCount ?? 0;
     _lastPaintedRowCount = 0;
+    _lastReadablePhaseARowCount = 0;
+    _lastReadablePhaseARowsPainted = 0;
+    _lastRichPhaseBRowsPainted = 0;
     if (manifest == null) {
       _recordVerticalCacheMiss(state, -1);
       return;

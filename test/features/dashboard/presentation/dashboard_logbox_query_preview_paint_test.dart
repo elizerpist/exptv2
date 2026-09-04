@@ -250,6 +250,17 @@ void main() {
         previewRowCount: 4,
       );
       final frame = _previewFrame(prepared, presentationEpoch: 1);
+      final phaseAResourceWindow = DashboardLogBoxSceneWindow(
+        identity: 'phase-a-before-rich:${prepared.logBox.viewportId}',
+        payloads: <DashboardLogViewportState>[prepared.logBox],
+      );
+      await sceneCache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'phase-a-before-rich-resource',
+        window: phaseAResourceWindow,
+        surfaceWidth: 378,
+      );
+      expect(sceneCache.railCriticalSceneFor(prepared.logBox), isNull);
       store.publish(frame);
 
       await tester.pumpWidget(
@@ -290,6 +301,9 @@ void main() {
       expect(first.payloadRowCount, 4);
       expect(first.drawableRowCount, 4);
       expect(first.paintedRowCount, greaterThan(0));
+      expect(first.readablePhaseARowCount, 4);
+      expect(first.readablePhaseARowsPainted, 4);
+      expect(first.richPhaseBRowsPainted, 0);
 
       await _prepareAndActivatePreviewScene(sceneCache, prepared.logBox);
       await tester.pump();
@@ -310,6 +324,110 @@ void main() {
       final exact = matching.last;
       expect(exact.drawableRowCount, 4);
       expect(exact.paintedRowCount, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'RED: a non-empty deferred Phase-A preview paints reusable readable transaction rows without a rich scene',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(committedViewport.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 17,
+        entryCountOverride: 3,
+        previewRowCount: 3,
+        deferredLogBox: true,
+      );
+      final resourceWindow = DashboardLogBoxSceneWindow(
+        identity: 'readable-phase-a:time:${prepared.logBox.viewportId}',
+        payloads: <DashboardLogViewportState>[prepared.logBox],
+      );
+      await sceneCache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'readable-phase-a-time-resource',
+        window: resourceWindow,
+        surfaceWidth: 378,
+      );
+
+      // The resource bank is intentionally invisible: rich Phase-B did not
+      // activate, so the renderer must prove that its Phase-A painter owns
+      // actual prepared text rather than the old accent/bar/dot drawing.
+      expect(sceneCache.railCriticalSceneFor(prepared.logBox), isNull);
+      final firstReadable = sceneCache.readablePhaseARowFor(
+        prepared.logBox,
+        ordinal: 0,
+      );
+      expect(firstReadable, isNotNull);
+      expect(firstReadable!.titleText, 'Fixture transaction 0');
+      expect(firstReadable.amountText, '-0,01 Ft');
+      expect(firstReadable.secondaryText, 'Fixture category');
+      expect(firstReadable.timeText, '12:00');
+
+      final frame = _previewFrame(prepared, presentationEpoch: 17);
+      store.publish(frame);
+      final projectionsBeforePaint =
+          prepared.logBox.richProjectionMetrics.projectedFrameCount;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 320,
+            child: Stack(
+              children: <Widget>[
+                CustomScrollView(
+                  controller: scrollController,
+                  slivers: const <Widget>[
+                    SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                  ],
+                ),
+                Positioned.fill(
+                  child: DashboardLogBoxRenderSurface(
+                    visibleFrames: store,
+                    scrollController: scrollController,
+                    minimumHeight: 320,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    committedViewport: committedViewport,
+                    preparedSceneCache: sceneCache,
+                    onExtentPublished: snapshots.add,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final snapshot = snapshots.firstWhere(
+        (value) => value.presentation?.queryKey == frame.queryKey,
+      );
+      expect(snapshot.renderDomain, DashboardLogBoxRenderDomain.railPreview);
+      expect(snapshot.payloadRowCount, 3);
+      expect(snapshot.readablePhaseARowCount, 3);
+      expect(snapshot.readablePhaseARowsPainted, 3);
+      expect(snapshot.richPhaseBRowsPainted, 0);
+      expect(snapshot.paintedRowCount, 3);
+      expect(
+        prepared.logBox.richProjectionMetrics.projectedFrameCount,
+        projectionsBeforePaint,
+        reason:
+            'The Phase-A painter must only paint prebuilt paragraph resources; '
+            'it cannot materialize a rich projection on the paint path.',
+      );
     },
   );
 
@@ -598,7 +716,7 @@ void main() {
   );
 
   testWidgets(
-    'RED: a complete filtered rail-preview scene paints in the first Query Apply frame without input',
+    'RED: a filtered Query Apply remains nonblank when its optional candidate scene is unavailable',
     (tester) async {
       final repository = _NonEmptyQueryRepository();
       final core = DashboardCoreController(
@@ -700,12 +818,17 @@ void main() {
         facetPresentation: facets,
       );
       expect(candidate, isNotNull);
+      final preparedCandidate = candidate!;
+      final candidateSceneRetained = sceneCache.hasCandidateWindow(
+        preparedCandidate.currentParentInteractionWindow,
+        candidateKey: preparedCandidate.cacheKey,
+      );
       expect(
-        sceneCache.hasCandidateWindow(
-          candidate!.currentParentInteractionWindow,
-          candidateKey: candidate.cacheKey,
-        ),
-        isTrue,
+        preparedCandidate.sceneStaged,
+        candidateSceneRetained,
+        reason:
+            'The candidate must report its optional rich-bank readiness '
+            'truthfully; semantic exactness is validated independently.',
       );
       expect(
         await core.applyQuery(
@@ -739,12 +862,31 @@ void main() {
       expect(payload?.queryKey, expectedPublishedKey);
       expect(queryBSnapshots, isNotEmpty);
       final snapshot = queryBSnapshots.last;
-      expect(snapshot.renderDomain, DashboardLogBoxRenderDomain.railPreview);
       expect(payload?.previewRowCount, greaterThan(0));
       expect(snapshot.drawableRowCount, greaterThan(0));
       expect(snapshot.paintedRowCount, greaterThan(0));
-      expect(scene, isNotNull);
-      expect(scene!.rowFor(payload!.flatItems.first.row), isNotNull);
+      if (snapshot.renderDomain == DashboardLogBoxRenderDomain.railPreview) {
+        expect(snapshot.readablePhaseARowCount, payload!.previewRowCount);
+        expect(snapshot.readablePhaseARowsPainted, greaterThan(0));
+        final readable = sceneCache.readablePhaseARowFor(payload, ordinal: 0);
+        expect(readable, isNotNull);
+        expect(readable!.titleText, isNotEmpty);
+        expect(readable.amountText, isNotEmpty);
+        if (scene != null) {
+          expect(scene.rowFor(payload.flatItems.first.row), isNotNull);
+          expect(snapshot.richPhaseBRowsPainted, greaterThan(0));
+        } else {
+          expect(snapshot.richPhaseBRowsPainted, 0);
+        }
+      } else {
+        expect(
+          snapshot.renderDomain,
+          DashboardLogBoxRenderDomain.committedVertical,
+          reason:
+              'A direct canonical Query Apply may retain its existing '
+              'vertical owner; either domain must paint the exact new rows.',
+        );
+      }
       expect(sceneCache.visiblePayloadWithoutPaintCount, 0);
     },
   );
@@ -832,6 +974,9 @@ void main() {
         isTrue,
         reason: sceneCache.report().toString(),
       );
+      final pendingPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final projectionsBeforePaint =
+          pendingPayload.richProjectionMetrics.projectedFrameCount;
       await tester.pump();
 
       final payload = core.visibleFrames.logBoxLane.value!.logBox;
@@ -846,6 +991,13 @@ void main() {
       expect(snapshot.payloadRowCount, 1);
       expect(snapshot.drawableRowCount, 1);
       expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(
+        payload.richProjectionMetrics.projectedFrameCount,
+        projectionsBeforePaint,
+        reason:
+            'The production painter must not materialize an additional rich '
+            'Mind projection after the direct preview publication.',
+      );
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
 
@@ -993,6 +1145,9 @@ void main() {
       );
       slider.onChangeStart!(slider.values);
       slider.onChanged!(const RangeValues(150000, 250000));
+      final firstPendingPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final firstProjectionsBeforePaint =
+          firstPendingPayload.richProjectionMetrics.projectedFrameCount;
       await tester.pump();
 
       final firstPayload = core.visibleFrames.logBoxLane.value!.logBox;
@@ -1010,6 +1165,16 @@ void main() {
       );
       expect(firstPaint.drawableRowCount, 1);
       expect(firstPaint.paintedRowCount, greaterThan(0));
+      expect(firstPaint.readablePhaseARowCount, 1);
+      expect(firstPaint.readablePhaseARowsPainted, 1);
+      expect(firstPaint.richPhaseBRowsPainted, 0);
+      expect(
+        firstPayload.richProjectionMetrics.projectedFrameCount,
+        firstProjectionsBeforePaint,
+        reason:
+            'A held Mind Phase-A paint may borrow prepared paragraphs but '
+            'cannot materialize a rich projection on its paint path.',
+      );
       expect(
         repository.prepareIndexCalls,
         1,
@@ -1033,6 +1198,9 @@ void main() {
       expect(emptyPayload.previewRowCount, 0);
       expect(emptyPaint.drawableRowCount, 0);
       expect(emptyPaint.paintedRowCount, 0);
+      expect(emptyPaint.readablePhaseARowCount, 0);
+      expect(emptyPaint.readablePhaseARowsPainted, 0);
+      expect(emptyPaint.richPhaseBRowsPainted, 0);
 
       slider = tester.widget<RangeSlider>(
         find.byKey(const ValueKey('query-amount-range-slider')),
@@ -1047,6 +1215,9 @@ void main() {
       expect(pointerUp, isFalse);
       expect(reversePayload.stableRowIdentities, <String>['amount-200000']);
       expect(reversePaint.paintedRowCount, greaterThan(0));
+      expect(reversePaint.readablePhaseARowCount, 1);
+      expect(reversePaint.readablePhaseARowsPainted, 1);
+      expect(reversePaint.richPhaseBRowsPainted, 0);
 
       // Submit two raw values in one display frame. The shared one-slot
       // scheduler must discard the intermediate all-row value and paint the
@@ -1075,6 +1246,9 @@ void main() {
       );
       expect(finalPayload.stableRowIdentities, <String>['amount-100000']);
       expect(finalPaint.paintedRowCount, greaterThan(0));
+      expect(finalPaint.readablePhaseARowCount, 1);
+      expect(finalPaint.readablePhaseARowsPainted, 1);
+      expect(finalPaint.richPhaseBRowsPainted, 0);
       expect(
         FluviDiagnosticLogger.entries.where(
           (event) => event.stage == 'MIND|LIVE_TARGET_PAINTED',
@@ -1159,7 +1333,10 @@ void main() {
   testWidgets(
     'RED LIVE-AVATAR: a prepared target crossing paints its exact production LogBox root in one frame',
     (tester) async {
-      final repository = _MindLivePreviewRepository();
+      final canonicalIndexGate = Completer<void>();
+      final repository = _MindLivePreviewRepository(
+        canonicalIndexGate: canonicalIndexGate,
+      );
       final core = DashboardCoreController(
         dataRepository: repository,
         initialDate: DateTime.utc(2026, 7, 14),
@@ -1171,7 +1348,11 @@ void main() {
       addTearDown(core.dispose);
       addTearDown(sceneCache.dispose);
       await core.bootstrap();
-      await _attachAndActivateInitialScene(core, sceneCache);
+      await _attachAndActivateInitialScene(
+        core,
+        sceneCache,
+        stageLiveInteractionFromPreparedResources: false,
+      );
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1234,6 +1415,9 @@ void main() {
         isTrue,
         reason: sceneCache.report().toString(),
       );
+      final pendingPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final projectionsBeforePaint =
+          pendingPayload.richProjectionMetrics.projectedFrameCount;
       await tester.pump();
 
       final payload = core.visibleFrames.logBoxLane.value!.logBox;
@@ -1243,13 +1427,35 @@ void main() {
       );
       expect(payload.queryKey.value, contains('categories:utilities'));
       expect(payload.previewRowCount, greaterThan(0));
-      expect(scene, isNotNull);
-      for (final item in payload.flatItems) {
-        expect(scene!.rowFor(item.row), isNotNull);
-      }
+      expect(
+        scene,
+        isNull,
+        reason:
+            'This production Avatar crossing deliberately withholds Phase B; '
+            'the matching Phase-A rows must remain readable on their own.',
+      );
       expect(snapshot.payloadRowCount, payload.previewRowCount);
       expect(snapshot.drawableRowCount, payload.previewRowCount);
       expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(
+        snapshot.renderDomain,
+        DashboardLogBoxRenderDomain.railPreview,
+        reason: sceneCache.report().toString(),
+      );
+      expect(
+        snapshot.readablePhaseARowCount,
+        payload.previewRowCount,
+        reason: sceneCache.report().toString(),
+      );
+      expect(snapshot.readablePhaseARowsPainted, payload.previewRowCount);
+      expect(snapshot.richPhaseBRowsPainted, 0);
+      expect(
+        payload.richProjectionMetrics.projectedFrameCount,
+        projectionsBeforePaint,
+        reason:
+            'Avatar Phase-A uses its already prepared row bank; the stable '
+            'painter cannot project a rich LogBox scene during the crossing.',
+      );
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
       expect(
@@ -1269,6 +1475,15 @@ void main() {
         reason:
             'The extent report must distinguish a selected Avatar from its '
             'matching production LogBox root actually painting.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|CANONICAL_PUBLICATION_RECONCILED',
+        ),
+        isEmpty,
+        reason:
+            'A moving Avatar publishes Phase A immediately, but it may not '
+            'canonically commit an intermediate target before settle.',
       );
 
       expect(
@@ -1299,6 +1514,18 @@ void main() {
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
       core.endBudgetAvatarMotion();
+      canonicalIndexGate.complete();
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|CANONICAL_PUBLICATION_RECONCILED',
+        ),
+        hasLength(1),
+        reason:
+            'The deferred latest-wins slot commits exactly the last Avatar '
+            'target once at the motion-idle boundary.',
+      );
     },
   );
 
@@ -1510,6 +1737,15 @@ void main() {
             'Avatar settle may promote ownership but cannot introduce the '
             'first matching LogBox paint.',
       );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|CANONICAL_PUBLICATION_RECONCILED',
+        ),
+        hasLength(1),
+        reason:
+            'The complete physical rail path coalesces crossings into one '
+            'latest-target canonical publication at settle.',
+      );
     },
   );
 
@@ -1529,7 +1765,11 @@ void main() {
       addTearDown(core.dispose);
       addTearDown(sceneCache.dispose);
       await core.bootstrap();
-      await _attachAndActivateInitialScene(core, sceneCache);
+      await _attachAndActivateInitialScene(
+        core,
+        sceneCache,
+        stageLiveInteractionFromPreparedResources: false,
+      );
       final origin = core.navigation.state;
       final candidate = core.experimentalTemporalComponentOffsetCandidate(
         plane: TimePlane.month,
@@ -1573,19 +1813,29 @@ void main() {
         ),
       );
       await tester.pump();
-      final liveHotset = core.railInteractionSceneWindowFor(origin);
-      await sceneCache.prepareWindow(
-        window: liveHotset,
-        surfaceWidth: sceneCache.surfaceWidth,
+      for (
+        var frame = 0;
+        frame < 40 && !sceneCache.hasLiveInteractionResourceBank;
+        frame += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(
+        sceneCache.hasLiveInteractionResourceBank,
+        isTrue,
+        reason:
+            'Time Phase-A paragraph resources are prepared while idle, not '
+            'during a semantic crossing.',
       );
-      sceneCache.activateWindow(liveHotset);
-      core.recordInitialSceneWindowActivation(liveHotset);
       final prepareCountBeforeCrossing = sceneCache.scenePrepareNewCount;
       core.beginSegmentedSummaryMotion();
       core.navigateExperimentalTemporalComponentCandidate(
         candidate: candidate,
         component: DashboardTemporalAnchorComponent.day,
       );
+      final pendingPayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final projectionsBeforePaint =
+          pendingPayload.richProjectionMetrics.projectedFrameCount;
       await tester.pump();
 
       final payload = core.visibleFrames.logBoxLane.value!.logBox;
@@ -1597,13 +1847,30 @@ void main() {
       expect(payload.previewRowCount, greaterThan(0));
       expect(
         scene,
-        isNotNull,
+        isNull,
         reason:
-            'payload=${payload.queryKey.value}/${payload.viewportId} '
-            'cache=${sceneCache.report()}',
+            'The Time production parent deliberately withholds optional rich '
+            'Phase B; exact Phase-A rows remain independently drawable.',
       );
+      expect(snapshot.renderDomain, DashboardLogBoxRenderDomain.railPreview);
       expect(snapshot.drawableRowCount, payload.previewRowCount);
       expect(snapshot.paintedRowCount, greaterThan(0));
+      expect(snapshot.readablePhaseARowCount, payload.previewRowCount);
+      expect(
+        snapshot.readablePhaseARowsPainted,
+        snapshot.paintedRowCount,
+        reason:
+            'Only the bounded visible viewport is painted, but every painted '
+            'Phase-A slot must be a prepared readable transaction row.',
+      );
+      expect(snapshot.richPhaseBRowsPainted, 0);
+      expect(
+        payload.richProjectionMetrics.projectedFrameCount,
+        projectionsBeforePaint,
+        reason:
+            'Time Phase-A paint consumes only the idle-prepared readable bank '
+            'and never materializes a rich projection in the semantic tick.',
+      );
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.scenePrepareNewCount, prepareCountBeforeCrossing);
     },
