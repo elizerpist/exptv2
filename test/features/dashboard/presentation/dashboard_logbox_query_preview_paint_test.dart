@@ -1139,6 +1139,12 @@ void main() {
       );
       await tester.pump();
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      final viewportElement = tester.element(
+        find.byType(DashboardLogBoxViewport),
+      );
+      final renderSurfaceElement = tester.element(
+        find.byType(DashboardLogBoxRenderSurface),
+      );
 
       var slider = tester.widget<RangeSlider>(
         find.byKey(const ValueKey('query-amount-range-slider')),
@@ -1156,6 +1162,21 @@ void main() {
       );
       expect(pointerUp, isFalse);
       expect(firstPayload.stableRowIdentities, <String>['amount-200000']);
+      expect(
+        find.text('1 tranzakció listázva'),
+        findsOneWidget,
+        reason:
+            'The production header must follow the exact total in the accepted '
+            'Mind count lane, not the committed frame or bounded row payload.',
+      );
+      expect(
+        tester.element(find.byType(DashboardLogBoxViewport)),
+        same(viewportElement),
+      );
+      expect(
+        tester.element(find.byType(DashboardLogBoxRenderSurface)),
+        same(renderSurfaceElement),
+      );
       expect(
         sceneCache.railCriticalSceneFor(firstPayload),
         isNull,
@@ -1201,6 +1222,7 @@ void main() {
       expect(emptyPaint.readablePhaseARowCount, 0);
       expect(emptyPaint.readablePhaseARowsPainted, 0);
       expect(emptyPaint.richPhaseBRowsPainted, 0);
+      expect(find.text('0 tranzakció listázva'), findsOneWidget);
 
       slider = tester.widget<RangeSlider>(
         find.byKey(const ValueKey('query-amount-range-slider')),
@@ -1218,6 +1240,7 @@ void main() {
       expect(reversePaint.readablePhaseARowCount, 1);
       expect(reversePaint.readablePhaseARowsPainted, 1);
       expect(reversePaint.richPhaseBRowsPainted, 0);
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
 
       // Submit two raw values in one display frame. The shared one-slot
       // scheduler must discard the intermediate all-row value and paint the
@@ -1249,6 +1272,13 @@ void main() {
       expect(finalPaint.readablePhaseARowCount, 1);
       expect(finalPaint.readablePhaseARowsPainted, 1);
       expect(finalPaint.richPhaseBRowsPainted, 0);
+      expect(
+        find.text('1 tranzakció listázva'),
+        findsOneWidget,
+        reason:
+            'The canonical apply must reconcile to the latest accepted count '
+            'without a stale or zero-count header flash.',
+      );
       expect(
         FluviDiagnosticLogger.entries.where(
           (event) => event.stage == 'MIND|LIVE_TARGET_PAINTED',
@@ -1631,6 +1661,7 @@ void main() {
                     onPreparedTargetHotsetRequested:
                         drilldown.primeBudgetTargetHotset,
                     liveTargetReadiness: drilldown.liveTargetReadiness,
+                    liveTargetPainted: drilldown.liveTargetPainted,
                     onMotionActiveChanged: (active) {
                       if (active) {
                         core.beginBudgetAvatarMotion();
@@ -1745,6 +1776,21 @@ void main() {
         reason:
             'The complete physical rail path coalesces crossings into one '
             'latest-target canonical publication at settle.',
+      );
+      final motionSummary = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_AVATAR_MOTION_SUMMARY',
+      );
+      final ballisticMatchingPaints = RegExp(
+        r'ballisticMatchingLogBoxPaints=(\d+)',
+      ).firstMatch(motionSummary.scope ?? '');
+      expect(ballisticMatchingPaints, isNotNull);
+      expect(
+        int.parse(ballisticMatchingPaints!.group(1)!),
+        greaterThan(0),
+        reason:
+            'The rail summary must account for the same Phase-A LogBox paint '
+            'that the production Core has acknowledged; a hard-coded zero '
+            'would make a successful visible target look unpainted.',
       );
     },
   );

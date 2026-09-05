@@ -371,6 +371,150 @@ void main() {
   });
 
   testWidgets(
+    'Ledger count follows the accepted live count lane instead of the committed payload',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      final committed = _frame(totalRows: 94);
+      expect(store.publish(committed), isTrue);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            child: DashboardLogBoxHeader(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 0,
+                width: 378,
+                height: DashboardLayoutMetrics.referenceLogBoxHeaderHeight,
+              ),
+              visibleFrames: store,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('94 tranzakció listázva'), findsOneWidget);
+
+      final live = _frame(totalRows: 2288, presentationEpoch: 2);
+      final order = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 1,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          live,
+          previewGeneration: 1,
+          order: order,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+
+      expect(store.value, same(committed));
+      expect(store.countLane.value, same(live));
+      expect(live.logBox.previewRowCount, 24);
+      expect(live.count.entryCount, 2288);
+      expect(find.text('2288 tranzakció listázva'), findsOneWidget);
+      expect(find.text('24 tranzakció listázva'), findsNothing);
+
+      final staleOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 2,
+      );
+      final currentOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 3,
+      );
+      final current = _frame(totalRows: 1, presentationEpoch: 3);
+      expect(
+        store.publishPreparedInteractionPreview(
+          current,
+          previewGeneration: 3,
+          order: currentOrder,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+
+      expect(
+        store.publishPreparedInteractionPreview(
+          _frame(totalRows: 0, presentationEpoch: 2),
+          previewGeneration: 2,
+          order: staleOrder,
+        ),
+        isFalse,
+        reason:
+            'An older live count may not replace the current accepted '
+            'producer/epoch projection.',
+      );
+      await tester.pump();
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+
+      expect(
+        store.armPreparedInteractionPreviewCanonicalReconciliation(
+          order: currentOrder,
+          frameGeneration: current.frameGeneration,
+        ),
+        isTrue,
+      );
+      expect(store.publish(_frame(totalRows: 1, presentationEpoch: 4)), isTrue);
+      await tester.pump();
+      expect(
+        store.interactionPreviewReconciliationState,
+        DashboardInteractionPreviewReconciliationState.reconciledExact,
+      );
+      expect(find.text('1 tranzakció listázva'), findsOneWidget);
+
+      final cancellable = _frame(totalRows: 21, presentationEpoch: 5);
+      final cancelOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 4,
+      );
+      expect(
+        store.publishPreparedInteractionPreview(
+          cancellable,
+          previewGeneration: 4,
+          order: cancelOrder,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      expect(find.text('21 tranzakció listázva'), findsOneWidget);
+      store.clearPreparedInteractionPreview(order: cancelOrder);
+      await tester.pump();
+      expect(
+        find.text('1 tranzakció listázva'),
+        findsOneWidget,
+        reason:
+            'Cancelling the current live lane restores the committed count '
+            'without a zero or stale-preview flash.',
+      );
+
+      final avatarOrder = store.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.budgetAvatar,
+        localGeneration: 1,
+      );
+      final avatar = _frame(totalRows: 21, presentationEpoch: 6);
+      expect(
+        store.publishPreparedInteractionPreview(
+          avatar,
+          previewGeneration: 1,
+          order: avatarOrder,
+        ),
+        isTrue,
+        reason:
+            'A later Avatar target uses the same accepted count lane without '
+            'ever replacing the committed structural frame.',
+      );
+      await tester.pump();
+      expect(store.value, isNot(same(avatar)));
+      expect(find.text('21 tranzakció listázva'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'Ledger chrome keeps count and SearchPill inside scaled structural slots',
     (tester) async {
       final store = DashboardVisibleFrameStore();

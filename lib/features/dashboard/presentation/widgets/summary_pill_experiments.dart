@@ -353,172 +353,258 @@ final class SummaryPillExperiment extends StatelessWidget {
   final DashboardSummaryPresentationSettings presentation;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: Listenable.merge(<Listenable>[
-      navigation,
-      visibleFrames.navigationLane,
-    ]),
-    builder: (context, _) {
-      performanceCounters?.increment(
-        DashboardPerformanceMetric.summaryPillBuild,
-      );
-      final level = SummaryPillExperimentLevel.fromNavigation(navigation);
-      final depth = DashboardShadowStyleScope.profileOf(
-        context,
-      ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
-      final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
-          .borderRadiusFor(
-            DashboardCornerSurfaceFamily.summaryPill,
-            size: Size(bounds.width, bounds.height),
-          );
-      final content = LayoutBuilder(
-        builder: (context, constraints) {
-          final inset = bounds.width <= 320
-              ? 6.0
-              : FluviVisualTokens.controlHorizontalInset;
-          // Keep the pre-existing prepared-amount width contract while
-          // turning its remaining area into deterministic fixed tracks.
-          final amountWidth = constraints.maxWidth * .40;
-          // This is the original quarter-track navigation footprint. It is
-          // retained only as the measured pre-regression content-edge baseline
-          // for the requested 50% gap—not as a visual or gesture lane.
-          final preRegressionNavigationWidth =
-              constraints.maxWidth - amountWidth - inset * 2;
-          // Normal preserves the existing right-side amount zone; mirrored
-          // swaps the two whole zones. In either orientation, navigation's
-          // outer edge is the mode badge's equal horizontal/vertical inset.
-          final navigationWidth = constraints.maxWidth - amountWidth - inset;
-          final activeTracks = <int>[
-            0,
-            if (level != SummaryPillExperimentLevel.sum) 1,
-            if (level == SummaryPillExperimentLevel.month ||
-                level == SummaryPillExperimentLevel.day)
-              2,
-            if (level == SummaryPillExperimentLevel.day) 3,
-          ];
-          final selectorGeometry = SummarySegmentedTrackGeometry.resolve(
-            width: navigationWidth,
-            height: bounds.height,
-            activeTrackIndices: activeTracks,
-            preRegressionNavigationWidth: preRegressionNavigationWidth,
-            orientation: presentation.segmentedOrientation,
-          );
-          final navigationLeft =
-              presentation.segmentedOrientation ==
-                  SummarySegmentedOrientation.normal
-              ? 0.0
-              : inset + amountWidth;
-          bool isSelectorPosition(Offset localPosition) => activeTracks.any(
-            (track) => selectorGeometry
-                .semanticRectForTrack(track)
-                .shift(Offset(navigationLeft, 0))
-                .contains(localPosition),
-          );
-          final navigationSurface = SizedBox(
-            width: navigationWidth,
-            height: bounds.height,
-            child: _SegmentedNavigationSurface(
-              level: level,
-              height: bounds.height,
+  Widget build(BuildContext context) => _SegmentedMotionGateHost(
+    onMotionActiveChanged: onSelectorMotionActiveChanged,
+    builder: (context, motionGate) => ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        navigation,
+        visibleFrames.navigationLane,
+      ]),
+      builder: (context, _) {
+        performanceCounters?.increment(
+          DashboardPerformanceMetric.summaryPillBuild,
+        );
+        final level = SummaryPillExperimentLevel.fromNavigation(navigation);
+        final depth = DashboardShadowStyleScope.profileOf(
+          context,
+        ).depthFor(DashboardCornerSurfaceFamily.summaryPill);
+        final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
+            .borderRadiusFor(
+              DashboardCornerSurfaceFamily.summaryPill,
+              size: Size(bounds.width, bounds.height),
+            );
+        final content = LayoutBuilder(
+          builder: (context, constraints) {
+            final inset = bounds.width <= 320
+                ? 6.0
+                : FluviVisualTokens.controlHorizontalInset;
+            // Keep the pre-existing prepared-amount width contract while
+            // turning its remaining area into deterministic fixed tracks.
+            final amountWidth = constraints.maxWidth * .40;
+            // This is the original quarter-track navigation footprint. It is
+            // retained only as the measured pre-regression content-edge baseline
+            // for the requested 50% gap—not as a visual or gesture lane.
+            final preRegressionNavigationWidth =
+                constraints.maxWidth - amountWidth - inset * 2;
+            // Normal preserves the existing right-side amount zone; mirrored
+            // swaps the two whole zones. In either orientation, navigation's
+            // outer edge is the mode badge's equal horizontal/vertical inset.
+            final navigationWidth = constraints.maxWidth - amountWidth - inset;
+            final activeTracks = <int>[
+              0,
+              if (level != SummaryPillExperimentLevel.sum) 1,
+              if (level == SummaryPillExperimentLevel.month ||
+                  level == SummaryPillExperimentLevel.day)
+                2,
+              if (level == SummaryPillExperimentLevel.day) 3,
+            ];
+            final selectorGeometry = SummarySegmentedTrackGeometry.resolve(
               width: navigationWidth,
+              height: bounds.height,
+              activeTrackIndices: activeTracks,
               preRegressionNavigationWidth: preRegressionNavigationWidth,
-              navigation: navigation,
-              presentation: presentation,
-              onLevelCrossed: onLevelCrossed,
-              onComponentCrossed: onComponentCrossed,
-              onComponentCrossingAccepted: onComponentCrossingAccepted,
-              componentPaintedTarget: componentPaintedTarget,
-              onComponentSettled: onComponentSettled,
-              motionDiagnostics: motionDiagnostics,
-              componentCandidateProjector: componentCandidateProjector,
-              onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
-              onSelectorDirectInputStarted: onSelectorDirectInputStarted,
-              onSelectorPointerDownDecision: onSelectorPointerDownDecision,
-              autoResetMotionRegistry: autoResetMotionRegistry,
-            ),
-          );
-          final amountZone = SizedBox(
-            key: const ValueKey<String>('summary-pill-experiment-amount-zone'),
-            width: amountWidth,
-            height: bounds.height,
-            child: Align(
-              alignment:
-                  presentation.segmentedOrientation ==
-                      SummarySegmentedOrientation.normal
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              child: SummaryPillPreparedAmountSlot(
-                visibleFrames: visibleFrames,
-                performanceCounters: performanceCounters,
-                onMotionActiveChanged: onAmountMotionActiveChanged,
-                slotWidth: amountWidth,
+              orientation: presentation.segmentedOrientation,
+            );
+            final navigationLeft =
+                presentation.segmentedOrientation ==
+                    SummarySegmentedOrientation.normal
+                ? 0.0
+                : inset + amountWidth;
+            bool isSelectorPosition(Offset localPosition) => activeTracks.any(
+              (track) => selectorGeometry
+                  .semanticRectForTrack(track)
+                  .shift(Offset(navigationLeft, 0))
+                  .contains(localPosition),
+            );
+            final navigationSurface = SizedBox(
+              width: navigationWidth,
+              height: bounds.height,
+              child: _SegmentedNavigationSurface(
+                level: level,
+                height: bounds.height,
+                width: navigationWidth,
+                preRegressionNavigationWidth: preRegressionNavigationWidth,
+                navigation: navigation,
+                presentation: presentation,
+                onLevelCrossed: onLevelCrossed,
+                onComponentCrossed: onComponentCrossed,
+                onComponentCrossingAccepted: onComponentCrossingAccepted,
+                componentPaintedTarget: componentPaintedTarget,
+                onComponentSettled: onComponentSettled,
+                motionDiagnostics: motionDiagnostics,
+                componentCandidateProjector: componentCandidateProjector,
+                motionGate: motionGate,
+                onSelectorDirectInputStarted: onSelectorDirectInputStarted,
+                onSelectorPointerDownDecision: onSelectorPointerDownDecision,
+                autoResetMotionRegistry: autoResetMotionRegistry,
+              ),
+            );
+            final amountZone = SizedBox(
+              key: const ValueKey<String>(
+                'summary-pill-experiment-amount-zone',
+              ),
+              width: amountWidth,
+              height: bounds.height,
+              child: Align(
                 alignment:
                     presentation.segmentedOrientation ==
                         SummarySegmentedOrientation.normal
                     ? Alignment.centerRight
                     : Alignment.centerLeft,
+                child: SummaryPillPreparedAmountSlot(
+                  visibleFrames: visibleFrames,
+                  performanceCounters: performanceCounters,
+                  onMotionActiveChanged: onAmountMotionActiveChanged,
+                  slotWidth: amountWidth,
+                  alignment:
+                      presentation.segmentedOrientation ==
+                          SummarySegmentedOrientation.normal
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                ),
               ),
-            ),
-          );
-          final sections = switch (presentation.segmentedOrientation) {
-            SummarySegmentedOrientation.normal => Row(
-              children: <Widget>[
-                navigationSurface,
-                amountZone,
-                SizedBox(width: inset),
-              ],
-            ),
-            SummarySegmentedOrientation.mirrored => Row(
-              children: <Widget>[
-                SizedBox(width: inset),
-                amountZone,
-                navigationSurface,
-              ],
-            ),
-          };
-          // Selector sections are above this surface in the hit-test tree, so
-          // temporal flings retain exact Rect ownership. The exposed surface
-          // is the only Summary region that can tap-reset or drag Header.
-          return Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              GestureDetector(
-                key: const ValueKey<String>('summary-pill-background-gesture'),
-                behavior: HitTestBehavior.opaque,
-                onTapUp: (details) {
-                  if (!isSelectorPosition(details.localPosition)) {
-                    onBackgroundTap?.call();
-                  }
-                },
-                onVerticalDragStart: onBackgroundVerticalDragStart,
-                onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
-                onVerticalDragEnd: onBackgroundVerticalDragEnd,
+            );
+            final sections = switch (presentation.segmentedOrientation) {
+              SummarySegmentedOrientation.normal => Row(
+                children: <Widget>[
+                  navigationSurface,
+                  amountZone,
+                  SizedBox(width: inset),
+                ],
               ),
-              sections,
-            ],
-          );
-        },
-      );
-      return SizedBox(
-        key: ValueKey<String>('summary-pill-experiment-${variant.name}'),
-        width: bounds.width,
-        height: bounds.height,
-        child: FluviRoundedBox(
-          color: depth.surfaceColor ?? FluviVisualTokens.surface,
-          border: DashboardBorderScope.profileOf(
-            context,
-          ).borderFor(DashboardBorderSurface.summary),
-          borderRadius: borderRadius,
-          boxShadow: depth.shadows,
-          child:
-              presentation.temporalFlingPresentation ==
-                  SummaryTemporalFlingPresentation.dynamicTrio
-              ? ClipRRect(borderRadius: borderRadius, child: content)
-              : content,
-        ),
-      );
-    },
+              SummarySegmentedOrientation.mirrored => Row(
+                children: <Widget>[
+                  SizedBox(width: inset),
+                  amountZone,
+                  navigationSurface,
+                ],
+              ),
+            };
+            // Selector sections are above this surface in the hit-test tree, so
+            // temporal flings retain exact Rect ownership. The exposed surface
+            // is the only Summary region that can tap-reset or drag Header.
+            return Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                GestureDetector(
+                  key: const ValueKey<String>(
+                    'summary-pill-background-gesture',
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (details) {
+                    if (!isSelectorPosition(details.localPosition)) {
+                      onBackgroundTap?.call();
+                    }
+                  },
+                  onVerticalDragStart: onBackgroundVerticalDragStart,
+                  onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
+                  onVerticalDragEnd: onBackgroundVerticalDragEnd,
+                ),
+                sections,
+              ],
+            );
+          },
+        );
+        return SizedBox(
+          key: ValueKey<String>('summary-pill-experiment-${variant.name}'),
+          width: bounds.width,
+          height: bounds.height,
+          child: FluviRoundedBox(
+            color: depth.surfaceColor ?? FluviVisualTokens.surface,
+            border: DashboardBorderScope.profileOf(
+              context,
+            ).borderFor(DashboardBorderSurface.summary),
+            borderRadius: borderRadius,
+            boxShadow: depth.shadows,
+            child:
+                presentation.temporalFlingPresentation ==
+                    SummaryTemporalFlingPresentation.dynamicTrio
+                ? ClipRRect(borderRadius: borderRadius, child: content)
+                : content,
+          ),
+        );
+      },
+    ),
   );
+}
+
+/// Owns the one presentation-side motion handoff for the complete segmented
+/// adapter. Individual hierarchy tracks can appear and disappear as the mode
+/// selector crosses a level, so their local idle/dispose callbacks cannot be
+/// treated as global Summary-idle events.
+final class _SegmentedMotionGateHost extends StatefulWidget {
+  const _SegmentedMotionGateHost({
+    required this.onMotionActiveChanged,
+    required this.builder,
+  });
+
+  final ValueChanged<bool>? onMotionActiveChanged;
+  final Widget Function(BuildContext context, _SegmentedMotionGate gate)
+  builder;
+
+  @override
+  State<_SegmentedMotionGateHost> createState() =>
+      _SegmentedMotionGateHostState();
+}
+
+final class _SegmentedMotionGateHostState
+    extends State<_SegmentedMotionGateHost> {
+  late final _SegmentedMotionGate _gate = _SegmentedMotionGate(
+    widget.onMotionActiveChanged,
+  );
+
+  @override
+  void didUpdateWidget(covariant _SegmentedMotionGateHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _gate.updateCallback(widget.onMotionActiveChanged);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _gate);
+
+  @override
+  void dispose() {
+    // The host, not a conditionally removed child selector, is the exact
+    // segmented-variant unmount boundary.
+    _gate.releaseForAdapterUnmount();
+    super.dispose();
+  }
+}
+
+enum _SegmentedMotionOwner { mode, year, month, day }
+
+/// Serializes local selector callbacks into the existing single Summary lane.
+///
+/// It has no navigation, query, frame, or animation authority. Its only job
+/// is to prevent a disposed non-owner (for example Month after a Mode
+/// crossing) from ending a direct drag still owned by another selector.
+final class _SegmentedMotionGate {
+  _SegmentedMotionGate(this._onMotionActiveChanged);
+
+  ValueChanged<bool>? _onMotionActiveChanged;
+  _SegmentedMotionOwner? _activeOwner;
+
+  void updateCallback(ValueChanged<bool>? callback) {
+    _onMotionActiveChanged = callback;
+  }
+
+  ValueChanged<bool> callbackFor(_SegmentedMotionOwner owner) => (active) {
+    if (active) {
+      if (_activeOwner == owner) return;
+      _activeOwner = owner;
+      _onMotionActiveChanged?.call(true);
+      return;
+    }
+    if (_activeOwner != owner) return;
+    _activeOwner = null;
+    _onMotionActiveChanged?.call(false);
+  };
+
+  void releaseForAdapterUnmount() {
+    if (_activeOwner == null) return;
+    _activeOwner = null;
+    _onMotionActiveChanged?.call(false);
+  }
 }
 
 enum SummaryPillExperimentLevel {
@@ -594,7 +680,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     this.onComponentSettled,
     this.motionDiagnostics,
     this.componentCandidateProjector,
-    this.onSelectorMotionActiveChanged,
+    required this.motionGate,
     this.onSelectorDirectInputStarted,
     this.onSelectorPointerDownDecision,
     this.autoResetMotionRegistry,
@@ -614,7 +700,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final _ComponentCrossed? onComponentSettled;
   final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
-  final ValueChanged<bool>? onSelectorMotionActiveChanged;
+  final _SegmentedMotionGate motionGate;
   final VoidCallback? onSelectorDirectInputStarted;
   final ValueChanged<CenteredCarouselPointerDownDecision>?
   onSelectorPointerDownDecision;
@@ -639,7 +725,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
       height: height,
       level: level,
       onCrossed: onLevelCrossed,
-      onMotionActiveChanged: onSelectorMotionActiveChanged,
+      onMotionActiveChanged: motionGate.callbackFor(_SegmentedMotionOwner.mode),
       onDirectInputStarted: onSelectorDirectInputStarted,
       onPointerDownDecision: onSelectorPointerDownDecision,
       autoResetMotionRegistry: autoResetMotionRegistry,
@@ -651,7 +737,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     onComponentSettled: onComponentSettled,
     motionDiagnostics: motionDiagnostics,
     componentCandidateProjector: componentCandidateProjector,
-    onSelectorMotionActiveChanged: onSelectorMotionActiveChanged,
+    motionGate: motionGate,
     onSelectorDirectInputStarted: onSelectorDirectInputStarted,
     onSelectorPointerDownDecision: onSelectorPointerDownDecision,
     autoResetMotionRegistry: autoResetMotionRegistry,
@@ -679,7 +765,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     this.onComponentSettled,
     this.motionDiagnostics,
     this.componentCandidateProjector,
-    this.onSelectorMotionActiveChanged,
+    required this.motionGate,
     this.onSelectorDirectInputStarted,
     this.onSelectorPointerDownDecision,
     this.autoResetMotionRegistry,
@@ -705,7 +791,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final _ComponentCrossed? onComponentSettled;
   final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
-  final ValueChanged<bool>? onSelectorMotionActiveChanged;
+  final _SegmentedMotionGate motionGate;
   final VoidCallback? onSelectorDirectInputStarted;
   final ValueChanged<CenteredCarouselPointerDownDecision>?
   onSelectorPointerDownDecision;
@@ -780,7 +866,9 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.year,
               ),
-              onMotionActiveChanged: onSelectorMotionActiveChanged,
+              onMotionActiveChanged: motionGate.callbackFor(
+                _SegmentedMotionOwner.year,
+              ),
               onDirectInputStarted: onSelectorDirectInputStarted,
               onPointerDownDecision: onSelectorPointerDownDecision,
               motionDiagnostics: motionDiagnostics,
@@ -836,7 +924,9 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.month,
               ),
-              onMotionActiveChanged: onSelectorMotionActiveChanged,
+              onMotionActiveChanged: motionGate.callbackFor(
+                _SegmentedMotionOwner.month,
+              ),
               onDirectInputStarted: onSelectorDirectInputStarted,
               onPointerDownDecision: onSelectorPointerDownDecision,
               motionDiagnostics: motionDiagnostics,
@@ -886,7 +976,9 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                 candidate,
                 DashboardTemporalAnchorComponent.day,
               ),
-              onMotionActiveChanged: onSelectorMotionActiveChanged,
+              onMotionActiveChanged: motionGate.callbackFor(
+                _SegmentedMotionOwner.day,
+              ),
               onDirectInputStarted: onSelectorDirectInputStarted,
               onPointerDownDecision: onSelectorPointerDownDecision,
               motionDiagnostics: motionDiagnostics,
@@ -1093,6 +1185,13 @@ final class _ModeSelectorState extends State<_ModeSelector> {
 
   @override
   void dispose() {
+    // A variant replacement can remove this carousel while a drag or ballistic
+    // activity is still active.  Unlike a normal idle/interrupted callback,
+    // disposal has no later CenteredCarousel notification, so it must release
+    // the shared Summary motion lane explicitly.  Otherwise the removed
+    // segmented adapter can keep the core's foreground/paging safety gate
+    // active after Classic has become the only visible input surface.
+    widget.onMotionActiveChanged?.call(false);
     _detachResetRunner(_attachedRegistry);
     _controller.dispose();
     super.dispose();
@@ -1469,6 +1568,10 @@ final class _HierarchyValueSelectorState
 
   @override
   void dispose() {
+    // A hierarchy track can disappear while the persistent mode selector is
+    // still dragging across a level. Only that selector owns the segmented
+    // adapter's variant-unmount release; clearing here would incorrectly end
+    // its shared Summary lane during an in-place track replacement.
     widget.paintedTargets?.removeListener(_onPaintedTargetChanged);
     _detachResetRunner(_attachedRegistry);
     _controller.dispose();

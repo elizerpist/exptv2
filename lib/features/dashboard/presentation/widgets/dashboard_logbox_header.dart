@@ -20,9 +20,12 @@ import '../dashboard_logbox_search_pill_visibility.dart';
 
 /// Stable Ledger chrome above the sole LogBox scroll surface.
 ///
-/// The committed count binds one complete frame, so it retains the same
-/// Query/revision identity as the LogBoxes below. The SummaryPill remains the
-/// sole visible transaction-result amount during this staged migration.
+/// The typed count lane binds the same complete accepted projection as the
+/// LogBoxes below. During a live interaction it intentionally remains on the
+/// exact Phase-A preview while the structural frame stays committed; matching
+/// canonical publication then reconciles the lane without a header-only
+/// rollback. The SummaryPill remains the sole visible transaction-result
+/// amount during this staged migration.
 final class DashboardLogBoxHeader extends StatelessWidget {
   const DashboardLogBoxHeader({
     super.key,
@@ -168,7 +171,7 @@ final class _DashboardLedgerHeaderControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<DashboardVisibleFrame?>(
-      valueListenable: visibleFrames,
+      valueListenable: visibleFrames.countLane,
       builder: (context, frame, _) {
         final measure = performanceCounters?.measuresDurations ?? false;
         final started = measure ? developer.Timeline.now : 0;

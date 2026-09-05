@@ -16,7 +16,10 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_mode_control
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -532,6 +535,130 @@ void main() {
       );
       expect(tester.getRect(lowerCard).height, 275);
       expect(tester.getRect(handle).top, 753);
+    },
+  );
+
+  testWidgets(
+    'switching away from an active segmented Summary releases its shared motion lane',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      final tuner = tester.widget<DashboardHeaderVisualTuner>(
+        find.byType(DashboardHeaderVisualTuner),
+      );
+      final variants = tuner.summaryPillVariants!;
+      final queryBefore = controller.currentQuery.scope.key;
+      final countBefore = controller.visibleFrames.countLane.value;
+      variants.select(SummaryPillVariant.segmented);
+      await tester.pump();
+      expect(controller.currentQuery.scope.key, queryBefore);
+      expect(controller.visibleFrames.countLane.value, same(countBefore));
+
+      final selector = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-month-selector'),
+      );
+      expect(selector, findsOneWidget);
+      final gesture = await tester.startGesture(tester.getCenter(selector));
+      await gesture.moveBy(const Offset(0, -96));
+      await tester.pump();
+      expect(controller.foregroundInputMotion.value, isTrue);
+
+      FluviDiagnosticLogger.clear();
+      variants.select(SummaryPillVariant.legacy);
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('summary-pill-segmented-month-selector'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+        findsOneWidget,
+      );
+      expect(controller.foregroundInputMotion.value, isFalse);
+      expect(
+        controller.isMotionLaneActive(DashboardMotionLane.summaryShell),
+        isFalse,
+      );
+      expect(controller.currentQuery.scope.key, queryBefore);
+      expect(controller.visibleFrames.countLane.value, same(countBefore));
+      final transitionStarted = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'SUMMARY_VARIANT_TRANSITION_STARTED')
+          .single;
+      expect(transitionStarted.scope, contains('interactionEpoch='));
+      expect(transitionStarted.scope, contains('producerLocalGeneration='));
+      expect(transitionStarted.scope, contains('targetHandle='));
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere(
+              (event) => event.stage == 'SUMMARY_VARIANT_OUTGOING_QUIESCED',
+            )
+            .scope,
+        contains('summaryShellMotionActive=false'),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_VARIANT_STALE_CALLBACK_REJECTED',
+        ),
+        hasLength(1),
+        reason:
+            'The outgoing segmented controller disposes after selection has '
+            'advanced the epoch; it must not re-own the current Summary lane.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_VARIANT_TRANSITION_COMPLETED',
+        ),
+        hasLength(1),
+      );
+      await gesture.up();
+    },
+  );
+
+  testWidgets(
+    'production Budget Avatar rail receives Core-confirmed paint metadata only as diagnostics',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      final rail = tester.widget<BudgetTargetAvatarRail>(
+        find.byType(BudgetTargetAvatarRail),
+      );
+      expect(
+        rail.liveTargetPainted,
+        same(controller.budgetAvatarTargetPainted),
+      );
+      expect(
+        rail.liveTargetReadiness,
+        same(controller.budgetAvatarLiveRootReady),
+        reason:
+            'The production surface must compose Core-owned readiness and '
+            'paint acknowledgements into the one existing rail, never create '
+            'a second Avatar/visible-frame authority.',
+      );
     },
   );
 

@@ -50,6 +50,7 @@ import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
+import 'dashboard_avatar_target_painted.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
 import 'dashboard_vertical_background_work_snapshot.dart';
 import 'dashboard_interaction_diagnostics.dart';
@@ -843,6 +844,12 @@ final class DashboardCoreController {
   final ValueNotifier<bool> budgetAvatarLiveRootReady = ValueNotifier<bool>(
     false,
   );
+
+  /// The Budget rail observes this bounded post-paint acknowledgement only to
+  /// reconcile its flight diagnostics with the exact LogBox paint domain.
+  /// It is metadata, never an Avatar selection or visible-frame authority.
+  final ValueNotifier<DashboardAvatarTargetPainted?> budgetAvatarTargetPainted =
+      ValueNotifier<DashboardAvatarTargetPainted?>(null);
 
   /// The Segmented selector observes this bounded post-paint acknowledgement
   /// instead of treating its own carousel callback as paint proof.
@@ -5552,12 +5559,14 @@ final class DashboardCoreController {
   void _recordAvatarLivePublicationAccepted({
     required int? targetHandle,
     required int focusGeneration,
+    String acknowledgementSource = 'semanticPublication',
   }) {
     if (targetHandle == null) return;
     final payload = visibleFrames.logBoxLane.value;
     final presentation = visibleFrames.logBoxPresentationLane.value;
     if (payload == null || presentation == null) return;
     _cancelAvatarLivePaintWaiter();
+    budgetAvatarTargetPainted.value = null;
     _avatarLiveRenderTarget = _AvatarLiveRenderTarget(
       targetHandle: targetHandle,
       focusGeneration: focusGeneration,
@@ -5574,7 +5583,9 @@ final class DashboardCoreController {
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'AV|VISIBLE_PUBLICATION_ACCEPTED',
+        stage: acknowledgementSource == 'semanticPublication'
+            ? 'AV|VISIBLE_PUBLICATION_ACCEPTED'
+            : 'AV|LOGBOX_PAINT_ACK_REARMED',
         queryKey: presentation.queryKey.value,
         direction: payload.direction.name,
         coreRevision: presentation.coreRevision,
@@ -5584,6 +5595,7 @@ final class DashboardCoreController {
             'presentationEpoch=${presentation.presentationEpoch} '
             'frameGeneration=${presentation.frameGeneration} '
             'exactEmpty=${payload.logBox.previewRowCount == 0} '
+            'acknowledgementSource=$acknowledgementSource '
             'budgetTargetSelected=true mixedProjectionCount='
             '${visibleFrames.mixedProjectionCount}',
       ),
@@ -5645,6 +5657,13 @@ final class DashboardCoreController {
         presentation.frameGeneration == target.frameGeneration;
   }
 
+  bool _hasCurrentExactAvatarTargetPaint({required int? targetHandle}) {
+    final target = _avatarLiveRenderTarget;
+    return target != null &&
+        target.targetHandle == targetHandle &&
+        _isCurrentExactAvatarTargetPainted(target);
+  }
+
   /// Cancels an unresolved exact-paint wait. A target that is already exactly
   /// visible remains usable for a cyclic crossing after raw pointer re-entry;
   /// retaining it never authorizes a stale frame because
@@ -5659,6 +5678,7 @@ final class DashboardCoreController {
       return;
     }
     _avatarLiveRenderTarget = null;
+    budgetAvatarTargetPainted.value = null;
     target?.completePaint(false);
   }
 
@@ -7161,6 +7181,29 @@ final class DashboardCoreController {
         prior.partner?.id == nextPartner?.id &&
         prior.normalizedSearch == nextSearch &&
         canReuseAlreadyActiveAvatarTarget) {
+      final rearmAvatarPaintAcknowledgement =
+          source == DashboardLiveInteractionSource.budgetAvatar &&
+          publishDuringMotion &&
+          !_hasCurrentExactAvatarTargetPaint(targetHandle: budgetTargetHandle);
+      final avatarPaintAcknowledgement =
+          source != DashboardLiveInteractionSource.budgetAvatar ||
+              !publishDuringMotion
+          ? 'notApplicable'
+          : rearmAvatarPaintAcknowledgement
+          ? 'rearmedAwaitingExactPaint'
+          : 'retainedExactPaint';
+      // Raw re-entry intentionally cancels an unpainted former target before
+      // its next crossing. A same-target Phase-A reuse has no new frame to
+      // construct, but it still needs a fresh exact renderer acknowledgement
+      // for that pointer generation. Conversely, an exactly painted current
+      // target is retained and must not be retagged or republished.
+      if (rearmAvatarPaintAcknowledgement) {
+        _recordAvatarLivePublicationAccepted(
+          targetHandle: budgetTargetHandle,
+          focusGeneration: _focusPublicationGeneration,
+          acknowledgementSource: 'sameTargetReentryUnpainted',
+        );
+      }
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'FOCUS_REQUEST_ALREADY_ACTIVE',
@@ -7172,6 +7215,7 @@ final class DashboardCoreController {
               'partner=${nextPartner?.id ?? 'none'} '
               'searchLength=${nextSearch?.length ?? 0} '
               'presentationEpoch=${visibleFrames.value?.presentationEpoch ?? 0} '
+              'avatarPaintAcknowledgement=$avatarPaintAcknowledgement '
               'avatarSemanticFrameCurrent='
               '${source != DashboardLiveInteractionSource.budgetAvatar || !publishDuringMotion || _isCurrentAvatarSemanticTarget(targetHandle: budgetTargetHandle, category: nextCategory, partner: nextPartner, normalizedSearch: nextSearch)}',
         ),
@@ -8651,6 +8695,17 @@ final class DashboardCoreController {
     }
     target.logBoxPainted = true;
     target.completePaint(true);
+    budgetAvatarTargetPainted.value = DashboardAvatarTargetPainted(
+      targetHandle: target.targetHandle,
+      focusGeneration: target.focusGeneration,
+      queryKey: target.queryKey,
+      coreRevision: target.coreRevision,
+      presentationEpoch: target.presentationEpoch,
+      frameGeneration: target.frameGeneration,
+      exactEmpty: target.exactEmpty,
+      readablePhaseARowsPainted: snapshot.readablePhaseARowsPainted,
+      richPhaseBRowsPainted: snapshot.richPhaseBRowsPainted,
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|LOGBOX_TARGET_PAINTED',
@@ -10171,6 +10226,19 @@ final class DashboardCoreController {
     _setMotionLaneActive(lane, active);
   }
 
+  /// Read-only lifecycle evidence for a presentation-adapter boundary.
+  ///
+  /// This exposes no motion authority: callers can only inspect whether one
+  /// named lane currently participates in the shared controller's safety
+  /// boundary. It lets a Summary-variant transition distinguish its own
+  /// `summaryShell` handoff from unrelated Avatar or rail motion.
+  bool isMotionLaneActive(DashboardMotionLane lane) =>
+      !_disposed && _activeMotionLanes.contains(lane);
+
+  /// Bounded names for transition diagnostics; never used in a live tick.
+  String get activeMotionLaneNames =>
+      _activeMotionLanes.map((lane) => lane.name).join(',');
+
   void _setMotionLaneActive(DashboardMotionLane lane, bool active) {
     final pagingMotionWasActive = _committedPagingSafetyMotionActive;
     final changed = active
@@ -10443,6 +10511,7 @@ final class DashboardCoreController {
     _sceneWindowPreparing.dispose();
     foregroundInputMotion.dispose();
     budgetAvatarLiveRootReady.dispose();
+    budgetAvatarTargetPainted.dispose();
     segmentedTargetPainted.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();

@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 import '../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../core/categories/domain/fluvi_category.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
@@ -144,6 +145,9 @@ class _CoreDashboardState extends State<CoreDashboard>
   int? _mindAmountPreviewPrimeSignature;
   bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
+  SummaryPillVariant _lastSummaryPillVariant = SummaryPillVariant.legacy;
+  int _lastSummaryVariantTransitionLayoutEpoch = 0;
+  int? _lastRejectedSummaryVariantCallbackEpoch;
 
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
@@ -175,7 +179,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         DashboardBudgetHeaderPresentationController();
     _budgetRingPresentationController = BudgetRingPresentationController();
     _logBoxHeightController.addListener(_onLogBoxHeightChanged);
-    _summaryPillVariantController.addListener(_onLayoutPresentationChanged);
+    _summaryPillVariantController.addListener(_onSummaryPillVariantChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.addListener(_onLayoutPresentationChanged);
     final financialLimitRepository = widget.financialLimitRepository;
@@ -532,7 +536,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
     _summaryMotionController.dispose();
-    _summaryPillVariantController.removeListener(_onLayoutPresentationChanged);
+    _summaryPillVariantController.removeListener(_onSummaryPillVariantChanged);
     _bodyOrderController.removeListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.removeListener(_onLayoutPresentationChanged);
     _summaryPillVariantController.dispose();
@@ -604,6 +608,7 @@ class _CoreDashboardState extends State<CoreDashboard>
             ? 0
             : (geometry.collapseProgress / collapseTravel * 20).round();
         _recordLayerStack(frame);
+        _recordSummaryVariantTransitionPresentation(frame);
         _upperVerticalGestures.updateViewportMapper(
           geometry.mapViewportVerticalDragToController,
         );
@@ -800,12 +805,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               _summaryPresentationController,
                                           motionController:
                                               _summaryMotionController,
-                                          onMotionActiveChanged: (active) =>
-                                              controller.setMotionLaneActive(
-                                                DashboardMotionLane
-                                                    .summaryShell,
-                                                active,
-                                              ),
+                                          onVariantMotionActiveChanged:
+                                              _onSummaryVariantMotionActiveChanged,
                                           onAmountMotionActiveChanged:
                                               (active) => controller
                                                   .setMotionLaneActive(
@@ -1324,6 +1325,191 @@ class _CoreDashboardState extends State<CoreDashboard>
     unawaited(controller.commitMindAmountRange(values));
   }
 
+  void _onSummaryPillVariantChanged() {
+    final outgoing = _lastSummaryPillVariant;
+    final incoming = _summaryPillVariantController.value;
+    if (outgoing == incoming) {
+      _onLayoutPresentationChanged();
+      return;
+    }
+    final transitionEpoch = _summaryPillVariantController.transitionEpoch;
+    final visible =
+        controller.visibleFrames.countLane.value ??
+        controller.visibleFrames.value;
+    final queryKey =
+        visible?.queryKey.value ?? controller.currentQuery.scope.key.value;
+    final coreRevision =
+        visible?.coreRevision ?? controller.preparedIndex?.coreRevision;
+    final outgoingSummaryMotionActive = controller.isMotionLaneActive(
+      DashboardMotionLane.summaryShell,
+    );
+    _lastSummaryPillVariant = incoming;
+
+    // The controller owns one shared shell lane. Quiesce it synchronously at
+    // the adapter boundary, before the outgoing element disposes and before a
+    // new adapter can report a current motion. This does not alter either
+    // adapter's gesture physics or navigation state.
+    controller.setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_VARIANT_TRANSITION_STARTED',
+        queryKey: queryKey,
+        coreRevision: coreRevision,
+        scope:
+            'fromVariant=${outgoing.name} toVariant=${incoming.name} '
+            'variantTransitionEpoch=$transitionEpoch '
+            'outgoingAdapter=${_summaryAdapterName(outgoing)} '
+            'incomingAdapter=${_summaryAdapterName(incoming)} '
+            'outgoingSummaryMotionActive=$outgoingSummaryMotionActive '
+            'hasPhysicalRailBefore=${outgoing == SummaryPillVariant.legacy} '
+            'hasPhysicalRailAfter=${incoming == SummaryPillVariant.legacy} '
+            'queryDigest=${FluviDiagnosticKeyDigest.of(queryKey)} '
+            '${_summaryVariantLiveIdentityScope()}',
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_VARIANT_OUTGOING_QUIESCED',
+        queryKey: queryKey,
+        coreRevision: coreRevision,
+        scope:
+            'fromVariant=${outgoing.name} '
+            'variantTransitionEpoch=$transitionEpoch '
+            'summaryShellMotionActive=${controller.isMotionLaneActive(DashboardMotionLane.summaryShell)} '
+            'activeMotionLanes=${controller.activeMotionLaneNames}',
+      ),
+    );
+    _onLayoutPresentationChanged();
+  }
+
+  void _onSummaryVariantMotionActiveChanged(
+    SummaryPillVariant variant,
+    int transitionEpoch,
+    bool active,
+  ) {
+    if (!mounted ||
+        _summaryPillVariantController.value != variant ||
+        _summaryPillVariantController.transitionEpoch != transitionEpoch) {
+      final visible =
+          controller.visibleFrames.countLane.value ??
+          controller.visibleFrames.value;
+      final queryKey =
+          visible?.queryKey.value ?? controller.currentQuery.scope.key.value;
+      if (_lastRejectedSummaryVariantCallbackEpoch != transitionEpoch) {
+        _lastRejectedSummaryVariantCallbackEpoch = transitionEpoch;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SUMMARY_VARIANT_STALE_CALLBACK_REJECTED',
+            queryKey: queryKey,
+            coreRevision: visible?.coreRevision,
+            scope:
+                'callbackVariant=${variant.name} '
+                'callbackEpoch=$transitionEpoch '
+                'currentVariant=${_summaryPillVariantController.value.name} '
+                'currentEpoch=${_summaryPillVariantController.transitionEpoch} '
+                'active=$active '
+                'mounted=$mounted '
+                '${_summaryVariantLiveIdentityScope()}',
+          ),
+        );
+      }
+      return;
+    }
+    switch (variant) {
+      case SummaryPillVariant.legacy:
+        controller.setMotionLaneActive(
+          DashboardMotionLane.summaryShell,
+          active,
+        );
+      case SummaryPillVariant.segmented:
+        if (active) {
+          controller.beginSegmentedSummaryMotion();
+        } else {
+          controller.endSegmentedSummaryMotion();
+        }
+    }
+  }
+
+  void _recordSummaryVariantTransitionPresentation(DashboardVisualFrame frame) {
+    final transitionEpoch = _summaryPillVariantController.transitionEpoch;
+    if (transitionEpoch == _lastSummaryVariantTransitionLayoutEpoch) return;
+    _lastSummaryVariantTransitionLayoutEpoch = transitionEpoch;
+    final geometry = frame.geometry;
+    final variant = _summaryPillVariantController.value;
+    final visible =
+        controller.visibleFrames.countLane.value ??
+        controller.visibleFrames.value;
+    final queryKey =
+        visible?.queryKey.value ?? controller.currentQuery.scope.key.value;
+    String bounds(DashboardBounds value) =>
+        '${value.left.toStringAsFixed(1)},${value.top.toStringAsFixed(1)} '
+        '${value.width.toStringAsFixed(1)}x${value.height.toStringAsFixed(1)}';
+    final geometryDigest = Object.hash(
+      geometry.summaryBounds,
+      geometry.railBounds,
+      geometry.modeContentBounds,
+      geometry.logBoxHeaderBounds,
+      geometry.collapseHandleBounds,
+    );
+    final scope =
+        'variant=${variant.name} '
+        'variantTransitionEpoch=$transitionEpoch '
+        'adapter=${_summaryAdapterName(variant)} '
+        'hasPhysicalRail=${geometry.hasPhysicalRail} '
+        'geometryDigest=$geometryDigest '
+        'summaryBounds=${bounds(geometry.summaryBounds)} '
+        'railBounds=${bounds(geometry.railBounds)} '
+        'modeContentBounds=${bounds(geometry.modeContentBounds)} '
+        'logBoxBounds=${bounds(geometry.logBoxHeaderBounds)} '
+        'collapseHandleBounds=${bounds(geometry.collapseHandleBounds)} '
+        '${_summaryVariantLiveIdentityScope()}';
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_VARIANT_INCOMING_READY',
+        queryKey: queryKey,
+        coreRevision: visible?.coreRevision,
+        scope: '$scope state=presentationBound',
+      ),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _summaryPillVariantController.transitionEpoch != transitionEpoch) {
+        return;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_VARIANT_TRANSITION_COMPLETED',
+          queryKey: queryKey,
+          coreRevision: visible?.coreRevision,
+          scope: '$scope state=postFrameNoPaintClaim',
+        ),
+      );
+    });
+  }
+
+  String _summaryAdapterName(SummaryPillVariant variant) => switch (variant) {
+    SummaryPillVariant.legacy => 'DashboardSummaryPill',
+    SummaryPillVariant.segmented => 'SummaryPillExperiment',
+  };
+
+  /// Bounded shared-authority context for a presentation-only adapter swap.
+  ///
+  /// A Summary variant does not own this identity. Recording it on both sides
+  /// of the boundary lets a physical trace distinguish an obsolete adapter
+  /// callback from a changed Core/Avatar/Mind intent without logging a query
+  /// payload or individual rows.
+  String _summaryVariantLiveIdentityScope() {
+    final live = controller.liveInteractions.frame;
+    return 'visibleProducer=${live?.source.name ?? 'none'} '
+        'liveInteractionGeneration=${live?.generation ?? 0} '
+        'interactionEpoch=${live?.interactionPublicationEpoch ?? 0} '
+        'producerLocalGeneration=${live?.producerLocalGeneration ?? 0} '
+        'targetHandle=${live?.budgetTargetHandle ?? '-'} '
+        'presentationEpoch=${live?.presentationEpoch ?? -1} '
+        'frameGeneration=${live?.visibleFrameGeneration ?? -1} '
+        'activeMotionLanes=${controller.activeMotionLaneNames}';
+  }
+
   void _onLayoutPresentationChanged() {
     if (mounted) setState(() {});
   }
@@ -1341,7 +1527,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.summaryPillVariants,
     required this.summaryPresentation,
     required this.motionController,
-    required this.onMotionActiveChanged,
+    required this.onVariantMotionActiveChanged,
     required this.onAmountMotionActiveChanged,
     required this.autoResetController,
     required this.autoResetMotions,
@@ -1353,7 +1539,12 @@ class _DashboardSummaryRegion extends StatelessWidget {
   final SummaryPillVariantController summaryPillVariants;
   final DashboardSummaryPresentationController summaryPresentation;
   final SummaryNavigationMotionController motionController;
-  final ValueChanged<bool> onMotionActiveChanged;
+  final void Function(
+    SummaryPillVariant variant,
+    int transitionEpoch,
+    bool active,
+  )
+  onVariantMotionActiveChanged;
   final ValueChanged<bool> onAmountMotionActiveChanged;
   final DashboardSummaryAutoResetController autoResetController;
   final DashboardSummaryAutoResetMotionRegistry autoResetMotions;
@@ -1363,111 +1554,118 @@ class _DashboardSummaryRegion extends StatelessWidget {
   Widget build(BuildContext context) =>
       ValueListenableBuilder<SummaryPillVariant>(
         valueListenable: summaryPillVariants,
-        builder: (context, variant, _) =>
-            ValueListenableBuilder<DashboardSummaryPresentationSettings>(
-              valueListenable: summaryPresentation,
-              builder: (context, presentation, _) => switch (variant) {
-                SummaryPillVariant.legacy => _legacyPill(),
-                SummaryPillVariant.segmented => SummaryPillExperiment(
-                  variant: variant,
-                  bounds: bounds,
-                  navigation: controller.navigation,
-                  visibleFrames: controller.visibleFrames,
-                  performanceCounters: controller.performanceCounters,
-                  onAmountMotionActiveChanged: onAmountMotionActiveChanged,
-                  presentation: presentation,
-                  onSelectorMotionActiveChanged: (active) {
-                    if (active) {
-                      if (!autoResetMotions.isExecuting) {
-                        autoResetController.cancel();
-                      }
-                      controller.beginSegmentedSummaryMotion();
-                    } else {
-                      controller.endSegmentedSummaryMotion();
+        builder: (context, variant, _) {
+          final transitionEpoch = summaryPillVariants.transitionEpoch;
+          return ValueListenableBuilder<DashboardSummaryPresentationSettings>(
+            valueListenable: summaryPresentation,
+            builder: (context, presentation, _) => switch (variant) {
+              SummaryPillVariant.legacy => _legacyPill(transitionEpoch),
+              SummaryPillVariant.segmented => SummaryPillExperiment(
+                variant: variant,
+                bounds: bounds,
+                navigation: controller.navigation,
+                visibleFrames: controller.visibleFrames,
+                performanceCounters: controller.performanceCounters,
+                onAmountMotionActiveChanged: onAmountMotionActiveChanged,
+                presentation: presentation,
+                onSelectorMotionActiveChanged: (active) {
+                  if (active) {
+                    if (!autoResetMotions.isExecuting) {
+                      autoResetController.cancel();
                     }
-                  },
-                  onSelectorDirectInputStarted: () {
-                    // The Segmented selector must receive the exact same
-                    // foreground preemption boundary as Classic.  Otherwise
-                    // a ballistic/scene callback can outlive a new pointer
-                    // until its own asynchronous cleanup happens.
-                    controller.noteSummaryDirectPointerDown();
-                    autoResetController.cancel();
-                    autoResetMotions.cancelActiveResetMotion();
-                  },
-                  onSelectorPointerDownDecision:
-                      controller.recordSegmentedPointerDown,
-                  onBackgroundTap: () {
-                    // A second background tap supersedes even a reset that
-                    // is currently waiting for a selector to mount.
-                    autoResetMotions.cancelActiveResetMotion();
-                    final navigation = controller.navigation.state;
-                    final plan = DashboardSummaryAutoResetPlan.resolve(
-                      plane: navigation.plane,
-                      isRailOpen: navigation.isRailOpen,
-                      year: navigation.yearCursor,
-                      month: navigation.monthCursor.month,
-                      logicalToday: controller.logicalAsOfDate,
-                    );
-                    unawaited(
-                      autoResetController.start(
-                        plan: plan,
-                        runStep: autoResetMotions.run,
-                      ),
-                    );
-                  },
-                  onBackgroundVerticalDragStart: (_) =>
-                      upperVerticalGestures.begin(),
-                  onBackgroundVerticalDragUpdate: (details) =>
-                      upperVerticalGestures.dragByViewport(details.delta.dy),
-                  onBackgroundVerticalDragEnd: (_) =>
-                      upperVerticalGestures.end(),
-                  autoResetMotionRegistry: autoResetMotions,
-                  componentCandidateProjector:
-                      ({
-                        required base,
-                        required plane,
-                        required isRailOpen,
-                        required component,
-                        required offset,
-                      }) => controller
-                          .experimentalTemporalComponentOffsetCandidate(
-                            plane: plane,
-                            isRailOpen: isRailOpen,
-                            component: component,
-                            offset: offset,
-                            base: base,
-                          ),
-                  onLevelCrossed: (plane, isRailOpen) =>
-                      controller.navigateExperimentalTemporalSelection(
-                        plane: plane,
-                        isRailOpen: isRailOpen,
-                      ),
-                  onComponentCrossed: (_, _) {},
-                  onComponentCrossingAccepted: (candidate, component) =>
-                      controller.navigateExperimentalTemporalComponentCandidate(
-                        candidate: candidate,
-                        component: component,
-                      ),
-                  componentPaintedTarget: controller.segmentedTargetPainted,
-                  onComponentSettled: (candidate, component) =>
-                      controller.settleExperimentalTemporalComponentCandidate(
-                        candidate: candidate,
-                        component: component,
-                      ),
-                  motionDiagnostics: controller.railFlightRecorder,
-                ),
-              },
-            ),
+                  }
+                  onVariantMotionActiveChanged(
+                    SummaryPillVariant.segmented,
+                    transitionEpoch,
+                    active,
+                  );
+                },
+                onSelectorDirectInputStarted: () {
+                  // The Segmented selector must receive the exact same
+                  // foreground preemption boundary as Classic.  Otherwise
+                  // a ballistic/scene callback can outlive a new pointer
+                  // until its own asynchronous cleanup happens.
+                  controller.noteSummaryDirectPointerDown();
+                  autoResetController.cancel();
+                  autoResetMotions.cancelActiveResetMotion();
+                },
+                onSelectorPointerDownDecision:
+                    controller.recordSegmentedPointerDown,
+                onBackgroundTap: () {
+                  // A second background tap supersedes even a reset that
+                  // is currently waiting for a selector to mount.
+                  autoResetMotions.cancelActiveResetMotion();
+                  final navigation = controller.navigation.state;
+                  final plan = DashboardSummaryAutoResetPlan.resolve(
+                    plane: navigation.plane,
+                    isRailOpen: navigation.isRailOpen,
+                    year: navigation.yearCursor,
+                    month: navigation.monthCursor.month,
+                    logicalToday: controller.logicalAsOfDate,
+                  );
+                  unawaited(
+                    autoResetController.start(
+                      plan: plan,
+                      runStep: autoResetMotions.run,
+                    ),
+                  );
+                },
+                onBackgroundVerticalDragStart: (_) =>
+                    upperVerticalGestures.begin(),
+                onBackgroundVerticalDragUpdate: (details) =>
+                    upperVerticalGestures.dragByViewport(details.delta.dy),
+                onBackgroundVerticalDragEnd: (_) => upperVerticalGestures.end(),
+                autoResetMotionRegistry: autoResetMotions,
+                componentCandidateProjector:
+                    ({
+                      required base,
+                      required plane,
+                      required isRailOpen,
+                      required component,
+                      required offset,
+                    }) =>
+                        controller.experimentalTemporalComponentOffsetCandidate(
+                          plane: plane,
+                          isRailOpen: isRailOpen,
+                          component: component,
+                          offset: offset,
+                          base: base,
+                        ),
+                onLevelCrossed: (plane, isRailOpen) =>
+                    controller.navigateExperimentalTemporalSelection(
+                      plane: plane,
+                      isRailOpen: isRailOpen,
+                    ),
+                onComponentCrossed: (_, _) {},
+                onComponentCrossingAccepted: (candidate, component) =>
+                    controller.navigateExperimentalTemporalComponentCandidate(
+                      candidate: candidate,
+                      component: component,
+                    ),
+                componentPaintedTarget: controller.segmentedTargetPainted,
+                onComponentSettled: (candidate, component) =>
+                    controller.settleExperimentalTemporalComponentCandidate(
+                      candidate: candidate,
+                      component: component,
+                    ),
+                motionDiagnostics: controller.railFlightRecorder,
+              ),
+            },
+          );
+        },
       );
 
-  Widget _legacyPill() {
+  Widget _legacyPill(int transitionEpoch) {
     return DashboardSummaryPill(
       bounds: bounds,
       navigation: controller.navigation,
       visibleFrames: controller.visibleFrames,
       navigationMotionController: motionController,
-      onMotionActiveChanged: onMotionActiveChanged,
+      onMotionActiveChanged: (active) => onVariantMotionActiveChanged(
+        SummaryPillVariant.legacy,
+        transitionEpoch,
+        active,
+      ),
       onAmountMotionActiveChanged: onAmountMotionActiveChanged,
       onDirectInputStarted: controller.noteSummaryDirectPointerDown,
       horizontalCandidateBuilder: _horizontalCandidate,

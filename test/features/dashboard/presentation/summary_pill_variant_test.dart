@@ -25,6 +25,22 @@ void main() {
     expect(controller.value, SummaryPillVariant.legacy);
   });
 
+  test(
+    'variant selection has a monotonic epoch without duplicate transitions',
+    () {
+      final controller = SummaryPillVariantController();
+      addTearDown(controller.dispose);
+
+      expect(controller.transitionEpoch, 0);
+      controller.select(SummaryPillVariant.segmented);
+      expect(controller.transitionEpoch, 1);
+      controller.select(SummaryPillVariant.segmented);
+      expect(controller.transitionEpoch, 1);
+      controller.select(SummaryPillVariant.legacy);
+      expect(controller.transitionEpoch, 2);
+    },
+  );
+
   test('body-order state rejects missing or duplicate body blocks', () {
     expect(
       () => DashboardBodyOrder(const <DashboardBodyComponent>[

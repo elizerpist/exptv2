@@ -19,6 +19,7 @@ import 'package:fluvi/core/categories/presentation/category_icon_view.dart';
 import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart';
@@ -817,6 +818,179 @@ void main() {
       );
       expect(summary.scope, contains('ballisticSemanticCrossings='));
       expect(summary.scope, contains('ballisticPreviewAccepted='));
+    },
+  );
+
+  testWidgets(
+    'Avatar flight marks a terminal paint as pending and reconciles a late exact Phase-A paint',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final painted = ValueNotifier<DashboardAvatarTargetPainted?>(null);
+      final acceptedTargets = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(painted.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                liveTargetPainted: painted,
+                onTargetPreviewAccepted: (targetHandle) {
+                  acceptedTargets.add(targetHandle);
+                  return Future<bool>.value(true);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-420, 0),
+        2600,
+      );
+      await tester.pumpAndSettle();
+
+      expect(acceptedTargets, isNotEmpty);
+      final summary = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_AVATAR_MOTION_SUMMARY',
+      );
+      expect(
+        summary.scope,
+        contains('paintAccountingState=awaitingExactPaint'),
+        reason:
+            'A terminal summary emitted before the render callback must not '
+            'present zero matching paint as a final failure.',
+      );
+
+      painted.value = DashboardAvatarTargetPainted(
+        targetHandle: acceptedTargets.last,
+        focusGeneration: 1,
+        queryKey: 'test/avatar-late-paint',
+        coreRevision: 1,
+        presentationEpoch: 1,
+        frameGeneration: 1,
+        exactEmpty: false,
+        readablePhaseARowsPainted: 1,
+        richPhaseBRowsPainted: 0,
+      );
+      await tester.pump();
+
+      final reconciled = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_AVATAR_MOTION_PAINT_RECONCILED',
+      );
+      expect(reconciled.scope, contains('generation='));
+      expect(reconciled.scope, contains('phase=ballistic'));
+      expect(reconciled.scope, contains('matchingLogBoxPaints=1'));
+      expect(reconciled.scope, contains('source=preparedReadablePhaseA'));
+    },
+  );
+
+  testWidgets(
+    'RED: a retained exact Avatar paint is accounted when a same-target preview is accepted',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final painted = ValueNotifier<DashboardAvatarTargetPainted?>(null);
+      final acceptance = Completer<bool>();
+      final requestedTargets = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(painted.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                liveTargetPainted: painted,
+                onTargetPreviewAccepted: (targetHandle) {
+                  requestedTargets.add(targetHandle);
+                  return acceptance.future;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-180, 0),
+        2600,
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(requestedTargets, isNotEmpty);
+
+      // Core retains this already-exact paint across a same-target raw
+      // re-entry. ValueNotifier does not notify when the rail later creates
+      // its local expectation, so the rail must consume its current value.
+      painted.value = DashboardAvatarTargetPainted(
+        targetHandle: requestedTargets.last,
+        focusGeneration: 91,
+        queryKey: 'test/avatar-retained-paint',
+        coreRevision: 1,
+        presentationEpoch: 7,
+        frameGeneration: 11,
+        exactEmpty: false,
+        readablePhaseARowsPainted: 1,
+        richPhaseBRowsPainted: 0,
+      );
+      acceptance.complete(true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final accounted = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'AV|LOGBOX_TARGET_PAINT_ACCOUNTED')
+          .toList(growable: false);
+      expect(accounted, isNotEmpty);
+      expect(accounted.last.scope, contains('source=retainedExactPaint'));
     },
   );
 

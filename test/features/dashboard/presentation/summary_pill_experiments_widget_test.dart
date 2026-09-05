@@ -1165,6 +1165,75 @@ void main() {
   });
 
   testWidgets(
+    'RED: removing a hierarchy track does not end the still-active mode selector motion',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      final motionStates = <bool>[];
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SummaryPillExperiment(
+            variant: SummaryPillVariant.segmented,
+            bounds: _bounds,
+            navigation: navigation,
+            visibleFrames: visibleFrames,
+            onLevelCrossed: (plane, isRailOpen) {
+              navigation.commitTemporalCandidate(
+                navigation.temporalCandidate(
+                  plane: plane,
+                  isRailOpen: isRailOpen,
+                ),
+              );
+            },
+            onComponentCrossed: (_, _) {},
+            onSelectorMotionActiveChanged: motionStates.add,
+          ),
+        ),
+      );
+
+      final mode = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-mode-selector'),
+      );
+      final month = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-month-selector'),
+      );
+      expect(month, findsOneWidget);
+
+      final gesture = await tester.startGesture(tester.getCenter(mode));
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump();
+
+      // This is the exact synchronous navigation rebuild performed by a mode
+      // crossing. Keep its owning gesture down while Month is removed, so the
+      // test isolates the disposal handoff from carousel velocity.
+      navigation.commitTemporalCandidate(
+        navigation.temporalCandidate(plane: TimePlane.year, isRailOpen: false),
+      );
+      await tester.pump();
+
+      expect(month, findsNothing, reason: 'The mode crossing replaced Month.');
+      expect(motionStates, isNotEmpty);
+      expect(
+        motionStates.last,
+        isTrue,
+        reason:
+            'The mode carousel still owns its direct drag; disposing the '
+            'now-inactive month selector must not clear the shared lane.',
+      );
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(motionStates.last, isFalse);
+    },
+  );
+
+  testWidgets(
     'RED: a direct Mode fling retains multiple crossings when it invalidates auto-reset',
     (tester) async {
       final navigation = DashboardNavigationController(

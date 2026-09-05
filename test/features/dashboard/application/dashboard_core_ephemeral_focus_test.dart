@@ -2454,6 +2454,46 @@ void main() {
   );
 
   test(
+    'RED: same Avatar crossing after raw re-entry rearms its exact paint acknowledgement',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+      );
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(core: core);
+      final state = _budgetAvatarPreviewState(
+        categoryId: 'utilities',
+        displayName: 'Utilities',
+      );
+
+      core.beginBudgetAvatarMotion();
+      expect(await drilldown.previewBudgetTarget(state: state), isTrue);
+      expect(core.budgetAvatarTargetPainted.value, isNull);
+
+      // Raw contact cancels the unpainted former acknowledgement. Returning
+      // to the same already accepted Phase-A target must arm the next actual
+      // LogBox extent report instead of accepting semantic state only.
+      core.noteBudgetAvatarDirectPointerDown();
+      expect(await drilldown.previewBudgetTarget(state: state), isTrue);
+      final reenteredFrame = core.visibleFrames.logBoxLane.value!;
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(reenteredFrame));
+
+      expect(core.budgetAvatarTargetPainted.value?.targetHandle, 1);
+      expect(await core.awaitBudgetAvatarTargetPaint(targetHandle: 1), isTrue);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
     'RG-G2: Avatar crossings publish prepared semantic frames without starting rich scene work during motion',
     () async {
       final repository = _FocusSeedRepository();

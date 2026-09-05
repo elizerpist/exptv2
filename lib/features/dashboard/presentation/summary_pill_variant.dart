@@ -21,7 +21,17 @@ final class SummaryPillVariantController
     extends ValueNotifier<SummaryPillVariant> {
   SummaryPillVariantController() : super(SummaryPillVariant.legacy);
 
+  int _transitionEpoch = 0;
+
+  /// Monotonically identifies a real presentation-adapter replacement.
+  ///
+  /// It deliberately has no query, navigation, or data authority. Consumers
+  /// use it only to reject callbacks emitted by a disposed adapter.
+  int get transitionEpoch => _transitionEpoch;
+
   void select(SummaryPillVariant variant) {
-    if (value != variant) value = variant;
+    if (value == variant) return;
+    _transitionEpoch += 1;
+    value = variant;
   }
 }

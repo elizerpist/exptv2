@@ -10,6 +10,7 @@ import '../../../../core/categories/presentation/budget_category_avatar_artwork.
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
+import '../../application/dashboard_avatar_target_painted.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import 'budget_limit_quick_edit_gesture.dart';
@@ -44,6 +45,7 @@ class BudgetTargetAvatarRail extends StatefulWidget {
     this.onTargetSettled,
     this.onPreparedTargetHotsetRequested,
     this.liveTargetReadiness,
+    this.liveTargetPainted,
     this.onDirectInputStarted,
     this.onMotionActiveChanged,
   });
@@ -74,6 +76,11 @@ class BudgetTargetAvatarRail extends StatefulWidget {
   /// Rich resources are a bounded Phase-B enhancement. They are observed for
   /// diagnostics but never gate the rail's Phase-A semantic crossing.
   final ValueListenable<bool>? liveTargetReadiness;
+
+  /// One Core-confirmed, identity-valid post-paint event. The rail observes
+  /// this only to account for actual Phase-A/Phase-B paint in a flight report;
+  /// it never uses it to choose, settle, or replace a target.
+  final ValueListenable<DashboardAvatarTargetPainted?>? liveTargetPainted;
 
   /// Raw Avatar contact gets the same input-priority boundary as the visual
   /// rail, but does not itself claim a motion lane. A tap/cancel must not
@@ -124,6 +131,12 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   int _ballisticPreviewRejected = 0;
   int _directMatchingLogBoxPaints = 0;
   int _ballisticMatchingLogBoxPaints = 0;
+  int _retainedExactPaints = 0;
+  int _matchingRichPhaseBPaints = 0;
+  int? _latestPaintedTargetHandle;
+  int? _latestRichPaintedTargetHandle;
+  _AvatarPreviewPaintExpectation? _pendingPaintExpectation;
+  _AvatarTerminalPaintSummary? _pendingTerminalPaintSummary;
   int _stalePreviewCompletions = 0;
   int _untrackedPreviewCompletions = 0;
   int _settleVisualDeltaCount = 0;
@@ -149,6 +162,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _replaceItems(widget.presentation.value.items, initial: true);
     _requestPreparedTargetHotset();
     widget.presentation.addListener(_onPresentationChanged);
+    widget.liveTargetPainted?.addListener(_onLiveTargetPainted);
     widget.navigationController?.attach(this);
   }
 
@@ -171,12 +185,17 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       oldWidget.navigationController?.detach(this);
       widget.navigationController?.attach(this);
     }
+    if (!identical(oldWidget.liveTargetPainted, widget.liveTargetPainted)) {
+      oldWidget.liveTargetPainted?.removeListener(_onLiveTargetPainted);
+      widget.liveTargetPainted?.addListener(_onLiveTargetPainted);
+    }
   }
 
   @override
   void dispose() {
     if (_activeMotionOrigin != null) widget.onMotionActiveChanged?.call(false);
     widget.presentation.removeListener(_onPresentationChanged);
+    widget.liveTargetPainted?.removeListener(_onLiveTargetPainted);
     widget.navigationController?.detach(this);
     _quickEdit?.dispose();
     _previewPublisher.dispose();
@@ -395,11 +414,111 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       ),
     );
     if (accepted && error == null) {
+      _pendingPaintExpectation = _AvatarPreviewPaintExpectation(
+        targetHandle: targetHandle,
+        generation: generation,
+        phase: phase,
+      );
+      // Same-target raw re-entry may retain an exact Core-confirmed paint
+      // while no new ValueNotifier change is necessary. Consume that bounded
+      // metadata after the local expectation is armed; it remains accounting
+      // only and cannot select or settle a target.
+      _onLiveTargetPainted(retainedAtExpectation: true);
       _markSemanticTargetAccepted(
         targetHandle: targetHandle,
         generation: generation,
       );
     }
+  }
+
+  void _onLiveTargetPainted({bool retainedAtExpectation = false}) {
+    final painted = widget.liveTargetPainted?.value;
+    final expectation = _pendingPaintExpectation;
+    if (painted == null ||
+        expectation == null ||
+        expectation.generation != _motionGeneration ||
+        expectation.targetHandle != painted.targetHandle) {
+      return;
+    }
+    // Core validates query/revision/presentation/frame identity before it
+    // writes this metadata. Its newer-target path cancels the former waiter;
+    // an immediate read is limited to a retained exact same-target paint.
+    // Target plus the local flight generation remains the rail's bounded
+    // correlation key.
+    switch (expectation.phase) {
+      case BudgetTargetAvatarMotionPhase.directDrag:
+        if (retainedAtExpectation) {
+          _retainedExactPaints += 1;
+        } else {
+          _directMatchingLogBoxPaints += 1;
+        }
+      case BudgetTargetAvatarMotionPhase.ballistic:
+        if (retainedAtExpectation) {
+          _retainedExactPaints += 1;
+        } else {
+          _ballisticMatchingLogBoxPaints += 1;
+        }
+      case BudgetTargetAvatarMotionPhase.settling:
+      case BudgetTargetAvatarMotionPhase.interrupted:
+      case null:
+        return;
+    }
+    final terminalSummary = _pendingTerminalPaintSummary;
+    _pendingPaintExpectation = null;
+    _pendingTerminalPaintSummary = null;
+    _latestPaintedTargetHandle = painted.targetHandle;
+    if (painted.hasRichPhaseBPaint) {
+      if (!retainedAtExpectation) _matchingRichPhaseBPaints += 1;
+      _latestRichPaintedTargetHandle = painted.targetHandle;
+    }
+    final paintSource = retainedAtExpectation
+        ? 'retainedExactPaint'
+        : painted.hasRichPhaseBPaint
+        ? 'richPhaseB'
+        : 'preparedReadablePhaseA';
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|LOGBOX_TARGET_PAINT_ACCOUNTED',
+        queryKey: painted.queryKey,
+        coreRevision: painted.coreRevision,
+        scope:
+            'generation=${expectation.generation} '
+            'phase=${expectation.phase!.name} '
+            'targetHandle=${painted.targetHandle} '
+            'focusGeneration=${painted.focusGeneration} '
+            'presentationEpoch=${painted.presentationEpoch} '
+            'frameGeneration=${painted.frameGeneration} '
+            'readablePhaseARowsPainted=${painted.readablePhaseARowsPainted} '
+            'richPhaseBRowsPainted=${painted.richPhaseBRowsPainted} '
+            'source=$paintSource '
+            'paintOccurrence=${retainedAtExpectation ? 'alreadyVisibleBeforeExpectation' : 'actualExtentAfterExpectation'}',
+      ),
+    );
+    if (terminalSummary == null ||
+        terminalSummary.generation != expectation.generation) {
+      return;
+    }
+    _pendingTerminalPaintSummary = null;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_AVATAR_MOTION_PAINT_RECONCILED',
+        queryKey: painted.queryKey,
+        coreRevision: painted.coreRevision,
+        scope:
+            'generation=${terminalSummary.generation} '
+            'origin=${terminalSummary.origin.name} '
+            'terminalReason=${terminalSummary.terminalReason} '
+            'phase=${expectation.phase!.name} '
+            'targetHandle=${painted.targetHandle} '
+            'matchingLogBoxPaints='
+            '${_directMatchingLogBoxPaints + _ballisticMatchingLogBoxPaints} '
+            'directMatchingLogBoxPaints=$_directMatchingLogBoxPaints '
+            'ballisticMatchingLogBoxPaints=$_ballisticMatchingLogBoxPaints '
+            'retainedExactPaints=$_retainedExactPaints '
+            'richScenePainted=$_matchingRichPhaseBPaints '
+            'source=$paintSource',
+      ),
+    );
   }
 
   void _markSemanticTargetAccepted({
@@ -431,6 +550,12 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _ballisticPreviewRejected = 0;
     _directMatchingLogBoxPaints = 0;
     _ballisticMatchingLogBoxPaints = 0;
+    _retainedExactPaints = 0;
+    _matchingRichPhaseBPaints = 0;
+    _latestPaintedTargetHandle = null;
+    _latestRichPaintedTargetHandle = null;
+    _pendingPaintExpectation = null;
+    _pendingTerminalPaintSummary = null;
     _stalePreviewCompletions = 0;
     _untrackedPreviewCompletions = 0;
     _settleVisualDeltaCount = 0;
@@ -579,6 +704,24 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         ? identityHashCode(_controller.scrollController.position)
         : 0;
     final cadence = _semanticCadence.snapshot();
+    final pendingPaint = _pendingPaintExpectation;
+    final awaitingExactPaint =
+        pendingPaint?.generation == _motionGeneration &&
+        pendingPaint?.phase != null;
+    _pendingTerminalPaintSummary = awaitingExactPaint
+        ? _AvatarTerminalPaintSummary(
+            generation: _motionGeneration,
+            origin: origin,
+            terminalReason: terminalReason,
+          )
+        : null;
+    final paintAccountingState = awaitingExactPaint
+        ? 'awaitingExactPaint'
+        : (_directMatchingLogBoxPaints + _ballisticMatchingLogBoxPaints > 0
+              ? 'accounted'
+              : _retainedExactPaints > 0
+              ? 'retainedExactPaintAlreadyVisible'
+              : 'noAcceptedPaintExpected');
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_AVATAR_MOTION_SUMMARY',
@@ -597,11 +740,20 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'ballisticPreviewRejected=$_ballisticPreviewRejected '
             'directMatchingLogBoxPaints=$_directMatchingLogBoxPaints '
             'ballisticMatchingLogBoxPaints=$_ballisticMatchingLogBoxPaints '
+            'retainedExactPaints=$_retainedExactPaints '
+            'visibleExactPaints=${_directMatchingLogBoxPaints + _ballisticMatchingLogBoxPaints + _retainedExactPaints} '
+            'paintAccountingState=$paintAccountingState '
+            'pendingPaintTargetHandle='
+            '${awaitingExactPaint ? pendingPaint!.targetHandle : '-'} '
+            'pendingPaintPhase='
+            '${awaitingExactPaint ? pendingPaint!.phase!.name : '-'} '
             'stalePreviewCompletions=$_stalePreviewCompletions '
             'untrackedPreviewCompletions=$_untrackedPreviewCompletions '
             'latestSemanticTargetHandle='
             '${_latestSemanticTargetHandle ?? '-'} '
-            'latestRichPaintedTargetHandle=- '
+            'latestPaintedTargetHandle=${_latestPaintedTargetHandle ?? '-'} '
+            'latestRichPaintedTargetHandle='
+            '${_latestRichPaintedTargetHandle ?? '-'} '
             'settleTargetHandle=${_pendingSettleTargetHandle ?? '-'} '
             'rawScrollUpdates=$_motionRawScrollUpdates '
             'firstTickMicros=${cadence.firstTickLatencyMicros} '
@@ -614,7 +766,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'skippedSemanticIndexCount=${cadence.skippedSemanticIndexCount} '
             'acceptedLiveSnapshots=${_directPreviewAccepted + _ballisticPreviewAccepted} '
             'semanticFrameAccepted=${_directPreviewAccepted + _ballisticPreviewAccepted} '
-            'richScenePainted=0 '
+            'richScenePainted=$_matchingRichPhaseBPaints '
             'completeLivePublications=${_directPreviewAccepted + _ballisticPreviewAccepted} '
             'sameVsyncCoalescedTickCount=${_motionSemanticCrossings - _motionPreviewPublications} '
             'repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 '
@@ -804,6 +956,30 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       ),
     );
   }
+}
+
+final class _AvatarPreviewPaintExpectation {
+  const _AvatarPreviewPaintExpectation({
+    required this.targetHandle,
+    required this.generation,
+    required this.phase,
+  });
+
+  final int targetHandle;
+  final int generation;
+  final BudgetTargetAvatarMotionPhase? phase;
+}
+
+final class _AvatarTerminalPaintSummary {
+  const _AvatarTerminalPaintSummary({
+    required this.generation,
+    required this.origin,
+    required this.terminalReason,
+  });
+
+  final int generation;
+  final CenteredCarouselMotionOrigin origin;
+  final String terminalReason;
 }
 
 final class _PreparedBudgetTargetAvatar {
