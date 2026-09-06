@@ -1,41 +1,41 @@
 {
   "schema_version": 1,
-  "record_count": 9599,
+  "record_count": 9692,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_BudgetAvatarFocusHotsetEntry#`<constructor>`().",
-      "sha256": "e079c176da60bada0c9355ae86c367a8da50c3f7f321a9f4a2065cf828e2523d"
+      "sha256": "ae12b2637c5fea0b08e436bf9cc7d30022250b8174edc72689e3cef419345957"
     },
     {
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_BudgetAvatarFocusHotsetEntry#derivation.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_clay_donut_scene.dart`/BudgetClayDonutGeometry#frontDepth.",
-      "sha256": "6c5270fb0460b6cb24aae28e1489e313f0de38dd831204a072e0fb453f3409b7"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_category_distribution_visual_bank.dart`/DashboardBudgetDistributionDrawableController#dispose().",
+      "sha256": "858cd49864899993dff1adf64f3f0841b6a16e0fe7d693e79c74a54a3be6e0bb"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_clay_donut_scene.dart`/BudgetClayDonutGeometry#gapDegreesForSliceCount().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_viewport.dart`/_VerticalInteractionSession#matches().",
-      "sha256": "60c4f446379615f3618e45c3ddacd96a04228e5744c6171791dee41b5e625ef1"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_category_distribution_visual_bank.dart`/DashboardBudgetDistributionDrawableController#evictionCount.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_viewport.dart`/_DashboardLogScrollArea#hitTestController.",
+      "sha256": "5dae40f24da4dbb5acbf3abef743acf42dc8622ea7441ec6337c2497ab5fdf56"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_viewport.dart`/_VerticalInteractionSession#presentationEpoch.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_time_navigation_state.dart`/DashboardTimeNavigationChange#kind.",
-      "sha256": "a541d49b4b04de189a009881b5c4be266a279d2758a9d8678fac3c5fde7f61b5"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_viewport.dart`/_DashboardLogScrollArea#onAvatarTap.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_time_navigation_controller.dart`/DashboardNavigationController#retainSettledChild().",
+      "sha256": "8bab0fb8beb4e045bd7a1301160a38ae0ae6a257d5232c524d4ce6c591df6f81"
     },
     {
       "path": "symbols/part-004.jsonl",
-      "record_count": 1599,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_time_navigation_state.dart`/DashboardTimeNavigationChangeDirection#",
+      "record_count": 1692,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_time_navigation_controller.dart`/DashboardNavigationController#selectDirection().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "d55986af13366cb3a002182d94b7d6f59c1e5b875e91c4b26e9d9fe391e19dc0"
+      "sha256": "cd8c96a8a82aec4b22aa9b10625b7298c2f4436157467d02abc1d62ac6e11265"
     }
   ]
 }
