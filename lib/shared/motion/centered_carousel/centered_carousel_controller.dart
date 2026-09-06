@@ -87,6 +87,7 @@ class CenteredCarouselController extends ChangeNotifier {
   bool _isScrolling = false;
   bool _directPointerIsDown = false;
   bool _terminalActivityCheckScheduled = false;
+  int? _terminalHoldRetryCommandId;
   bool _disposed = false;
   bool _isRebasing = false;
   bool _suppressScrollEvents = false;
@@ -223,6 +224,7 @@ class CenteredCarouselController extends ChangeNotifier {
   }) {
     final commandId = ++_motionCommandId;
     _activeMotionCommandId = commandId;
+    _terminalHoldRetryCommandId = null;
     onMotionStarted?.call(origin);
     return commandId;
   }
@@ -550,6 +552,7 @@ class CenteredCarouselController extends ChangeNotifier {
     _motionCommandId += 1;
     _activeMotionCommandId = 0;
     _lastSettledCommandId = null;
+    _terminalHoldRetryCommandId = null;
     _isScrolling = false;
   }
 
@@ -653,7 +656,23 @@ class CenteredCarouselController extends ChangeNotifier {
       }
       final commandId = _activeMotionCommandId;
       if (!isCurrentMotionCommand(commandId)) return;
-      if (_scrollController.position.activity is! IdleScrollActivity) return;
+      final activity = _scrollController.position.activity;
+      if (activity is! IdleScrollActivity) {
+        // HoldScrollActivity is deliberately non-scrolling. If raw contact
+        // has ended while the first probe sees that transient activity,
+        // isScrollingNotifier cannot emit a second false transition when the
+        // position subsequently becomes idle. Give this command exactly one
+        // additional frame-local probe for that handoff. A persistent hold is
+        // not a reason to synthesize an unbounded frame loop; a new pointer,
+        // scrolling activity or command invalidation owns any later change.
+        if (activity is HoldScrollActivity &&
+            _terminalHoldRetryCommandId != commandId) {
+          _terminalHoldRetryCommandId = commandId;
+          _scheduleTerminalActivityCheck();
+        }
+        return;
+      }
+      _terminalHoldRetryCommandId = null;
       rebaseIfNeeded();
       onMotionIdle?.call(_selectedLogicalIndex);
       _emitSettledForCommand(commandId);

@@ -273,6 +273,60 @@ and Mind diagnostics groups pass within the broad run. No golden was
 regenerated. GitHub CI remains the delivery authority. No local APK was
 attempted.
 
+### Profile terminal-idle lifecycle — red/green root cause
+
+The first delivery candidate `aa26f01…` exposed a profile-gate failure twice,
+once in `B_year_month_rail_populated` and once in `I_first_fling`.  Both
+failures ended with a physical `ScrollPosition` already idle but the dashboard
+motion state still `drag`:
+
+```
+Dashboard rail did not become motion-idle before the profile timeout:
+activity=drag scrollActivity=false.
+```
+
+The runs also contain multi-second software-EGL frames, but that timing is not
+by itself a root cause.  The profile harness, the shared carousel controller,
+the motion kernel, and the Time rail have no source diff between `9e8a…` and
+`aa26…`. The separate same-source `9e8a…` control run
+[`34052858228`](https://github.com/elizerpist/exptv2/actions/runs/34052858228)
+also fails in `I_first_fling` with the same normalized state
+(`activity=drag scrollActivity=false`) after software-EGL frames up to
+3671.89 ms. This proves the profile failure is not introduced by the `aa26…`
+repair, while still leaving the underlying shared lifecycle defect in scope.
+
+The current shared-controller test then reproduced a concrete lifecycle race:
+after raw contact ends, `_scheduleTerminalActivityCheck` sampled a transient
+`HoldScrollActivity` and returned. Flutter defines Hold as *non-scrolling*.
+Its later `HoldScrollActivity -> IdleScrollActivity` transition therefore does
+not produce another `isScrollingNotifier` false transition. No second terminal
+probe was scheduled, so `onSelectionSettled` never reached
+`TimeRefinementRail -> DashboardMotionKernel`, leaving the kernel at `drag`
+while `hasActiveScrollActivity` was false.
+
+The red test fails on the pre-fix code (`Expected: [2]; Actual: []`). A second
+production-parent regression verifies the real
+`CoreDashboard -> TimeRefinementRail -> DashboardMotionKernel` chain. The
+minimal repair gives a command-scoped terminal Hold exactly one additional
+frame-local probe. It stops after that probe, or earlier on a new pointer,
+scrolling activity, command invalidation, disposal, or an actual idle settle.
+A regression proves a persistent Hold cannot create an unbounded frame loop.
+It adds no timer, timeout increase, cooldown, physics change,
+controller/position recreation, query work, or target-frequency reduction.
+
+The final bounded implementation passes both shared-controller cases and the
+full `core_dashboard_test.dart` suite (`+31`), including the persistent
+`CoreDashboard -> TimeRefinementRail -> DashboardMotionKernel` path. This is
+local red/green evidence only; the exact new-SHA profile gate remains required
+before classifying the CI symptom as repaired.
+
+Current changed-SHA validation is clean for formatter, analyzer, shared motion
+(`+35`), Summary (`+48`), application (`+278`) and fast (`+291`) suites. The
+full presentation suite is `+583 -19`: the one additional pass is this new
+regression and the 19 failures retain the clean-9e header/golden/ticker and
+stable-Scrollable signatures. No golden was changed. The final GitHub profile
+matrix remains the acceptance check for the original timeout symptom.
+
 ### Independent review reconciliation
 
 One review raised three follow-up checks. CURRENT source and tests resolve two

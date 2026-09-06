@@ -26,7 +26,8 @@ not mark a physical requirement DONE.
 | TIME-PROTECT-01 | User §8; frozen Time flights 18–22 | Time projection, LogBox render/extent, target acknowledgement | No Time semantic/query/paint/extent change; existing exact paint/empty/coalescing and zero tick heavy work remain green | Existing Time production-parent regressions run unchanged | DONE — targeted Time/LogBox production-parent coverage remains green; no Time production source changed |
 | OWNER-01 | Global architecture gate | Shared controller/cache/render flow | No second controller, visible-frame store, LogBox, resource cache or copied gesture engine; UI remains intent/rendering only | Architecture card, dependency/source inspection, focused boundary test | DONE — existing prepared-scene cache is bound through the existing coordinator; no new owner was allocated |
 | HOTPATH-01 | User §§5–8 | Summary/Avatar/Mind hot paths | No DB/query/index/rich projection/TextPainter work at semantic ticks; no timer/cooldown/reduced target frequency/physics retune | Flight counters, source inspection, focused tests | DONE — cache-only compact resource binding; new Mind pointer diagnostics are opt-in rather than retained on a normal release slider path; no timer or physics change |
-| VALIDATE-01 | User §9 | Changed Dart/test surfaces | Red tests observed first; format, analyzer, focused, app, fast and presentation suites are compared against exact 9e baseline | Exact proot commands and normalized failures | PARTIAL — format/analyze/targeted/app/fast suites pass; full presentation reaches the normalized inherited 19 failures with no new failure; remote CI remains pending |
+| PROFILE-IDLE-01 | Repeated aa26 profile-gate failures; current `CenteredCarouselController` source | Shared terminal motion lifecycle | A terminal `HoldScrollActivity` that becomes idle cannot leave the Time motion kernel in `drag`; it must publish one current settle without controller recreation, delay, timeout expansion or physics change | Red/green shared-carousel widget test plus Time/profile validation | PARTIAL — pre-fix red test observed; bounded one-retry green tests and the persistent `CoreDashboard -> TimeRefinementRail -> DashboardMotionKernel` regression pass locally; exact new-SHA profile validation remains required |
+| VALIDATE-01 | User §9 | Changed Dart/test surfaces | Red tests observed first; format, analyzer, focused, app, fast and presentation suites are compared against exact 9e baseline | Exact proot commands and normalized failures | PARTIAL — current change passes format, analyzer, shared motion (`+35`), Summary (`+48`), CoreDashboard (`+31`), application (`+278`) and fast (`+291`); presentation is `+583 -19`, matching the documented clean-9e inherited signatures; remote CI remains pending |
 | DELIVERY-01 | Global AGENTS + user §5 | App branch / GitHub Actions | Atomic application commits are pushed; exact normal human APK is built online, downloaded to `/storage/emulated/0/Download/fluvi`, and SHA-256 recorded | GitHub run/artifact/download verification | NOT DONE |
 | GRAPH-01 | User §5 | Tooling worktree only | Separate SCIP regeneration indexes exact final app SHA; deterministic tooling checks pass and tooling commit is pushed | Manifest/hash/tooling test report | NOT DONE |
 | PHYSICAL-01 | User | Device | Human validates repaired behavior | User-only device test | PENDING — USER ONLY |
@@ -37,6 +38,7 @@ not mark a physical requirement DONE.
 | --- | --- | --- |
 | Summary rapid repeat | One CoreDashboard, CoreController, segmented Summary, upper coordinator and carousel controllers | Selector pointer at each interval/activity is exclusive; no collapse for selector ownership |
 | Summary boundary | Actual layout geometry under normal/mirrored widths and selector combinations | visual/interaction/semantics rects and background cells are deterministic/non-overlapping |
+| Carousel terminal lifecycle | Shared carousel controller plus persistent CoreDashboard/Time rail | one current settle after transient Hold→Idle; persistent Hold has one bounded retry and no unbounded frame scheduling |
 | Avatar resource gap | Actual CommittedLogViewportCache + PreparedSceneCache + stable LogBox surface | private prearm alone is not painter readiness; exact bounded Phase A paints by next frame |
 | Avatar rapid targets | Real category/partner focus sequence in one dashboard | exact terminal classification; coherent selected/header/distribution/count/LogBox/paint identity |
 | Avatar memory/perf | Real resource-window owner and existing FrameTiming collector | bounded bank; no heavy tick work; measured residual only |
@@ -89,3 +91,20 @@ always remains **PENDING — USER ONLY**.
   render-surface signatures; the changed Summary, Avatar Phase-A and Mind
   diagnostics tests pass within that run. No golden was regenerated. Remote
   CI remains the delivery gate.
+
+- **PASS — current terminal-lifecycle repair:** both new shared-carousel
+  red/green regressions and `time rail settles after a terminal non-scrolling
+  Hold handoff` pass. The complete
+  `test/features/dashboard/presentation/core_dashboard_test.dart` suite also
+  passes (`+31`).
+- **PASS — current change:** proot formatter reports `Formatted 3 files (0
+  changed)`; `flutter analyze` reports `No issues found!`; the shared motion
+  batch is `+35`, the Summary batch is `+48`, the application suite is `+278`,
+  and `./scripts/test-fluvi-fast.sh` is `+291`.
+- **FAIL — normalized inherited:** the complete presentation suite is
+  `+583 -19`. The extra passing test is the new terminal-Hold regression; the
+  19 failure count and observed header/golden/ticker/Scrollable signatures
+  match the clean-9e baseline. The protected direct Time/LogBox batch similarly
+  completes `+71 -1`; its sole failure is the same pre-existing
+  `find.byType(Scrollable).single` assertion in
+  `dashboard_logbox_stable_render_surface_test.dart`.

@@ -320,6 +320,86 @@ void main() {
     expect(controller.selectedIndex, targetIndex);
   });
 
+  testWidgets(
+    'a terminal hold that becomes idle still emits the current settle',
+    (tester) async {
+      final controller = CenteredCarouselController(initialIndex: 2);
+      addTearDown(controller.dispose);
+      final settled = <int>[];
+
+      await tester.pumpWidget(
+        _host(
+          CenteredCarousel<int>(
+            items: const [0, 1, 2, 3, 4],
+            controller: controller,
+            spec: CenteredCarouselSpec(itemExtent: 72),
+            height: 80,
+            onSelectionSettled: settled.add,
+            itemBuilder: (context, item, metrics) =>
+                SizedBox(width: 48, height: 48, child: Text('$item')),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      controller
+        ..beginUserMotionCommand()
+        ..noteDirectPointerDown();
+      final hold = controller.scrollController.position.hold(() {});
+      controller.noteDirectPointerEnded();
+
+      // The first terminal probe sees the transient HoldScrollActivity.  A
+      // Hold is non-scrolling, so it cannot rely on isScrollingNotifier to
+      // schedule another probe when it later becomes IdleScrollActivity.
+      await tester.pump();
+      expect(controller.hasActiveScrollActivity, isTrue);
+      expect(settled, isEmpty);
+
+      hold.cancel();
+      await tester.pump();
+      await tester.pump();
+
+      expect(controller.hasActiveScrollActivity, isFalse);
+      expect(settled, [2]);
+    },
+  );
+
+  testWidgets('a persistent terminal hold receives only one retry frame', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 2);
+    addTearDown(controller.dispose);
+    final settled = <int>[];
+
+    await tester.pumpWidget(
+      _host(
+        CenteredCarousel<int>(
+          items: const [0, 1, 2, 3, 4],
+          controller: controller,
+          spec: CenteredCarouselSpec(itemExtent: 72),
+          height: 80,
+          onSelectionSettled: settled.add,
+          itemBuilder: (context, item, metrics) =>
+              SizedBox(width: 48, height: 48, child: Text('$item')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller
+      ..beginUserMotionCommand()
+      ..noteDirectPointerDown();
+    final hold = controller.scrollController.position.hold(() {});
+    controller.noteDirectPointerEnded();
+
+    final frameCount = await tester.pumpAndSettle();
+
+    expect(frameCount, lessThanOrEqualTo(2));
+    expect(controller.hasActiveScrollActivity, isTrue);
+    expect(settled, isEmpty);
+    hold.cancel();
+  });
+
   testWidgets('latest tap owns the settled callback', (tester) async {
     final controller = CenteredCarouselController(initialIndex: 0);
     addTearDown(controller.dispose);

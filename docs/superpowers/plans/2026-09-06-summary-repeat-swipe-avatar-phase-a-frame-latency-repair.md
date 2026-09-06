@@ -32,12 +32,18 @@ them would introduce conflicting edits at the authority boundary.
    probe is compile-time diagnostic opt-in. Avatar
    FrameTiming must be remeasured on the next profile APK before any physics or
    build/raster optimization is considered.
-7. **DONE (local scope) — Protect and validate.**  Formatter, analyzer,
-   changed focused groups, the application suite (`+278`) and the fast suite
-   (`+291`) pass. The full presentation suite completes at `+582 -19`; its
-   19 failures are normalized to the clean-9e header/golden/ticker and stable
-   render-surface baseline. Remote CI remains the delivery authority.
-8. **NEXT — Deliver.**  Review changed-symbol graph consumers, reread the
+7. **DONE (local; CI pending) — Protect and validate.**  The current
+   terminal-lifecycle repair passes formatting, analyzer, shared motion
+   (`+35`), Summary (`+48`), CoreDashboard (`+31`), application (`+278`) and
+   fast (`+291`) validation. The full presentation suite is `+583 -19`; its
+   19 failures remain normalized to the clean-9e header/golden/ticker and
+   stable render-surface baseline. No golden was regenerated.
+8. **DONE (local; profile CI pending) — Repair terminal Hold→Idle handoff.**
+   The shared controller previously sampled a transient non-scrolling
+   `HoldScrollActivity` and missed its later idle handoff, leaving the Time
+   motion kernel in `drag`. A command-scoped single frame-local retry preserves
+   the existing controller/physics and cannot spin for a persistent Hold.
+9. **NEXT — Deliver.**  Review changed-symbol graph consumers, reread the
    checklist, make atomic application commits, push, monitor the exact GitHub
    Actions SHA, download/hash the normal human APK, then regenerate/validate/
    push SCIP from the separate tooling worktree.

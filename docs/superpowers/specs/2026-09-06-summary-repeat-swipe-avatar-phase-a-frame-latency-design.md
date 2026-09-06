@@ -63,6 +63,21 @@ unchanged and the proven stale layer, arena, lifecycle, or coordinator owner is
 repaired instead.  No timer, cooldown, forced settle, controller recreation,
 or oversized overlapping detector is permissible.
 
+## Terminal motion handoff
+
+The selector controller must also distinguish a physical terminal state from a
+notification transition. `HoldScrollActivity` is deliberately non-scrolling,
+so a terminal probe that samples a transient Hold cannot depend on a later
+`isScrollingNotifier == false` transition when the position becomes idle.
+
+`CenteredCarouselController` keeps the existing command owner and grants that
+exact command one additional frame-local terminal probe. It emits the normal
+current-command settle only if that probe sees `IdleScrollActivity`. A Hold
+which remains active receives no synthetic settle and no repeated probe loop;
+new pointer contact, scrolling, command invalidation, disposal, or the
+existing idle path remains authoritative. This is lifecycle reconciliation,
+not a timeout, cooldown, physics adjustment, or controller replacement.
+
 ## Avatar Phase-A resource authority
 
 The active rail-preview painter determines readiness through

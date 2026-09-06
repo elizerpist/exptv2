@@ -1692,6 +1692,52 @@ void main() {
     },
   );
 
+  testWidgets('time rail settles after a terminal non-scrolling Hold handoff', (
+    tester,
+  ) async {
+    final controller = DashboardCoreController(initialCoreRevision: 1);
+    addTearDown(controller.dispose);
+    await controller.bootstrap();
+    await pumpDashboardSurface(
+      tester,
+      CoreDashboard(
+        controller: controller,
+        modeController: _modeControllerFor(DashboardModeSpec.balance),
+        categoryCollection: emptyTestCategoryCollection,
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+    await tester.pump();
+    final carousel = controller.motion.carouselController;
+    FluviDiagnosticLogger.clear();
+    carousel
+      ..beginUserMotionCommand()
+      ..noteDirectPointerDown();
+    final hold = carousel.scrollController.position.hold(() {});
+    carousel.noteDirectPointerEnded();
+
+    // The first terminal check intentionally sees HoldScrollActivity. The
+    // Time kernel must still receive its one settle after the hold releases
+    // into idle, even though Hold is not a scrolling-notifier transition.
+    await tester.pump();
+    expect(controller.motion.state.activity, DashboardMotionActivity.drag);
+    expect(carousel.hasActiveScrollActivity, isTrue);
+
+    hold.cancel();
+    await tester.pump();
+    await tester.pump();
+
+    expect(controller.motion.state.activity, DashboardMotionActivity.idle);
+    expect(carousel.hasActiveScrollActivity, isFalse);
+    expect(
+      FluviDiagnosticLogger.entries.where(
+        (event) => event.stage == 'TM|FLING_SETTLED',
+      ),
+      hasLength(1),
+    );
+  });
+
   testWidgets('split header lower card reveals from behind the upper card', (
     tester,
   ) async {
