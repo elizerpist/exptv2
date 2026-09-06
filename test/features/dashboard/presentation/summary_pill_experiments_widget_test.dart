@@ -20,68 +20,83 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
-  test('segmented visual and gesture centres are identical', () {
-    final geometry = SummarySegmentedTrackGeometry.resolve(
-      width: 218.8,
-      preRegressionNavigationWidth: 210.8,
-      activeTrackIndices: const <int>[0, 1, 2, 3],
-    );
-
-    for (final track in const <int>[0, 1, 2, 3]) {
-      expect(
-        geometry.visualCenterForTrack(track),
-        closeTo(geometry.semanticCenterForTrack(track), .000001),
-        reason:
-            'The visible $track selector must use the same centre as its '
-            'gesture owner.',
-      );
-    }
-    final mode = geometry.semanticRectForTrack(0);
-    final year = geometry.semanticRectForTrack(1);
-    final month = geometry.semanticRectForTrack(2);
-    final day = geometry.semanticRectForTrack(3);
-    expect(mode.overlaps(year), isFalse);
-    expect(year.overlaps(month), isFalse);
-    expect(month.overlaps(day), isFalse);
-    final modeVisual = geometry.visualContentRectForTrack(0);
-    final yearVisual = geometry.visualContentRectForTrack(1);
-    final monthVisual = geometry.visualContentRectForTrack(2);
-    final dayVisual = geometry.visualContentRectForTrack(3);
-    // A visual label may not live inside an independently padded interaction
-    // lane. The exact same Rect owns its paint/clip/semantics/gesture.
-    expect(modeVisual, mode);
-    expect(yearVisual, year);
-    expect(monthVisual, month);
-    expect(dayVisual, day);
-    expect(
-      yearVisual.left - modeVisual.right,
-      closeTo(geometry.segmentedSectionGap, .000001),
-    );
-    expect(
-      monthVisual.left - yearVisual.right,
-      closeTo(geometry.segmentedSectionGap, .000001),
-    );
-    expect(
-      dayVisual.left - monthVisual.right,
-      closeTo(geometry.segmentedSectionGap, .000001),
-    );
-    expect(
-      geometry.segmentedSectionGap,
-      geometry.preRegressionContentEdgeGap / 2,
-    );
-    expect(
-      modeVisual.left,
-      (geometry.height - geometry.contentMetrics.modeVisualSize) / 2,
-      reason: 'large mode visual left inset must equal its top inset',
-    );
-    expect(
-      geometry.preRegressionContentEdgeGap,
-      SummarySegmentedTrackGeometry.preRegressionContentEdgeGapFor(
+  test(
+    'segmented visual content stays fixed while interaction cells meet at selector boundaries',
+    () {
+      final geometry = SummarySegmentedTrackGeometry.resolve(
+        width: 218.8,
         preRegressionNavigationWidth: 210.8,
-      ),
-      reason: 'the half-gap must come from old width and old 25px badge',
-    );
-  });
+        activeTrackIndices: const <int>[0, 1, 2, 3],
+      );
+
+      for (final track in const <int>[0, 1, 2, 3]) {
+        final visual = geometry.visualContentRectForTrack(track);
+        final interaction = geometry.interactionCellRectForTrack(track);
+        expect(
+          interaction.contains(visual.center),
+          isTrue,
+          reason:
+              'The visible $track selector must remain inside its usable cell.',
+        );
+        expect(geometry.semanticRectForTrack(track), interaction);
+      }
+      final mode = geometry.semanticRectForTrack(0);
+      final year = geometry.semanticRectForTrack(1);
+      final month = geometry.semanticRectForTrack(2);
+      final day = geometry.semanticRectForTrack(3);
+      expect(mode.overlaps(year), isFalse);
+      expect(year.overlaps(month), isFalse);
+      expect(month.overlaps(day), isFalse);
+      final modeVisual = geometry.visualContentRectForTrack(0);
+      final yearVisual = geometry.visualContentRectForTrack(1);
+      final monthVisual = geometry.visualContentRectForTrack(2);
+      final dayVisual = geometry.visualContentRectForTrack(3);
+      // Visual placement remains authored; only the separator-side interaction
+      // cells are widened. They stay disjoint and never consume the amount zone.
+      expect(mode.contains(modeVisual.center), isTrue);
+      expect(year.contains(yearVisual.center), isTrue);
+      expect(month.contains(monthVisual.center), isTrue);
+      expect(day.contains(dayVisual.center), isTrue);
+      expect(mode.overlaps(year), isFalse);
+      expect(year.overlaps(month), isFalse);
+      expect(month.overlaps(day), isFalse);
+      expect(
+        day.left,
+        closeTo((monthVisual.right + dayVisual.left) / 2, .000001),
+        reason: 'The day cell begins at its preceding selector midpoint.',
+      );
+      expect(mode.left, 0);
+      expect(day.right, geometry.width);
+      expect(
+        yearVisual.left - modeVisual.right,
+        closeTo(geometry.segmentedSectionGap, .000001),
+      );
+      expect(
+        monthVisual.left - yearVisual.right,
+        closeTo(geometry.segmentedSectionGap, .000001),
+      );
+      expect(
+        dayVisual.left - monthVisual.right,
+        closeTo(geometry.segmentedSectionGap, .000001),
+      );
+      expect(
+        geometry.segmentedSectionGap,
+        geometry.preRegressionContentEdgeGap / 2,
+      );
+      expect(
+        modeVisual.left,
+        (geometry.height - geometry.contentMetrics.modeVisualSize) / 2,
+        reason: 'large mode visual left inset must equal its top inset',
+      );
+      expect(
+        geometry.preRegressionContentEdgeGap,
+        SummarySegmentedTrackGeometry.preRegressionContentEdgeGapFor(
+          preRegressionNavigationWidth: 210.8,
+        ),
+        reason: 'the half-gap must come from old width and old 25px badge',
+      );
+    },
+  );
 
   test('segmented mirror reverses only the owned component Rects', () {
     final normal = SummarySegmentedTrackGeometry.resolve(
@@ -99,20 +114,22 @@ void main() {
 
     expect(
       mirrored.semanticRectForTrack(3).right,
-      lessThan(mirrored.semanticRectForTrack(2).left),
+      lessThanOrEqualTo(mirrored.semanticRectForTrack(2).left),
     );
     expect(
       mirrored.semanticRectForTrack(2).right,
-      lessThan(mirrored.semanticRectForTrack(1).left),
+      lessThanOrEqualTo(mirrored.semanticRectForTrack(1).left),
     );
     expect(
       mirrored.semanticRectForTrack(1).right,
-      lessThan(mirrored.semanticRectForTrack(0).left),
+      lessThanOrEqualTo(mirrored.semanticRectForTrack(0).left),
     );
     for (final track in const <int>[0, 1, 2, 3]) {
       expect(
-        mirrored.semanticRectForTrack(track),
-        mirrored.visualContentRectForTrack(track),
+        mirrored
+            .semanticRectForTrack(track)
+            .contains(mirrored.visualContentRectForTrack(track).center),
+        isTrue,
       );
       expect(
         mirrored.semanticRectForTrack(track).width,
@@ -122,12 +139,18 @@ void main() {
     expect(
       mirrored.semanticRectForTrack(2).left -
           mirrored.semanticRectForTrack(3).right,
-      closeTo(normal.segmentedSectionGap, .000001),
+      closeTo(0, .000001),
+      reason: 'Adjacent interaction cells meet at one deterministic boundary.',
     );
     expect(
-      mirrored.width - mirrored.semanticRectForTrack(0).right,
-      (mirrored.height - mirrored.contentMetrics.modeVisualSize) / 2,
-      reason: 'mirrored mode right inset matches normal top inset',
+      mirrored.semanticRectForTrack(3).left,
+      0,
+      reason: 'The mirrored outer Day cell starts at the navigation edge.',
+    );
+    expect(
+      mirrored.semanticRectForTrack(0).right,
+      mirrored.width,
+      reason: 'The mirrored outer Mode cell reaches the navigation edge.',
     );
   });
 
@@ -196,7 +219,13 @@ void main() {
         ),
       );
 
-      await tester.tapAt(const Offset(374, 29));
+      // The outer selector cells now intentionally own every point in the
+      // navigation zone. Use the separately owned amount zone to exercise a
+      // genuine Summary-background tap instead of a former glyph-side gap.
+      final amountZone = tester.getRect(
+        find.byKey(const ValueKey('summary-pill-experiment-amount-zone')),
+      );
+      await tester.tapAt(amountZone.center);
       await tester.pump();
       expect(resetTaps, 1);
 
@@ -252,6 +281,98 @@ void main() {
     expect(dragEnds, 1);
     expect(resetTaps, 0);
   });
+
+  testWidgets(
+    'RED repeat-day swipe: the separator-side day interaction cell owns a new pointer instead of Header collapse',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      var selectorPointerStarts = 0;
+      var backgroundDragStarts = 0;
+      final pointerHits = <SummarySegmentedPointerHit>[];
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: _bounds.width,
+              height: _bounds.height,
+              child: SummaryPillExperiment(
+                variant: SummaryPillVariant.segmented,
+                bounds: _bounds,
+                navigation: navigation,
+                visibleFrames: visibleFrames,
+                onLevelCrossed: (_, _) {},
+                onComponentCrossed: (_, _) {},
+                onSelectorDirectInputStarted: () => selectorPointerStarts += 1,
+                onPointerHitClassified: pointerHits.add,
+                onBackgroundVerticalDragStart: (_) => backgroundDragStarts += 1,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final shell = tester.getRect(
+        find.byKey(const ValueKey('summary-pill-experiment-segmented')),
+      );
+      final amount = tester.getRect(
+        find.byKey(const ValueKey('summary-pill-experiment-amount-zone')),
+      );
+      final inset = shell.width <= 320
+          ? 6.0
+          : FluviVisualTokens.controlHorizontalInset;
+      final geometry = SummarySegmentedTrackGeometry.resolve(
+        width: shell.width - amount.width - inset,
+        height: shell.height,
+        activeTrackIndices: const <int>[0, 1, 2, 3],
+        preRegressionNavigationWidth: shell.width - amount.width - inset * 2,
+      );
+      final dayVisual = geometry
+          .visualContentRectForTrack(3)
+          .shift(Offset(shell.left, shell.top));
+      final gesture = await tester.startGesture(
+        Offset(dayVisual.left - 1, dayVisual.center.dy),
+      );
+      await gesture.moveBy(const Offset(0, -48));
+      await tester.pump();
+      await gesture.up();
+
+      expect(
+        selectorPointerStarts,
+        1,
+        reason:
+            'A point in the separator-adjacent day cell must reach the '
+            'selector raw-pointer boundary immediately, even after a prior '
+            'selector motion.',
+      );
+      expect(pointerHits, hasLength(1));
+      expect(pointerHits.single.selectorTrack, 3);
+      expect(
+        pointerHits.single.trackRects[3]!.visualContent.contains(
+          pointerHits.single.localPosition,
+        ),
+        isFalse,
+        reason:
+            'This regression starts in the separator-side day interaction '
+            'cell, not on the authored day glyph/content rectangle.',
+      );
+      expect(
+        backgroundDragStarts,
+        0,
+        reason:
+            'A selector-owned pointer must not leak into the Summary '
+            'background Header-collapse recognizer.',
+      );
+    },
+  );
 
   testWidgets(
     'mirrored Summary keeps reset behind its mirrored selector Rects',
@@ -976,7 +1097,7 @@ void main() {
   );
 
   testWidgets(
-    'mirrored Segmented fields retain their own rendered hit Rects and flings',
+    'mirrored Segmented fields retain disjoint interaction cells and flings',
     (tester) async {
       final navigation = DashboardNavigationController(
         initialDate: DateTime(2026, 7, 15),
@@ -1041,21 +1162,27 @@ void main() {
           geometry
               .semanticRectForTrack(entry.key)
               .shift(Offset(amount.right, amount.top)),
-          reason: 'mirrored visual, clip, semantics and hit owner must match',
+          reason:
+              'The active selector owns its midpoint-derived interaction and '
+              'semantics cell; authored visual content remains separately '
+              'anchored inside it.',
         );
       }
-      expect(amount.right, lessThan(tester.getRect(selectors[3]!).left));
+      expect(
+        amount.right,
+        lessThanOrEqualTo(tester.getRect(selectors[3]!).left),
+      );
       expect(
         tester.getRect(selectors[3]!).right,
-        lessThan(tester.getRect(selectors[2]!).left),
+        lessThanOrEqualTo(tester.getRect(selectors[2]!).left),
       );
       expect(
         tester.getRect(selectors[2]!).right,
-        lessThan(tester.getRect(selectors[1]!).left),
+        lessThanOrEqualTo(tester.getRect(selectors[1]!).left),
       );
       expect(
         tester.getRect(selectors[1]!).right,
-        lessThan(tester.getRect(selectors[0]!).left),
+        lessThanOrEqualTo(tester.getRect(selectors[0]!).left),
       );
 
       await tester.fling(selectors[0]!, const Offset(0, 80), 900);

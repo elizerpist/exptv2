@@ -11,6 +11,7 @@ import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
+import '../../query/presentation/query_amount_range_control.dart';
 import 'balance_dashboard_core_surface.dart';
 import 'budget_dashboard_core_surface.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -63,6 +64,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.onMindQueryAmountRangePreviewChanged,
     this.onMindQueryAmountRangeInteractionStarted,
     this.onMindQueryAmountRangeInteractionEnded,
+    this.onMindQueryAmountRangeInteractionSummary,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -99,6 +101,8 @@ class DashboardCoreModeHost extends StatefulWidget {
   onMindQueryAmountRangePreviewChanged;
   final VoidCallback? onMindQueryAmountRangeInteractionStarted;
   final VoidCallback? onMindQueryAmountRangeInteractionEnded;
+  final ValueChanged<QueryAmountRangeInteractionSummary>?
+  onMindQueryAmountRangeInteractionSummary;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -328,6 +332,8 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             widget.onMindQueryAmountRangeInteractionStarted,
         onQueryAmountRangeInteractionEnded:
             widget.onMindQueryAmountRangeInteractionEnded,
+        onQueryAmountRangeInteractionSummary:
+            widget.onMindQueryAmountRangeInteractionSummary,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,
       ),

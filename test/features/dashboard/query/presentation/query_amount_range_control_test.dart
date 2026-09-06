@@ -198,6 +198,133 @@ void main() {
   );
 
   testWidgets(
+    'Mind emits one bounded pointer-to-preview summary without changing the preview lane',
+    (tester) async {
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 200000,
+        upperScaled100: 700000,
+      );
+      final scheduler = _PreviewFrameScheduler();
+      final summaries = <QueryAmountRangeInteractionSummary>[];
+      final previews = <QueryAmountRangeValues>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: QueryAmountRangeControl(
+              values: range,
+              previewScheduler: scheduler,
+              onRangeCommitted: _discardRange,
+              onRangePreviewChanged: previews.add,
+              onInteractionSummary: summaries.add,
+            ),
+          ),
+        ),
+      );
+
+      final pointerProbe = tester.widget<Listener>(
+        find.byKey(const ValueKey('query-amount-range-pointer-probe')),
+      );
+      pointerProbe.onPointerDown!(
+        const PointerDownEvent(pointer: 73, position: Offset(24, 12)),
+      );
+      final slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChangeStart!(slider.values);
+      slider.onChanged!(const RangeValues(300000, 600000));
+      slider.onChanged!(const RangeValues(300000, 600000));
+      slider.onChanged!(const RangeValues(400000, 500000));
+
+      scheduler.fireFrame();
+      expect(previews, hasLength(1));
+      slider.onChangeEnd!(const RangeValues(400000, 500000));
+
+      expect(summaries, hasLength(1));
+      final summary = summaries.single;
+      expect(summary.pointerId, 73);
+      expect(summary.rawPointerObserved, isTrue);
+      expect(summary.pointerToRecognizerMicros, isNotNull);
+      expect(summary.pointerToFirstValueChangeMicros, isNotNull);
+      expect(summary.pointerToFirstPreviewPublicationMicros, isNotNull);
+      expect(summary.valueChangeCount, 2);
+      expect(summary.unchangedValueCount, 1);
+      expect(summary.previewRequestCount, 3);
+      expect(summary.previewPublicationCount, 1);
+      expect(summary.coalescedPreviewCount, 2);
+      expect(
+        summary.finalValues,
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 900000,
+          lowerScaled100: 400000,
+          upperScaled100: 500000,
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'a diagnostic-disabled control keeps the release slider tree free of the pointer probe',
+    (tester) async {
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 200000,
+        upperScaled100: 700000,
+      );
+      final scheduler = _PreviewFrameScheduler();
+      final previews = <QueryAmountRangeValues>[];
+      final summaries = <QueryAmountRangeInteractionSummary>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: QueryAmountRangeControl(
+              values: range,
+              previewScheduler: scheduler,
+              onRangeCommitted: _discardRange,
+              onRangePreviewChanged: previews.add,
+              onInteractionSummary: summaries.add,
+              enableInteractionDiagnostics: false,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('query-amount-range-pointer-probe')),
+        findsNothing,
+        reason:
+            'A normal release consumer must not keep a passive diagnostics '
+            'Listener, Stopwatch, or per-drag counters on the slider path.',
+      );
+
+      final slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChangeStart!(slider.values);
+      slider.onChanged!(const RangeValues(300000, 600000));
+      scheduler.fireFrame();
+      slider.onChangeEnd!(const RangeValues(300000, 600000));
+
+      expect(previews, hasLength(1));
+      expect(summaries, isEmpty);
+      expect(
+        previews.single,
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 900000,
+          lowerScaled100: 300000,
+          upperScaled100: 600000,
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'RED REENTRANT-MIND: twenty next-frame drags reuse one mounted slider state',
     (tester) async {
       const range = QueryAmountRangeValues(

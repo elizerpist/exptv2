@@ -2124,6 +2124,20 @@ void main() {
       final pendingPayload = core.visibleFrames.logBoxLane.value!.logBox;
       final projectionsBeforePaint =
           pendingPayload.richProjectionMetrics.projectedFrameCount;
+      expect(
+        pendingPayload.hasPreparedSemanticPreviewGeometry,
+        isTrue,
+        reason:
+            'The production Avatar crossing may publish only after its exact '
+            'focused payload is bound to the painter-visible Phase-A bank.',
+      );
+      expect(
+        sceneCache.hasCompleteReadablePhaseAFor(pendingPayload),
+        isTrue,
+        reason:
+            'A committed/private base prearm is not a substitute for the '
+            'actual rail-preview painter resource contract.',
+      );
       await tester.pump();
 
       final payload = core.visibleFrames.logBoxLane.value!.logBox;
@@ -2164,6 +2178,15 @@ void main() {
       );
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.visiblePayloadWithoutDrawableCount, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|PHASE_A_RESOURCE_READY',
+        ),
+        hasLength(1),
+        reason:
+            'The bounded diagnostic must name actual painter readiness rather '
+            'than reporting only a private committed-root prearm.',
+      );
       expect(
         FluviDiagnosticLogger.entries.where(
           (event) => event.stage == 'AV|VISIBLE_PUBLICATION_ACCEPTED',
@@ -3158,6 +3181,13 @@ Future<void> _attachAndActivateInitialScene(
               window,
               lane: lane,
               resourceKey: candidateKey,
+            ),
+    bindLiveInteractionReadablePhaseA:
+        (payload, {required lane, required resourceKey}) =>
+            cache.bindLiveInteractionReadablePhaseA(
+              payload,
+              lane: lane,
+              resourceKey: resourceKey,
             ),
     stageLiveInteractionFromPreparedResources:
         (window, {required retainViewportId}) =>

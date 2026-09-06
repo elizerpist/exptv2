@@ -899,6 +899,8 @@ final class DashboardCoreController {
   _liveInteractionResourceWindowPreparer;
   DashboardLogBoxLiveInteractionResourceLookup?
   _liveInteractionResourceWindowLookup;
+  DashboardLogBoxLiveInteractionReadablePhaseABinder?
+  _liveInteractionReadablePhaseABinder;
   DashboardLogBoxActiveResourceSceneStager? _liveInteractionResourceSceneStager;
   DashboardLogBoxActiveSceneWindowRetainer? _activeSceneWindowRetainer;
   DashboardLogBoxRetainedFocusSceneWindowDiscarder?
@@ -1125,6 +1127,8 @@ final class DashboardCoreController {
     DashboardLogBoxLiveInteractionResourcePreparer?
     prepareLiveInteractionResources,
     DashboardLogBoxLiveInteractionResourceLookup? hasLiveInteractionResources,
+    DashboardLogBoxLiveInteractionReadablePhaseABinder?
+    bindLiveInteractionReadablePhaseA,
     DashboardLogBoxActiveResourceSceneStager?
     stageLiveInteractionFromPreparedResources,
     DashboardLogBoxActiveSceneWindowRetainer? retainActive,
@@ -1159,6 +1163,7 @@ final class DashboardCoreController {
     _retainedSceneWindowLookup = hasRetained;
     _liveInteractionResourceWindowPreparer = prepareLiveInteractionResources;
     _liveInteractionResourceWindowLookup = hasLiveInteractionResources;
+    _liveInteractionReadablePhaseABinder = bindLiveInteractionReadablePhaseA;
     _liveInteractionResourceSceneStager =
         stageLiveInteractionFromPreparedResources;
     _activeSceneWindowRetainer = retainActive;
@@ -1220,6 +1225,7 @@ final class DashboardCoreController {
     _retainedSceneWindowLookup = null;
     _liveInteractionResourceWindowPreparer = null;
     _liveInteractionResourceWindowLookup = null;
+    _liveInteractionReadablePhaseABinder = null;
     _liveInteractionResourceSceneStager = null;
     _activeSceneWindowRetainer = null;
     _retainedFocusSceneWindowDiscarder = null;
@@ -1820,6 +1826,22 @@ final class DashboardCoreController {
     return true;
   }
 
+  bool _canReuseActiveLiveFacetPreviewScene(
+    DashboardLogBoxSceneWindow targetWindow,
+  ) {
+    final preview = _activeLiveFacetPreviewScene;
+    final active = _activeSceneWindow;
+    return preview != null &&
+        active != null &&
+        _sameSceneWindow(preview, targetWindow) &&
+        _sameSceneWindow(active, preview);
+  }
+
+  /// Promotes a scene that is already backed by the active immutable bank
+  /// after an Avatar Phase-A target has become painter-ready. This remains an
+  /// optional Phase-B augmentation: failure never blocks the exact readable
+  /// Phase-A publication, and it performs no scene preparation or text work
+  /// at the semantic crossing.
   bool _activateLiveFacetPreviewSceneFromActiveResources({
     required PreparedDashboardIndex index,
     required DashboardNavigationState publicationState,
@@ -1842,17 +1864,6 @@ final class DashboardCoreController {
       _activeLiveFacetPreviewScene = targetWindow;
     }
     return activated;
-  }
-
-  bool _canReuseActiveLiveFacetPreviewScene(
-    DashboardLogBoxSceneWindow targetWindow,
-  ) {
-    final preview = _activeLiveFacetPreviewScene;
-    final active = _activeSceneWindow;
-    return preview != null &&
-        active != null &&
-        _sameSceneWindow(preview, targetWindow) &&
-        _sameSceneWindow(active, preview);
   }
 
   void _finishSceneWindowPreparation() {
@@ -5580,6 +5591,7 @@ final class DashboardCoreController {
     required int? targetHandle,
     required int focusGeneration,
     String acknowledgementSource = 'semanticPublication',
+    bool richSceneStaged = false,
   }) {
     if (targetHandle == null) return;
     final payload = visibleFrames.logBoxLane.value;
@@ -5612,6 +5624,7 @@ final class DashboardCoreController {
         entryCount: payload.logBox.previewRowCount,
         scope:
             'focusGeneration=$focusGeneration targetHandle=$targetHandle '
+            'richSceneStaged=$richSceneStaged '
             'presentationEpoch=${presentation.presentationEpoch} '
             'frameGeneration=${presentation.frameGeneration} '
             'exactEmpty=${payload.logBox.previewRowCount == 0} '
@@ -7157,19 +7170,24 @@ final class DashboardCoreController {
     budgetAvatarLiveRootReady.value = false;
   }
 
-  bool _activateBudgetAvatarLiveRoot({
+  /// Makes one selected Avatar payload eligible for an immediate readable
+  /// Phase-A publication.
+  ///
+  /// The prearmed base resource window remains a bounded source of immutable
+  /// rows, but its private complete-scene status is not renderer readiness for
+  /// a newly focused payload. Bind the focused payload through the exact cache
+  /// authority that the rail-preview painter consults instead. Rich Phase-B
+  /// staging is intentionally not attempted at a semantic crossing.
+  bool _bindBudgetAvatarLivePhaseA({
     required PreparedDashboardIndex baseIndex,
     required PreparedDashboardIndex liveIndex,
     required CurrentLedgerQueryScope visibleScope,
-    required DashboardNavigationState publicationState,
     required int generation,
     required int? budgetTargetHandle,
   }) {
-    final stager = _liveInteractionResourceSceneStager;
-    final activate = _sceneWindowActivator;
-    if (stager == null || activate == null) return true;
     final resourceWindow = _budgetAvatarLiveResourceWindow;
     final resourceKey = _budgetAvatarLiveResourceKey;
+    final phaseABinder = _liveInteractionReadablePhaseABinder;
     final resourcesReady =
         budgetAvatarLiveRootReady.value &&
         identical(_budgetAvatarLiveResourceBase, baseIndex) &&
@@ -7182,23 +7200,18 @@ final class DashboardCoreController {
             ) ??
             false);
     final payload = liveIndex.frameFor(visibleScope).logBox;
-    final liveWindow = DashboardLogBoxSceneWindow(
-      identity:
-          'avatar-live:generation:$generation|target:${budgetTargetHandle ?? '-'}|'
-          '${payload.queryKey.value}',
-      payloads: <DashboardLogViewportState>[payload],
-      coverageIdentity: _coverageFor(
-        publicationState,
-        indexOverride: liveIndex,
-      ),
-    );
-    final staged =
-        resourcesReady &&
-        stager(
-          liveWindow,
-          retainViewportId: visibleFrames.value?.logBox.viewportId,
-        );
-    if (!staged) {
+    // A headless controller has no stable painter/cache attachment to bind.
+    // Preserve those model-only consumers; production CoreDashboard always
+    // supplies [phaseABinder] and therefore cannot bypass this gate.
+    var phaseAReady = payload.previewRowCount == 0 || phaseABinder == null;
+    if (!phaseAReady && resourcesReady) {
+      phaseAReady = phaseABinder(
+        payload,
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: resourceKey,
+      );
+    }
+    if (!phaseAReady) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'AV|LIVE_ROOT_MISS',
@@ -7207,23 +7220,30 @@ final class DashboardCoreController {
           coreRevision: liveIndex.coreRevision,
           entryCount: payload.previewRowCount,
           scope:
-              'generation=$generation resourcesReady=$resourcesReady '
-              'repositoryRequests=0 indexBuilds=0 textPainterCreates=0',
+              'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
+              'resourcesReady=$resourcesReady phaseAReady=false '
+              'resourceOwner=preparedSceneCache '
+              'resourceKey=${resourceKey == null ? 'none' : FluviDiagnosticKeyDigest.of(resourceKey)} '
+              'repositoryRequests=0 indexBuilds=0 textPainterCreates=0 '
+              'richProjection=0',
         ),
       );
       return false;
     }
-    _activateSceneWindow(liveWindow, activate: activate);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'AV|LIVE_ROOT_ACTIVATED',
+        stage: 'AV|PHASE_A_RESOURCE_READY',
         queryKey: visibleScope.key.value,
         direction: visibleScope.direction.name,
         coreRevision: liveIndex.coreRevision,
         entryCount: payload.previewRowCount,
         scope:
             'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
-            'completeLivePublications=1 mixedProjectionCount=0',
+            'resourceOwner=${phaseABinder == null ? 'unattachedModel' : 'preparedSceneCache'} '
+            'resourceKey=${resourceKey == null ? 'none' : FluviDiagnosticKeyDigest.of(resourceKey)} '
+            'phaseAReady=true '
+            'repositoryRequests=0 indexBuilds=0 textPainterCreates=0 '
+            'richProjection=0',
       ),
     );
     return true;
@@ -7518,19 +7538,36 @@ final class DashboardCoreController {
             '${hotsetHit ? 0 : derivation.currentRootProjectionMicros}',
       ),
     );
-    var richSceneStaged =
+    final phaseAResourcesReady =
         source == DashboardLiveInteractionSource.budgetAvatar &&
         publishDuringMotion &&
-        _activateBudgetAvatarLiveRoot(
+        _bindBudgetAvatarLivePhaseA(
           baseIndex: baseIndex,
           liveIndex: derived,
           visibleScope: effectiveScope.copyWith(
             timeScope: publicationState.effectiveScope,
           ),
-          publicationState: publicationState,
           generation: generation,
           budgetTargetHandle: budgetTargetHandle,
         );
+    if (completeAvatarLivePublication && !phaseAResourcesReady) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|PHASE_A_PUBLICATION_DEFERRED',
+          queryKey: effectiveScope.key.value,
+          direction: direction.name,
+          coreRevision: derived.coreRevision,
+          entryCount: derived
+              .frameFor(publicationState.parentQueryScope)
+              .entryCount,
+          scope:
+              'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
+              'reason=actualPainterReadablePhaseAUnavailable '
+              'richSceneStaged=false',
+        ),
+      );
+      return false;
+    }
     final phaseAPublished = completeAvatarLivePublication
         ? presentation.publishPreparedInteractionPreview(
             index: derived,
@@ -7553,24 +7590,21 @@ final class DashboardCoreController {
           scope:
               'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
               '${_interactionPublicationAuthorityDiagnosticScope(candidate: interactionOrder, queryKey: effectiveScope.key.value, coreRevision: derived.coreRevision, frameGeneration: visibleFrames.logBoxLane.value?.frameGeneration, reason: 'visibleFrameStoreRejected:${visibleFrames.lastInteractionPreviewRejectionReason ?? 'unknown'}')} '
-              'richSceneStaged=$richSceneStaged',
+              'phaseAResourcesReady=$phaseAResourcesReady richSceneStaged=false',
         ),
       );
       return false;
     }
-    if (completeAvatarLivePublication &&
-        (!richSceneStaged || _liveInteractionResourceSceneStager == null)) {
-      richSceneStaged =
-          _activateLiveFacetPreviewSceneFromActiveResources(
-            index: derived,
-            publicationState: publicationState,
-            isStillCurrent: () =>
-                !_disposed &&
-                generation == _focusPublicationGeneration &&
-                currentQuery.scopeFor(direction) == baseScope,
-          ) ||
-          richSceneStaged;
-    }
+    final richSceneStaged =
+        completeAvatarLivePublication &&
+        _activateLiveFacetPreviewSceneFromActiveResources(
+          index: derived,
+          publicationState: publicationState,
+          isStillCurrent: () =>
+              !_disposed &&
+              generation == _focusPublicationGeneration &&
+              currentQuery.scopeFor(direction) == baseScope,
+        );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: phaseAPublished
@@ -7588,6 +7622,7 @@ final class DashboardCoreController {
             'interactionEpoch=${interactionOrder?.interactionEpoch ?? 0} '
             'localGeneration=${interactionOrder?.localGeneration ?? 0} '
             'searchLength=${nextSearch?.length ?? 0} '
+            'phaseAResourcesReady=$phaseAResourcesReady '
             'richSceneStaged=$richSceneStaged '
             'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
       ),
@@ -7621,6 +7656,7 @@ final class DashboardCoreController {
       _recordAvatarLivePublicationAccepted(
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
+        richSceneStaged: richSceneStaged,
       );
     }
     final installation = _scheduleFocusedSceneInstall(
@@ -7871,19 +7907,36 @@ final class DashboardCoreController {
       availability: availability,
       coreRevision: baseIndex.coreRevision,
     );
-    var richSceneStaged =
+    final phaseAResourcesReady =
         source == DashboardLiveInteractionSource.budgetAvatar &&
         publishDuringMotion &&
-        _activateBudgetAvatarLiveRoot(
+        _bindBudgetAvatarLivePhaseA(
           baseIndex: baseIndex,
           liveIndex: baseIndex,
           visibleScope: baseScope.copyWith(
             timeScope: publicationState.effectiveScope,
           ),
-          publicationState: publicationState,
           generation: generation,
           budgetTargetHandle: budgetTargetHandle,
         );
+    if (completeAvatarLivePublication && !phaseAResourcesReady) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|PHASE_A_PUBLICATION_DEFERRED',
+          queryKey: baseScope.key.value,
+          direction: baseScope.direction.name,
+          coreRevision: baseIndex.coreRevision,
+          entryCount: baseIndex
+              .frameFor(publicationState.parentQueryScope)
+              .entryCount,
+          scope:
+              'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
+              'reason=actualPainterReadablePhaseAUnavailable '
+              'richSceneStaged=false',
+        ),
+      );
+      return false;
+    }
     // Closing is a direct semantic acceptance. It may not wait for the old
     // focused scene to restore before removing the chip or accepting another
     // input. The retained base frame below follows immediately when possible.
@@ -7906,24 +7959,21 @@ final class DashboardCoreController {
           scope:
               'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
               '${_interactionPublicationAuthorityDiagnosticScope(candidate: interactionOrder, queryKey: baseScope.key.value, coreRevision: baseIndex.coreRevision, frameGeneration: visibleFrames.logBoxLane.value?.frameGeneration, reason: 'visibleFrameStoreRejected:${visibleFrames.lastInteractionPreviewRejectionReason ?? 'unknown'}')} '
-              'richSceneStaged=$richSceneStaged',
+              'phaseAResourcesReady=$phaseAResourcesReady richSceneStaged=false',
         ),
       );
       return false;
     }
-    if (completeAvatarLivePublication &&
-        (!richSceneStaged || _liveInteractionResourceSceneStager == null)) {
-      richSceneStaged =
-          _activateLiveFacetPreviewSceneFromActiveResources(
-            index: baseIndex,
-            publicationState: publicationState,
-            isStillCurrent: () =>
-                !_disposed &&
-                generation == _focusPublicationGeneration &&
-                currentQuery.scopeFor(state.anchor.direction) == baseScope,
-          ) ||
-          richSceneStaged;
-    }
+    final richSceneStaged =
+        completeAvatarLivePublication &&
+        _activateLiveFacetPreviewSceneFromActiveResources(
+          index: baseIndex,
+          publicationState: publicationState,
+          isStillCurrent: () =>
+              !_disposed &&
+              generation == _focusPublicationGeneration &&
+              currentQuery.scopeFor(state.anchor.direction) == baseScope,
+        );
     final interactionFrame = _acceptLiveInteraction(
       source: source,
       interactionOrder: interactionOrder,
@@ -7945,6 +7995,7 @@ final class DashboardCoreController {
       _recordAvatarLivePublicationAccepted(
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
+        richSceneStaged: richSceneStaged,
       );
     }
     final installation = _scheduleFocusedSceneInstall(

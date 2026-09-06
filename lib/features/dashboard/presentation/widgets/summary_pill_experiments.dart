@@ -107,11 +107,14 @@ final class SummarySegmentedContentMetrics {
       ).substring(0, 3).toUpperCase();
 }
 
-/// One actual Rect authority for each active segmented Summary component.
+/// Geometry authority for each active segmented Summary component.
 ///
-/// The same section Rect owns painting, clipping, semantics and carousel hit
-/// testing. There are no hidden quarter-width gesture tracks and no translated
-/// visual contents.
+/// The authored visual Rect remains glyph/content-sized. Its interaction and
+/// semantics cell is derived from neighbouring selector midpoints and the
+/// navigation-zone edges, so a user can start a swipe anywhere in the visibly
+/// attributable selector cell without allowing one selector to overlap another
+/// or consume the amount zone. The background owns the amount zone and any
+/// Summary surface outside the navigation zone.
 @immutable
 final class SummarySegmentedTrackGeometry {
   const SummarySegmentedTrackGeometry._({
@@ -239,17 +242,46 @@ final class SummarySegmentedTrackGeometry {
   final SummarySegmentedOrientation orientation;
   final Map<int, Rect> _sectionRects;
 
-  Rect semanticRectForTrack(int track) => _rectForTrack(track);
+  /// The accessibility cell deliberately follows the usable interaction cell,
+  /// not the narrower authored glyph/content Rect.
+  Rect semanticRectForTrack(int track) => interactionCellRectForTrack(track);
 
-  double semanticCenterForTrack(int track) => _rectForTrack(track).center.dx;
+  double semanticCenterForTrack(int track) =>
+      interactionCellRectForTrack(track).center.dx;
 
-  /// The painted selector uses the exact owning interaction Rect; this catches
-  /// any future return of visual-only translations or separate touch lanes.
+  /// The bounded, non-overlapping pointer owner for this selector. Adjacent
+  /// cells meet exactly at their visual separator midpoint. Outer cells reach
+  /// the navigation-zone edge, never the adjacent amount zone, so there is no
+  /// glyph-sized dead strip inside a visible first/last selector section.
+  Rect interactionCellRectForTrack(int track) {
+    final visual = _rectForTrack(track);
+    final spatialTracks = activeTrackIndices.toList(growable: false)
+      ..sort(
+        (left, right) =>
+            _rectForTrack(left).left.compareTo(_rectForTrack(right).left),
+      );
+    final spatialIndex = spatialTracks.indexOf(track);
+    assert(spatialIndex >= 0);
+    final previous = spatialIndex == 0
+        ? null
+        : _rectForTrack(spatialTracks[spatialIndex - 1]);
+    final next = spatialIndex == spatialTracks.length - 1
+        ? null
+        : _rectForTrack(spatialTracks[spatialIndex + 1]);
+    return Rect.fromLTRB(
+      previous == null ? 0 : (previous.right + visual.left) / 2,
+      0,
+      next == null ? width : (visual.right + next.left) / 2,
+      height,
+    );
+  }
+
+  /// The painted selector remains at the exact authored content Rect.
   double visualCenterForTrack(int track) =>
       visualContentRectForTrack(track).center.dx;
 
-  /// There is no second visual Rect. This is kept as an explicit API so tests
-  /// can pin visual/hit/semantics parity.
+  /// This stays deliberately separate from interaction and semantics cells.
+  /// It is the visual placement contract, not a glyph-sized touch target.
   Rect visualContentRectForTrack(int track) => _rectForTrack(track);
 
   double separatorCenterAfterTrack(int leadingTrack) {
@@ -277,6 +309,47 @@ final class SummarySegmentedTrackGeometry {
   }
 }
 
+/// One passive, bounded raw-pointer classification from the segmented Summary
+/// surface. It has no recognizer or motion authority: selector and background
+/// gestures retain their existing owners. The record lets a physical trace
+/// distinguish an interaction-cell miss from a later arena/lifecycle failure.
+@immutable
+final class SummarySegmentedPointerHit {
+  const SummarySegmentedPointerHit({
+    required this.pointerId,
+    required this.globalPosition,
+    required this.localPosition,
+    required this.level,
+    required this.selectorTrack,
+    required this.trackRects,
+  });
+
+  final int pointerId;
+  final Offset globalPosition;
+  final Offset localPosition;
+  final SummaryPillExperimentLevel level;
+
+  /// Null when the raw point belongs to genuine Summary background.
+  final int? selectorTrack;
+
+  /// Summary-local visual, interaction and semantics authorities for every
+  /// active selector at this pointer boundary.
+  final Map<int, SummarySegmentedTrackRects> trackRects;
+}
+
+@immutable
+final class SummarySegmentedTrackRects {
+  const SummarySegmentedTrackRects({
+    required this.visualContent,
+    required this.interactionCell,
+    required this.semantics,
+  });
+
+  final Rect visualContent;
+  final Rect interactionCell;
+  final Rect semantics;
+}
+
 /// Fixed-height presentation experiments over the existing dashboard time
 /// state. They intentionally contain no query or temporal state of their own.
 final class SummaryPillExperiment extends StatelessWidget {
@@ -298,6 +371,7 @@ final class SummaryPillExperiment extends StatelessWidget {
     this.onSelectorMotionActiveChanged,
     this.onSelectorDirectInputStarted,
     this.onSelectorPointerDownDecision,
+    this.onPointerHitClassified,
     this.onBackgroundTap,
     this.onBackgroundVerticalDragStart,
     this.onBackgroundVerticalDragUpdate,
@@ -345,6 +419,7 @@ final class SummaryPillExperiment extends StatelessWidget {
   final VoidCallback? onSelectorDirectInputStarted;
   final ValueChanged<CenteredCarouselPointerDownDecision>?
   onSelectorPointerDownDecision;
+  final ValueChanged<SummarySegmentedPointerHit>? onPointerHitClassified;
   final VoidCallback? onBackgroundTap;
   final GestureDragStartCallback? onBackgroundVerticalDragStart;
   final GestureDragUpdateCallback? onBackgroundVerticalDragUpdate;
@@ -412,10 +487,45 @@ final class SummaryPillExperiment extends StatelessWidget {
                 : inset + amountWidth;
             bool isSelectorPosition(Offset localPosition) => activeTracks.any(
               (track) => selectorGeometry
-                  .semanticRectForTrack(track)
+                  .interactionCellRectForTrack(track)
                   .shift(Offset(navigationLeft, 0))
                   .contains(localPosition),
             );
+            void classifyPointer(PointerDownEvent event) {
+              final trackRects = <int, SummarySegmentedTrackRects>{
+                for (final track in activeTracks)
+                  track: SummarySegmentedTrackRects(
+                    visualContent: selectorGeometry
+                        .visualContentRectForTrack(track)
+                        .shift(Offset(navigationLeft, 0)),
+                    interactionCell: selectorGeometry
+                        .interactionCellRectForTrack(track)
+                        .shift(Offset(navigationLeft, 0)),
+                    semantics: selectorGeometry
+                        .semanticRectForTrack(track)
+                        .shift(Offset(navigationLeft, 0)),
+                  ),
+              };
+              final selectorTrack = activeTracks.cast<int?>().firstWhere(
+                (track) => trackRects[track]!.interactionCell.contains(
+                  event.localPosition,
+                ),
+                orElse: () => null,
+              );
+              onPointerHitClassified?.call(
+                SummarySegmentedPointerHit(
+                  pointerId: event.pointer,
+                  globalPosition: event.position,
+                  localPosition: event.localPosition,
+                  level: level,
+                  selectorTrack: selectorTrack,
+                  trackRects: Map<int, SummarySegmentedTrackRects>.unmodifiable(
+                    trackRects,
+                  ),
+                ),
+              );
+            }
+
             final navigationSurface = SizedBox(
               width: navigationWidth,
               height: bounds.height,
@@ -483,25 +593,32 @@ final class SummaryPillExperiment extends StatelessWidget {
             // Selector sections are above this surface in the hit-test tree, so
             // temporal flings retain exact Rect ownership. The exposed surface
             // is the only Summary region that can tap-reset or drag Header.
-            return Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                GestureDetector(
-                  key: const ValueKey<String>(
-                    'summary-pill-background-gesture',
+            return Listener(
+              // This listener is deliberately passive. The opaque background
+              // already guarantees a child hit for every Summary point, so
+              // defer-to-child records the real route without enlarging a hit
+              // target or adding a competing gesture recognizer.
+              onPointerDown: classifyPointer,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  GestureDetector(
+                    key: const ValueKey<String>(
+                      'summary-pill-background-gesture',
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (details) {
+                      if (!isSelectorPosition(details.localPosition)) {
+                        onBackgroundTap?.call();
+                      }
+                    },
+                    onVerticalDragStart: onBackgroundVerticalDragStart,
+                    onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
+                    onVerticalDragEnd: onBackgroundVerticalDragEnd,
                   ),
-                  behavior: HitTestBehavior.opaque,
-                  onTapUp: (details) {
-                    if (!isSelectorPosition(details.localPosition)) {
-                      onBackgroundTap?.call();
-                    }
-                  },
-                  onVerticalDragStart: onBackgroundVerticalDragStart,
-                  onVerticalDragUpdate: onBackgroundVerticalDragUpdate,
-                  onVerticalDragEnd: onBackgroundVerticalDragEnd,
-                ),
-                sections,
-              ],
+                  sections,
+                ],
+              ),
             );
           },
         );
@@ -720,10 +837,11 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     yearTrack: 1,
     monthTrack: 2,
     dayTrack: 3,
-    modeSelector: _ModeSelector(
+    modeSelector: (visualContentOffset) => _ModeSelector(
       key: const ValueKey<String>('summary-pill-segmented-mode-selector'),
       height: height,
       level: level,
+      visualContentOffset: visualContentOffset,
       onCrossed: onLevelCrossed,
       onMotionActiveChanged: motionGate.callbackFor(_SegmentedMotionOwner.mode),
       onDirectInputStarted: onSelectorDirectInputStarted,
@@ -783,7 +901,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final int yearTrack;
   final int monthTrack;
   final int dayTrack;
-  final Widget modeSelector;
+  final Widget Function(double visualContentOffset) modeSelector;
   final _ComponentCrossed onComponentCrossed;
   final _ComponentCrossingAccepted? onComponentCrossingAccepted;
   final ValueListenable<DashboardSegmentedTargetPainted?>?
@@ -815,9 +933,15 @@ final class _FixedHierarchyTracks extends StatelessWidget {
       preRegressionNavigationWidth: preRegressionNavigationWidth,
       orientation: presentation.segmentedOrientation,
     );
+    double visualContentOffsetFor(int track) =>
+        geometry.visualContentRectForTrack(track).center.dx -
+        geometry.interactionCellRectForTrack(track).center.dx;
     return Stack(
       children: <Widget>[
-        _track(geometry.semanticRectForTrack(modeTrack), modeSelector),
+        _track(
+          geometry.interactionCellRectForTrack(modeTrack),
+          modeSelector(visualContentOffsetFor(modeTrack)),
+        ),
         if (presentation.showSeparators &&
             level != SummaryPillExperimentLevel.sum)
           _separator(
@@ -827,10 +951,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
           ),
         if (level != SummaryPillExperimentLevel.sum)
           _track(
-            geometry.semanticRectForTrack(yearTrack),
+            geometry.interactionCellRectForTrack(yearTrack),
             _HierarchyValueSelector(
               key: ValueKey<String>('summary-pill-$keyPrefix-year-selector'),
               height: height,
+              visualContentOffset: visualContentOffsetFor(yearTrack),
               navigation: navigation,
               semanticsLabel:
                   'Év: ${navigation.state.yearCursor}. Függőlegesen húzva módosítható.',
@@ -885,10 +1010,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
         if (level == SummaryPillExperimentLevel.month ||
             level == SummaryPillExperimentLevel.day)
           _track(
-            geometry.semanticRectForTrack(monthTrack),
+            geometry.interactionCellRectForTrack(monthTrack),
             _HierarchyValueSelector(
               key: ValueKey<String>('summary-pill-$keyPrefix-month-selector'),
               height: height,
+              visualContentOffset: visualContentOffsetFor(monthTrack),
               navigation: navigation,
               semanticsLabel:
                   'Hónap: ${DashboardTimeLabelFormatter.monthName(navigation.state.monthCursor.month)}. Függőlegesen húzva módosítható.',
@@ -937,10 +1063,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
           ),
         if (level == SummaryPillExperimentLevel.day)
           _track(
-            geometry.semanticRectForTrack(dayTrack),
+            geometry.interactionCellRectForTrack(dayTrack),
             _HierarchyValueSelector(
               key: ValueKey<String>('summary-pill-$keyPrefix-day-selector'),
               height: height,
+              visualContentOffset: visualContentOffsetFor(dayTrack),
               navigation: navigation,
               semanticsLabel:
                   'Nap: ${navigation.state.dayCursor}. Függőlegesen húzva módosítható.',
@@ -1037,6 +1164,7 @@ final class _ModeSelector extends StatefulWidget {
     super.key,
     required this.height,
     required this.level,
+    required this.visualContentOffset,
     required this.onCrossed,
     this.onMotionActiveChanged,
     this.autoResetMotionRegistry,
@@ -1047,6 +1175,7 @@ final class _ModeSelector extends StatefulWidget {
 
   final double height;
   final SummaryPillExperimentLevel level;
+  final double visualContentOffset;
   final _LevelCrossed onCrossed;
   final ValueChanged<bool>? onMotionActiveChanged;
   final DashboardSummaryAutoResetMotionRegistry? autoResetMotionRegistry;
@@ -1178,8 +1307,10 @@ final class _ModeSelectorState extends State<_ModeSelector> {
         }
       },
       onMotionIdle: (_) => widget.onMotionActiveChanged?.call(false),
-      itemBuilder: (context, item, _) =>
-          ExcludeSemantics(child: _ModeBadge(item: item)),
+      itemBuilder: (context, item, _) => Transform.translate(
+        offset: Offset(widget.visualContentOffset, 0),
+        child: ExcludeSemantics(child: _ModeBadge(item: item)),
+      ),
     ),
   );
 
@@ -1225,6 +1356,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
   const _HierarchyValueSelector({
     super.key,
     required this.height,
+    required this.visualContentOffset,
     required this.navigation,
     required this.semanticsLabel,
     required this.candidateForOffset,
@@ -1242,6 +1374,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
   });
 
   final double height;
+  final double visualContentOffset;
   final DashboardNavigationController navigation;
   final String semanticsLabel;
   final DashboardNavigationState? Function(
@@ -1518,31 +1651,37 @@ final class _HierarchyValueSelectorState
                 SummaryTemporalFlingPresentation.dynamicTrio) {
               return const SizedBox.shrink();
             }
-            return FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                widget.labelForCandidate(candidate),
-                maxLines: 1,
-                style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
-                  color: FluviVisualTokens.textSecondary,
+            return Transform.translate(
+              offset: Offset(widget.visualContentOffset, 0),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.labelForCandidate(candidate),
+                  maxLines: 1,
+                  style: FluviVisualTokens.summaryTitleTextStyle.copyWith(
+                    color: FluviVisualTokens.textSecondary,
+                  ),
                 ),
               ),
             );
           },
         ),
         if (widget.presentation == SummaryTemporalFlingPresentation.dynamicTrio)
-          ExcludeSemantics(
-            child: ClipRect(
-              child: IgnorePointer(
-                child: ListenableBuilder(
-                  listenable: _controller,
-                  builder: (context, _) => _DynamicTrioValues(
-                    height: widget.height,
-                    rawIndex: _controller.rawCenteredLogicalIndex,
-                    isMoving: _controller.hasActiveScrollActivity,
-                    origin: _motionOrigin ?? widget.navigation.state,
-                    candidateForOffset: widget.candidateForOffset,
-                    labelForCandidate: widget.labelForCandidate,
+          Transform.translate(
+            offset: Offset(widget.visualContentOffset, 0),
+            child: ExcludeSemantics(
+              child: ClipRect(
+                child: IgnorePointer(
+                  child: ListenableBuilder(
+                    listenable: _controller,
+                    builder: (context, _) => _DynamicTrioValues(
+                      height: widget.height,
+                      rawIndex: _controller.rawCenteredLogicalIndex,
+                      isMoving: _controller.hasActiveScrollActivity,
+                      origin: _motionOrigin ?? widget.navigation.state,
+                      candidateForOffset: widget.candidateForOffset,
+                      labelForCandidate: widget.labelForCandidate,
+                    ),
                   ),
                 ),
               ),

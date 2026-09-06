@@ -1,0 +1,59 @@
+{
+  "format": "fluvi-drive-evidence-snapshot/v1",
+  "frozen_at": "2026-09-06T14:00:11+02:00",
+  "source_application_commit": "9e8a7b3a0a1f17bbd9433927e1d8a0afcd8413e9",
+  "source_build_identity": "profile/9e8a7b3a0a1f",
+  "session_id": "fluvi-1788686737010611",
+  "materialization": {
+    "source": "Google Drive native-document paragraph read",
+    "encoding": "UTF-8",
+    "serialization": "Each returned paragraph text joined with one LF and a final LF.",
+    "immutability_rule": "Do not rewrite these files during this repair cycle. Re-audit only these hashes; later Drive mutations belong to a subsequent evidence cycle unless explicitly authorized."
+  },
+  "documents": [
+    {
+      "name": "Fluvi logs avatar fling",
+      "drive_document_id": "1FF1BnHJHOEygG3QhMeDfrehzjo0YzIztaGJfNTWZqNs",
+      "drive_modified_time": "2026-09-06T09:26:26.301Z",
+      "frozen_file": "fluvi-logs-avatar-fling.txt",
+      "byte_size": 637792,
+      "sha256": "fb95ea63204fc67ff8c5fd9687374c073d0b771dc2933202b2e803d88b9a8d9d",
+      "live_tail_headers": [
+        "FLUVI_DIAGNOSTICS LIVE_TAIL sessionId=fluvi-1788686737010611 sessionEventCount=2184 retainedCount=1000 firstRetainedSequence=1185 lastRetainedSequence=2184",
+        "FLUVI_DIAGNOSTICS LIVE_TAIL sessionId=fluvi-1788686737010611 sessionEventCount=2185 retainedCount=1000 firstRetainedSequence=1186 lastRetainedSequence=2185"
+      ],
+      "deduplicated_retained_sequence_range": "1185-2185"
+    },
+    {
+      "name": "Fluvi logs time fling",
+      "drive_document_id": "1XSzi1TO8CfVKDGxAMkUYhJihbqy7nEDUcmqs8mboxoE",
+      "drive_modified_time": "2026-09-06T09:28:06.525Z",
+      "frozen_file": "fluvi-logs-time-fling.txt",
+      "byte_size": 901597,
+      "sha256": "f96cf8f5995b1f9c7106a7b2ccc529798e4c0b02f7a9d16daaedd927ab107a31",
+      "live_tail_headers": [
+        "FLUVI_DIAGNOSTICS LIVE_TAIL sessionId=fluvi-1788686737010611 sessionEventCount=5997 retainedCount=1000 firstRetainedSequence=4998 lastRetainedSequence=5997",
+        "FLUVI_DIAGNOSTICS LIVE_TAIL sessionId=fluvi-1788686737010611 sessionEventCount=5998 retainedCount=1000 firstRetainedSequence=4999 lastRetainedSequence=5998"
+      ],
+      "deduplicated_retained_sequence_range": "4998-5998"
+    },
+    {
+      "name": "Fluvi logs slider",
+      "drive_document_id": "13jUTJW6sg-gaG7Zt3EofLxPauSvoKOqLpqss8dAR_rU",
+      "drive_modified_time": "2026-09-06T09:29:59.130Z",
+      "frozen_file": "fluvi-logs-slider.txt",
+      "byte_size": 728959,
+      "sha256": "9cef610403acf46351e99e90015cd8a4747dad1ad60a434e1dada117e989cfe7",
+      "live_tail_headers": [
+        "FLUVI_DIAGNOSTICS LIVE_TAIL sessionId=fluvi-1788686737010611 sessionEventCount=15751 retainedCount=1000 firstRetainedSequence=14752 lastRetainedSequence=15751",
+        "FLUVI_DIAGNOSTICS LIVE_TAIL sessionId=fluvi-1788686737010611 sessionEventCount=15752 retainedCount=1000 firstRetainedSequence=14753 lastRetainedSequence=15752"
+      ],
+      "deduplicated_retained_sequence_range": "14752-15752"
+    }
+  ],
+  "retention_gaps": [
+    "2186-4997",
+    "5999-14751"
+  ],
+  "historical_same_sha_session": "fluvi-1788669322121683"
+}

@@ -362,6 +362,21 @@ typedef DashboardLogBoxLiveInteractionResourceLookup =
       required String candidateKey,
     });
 
+/// Binds one exact live payload to the Phase-A resources that the active
+/// rail-preview painter will actually query.
+///
+/// A complete scene for the broader prearmed base window is deliberately not
+/// enough: a focused Avatar payload has its own compact semantic geometry and
+/// must prove every row/header through the same lane-owned bank before it can
+/// become the visible owner. The binding is compact, synchronous and may not
+/// create paragraphs, a rich scene, an index or a query.
+typedef DashboardLogBoxLiveInteractionReadablePhaseABinder =
+    bool Function(
+      DashboardLogViewportState payload, {
+      required DashboardLiveInteractionResourceLane lane,
+      required String resourceKey,
+    });
+
 typedef DashboardLogBoxRetainedSceneWindowLookup =
     bool Function(DashboardLogBoxSceneWindow window);
 

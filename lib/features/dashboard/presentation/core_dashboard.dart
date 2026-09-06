@@ -30,6 +30,7 @@ import '../application/dashboard_performance_counters.dart';
 import '../query/domain/ledger_direction.dart';
 import '../query/domain/query_amount_range.dart';
 import '../query/application/dashboard_applied_query_facet_loader.dart';
+import '../query/presentation/query_amount_range_control.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -335,6 +336,13 @@ class _CoreDashboardState extends State<CoreDashboard>
                 window,
                 lane: lane,
                 resourceKey: candidateKey,
+              ),
+      bindLiveInteractionReadablePhaseA:
+          (payload, {required lane, required resourceKey}) =>
+              _preparedSceneCache.bindLiveInteractionReadablePhaseA(
+                payload,
+                lane: lane,
+                resourceKey: resourceKey,
               ),
       stageLiveInteractionFromPreparedResources:
           (window, {required retainViewportId}) => _preparedSceneCache
@@ -712,6 +720,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _beginMindQueryAmountRangeInteraction,
                                         onMindQueryAmountRangeInteractionEnded:
                                             _endMindQueryAmountRangeInteraction,
+                                        onMindQueryAmountRangeInteractionSummary:
+                                            _recordMindQueryAmountRangeInteractionSummary,
                                         budgetPresentation: _budgetPresentation,
                                         budgetLimitEditController:
                                             _budgetLimitEdit,
@@ -819,6 +829,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               _summaryAutoResetMotions,
                                           upperVerticalGestures:
                                               _upperVerticalGestures,
+                                          onPointerHitClassified:
+                                              _recordSummaryPointerHit,
+                                          onBackgroundVerticalDragStart:
+                                              _beginSummaryBackgroundVerticalDrag,
                                         ),
                                       ),
                                       _FramePosition(
@@ -1318,6 +1332,48 @@ class _CoreDashboardState extends State<CoreDashboard>
     _mindAmountInteractionActive = false;
   }
 
+  /// Emits one bounded input-to-preview record per physical Mind drag.
+  ///
+  /// The control keeps raw pointer and recognizer timings locally. The Core
+  /// adds the current query identity here, without inspecting transaction data
+  /// or altering the established live-preview/canonical lanes.
+  void _recordMindQueryAmountRangeInteractionSummary(
+    QueryAmountRangeInteractionSummary summary,
+  ) {
+    final direction =
+        controller.presentation.navigation.state.parentQueryScope.direction;
+    final scope = controller.currentQuery.scopeFor(direction);
+    final live = controller.liveInteractions.frame;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|SLIDER_INPUT_PIPELINE_SUMMARY',
+        flowId: 'interaction:${controller.mindAmountInteractionGeneration}',
+        queryKey: scope.key.value,
+        direction: direction.name,
+        coreRevision:
+            controller.visibleFrames.countLane.value?.coreRevision ??
+            controller.visibleFrames.value?.coreRevision,
+        scope:
+            'pointerId=${summary.pointerId ?? '-'} '
+            'rawPointerObserved=${summary.rawPointerObserved} '
+            'pointerToRecognizerMicros=${summary.pointerToRecognizerMicros ?? '-'} '
+            'pointerToFirstValueChangeMicros=${summary.pointerToFirstValueChangeMicros ?? '-'} '
+            'pointerToFirstPreviewPublicationMicros=${summary.pointerToFirstPreviewPublicationMicros ?? '-'} '
+            'interactionMicros=${summary.interactionMicros} '
+            'valueChangeCount=${summary.valueChangeCount} '
+            'unchangedValueCount=${summary.unchangedValueCount} '
+            'previewRequestCount=${summary.previewRequestCount} '
+            'previewPublicationCount=${summary.previewPublicationCount} '
+            'coalescedPreviewCount=${summary.coalescedPreviewCount} '
+            'rangeLower=${summary.finalValues.lowerScaled100} '
+            'rangeUpper=${summary.finalValues.upperScaled100} '
+            'liveProducer=${live?.source.name ?? 'none'} '
+            'liveGeneration=${live?.generation ?? 0} '
+            'liveEpoch=${live?.interactionPublicationEpoch ?? 0}',
+      ),
+    );
+  }
+
   void _commitMindQueryAmountRange(QueryAmountRangeValues values) {
     // The Core owns the multi-step final-preview → paint acknowledgement →
     // canonical persistence workflow. The widget only ends its physical
@@ -1518,6 +1574,63 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryAutoResetController.cancel();
     _summaryAutoResetMotions.cancelActiveResetMotion();
   }
+
+  /// Records one passive hit classification before Flutter's gesture arena
+  /// resolves the pointer. This is intentionally diagnostic-only: it neither
+  /// adds a recognizer nor changes selector/background ownership.
+  void _recordSummaryPointerHit(SummarySegmentedPointerHit hit) {
+    String rect(Rect value) =>
+        '${value.left.toStringAsFixed(1)},${value.top.toStringAsFixed(1)},'
+        '${value.right.toStringAsFixed(1)},${value.bottom.toStringAsFixed(1)}';
+    final tracks = hit.trackRects.entries
+        .map(
+          (entry) =>
+              'track${entry.key}:visual=${rect(entry.value.visualContent)}:'
+              'interaction=${rect(entry.value.interactionCell)}:'
+              'semantics=${rect(entry.value.semantics)}',
+        )
+        .join('|');
+    final variantEpoch = _summaryPillVariantController.transitionEpoch;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_POINTER_HIT_CLASSIFIED',
+        queryKey: controller.navigation.state.parentQueryScope.key.value,
+        coreRevision: controller.visibleFrames.value?.coreRevision,
+        scope:
+            'pointerId=${hit.pointerId} '
+            'global=${hit.globalPosition.dx.toStringAsFixed(1)},${hit.globalPosition.dy.toStringAsFixed(1)} '
+            'local=${hit.localPosition.dx.toStringAsFixed(1)},${hit.localPosition.dy.toStringAsFixed(1)} '
+            'level=${hit.level.name} '
+            'owner=${hit.selectorTrack == null ? 'summaryBackground' : 'selector'} '
+            'selectorTrack=${hit.selectorTrack ?? '-'} '
+            'variant=${_summaryPillVariantController.value.name} '
+            'variantTransitionEpoch=$variantEpoch '
+            'visibleFrameGeneration=${controller.visibleFrames.value?.frameGeneration ?? '-'} '
+            'upperVerticalHandling=${_upperVerticalGestures.isHandlingPointer} '
+            'tracks=$tracks',
+      ),
+    );
+  }
+
+  /// This callback fires only after the background drag recognizer owns the
+  /// pointer. Paired with the passive hit record above, the next physical
+  /// trace can distinguish a selector-cell miss from a later arena outcome.
+  void _beginSummaryBackgroundVerticalDrag(DragStartDetails details) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_BACKGROUND_POINTER_ACCEPTED',
+        queryKey: controller.navigation.state.parentQueryScope.key.value,
+        coreRevision: controller.visibleFrames.value?.coreRevision,
+        scope:
+            'global=${details.globalPosition.dx.toStringAsFixed(1)},${details.globalPosition.dy.toStringAsFixed(1)} '
+            'local=${details.localPosition.dx.toStringAsFixed(1)},${details.localPosition.dy.toStringAsFixed(1)} '
+            'variant=${_summaryPillVariantController.value.name} '
+            'variantTransitionEpoch=${_summaryPillVariantController.transitionEpoch} '
+            'upperVerticalHandlingBefore=${_upperVerticalGestures.isHandlingPointer}',
+      ),
+    );
+    _upperVerticalGestures.begin();
+  }
 }
 
 class _DashboardSummaryRegion extends StatelessWidget {
@@ -1532,6 +1645,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
     required this.autoResetController,
     required this.autoResetMotions,
     required this.upperVerticalGestures,
+    required this.onPointerHitClassified,
+    required this.onBackgroundVerticalDragStart,
   });
 
   final DashboardBounds bounds;
@@ -1549,6 +1664,8 @@ class _DashboardSummaryRegion extends StatelessWidget {
   final DashboardSummaryAutoResetController autoResetController;
   final DashboardSummaryAutoResetMotionRegistry autoResetMotions;
   final DashboardUpperVerticalGestureCoordinator upperVerticalGestures;
+  final ValueChanged<SummarySegmentedPointerHit> onPointerHitClassified;
+  final GestureDragStartCallback onBackgroundVerticalDragStart;
 
   @override
   Widget build(BuildContext context) =>
@@ -1591,6 +1708,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
                 },
                 onSelectorPointerDownDecision:
                     controller.recordSegmentedPointerDown,
+                onPointerHitClassified: onPointerHitClassified,
                 onBackgroundTap: () {
                   // A second background tap supersedes even a reset that
                   // is currently waiting for a selector to mount.
@@ -1610,8 +1728,7 @@ class _DashboardSummaryRegion extends StatelessWidget {
                     ),
                   );
                 },
-                onBackgroundVerticalDragStart: (_) =>
-                    upperVerticalGestures.begin(),
+                onBackgroundVerticalDragStart: onBackgroundVerticalDragStart,
                 onBackgroundVerticalDragUpdate: (details) =>
                     upperVerticalGestures.dragByViewport(details.delta.dy),
                 onBackgroundVerticalDragEnd: (_) => upperVerticalGestures.end(),

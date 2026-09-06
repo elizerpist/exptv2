@@ -1396,6 +1396,82 @@ void main() {
   );
 
   test(
+    'RED AVATAR PHASE-A AUTHORITY: a prearmed base scene cannot stand in for the focused painter payload',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final activePayload = _deferredPayload(month: 6, rowCount: 1);
+      final activeWindow = DashboardLogBoxSceneWindow(
+        identity: 'avatar-active-before-resource',
+        payloads: <DashboardLogViewportState>[activePayload],
+      );
+      final basePayload = _deferredPayload(month: 7, rowCount: 3);
+      final focusedScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+        categoryIds: const <String>{'category-0'},
+      );
+      final focusedPayload = DashboardLogViewportState.deferredPreparedOrdered(
+        scope: focusedScope,
+        revision: 1,
+        entries: <DashboardLedgerEntry>[
+          basePayload.semanticPreviewLedgerEntryAt(0)!,
+        ],
+        entryCount: 1,
+        nextCursor: null,
+      );
+      final resourceWindow = DashboardLogBoxSceneWindow(
+        identity: 'avatar-base-resource-window',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+
+      await cache.prepareWindow(window: activeWindow, surfaceWidth: 378);
+      cache.activateWindow(activeWindow);
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: 'avatar-base-resource',
+        window: resourceWindow,
+        surfaceWidth: 378,
+      );
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          resourceWindow,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: 'avatar-base-resource',
+        ),
+        isTrue,
+        reason:
+            'The historical false-ready state starts with a complete private '
+            'base resource window.',
+      );
+      expect(focusedPayload.hasPreparedSemanticPreviewGeometry, isFalse);
+      expect(
+        cache.hasCompleteReadablePhaseAFor(focusedPayload),
+        isFalse,
+        reason:
+            'A broad prearm alone cannot claim that the focused payload is '
+            'paintable by the actual rail-preview painter.',
+      );
+
+      expect(
+        cache.bindLiveInteractionReadablePhaseA(
+          focusedPayload,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: 'avatar-base-resource',
+        ),
+        isTrue,
+      );
+      expect(focusedPayload.hasPreparedSemanticPreviewGeometry, isTrue);
+      expect(cache.hasCompleteReadablePhaseAFor(focusedPayload), isTrue);
+      expect(cache.readablePhaseARowCountFor(focusedPayload), 1);
+      expect(focusedPayload.isRichProjected, isFalse);
+      expect(cache.textLayoutMissCount, 0);
+    },
+  );
+
+  test(
     'RED REENTRANT-MIND: a borrowing release candidate coexists with an oversized bounded live resource bank',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache(

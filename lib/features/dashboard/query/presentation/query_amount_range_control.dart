@@ -1,9 +1,48 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../motion/dashboard_display_frame_coalescer.dart';
 import '../domain/query_amount_range.dart';
 import 'query_menu_formatters.dart';
 import 'query_menu_tokens.dart';
+
+/// One bounded, per-drag input-to-preview timing record.
+///
+/// This belongs to the reusable Range control because it observes the raw
+/// pointer, RangeSlider recognizer and display-frame coalescer without making
+/// a Dashboard controller own a second gesture path. Hosts may correlate the
+/// record with their own publication/paint diagnostics; this model carries no
+/// query or transaction data.
+@immutable
+final class QueryAmountRangeInteractionSummary {
+  const QueryAmountRangeInteractionSummary({
+    required this.pointerId,
+    required this.rawPointerObserved,
+    required this.pointerToRecognizerMicros,
+    required this.pointerToFirstValueChangeMicros,
+    required this.pointerToFirstPreviewPublicationMicros,
+    required this.interactionMicros,
+    required this.valueChangeCount,
+    required this.unchangedValueCount,
+    required this.previewRequestCount,
+    required this.previewPublicationCount,
+    required this.coalescedPreviewCount,
+    required this.finalValues,
+  });
+
+  final int? pointerId;
+  final bool rawPointerObserved;
+  final int? pointerToRecognizerMicros;
+  final int? pointerToFirstValueChangeMicros;
+  final int? pointerToFirstPreviewPublicationMicros;
+  final int interactionMicros;
+  final int valueChangeCount;
+  final int unchangedValueCount;
+  final int previewRequestCount;
+  final int previewPublicationCount;
+  final int coalescedPreviewCount;
+  final QueryAmountRangeValues finalValues;
+}
 
 /// The shared Query-menu/Mind amount range renderer.
 ///
@@ -18,6 +57,8 @@ final class QueryAmountRangeControl extends StatefulWidget {
     this.onRangePreviewChanged,
     this.onInteractionStarted,
     this.onInteractionEnded,
+    this.onInteractionSummary,
+    this.enableInteractionDiagnostics = kFluviOnscreenDiagnosticsEnabled,
     this.previewScheduler,
   });
 
@@ -26,6 +67,12 @@ final class QueryAmountRangeControl extends StatefulWidget {
   final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
+  final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
+
+  /// The physical diagnostic APK opts in to the bounded pointer pipeline.
+  /// A normal release keeps the established RangeSlider path free of its
+  /// passive Listener, Stopwatch and per-drag accounting.
+  final bool enableInteractionDiagnostics;
 
   /// Testable pre-display-frame scheduler. Production defaults to the shared
   /// Dashboard scheduler; this is not a widget-local timer or post-frame lane.
@@ -42,6 +89,22 @@ final class _QueryAmountRangeControlState
   late final DashboardDisplayFrameCoalescer<QueryAmountRangeValues>
   _previewCoalescer;
   var _dragActive = false;
+  Stopwatch? _interactionStopwatch;
+  int? _pointerId;
+  var _rawPointerObserved = false;
+  int? _recognizerMicros;
+  int? _firstValueChangeMicros;
+  int? _firstPreviewPublicationMicros;
+  QueryAmountRangeValues? _lastChangedValues;
+  var _valueChangeCount = 0;
+  var _unchangedValueCount = 0;
+  var _previewRequestCountAtStart = 0;
+  var _previewPublicationCountAtStart = 0;
+  var _coalescedPreviewCountAtStart = 0;
+
+  bool get _collectInteractionDiagnostics =>
+      widget.enableInteractionDiagnostics &&
+      widget.onInteractionSummary != null;
 
   @override
   void initState() {
@@ -52,6 +115,9 @@ final class _QueryAmountRangeControlState
           widget.previewScheduler ?? FlutterDashboardDisplayFrameScheduler(),
       publish: (values) {
         if (!mounted) return;
+        if (_collectInteractionDiagnostics) {
+          _firstPreviewPublicationMicros ??= _elapsedMicros;
+        }
         widget.onRangePreviewChanged?.call(values);
       },
     );
@@ -71,12 +137,129 @@ final class _QueryAmountRangeControlState
         values.upperScaled100.toDouble(),
       );
 
+  int get _elapsedMicros => _interactionStopwatch?.elapsedMicroseconds ?? 0;
+
+  void _beginInteractionTrace({int? pointerId, required bool rawPointer}) {
+    if (!_collectInteractionDiagnostics) return;
+    _interactionStopwatch = Stopwatch()..start();
+    _pointerId = pointerId;
+    _rawPointerObserved = rawPointer;
+    _recognizerMicros = null;
+    _firstValueChangeMicros = null;
+    _firstPreviewPublicationMicros = null;
+    _lastChangedValues = null;
+    _valueChangeCount = 0;
+    _unchangedValueCount = 0;
+    _previewRequestCountAtStart = _previewCoalescer.requestCount;
+    _previewPublicationCountAtStart = _previewCoalescer.publishCount;
+    _coalescedPreviewCountAtStart = _previewCoalescer.coalescedTargetCount;
+  }
+
+  void _onRawPointerDown(PointerDownEvent event) {
+    if (!_collectInteractionDiagnostics || _dragActive) return;
+    _beginInteractionTrace(pointerId: event.pointer, rawPointer: true);
+  }
+
+  void _emitInteractionSummary(QueryAmountRangeValues finalValues) {
+    if (!_collectInteractionDiagnostics) return;
+    final stopwatch = _interactionStopwatch;
+    if (stopwatch == null) return;
+    stopwatch.stop();
+    widget.onInteractionSummary?.call(
+      QueryAmountRangeInteractionSummary(
+        pointerId: _pointerId,
+        rawPointerObserved: _rawPointerObserved,
+        pointerToRecognizerMicros: _recognizerMicros,
+        pointerToFirstValueChangeMicros: _firstValueChangeMicros,
+        pointerToFirstPreviewPublicationMicros: _firstPreviewPublicationMicros,
+        interactionMicros: stopwatch.elapsedMicroseconds,
+        valueChangeCount: _valueChangeCount,
+        unchangedValueCount: _unchangedValueCount,
+        previewRequestCount:
+            _previewCoalescer.requestCount - _previewRequestCountAtStart,
+        previewPublicationCount:
+            _previewCoalescer.publishCount - _previewPublicationCountAtStart,
+        coalescedPreviewCount:
+            _previewCoalescer.coalescedTargetCount -
+            _coalescedPreviewCountAtStart,
+        finalValues: finalValues,
+      ),
+    );
+    _interactionStopwatch = null;
+    _pointerId = null;
+  }
+
   void _schedulePreview(QueryAmountRangeValues values) {
     if (widget.onRangePreviewChanged == null) return;
     _previewCoalescer.request(values);
   }
 
   void _flushPreview() => _previewCoalescer.flush();
+
+  Widget _buildRangeSlider({
+    required QueryAmountRangeValues values,
+    required RangeValues local,
+    required double maximum,
+  }) {
+    final slider = RangeSlider(
+      key: const ValueKey('query-amount-range-slider'),
+      values: local,
+      min: values.minimumScaled100.toDouble(),
+      max: maximum,
+      onChangeStart: values.isActionable
+          ? (_) {
+              if (_collectInteractionDiagnostics &&
+                  _interactionStopwatch == null) {
+                _beginInteractionTrace(pointerId: null, rawPointer: false);
+              }
+              if (_collectInteractionDiagnostics) {
+                _recognizerMicros ??= _elapsedMicros;
+              }
+              _dragActive = true;
+              widget.onInteractionStarted?.call();
+            }
+          : null,
+      onChanged: values.isActionable
+          ? (next) {
+              final normalized = values.fromRawRange(
+                lower: next.start.round(),
+                upper: next.end.round(),
+              );
+              if (_collectInteractionDiagnostics) {
+                if (_lastChangedValues == normalized) {
+                  _unchangedValueCount += 1;
+                } else {
+                  _lastChangedValues = normalized;
+                  _valueChangeCount += 1;
+                  _firstValueChangeMicros ??= _elapsedMicros;
+                }
+              }
+              setState(() => _localValues = next);
+              _schedulePreview(normalized);
+            }
+          : null,
+      onChangeEnd: values.isActionable
+          ? (next) {
+              _dragActive = false;
+              final committed = values.fromRawRange(
+                lower: next.start.round(),
+                upper: next.end.round(),
+              );
+              _flushPreview();
+              _emitInteractionSummary(committed);
+              widget.onInteractionEnded?.call();
+              widget.onRangeCommitted(committed);
+            }
+          : null,
+    );
+    if (!_collectInteractionDiagnostics) return slider;
+    return Listener(
+      key: const ValueKey('query-amount-range-pointer-probe'),
+      behavior: HitTestBehavior.deferToChild,
+      onPointerDown: _onRawPointerDown,
+      child: slider,
+    );
+  }
 
   @override
   void dispose() {
@@ -147,40 +330,10 @@ final class _QueryAmountRangeControlState
                 ),
                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
               ),
-              child: RangeSlider(
-                key: const ValueKey('query-amount-range-slider'),
-                values: local,
-                min: values.minimumScaled100.toDouble(),
-                max: maximum,
-                onChangeStart: values.isActionable
-                    ? (_) {
-                        _dragActive = true;
-                        widget.onInteractionStarted?.call();
-                      }
-                    : null,
-                onChanged: values.isActionable
-                    ? (next) {
-                        setState(() => _localValues = next);
-                        _schedulePreview(
-                          values.fromRawRange(
-                            lower: next.start.round(),
-                            upper: next.end.round(),
-                          ),
-                        );
-                      }
-                    : null,
-                onChangeEnd: values.isActionable
-                    ? (next) {
-                        _dragActive = false;
-                        final committed = values.fromRawRange(
-                          lower: next.start.round(),
-                          upper: next.end.round(),
-                        );
-                        _flushPreview();
-                        widget.onInteractionEnded?.call();
-                        widget.onRangeCommitted(committed);
-                      }
-                    : null,
+              child: _buildRangeSlider(
+                values: values,
+                local: local,
+                maximum: maximum,
               ),
             ),
           ],

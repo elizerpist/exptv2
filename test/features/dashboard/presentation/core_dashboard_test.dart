@@ -31,6 +31,7 @@ import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runti
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/widgets/time_refinement_rail.dart';
 
 import '../../../support/test_pump.dart';
@@ -625,6 +626,240 @@ void main() {
         hasLength(1),
       );
       await gesture.up();
+    },
+  );
+
+  testWidgets(
+    'RED production Summary: an immediate second Day swipe keeps exclusive selector ownership',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialCoreRevision: 1,
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      final tuner = tester.widget<DashboardHeaderVisualTuner>(
+        find.byType(DashboardHeaderVisualTuner),
+      );
+      tuner.summaryPillVariants!.select(SummaryPillVariant.segmented);
+      await tester.pump();
+
+      final day = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-day-selector'),
+      );
+      expect(day, findsOneWidget);
+      final dayCell = tester.getRect(day);
+      final expansionBefore = controller.expansion.progress;
+      FluviDiagnosticLogger.clear();
+
+      final first = await tester.startGesture(tester.getCenter(day));
+      await first.moveBy(const Offset(0, -72));
+      await first.up();
+      await tester.pump();
+
+      // Do not settle the first carousel flight. The second raw pointer must
+      // own the same Day cell immediately, including at its separator-side
+      // interaction boundary.
+      final second = await tester.startGesture(
+        Offset(dayCell.left + 1, dayCell.center.dy),
+      );
+      await second.moveBy(const Offset(0, -48));
+      await tester.pump();
+      await second.up();
+      await tester.pump();
+
+      final pointerHits = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'SUMMARY_POINTER_HIT_CLASSIFIED')
+          .toList(growable: false);
+      expect(pointerHits, hasLength(2));
+      expect(
+        pointerHits.every(
+          (event) => event.scope?.contains('owner=selector') == true,
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_BACKGROUND_POINTER_ACCEPTED',
+        ),
+        isEmpty,
+        reason:
+            'A Day-owned pointer must not transfer into the Header-collapse '
+            'gesture after the first carousel flight.',
+      );
+      expect(controller.expansion.progress, expansionBefore);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_POINTER_ACCEPTED',
+        ),
+        hasLength(2),
+        reason:
+            'The real Core controller receives both raw Day-pointer starts; '
+            'there is no delayed re-enable or replacement controller.',
+      );
+    },
+  );
+
+  testWidgets(
+    'production Summary: Day interaction ownership has no repeat-swipe cooldown matrix',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialCoreRevision: 1,
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+
+      for (final delay in <Duration>[
+        Duration.zero,
+        const Duration(milliseconds: 16),
+        const Duration(milliseconds: 32),
+        const Duration(milliseconds: 50),
+        const Duration(milliseconds: 100),
+        const Duration(milliseconds: 250),
+        const Duration(milliseconds: 500),
+        const Duration(milliseconds: 1000),
+      ]) {
+        final day = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('summary-pill-segmented-day-selector'),
+          ),
+        );
+        FluviDiagnosticLogger.clear();
+
+        final first = await tester.startGesture(day.center);
+        await first.moveBy(const Offset(0, -72));
+        await first.up();
+        if (delay != Duration.zero) await tester.pump(delay);
+
+        // This is intentionally not pumpAndSettle: the second contact must
+        // replace a drag/hold/ballistic command at the raw pointer boundary.
+        final second = await tester.startGesture(
+          Offset(day.left + 1, day.center.dy),
+        );
+        await second.moveBy(const Offset(0, -48));
+        await second.up();
+        await tester.pump();
+
+        expect(
+          FluviDiagnosticLogger.entries.where(
+            (event) => event.stage == 'SUMMARY_BACKGROUND_POINTER_ACCEPTED',
+          ),
+          isEmpty,
+          reason:
+              'delay=${delay.inMilliseconds}ms: a separator-side Day cell '
+              'contact must never become a Header-collapse drag.',
+        );
+        expect(
+          FluviDiagnosticLogger.entries.where(
+            (event) => event.stage == 'SUMMARY_POINTER_ACCEPTED',
+          ),
+          hasLength(2),
+          reason:
+              'delay=${delay.inMilliseconds}ms: both Day contacts must reach '
+              'the stable carousel controller without a cooldown.',
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'production Summary: genuine unassigned background still owns Header collapse',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialCoreRevision: 1,
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+
+      final summary = tester.getRect(
+        find.byKey(const ValueKey('summary-pill-experiment-segmented')),
+      );
+      // The selector cells now fill the navigation zone up to the amount
+      // boundary. Use the real unassigned trailing Summary inset rather than
+      // a formerly dead strip beside the Day glyph.
+      final backgroundStart = Offset(summary.right - 1, summary.center.dy);
+      expect(summary.contains(backgroundStart), isTrue);
+      final expansionBefore = controller.expansion.progress;
+      FluviDiagnosticLogger.clear();
+
+      final gesture = await tester.startGesture(backgroundStart);
+      await gesture.moveBy(const Offset(0, -72));
+      // The first displacement resolves the vertical-drag arena. The next
+      // sample is the first one the background coordinator owns.
+      await gesture.moveBy(const Offset(0, -32));
+      await tester.pump();
+      expect(controller.expansion.progress, greaterThan(expansionBefore));
+      await gesture.up();
+      await tester.pump();
+
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'SUMMARY_POINTER_HIT_CLASSIFIED')
+            .single
+            .scope,
+        contains('owner=summaryBackground'),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_BACKGROUND_POINTER_ACCEPTED',
+        ),
+        hasLength(1),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_POINTER_ACCEPTED',
+        ),
+        isEmpty,
+      );
     },
   );
 

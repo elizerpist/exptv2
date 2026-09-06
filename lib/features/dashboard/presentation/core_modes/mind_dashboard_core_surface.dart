@@ -28,6 +28,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.onQueryAmountRangePreviewChanged,
     this.onQueryAmountRangeInteractionStarted,
     this.onQueryAmountRangeInteractionEnded,
+    this.onQueryAmountRangeInteractionSummary,
     this.headerVisualController,
     this.headerVisualFrame,
   });
@@ -43,6 +44,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangePreviewChanged;
   final VoidCallback? onQueryAmountRangeInteractionStarted;
   final VoidCallback? onQueryAmountRangeInteractionEnded;
+  final ValueChanged<QueryAmountRangeInteractionSummary>?
+  onQueryAmountRangeInteractionSummary;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
 
@@ -88,6 +91,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
                               onQueryAmountRangeInteractionStarted,
                           onInteractionEnded:
                               onQueryAmountRangeInteractionEnded,
+                          onInteractionSummary:
+                              onQueryAmountRangeInteractionSummary,
                         ),
                       ),
                     ),
@@ -129,6 +134,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
     required this.onRangePreviewChanged,
     required this.onInteractionStarted,
     required this.onInteractionEnded,
+    required this.onInteractionSummary,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -141,6 +147,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
   final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
+  final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +160,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
       onRangePreviewChanged: onRangePreviewChanged,
       onInteractionStarted: onInteractionStarted,
       onInteractionEnded: onInteractionEnded,
+      onInteractionSummary: onInteractionSummary,
     );
     final lifecycle = lifecycleChanges;
     if (lifecycle == null) {
@@ -181,6 +189,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
     required this.onRangePreviewChanged,
     required this.onInteractionStarted,
     required this.onInteractionEnded,
+    required this.onInteractionSummary,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -191,6 +200,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
   final ValueChanged<QueryAmountRangeValues>? onRangePreviewChanged;
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
+  final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
 
   @override
   State<_MindQueryAmountRangeBinding> createState() =>
@@ -258,6 +268,7 @@ final class _MindQueryAmountRangeBindingState
         onRangePreviewChanged: widget.onRangePreviewChanged,
         onInteractionStarted: widget.onInteractionStarted,
         onInteractionEnded: widget.onInteractionEnded,
+        onInteractionSummary: widget.onInteractionSummary,
         onRangeCommitted: widget.onRangeCommitted,
       ),
     );

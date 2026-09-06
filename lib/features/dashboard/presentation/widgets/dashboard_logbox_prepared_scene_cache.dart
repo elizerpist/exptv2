@@ -811,6 +811,54 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
         window.payloads.every(bank.hasCompleteSceneFor);
   }
 
+  /// Arms and verifies the compact Phase-A geometry for [payload] through the
+  /// exact lane-owned bank that the rail-preview painter will use.
+  ///
+  /// This is intentionally narrower than [hasLiveInteractionResourceWindow].
+  /// The latter proves that a broad prearmed source window has a complete rich
+  /// scene; it cannot prove that a newly derived focus payload has the compact
+  /// geometry and row/header slots required by the Phase-A painter. No
+  /// [TextPainter], rich projection, query or index work is performed here.
+  bool bindLiveInteractionReadablePhaseA(
+    DashboardLogViewportState payload, {
+    required DashboardLiveInteractionResourceLane lane,
+    required String resourceKey,
+  }) {
+    if (payload.previewRowCount == 0) return true;
+    if (_liveInteractionResourceKeys[lane] != resourceKey) return false;
+    final bank = _retainedCandidateBanks[resourceKey];
+    if (bank == null ||
+        bank.surfaceWidth != _surfaceWidth ||
+        bank.devicePixelRatio != _devicePixelRatio ||
+        !bank.manifest.isComplete) {
+      return false;
+    }
+
+    // Sparse payloads deliberately defer this compact table until their
+    // selected live resource owner binds them. This derivation contains only
+    // immutable ledger/group references and is never a paint-path operation.
+    payload.prepareSemanticPreviewGeometry();
+    for (var ordinal = 0; ordinal < payload.previewRowCount; ordinal += 1) {
+      final entryId = payload.semanticPreviewRowIdentityAt(ordinal);
+      final slot = payload.semanticPreviewSlotAt(ordinal);
+      if (entryId == null ||
+          slot == null ||
+          bank.readablePhaseAResourceFor(
+                payload,
+                entryId: entryId,
+                dayLabel: slot.dayLabel,
+              ) ==
+              null) {
+        return false;
+      }
+    }
+    _touchRetainedCandidateBank(resourceKey, bank);
+    // Use the public lookup too: it is the exact all-or-nothing contract used
+    // by the active rail-preview painter, rather than a parallel readiness
+    // definition owned by the controller.
+    return hasCompleteReadablePhaseAFor(payload);
+  }
+
   bool hasRetainedWindow(DashboardLogBoxSceneWindow window) =>
       _retainedCandidateBankFor(window) != null ||
       _retainedActiveSceneBankFor(window) != null;
