@@ -818,6 +818,17 @@ void main() {
       );
       expect(summary.scope, contains('ballisticSemanticCrossings='));
       expect(summary.scope, contains('ballisticPreviewAccepted='));
+      expect(
+        summary.scope,
+        contains('frameTimingSamples='),
+        reason:
+            'Semantic inter-tick spacing is not a frame-time measurement. '
+            'Every production Avatar flight must expose bounded Flutter '
+            'FrameTiming evidence separately.',
+      );
+      expect(summary.scope, contains('frameTimingMissedFrames='));
+      expect(summary.scope, contains('semanticToStoreP95Micros='));
+      expect(summary.scope, contains('storeToPaintP95Micros='));
     },
   );
 

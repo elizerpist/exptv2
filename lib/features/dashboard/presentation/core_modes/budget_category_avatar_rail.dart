@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:ui' show FramePhase;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
@@ -107,6 +110,13 @@ class BudgetTargetAvatarRail extends StatefulWidget {
 class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     implements BudgetTargetAvatarRailCommandDelegate {
   static const _itemExtent = 58.0;
+  // The human-diagnostic profile opts in with the dart define below; debug
+  // tests also exercise the bounded evidence path. A normal release carries
+  // neither a FrameTiming callback nor diagnostic buffers/timestamps on the
+  // Avatar hot path.
+  static const _collectFrameTimingDiagnostics =
+      bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS') || kDebugMode;
+  static const _targetTimingStampCapacity = 16;
 
   late final CenteredCarouselController _controller;
   late final CenteredCarouselSpec _spec;
@@ -146,6 +156,36 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   bool _settledTargetCommitted = false;
   final CenteredCarouselSemanticCadenceAccumulator _semanticCadence =
       CenteredCarouselSemanticCadenceAccumulator();
+  final CenteredCarouselFrameTimingAccumulator? _frameTimings =
+      _collectFrameTimingDiagnostics
+      ? CenteredCarouselFrameTimingAccumulator()
+      : null;
+  final CenteredCarouselLatencyDistributionAccumulator? _rawToSemanticLatency =
+      _collectFrameTimingDiagnostics
+      ? CenteredCarouselLatencyDistributionAccumulator()
+      : null;
+  final CenteredCarouselLatencyDistributionAccumulator?
+  _semanticToStoreLatency = _collectFrameTimingDiagnostics
+      ? CenteredCarouselLatencyDistributionAccumulator()
+      : null;
+  final CenteredCarouselLatencyDistributionAccumulator? _storeToPaintLatency =
+      _collectFrameTimingDiagnostics
+      ? CenteredCarouselLatencyDistributionAccumulator()
+      : null;
+  final CenteredCarouselLatencyDistributionAccumulator?
+  _acknowledgedFrameToRasterLatency = _collectFrameTimingDiagnostics
+      ? CenteredCarouselLatencyDistributionAccumulator()
+      : null;
+  final Map<int, int>? _semanticTargetMicros = _collectFrameTimingDiagnostics
+      ? <int, int>{}
+      : null;
+  final Map<int, int>? _acceptedTargetMicros = _collectFrameTimingDiagnostics
+      ? <int, int>{}
+      : null;
+  TimingsCallback? _frameTimingsCallback;
+  int? _lastRawScrollMicros;
+  int? _awaitingPaintFrameVsyncMicros;
+  int _motionAvatarRailBuilds = 0;
 
   @override
   void initState() {
@@ -164,6 +204,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.presentation.addListener(_onPresentationChanged);
     widget.liveTargetPainted?.addListener(_onLiveTargetPainted);
     widget.navigationController?.attach(this);
+    if (_collectFrameTimingDiagnostics) {
+      _frameTimingsCallback = _onFrameTimings;
+      SchedulerBinding.instance.addTimingsCallback(_frameTimingsCallback!);
+    }
   }
 
   @override
@@ -199,6 +243,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     widget.navigationController?.detach(this);
     _quickEdit?.dispose();
     _previewPublisher.dispose();
+    final timingsCallback = _frameTimingsCallback;
+    if (timingsCallback != null) {
+      SchedulerBinding.instance.removeTimingsCallback(timingsCallback);
+    }
     _controller.scrollController.removeListener(_onRawScrollUpdate);
     _controller.dispose();
     super.dispose();
@@ -288,7 +336,17 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   void _onPreviewChanged(int logicalIndex) {
     if (_items.isEmpty) return;
+    final targetHandle =
+        _items[_modulo(logicalIndex, _items.length)].targetHandle;
     if (_activeMotionOrigin != null) {
+      if (_collectFrameTimingDiagnostics) {
+        final now = developer.Timeline.now;
+        final rawScrollMicros = _lastRawScrollMicros;
+        if (rawScrollMicros != null) {
+          _rawToSemanticLatency!.record(now - rawScrollMicros);
+        }
+        _recordTargetTimestamp(_semanticTargetMicros!, targetHandle, now);
+      }
       _motionSemanticCrossings += 1;
       switch (_activeMotionPhase) {
         case BudgetTargetAvatarMotionPhase.directDrag:
@@ -302,15 +360,16 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       }
       _semanticCadence.recordTick(logicalIndex);
     }
-    _previewPublisher.submit(
-      _items[_modulo(logicalIndex, _items.length)].targetHandle,
-    );
+    _previewPublisher.submit(targetHandle);
   }
 
   void _publishPreviewTargetHandle(int targetHandle) {
     if (!mounted) return;
     final phase = _activeMotionPhase;
     final generation = _motionGeneration;
+    final semanticCrossedAtMicros = _collectFrameTimingDiagnostics
+        ? _semanticTargetMicros![targetHandle]
+        : null;
     if (_activeMotionOrigin != null) {
       _motionPreviewPublications += 1;
       switch (phase) {
@@ -353,6 +412,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         targetHandle: targetHandle,
         generation: generation,
         phase: phase,
+        semanticCrossedAtMicros: semanticCrossedAtMicros,
       ),
     );
   }
@@ -362,6 +422,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     required int targetHandle,
     required int generation,
     required BudgetTargetAvatarMotionPhase? phase,
+    required int? semanticCrossedAtMicros,
   }) async {
     var accepted = false;
     Object? error;
@@ -414,6 +475,19 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       ),
     );
     if (accepted && error == null) {
+      if (_collectFrameTimingDiagnostics) {
+        final acceptedAtMicros = developer.Timeline.now;
+        if (semanticCrossedAtMicros != null) {
+          _semanticToStoreLatency!.record(
+            acceptedAtMicros - semanticCrossedAtMicros,
+          );
+        }
+        _recordTargetTimestamp(
+          _acceptedTargetMicros!,
+          targetHandle,
+          acceptedAtMicros,
+        );
+      }
       _pendingPaintExpectation = _AvatarPreviewPaintExpectation(
         targetHandle: targetHandle,
         generation: generation,
@@ -467,6 +541,21 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _pendingPaintExpectation = null;
     _pendingTerminalPaintSummary = null;
     _latestPaintedTargetHandle = painted.targetHandle;
+    if (!retainedAtExpectation && _collectFrameTimingDiagnostics) {
+      final acceptedAtMicros = _acceptedTargetMicros!.remove(
+        painted.targetHandle,
+      );
+      if (acceptedAtMicros != null) {
+        _storeToPaintLatency!.record(developer.Timeline.now - acceptedAtMicros);
+      }
+      // A frame timing callback supplies the engine's raster-finish timestamp.
+      // Keep the raw vsync timestamp rather than a wall clock so the two
+      // values share Flutter's engine-time epoch. The result is an upper bound
+      // from the acknowledged paint frame to raster completion, not a claim
+      // that a semantic crossing itself was rendered in that frame.
+      _awaitingPaintFrameVsyncMicros =
+          SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
+    }
     if (painted.hasRichPhaseBPaint) {
       if (!retainedAtExpectation) _matchingRichPhaseBPaints += 1;
       _latestRichPaintedTargetHandle = painted.targetHandle;
@@ -564,6 +653,18 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _terminalSettleAwaitingSemanticFrame = false;
     _settledTargetCommitted = false;
     _semanticCadence.reset();
+    if (_collectFrameTimingDiagnostics) {
+      _frameTimings!.reset();
+      _rawToSemanticLatency!.reset();
+      _semanticToStoreLatency!.reset();
+      _storeToPaintLatency!.reset();
+      _acknowledgedFrameToRasterLatency!.reset();
+      _semanticTargetMicros!.clear();
+      _acceptedTargetMicros!.clear();
+      _lastRawScrollMicros = null;
+      _awaitingPaintFrameVsyncMicros = null;
+      _motionAvatarRailBuilds = 0;
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|FLING_STARTED',
@@ -704,6 +805,20 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         ? identityHashCode(_controller.scrollController.position)
         : 0;
     final cadence = _semanticCadence.snapshot();
+    final timingDiagnostics = _collectFrameTimingDiagnostics;
+    final frameTimings = timingDiagnostics ? _frameTimings!.snapshot() : null;
+    final rawToSemantic = timingDiagnostics
+        ? _rawToSemanticLatency!.snapshot()
+        : null;
+    final semanticToStore = timingDiagnostics
+        ? _semanticToStoreLatency!.snapshot()
+        : null;
+    final storeToPaint = timingDiagnostics
+        ? _storeToPaintLatency!.snapshot()
+        : null;
+    final acknowledgedFrameToRaster = timingDiagnostics
+        ? _acknowledgedFrameToRasterLatency!.snapshot()
+        : null;
     final pendingPaint = _pendingPaintExpectation;
     final awaitingExactPaint =
         pendingPaint?.generation == _motionGeneration &&
@@ -756,6 +871,25 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             '${_latestRichPaintedTargetHandle ?? '-'} '
             'settleTargetHandle=${_pendingSettleTargetHandle ?? '-'} '
             'rawScrollUpdates=$_motionRawScrollUpdates '
+            'avatarRailBuilds=${timingDiagnostics ? _motionAvatarRailBuilds : -1} '
+            'frameTimingSamples=${frameTimings?.retainedFrameCount ?? -1} '
+            'frameTimingDroppedSamples=${frameTimings?.droppedFrameCount ?? -1} '
+            'frameTimingMissedFrames=${frameTimings?.missedFrameCount ?? -1} '
+            'frameTimingBuildP50Micros=${frameTimings?.buildP50Micros ?? -1} '
+            'frameTimingBuildP95Micros=${frameTimings?.buildP95Micros ?? -1} '
+            'frameTimingBuildMaxMicros=${frameTimings?.buildMaximumMicros ?? -1} '
+            'frameTimingRasterP50Micros=${frameTimings?.rasterP50Micros ?? -1} '
+            'frameTimingRasterP95Micros=${frameTimings?.rasterP95Micros ?? -1} '
+            'frameTimingRasterMaxMicros=${frameTimings?.rasterMaximumMicros ?? -1} '
+            'frameTimingTotalSpanP50Micros=${frameTimings?.totalSpanP50Micros ?? -1} '
+            'frameTimingTotalSpanP95Micros=${frameTimings?.totalSpanP95Micros ?? -1} '
+            'frameTimingTotalSpanMaxMicros=${frameTimings?.totalSpanMaximumMicros ?? -1} '
+            'rawToSemanticP95Micros=${rawToSemantic?.p95Micros ?? -1} '
+            'semanticToStoreP95Micros=${semanticToStore?.p95Micros ?? -1} '
+            'storeToPaintP95Micros=${storeToPaint?.p95Micros ?? -1} '
+            'acknowledgedFrameToRasterP95Micros='
+            '${acknowledgedFrameToRaster?.p95Micros ?? -1} '
+            'frameTimingDiagnostics=$timingDiagnostics '
             'firstTickMicros=${cadence.firstTickLatencyMicros} '
             'interTickMinMicros=${cadence.interTickMinimumMicros} '
             'interTickMedianMicros=${cadence.interTickMedianMicros} '
@@ -784,7 +918,39 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   }
 
   void _onRawScrollUpdate() {
-    if (_activeMotionOrigin != null) _motionRawScrollUpdates += 1;
+    if (_activeMotionOrigin != null) {
+      _motionRawScrollUpdates += 1;
+      if (_collectFrameTimingDiagnostics) {
+        _lastRawScrollMicros = developer.Timeline.now;
+      }
+    }
+  }
+
+  void _onFrameTimings(List<FrameTiming> timings) {
+    if (!_collectFrameTimingDiagnostics) return;
+    final motionActive = _activeMotionOrigin != null;
+    final awaitingPaintFrameVsyncMicros = _awaitingPaintFrameVsyncMicros;
+    if (!motionActive && awaitingPaintFrameVsyncMicros == null) return;
+    for (final timing in timings) {
+      if (motionActive) _frameTimings!.recordFrameTiming(timing);
+      if (awaitingPaintFrameVsyncMicros != null &&
+          timing.timestampInMicroseconds(FramePhase.rasterFinish) >=
+              awaitingPaintFrameVsyncMicros) {
+        _acknowledgedFrameToRasterLatency!.record(
+          timing.timestampInMicroseconds(FramePhase.rasterFinish) -
+              awaitingPaintFrameVsyncMicros,
+        );
+        _awaitingPaintFrameVsyncMicros = null;
+        break;
+      }
+    }
+  }
+
+  void _recordTargetTimestamp(Map<int, int> timestamps, int target, int now) {
+    timestamps[target] = now;
+    while (timestamps.length > _targetTimingStampCapacity) {
+      timestamps.remove(timestamps.keys.first);
+    }
   }
 
   void _requestPreparedTargetHotset({int? centerLogicalIndex}) {
@@ -823,6 +989,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   @override
   Widget build(BuildContext context) {
+    if (_collectFrameTimingDiagnostics && _activeMotionOrigin != null) {
+      _motionAvatarRailBuilds += 1;
+    }
     return SizedBox.expand(
       key: const ValueKey('budget-target-avatar-rail'),
       child: _items.isEmpty

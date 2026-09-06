@@ -1315,6 +1315,151 @@ void main() {
   );
 
   testWidgets(
+    'RED TIME SETTLE: an unpainted exact Time target remains preview-owned until its matching LogBox acknowledgement',
+    (tester) async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      addTearDown(FluviDiagnosticLogger.clear);
+      await core.bootstrap();
+      final origin = core.navigation.state;
+      final candidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      final preview = core.visibleFrames.value!;
+      expect(preview.mode, DashboardVisibleMode.preview);
+
+      FluviDiagnosticLogger.clear();
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+
+      expect(
+        core.navigation.state.dayCursor,
+        origin.dayCursor,
+        reason:
+            'A semantic target may be accepted immediately, but canonical '
+            'settlement is forbidden until the real LogBox owner has '
+            'acknowledged its exact visible paint.',
+      );
+      expect(core.visibleFrames.value, same(preview));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_SETTLE_AWAITING_EXACT_PAINT',
+        ),
+        hasLength(1),
+      );
+
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(preview));
+      await tester.pump();
+      expect(core.navigation.state.dayCursor, candidate.dayCursor);
+      expect(core.visibleFrames.value!.mode, DashboardVisibleMode.committed);
+    },
+  );
+
+  testWidgets(
+    'RED TIME VISUAL OUTCOME: a target superseded before a display frame is explicitly classified as coalesced',
+    (tester) async {
+      final core = DashboardCoreController(
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      addTearDown(FluviDiagnosticLogger.clear);
+      await core.bootstrap();
+      final origin = core.navigation.state;
+      final first = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+      final second = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 2,
+        base: origin,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: first,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: second,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+
+      final current = core.visibleFrames.value!;
+      expect(current.queryKey, second.temporalAnchor.sourceChildQueryKey);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'SUMMARY_TARGET_VISUAL_OUTCOME' &&
+              (event.scope?.contains('outcome=coalescedBeforePaint') ??
+                  false) &&
+              event.queryKey == first.temporalAnchor.sourceChildQueryKey.value,
+        ),
+        hasLength(1),
+        reason:
+            'An accepted target replaced in the coalescer before it receives '
+            'a render opportunity must be accounted for once, rather than '
+            'silently inflating a missing-paint metric.',
+      );
+
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(current));
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: second,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+      expect(core.navigation.state.dayCursor, second.dayCursor);
+    },
+  );
+
+  testWidgets(
     'RED TIME PROMOTION: a matching committed-vertical acknowledgement accepts the already-visible preview target',
     (tester) async {
       final repository = _FocusSeedRepository();
@@ -1362,6 +1507,11 @@ void main() {
       final preview = core.visibleFrames.value!;
       expect(preview.mode, DashboardVisibleMode.preview);
       expect(preview.logBox.previewRowCount, 24);
+      // The first authoritative acknowledgement belongs to the exact
+      // readable preview. A later committed-vertical report may enrich the
+      // same target's geometry, but it cannot be the first paint that
+      // authorizes canonical settlement.
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(preview));
 
       core.settleExperimentalTemporalComponentCandidate(
         candidate: candidate,
@@ -1475,7 +1625,89 @@ void main() {
   );
 
   testWidgets(
-    'b166 regression: a new Summary pointer retains an accepted unpainted semantic target while rejecting its stale rich acknowledgement',
+    'RED TIME PAINT IDENTITY: returning to an already-painted target requires its newer frame acknowledgement',
+    (tester) async {
+      final core = DashboardCoreController(
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final origin = core.navigation.state;
+      final next = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: next,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      final firstNextFrame = core.visibleFrames.logBoxLane.value!;
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(firstNextFrame));
+
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: origin,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.logBoxLane.value!),
+      );
+
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: next,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      final secondNextFrame = core.visibleFrames.logBoxLane.value!;
+      expect(
+        secondNextFrame.frameGeneration,
+        greaterThan(firstNextFrame.frameGeneration),
+      );
+
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(secondNextFrame));
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: next,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+
+      expect(
+        core.navigation.state.dayCursor,
+        next.dayCursor,
+        reason:
+            'The old fast-path compared only the temporal candidate and left '
+            'this newer same-query frame forever unpainted for settlement.',
+      );
+    },
+  );
+
+  testWidgets(
+    'b166 regression: a new Summary pointer cannot commit an unpainted semantic target and rejects its late acknowledgement',
     (tester) async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -1518,7 +1750,7 @@ void main() {
         candidate: candidate,
         component: DashboardTemporalAnchorComponent.day,
       );
-      expect(core.navigation.state.dayCursor, candidate.dayCursor);
+      expect(core.navigation.state.dayCursor, origin.dayCursor);
 
       // A direct pointer interrupts the old ballistic/settling generation
       // before it crosses a replacement target. A late report for that old
@@ -1532,16 +1764,16 @@ void main() {
       expect(core.segmentedTargetPainted.value, isNull);
       expect(
         core.navigation.state.dayCursor,
-        candidate.dayCursor,
+        origin.dayCursor,
         reason:
-            'A richer late paint acknowledgement may not move a semantically '
-            'accepted release target back to the old month.',
+            'A late acknowledgement from an interrupted, unpainted preview '
+            'may not become a first-time canonical settlement.',
       );
     },
   );
 
   testWidgets(
-    'b166 regression: Summary pointer interruption keeps the latest accepted target over an older rich-painted preview',
+    'b166 regression: Summary pointer interruption never promotes a newer unpainted target over canonical state',
     (tester) async {
       final repository = _FocusSeedRepository();
       final core = DashboardCoreController(
@@ -1604,14 +1836,15 @@ void main() {
       );
 
       // The new pointer becomes a cancelled/tap interaction: it never emits
-      // a replacement crossing. The latest accepted B target remains the
-      // semantic origin; a richer old A paint is diagnostic only.
+      // a replacement crossing. The B preview may remain the live visible
+      // target until the next interaction, but it cannot become canonical
+      // before its own exact acknowledgement.
       core.noteSummaryDirectPointerDown();
       await tester.pump();
 
       final retained = core.visibleFrames.value!;
-      expect(core.navigation.state.dayCursor, unpainted.dayCursor);
-      expect(retained.mode, DashboardVisibleMode.committed);
+      expect(core.navigation.state.dayCursor, origin.dayCursor);
+      expect(retained.mode, DashboardVisibleMode.preview);
       expect(retained.queryKey, unpainted.temporalAnchor.sourceChildQueryKey);
       expect(core.segmentedTargetPainted.value, isNull);
       expect(repository.prepareCalls, 1);
@@ -1619,7 +1852,7 @@ void main() {
   );
 
   testWidgets(
-    'b166 regression: parent-changing Summary interruption retains the latest accepted parent rather than restoring an older rich scene',
+    'b166 regression: parent-changing Summary interruption leaves an unpainted live target non-canonical',
     (tester) async {
       final core = DashboardCoreController(
         initialDate: DateTime.utc(2026, 7, 14),
@@ -1757,8 +1990,8 @@ void main() {
       await tester.pump();
 
       final retained = core.visibleFrames.value!;
-      expect(core.navigation.state.dayCursor, unpainted.dayCursor);
-      expect(retained.mode, DashboardVisibleMode.committed);
+      expect(core.navigation.state.dayCursor, origin.dayCursor);
+      expect(retained.mode, DashboardVisibleMode.preview);
       expect(retained.queryKey, unpainted.temporalAnchor.sourceChildQueryKey);
       expect(
         cache.railCriticalSceneFor(retained.logBox),

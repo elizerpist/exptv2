@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
+import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/current_ledger_query_scope.dart';
@@ -243,6 +244,186 @@ final class DashboardLogGroupLayoutViewModel {
   final int rowCount;
 }
 
+/// Immutable, compact geometry for the bounded Phase-A preview payload.
+///
+/// The rich LogBox projection deliberately remains deferred until a scene
+/// owner prepares it.  A visible Phase-A frame must nevertheless use the
+/// exact same day-header, group-gap and row-origin geometry as that future
+/// rich/committed rendering.  This table is therefore assembled with the
+/// prepared frame, never by a painter or live interaction tick.
+@immutable
+final class DashboardLogSemanticPreviewGeometry {
+  DashboardLogSemanticPreviewGeometry._({
+    required List<DashboardLogSemanticPreviewSlot> slots,
+    required List<DashboardLogSemanticPreviewGroup> groups,
+  }) : slots = List<DashboardLogSemanticPreviewSlot>.unmodifiable(slots),
+       groups = List<DashboardLogSemanticPreviewGroup>.unmodifiable(groups);
+
+  factory DashboardLogSemanticPreviewGeometry.fromGroups(
+    List<DashboardDayLogGroupViewModel> source,
+  ) {
+    final groups = <DashboardLogSemanticPreviewGroup>[];
+    final slots = <DashboardLogSemanticPreviewSlot>[];
+    var precedingRowCount = 0;
+    for (var groupIndex = 0; groupIndex < source.length; groupIndex += 1) {
+      final group = source[groupIndex];
+      final rowCount = group.rows.length;
+      groups.add(
+        DashboardLogSemanticPreviewGroup(
+          groupIndex: groupIndex,
+          precedingRowCount: precedingRowCount,
+          rowCount: rowCount,
+          dayLabel: group.dayLabel,
+        ),
+      );
+      for (var rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        slots.add(
+          DashboardLogSemanticPreviewSlot(
+            ordinal: precedingRowCount + rowIndex,
+            groupIndex: groupIndex,
+            precedingRowCount: precedingRowCount,
+            rowIndexInGroup: rowIndex,
+            groupRowCount: rowCount,
+            dayLabel: rowIndex == 0 ? group.dayLabel : null,
+          ),
+        );
+      }
+      precedingRowCount += rowCount;
+    }
+    return DashboardLogSemanticPreviewGeometry._(slots: slots, groups: groups);
+  }
+
+  /// Builds only date/group coordinates from compact prepared ledger rows.
+  /// It deliberately does not project row view-models, format text, or create
+  /// paragraph resources.
+  factory DashboardLogSemanticPreviewGeometry.fromPreparedReferences({
+    required DashboardLogRowProjectionCache rowProjectionCache,
+    required List<int> rowIndices,
+  }) {
+    final groupStarts = <int>[];
+    final groupDates = <LocalDate>[];
+    LocalDate? previousDate;
+    for (var ordinal = 0; ordinal < rowIndices.length; ordinal += 1) {
+      final entry = rowProjectionCache.entryAt(rowIndices[ordinal]);
+      final date = _dateFromEpochDay(entry.bookedLocalEpochDay);
+      if (date != previousDate) {
+        groupStarts.add(ordinal);
+        groupDates.add(date);
+        previousDate = date;
+      }
+    }
+
+    final groups = <DashboardLogSemanticPreviewGroup>[];
+    final slots = <DashboardLogSemanticPreviewSlot>[];
+    for (var groupIndex = 0; groupIndex < groupStarts.length; groupIndex += 1) {
+      final precedingRowCount = groupStarts[groupIndex];
+      final end = groupIndex + 1 < groupStarts.length
+          ? groupStarts[groupIndex + 1]
+          : rowIndices.length;
+      final rowCount = end - precedingRowCount;
+      final date = groupDates[groupIndex];
+      final dayLabel = DashboardTimeLabelFormatter.date(
+        YearMonth(year: date.year, month: date.month),
+        date.day,
+      );
+      groups.add(
+        DashboardLogSemanticPreviewGroup(
+          groupIndex: groupIndex,
+          precedingRowCount: precedingRowCount,
+          rowCount: rowCount,
+          dayLabel: dayLabel,
+        ),
+      );
+      for (var rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+        slots.add(
+          DashboardLogSemanticPreviewSlot(
+            ordinal: precedingRowCount + rowIndex,
+            groupIndex: groupIndex,
+            precedingRowCount: precedingRowCount,
+            rowIndexInGroup: rowIndex,
+            groupRowCount: rowCount,
+            dayLabel: rowIndex == 0 ? dayLabel : null,
+          ),
+        );
+      }
+    }
+    return DashboardLogSemanticPreviewGeometry._(slots: slots, groups: groups);
+  }
+
+  final List<DashboardLogSemanticPreviewSlot> slots;
+  final List<DashboardLogSemanticPreviewGroup> groups;
+
+  int get groupCount => groups.length;
+
+  DashboardLogSemanticPreviewSlot? slotAt(int ordinal) =>
+      ordinal < 0 || ordinal >= slots.length ? null : slots[ordinal];
+
+  /// The exact bounded content height shared by Phase A, rich preview and
+  /// committed page zero. The viewport-sized structural host is handled by
+  /// the render-domain/extent owner separately.
+  double contentExtent(double rowHeight) {
+    if (slots.isEmpty) return 0;
+    final last = slots.last;
+    return last.rowTop(rowHeight) + rowHeight;
+  }
+}
+
+@immutable
+final class DashboardLogSemanticPreviewGroup {
+  const DashboardLogSemanticPreviewGroup({
+    required this.groupIndex,
+    required this.precedingRowCount,
+    required this.rowCount,
+    required this.dayLabel,
+  });
+
+  final int groupIndex;
+  final int precedingRowCount;
+  final int rowCount;
+  final String dayLabel;
+
+  double headerTop(double rowHeight) =>
+      groupIndex * DashboardLogBoxTokens.dayHeaderHeight +
+      groupIndex * DashboardLogBoxTokens.dayGroupGap +
+      precedingRowCount * rowHeight;
+
+  double rowTop(double rowHeight) =>
+      headerTop(rowHeight) + DashboardLogBoxTokens.dayHeaderHeight;
+}
+
+@immutable
+final class DashboardLogSemanticPreviewSlot {
+  const DashboardLogSemanticPreviewSlot({
+    required this.ordinal,
+    required this.groupIndex,
+    required this.precedingRowCount,
+    required this.rowIndexInGroup,
+    required this.groupRowCount,
+    required this.dayLabel,
+  });
+
+  final int ordinal;
+  final int groupIndex;
+  final int precedingRowCount;
+  final int rowIndexInGroup;
+  final int groupRowCount;
+
+  /// Non-null only for the first row of an exact day group.
+  final String? dayLabel;
+
+  bool get showsSeparator => rowIndexInGroup != 0;
+
+  double headerTop(double rowHeight) =>
+      groupIndex * DashboardLogBoxTokens.dayHeaderHeight +
+      groupIndex * DashboardLogBoxTokens.dayGroupGap +
+      precedingRowCount * rowHeight;
+
+  double rowTop(double rowHeight) =>
+      headerTop(rowHeight) +
+      DashboardLogBoxTokens.dayHeaderHeight +
+      rowIndexInGroup * rowHeight;
+}
+
 /// The complete immutable LogBox presentation derived from one dashboard
 /// snapshot. The viewport never receives raw transaction DTOs from rendering.
 ///
@@ -261,6 +442,10 @@ class DashboardLogViewportState {
     required this.direction,
   }) : _eagerGroups = List<DashboardDayLogGroupViewModel>.unmodifiable(groups),
        _deferred = null,
+       _semanticPreviewGeometryHolder =
+           _DashboardLogSemanticPreviewGeometryHolder(
+             DashboardLogSemanticPreviewGeometry.fromGroups(groups),
+           ),
        nextCursor = nextCursor == null
            ? null
            : Map<String, Object?>.unmodifiable(nextCursor);
@@ -320,6 +505,8 @@ class DashboardLogViewportState {
     required _DeferredViewportProjection deferred,
   }) : _eagerGroups = null,
        _deferred = deferred,
+       _semanticPreviewGeometryHolder =
+           _DashboardLogSemanticPreviewGeometryHolder(),
        nextCursor = nextCursor == null
            ? null
            : Map<String, Object?>.unmodifiable(nextCursor);
@@ -328,6 +515,43 @@ class DashboardLogViewportState {
   final int? revision;
   final List<DashboardDayLogGroupViewModel>? _eagerGroups;
   final _DeferredViewportProjection? _deferred;
+  final _DashboardLogSemanticPreviewGeometryHolder
+  _semanticPreviewGeometryHolder;
+
+  /// Whether the bounded Phase-A geometry has been prepared by a resource
+  /// owner. Sparse prepared-index frames deliberately start without this
+  /// memoized table: materializing it for every calendar candidate at index
+  /// construction would turn one 24-row visual aid into whole-index work.
+  bool get hasPreparedSemanticPreviewGeometry =>
+      _semanticPreviewGeometryHolder.value != null;
+
+  /// The already-prepared Phase-A geometry, if its resource owner has armed
+  /// the payload. Render-domain selection uses this non-materializing view so
+  /// widget build and paint can never create date grouping or text resources.
+  DashboardLogSemanticPreviewGeometry? get preparedSemanticPreviewGeometry =>
+      _semanticPreviewGeometryHolder.value;
+
+  /// Arms the compact geometry while an existing scene/resource preparation
+  /// owner is already traversing this bounded payload. This is a pure
+  /// memoized derivation of immutable ledger references; it is not rich row
+  /// projection, TextPainter creation, or a live paint-path allocation.
+  DashboardLogSemanticPreviewGeometry prepareSemanticPreviewGeometry() =>
+      _semanticPreviewGeometryHolder.value ??=
+          _deferred?.prepareSemanticPreviewGeometry() ??
+          DashboardLogSemanticPreviewGeometry.fromGroups(_eagerGroups!);
+
+  /// Exact Phase-A geometry after [prepareSemanticPreviewGeometry] has armed
+  /// it. Callers in renderer/build paths must use
+  /// [preparedSemanticPreviewGeometry] first rather than triggering work.
+  DashboardLogSemanticPreviewGeometry get semanticPreviewGeometry {
+    final geometry = _semanticPreviewGeometryHolder.value;
+    if (geometry != null) return geometry;
+    throw StateError(
+      'Phase-A geometry must be prepared before a deferred LogBox payload '
+      'can enter a render path.',
+    );
+  }
+
   final int entryCount;
   final Map<String, Object?>? nextCursor;
   final LedgerDirection direction;
@@ -363,6 +587,9 @@ class DashboardLogViewportState {
     return _resolvedProjection.flatItems[ordinal].row.entryId;
   }
 
+  DashboardLogSemanticPreviewSlot? semanticPreviewSlotAt(int ordinal) =>
+      _semanticPreviewGeometryHolder.value?.slotAt(ordinal);
+
   /// Provides the resident immutable ledger entry for the compact Phase-A
   /// renderer.  It is deliberately unavailable for an already-resolved rich
   /// projection: that path has a complete row scene and must use it instead.
@@ -371,8 +598,7 @@ class DashboardLogViewportState {
     return _deferred?.entryAt(ordinal);
   }
 
-  int get groupCount =>
-      _deferred?.groupCount ?? _resolvedProjection.groups.length;
+  int get groupCount => prepareSemanticPreviewGeometry().groupCount;
   int get viewportId =>
       _deferred?.viewportId(
         queryKey: queryKey,
@@ -450,6 +676,16 @@ final class _DashboardLogViewportProjectionHolder {
   _DashboardLogViewportProjection? value;
 }
 
+/// Private mutable memoization holder. The outer viewport value remains
+/// semantically immutable: this caches only a pure derivation of its stable
+/// rows, just like [_DashboardLogViewportProjectionHolder] caches rich
+/// projection work behind the explicit scene owner.
+final class _DashboardLogSemanticPreviewGeometryHolder {
+  _DashboardLogSemanticPreviewGeometryHolder([this.value]);
+
+  DashboardLogSemanticPreviewGeometry? value;
+}
+
 final class _DeferredViewportProjection {
   _DeferredViewportProjection({
     required DashboardLogRowProjectionCache rowProjectionCache,
@@ -459,6 +695,11 @@ final class _DeferredViewportProjection {
 
   final DashboardLogRowProjectionCache _rowProjectionCache;
   final List<int> _rowIndices;
+  late final DashboardLogSemanticPreviewGeometry _semanticPreviewGeometry =
+      DashboardLogSemanticPreviewGeometry.fromPreparedReferences(
+        rowProjectionCache: _rowProjectionCache,
+        rowIndices: _rowIndices,
+      );
   late final List<String> stableRowIdentities = List<String>.unmodifiable(
     _rowIndices.map((index) => _entryAt(index).id),
   );
@@ -487,10 +728,11 @@ final class _DeferredViewportProjection {
         reusedProjectedFrameCount: 0,
       );
   int get previewRowCount => _rowIndices.length;
-  int get groupCount => _groupCount;
+
+  DashboardLogSemanticPreviewGeometry prepareSemanticPreviewGeometry() =>
+      _semanticPreviewGeometry;
 
   late final int _groupContentIdentity = _rawGroupContentIdentity();
-  late final int _groupCount = _rawGroupCount();
 
   _DashboardLogViewportProjection project() {
     while (!isProjected) {
@@ -556,19 +798,6 @@ final class _DeferredViewportProjection {
     // all rich group/view-model objects are intentionally deferred until the
     // scene window consumes this payload.
     return Object.hashAll(_rowIndices);
-  }
-
-  int _rawGroupCount() {
-    LocalDate? previousDate;
-    var count = 0;
-    for (final index in _rowIndices) {
-      final date = _dateFromEpochDay(_entryAt(index).bookedLocalEpochDay);
-      if (date != previousDate) {
-        count += 1;
-        previousDate = date;
-      }
-    }
-    return count;
   }
 
   DashboardLedgerEntry _entryAt(int index) {

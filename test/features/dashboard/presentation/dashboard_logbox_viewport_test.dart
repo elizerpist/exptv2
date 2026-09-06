@@ -1058,7 +1058,7 @@ void main() {
   );
 
   testWidgets(
-    'RED: an exact virtual extent is authoritative before the first vertical drag',
+    'RED: rail-preview keeps its own bounded extent until a real vertical gesture takes ownership',
     (tester) async {
       final fixture = await _readyFixture(tester, totalRows: 94);
       addTearDown(fixture.dispose);
@@ -1076,23 +1076,31 @@ void main() {
       expect(fixture.cache.isVerticalRenderingActive, isFalse);
       expect(
         maxAtRest,
+        lessThan(
+          fixture.cache.contentHeight -
+              position.viewportDimension +
+              DashboardLogBoxTokens.terminalBottomBreathingRoom,
+        ),
+        reason:
+            'A rail-preview paint must use the matching bounded Phase-A '
+            'surface extent. Giving it committed-vertical scroll geometry '
+            'before a real vertical gesture would make paint and extent '
+            'owners disagree for the same frame.',
+      );
+
+      await tester.drag(scrollView, const Offset(0, -80));
+      await tester.pump();
+
+      expect(fixture.cache.isVerticalRenderingActive, isTrue);
+      expect(
+        position.maxScrollExtent,
         closeTo(
           fixture.cache.contentHeight -
               position.viewportDimension +
               DashboardLogBoxTokens.terminalBottomBreathingRoom,
           0.1,
         ),
-        reason:
-            'The full immutable virtual geometry is already known while '
-            'railPreview paints the prepared root. Its only extra scroll '
-            'extent is the terminal navigation/shadow tail, so a first drag '
-            'may switch paint domain but cannot install dimensions.',
       );
-
-      await tester.drag(scrollView, const Offset(0, -80));
-      await tester.pump();
-
-      expect(position.maxScrollExtent, maxAtRest);
       final scrollableAfterDrag = tester.state<ScrollableState>(
         _logBoxScrollable(),
       );
@@ -1588,6 +1596,12 @@ void main() {
       final scrollable = tester.state<ScrollableState>(_logBoxScrollable());
       final position = scrollable.position;
       final controller = scrollable.widget.controller;
+      await tester.drag(
+        find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+        const Offset(0, -80),
+      );
+      await tester.pump();
+      expect(fixture.cache.isVerticalRenderingActive, isTrue);
       final oldManifest = fixture.cache.geometryManifest!;
       const ordinal = 3;
       final oldPage = oldManifest.pageForOrdinal(ordinal)!;

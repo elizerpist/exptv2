@@ -28,8 +28,11 @@ final class DashboardLogBoxTerminalExtent {
       // A short exact scope keeps its own exact surface height. The viewport
       // still reaches the physical bottom, but it has no invented content or
       // scroll range merely to fill that space. The empty state remains a
-      // viewport-sized stable render host so its later first publication does
-      // not create or replace the scroll surface.
+      // viewport-sized *structural* render host so its later first
+      // publication does not create or replace the scroll surface. That host
+      // is not authorization for a user-visible empty decoration: the LogBox
+      // painter keeps exact-empty output transparent and the header owns the
+      // truthful zero-count communication.
       renderSurfaceExtent: content == 0 ? viewport : content,
       terminalBottomInset: needsScrollableTail ? requestedInset : 0,
     );

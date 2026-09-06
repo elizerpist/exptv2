@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 /// Optional, typed observer for proving carousel motion invariants.
 ///
@@ -115,6 +116,239 @@ final class CenteredCarouselSemanticCadenceSnapshot {
   final int longGapCount;
   final int duplicateTickCount;
   final int skippedSemanticIndexCount;
+}
+
+/// Bounded physical-frame timing evidence for a carousel flight.
+///
+/// Semantic-crossing cadence describes discrete product state changes, not
+/// Flutter rendering cost. Consumers use this accumulator only at a bounded
+/// flight boundary to distinguish an irregular target cadence from actual
+/// build/raster frame-budget misses.
+final class CenteredCarouselFrameTimingAccumulator {
+  CenteredCarouselFrameTimingAccumulator({
+    this.capacity = 512,
+    this.frameBudgetMicros = 16667,
+  }) : assert(capacity > 0),
+       assert(frameBudgetMicros > 0),
+       _buildMicros = List<int>.filled(capacity, 0, growable: false),
+       _rasterMicros = List<int>.filled(capacity, 0, growable: false),
+       _totalSpanMicros = List<int>.filled(capacity, 0, growable: false);
+
+  final int capacity;
+  final int frameBudgetMicros;
+  final List<int> _buildMicros;
+  final List<int> _rasterMicros;
+  final List<int> _totalSpanMicros;
+  int _writeCursor = 0;
+  int _retainedFrameCount = 0;
+  int _receivedFrameCount = 0;
+  int _overwrittenFrameCount = 0;
+
+  void reset() {
+    _writeCursor = 0;
+    _retainedFrameCount = 0;
+    _receivedFrameCount = 0;
+    _overwrittenFrameCount = 0;
+  }
+
+  void recordFrameTiming(FrameTiming timing) => recordDurations(
+    buildMicros: timing.buildDuration.inMicroseconds,
+    rasterMicros: timing.rasterDuration.inMicroseconds,
+    totalSpanMicros: timing.totalSpan.inMicroseconds,
+  );
+
+  /// Accepts raw duration values for a platform/profile adapter without
+  /// allocating an event object on the input path.
+  void recordDurations({
+    required int buildMicros,
+    required int rasterMicros,
+    required int totalSpanMicros,
+  }) {
+    _receivedFrameCount += 1;
+    if (_retainedFrameCount == capacity) {
+      _overwrittenFrameCount += 1;
+    } else {
+      _retainedFrameCount += 1;
+    }
+    _buildMicros[_writeCursor] = buildMicros < 0 ? 0 : buildMicros;
+    _rasterMicros[_writeCursor] = rasterMicros < 0 ? 0 : rasterMicros;
+    _totalSpanMicros[_writeCursor] = totalSpanMicros < 0 ? 0 : totalSpanMicros;
+    _writeCursor = (_writeCursor + 1) % capacity;
+  }
+
+  CenteredCarouselFrameTimingSnapshot snapshot() {
+    final build = _sortedValues(_buildMicros);
+    final raster = _sortedValues(_rasterMicros);
+    final totalSpan = _sortedValues(_totalSpanMicros);
+    final missed = <int>[
+      for (var index = 0; index < _retainedFrameCount; index += 1)
+        if (_buildMicros[index] > frameBudgetMicros ||
+            _rasterMicros[index] > frameBudgetMicros ||
+            _totalSpanMicros[index] > frameBudgetMicros)
+          index,
+    ].length;
+    return CenteredCarouselFrameTimingSnapshot(
+      receivedFrameCount: _receivedFrameCount,
+      retainedFrameCount: _retainedFrameCount,
+      droppedFrameCount: _overwrittenFrameCount,
+      missedFrameCount: missed,
+      buildP50Micros: _percentile(build, .50),
+      buildP90Micros: _percentile(build, .90),
+      buildP95Micros: _percentile(build, .95),
+      buildP99Micros: _percentile(build, .99),
+      buildMaximumMicros: build.isEmpty ? 0 : build.last,
+      buildTotalMicros: _sum(build),
+      rasterP50Micros: _percentile(raster, .50),
+      rasterP90Micros: _percentile(raster, .90),
+      rasterP95Micros: _percentile(raster, .95),
+      rasterP99Micros: _percentile(raster, .99),
+      rasterMaximumMicros: raster.isEmpty ? 0 : raster.last,
+      rasterTotalMicros: _sum(raster),
+      totalSpanP50Micros: _percentile(totalSpan, .50),
+      totalSpanP95Micros: _percentile(totalSpan, .95),
+      totalSpanMaximumMicros: totalSpan.isEmpty ? 0 : totalSpan.last,
+      totalSpanTotalMicros: _sum(totalSpan),
+    );
+  }
+
+  List<int> _sortedValues(List<int> source) {
+    if (_retainedFrameCount == 0) return const <int>[];
+    final values = <int>[
+      for (var ordinal = 0; ordinal < _retainedFrameCount; ordinal += 1)
+        source[(_writeCursor - _retainedFrameCount + ordinal) % capacity],
+    ]..sort();
+    return values;
+  }
+
+  static int _percentile(List<int> values, double fraction) {
+    if (values.isEmpty) return 0;
+    return values[((values.length - 1) * fraction).ceil()];
+  }
+
+  static int _sum(List<int> values) =>
+      values.fold(0, (total, value) => total + value);
+}
+
+@immutable
+final class CenteredCarouselFrameTimingSnapshot {
+  const CenteredCarouselFrameTimingSnapshot({
+    required this.receivedFrameCount,
+    required this.retainedFrameCount,
+    required this.droppedFrameCount,
+    required this.missedFrameCount,
+    required this.buildP50Micros,
+    required this.buildP90Micros,
+    required this.buildP95Micros,
+    required this.buildP99Micros,
+    required this.buildMaximumMicros,
+    required this.buildTotalMicros,
+    required this.rasterP50Micros,
+    required this.rasterP90Micros,
+    required this.rasterP95Micros,
+    required this.rasterP99Micros,
+    required this.rasterMaximumMicros,
+    required this.rasterTotalMicros,
+    required this.totalSpanP50Micros,
+    required this.totalSpanP95Micros,
+    required this.totalSpanMaximumMicros,
+    required this.totalSpanTotalMicros,
+  });
+
+  final int receivedFrameCount;
+  final int retainedFrameCount;
+  final int droppedFrameCount;
+  final int missedFrameCount;
+  final int buildP50Micros;
+  final int buildP90Micros;
+  final int buildP95Micros;
+  final int buildP99Micros;
+  final int buildMaximumMicros;
+  final int buildTotalMicros;
+  final int rasterP50Micros;
+  final int rasterP90Micros;
+  final int rasterP95Micros;
+  final int rasterP99Micros;
+  final int rasterMaximumMicros;
+  final int rasterTotalMicros;
+  final int totalSpanP50Micros;
+  final int totalSpanP95Micros;
+  final int totalSpanMaximumMicros;
+  final int totalSpanTotalMicros;
+}
+
+/// Fixed-capacity latency distribution for adjacent carousel pipeline stages.
+///
+/// This records scalar durations only. It deliberately does not retain a
+/// target, pointer, query, or per-frame event object, so a high-frequency
+/// gesture cannot turn its diagnostics into an unbounded allocation source.
+final class CenteredCarouselLatencyDistributionAccumulator {
+  CenteredCarouselLatencyDistributionAccumulator({this.capacity = 64})
+    : assert(capacity > 0),
+      _samples = List<int>.filled(capacity, 0, growable: false);
+
+  final int capacity;
+  final List<int> _samples;
+  int _writeCursor = 0;
+  int _retainedSampleCount = 0;
+  int _receivedSampleCount = 0;
+  int _overwrittenSampleCount = 0;
+
+  void reset() {
+    _writeCursor = 0;
+    _retainedSampleCount = 0;
+    _receivedSampleCount = 0;
+    _overwrittenSampleCount = 0;
+  }
+
+  void record(int micros) {
+    _receivedSampleCount += 1;
+    if (_retainedSampleCount == capacity) {
+      _overwrittenSampleCount += 1;
+    } else {
+      _retainedSampleCount += 1;
+    }
+    _samples[_writeCursor] = micros < 0 ? 0 : micros;
+    _writeCursor = (_writeCursor + 1) % capacity;
+  }
+
+  CenteredCarouselLatencyDistributionSnapshot snapshot() {
+    final values = <int>[
+      for (var ordinal = 0; ordinal < _retainedSampleCount; ordinal += 1)
+        _samples[(_writeCursor - _retainedSampleCount + ordinal) % capacity],
+    ]..sort();
+    return CenteredCarouselLatencyDistributionSnapshot(
+      receivedSampleCount: _receivedSampleCount,
+      retainedSampleCount: _retainedSampleCount,
+      droppedSampleCount: _overwrittenSampleCount,
+      p50Micros: _percentile(values, .50),
+      p95Micros: _percentile(values, .95),
+      maximumMicros: values.isEmpty ? 0 : values.last,
+    );
+  }
+
+  static int _percentile(List<int> values, double fraction) {
+    if (values.isEmpty) return 0;
+    return values[((values.length - 1) * fraction).ceil()];
+  }
+}
+
+@immutable
+final class CenteredCarouselLatencyDistributionSnapshot {
+  const CenteredCarouselLatencyDistributionSnapshot({
+    required this.receivedSampleCount,
+    required this.retainedSampleCount,
+    required this.droppedSampleCount,
+    required this.p50Micros,
+    required this.p95Micros,
+    required this.maximumMicros,
+  });
+
+  final int receivedSampleCount;
+  final int retainedSampleCount;
+  final int droppedSampleCount;
+  final int p50Micros;
+  final int p95Micros;
+  final int maximumMicros;
 }
 
 @immutable

@@ -348,6 +348,9 @@ final class _DashboardLogBoxRenderSurfaceState
                 presentation: presentation,
                 committedViewport: _committedViewport,
               );
+              final hasCompleteReadablePhaseA =
+                  payload != null &&
+                  _sceneCache.hasCompleteReadablePhaseAFor(payload);
               final renderDomain = resolveDashboardLogBoxRenderDomain(
                 payload: payload,
                 presentation: presentation,
@@ -355,6 +358,7 @@ final class _DashboardLogBoxRenderSurfaceState
                 hasExactRailScene:
                     payload != null &&
                     _sceneCache.railCriticalSceneFor(payload) != null,
+                hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
               );
               _recordRenderDomainTransition(frame, presentation, renderDomain);
               final viewportId = payload?.viewportId ?? 0;
@@ -389,18 +393,19 @@ final class _DashboardLogBoxRenderSurfaceState
                 );
               }
 
-              final previewSurfaceHeight = _contentHeight(
-                payload,
-                widget.minimumHeight,
+              final previewSurfaceHeight =
+                  dashboardLogBoxSurfaceExtentForDomain(
+                    renderDomain: DashboardLogBoxRenderDomain.railPreview,
+                    payload: payload,
+                    minimumHeight: widget.minimumHeight,
+                    committedViewport: _committedViewport,
+                    layoutProfile: layoutProfile,
+                  );
+              final surfaceHeight = dashboardLogBoxSurfaceExtentForDomain(
+                renderDomain: renderDomain,
+                payload: payload,
+                minimumHeight: widget.minimumHeight,
                 committedViewport: _committedViewport,
-                useCommittedViewport: false,
-                layoutProfile: layoutProfile,
-              );
-              final committedSurfaceHeight = _contentHeight(
-                payload,
-                widget.minimumHeight,
-                committedViewport: _committedViewport,
-                useCommittedViewport: hasExactGeometry,
                 layoutProfile: layoutProfile,
               );
               final binding = _DashboardLogBoxRenderBinding(
@@ -409,13 +414,15 @@ final class _DashboardLogBoxRenderSurfaceState
                 payload: payload,
                 renderDomain: renderDomain,
                 previewSurfaceHeight: previewSurfaceHeight,
-                usesCommittedGeometry: hasExactGeometry,
+                usesCommittedGeometry:
+                    hasExactGeometry &&
+                    renderDomain ==
+                        DashboardLogBoxRenderDomain.committedVertical,
                 terminalBottomInset: widget.terminalBottomInset,
-                // Paint ownership may remain railPreview before input. Its
-                // immutable scroll world may not remain a 24-row preview.
-                surfaceHeight: hasExactGeometry
-                    ? committedSurfaceHeight
-                    : previewSurfaceHeight,
+                // Paint and extent must select one owner. An exact committed
+                // cache may be ready while Phase A deliberately remains the
+                // visible rail-preview owner until vertical input begins.
+                surfaceHeight: surfaceHeight,
               );
               final resolvedGroupRadius =
                   DashboardCornerRoundnessScope.profileOf(
@@ -1103,32 +1110,6 @@ final class _DashboardLogBoxRenderSurfaceState
       return null;
     }
   }
-
-  static double _contentHeight(
-    DashboardLogViewportState? payload,
-    double minimumHeight, {
-    required CommittedLogViewportCache committedViewport,
-    required bool useCommittedViewport,
-    required DashboardLogBoxLayoutProfile layoutProfile,
-  }) {
-    if (useCommittedViewport && committedViewport.hasVirtualGeometry) {
-      // A committed nonempty scope has exactly one scroll world: the immutable
-      // manifest. A shorter list keeps that exact extent; the surrounding
-      // scroll viewport may be larger without inventing rows or a second page
-      // geometry source. Empty scopes retain their non-scrollable area.
-      return committedViewport.totalEntryCount == 0
-          ? minimumHeight
-          : math.max(0, committedViewport.contentHeight);
-    }
-    if (payload == null || payload.previewRowCount == 0) {
-      return minimumHeight;
-    }
-    final groupDecorationHeight =
-        payload.groupCount * DashboardLogBoxTokens.dayHeaderHeight +
-        math.max(0, payload.groupCount - 1) * DashboardLogBoxTokens.dayGroupGap;
-    final rowHeight = payload.previewRowCount * layoutProfile.rowHeight;
-    return math.max(minimumHeight, groupDecorationHeight + rowHeight);
-  }
 }
 
 /// One immutable surface decision. The payload lane may intentionally retain
@@ -1295,16 +1276,11 @@ final class _DashboardLogBoxPaintResources {
     : divider = Paint()..color = FluviVisualTokens.border,
       groupSurface = Paint()..color = FluviVisualTokens.surface,
       editPlaceholder = Paint()
-        ..color = DashboardLogBoxTokens.editPlaceholderBackground,
-      semanticPreviewAccent = Paint(),
-      semanticPreviewSecondaryLine = Paint()
-        ..color = FluviVisualTokens.surfaceInactive;
+        ..color = DashboardLogBoxTokens.editPlaceholderBackground;
 
   final Paint divider;
   final Paint groupSurface;
   final Paint editPlaceholder;
-  final Paint semanticPreviewAccent;
-  final Paint semanticPreviewSecondaryLine;
 
   void dispose() {}
 }
@@ -1547,7 +1523,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       _lastReadablePhaseARowCount = 0;
       _lastReadablePhaseARowsPainted = 0;
       _lastRichPhaseBRowsPainted = 0;
-      _paintEmpty(canvas, size, scene);
+      // The viewport-sized render host is structural only. The zero-count
+      // header is the visible empty state; a rich scene must not turn an
+      // exact empty result into a centred shell or fake row geometry.
       _recordPaintDuration(started, measure);
       return;
     }
@@ -1600,52 +1578,69 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _lastRichPhaseBRowsPainted = 0;
     if (totalRows == 0) {
       _lastPaintedRowCount = 0;
-      _paintExactEmptySemanticPreview(canvas, size);
+      // Preserve the stable custom render object but paint nothing. A
+      // structural empty host is not a user-visible placeholder contract.
+      return;
+    }
+    // A non-empty Phase-A target is all-or-nothing.  Drawing a partial row,
+    // abstract marker, or group shell when its exact prepared resource is
+    // absent would make an invariant failure look like legitimate financial
+    // data. The scene-cache activation listener rebuilds this stable surface
+    // as soon as the complete immutable bank arrives.
+    if (!sceneCache.hasCompleteReadablePhaseAFor(state)) {
+      _lastPaintedRowCount = 0;
+      sceneCache.recordVisiblePayloadWithoutDrawable();
       return;
     }
     final visibleWindow = _visibleWindow(size);
-    final first = math.max(0, (visibleWindow.top / rowHeight).floor());
-    final last = math.min(
-      totalRows,
-      math.max(first + 1, (visibleWindow.bottom / rowHeight).ceil() + 1),
-    );
-    final width = math.max(
-      0.0,
-      size.width - DashboardLogBoxTokens.horizontalGutter * 2,
+    final geometry = state.semanticPreviewGeometry;
+    _paintSemanticPreviewGroupBackgrounds(
+      canvas,
+      size,
+      geometry,
+      visibleTop: visibleWindow.top,
+      visibleBottom: visibleWindow.bottom,
     );
     var painted = 0;
     var readablePainted = 0;
-    for (var ordinal = first; ordinal < last; ordinal += 1) {
-      final top = ordinal * rowHeight;
+    for (final slot in geometry.slots) {
+      final top = slot.rowTop(rowHeight);
       if (top > visibleWindow.bottom) break;
       if (top + rowHeight < visibleWindow.top) continue;
-      final slot = Rect.fromLTWH(
-        DashboardLogBoxTokens.horizontalGutter,
-        top,
-        width,
-        math.max(0, rowHeight - 2),
+      final resource = sceneCache.readablePhaseAResourceFor(
+        state,
+        ordinal: slot.ordinal,
       );
-      if (slot.isEmpty) continue;
-      final body = groupRadius.toRRect(slot);
-      canvas.drawRRect(body, resources.groupSurface);
-      _paintGroupBorder(canvas, slot);
-
-      final readable = sceneCache.readablePhaseARowFor(state, ordinal: ordinal);
-      if (readable == null) {
-        // This is an explicit invariant-violation appearance, not the normal
-        // Phase-A renderer. A visible exact target is required to have its
-        // readable resource bank before motion begins; keeping this bounded
-        // marker makes a bad host/resource lifecycle diagnosable without
-        // constructing text or projecting rows in paint.
-        _paintUnreadablePhaseAInvariantMarker(canvas, slot);
-        painted += 1;
-        continue;
+      // The complete-bank check above makes this fail-closed branch an
+      // impossible cache generation change, not an alternate normal visual.
+      if (resource == null) {
+        _lastPaintedRowCount = 0;
+        _lastReadablePhaseARowsPainted = 0;
+        sceneCache.recordVisiblePayloadWithoutDrawable();
+        return;
+      }
+      final dayHeader = resource.dayHeader;
+      if (slot.dayLabel != null) {
+        if (dayHeader == null) {
+          _lastPaintedRowCount = 0;
+          _lastReadablePhaseARowsPainted = 0;
+          sceneCache.recordVisiblePayloadWithoutDrawable();
+          return;
+        }
+        dayHeader.paint(
+          canvas,
+          Offset(
+            DashboardLogBoxTokens.horizontalGutter,
+            slot.headerTop(rowHeight) + DashboardLogBoxTokens.dayHeaderTopInset,
+          ),
+        );
       }
       _paintReadablePhaseARow(
         canvas,
         width: size.width,
         rowTop: top,
-        readable: readable,
+        readable: resource.row,
+        showsSeparator: slot.showsSeparator,
       );
       painted += 1;
       readablePainted += 1;
@@ -1663,7 +1658,14 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required double width,
     required double rowTop,
     required DashboardPreparedLogBoxReadablePhaseARow readable,
+    required bool showsSeparator,
   }) {
+    _paintRowSeparatorAt(
+      canvas,
+      width: width,
+      rowTop: rowTop,
+      showsSeparator: showsSeparator,
+    );
     final badgeTop =
         rowTop + (rowHeight - DashboardLogBoxTokens.avatarSize) / 2;
     final badgeRect = Rect.fromLTWH(
@@ -1697,56 +1699,6 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
   }
 
-  void _paintUnreadablePhaseAInvariantMarker(Canvas canvas, Rect slot) {
-    resources.semanticPreviewAccent.color = FluviVisualTokens.border;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          slot.left + DashboardLogBoxTokens.rowHorizontalInset,
-          slot.center.dy - 2,
-          math.min(40, math.max(0, slot.width - 32)),
-          4,
-        ),
-        const Radius.circular(2),
-      ),
-      resources.semanticPreviewAccent,
-    );
-  }
-
-  void _paintExactEmptySemanticPreview(Canvas canvas, Size size) {
-    final width = math.max(
-      0.0,
-      size.width - DashboardLogBoxTokens.horizontalGutter * 2,
-    );
-    final height = math.min(56.0, math.max(0.0, size.height - 24));
-    if (width == 0 || height == 0) return;
-    final rect = Rect.fromLTWH(
-      DashboardLogBoxTokens.horizontalGutter,
-      math.max(12, (size.height - height) / 2),
-      width,
-      height,
-    );
-    canvas.drawRRect(groupRadius.toRRect(rect), resources.groupSurface);
-    _paintGroupBorder(canvas, rect);
-    final glyphWidth = math.min(72.0, rect.width * 0.34);
-    final glyphLeft = rect.center.dx - glyphWidth / 2;
-    resources.semanticPreviewAccent.color = FluviVisualTokens.border;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(glyphLeft, rect.center.dy - 7, glyphWidth, 4),
-        const Radius.circular(2),
-      ),
-      resources.semanticPreviewAccent,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(glyphLeft + 12, rect.center.dy + 4, glyphWidth - 24, 4),
-        const Radius.circular(2),
-      ),
-      resources.semanticPreviewSecondaryLine,
-    );
-  }
-
   void _paintCommittedViewport(
     Canvas canvas,
     Size size,
@@ -1763,8 +1715,8 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       return;
     }
     if (committedViewport.totalEntryCount == 0) {
-      final scene = sceneCache.railCriticalSceneFor(state);
-      if (scene != null) _paintEmpty(canvas, size, scene);
+      // The committed domain observes the same transparent exact-empty
+      // contract as Phase A; it must not reintroduce a synthetic empty card.
       return;
     }
     final visibleWindow = _visibleWindow(size);
@@ -1968,21 +1920,6 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     );
   }
 
-  void _paintEmpty(
-    Canvas canvas,
-    Size size,
-    DashboardPreparedLogBoxScene scene,
-  ) {
-    final painter = scene.empty;
-    painter.paint(
-      canvas,
-      Offset(
-        (size.width - painter.width) / 2,
-        math.max(0, (size.height - painter.height) / 2),
-      ),
-    );
-  }
-
   void _paintGroupBackgrounds(
     Canvas canvas,
     Size size,
@@ -2019,6 +1956,35 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
           ),
         );
       }
+    }
+  }
+
+  /// Phase A uses the same prepared group coordinates as rich preview and
+  /// committed page zero. Its rows borrow already-laid-out text resources,
+  /// but their card surface, first-row origin and day-gap geometry must not
+  /// approximate a second visual contract.
+  void _paintSemanticPreviewGroupBackgrounds(
+    Canvas canvas,
+    Size size,
+    DashboardLogSemanticPreviewGeometry geometry, {
+    required double visibleTop,
+    required double visibleBottom,
+  }) {
+    for (final group in geometry.groups) {
+      if (group.rowCount == 0) continue;
+      final top = group.rowTop(rowHeight);
+      final height = group.rowCount * rowHeight;
+      if (top > visibleBottom) break;
+      if (top + height < visibleTop) continue;
+      _paintGroupSurface(
+        canvas,
+        Rect.fromLTWH(
+          DashboardLogBoxTokens.horizontalGutter,
+          top,
+          size.width - DashboardLogBoxTokens.horizontalGutter * 2,
+          height,
+        ),
+      );
     }
   }
 
@@ -2321,8 +2287,20 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required double width,
     required DashboardLogViewportItemViewModel item,
     required double rowTop,
+  }) => _paintRowSeparatorAt(
+    canvas,
+    width: width,
+    rowTop: rowTop,
+    showsSeparator: item.showSeparator,
+  );
+
+  void _paintRowSeparatorAt(
+    Canvas canvas, {
+    required double width,
+    required double rowTop,
+    required bool showsSeparator,
   }) {
-    if (!item.showSeparator) return;
+    if (!showsSeparator) return;
     canvas.drawRect(
       Rect.fromLTWH(
         DashboardLogBoxTokens.rowHorizontalInset +
@@ -2680,15 +2658,10 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   SemanticsBuilderCallback get semanticsBuilder => (size) {
     final state = payload;
     if (state == null || state.previewRowCount == 0) {
-      return <CustomPainterSemantics>[
-        CustomPainterSemantics(
-          rect: Offset.zero & size,
-          properties: SemanticsProperties(
-            label: 'Nincs tranzakció ebben az időszakban.',
-            textDirection: TextDirection.ltr,
-          ),
-        ),
-      ];
+      // An exact-empty body has neither row affordances nor loading content.
+      // The header exposes the truthful zero count while this stable host
+      // deliberately contributes no fake transaction semantics.
+      return const <CustomPainterSemantics>[];
     }
     final visibleWindow = _visibleWindow(size);
     final viewportTop = visibleWindow.top;
@@ -2751,25 +2724,31 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       );
       return result;
     }
-    final first = _firstPossiblyVisibleItem(state.flatItems, viewportTop);
-    for (
-      var index = first;
-      index < state.flatItems.length && result.length < 24;
-      index += 1
-    ) {
-      final item = state.flatItems[index];
-      final top = _rowTop(item);
+    // Match Phase-A pixels without resolving a deferred rich projection.
+    // An incomplete resource bank is fail-closed: it exposes neither a fake
+    // card nor an actionable transaction semantic while the stable surface
+    // awaits the exact prepared resource publication.
+    if (!sceneCache.hasCompleteReadablePhaseAFor(state)) return result;
+    for (final slot in state.semanticPreviewGeometry.slots) {
+      if (result.length >= 24) break;
+      final top = slot.rowTop(rowHeight);
       if (top > viewportBottom) break;
+      if (top + rowHeight < viewportTop) continue;
+      final resource = sceneCache.readablePhaseAResourceFor(
+        state,
+        ordinal: slot.ordinal,
+      );
+      if (resource == null) return const <CustomPainterSemantics>[];
       result.add(
         CustomPainterSemantics(
           rect: Rect.fromLTWH(0, top, size.width, rowHeight),
           properties: SemanticsProperties(
-            label: item.row.semanticLabel,
+            label: resource.row.semanticLabel,
             textDirection: TextDirection.ltr,
             button: true,
             onTap: onEntryTap == null
                 ? null
-                : () => onEntryTap!(item.row.entryId),
+                : () => onEntryTap!(resource.row.entryId),
           ),
         ),
       );

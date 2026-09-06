@@ -1,18 +1,23 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
@@ -328,6 +333,303 @@ void main() {
   );
 
   testWidgets(
+    'RED TIME GEOMETRY: Phase-A uses the exact rich day-group row origins before and after handoff',
+    (tester) async {
+      const sentinel = Color(0xFF123456);
+      final store = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final boundaryKey = GlobalKey();
+      addTearDown(store.dispose);
+      addTearDown(committedViewport.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 17,
+        entryCountOverride: 3,
+        previewRowCount: 3,
+        previewGroupCount: 2,
+      );
+      final payload = prepared.logBox;
+      final phaseAWindow = DashboardLogBoxSceneWindow(
+        identity: 'phase-a-group-geometry:${payload.viewportId}',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      await sceneCache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'phase-a-group-geometry',
+        window: phaseAWindow,
+        surfaceWidth: 378,
+      );
+      expect(sceneCache.railCriticalSceneFor(payload), isNull);
+      final frame = _previewFrame(prepared, presentationEpoch: 17);
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepaintBoundary(
+            key: boundaryKey,
+            child: ColoredBox(
+              color: sentinel,
+              child: SizedBox(
+                width: 378,
+                height: 220,
+                child: Stack(
+                  children: <Widget>[
+                    CustomScrollView(
+                      controller: scrollController,
+                      slivers: const <Widget>[
+                        SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                      ],
+                    ),
+                    Positioned.fill(
+                      child: DashboardLogBoxRenderSurface(
+                        visibleFrames: store,
+                        scrollController: scrollController,
+                        minimumHeight: 220,
+                        preparedRasters: PreparedVectorAssetAtlas.instance
+                            .logBoxRastersFor(3),
+                        committedViewport: committedViewport,
+                        preparedSceneCache: sceneCache,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final geometry = payload.semanticPreviewGeometry;
+      expect(geometry.groups, hasLength(2));
+      expect(geometry.slots, hasLength(3));
+      expect(
+        geometry.slots[0].rowTop(DashboardLogBoxTokens.rowHeight),
+        DashboardLogBoxTokens.dayHeaderHeight,
+      );
+      expect(
+        geometry.slots[2].rowTop(DashboardLogBoxTokens.rowHeight),
+        DashboardLogBoxTokens.dayHeaderHeight * 2 +
+            DashboardLogBoxTokens.dayGroupGap +
+            DashboardLogBoxTokens.rowHeight * 2,
+      );
+
+      final surfaceFinder = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final surface = tester.renderObject<RenderBox>(surfaceFinder);
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final origin = surface.localToGlobal(Offset.zero, ancestor: boundary);
+      final phaseAImage = (await tester.runAsync(
+        () => boundary.toImage(pixelRatio: 1),
+      ))!;
+      addTearDown(phaseAImage.dispose);
+      final phaseABytes = (await tester.runAsync(
+        () => phaseAImage.toByteData(format: ui.ImageByteFormat.rawRgba),
+      ))!;
+      final firstRowTop = geometry.slots.first
+          .rowTop(DashboardLogBoxTokens.rowHeight)
+          .round();
+      final secondGroupRowTop = geometry.slots[2]
+          .rowTop(DashboardLogBoxTokens.rowHeight)
+          .round();
+      final probeX = (origin.dx + surface.size.width / 2).round();
+      final probeTop = origin.dy.round();
+      expect(
+        _pixelMatchesColor(
+          phaseABytes,
+          phaseAImage.width,
+          phaseAImage.height,
+          x: probeX,
+          y: probeTop + firstRowTop - 3,
+          color: sentinel,
+        ),
+        isTrue,
+        reason:
+            'Phase-A must leave the day-header band above the first card; '
+            'ordinal * rowHeight would paint a card at the surface origin.',
+      );
+      expect(
+        _pixelMatchesColor(
+          phaseABytes,
+          phaseAImage.width,
+          phaseAImage.height,
+          x: probeX,
+          y: probeTop + secondGroupRowTop + 5,
+          color: FluviVisualTokens.surface,
+        ),
+        isTrue,
+        reason:
+            'The second day-group card must use its header/gap-adjusted '
+            'origin before optional rich Phase B is available.',
+      );
+
+      await _prepareAndActivatePreviewScene(sceneCache, payload);
+      await tester.pump();
+      await tester.pump();
+      final richImage = (await tester.runAsync(
+        () => boundary.toImage(pixelRatio: 1),
+      ))!;
+      addTearDown(richImage.dispose);
+      final richBytes = (await tester.runAsync(
+        () => richImage.toByteData(format: ui.ImageByteFormat.rawRgba),
+      ))!;
+      expect(
+        _pixelMatchesColor(
+          richBytes,
+          richImage.width,
+          richImage.height,
+          x: probeX,
+          y: probeTop + firstRowTop - 3,
+          color: sentinel,
+        ),
+        isTrue,
+        reason:
+            'Phase-B handoff must preserve the exact day-header band above '
+            'the first transaction card.',
+      );
+      expect(
+        _pixelMatchesColor(
+          richBytes,
+          richImage.width,
+          richImage.height,
+          x: probeX,
+          y: probeTop + secondGroupRowTop + 5,
+          color: FluviVisualTokens.surface,
+        ),
+        isTrue,
+        reason:
+            'Phase-A and rich Phase-B must share the same second-group card '
+            'origin; rich activation may not introduce a padding jump.',
+      );
+    },
+  );
+
+  testWidgets(
+    'RED PHASE-A INVARIANT: a nonempty target without an exact readable bank fails closed without a marker',
+    (tester) async {
+      const sentinel = Color(0xFF123456);
+      final store = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      final boundaryKey = GlobalKey();
+      addTearDown(store.dispose);
+      addTearDown(committedViewport.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 19,
+        entryCountOverride: 3,
+        previewRowCount: 3,
+        previewGroupCount: 2,
+      );
+      final frame = _previewFrame(prepared, presentationEpoch: 19);
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepaintBoundary(
+            key: boundaryKey,
+            child: ColoredBox(
+              color: sentinel,
+              child: SizedBox(
+                width: 378,
+                height: 220,
+                child: Stack(
+                  children: <Widget>[
+                    CustomScrollView(
+                      controller: scrollController,
+                      slivers: const <Widget>[
+                        SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                      ],
+                    ),
+                    Positioned.fill(
+                      child: DashboardLogBoxRenderSurface(
+                        visibleFrames: store,
+                        scrollController: scrollController,
+                        minimumHeight: 220,
+                        preparedRasters: PreparedVectorAssetAtlas.instance
+                            .logBoxRastersFor(3),
+                        committedViewport: committedViewport,
+                        preparedSceneCache: sceneCache,
+                        // Keep the renderer on the constructed invariant
+                        // path: no target resource may arrive through the
+                        // component-only warmup callback.
+                        sceneWindowProvider: () => DashboardLogBoxSceneWindow(
+                          identity: 'missing-readable-phase-a-resource',
+                          payloads: const <DashboardLogViewportState>[],
+                        ),
+                        onExtentPublished: snapshots.add,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final snapshot = snapshots.firstWhere(
+        (value) => value.presentation?.queryKey == frame.queryKey,
+      );
+      expect(snapshot.payloadRowCount, 3);
+      expect(snapshot.drawableRowCount, 3);
+      expect(snapshot.paintedRowCount, 0);
+      expect(snapshot.readablePhaseARowCount, 0);
+      expect(snapshot.readablePhaseARowsPainted, 0);
+      final surfaceFinder = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      final surface = tester.renderObject<RenderBox>(surfaceFinder);
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final origin = surface.localToGlobal(Offset.zero, ancestor: boundary);
+      final image = (await tester.runAsync(
+        () => boundary.toImage(pixelRatio: 1),
+      ))!;
+      addTearDown(image.dispose);
+      final bytes = (await tester.runAsync(
+        () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+      ))!;
+      expect(
+        _nonSentinelPixelCount(
+          bytes,
+          image.width,
+          image.height,
+          origin & surface.size,
+          sentinel,
+        ),
+        0,
+        reason:
+            'A missing exact Phase-A bank is a fail-closed diagnostic state, '
+            'not a visible bar/dot marker, fake group card, or partial row.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED: a non-empty deferred Phase-A preview paints reusable readable transaction rows without a rich scene',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -428,6 +730,380 @@ void main() {
             'The Phase-A painter must only paint prebuilt paragraph resources; '
             'it cannot materialize a rich projection on the paint path.',
       );
+    },
+  );
+
+  testWidgets(
+    'RED TIME DOMAIN: readable Phase-A keeps a dormant exact committed fallback in rail preview',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final scrollController = ScrollController();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      final richPreparationBlocker = Completer<void>();
+      addTearDown(store.dispose);
+      addTearDown(committedViewport.dispose);
+      addTearDown(sceneCache.dispose);
+      addTearDown(scrollController.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 17,
+        entryCountOverride: 3,
+        previewRowCount: 3,
+        deferredLogBox: true,
+      );
+      final frame = _previewFrame(prepared, presentationEpoch: 17);
+      committedViewport.seed(
+        CommittedLogPage(
+          queryKey: frame.queryKey,
+          coreRevision: frame.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: frame.logBox,
+        ),
+        generation: 1,
+        geometryManifest: CommittedVerticalGeometryManifest.compile(
+          queryKey: frame.queryKey,
+          coreRevision: frame.coreRevision,
+          pageSize: 24,
+          totalEntryCount: frame.logBox.entryCount,
+          dayBuckets: <CommittedVerticalGeometryDayBucket>[
+            for (var index = 0; index < frame.logBox.groups.length; index += 1)
+              if (frame.logBox.groups[index].rows.isNotEmpty)
+                CommittedVerticalGeometryDayBucket(
+                  bookedLocalEpochDay: 20_000 - index,
+                  entryCount: frame.logBox.groups[index].rows.length,
+                ),
+          ],
+        ),
+      );
+      committedViewport.configureSurfaceWidth(378);
+      final resourceWindow = DashboardLogBoxSceneWindow(
+        identity:
+            'phase-a-before-committed-fallback:${frame.logBox.viewportId}',
+        payloads: <DashboardLogViewportState>[frame.logBox],
+      );
+      await sceneCache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'phase-a-before-committed-fallback',
+        window: resourceWindow,
+        surfaceWidth: 378,
+      );
+      expect(sceneCache.railCriticalSceneFor(frame.logBox), isNull);
+      expect(
+        sceneCache.readablePhaseARowCountFor(frame.logBox),
+        frame.logBox.previewRowCount,
+      );
+
+      // Hold only the optional rich preparation at its scheduler boundary.
+      // The resource bank above remains complete and paintable, reproducing
+      // the physical state where a Time target is exact in Phase A while its
+      // rich scene is unavailable. This is intentionally not a timer or a
+      // production behaviour change.
+      final blockedRichPreparation = sceneCache.prepareWindow(
+        window: DashboardLogBoxSceneWindow(
+          identity: 'blocked-rich:${frame.logBox.viewportId}',
+          payloads: <DashboardLogViewportState>[frame.logBox],
+        ),
+        surfaceWidth: 378,
+        yieldEveryRows: 1,
+        yieldToBackground: () => richPreparationBlocker.future,
+        intent: DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+      );
+      unawaited(
+        blockedRichPreparation.then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {},
+        ),
+      );
+      addTearDown(() {
+        if (!richPreparationBlocker.isCompleted) {
+          richPreparationBlocker.complete();
+        }
+      });
+      store.publish(frame);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 320,
+            child: Stack(
+              children: <Widget>[
+                CustomScrollView(
+                  controller: scrollController,
+                  slivers: const <Widget>[
+                    SliverToBoxAdapter(child: SizedBox(height: 2400)),
+                  ],
+                ),
+                Positioned.fill(
+                  child: DashboardLogBoxRenderSurface(
+                    visibleFrames: store,
+                    scrollController: scrollController,
+                    minimumHeight: 320,
+                    preparedRasters: PreparedVectorAssetAtlas.instance
+                        .logBoxRastersFor(3),
+                    committedViewport: committedViewport,
+                    preparedSceneCache: sceneCache,
+                    onExtentPublished: snapshots.add,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final previewSnapshot = snapshots.firstWhere(
+        (value) => value.presentation?.queryKey == frame.queryKey,
+      );
+      expect(
+        previewSnapshot.renderDomain,
+        DashboardLogBoxRenderDomain.railPreview,
+        reason:
+            'The target first paints from complete readable Phase A before '
+            'its optional rich scene becomes available.',
+      );
+      expect(previewSnapshot.readablePhaseARowsPainted, 3);
+
+      expect(
+        store.promoteCommitted(
+          expectedKey: frame.queryKey,
+          epoch: frame.presentationEpoch,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+
+      final snapshot = snapshots.lastWhere(
+        (value) =>
+            value.presentation?.queryKey == frame.queryKey &&
+            value.presentation?.mode == DashboardVisibleMode.committed,
+      );
+      expect(snapshot.payloadLaneMode, DashboardVisibleMode.preview);
+      expect(
+        snapshot.renderDomain,
+        DashboardLogBoxRenderDomain.railPreview,
+        reason:
+            'A readable exact Phase-A target is already drawable. Before a '
+            'real vertical gesture, the committed cache is a fallback only and '
+            'may not take ownership merely because optional Phase B is absent.',
+      );
+      expect(snapshot.readablePhaseARowsPainted, 3);
+      expect(snapshot.richPhaseBRowsPainted, 0);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(
+        sceneCache.cancelInFlightPreparation(
+          intent: DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+        ),
+        isTrue,
+      );
+      richPreparationBlocker.complete();
+    },
+  );
+
+  testWidgets(
+    'RED TIME DOMAIN/EXTENT: a complete live Phase-A bank atomically moves the persistent viewport from committed fallback to preview geometry',
+    (tester) async {
+      final store = DashboardVisibleFrameStore();
+      final committedViewport = CommittedLogViewportCache(pageSize: 24);
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(store.dispose);
+      addTearDown(committedViewport.dispose);
+      addTearDown(sceneCache.dispose);
+
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      // The bounded preview is one exact committed root page while the
+      // manifest owns the larger structural scroll world. This is the real
+      // fallback -> readable-Phase-A handoff shape: the stable viewport must
+      // change its extent authority in the same cache notification as its
+      // render domain, without recreating the physical ScrollPosition.
+      final prepared = runtimeTestFrame(
+        scope,
+        revision: 23,
+        entryCountOverride: 48,
+        previewRowCount: 24,
+      );
+      final preview = _previewFrame(prepared, presentationEpoch: 23);
+      committedViewport.seed(
+        CommittedLogPage(
+          queryKey: preview.queryKey,
+          coreRevision: preview.coreRevision,
+          generation: 1,
+          ordinal: 0,
+          startCursor: null,
+          previousStartCursor: null,
+          payload: preview.logBox,
+        ),
+        generation: 1,
+        geometryManifest: CommittedVerticalGeometryManifest.compile(
+          queryKey: preview.queryKey,
+          coreRevision: preview.coreRevision,
+          pageSize: 24,
+          totalEntryCount: preview.logBox.entryCount,
+          dayBuckets: const <CommittedVerticalGeometryDayBucket>[
+            CommittedVerticalGeometryDayBucket(
+              bookedLocalEpochDay: 20_000,
+              entryCount: 48,
+            ),
+          ],
+        ),
+      );
+      committedViewport.configureSurfaceWidth(378);
+      store.publish(preview);
+      expect(
+        store.promoteCommitted(
+          expectedKey: preview.queryKey,
+          epoch: preview.presentationEpoch,
+        ),
+        isTrue,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: store,
+              committedViewport: committedViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              // Do not let component-only warmup make the resource available:
+              // this test specifically proves that the completed live bank is
+              // the structural handoff signal observed by the production
+              // parent.
+              sceneWindowProvider: () => DashboardLogBoxSceneWindow(
+                identity: 'domain-extent-empty-component-window',
+                payloads: const <DashboardLogViewportState>[],
+              ),
+              onExtentPublished: snapshots.add,
+            ),
+          ),
+        ),
+      );
+      for (
+        var frame = 0;
+        frame < 4 && !committedViewport.hasDrawableRootFallback;
+        frame += 1
+      ) {
+        await tester.pump();
+      }
+      expect(committedViewport.hasDrawableRootFallback, isTrue);
+      await tester.pump();
+
+      final scrollPosition = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byKey(const ValueKey('dashboard-logbox-scroll-view')),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+      final committedSnapshot = snapshots.lastWhere(
+        (snapshot) =>
+            snapshot.presentation?.queryKey == preview.queryKey &&
+            snapshot.renderDomain ==
+                DashboardLogBoxRenderDomain.committedVertical,
+      );
+      final committedMaxScrollExtent = scrollPosition.maxScrollExtent;
+      expect(committedSnapshot.payloadLaneMode, DashboardVisibleMode.preview);
+      expect(
+        committedSnapshot.renderedContentExtent,
+        committedViewport.contentHeight,
+      );
+
+      final phaseAWindow = DashboardLogBoxSceneWindow(
+        identity: 'domain-extent-live-phase-a:${preview.logBox.viewportId}',
+        payloads: <DashboardLogViewportState>[preview.logBox],
+      );
+      await sceneCache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'domain-extent-live-phase-a',
+        window: phaseAWindow,
+        surfaceWidth: 378,
+      );
+      expect(sceneCache.hasCompleteReadablePhaseAFor(preview.logBox), isTrue);
+      await tester.pump();
+      await tester.pump();
+
+      final previewSnapshot = snapshots.lastWhere(
+        (snapshot) =>
+            snapshot.presentation?.queryKey == preview.queryKey &&
+            snapshot.renderDomain == DashboardLogBoxRenderDomain.railPreview,
+      );
+      expect(
+        identical(
+          scrollPosition,
+          tester
+              .state<ScrollableState>(
+                find.descendant(
+                  of: find.byKey(
+                    const ValueKey('dashboard-logbox-scroll-view'),
+                  ),
+                  matching: find.byType(Scrollable),
+                ),
+              )
+              .position,
+        ),
+        isTrue,
+        reason:
+            'The domain/extent handoff must preserve the persistent vertical '
+            'ScrollPosition rather than fixing continuity by replacing it.',
+      );
+      expect(previewSnapshot.payloadLaneMode, DashboardVisibleMode.preview);
+      expect(previewSnapshot.readablePhaseARowCount, 24);
+      expect(
+        previewSnapshot.readablePhaseARowsPainted,
+        greaterThan(0),
+        reason:
+            'The viewport may clip lower prepared rows, but the current '
+            'visible Phase-A portion must paint immediately.',
+      );
+      expect(
+        previewSnapshot.renderedContentExtent,
+        lessThan(committedSnapshot.renderedContentExtent),
+        reason:
+            'The stable parent must stop exposing dormant committed-world '
+            'extent in the same frame as readable Phase A owns paint.',
+      );
+      expect(
+        scrollPosition.maxScrollExtent,
+        lessThan(committedMaxScrollExtent),
+        reason:
+            'The CustomScrollView extent must follow the selected preview '
+            'domain; changing only the painter would leave old padding/tail '
+            'authority visible.',
+      );
+      expect(
+        previewSnapshot.terminalBottomInset,
+        committedSnapshot.terminalBottomInset,
+        reason:
+            'The one genuine scroll tail remains separate from content '
+            'geometry; the handoff must neither retain an extra old tail nor '
+            'double-add it.',
+      );
+      expect(previewSnapshot.isMismatch, isFalse);
     },
   );
 
@@ -1919,6 +2595,45 @@ void main() {
       );
       expect(sceneCache.textLayoutMissCount, 0);
       expect(sceneCache.scenePrepareNewCount, prepareCountBeforeCrossing);
+
+      // Promote the same already-painted frame. The payload lane deliberately
+      // remains preview during this ownership-only retag; rich Phase B is
+      // still absent. The stable production viewport must retain the exact
+      // Phase-A paint domain and geometry instead of selecting the dormant
+      // committed root merely because it exists.
+      final publishesBeforeSettle = core.visibleFrames.visiblePublishCount;
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+      final promotedSnapshot = snapshots.lastWhere(
+        (value) =>
+            value.presentation?.queryKey == payload.queryKey &&
+            value.presentation?.mode == DashboardVisibleMode.committed,
+      );
+      expect(core.visibleFrames.value!.mode, DashboardVisibleMode.committed);
+      expect(promotedSnapshot.payloadLaneMode, DashboardVisibleMode.preview);
+      expect(
+        promotedSnapshot.renderDomain,
+        DashboardLogBoxRenderDomain.railPreview,
+        reason:
+            'Committed ownership may not replace a current readable Phase-A '
+            'target with a dormant fallback before vertical input.',
+      );
+      expect(
+        promotedSnapshot.readablePhaseARowsPainted,
+        snapshot.readablePhaseARowsPainted,
+      );
+      expect(
+        promotedSnapshot.renderedContentExtent,
+        snapshot.renderedContentExtent,
+      );
+      expect(
+        promotedSnapshot.terminalBottomInset,
+        snapshot.terminalBottomInset,
+      );
+      expect(core.visibleFrames.visiblePublishCount, publishesBeforeSettle);
     },
   );
 
@@ -2054,6 +2769,133 @@ void main() {
       expect(visibleAfterSettle?.mode, DashboardVisibleMode.committed);
       expect(core.visibleFrames.visiblePublishCount, publishesBeforeSettle);
       expect(sceneCache.textLayoutMissCount, 0);
+    },
+  );
+
+  testWidgets(
+    'RED TIME EMPTY VISUAL: an exact empty target keeps the stable host transparent without a marker or row semantics',
+    (tester) async {
+      const sentinel = Color(0xFF123456);
+      final core = DashboardCoreController(
+        dataRepository: _TimeReversalRepository(),
+        initialDate: DateTime.utc(2025, 4, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final boundaryKey = GlobalKey();
+      addTearDown(core.dispose);
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final empty2024 = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -1,
+        base: core.navigation.state,
+      )!;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RepaintBoundary(
+            key: boundaryKey,
+            child: ColoredBox(
+              color: sentinel,
+              child: SizedBox(
+                width: 378,
+                height: 700,
+                child: DashboardLogBoxViewport(
+                  bounds: const DashboardBounds(
+                    left: 0,
+                    top: 28,
+                    width: 378,
+                    height: 28,
+                  ),
+                  visibleFrames: core.visibleFrames,
+                  committedViewport: core.committedLogViewport,
+                  preparedSceneCache: sceneCache,
+                  preparedRasters: PreparedVectorAssetAtlas.instance
+                      .logBoxRastersFor(3),
+                  onLoadNextPage: (_) {},
+                  performanceCounters: core.performanceCounters,
+                  renderDiagnostics: core.renderReadinessDiagnostics,
+                  renderDiagnosticContextProvider: () =>
+                      core.renderDiagnosticContext,
+                  onExtentPublished: core.recordLogBoxRenderExtent,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: empty2024,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+
+      final payload = core.visibleFrames.logBoxLane.value!.logBox;
+      expect(payload.previewRowCount, 0);
+      final surfaceFinder = find.byKey(
+        const ValueKey('dashboard-logbox-stable-render-surface'),
+      );
+      expect(surfaceFinder, findsOneWidget);
+      final surface = tester.renderObject<RenderBox>(surfaceFinder);
+      final boundary =
+          boundaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final origin = surface.localToGlobal(Offset.zero, ancestor: boundary);
+      final image = (await tester.runAsync(
+        () => boundary.toImage(pixelRatio: 1),
+      ))!;
+      addTearDown(image.dispose);
+      final bytes = (await tester.runAsync(
+        () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+      ))!;
+
+      // The old exact-empty painter drew a centred 56px shell and two bars
+      // here. The structural viewport remains, but an exact-empty result
+      // must leave this body entirely transparent.
+      final markerProbe = Rect.fromCenter(
+        center: origin + surface.size.center(Offset.zero),
+        width: 160,
+        height: 72,
+      );
+      expect(
+        _nonSentinelPixelCount(
+          bytes,
+          image.width,
+          image.height,
+          markerProbe,
+          sentinel,
+        ),
+        0,
+        reason:
+            'The zero-count header is the product empty state; the LogBox '
+            'body may not paint a rounded shell, bars, dots or fake rows.',
+      );
+
+      final semantics = tester.ensureSemantics();
+      await tester.pump();
+      expect(
+        find.semantics.byLabel('Nincs tranzakció ebben az időszakban.'),
+        findsNothing,
+        reason:
+            'An exact empty body must expose zero row/loading semantics; the '
+            'header already communicates the count.',
+      );
+      semantics.dispose();
     },
   );
 
@@ -2526,6 +3368,48 @@ final class _NonEmptyQueryRepository implements DashboardDataRuntimeRepository {
 
   static int _previewRowCountFor(CurrentLedgerQueryScope scope) =>
       _entryCountFor(scope).clamp(0, 24).toInt();
+}
+
+int _nonSentinelPixelCount(
+  ByteData bytes,
+  int imageWidth,
+  int imageHeight,
+  Rect rect,
+  Color sentinel,
+) {
+  final sentinelRed = (sentinel.r * 255.0).round().clamp(0, 255).toInt();
+  final sentinelGreen = (sentinel.g * 255.0).round().clamp(0, 255).toInt();
+  final sentinelBlue = (sentinel.b * 255.0).round().clamp(0, 255).toInt();
+  var count = 0;
+  for (var y = rect.top.floor(); y < rect.bottom.ceil(); y += 1) {
+    for (var x = rect.left.floor(); x < rect.right.ceil(); x += 1) {
+      if (x < 0 || y < 0 || x >= imageWidth || y >= imageHeight) continue;
+      final offset = (y * imageWidth + x) * 4;
+      if (bytes.getUint8(offset) != sentinelRed ||
+          bytes.getUint8(offset + 1) != sentinelGreen ||
+          bytes.getUint8(offset + 2) != sentinelBlue ||
+          bytes.getUint8(offset + 3) != 255) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+bool _pixelMatchesColor(
+  ByteData bytes,
+  int imageWidth,
+  int imageHeight, {
+  required int x,
+  required int y,
+  required Color color,
+}) {
+  if (x < 0 || y < 0 || x >= imageWidth || y >= imageHeight) return false;
+  final offset = (y * imageWidth + x) * 4;
+  return bytes.getUint8(offset) == (color.r * 255.0).round() &&
+      bytes.getUint8(offset + 1) == (color.g * 255.0).round() &&
+      bytes.getUint8(offset + 2) == (color.b * 255.0).round() &&
+      bytes.getUint8(offset + 3) == (color.a * 255.0).round();
 }
 
 final class _TimeReversalRepository implements DashboardDataRuntimeRepository {

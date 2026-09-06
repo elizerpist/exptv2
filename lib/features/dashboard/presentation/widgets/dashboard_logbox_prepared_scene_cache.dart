@@ -319,15 +319,35 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   DashboardPreparedLogBoxReadablePhaseARow? readablePhaseARowFor(
     DashboardLogViewportState payload, {
     required int ordinal,
+  }) => readablePhaseAResourceFor(payload, ordinal: ordinal)?.row;
+
+  /// Exact complete Phase-A resource for one compact semantic slot.
+  ///
+  /// A row and its day header must come from the same immutable bank. Mixing
+  /// a borrowed row with a header from another bank could preserve text while
+  /// changing the card's group geometry at handoff, so this lookup is the
+  /// renderer's all-or-nothing Phase-A readiness contract.
+  DashboardPreparedLogBoxReadablePhaseASlot? readablePhaseAResourceFor(
+    DashboardLogViewportState payload, {
+    required int ordinal,
   }) {
     final entryId = payload.semanticPreviewRowIdentityAt(ordinal);
-    if (entryId == null) return null;
+    final slot = payload.semanticPreviewSlotAt(ordinal);
+    if (entryId == null || slot == null) return null;
 
-    DashboardPreparedLogBoxReadablePhaseARow? find(
+    DashboardPreparedLogBoxReadablePhaseASlot? find(
       _DashboardLogBoxStagedSceneBank bank,
-    ) => bank.readablePhaseARowFor(payload, entryId);
+    ) => bank.readablePhaseAResourceFor(
+      payload,
+      entryId: entryId,
+      dayLabel: slot.dayLabel,
+    );
 
-    final active = _activeBank.readablePhaseARowFor(payload, entryId);
+    final active = _activeBank.readablePhaseAResourceFor(
+      payload,
+      entryId: entryId,
+      dayLabel: slot.dayLabel,
+    );
     if (active != null) return active;
 
     // Prefer the explicitly live resource lanes. Their retention is the
@@ -360,9 +380,30 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int readablePhaseARowCountFor(DashboardLogViewportState payload) {
     var count = 0;
     for (var ordinal = 0; ordinal < payload.previewRowCount; ordinal += 1) {
-      if (readablePhaseARowFor(payload, ordinal: ordinal) != null) count += 1;
+      if (readablePhaseAResourceFor(payload, ordinal: ordinal) != null) {
+        count += 1;
+      }
     }
     return count;
+  }
+
+  /// Whether every bounded visible Phase-A row already has its exact,
+  /// immutable readable resource. This is a cache-only identity lookup: it
+  /// neither projects rich rows nor creates text layouts, and it deliberately
+  /// has no LRU or ownership side effect while a render-domain decision is
+  /// being made.
+  ///
+  /// A zero-row payload is complete by definition. Its transparent visual
+  /// contract is selected separately by the renderer.
+  bool hasCompleteReadablePhaseAFor(DashboardLogViewportState payload) {
+    if (payload.previewRowCount == 0) return true;
+    if (!payload.hasPreparedSemanticPreviewGeometry) return false;
+    for (var ordinal = 0; ordinal < payload.previewRowCount; ordinal += 1) {
+      if (readablePhaseAResourceFor(payload, ordinal: ordinal) == null) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// Stages [window] only when its rich payloads and every exact row
@@ -639,6 +680,16 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     DashboardLogBoxScenePreparationYield? yieldToBackground,
   }) async {
     _ensureUsable();
+    // Sparse prepared-index frames intentionally defer this compact table
+    // until a live-resource owner has selected one bounded payload. Doing it
+    // here keeps grouping out of index construction, widget build and paint;
+    // the resulting immutable geometry is ready before this bank can publish
+    // as readable Phase A.
+    for (final payload in window.payloads) {
+      if (payload.previewRowCount > 0) {
+        payload.prepareSemanticPreviewGeometry();
+      }
+    }
     final priorKey = _liveInteractionResourceKeys[lane];
     if (priorKey == resourceKey &&
         hasCandidateWindow(window, candidateKey: resourceKey)) {
@@ -731,6 +782,15 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
             'retainedBanks=${_retainedCandidateBanks.length}',
       ),
     );
+    // A generic candidate stays hermetic until its explicit scene activation.
+    // A completed live resource bank is different: it is the already-prepared
+    // exact Phase-A paint authority for a current Time/Avatar/Mind payload.
+    // Publish only after the entire immutable bank and its lane ownership are
+    // installed, so the stable renderer and its parent extent owner can
+    // atomically leave a dormant committed-root fallback. This is one bounded
+    // pre-motion/cache-completion notification, never a paint-time resource
+    // lookup or a partial-bank publication.
+    notifyListeners();
   }
 
   bool hasLiveInteractionResourceWindow(
@@ -2605,6 +2665,23 @@ final class DashboardPreparedLogBoxReadablePhaseARow {
       amountStyle == other.amountStyle;
 }
 
+/// One all-or-nothing renderer resource for a semantic Phase-A slot.
+///
+/// The row and optional day header are borrowed from the same completed scene
+/// bank. This keeps Phase-A card origin and group decoration identical to the
+/// rich and committed renderers without making the painter materialize a
+/// projection or mix cache generations.
+@immutable
+final class DashboardPreparedLogBoxReadablePhaseASlot {
+  const DashboardPreparedLogBoxReadablePhaseASlot({
+    required this.row,
+    required this.dayHeader,
+  });
+
+  final DashboardPreparedLogBoxReadablePhaseARow row;
+  final TextPainter? dayHeader;
+}
+
 /// The sole renderer-visible cache state. All maps are immutable snapshots;
 /// publishing a new complete world means replacing this one pointer.
 @immutable
@@ -2724,6 +2801,21 @@ final class RailCriticalSceneBank {
     if (manifest?.coreRevision != payload.revision) return null;
     return readablePhaseARows[entryId];
   }
+
+  DashboardPreparedLogBoxReadablePhaseASlot? readablePhaseAResourceFor(
+    DashboardLogViewportState payload, {
+    required String entryId,
+    required String? dayLabel,
+  }) {
+    final row = readablePhaseARowFor(payload, entryId);
+    if (row == null) return null;
+    final dayHeader = dayLabel == null ? null : dayHeaders[dayLabel];
+    if (dayLabel != null && dayHeader == null) return null;
+    return DashboardPreparedLogBoxReadablePhaseASlot(
+      row: row,
+      dayHeader: dayHeader,
+    );
+  }
 }
 
 /// Private immutable scene-bank lease token. It has no renderer entry point;
@@ -2808,6 +2900,21 @@ final class _DashboardLogBoxStagedSceneBank {
   ) {
     if (manifest.coreRevision != payload.revision) return null;
     return readablePhaseARows[entryId];
+  }
+
+  DashboardPreparedLogBoxReadablePhaseASlot? readablePhaseAResourceFor(
+    DashboardLogViewportState payload, {
+    required String entryId,
+    required String? dayLabel,
+  }) {
+    final row = readablePhaseARowFor(payload, entryId);
+    if (row == null) return null;
+    final dayHeader = dayLabel == null ? null : dayHeaders[dayLabel];
+    if (dayLabel != null && dayHeader == null) return null;
+    return DashboardPreparedLogBoxReadablePhaseASlot(
+      row: row,
+      dayHeader: dayHeader,
+    );
   }
 }
 

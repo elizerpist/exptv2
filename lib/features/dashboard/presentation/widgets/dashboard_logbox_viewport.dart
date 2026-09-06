@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
+import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -27,6 +28,7 @@ import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_logbox_header.dart';
 import '../dashboard_logbox_search_pill_visibility.dart';
+import '../dashboard_logbox_height.dart';
 import 'dashboard_query_facet_chips.dart';
 import 'dashboard_logbox_render_surface.dart';
 import 'dashboard_logbox_prepared_scene_cache.dart';
@@ -1744,18 +1746,27 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   Widget build(BuildContext context) {
     // These are scope/geometry publication notifications only. Normal page
     // resource commits use `resourceChanges`, so they still repaint without
-    // rebuilding the sliver extent during a ballistic interaction.
+    // rebuilding the sliver extent during a ballistic interaction. A complete
+    // active scene-bank activation or live-resource-bank publication is
+    // structural too: it can atomically replace a dormant committed-root
+    // fallback with exact readable Phase A, and this parent must choose the
+    // matching preview extent in the same frame as the render surface.
+    // Generic invisible candidate preparation remains hermetic and does not
+    // notify this listener.
     final structuralChanges = Listenable.merge(<Listenable>[
       visibleFrames.logBoxLane,
       visibleFrames.logBoxPresentationLane,
       ?committedViewport,
+      ?preparedSceneCache,
     ]);
     return AnimatedBuilder(
       animation: structuralChanges,
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) {
           final terminalExtent = DashboardLogBoxTerminalExtent.resolve(
-            logBoxContentExtent: _authoritativeLogBoxContentExtent(),
+            logBoxContentExtent: _authoritativeLogBoxContentExtent(
+              layoutProfile: DashboardLogBoxLayoutScope.profileOf(context),
+            ),
             viewportDimension: constraints.maxHeight,
             terminalBottomInset:
                 MediaQuery.paddingOf(context).bottom +
@@ -1767,20 +1778,41 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     );
   }
 
-  double _authoritativeLogBoxContentExtent() {
+  double _authoritativeLogBoxContentExtent({
+    required DashboardLogBoxLayoutProfile layoutProfile,
+  }) {
     final frame = visibleFrames.logBoxLane.value;
     final presentation = visibleFrames.logBoxPresentationLane.value;
     final committed = committedViewport;
-    if (frame == null ||
-        committed == null ||
-        !hasExactCommittedLogBoxGeometry(
+    if (frame == null) return 0;
+    if (committed == null) {
+      return dashboardLogBoxPayloadContentExtent(
+        payload: frame.logBox,
+        layoutProfile: layoutProfile,
+      );
+    }
+    final renderDomain = resolveDashboardLogBoxRenderDomain(
+      payload: frame.logBox,
+      presentation: presentation,
+      committedViewport: committed,
+      hasExactRailScene:
+          preparedSceneCache?.railCriticalSceneFor(frame.logBox) != null,
+      hasCompleteReadablePhaseA:
+          preparedSceneCache?.hasCompleteReadablePhaseAFor(frame.logBox) ??
+          false,
+    );
+    if (renderDomain == DashboardLogBoxRenderDomain.committedVertical &&
+        hasExactCommittedLogBoxGeometry(
           payload: frame.logBox,
           presentation: presentation,
           committedViewport: committed,
         )) {
-      return 0;
+      return committed.contentHeight;
     }
-    return committed.contentHeight;
+    return dashboardLogBoxPayloadContentExtent(
+      payload: frame.logBox,
+      layoutProfile: layoutProfile,
+    );
   }
 
   Widget _buildScrollable(
@@ -2357,6 +2389,9 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     committedViewport: committed,
     hasExactRailScene:
         preparedSceneCache?.railCriticalSceneFor(visible.logBox) != null,
+    hasCompleteReadablePhaseA:
+        preparedSceneCache?.hasCompleteReadablePhaseAFor(visible.logBox) ??
+        false,
   ).name;
 
   void _rejectStaleVerticalUpdate({

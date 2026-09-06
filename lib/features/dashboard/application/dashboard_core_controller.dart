@@ -997,6 +997,11 @@ final class DashboardCoreController {
   int _segmentedTimePreviewCrossings = 0;
   int _segmentedTimeLivePublications = 0;
   int _segmentedTimeLiveRootMisses = 0;
+  int _segmentedTimeExactPaintedCount = 0;
+  int _segmentedTimeExactEmptyPaintedCount = 0;
+  int _segmentedTimeCoalescedBeforePaintCount = 0;
+  int _segmentedTimeCancelledBeforePaintCount = 0;
+  int _segmentedTimeAwaitingExactPaintCount = 0;
   final CenteredCarouselSemanticCadenceAccumulator _segmentedTimeCadence =
       CenteredCarouselSemanticCadenceAccumulator();
   _SegmentedTemporalPaintTarget? _segmentedLatestAcceptedPaintTarget;
@@ -1275,11 +1280,12 @@ final class DashboardCoreController {
         'revision': visibleFrames.value?.coreRevision,
         'presentationEpoch': visibleFrames.value?.presentationEpoch,
       },
-      'renderDomain': resolveDashboardLogBoxRenderDomain(
-        payload: visibleFrames.logBoxLane.value?.logBox,
-        presentation: visibleFrames.logBoxPresentationLane.value,
-        committedViewport: committedLogViewport,
-      ).name,
+      // The render surface owns the readable Phase-A cache. Recomputing a
+      // domain here without that cache could report committedVertical while
+      // the actual surface correctly retains railPreview. Physical reports
+      // therefore expose only the actual last-painted decision; before first
+      // paint the honest state is unpainted rather than a guessed owner.
+      'renderDomain': _lastLogBoxRenderExtent?.renderDomain.name ?? 'unpainted',
       'summary': _summaryDiagnosticReport(),
       'logBoxPresentation': <String, Object?>{
         ...(_lastLogBoxRenderExtent?.toReportMap() ??
@@ -5322,10 +5328,19 @@ final class DashboardCoreController {
   void beginSegmentedSummaryMotion() {
     _cancelSceneWindowMaintenanceForInput();
     _discardRetainedSegmentedPaintedScene();
+    _recordSegmentedTargetVisualOutcome(
+      _segmentedLatestAcceptedPaintTarget,
+      _SegmentedTargetVisualOutcome.cancelledByNewInteraction,
+    );
     _segmentedTimeFlightGeneration += 1;
     _segmentedTimePreviewCrossings = 0;
     _segmentedTimeLivePublications = 0;
     _segmentedTimeLiveRootMisses = 0;
+    _segmentedTimeExactPaintedCount = 0;
+    _segmentedTimeExactEmptyPaintedCount = 0;
+    _segmentedTimeCoalescedBeforePaintCount = 0;
+    _segmentedTimeCancelledBeforePaintCount = 0;
+    _segmentedTimeAwaitingExactPaintCount = 0;
     _segmentedLatestAcceptedPaintTarget = null;
     _segmentedLatestPaintedTarget = null;
     _segmentedPendingSettleTarget = null;
@@ -5366,7 +5381,8 @@ final class DashboardCoreController {
         latestSemanticTarget.interactionGeneration ==
             _segmentedTimeFlightGeneration;
     var promotedLatestSemanticTarget = false;
-    if (retainedLatestSemanticTarget) {
+    if (retainedLatestSemanticTarget &&
+        _hasExactSegmentedTargetPaint(latestSemanticTarget)) {
       promotedLatestSemanticTarget =
           _settleAcceptedExperimentalTemporalComponentCandidate(
             latestSemanticTarget,
@@ -5386,6 +5402,10 @@ final class DashboardCoreController {
         _segmentedLatestPaintedTarget != null ||
         _segmentedPendingSettleTarget != null;
     if (invalidatedSegmentedSettleTarget) {
+      _recordSegmentedTargetVisualOutcome(
+        _segmentedLatestAcceptedPaintTarget,
+        _SegmentedTargetVisualOutcome.cancelledByNewInteraction,
+      );
       _segmentedLatestAcceptedPaintTarget = null;
       _segmentedLatestPaintedTarget = null;
       _segmentedPendingSettleTarget = null;
@@ -5743,6 +5763,10 @@ final class DashboardCoreController {
     }
     _segmentedTimePreviewCrossings += 1;
     _segmentedTimeCadence.recordTick(_segmentedTimePreviewCrossings);
+    final supersededTarget = _segmentedLatestAcceptedPaintTarget;
+    final supersededTargetWasVisible =
+        supersededTarget != null &&
+        _isSegmentedTargetCurrentVisible(supersededTarget);
     if (_publishPreparedSegmentedTemporalTarget(
       candidate: candidate,
       source: component.name,
@@ -5788,7 +5812,13 @@ final class DashboardCoreController {
       }
       try {
         final exactEmpty = index.frameForKey(queryKey).entryCount == 0;
-        _segmentedLatestAcceptedPaintTarget = _SegmentedTemporalPaintTarget(
+        final interactionOrder =
+            presentation.queuedPreparedExperimentalTemporalInteractionOrder ??
+            visibleFrames.interactionPreviewOrder;
+        if (interactionOrder == null) {
+          return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
+        }
+        final acceptedTarget = _SegmentedTemporalPaintTarget(
           candidate: candidate,
           component: component,
           queryKey: queryKey.value,
@@ -5798,7 +5828,17 @@ final class DashboardCoreController {
           viewportId: visible.logBox.viewportId,
           interactionGeneration: _segmentedTimeFlightGeneration,
           exactEmpty: exactEmpty,
+          interactionOrder: interactionOrder,
         );
+        if (supersededTarget != null) {
+          _recordSegmentedTargetVisualOutcome(
+            supersededTarget,
+            supersededTargetWasVisible
+                ? _SegmentedTargetVisualOutcome.cancelledByNewInteraction
+                : _SegmentedTargetVisualOutcome.coalescedBeforePaint,
+          );
+        }
+        _segmentedLatestAcceptedPaintTarget = acceptedTarget;
         // Keep the last real paint until this new accepted target itself is
         // acknowledged. A raw pointer can then restore that exact last-painted
         // target if this newer preview is interrupted before paint.
@@ -6088,8 +6128,12 @@ final class DashboardCoreController {
     _SegmentedTemporalPaintTarget right,
   ) =>
       left.interactionGeneration == right.interactionGeneration &&
+      left.queryKey == right.queryKey &&
+      left.coreRevision == right.coreRevision &&
       left.presentationEpoch == right.presentationEpoch &&
       left.frameGeneration == right.frameGeneration &&
+      left.viewportId == right.viewportId &&
+      left.interactionOrder.hasSameIdentity(right.interactionOrder) &&
       _sameTemporalTarget(left.candidate, right.candidate);
 
   static bool _sameSceneWindow(
@@ -6153,6 +6197,32 @@ final class DashboardCoreController {
       }
       return;
     }
+    // A semantic preview is authority for live content, but it may not become
+    // the canonical Time target until the stable LogBox owner has confirmed
+    // the exact same frame actually painted. In particular, a rich-scene miss
+    // must not let a preview->committed domain handoff race ahead of its
+    // readable Phase-A paint.
+    if (!_hasExactSegmentedTargetPaint(pending)) {
+      if (!pending.settleAwaitingExactPaintReported) {
+        pending.settleAwaitingExactPaintReported = true;
+        _segmentedTimeAwaitingExactPaintCount += 1;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SUMMARY_SETTLE_AWAITING_EXACT_PAINT',
+            queryKey: pending.queryKey,
+            coreRevision: pending.coreRevision,
+            scope:
+                'component=${pending.component.name} '
+                'generation=${pending.interactionGeneration} '
+                'presentationEpoch=${pending.presentationEpoch} '
+                'frameGeneration=${pending.frameGeneration} '
+                'viewportId=${pending.viewportId} '
+                'exactEmpty=${pending.exactEmpty}',
+          ),
+        );
+      }
+      return;
+    }
     _segmentedPendingSettleTarget = null;
     _settleAcceptedExperimentalTemporalComponentCandidate(pending);
   }
@@ -6161,6 +6231,12 @@ final class DashboardCoreController {
     _SegmentedTemporalPaintTarget target, {
     bool allowPreparedRestore = false,
   }) {
+    // This is deliberately a second guard rather than relying solely on
+    // [_trySettleLatestAcceptedSegmentedTarget]. Direct-pointer interruption
+    // can reach this method too. No path may commit an unpainted preview.
+    if (!_hasExactSegmentedTargetPaint(target)) {
+      return false;
+    }
     final candidate = target.candidate;
     final component = target.component;
     final crossingCount = _segmentedTimePreviewCrossings;
@@ -6188,7 +6264,12 @@ final class DashboardCoreController {
             'longGapCount=${cadence.longGapCount} '
             'acceptedLiveSnapshots=$_segmentedTimeLivePublications '
             'liveRootMisses=$_segmentedTimeLiveRootMisses '
-            'paintedLiveSnapshots=${_segmentedLatestPaintedTarget == null ? 0 : 1} '
+            'paintedLiveSnapshots=$_segmentedTimeExactPaintedCount '
+            'exactEmptyPainted=$_segmentedTimeExactEmptyPaintedCount '
+            'coalescedBeforePaint=$_segmentedTimeCoalescedBeforePaintCount '
+            'cancelledByNewInteraction='
+            '$_segmentedTimeCancelledBeforePaintCount '
+            'settleAwaitingExactPaint=$_segmentedTimeAwaitingExactPaintCount '
             'paintRejected=$_segmentedPaintRejectedCount '
             'transientNavigationCommits=$_segmentedTimeLivePublications '
             'transientQueryApplies=0 '
@@ -6244,6 +6325,62 @@ final class DashboardCoreController {
     _discardRetainedSegmentedPaintedScene();
     _recordNavigationSelection('summaryExperimentPaintedTargetSettled');
     return true;
+  }
+
+  bool _hasExactSegmentedTargetPaint(_SegmentedTemporalPaintTarget target) {
+    final painted = _segmentedLatestPaintedTarget;
+    return painted != null && _sameSegmentedPaintTarget(painted, target);
+  }
+
+  bool _isSegmentedTargetCurrentVisible(_SegmentedTemporalPaintTarget target) {
+    final visible = visibleFrames.logBoxLane.value;
+    return visible != null &&
+        visible.queryKey.value == target.queryKey &&
+        visible.coreRevision == target.coreRevision &&
+        visible.presentationEpoch == target.presentationEpoch &&
+        visible.frameGeneration == target.frameGeneration &&
+        visible.logBox.viewportId == target.viewportId;
+  }
+
+  void _recordSegmentedTargetVisualOutcome(
+    _SegmentedTemporalPaintTarget? target,
+    _SegmentedTargetVisualOutcome outcome,
+  ) {
+    if (target == null || target.visualOutcome != null) return;
+    target.visualOutcome = outcome;
+    switch (outcome) {
+      case _SegmentedTargetVisualOutcome.exactPainted:
+        _segmentedTimeExactPaintedCount += 1;
+        break;
+      case _SegmentedTargetVisualOutcome.exactEmptyPainted:
+        _segmentedTimeExactPaintedCount += 1;
+        _segmentedTimeExactEmptyPaintedCount += 1;
+        break;
+      case _SegmentedTargetVisualOutcome.coalescedBeforePaint:
+        _segmentedTimeCoalescedBeforePaintCount += 1;
+        break;
+      case _SegmentedTargetVisualOutcome.cancelledByNewInteraction:
+        _segmentedTimeCancelledBeforePaintCount += 1;
+        break;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_TARGET_VISUAL_OUTCOME',
+        queryKey: target.queryKey,
+        coreRevision: target.coreRevision,
+        scope:
+            'outcome=${outcome.name} '
+            'component=${target.component.name} '
+            'producer=${target.interactionOrder.producer.name} '
+            'interactionEpoch=${target.interactionOrder.interactionEpoch} '
+            'localGeneration=${target.interactionOrder.localGeneration} '
+            'generation=${target.interactionGeneration} '
+            'presentationEpoch=${target.presentationEpoch} '
+            'frameGeneration=${target.frameGeneration} '
+            'viewportId=${target.viewportId} '
+            'exactEmpty=${target.exactEmpty}',
+      ),
+    );
   }
 
   static bool _sameTemporalTarget(
@@ -8550,9 +8687,7 @@ final class DashboardCoreController {
     }
     final alreadyPainted = _segmentedLatestPaintedTarget;
     if (alreadyPainted != null &&
-        alreadyPainted.interactionGeneration ==
-            accepted.interactionGeneration &&
-        _sameTemporalTarget(alreadyPainted.candidate, accepted.candidate)) {
+        _sameSegmentedPaintTarget(alreadyPainted, accepted)) {
       return;
     }
     // A newer exact paint is now active and authoritative. The prior
@@ -8560,6 +8695,12 @@ final class DashboardCoreController {
     // parent after this point.
     _discardRetainedSegmentedPaintedScene();
     _segmentedLatestPaintedTarget = accepted;
+    _recordSegmentedTargetVisualOutcome(
+      accepted,
+      accepted.exactEmpty
+          ? _SegmentedTargetVisualOutcome.exactEmptyPainted
+          : _SegmentedTargetVisualOutcome.exactPainted,
+    );
     segmentedTargetPainted.value = DashboardSegmentedTargetPainted(
       target: accepted.candidate,
       component: accepted.component,
@@ -8763,11 +8904,10 @@ final class DashboardCoreController {
     return <String, Object?>{
       'authoritativePresentationMode': presentation?.mode.name ?? 'unbound',
       'payloadLaneMode': payload?.mode.name ?? 'unbound',
-      'renderDomain': resolveDashboardLogBoxRenderDomain(
-        payload: payload?.logBox,
-        presentation: presentation,
-        committedViewport: committedLogViewport,
-      ).name,
+      // See [exportPhysicalRailReport]: this controller cannot determine the
+      // render surface's readable Phase-A readiness without duplicating cache
+      // ownership, so it must not invent a diagnostic domain before paint.
+      'renderDomain': 'unpainted',
       'payloadViewportId': payload?.logBox.viewportId,
       'authoritativeViewportId': presentation?.viewportId,
       'renderedRowCount': payload?.logBox.previewRowCount ?? 0,
@@ -10604,9 +10744,15 @@ final class _MindAmountRenderTarget {
   bool logBoxPainted = false;
 }
 
-@immutable
+enum _SegmentedTargetVisualOutcome {
+  exactPainted,
+  exactEmptyPainted,
+  coalescedBeforePaint,
+  cancelledByNewInteraction,
+}
+
 final class _SegmentedTemporalPaintTarget {
-  const _SegmentedTemporalPaintTarget({
+  _SegmentedTemporalPaintTarget({
     required this.candidate,
     required this.component,
     required this.queryKey,
@@ -10616,6 +10762,7 @@ final class _SegmentedTemporalPaintTarget {
     required this.viewportId,
     required this.interactionGeneration,
     required this.exactEmpty,
+    required this.interactionOrder,
   });
 
   final DashboardNavigationState candidate;
@@ -10627,4 +10774,7 @@ final class _SegmentedTemporalPaintTarget {
   final int viewportId;
   final int interactionGeneration;
   final bool exactEmpty;
+  final DashboardInteractionPreviewOrder interactionOrder;
+  bool settleAwaitingExactPaintReported = false;
+  _SegmentedTargetVisualOutcome? visualOutcome;
 }

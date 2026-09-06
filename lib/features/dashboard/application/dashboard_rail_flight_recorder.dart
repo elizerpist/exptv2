@@ -1143,19 +1143,8 @@ final class _GestureAccumulator {
   double dragEndVelocity = 0;
   int _missedFramesAtReleaseStart = 0;
   List<int>? _counterAtRelease;
-  static const int _maximumFrameSamples = 512;
-  final List<int> _uiFrameMicros = List<int>.filled(
-    _maximumFrameSamples,
-    0,
-    growable: false,
-  );
-  final List<int> _rasterFrameMicros = List<int>.filled(
-    _maximumFrameSamples,
-    0,
-    growable: false,
-  );
-  int _frameSampleCount = 0;
-  int _missedFrameCount = 0;
+  final CenteredCarouselFrameTimingAccumulator _frameTimings =
+      CenteredCarouselFrameTimingAccumulator();
 
   void addSample(CenteredCarouselGestureSample sample) {
     final gap = sample.eventTimestampMicros - lastEventMicros;
@@ -1184,7 +1173,7 @@ final class _GestureAccumulator {
     DashboardPerformanceCounters? counters,
   ) {
     dragEndVelocity = release.dragEndVelocityX;
-    _missedFramesAtReleaseStart = _missedFrameCount;
+    _missedFramesAtReleaseStart = _frameTimings.snapshot().missedFrameCount;
     _counterAtRelease = counters?.snapshotValues();
   }
 
@@ -1209,10 +1198,10 @@ final class _GestureAccumulator {
       ballisticInputVelocity: ballisticInputVelocity,
       startIndex: startLogicalIndex,
       finalIndex: settled.finalLogicalIndex,
-      uiMissedFramesDuringGesture: _missedFrameCount,
+      uiMissedFramesDuringGesture: _frameTimings.snapshot().missedFrameCount,
       uiMissedFramesAtRelease: math.max(
         0,
-        _missedFrameCount - _missedFramesAtReleaseStart,
+        _frameTimings.snapshot().missedFrameCount - _missedFramesAtReleaseStart,
       ),
       renderWorkDuringReleaseMicros: _renderWorkSinceRelease(counters),
     );
@@ -1262,15 +1251,7 @@ final class _GestureAccumulator {
   );
 
   void addFrameTiming(FrameTiming timing) {
-    if (_frameSampleCount >= _maximumFrameSamples) return;
-    final uiMicros = timing.buildDuration.inMicroseconds;
-    final rasterMicros = timing.rasterDuration.inMicroseconds;
-    _uiFrameMicros[_frameSampleCount] = uiMicros;
-    _rasterFrameMicros[_frameSampleCount] = rasterMicros;
-    _frameSampleCount += 1;
-    if (uiMicros > 16667 || rasterMicros > 16667) {
-      _missedFrameCount += 1;
-    }
+    _frameTimings.recordFrameTiming(timing);
   }
 
   DashboardRailFlightEvent frameTiming(
@@ -1278,24 +1259,23 @@ final class _GestureAccumulator {
     int timestampMicros,
     DashboardPerformanceCounters? counters,
   ) {
-    final ui = _sortedFrameValues(_uiFrameMicros);
-    final raster = _sortedFrameValues(_rasterFrameMicros);
+    final timings = _frameTimings.snapshot();
     return DashboardRailFlightEvent(
       type: DashboardRailFlightEventType.frameTiming,
       timestampMicros: timestampMicros,
       gestureId: gestureId,
       context: context,
-      uiFrameP50Micros: _percentile(ui, .50),
-      uiFrameP90Micros: _percentile(ui, .90),
-      uiFrameP95Micros: _percentile(ui, .95),
-      uiFrameP99Micros: _percentile(ui, .99),
-      rasterFrameP50Micros: _percentile(raster, .50),
-      rasterFrameP90Micros: _percentile(raster, .90),
-      rasterFrameP95Micros: _percentile(raster, .95),
-      rasterFrameP99Micros: _percentile(raster, .99),
-      longestUiFrameMicros: ui.isEmpty ? 0 : ui.last,
-      longestRasterFrameMicros: raster.isEmpty ? 0 : raster.last,
-      buildDurationMicros: _sumFrameValues(_uiFrameMicros),
+      uiFrameP50Micros: timings.buildP50Micros,
+      uiFrameP90Micros: timings.buildP90Micros,
+      uiFrameP95Micros: timings.buildP95Micros,
+      uiFrameP99Micros: timings.buildP99Micros,
+      rasterFrameP50Micros: timings.rasterP50Micros,
+      rasterFrameP90Micros: timings.rasterP90Micros,
+      rasterFrameP95Micros: timings.rasterP95Micros,
+      rasterFrameP99Micros: timings.rasterP99Micros,
+      longestUiFrameMicros: timings.buildMaximumMicros,
+      longestRasterFrameMicros: timings.rasterMaximumMicros,
+      buildDurationMicros: timings.buildTotalMicros,
       layoutDurationMicros:
           counterDelta(counters, DashboardPerformanceMetric.railLayoutMicros) +
           counterDelta(counters, DashboardPerformanceMetric.logLayoutMicros),
@@ -1306,14 +1286,16 @@ final class _GestureAccumulator {
             counters,
             DashboardPerformanceMetric.logSurfacePaintMicros,
           ),
-      rasterDurationMicros: _sumFrameValues(_rasterFrameMicros),
-      missedFrameCount: _missedFrameCount,
+      rasterDurationMicros: timings.rasterTotalMicros,
+      missedFrameCount: timings.missedFrameCount,
     );
   }
 
-  int _captureFrameCountAtRelease() => _frameSampleCount;
+  int _captureFrameCountAtRelease() =>
+      _frameTimings.snapshot().retainedFrameCount;
 
-  int _captureMissedFrameCountAtRelease() => _missedFrameCount;
+  int _captureMissedFrameCountAtRelease() =>
+      _frameTimings.snapshot().missedFrameCount;
 
   int counterDelta(
     DashboardPerformanceCounters? counters,
@@ -1337,26 +1319,6 @@ final class _GestureAccumulator {
       total += counterDelta(counters, metric);
     }
     return total;
-  }
-
-  List<int> _sortedFrameValues(List<int> source) {
-    if (_frameSampleCount == 0) return const <int>[];
-    final values = source.sublist(0, _frameSampleCount)..sort();
-    return values;
-  }
-
-  int _sumFrameValues(List<int> source) {
-    var total = 0;
-    for (var index = 0; index < _frameSampleCount; index += 1) {
-      total += source[index];
-    }
-    return total;
-  }
-
-  static int _percentile(List<int> sorted, double percentile) {
-    if (sorted.isEmpty) return 0;
-    final index = ((sorted.length - 1) * percentile).ceil();
-    return sorted[index];
   }
 
   int _percentileGap(double percentile) {

@@ -25,6 +25,60 @@ void main() {
     expect(snapshot.skippedSemanticIndexCount, 1);
   });
 
+  test(
+    'RED: frame timing keeps a bounded physical-frame summary without treating semantic cadence as jank',
+    () {
+      final timings = CenteredCarouselFrameTimingAccumulator(capacity: 2)
+        ..recordDurations(
+          buildMicros: 7000,
+          rasterMicros: 6000,
+          totalSpanMicros: 13000,
+        )
+        ..recordDurations(
+          buildMicros: 18000,
+          rasterMicros: 9000,
+          totalSpanMicros: 27000,
+        )
+        ..recordDurations(
+          buildMicros: 11000,
+          rasterMicros: 23000,
+          totalSpanMicros: 34000,
+        );
+
+      final snapshot = timings.snapshot();
+      expect(snapshot.receivedFrameCount, 3);
+      expect(snapshot.retainedFrameCount, 2);
+      expect(snapshot.droppedFrameCount, 1);
+      expect(snapshot.missedFrameCount, 2);
+      expect(snapshot.buildP50Micros, 18000);
+      expect(snapshot.buildP95Micros, 18000);
+      expect(snapshot.rasterP50Micros, 23000);
+      expect(snapshot.rasterP95Micros, 23000);
+      expect(snapshot.totalSpanP50Micros, 34000);
+      expect(snapshot.totalSpanP95Micros, 34000);
+      expect(snapshot.totalSpanMaximumMicros, 34000);
+    },
+  );
+
+  test(
+    'RED: stage latency retains a bounded distribution without allocating one record per tick',
+    () {
+      final latency =
+          CenteredCarouselLatencyDistributionAccumulator(capacity: 2)
+            ..record(10)
+            ..record(30)
+            ..record(20);
+
+      final snapshot = latency.snapshot();
+      expect(snapshot.receivedSampleCount, 3);
+      expect(snapshot.retainedSampleCount, 2);
+      expect(snapshot.droppedSampleCount, 1);
+      expect(snapshot.p50Micros, 30);
+      expect(snapshot.p95Micros, 30);
+      expect(snapshot.maximumMicros, 30);
+    },
+  );
+
   testWidgets(
     'reports one raw gesture, exact ballistic handoff and stable identities',
     (tester) async {

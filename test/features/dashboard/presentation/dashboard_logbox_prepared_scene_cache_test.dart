@@ -1359,6 +1359,7 @@ void main() {
 
       expect(cache.railCriticalSceneFor(payload), isNull);
       expect(cache.readablePhaseARowCountFor(payload), 3);
+      expect(cache.hasCompleteReadablePhaseAFor(payload), isTrue);
       final first = cache.readablePhaseARowFor(payload, ordinal: 0);
       expect(first, isNotNull);
       expect(first!.entryId, 'deferred-7-0');
@@ -1383,6 +1384,7 @@ void main() {
         nextCursor: null,
       );
       expect(cache.readablePhaseARowCountFor(wrongRevision), 0);
+      expect(cache.hasCompleteReadablePhaseAFor(wrongRevision), isFalse);
       expect(
         cache.readablePhaseARowFor(wrongRevision, ordinal: 0),
         isNull,

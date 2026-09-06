@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
@@ -13,6 +15,66 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
 
 void main() {
+  test(
+    'a sparse deferred payload arms Phase-A geometry only through its bounded resource owner',
+    () {
+      final scope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+      );
+      final payload = DashboardLogViewportState.deferredPreparedOrdered(
+        scope: scope,
+        revision: 1,
+        entryCount: 2,
+        nextCursor: null,
+        entries: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'later',
+            partnerId: 'p-later',
+            categoryId: 'c',
+            direction: 'expense',
+            amountMinor: 200,
+            bookedLocalEpochDay: 20_000,
+            bookedLocalTimeMinutes: 720,
+          ),
+          DashboardLedgerEntry(
+            id: 'earlier',
+            partnerId: 'p-earlier',
+            categoryId: 'c',
+            direction: 'expense',
+            amountMinor: 100,
+            bookedLocalEpochDay: 19_999,
+            bookedLocalTimeMinutes: 720,
+          ),
+        ],
+      );
+
+      expect(payload.hasPreparedSemanticPreviewGeometry, isFalse);
+      expect(
+        dashboardLogBoxPayloadContentExtent(
+          payload: payload,
+          layoutProfile: DashboardLogBoxLayoutProfile.baseline,
+        ),
+        0,
+        reason:
+            'A dormant sparse index frame must not build grouping during '
+            'layout before a bounded Phase-A resource owner selects it.',
+      );
+
+      payload.prepareSemanticPreviewGeometry();
+
+      expect(payload.hasPreparedSemanticPreviewGeometry, isTrue);
+      expect(
+        dashboardLogBoxPayloadContentExtent(
+          payload: payload,
+          layoutProfile: DashboardLogBoxLayoutProfile.baseline,
+        ),
+        greaterThan(0),
+      );
+      expect(payload.semanticPreviewGeometry.groupCount, 2);
+    },
+  );
+
   test('preview frames always select the prepared rail-scene domain', () {
     final cache = CommittedLogViewportCache(pageSize: 24);
     addTearDown(cache.dispose);
@@ -125,6 +187,39 @@ void main() {
         reason:
             'A non-empty committed geometry must choose its ready fallback, '
             'not a rail-preview domain with no paint source.',
+      );
+    },
+  );
+
+  testWidgets(
+    'a complete readable Phase-A bank keeps a dormant committed fallback in rail preview',
+    (tester) async {
+      final cache = CommittedLogViewportCache(pageSize: 24);
+      addTearDown(cache.dispose);
+      final committed = _frame(DashboardVisibleMode.committed, withRows: true);
+      cache.seed(
+        _root(committed),
+        generation: 1,
+        geometryManifest: _manifest(committed),
+      );
+      cache.configureSurfaceWidth(378);
+
+      await tester.pump();
+
+      expect(cache.isVerticalRenderingActive, isFalse);
+      expect(cache.hasDrawableRootFallback, isTrue);
+      expect(
+        resolveDashboardLogBoxRenderDomain(
+          payload: committed.logBox,
+          presentation: DashboardLogBoxPresentationBinding.fromFrame(committed),
+          committedViewport: cache,
+          hasExactRailScene: false,
+          hasCompleteReadablePhaseA: true,
+        ),
+        DashboardLogBoxRenderDomain.railPreview,
+        reason:
+            'A complete readable Phase-A target is already the exact paint '
+            'source before vertical input; the committed root stays dormant.',
       );
     },
   );
