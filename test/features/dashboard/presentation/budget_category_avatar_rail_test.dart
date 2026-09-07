@@ -430,6 +430,137 @@ void main() {
   );
 
   testWidgets(
+    'RED BUDGET LIMIT TARGET IDENTITY: a visually centred Avatar cannot start an edit for a stale presentation target',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      final navigation = BudgetTargetAvatarRailController();
+      addTearDown(harness.dispose);
+      addTearDown(navigation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 378,
+                height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                child: BudgetTargetAvatarRail(
+                  presentation: harness.presentation,
+                  limitEditController: harness.edits,
+                  navigationController: navigation,
+                  // Keep the real parent semantic authority on the aggregate
+                  // target just as a rejected live Avatar publication does.
+                  onTargetPreviewAccepted: (_) => Future<bool>.value(false),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final route = navigation.animateToTargetHandle(
+        1,
+        source: BudgetTargetNavigationSource.pieSlice,
+      );
+      await tester.pumpAndSettle();
+      await route;
+
+      final centred = tester.widget<BudgetCategoryAvatarArtwork>(
+        find.byKey(const ValueKey('budget-target-avatar-center')),
+      );
+      expect(centred.selectedTargetHandle, 1);
+      expect(
+        harness.presentation.value.selectedHandle,
+        0,
+        reason:
+            'This deliberately models the physical split-brain state: the '
+            'carousel has moved but the parent did not accept the target.',
+      );
+
+      final pointer = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('budget-target-avatar-center')),
+        ),
+      );
+      await tester.pump(kLongPressTimeout);
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+
+      expect(
+        harness.edits.value,
+        isNull,
+        reason:
+            'The selected visual target is 1 while the only editable '
+            'presentation context is target 0. Starting target 0 here would '
+            'silently write the wrong category.',
+      );
+      expect(harness.repository.upsertCalls, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'BUDGET_LIMIT_TARGET_IDENTITY_CHECK',
+        ),
+        isNotEmpty,
+      );
+      await pointer.up();
+    },
+  );
+
+  testWidgets(
+    'Budget limit chrome remains visible and target-coherent through a selected Avatar edit',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+        ),
+      );
+      await tester.pump();
+
+      final centred = tester.widget<BudgetCategoryAvatarArtwork>(
+        find.byKey(const ValueKey('budget-target-avatar-center')),
+      );
+      expect(centred.selectedTargetHandle, 0);
+      expect(harness.presentation.value.selectedLimitVisual.targetHandle, 0);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+
+      final pointer = await tester.startGesture(
+        tester.getCenter(
+          find.byKey(const ValueKey('budget-target-avatar-center')),
+        ),
+      );
+      await tester.pump(kLongPressTimeout);
+      await pointer.moveBy(const Offset(0, -13));
+      await tester.pump();
+
+      expect(harness.edits.value!.targetHandle, 0);
+      expect(harness.presentation.value.selectedHandle, 0);
+      expect(harness.presentation.value.selectedLimitVisual.targetHandle, 0);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+
+      await pointer.up();
+      await tester.pump();
+      expect(harness.repository.upsertCalls, 1);
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'RED REENTRANT-AVATAR: background hotset readiness never absorbs direct input',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(_categories(3));

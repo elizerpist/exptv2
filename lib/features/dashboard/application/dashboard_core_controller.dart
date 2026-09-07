@@ -164,6 +164,35 @@ final class _DeferredFocusSceneInstall {
   final Completer<bool> completion;
 }
 
+/// One bounded, latest-wins Avatar semantic target waiting only for the
+/// existing rail-preview resource authority.  Core does not own another cache
+/// or visible-frame store here: it retains the original interaction order and
+/// revalidates the same exact candidate when that cache reports completion.
+final class _PendingBudgetAvatarPhaseACandidate {
+  _PendingBudgetAvatarPhaseACandidate({
+    required this.generation,
+    required this.targetHandle,
+    required this.baseIndex,
+    required this.baseScope,
+    required this.visibleScope,
+    required this.interactionOrder,
+    required this.exactEmpty,
+    required this.isStillCurrent,
+    required this.publishIfPainterReady,
+  }) : completion = Completer<bool>();
+
+  final int generation;
+  final int? targetHandle;
+  final PreparedDashboardIndex baseIndex;
+  final CurrentLedgerQueryScope baseScope;
+  final CurrentLedgerQueryScope visibleScope;
+  final DashboardInteractionPreviewOrder interactionOrder;
+  final bool exactEmpty;
+  final bool Function() isStillCurrent;
+  final Future<bool> Function() publishIfPainterReady;
+  final Completer<bool> completion;
+}
+
 /// The rich scene is visual augmentation of an already exact prepared focus
 /// frame. Avatar crossings retain only the latest augmentation until direct
 /// motion releases the foreground lane.
@@ -1026,6 +1055,7 @@ final class DashboardCoreController {
   CommittedPagingFocusSnapshot? _focusBasePagingRetention;
   CommittedPagingFocusSnapshot? _pendingFocusBasePagingRestore;
   int _focusPublicationGeneration = 0;
+  _PendingBudgetAvatarPhaseACandidate? _pendingBudgetAvatarPhaseACandidate;
   _DeferredFocusSceneInstall? _deferredFocusSceneInstall;
   bool _focusSceneInstallDrainScheduled = false;
   _DeferredLiveFacetSceneAugmentation? _deferredLiveFacetSceneAugmentation;
@@ -5592,6 +5622,7 @@ final class DashboardCoreController {
     required int focusGeneration,
     String acknowledgementSource = 'semanticPublication',
     bool richSceneStaged = false,
+    bool exactCurrentVisualAlreadyPainted = false,
   }) {
     if (targetHandle == null) return;
     final payload = visibleFrames.logBoxLane.value;
@@ -5613,6 +5644,40 @@ final class DashboardCoreController {
       frameGeneration: presentation.frameGeneration,
       exactEmpty: payload.logBox.previewRowCount == 0,
     );
+    final target = _avatarLiveRenderTarget!;
+    if (exactCurrentVisualAlreadyPainted) {
+      // No new raster pass is needed when target 0 has claimed an interaction
+      // order for the exact aggregate frame that is already on screen. This
+      // records an existing matching visual rather than fabricating a future
+      // paint acknowledgement from a callback that will never fire.
+      target.logBoxPainted = true;
+      target.completePaint(true);
+      budgetAvatarTargetPainted.value = DashboardAvatarTargetPainted(
+        targetHandle: target.targetHandle,
+        focusGeneration: target.focusGeneration,
+        queryKey: target.queryKey,
+        coreRevision: target.coreRevision,
+        presentationEpoch: target.presentationEpoch,
+        frameGeneration: target.frameGeneration,
+        exactEmpty: target.exactEmpty,
+        readablePhaseARowsPainted: target.exactEmpty
+            ? 0
+            : payload.logBox.previewRowCount,
+        richPhaseBRowsPainted: 0,
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|LOGBOX_TARGET_ALREADY_VISIBLE',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          entryCount: payload.logBox.previewRowCount,
+          scope:
+              'focusGeneration=$focusGeneration targetHandle=$targetHandle '
+              'exactEmpty=${target.exactEmpty} '
+              'terminalClassification=${target.exactEmpty ? 'exactEmpty' : 'exactPhaseAPainted'}',
+        ),
+      );
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: acknowledgementSource == 'semanticPublication'
@@ -5727,6 +5792,10 @@ final class DashboardCoreController {
     // painted frame; only invalidate old publication completions so they
     // cannot overwrite the next generation in that pointer-to-crossing gap.
     _focusPublicationGeneration += 1;
+    _supersedePendingBudgetAvatarPhaseACandidate(
+      reason: 'cancelledByNewPointer',
+      replacementGeneration: _focusPublicationGeneration,
+    );
     _cancelDeferredFocusedSceneInstall();
     _deferredLiveFacetSceneAugmentation = null;
     _cancelAvatarLivePaintWaiter(retainCurrentExactPaintedTarget: true);
@@ -6848,9 +6917,7 @@ final class DashboardCoreController {
     CurrentLedgerQueryScope baseScope,
   ) async {
     if (_liveInteractionResourceWindowPreparer == null) return true;
-    final resourceKey =
-        'avatar-live-root:rev:${base.coreRevision}|index:${base.generation}|'
-        'base:${baseScope.key.value}';
+    final resourceKey = _budgetAvatarLiveResourceKeyFor(base, baseScope);
     final identityChanged =
         _budgetAvatarLiveResourceKey != resourceKey ||
         !identical(_budgetAvatarLiveResourceBase, base);
@@ -6913,8 +6980,20 @@ final class DashboardCoreController {
         scope: 'maxRows=8192 bounded=true textPaintersReady=true',
       ),
     );
+    // This is the existing cache-completion boundary.  A cold semantic
+    // crossing retained one latest candidate with its original interaction
+    // order; completion may now attempt the exact painter-visible bind.  It
+    // does not mint a new input order or wait for physical settle.
+    unawaited(_promotePendingBudgetAvatarPhaseACandidate());
     return true;
   }
+
+  String _budgetAvatarLiveResourceKeyFor(
+    PreparedDashboardIndex base,
+    CurrentLedgerQueryScope baseScope,
+  ) =>
+      'avatar-live-root:rev:${base.coreRevision}|index:${base.generation}|'
+      'base:${baseScope.key.value}';
 
   void _scheduleBudgetAvatarLiveResourceRetry() {
     if (_disposed || _budgetAvatarLiveResourceRetryScheduled) return;
@@ -6946,6 +7025,137 @@ final class DashboardCoreController {
         );
     budgetAvatarLiveRootReady.value =
         _budgetAvatarLiveResourcesReady && allFocusTargetsReady;
+  }
+
+  /// Keeps one newest exact Avatar target while the existing bounded
+  /// rail-preview resource bank is still preparing.  This is deliberately a
+  /// continuation of the original input transaction, not a retry queue: a
+  /// later target replaces the earlier one and preserves its own issued order.
+  Future<bool> _deferBudgetAvatarPhaseACandidate(
+    _PendingBudgetAvatarPhaseACandidate candidate,
+  ) {
+    _supersedePendingBudgetAvatarPhaseACandidate(
+      reason: 'coalescedBeforeReadiness',
+      replacementGeneration: candidate.generation,
+    );
+    _pendingBudgetAvatarPhaseACandidate = candidate;
+    _requestBudgetAvatarLiveRowResources(
+      candidate.baseIndex,
+      candidate.baseScope,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AVATAR_CANDIDATE_PENDING_RESOURCE',
+        queryKey: candidate.visibleScope.key.value,
+        direction: candidate.visibleScope.direction.name,
+        coreRevision: candidate.baseIndex.coreRevision,
+        entryCount: candidate.exactEmpty ? 0 : null,
+        scope:
+            'generation=${candidate.generation} '
+            'targetHandle=${candidate.targetHandle ?? '-'} '
+            'interactionEpoch=${candidate.interactionOrder.interactionEpoch} '
+            'localGeneration=${candidate.interactionOrder.localGeneration} '
+            'resourceKey=${FluviDiagnosticKeyDigest.of(_budgetAvatarLiveResourceKeyFor(candidate.baseIndex, candidate.baseScope))} '
+            'latestWins=true richSceneStaged=false',
+      ),
+    );
+    return candidate.completion.future;
+  }
+
+  void _supersedePendingBudgetAvatarPhaseACandidate({
+    required String reason,
+    int? replacementGeneration,
+  }) {
+    final pending = _pendingBudgetAvatarPhaseACandidate;
+    if (pending == null) return;
+    _pendingBudgetAvatarPhaseACandidate = null;
+    if (!pending.completion.isCompleted) {
+      pending.completion.complete(false);
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AVATAR_CANDIDATE_SUPERSEDED',
+        queryKey: pending.visibleScope.key.value,
+        direction: pending.visibleScope.direction.name,
+        coreRevision: pending.baseIndex.coreRevision,
+        scope:
+            'generation=${pending.generation} '
+            'targetHandle=${pending.targetHandle ?? '-'} '
+            'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+            'localGeneration=${pending.interactionOrder.localGeneration} '
+            'reason=$reason '
+            'replacementGeneration=${replacementGeneration ?? '-'} '
+            'terminalClassification=$reason',
+      ),
+    );
+  }
+
+  /// A pending Avatar resource completion retains its original input order.
+  /// It may resume only while that order is still at least as new as the
+  /// shared visible-frame owner. A later Mind or Time intent claims that
+  /// owner before its own frame is ready, so allowing this Avatar callback to
+  /// retry would leave its semantic future pending after a guaranteed stale
+  /// rejection from the visible store.
+  bool _isBudgetAvatarInteractionOrderCurrent(
+    DashboardInteractionPreviewOrder candidate,
+  ) {
+    final owner = visibleFrames.interactionPreviewOrder;
+    return owner == null ||
+        owner.hasSameIdentity(candidate) ||
+        owner.interactionEpoch < candidate.interactionEpoch;
+  }
+
+  Future<void> _promotePendingBudgetAvatarPhaseACandidate() async {
+    final candidate = _pendingBudgetAvatarPhaseACandidate;
+    if (candidate == null) return;
+    if (_disposed || !candidate.isStillCurrent()) {
+      _supersedePendingBudgetAvatarPhaseACandidate(reason: 'staleRejected');
+      return;
+    }
+    final published = await candidate.publishIfPainterReady();
+    if (!identical(_pendingBudgetAvatarPhaseACandidate, candidate)) return;
+    if (published) {
+      _pendingBudgetAvatarPhaseACandidate = null;
+      if (!candidate.completion.isCompleted) {
+        candidate.completion.complete(true);
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AVATAR_PENDING_CANDIDATE_PROMOTED',
+          queryKey: candidate.visibleScope.key.value,
+          direction: candidate.visibleScope.direction.name,
+          coreRevision: candidate.baseIndex.coreRevision,
+          scope:
+              'generation=${candidate.generation} '
+              'targetHandle=${candidate.targetHandle ?? '-'} '
+              'interactionEpoch=${candidate.interactionOrder.interactionEpoch} '
+              'localGeneration=${candidate.interactionOrder.localGeneration} '
+              'terminalClassification=exactPhaseAPaintedOrAwaitingPaint',
+        ),
+      );
+      return;
+    }
+    if (!candidate.isStillCurrent()) {
+      _supersedePendingBudgetAvatarPhaseACandidate(reason: 'staleRejected');
+      return;
+    }
+    // A live resource completion is allowed to be asynchronous, but its
+    // readiness claim must be the exact cache authority queried by the
+    // painter. Keep the one candidate pending for the next real completion
+    // rather than publishing an unreadable 13 px placeholder.
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AVATAR_PENDING_CANDIDATE_AWAITING_EXACT_BIND',
+        queryKey: candidate.visibleScope.key.value,
+        direction: candidate.visibleScope.direction.name,
+        coreRevision: candidate.baseIndex.coreRevision,
+        scope:
+            'generation=${candidate.generation} '
+            'targetHandle=${candidate.targetHandle ?? '-'} '
+            'resourceOwner=preparedSceneCache '
+            'accepted=false',
+      ),
+    );
   }
 
   /// Fixed numeric evidence for profile logs and regression tests. No target
@@ -7155,6 +7365,7 @@ final class DashboardCoreController {
   }
 
   void _clearBudgetAvatarFocusHotset() {
+    _supersedePendingBudgetAvatarPhaseACandidate(reason: 'staleRejected');
     _budgetAvatarFocusHotsetGeneration += 1;
     _budgetAvatarLiveResourcePrimeGeneration += 1;
     _budgetAvatarLiveResourceInFlightGeneration = null;
@@ -7188,8 +7399,12 @@ final class DashboardCoreController {
     final resourceWindow = _budgetAvatarLiveResourceWindow;
     final resourceKey = _budgetAvatarLiveResourceKey;
     final phaseABinder = _liveInteractionReadablePhaseABinder;
+    // The all-target hotset flag is useful prewarm telemetry, but it is not
+    // the painter's authority for this exact selected payload.  A warm exact
+    // target must publish when the existing rail-preview cache can bind it,
+    // even while unrelated neighbours are still preparing.
     final resourcesReady =
-        budgetAvatarLiveRootReady.value &&
+        _budgetAvatarLiveResourcesReady &&
         identical(_budgetAvatarLiveResourceBase, baseIndex) &&
         resourceWindow != null &&
         resourceKey != null &&
@@ -7431,6 +7646,12 @@ final class DashboardCoreController {
             localGeneration: generation,
           )
         : null;
+    if (completeAvatarLivePublication) {
+      _supersedePendingBudgetAvatarPhaseACandidate(
+        reason: 'coalescedBeforeReadiness',
+        replacementGeneration: generation,
+      );
+    }
     _provisionalFocusBaseIndex = baseIndex;
     _provisionalFocusBaseScope = baseScope;
     final started = Stopwatch()..start();
@@ -7538,34 +7759,148 @@ final class DashboardCoreController {
             '${hotsetHit ? 0 : derivation.currentRootProjectionMicros}',
       ),
     );
-    final phaseAResourcesReady =
-        source == DashboardLiveInteractionSource.budgetAvatar &&
-        publishDuringMotion &&
-        _bindBudgetAvatarLivePhaseA(
+    final visibleScope = effectiveScope.copyWith(
+      timeScope: publicationState.effectiveScope,
+    );
+    if (completeAvatarLivePublication) {
+      bool stillCurrent() =>
+          !_disposed &&
+          generation == _focusPublicationGeneration &&
+          identical(_focusBaseIndex ?? dataRuntime.currentIndex, baseIndex) &&
+          currentQuery.scopeFor(direction) == baseScope &&
+          _isBudgetAvatarInteractionOrderCurrent(interactionOrder!);
+      Future<bool> publishIfPainterReady() async {
+        if (!stillCurrent() ||
+            !_bindBudgetAvatarLivePhaseA(
+              baseIndex: baseIndex,
+              liveIndex: derived,
+              visibleScope: visibleScope,
+              generation: generation,
+              budgetTargetHandle: budgetTargetHandle,
+            )) {
+          return false;
+        }
+        return _publishPreparedEphemeralFocus(
           baseIndex: baseIndex,
-          liveIndex: derived,
-          visibleScope: effectiveScope.copyWith(
-            timeScope: publicationState.effectiveScope,
-          ),
+          baseScope: baseScope,
+          derived: derived,
+          effectiveScope: effectiveScope,
+          publicationState: publicationState,
+          availability: availability,
+          direction: direction,
+          category: nextCategory,
+          partner: nextPartner,
+          normalizedSearch: nextSearch,
+          source: source,
           generation: generation,
+          completeAvatarLivePublication: true,
+          phaseAResourcesReady: true,
+          interactionOrder: interactionOrder,
           budgetTargetHandle: budgetTargetHandle,
+          deferSceneInstallation: deferSceneInstallation,
+          publishDuringMotion: publishDuringMotion,
+          deferAvatarSceneAugmentation: deferAvatarSceneAugmentation,
+          deferAvatarCanonicalInstall: deferAvatarCanonicalInstall,
+          onVisibleSemanticCommit: onVisibleSemanticCommit,
+          started: started,
         );
-    if (completeAvatarLivePublication && !phaseAResourcesReady) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'AV|PHASE_A_PUBLICATION_DEFERRED',
-          queryKey: effectiveScope.key.value,
-          direction: direction.name,
-          coreRevision: derived.coreRevision,
-          entryCount: derived
-              .frameFor(publicationState.parentQueryScope)
-              .entryCount,
-          scope:
-              'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
-              'reason=actualPainterReadablePhaseAUnavailable '
-              'richSceneStaged=false',
-        ),
-      );
+      }
+
+      if (!_bindBudgetAvatarLivePhaseA(
+        baseIndex: baseIndex,
+        liveIndex: derived,
+        visibleScope: visibleScope,
+        generation: generation,
+        budgetTargetHandle: budgetTargetHandle,
+      )) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'AV|PHASE_A_PUBLICATION_DEFERRED',
+            queryKey: effectiveScope.key.value,
+            direction: direction.name,
+            coreRevision: derived.coreRevision,
+            entryCount: derived
+                .frameFor(publicationState.parentQueryScope)
+                .entryCount,
+            scope:
+                'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
+                'reason=actualPainterReadablePhaseAUnavailable '
+                'richSceneStaged=false',
+          ),
+        );
+        return _deferBudgetAvatarPhaseACandidate(
+          _PendingBudgetAvatarPhaseACandidate(
+            generation: generation,
+            targetHandle: budgetTargetHandle,
+            baseIndex: baseIndex,
+            baseScope: baseScope,
+            visibleScope: visibleScope,
+            interactionOrder: interactionOrder!,
+            exactEmpty: false,
+            isStillCurrent: stillCurrent,
+            publishIfPainterReady: publishIfPainterReady,
+          ),
+        );
+      }
+    }
+    return _publishPreparedEphemeralFocus(
+      baseIndex: baseIndex,
+      baseScope: baseScope,
+      derived: derived,
+      effectiveScope: effectiveScope,
+      publicationState: publicationState,
+      availability: availability,
+      direction: direction,
+      category: nextCategory,
+      partner: nextPartner,
+      normalizedSearch: nextSearch,
+      source: source,
+      generation: generation,
+      completeAvatarLivePublication: completeAvatarLivePublication,
+      phaseAResourcesReady: completeAvatarLivePublication,
+      interactionOrder: interactionOrder,
+      budgetTargetHandle: budgetTargetHandle,
+      deferSceneInstallation: deferSceneInstallation,
+      publishDuringMotion: publishDuringMotion,
+      deferAvatarSceneAugmentation: deferAvatarSceneAugmentation,
+      deferAvatarCanonicalInstall: deferAvatarCanonicalInstall,
+      onVisibleSemanticCommit: onVisibleSemanticCommit,
+      started: started,
+    );
+  }
+
+  /// Completes the one accepted prepared focus transaction after its input
+  /// producer has established the correct readiness contract. Avatar callers
+  /// reach this only after the exact rail-preview binder succeeds; ordinary
+  /// focus callers retain their existing model-only path.
+  Future<bool> _publishPreparedEphemeralFocus({
+    required PreparedDashboardIndex baseIndex,
+    required CurrentLedgerQueryScope baseScope,
+    required PreparedDashboardIndex derived,
+    required CurrentLedgerQueryScope effectiveScope,
+    required DashboardNavigationState publicationState,
+    required DashboardTemporalAvailability availability,
+    required LedgerDirection direction,
+    required DashboardFocusFacet? category,
+    required DashboardFocusFacet? partner,
+    required String? normalizedSearch,
+    required DashboardLiveInteractionSource source,
+    required int generation,
+    required bool completeAvatarLivePublication,
+    required bool phaseAResourcesReady,
+    required DashboardInteractionPreviewOrder? interactionOrder,
+    required int? budgetTargetHandle,
+    required bool deferSceneInstallation,
+    required bool publishDuringMotion,
+    required bool deferAvatarSceneAugmentation,
+    required bool deferAvatarCanonicalInstall,
+    required VoidCallback? onVisibleSemanticCommit,
+    required Stopwatch started,
+  }) async {
+    if (_disposed ||
+        generation != _focusPublicationGeneration ||
+        !identical(_focusBaseIndex ?? dataRuntime.currentIndex, baseIndex) ||
+        currentQuery.scopeFor(direction) != baseScope) {
       return false;
     }
     final phaseAPublished = completeAvatarLivePublication
@@ -7616,12 +7951,12 @@ final class DashboardCoreController {
         direction: direction.name,
         coreRevision: derived.coreRevision,
         scope:
-            'category=${nextCategory?.id ?? 'none'} '
-            'partner=${nextPartner?.id ?? 'none'} generation=$generation '
+            'category=${category?.id ?? 'none'} '
+            'partner=${partner?.id ?? 'none'} generation=$generation '
             'producer=${interactionOrder?.producer.name ?? '-'} '
             'interactionEpoch=${interactionOrder?.interactionEpoch ?? 0} '
             'localGeneration=${interactionOrder?.localGeneration ?? 0} '
-            'searchLength=${nextSearch?.length ?? 0} '
+            'searchLength=${normalizedSearch?.length ?? 0} '
             'phaseAResourcesReady=$phaseAResourcesReady '
             'richSceneStaged=$richSceneStaged '
             'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
@@ -7636,22 +7971,22 @@ final class DashboardCoreController {
     focus.replace(
       baseScope: baseScope,
       coreRevision: baseIndex.coreRevision,
-      category: nextCategory,
-      partner: nextPartner,
-      normalizedSearch: nextSearch,
+      category: category,
+      partner: partner,
+      normalizedSearch: normalizedSearch,
     );
     final interactionFrame = _acceptLiveInteraction(
       source: source,
       interactionOrder: interactionOrder,
       budgetTargetHandle: budgetTargetHandle,
-      category: nextCategory,
-      partner: nextPartner,
-      normalizedSearch: nextSearch,
+      category: category,
+      partner: partner,
+      normalizedSearch: normalizedSearch,
       effectiveQueryKey: effectiveScope.key.value,
     );
     if (completeAvatarLivePublication) {
       // Budget Header/highlight and exact LogBox rows share the accepted
-      // Phase-A identity.  Rich scene paint remains diagnostic enhancement.
+      // Phase-A identity. Rich scene paint remains diagnostic enhancement.
       onVisibleSemanticCommit?.call();
       _recordAvatarLivePublicationAccepted(
         targetHandle: budgetTargetHandle,
@@ -7864,28 +8199,49 @@ final class DashboardCoreController {
         DashboardLiveInteractionSource.facetClose,
     int? budgetTargetHandle,
     VoidCallback? onVisibleSemanticCommit,
+    int? replayGeneration,
+    DashboardInteractionPreviewOrder? replayInteractionOrder,
+    bool replayingPendingAvatarCandidate = false,
   }) async {
     final state = focus.state;
-    final baseIndex = _focusBaseIndex;
-    if (state == null || baseIndex == null) return false;
-    final baseScope = currentQuery.scopeFor(state.anchor.direction);
-    if (!state.anchor.matches(
-      baseScope: baseScope,
-      revision: baseIndex.coreRevision,
-    )) {
-      _clearFocusWithoutRestoration(reason: 'baseIdentityChanged');
-      return false;
-    }
-    final generation = ++_focusPublicationGeneration;
     final completeAvatarLivePublication =
         source == DashboardLiveInteractionSource.budgetAvatar &&
         publishDuringMotion;
+    final direction =
+        state?.anchor.direction ?? navigation.state.parentQueryScope.direction;
+    final baseIndex =
+        _focusBaseIndex ??
+        (completeAvatarLivePublication ? dataRuntime.currentIndex : null);
+    if (baseIndex == null ||
+        (state == null && !completeAvatarLivePublication)) {
+      return false;
+    }
+    final baseScope = currentQuery.scopeFor(direction);
+    if (state != null &&
+        !state.anchor.matches(
+          baseScope: baseScope,
+          revision: baseIndex.coreRevision,
+        )) {
+      _clearFocusWithoutRestoration(reason: 'baseIdentityChanged');
+      return false;
+    }
+    final generation = replayGeneration ?? ++_focusPublicationGeneration;
+    if (replayGeneration != null && generation != _focusPublicationGeneration) {
+      return false;
+    }
     final interactionOrder = completeAvatarLivePublication
-        ? visibleFrames.nextInteractionPreviewOrder(
-            producer: DashboardInteractionPreviewProducer.budgetAvatar,
-            localGeneration: generation,
-          )
+        ? replayInteractionOrder ??
+              visibleFrames.nextInteractionPreviewOrder(
+                producer: DashboardInteractionPreviewProducer.budgetAvatar,
+                localGeneration: generation,
+              )
         : null;
+    if (completeAvatarLivePublication && !replayingPendingAvatarCandidate) {
+      _supersedePendingBudgetAvatarPhaseACandidate(
+        reason: 'coalescedBeforeReadiness',
+        replacementGeneration: generation,
+      );
+    }
     // See [_requestEphemeralFocus]: a Budget source can publish during motion
     // without there actually being an active Avatar ballistic/drag lane.
     // Preserve immediate retained-base realization for that discrete path.
@@ -7920,6 +8276,7 @@ final class DashboardCoreController {
           budgetTargetHandle: budgetTargetHandle,
         );
     if (completeAvatarLivePublication && !phaseAResourcesReady) {
+      if (replayingPendingAvatarCandidate) return false;
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'AV|PHASE_A_PUBLICATION_DEFERRED',
@@ -7935,7 +8292,38 @@ final class DashboardCoreController {
               'richSceneStaged=false',
         ),
       );
-      return false;
+      final visibleScope = baseScope.copyWith(
+        timeScope: publicationState.effectiveScope,
+      );
+      bool stillCurrent() =>
+          !_disposed &&
+          generation == _focusPublicationGeneration &&
+          identical(_focusBaseIndex ?? dataRuntime.currentIndex, baseIndex) &&
+          currentQuery.scopeFor(direction) == baseScope &&
+          _isBudgetAvatarInteractionOrderCurrent(interactionOrder!);
+      return _deferBudgetAvatarPhaseACandidate(
+        _PendingBudgetAvatarPhaseACandidate(
+          generation: generation,
+          targetHandle: budgetTargetHandle,
+          baseIndex: baseIndex,
+          baseScope: baseScope,
+          visibleScope: visibleScope,
+          interactionOrder: interactionOrder!,
+          exactEmpty:
+              baseIndex.frameFor(visibleScope).logBox.previewRowCount == 0,
+          isStillCurrent: stillCurrent,
+          publishIfPainterReady: () => _restoreBaseAfterFocus(
+            deferSceneInstallation: deferSceneInstallation,
+            publishDuringMotion: publishDuringMotion,
+            source: source,
+            budgetTargetHandle: budgetTargetHandle,
+            onVisibleSemanticCommit: onVisibleSemanticCommit,
+            replayGeneration: generation,
+            replayInteractionOrder: interactionOrder,
+            replayingPendingAvatarCandidate: true,
+          ),
+        ),
+      );
     }
     // Closing is a direct semantic acceptance. It may not wait for the old
     // focused scene to restore before removing the chip or accepting another
@@ -7949,7 +8337,20 @@ final class DashboardCoreController {
             order: interactionOrder!,
           )
         : true;
-    if (completeAvatarLivePublication && !phaseAPublished) {
+    // A cold category may be superseded by target 0 while the already-painted
+    // aggregate frame is still on screen. The visible store correctly claims
+    // the new order but reports no lane change for identical pixels. That is
+    // an exact visible aggregate outcome, not a rejected semantic target.
+    final phaseAAlreadyVisible =
+        completeAvatarLivePublication &&
+        !phaseAPublished &&
+        visibleFrames.lastInteractionPreviewRejectionReason == null &&
+        visibleFrames.interactionPreviewOrder?.hasSameIdentity(
+              interactionOrder,
+            ) ==
+            true;
+    final phaseAAccepted = phaseAPublished || phaseAAlreadyVisible;
+    if (completeAvatarLivePublication && !phaseAAccepted) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'AV|SEMANTIC_FRAME_REJECTED',
@@ -7972,7 +8373,7 @@ final class DashboardCoreController {
           isStillCurrent: () =>
               !_disposed &&
               generation == _focusPublicationGeneration &&
-              currentQuery.scopeFor(state.anchor.direction) == baseScope,
+              currentQuery.scopeFor(direction) == baseScope,
         );
     final interactionFrame = _acceptLiveInteraction(
       source: source,
@@ -7996,6 +8397,7 @@ final class DashboardCoreController {
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
         richSceneStaged: richSceneStaged,
+        exactCurrentVisualAlreadyPainted: phaseAAlreadyVisible,
       );
     }
     final installation = _scheduleFocusedSceneInstall(
@@ -8010,7 +8412,7 @@ final class DashboardCoreController {
               !_disposed &&
               generation == _focusPublicationGeneration &&
               liveInteractions.isCurrent(interactionFrame) &&
-              currentQuery.scopeFor(state.anchor.direction) == baseScope,
+              currentQuery.scopeFor(direction) == baseScope,
           beforePublish: () {
             navigation.replaceAppliedQuery(
               baseScope,

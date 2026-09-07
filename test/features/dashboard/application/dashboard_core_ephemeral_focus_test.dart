@@ -25,6 +25,7 @@ import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewpo
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
+import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
@@ -32,6 +33,7 @@ import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_t
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
+import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 
@@ -744,6 +746,630 @@ void main() {
       );
       expect(core.visibleFrames.countLane.value!.count.entryCount, 1);
       expect(repository.prepareCalls, 1);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
+    'RED AVATAR COLD REPLAY: a real painter-resource completion promotes the latest pending target before settle',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      final basePayload = core.visibleFrames.logBoxLane.value!.logBox;
+      final baseWindow = DashboardLogBoxSceneWindow(
+        identity: 'cold-avatar-production-parent-base',
+        payloads: <DashboardLogViewportState>[basePayload],
+      );
+      await cache.prepareWindow(window: baseWindow, surfaceWidth: 378);
+      cache.activateWindow(baseWindow);
+
+      final resourcePreparationStarted = Completer<void>();
+      final releaseResourcePreparation = Completer<void>();
+      final resourcePreparationCompleted = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              final isBudgetAvatarResource =
+                  lane ==
+                  DashboardLiveInteractionResourceLane.budgetAvatarPreview;
+              if (isBudgetAvatarResource &&
+                  !resourcePreparationStarted.isCompleted) {
+                resourcePreparationStarted.complete();
+              }
+              await releaseResourcePreparation.future;
+              await cache.prepareLiveInteractionResourceWindow(
+                lane: lane,
+                resourceKey: retainedKey,
+                window: window,
+                surfaceWidth: 378,
+                retainViewportId: retainViewportId,
+              );
+              if (isBudgetAvatarResource &&
+                  !resourcePreparationCompleted.isCompleted) {
+                resourcePreparationCompleted.complete();
+              }
+            },
+        hasLiveInteractionResources:
+            (window, {required lane, required candidateKey}) =>
+                cache.hasLiveInteractionResourceWindow(
+                  window,
+                  lane: lane,
+                  resourceKey: candidateKey,
+                ),
+        bindLiveInteractionReadablePhaseA:
+            (payload, {required lane, required resourceKey}) =>
+                cache.bindLiveInteractionReadablePhaseA(
+                  payload,
+                  lane: lane,
+                  resourceKey: resourceKey,
+                ),
+      );
+
+      final categories =
+          ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
+            FluviCategory(
+              id: 'utilities',
+              name: 'Utilities',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+            FluviCategory(
+              id: 'food',
+              name: 'Food',
+              colorId: 'fallback',
+              iconId: 'fallback',
+              isSystemUncategorized: false,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 1,
+            ),
+          ]);
+      addTearDown(categories.dispose);
+      final budget = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: core.visibleFrames,
+        liveInteractions: core.liveInteractions,
+        transactionDirection: core.transactionDirection,
+        snapshotForCurrentFrame: _focusBudgetSnapshot,
+        logicalAsOfDate: core.logicalAsOfDate,
+      );
+      addTearDown(budget.dispose);
+      final drilldown = DashboardBudgetLogboxDrilldownCoordinator(
+        core: core,
+        presentation: budget,
+      );
+      final foodHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'food',
+      );
+      expect(foodHandle, greaterThan(0));
+
+      // This is the production resource lane, deliberately held before it
+      // becomes cache-visible. The exact target itself is already derivable.
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+      await resourcePreparationStarted.future;
+      core.beginBudgetAvatarMotion();
+      final preview = drilldown.previewBudgetTarget(targetHandle: foodHandle);
+      var previewCompleted = false;
+      preview.whenComplete(() => previewCompleted = true);
+      await pumpEventQueue();
+
+      expect(
+        previewCompleted,
+        isFalse,
+        reason:
+            'A cold exact target must remain as one latest pending candidate; '
+            'the current 5ba gate instead rejects and permanently forgets it.',
+      );
+      expect(core.focus.state, isNull);
+      expect(budget.value.selectedHandle, 0);
+
+      releaseResourcePreparation.complete();
+      await resourcePreparationCompleted.future.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => throw StateError(
+          'The existing bounded resource preparation never completed.',
+        ),
+      );
+      expect(
+        await preview.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => throw StateError(
+            'The current pending Avatar candidate was not replayed after '
+            'the existing resource-completion event. Recent diagnostics: '
+            '${FluviDiagnosticLogger.entries.map((event) => '${event.stage}[${event.scope}]').join(' | ')}',
+          ),
+        ),
+        isTrue,
+      );
+
+      final frame = core.visibleFrames.logBoxLane.value!;
+      expect(core.focus.state?.category?.id, 'food');
+      expect(budget.value.selectedHandle, foodHandle);
+      expect(budget.value.liveSelection.target.handle, foodHandle);
+      expect(budget.value.header.target.handle, foodHandle);
+      expect(budget.value.header.title, 'Food');
+      expect(budget.value.selectedLimitVisual.targetHandle, foodHandle);
+      expect(frame.scope.categoryIds, <String>{'food'});
+      expect(cache.hasCompleteReadablePhaseAFor(frame.logBox), isTrue);
+      expect(cache.readablePhaseARowCountFor(frame.logBox), greaterThan(0));
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(frame));
+      expect(core.budgetAvatarTargetPainted.value?.targetHandle, foodHandle);
+
+      final utilitiesHandle = budget.value.items.indexWhere(
+        (item) => item.target.category?.id == 'utilities',
+      );
+      expect(utilitiesHandle, greaterThan(0));
+      // A complete exact cache resource is sufficient. The aggregate hotset
+      // status may still be false while unrelated neighbours prepare, but it
+      // must not block this warm exact target.
+      core.budgetAvatarLiveRootReady.value = false;
+      expect(
+        await drilldown.previewBudgetTarget(targetHandle: utilitiesHandle),
+        isTrue,
+      );
+      expect(core.focus.state?.category?.id, 'utilities');
+      expect(budget.value.selectedHandle, utilitiesHandle);
+      expect(budget.value.header.target.handle, utilitiesHandle);
+      expect(budget.value.header.title, 'Utilities');
+      expect(budget.value.selectedLimitVisual.targetHandle, utilitiesHandle);
+      expect(core.visibleFrames.logBoxLane.value!.scope.categoryIds, <String>{
+        'utilities',
+      });
+      expect(await drilldown.previewBudgetTarget(targetHandle: 0), isTrue);
+      expect(core.focus.state, isNull);
+      expect(budget.value.selectedHandle, 0);
+      expect(budget.value.header.target.handle, 0);
+      expect(budget.value.selectedLimitVisual.targetHandle, 0);
+      expect(core.visibleFrames.logBoxLane.value!.scope.categoryIds, isEmpty);
+      expect(repository.prepareCalls, 1);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
+    'RED AVATAR COLD REPLAY: a newer cold target coalesces the older candidate and preserves its own input order',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      final baseWindow = DashboardLogBoxSceneWindow(
+        identity: 'cold-avatar-latest-wins-base',
+        payloads: <DashboardLogViewportState>[
+          core.visibleFrames.logBoxLane.value!.logBox,
+        ],
+      );
+      await cache.prepareWindow(window: baseWindow, surfaceWidth: 378);
+      cache.activateWindow(baseWindow);
+
+      final budgetResourceStarted = Completer<void>();
+      final releaseBudgetResource = Completer<void>();
+      final budgetResourceCompleted = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              final isBudgetAvatarResource =
+                  lane ==
+                  DashboardLiveInteractionResourceLane.budgetAvatarPreview;
+              if (isBudgetAvatarResource &&
+                  !budgetResourceStarted.isCompleted) {
+                budgetResourceStarted.complete();
+              }
+              await releaseBudgetResource.future;
+              await cache.prepareLiveInteractionResourceWindow(
+                lane: lane,
+                resourceKey: retainedKey,
+                window: window,
+                surfaceWidth: 378,
+                retainViewportId: retainViewportId,
+              );
+              if (isBudgetAvatarResource &&
+                  !budgetResourceCompleted.isCompleted) {
+                budgetResourceCompleted.complete();
+              }
+            },
+        hasLiveInteractionResources:
+            (window, {required lane, required candidateKey}) =>
+                cache.hasLiveInteractionResourceWindow(
+                  window,
+                  lane: lane,
+                  resourceKey: candidateKey,
+                ),
+        bindLiveInteractionReadablePhaseA:
+            (payload, {required lane, required resourceKey}) =>
+                cache.bindLiveInteractionReadablePhaseA(
+                  payload,
+                  lane: lane,
+                  resourceKey: resourceKey,
+                ),
+      );
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+      await budgetResourceStarted.future;
+      core.beginBudgetAvatarMotion();
+
+      final older = core.requestBudgetCategoryFocus(
+        const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        publishDuringMotion: true,
+        targetHandle: 1,
+      );
+      await pumpEventQueue();
+      final latest = core.requestBudgetCategoryFocus(
+        const DashboardFocusFacet(id: 'food', displayName: 'Food'),
+        publishDuringMotion: true,
+        targetHandle: 2,
+      );
+      expect(
+        await older.timeout(const Duration(seconds: 3)),
+        isFalse,
+        reason:
+            'A superseded cold candidate must terminate rather than later '
+            'replaying over the newest intent.',
+      );
+      expect(core.focus.state, isNull);
+
+      releaseBudgetResource.complete();
+      await budgetResourceCompleted.future.timeout(const Duration(seconds: 3));
+      expect(await latest.timeout(const Duration(seconds: 3)), isTrue);
+      final frame = core.visibleFrames.logBoxLane.value!;
+      expect(core.focus.state?.category?.id, 'food');
+      expect(frame.scope.categoryIds, <String>{'food'});
+      expect(cache.hasCompleteReadablePhaseAFor(frame.logBox), isTrue);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AVATAR_CANDIDATE_SUPERSEDED' &&
+              event.scope?.contains('targetHandle=1') == true &&
+              event.scope?.contains(
+                    'terminalClassification=coalescedBeforeReadiness',
+                  ) ==
+                  true,
+        ),
+        isNotEmpty,
+      );
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
+    'RED AVATAR COLD REPLAY: a newer shared Mind intent terminates a pending Avatar candidate instead of stranding it',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      final baseWindow = DashboardLogBoxSceneWindow(
+        identity: 'cold-avatar-newer-mind-owner-base',
+        payloads: <DashboardLogViewportState>[
+          core.visibleFrames.logBoxLane.value!.logBox,
+        ],
+      );
+      await cache.prepareWindow(window: baseWindow, surfaceWidth: 378);
+      cache.activateWindow(baseWindow);
+
+      final budgetResourceStarted = Completer<void>();
+      final releaseBudgetResource = Completer<void>();
+      final budgetResourceCompleted = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              final isBudgetAvatarResource =
+                  lane ==
+                  DashboardLiveInteractionResourceLane.budgetAvatarPreview;
+              if (isBudgetAvatarResource &&
+                  !budgetResourceStarted.isCompleted) {
+                budgetResourceStarted.complete();
+              }
+              await releaseBudgetResource.future;
+              await cache.prepareLiveInteractionResourceWindow(
+                lane: lane,
+                resourceKey: retainedKey,
+                window: window,
+                surfaceWidth: 378,
+                retainViewportId: retainViewportId,
+              );
+              if (isBudgetAvatarResource &&
+                  !budgetResourceCompleted.isCompleted) {
+                budgetResourceCompleted.complete();
+              }
+            },
+        hasLiveInteractionResources:
+            (window, {required lane, required candidateKey}) =>
+                cache.hasLiveInteractionResourceWindow(
+                  window,
+                  lane: lane,
+                  resourceKey: candidateKey,
+                ),
+        bindLiveInteractionReadablePhaseA:
+            (payload, {required lane, required resourceKey}) =>
+                cache.bindLiveInteractionReadablePhaseA(
+                  payload,
+                  lane: lane,
+                  resourceKey: resourceKey,
+                ),
+      );
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+      await budgetResourceStarted.future;
+      core.beginBudgetAvatarMotion();
+
+      final pendingAvatar = core.requestBudgetCategoryFocus(
+        const DashboardFocusFacet(id: 'food', displayName: 'Food'),
+        publishDuringMotion: true,
+        targetHandle: 2,
+      );
+      await pumpEventQueue();
+
+      // This uses the same production visible-frame authority that an
+      // accepted Mind drag claims before its own callback has a display frame.
+      final newerMindOrder = core.visibleFrames.nextInteractionPreviewOrder(
+        producer: DashboardInteractionPreviewProducer.mindAmount,
+        localGeneration: 1,
+      );
+      expect(
+        core.visibleFrames.claimInteractionPublicationIntent(newerMindOrder),
+        isTrue,
+      );
+      expect(
+        core.visibleFrames.interactionPreviewOrder?.hasSameIdentity(
+          newerMindOrder,
+        ),
+        isTrue,
+      );
+
+      releaseBudgetResource.complete();
+      await budgetResourceCompleted.future.timeout(const Duration(seconds: 3));
+      expect(
+        await pendingAvatar.timeout(const Duration(seconds: 3)),
+        isFalse,
+        reason:
+            'A newer cross-producer interaction owner must terminally stale '
+            'the cold Avatar candidate rather than leaving its original '
+            'semantic future unresolved after resource completion.',
+      );
+      expect(core.focus.state, isNull);
+      expect(
+        core.visibleFrames.interactionPreviewOrder?.hasSameIdentity(
+          newerMindOrder,
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AVATAR_CANDIDATE_SUPERSEDED' &&
+              event.scope?.contains('targetHandle=2') == true &&
+              event.scope?.contains('terminalClassification=staleRejected') ==
+                  true,
+        ),
+        isNotEmpty,
+      );
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
+    'RED AVATAR COLD REPLAY: a cold aggregate crossing supersedes an unaccepted category target',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      final baseWindow = DashboardLogBoxSceneWindow(
+        identity: 'cold-avatar-aggregate-base',
+        payloads: <DashboardLogViewportState>[
+          core.visibleFrames.logBoxLane.value!.logBox,
+        ],
+      );
+      await cache.prepareWindow(window: baseWindow, surfaceWidth: 378);
+      cache.activateWindow(baseWindow);
+
+      final budgetResourceStarted = Completer<void>();
+      final releaseBudgetResource = Completer<void>();
+      final budgetResourceCompleted = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              final isBudgetAvatarResource =
+                  lane ==
+                  DashboardLiveInteractionResourceLane.budgetAvatarPreview;
+              if (isBudgetAvatarResource &&
+                  !budgetResourceStarted.isCompleted) {
+                budgetResourceStarted.complete();
+              }
+              await releaseBudgetResource.future;
+              await cache.prepareLiveInteractionResourceWindow(
+                lane: lane,
+                resourceKey: retainedKey,
+                window: window,
+                surfaceWidth: 378,
+                retainViewportId: retainViewportId,
+              );
+              if (isBudgetAvatarResource &&
+                  !budgetResourceCompleted.isCompleted) {
+                budgetResourceCompleted.complete();
+              }
+            },
+        hasLiveInteractionResources:
+            (window, {required lane, required candidateKey}) =>
+                cache.hasLiveInteractionResourceWindow(
+                  window,
+                  lane: lane,
+                  resourceKey: candidateKey,
+                ),
+        bindLiveInteractionReadablePhaseA:
+            (payload, {required lane, required resourceKey}) =>
+                cache.bindLiveInteractionReadablePhaseA(
+                  payload,
+                  lane: lane,
+                  resourceKey: resourceKey,
+                ),
+      );
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+      ]);
+      await budgetResourceStarted.future;
+      core.beginBudgetAvatarMotion();
+
+      final category = core.requestBudgetCategoryFocus(
+        const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        publishDuringMotion: true,
+        targetHandle: 1,
+      );
+      await pumpEventQueue();
+      final aggregate = core.clearBudgetCategoryFocus(
+        publishDuringMotion: true,
+        targetHandle: 0,
+      );
+      await pumpEventQueue();
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AVATAR_CANDIDATE_SUPERSEDED' &&
+              event.scope?.contains('targetHandle=1') == true,
+        ),
+        isNotEmpty,
+        reason:
+            'A cold aggregate crossing must replace an unaccepted category '
+            'candidate before the resource completion arrives.',
+      );
+      expect(await category.timeout(const Duration(seconds: 3)), isFalse);
+
+      releaseBudgetResource.complete();
+      await budgetResourceCompleted.future.timeout(const Duration(seconds: 3));
+      expect(
+        await aggregate.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => throw StateError(
+            'The cold aggregate candidate did not replay. Recent diagnostics: '
+            '${FluviDiagnosticLogger.entries.where((event) => event.stage.startsWith('AV')).map((event) => '${event.stage}[${event.scope}]').join(' | ')}',
+          ),
+        ),
+        isTrue,
+      );
+      final frame = core.visibleFrames.logBoxLane.value!;
+      expect(core.focus.state, isNull);
+      expect(frame.scope.categoryIds, isEmpty);
+      expect(cache.hasCompleteReadablePhaseAFor(frame.logBox), isTrue);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AV|LOGBOX_TARGET_ALREADY_VISIBLE' &&
+              event.scope?.contains('targetHandle=0') == true,
+        ),
+        isNotEmpty,
+      );
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
+    'Avatar exact-empty category is an accepted zero-row target rather than a Phase-A resource failure',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      core.beginBudgetAvatarMotion();
+
+      expect(
+        await core.requestBudgetCategoryFocus(
+          const DashboardFocusFacet(id: 'known-empty', displayName: 'Empty'),
+          publishDuringMotion: true,
+          targetHandle: 1,
+        ),
+        isTrue,
+      );
+
+      final frame = core.visibleFrames.logBoxLane.value!;
+      expect(core.focus.state?.category?.id, 'known-empty');
+      expect(frame.scope.categoryIds, <String>{'known-empty'});
+      expect(frame.logBox.entryCount, 0);
+      expect(frame.logBox.previewRowCount, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'AV|PHASE_A_PUBLICATION_DEFERRED',
+        ),
+        isEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'LIVE_INTERACTION_ACCEPTED',
+        ),
+        isNotEmpty,
+      );
       core.endBudgetAvatarMotion();
     },
   );

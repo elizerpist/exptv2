@@ -1033,7 +1033,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                         ? () => _recordQuickEditPointerDown(item.targetHandle)
                         : null,
                     onLongPressStart: metrics.isSelected && _quickEdit != null
-                        ? (details) => _quickEdit?.longPressStarted(
+                        ? (details) => _startQuickEditForTarget(
+                            targetHandle: item.targetHandle,
                             globalY: details.globalPosition.dy,
                           )
                         : null,
@@ -1106,12 +1107,59 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     );
   }
 
+  /// Resolves the editable context only when all of the existing visual and
+  /// semantic authorities identify the same Avatar target. The normal
+  /// Phase-A transaction makes this true; this fail-closed boundary prevents
+  /// a transient split brain from editing a stale category instead.
+  DashboardBudgetEditContext? _quickEditContextForTarget(int targetHandle) {
+    final presentation = widget.presentation.value;
+    final context = widget.presentation.directInputEditContext();
+    final contextTargetHandle = switch (context) {
+      DashboardBudgetLimitEditContext(:final targetHandle) => targetHandle,
+      DashboardBudgetYearLimitEditContext(:final targetHandle) => targetHandle,
+      null => null,
+    };
+    final visualTargetHandle = presentation.selectedLimitVisual.targetHandle;
+    final coherent =
+        presentation.selectedHandle == targetHandle &&
+        visualTargetHandle == targetHandle &&
+        contextTargetHandle == targetHandle;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_LIMIT_TARGET_IDENTITY_CHECK',
+        direction: presentation.liveSelection.direction.name,
+        coreRevision: presentation.liveSelection.coreRevision,
+        scope:
+            'hitTargetHandle=$targetHandle '
+            'selectedHandle=${presentation.selectedHandle} '
+            'visualTargetHandle=$visualTargetHandle '
+            'editContextTargetHandle=${contextTargetHandle ?? '-'} '
+            'coherent=$coherent',
+      ),
+    );
+    return coherent ? context : null;
+  }
+
+  void _startQuickEditForTarget({
+    required int targetHandle,
+    required double globalY,
+  }) {
+    final context = _quickEditContextForTarget(targetHandle);
+    if (context == null) return;
+    _quickEdit?.longPressStartedWithContext(context: context, globalY: globalY);
+  }
+
   /// One bounded event proves that the selected Avatar remained the raw
   /// hit-test owner even if a later prepared Header projection is absent. The
   /// actual GestureArena outcome is represented by the following long-press
   /// start/acceptance events in [BudgetLimitQuickEditGestureController].
   void _recordQuickEditPointerDown(int targetHandle) {
     final context = widget.presentation.directInputEditContext();
+    final contextTargetHandle = switch (context) {
+      DashboardBudgetLimitEditContext(:final targetHandle) => targetHandle,
+      DashboardBudgetYearLimitEditContext(:final targetHandle) => targetHandle,
+      null => null,
+    };
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'BUDGET_LIMIT_EDIT_POINTER_DOWN',
@@ -1120,6 +1168,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         scope:
             'hitTargetHandle=$targetHandle '
             'selectedHandle=${widget.presentation.value.selectedHandle} '
+            'visualTargetHandle=${widget.presentation.value.selectedLimitVisual.targetHandle} '
+            'editContextTargetHandle=${contextTargetHandle ?? '-'} '
             'editContextResolved=${context != null} '
             'headerAvailable=${widget.presentation.value.header.editContext != null}',
       ),

@@ -1,0 +1,62 @@
+{
+  "purpose": "Immutable evidence snapshot for the Avatar Phase-A publication and Budget coherence repair cycle.",
+  "frozen_at": "2026-09-07T00:00:00+02:00",
+  "authority": {
+    "session_id": "fluvi-1788752412870045",
+    "application_commit": "5ba6c01eb391339c27861762ba888e29aae38593",
+    "build_identity": "profile/5ba6c01eb391",
+    "core_revisions_observed": [3, 4]
+  },
+  "documents": [
+    {
+      "title": "Fluvi logs avatar fling",
+      "drive_document_id": "1FF1BnHJHOEygG3QhMeDfrehzjo0YzIztaGJfNTWZqNs",
+      "drive_modified_at": "2026-09-07T03:41:06.948Z",
+      "readable_export": "avatar-live-tail.txt",
+      "readable_export_bytes": 762792,
+      "readable_export_sha256": "98d69c407a26c39b9fcb088a45c4e81ee34bbf0f5f81dd903458e684a0fff251",
+      "raw_export": "avatar-drive-export.docx",
+      "raw_export_bytes": 106223,
+      "raw_export_sha256": "3b41f2c47cab1bd8fc541105b7c0de5979fec27f88d2f18da166a99272f51aa0",
+      "live_tail_headers": [
+        {"first_sequence": 1726, "last_sequence": 2725, "retained_count": 1000, "session_event_count": 2725},
+        {"first_sequence": 1811, "last_sequence": 2810, "retained_count": 1000, "session_event_count": 2810}
+      ],
+      "raw_event_copies": 2000,
+      "unique_event_count": 1085,
+      "duplicate_event_count": 915,
+      "differing_duplicate_payload_count": 0,
+      "deduplicated_range": "1726-2810",
+      "runtime_range": "1726-2809",
+      "user_marks": [
+        {"sequence": 2725, "issue": "avatar_fling"},
+        {"sequence": 2810, "issue": "avatar_filter_stuck"}
+      ]
+    },
+    {
+      "title": "Fluvi budget bug",
+      "drive_document_id": "1KCxfP-l4dKEDHwfdwMu7OttTUtUaqIeyA32ViPNUKxc",
+      "drive_modified_at": "2026-09-07T03:45:19.513Z",
+      "readable_export": "budget-live-tail.txt",
+      "readable_export_bytes": 400779,
+      "readable_export_sha256": "24b18ca72e33e2176bf9ba2955aaaea65ecb17e930c0c9c44a4dead2416bba63",
+      "raw_export": "budget-drive-export.docx",
+      "raw_export_bytes": 44996,
+      "raw_export_sha256": "09de9e5037cffd7ab77762f2554ae2073b53a7ec2346a06664a51ff1b5c35669",
+      "live_tail_headers": [
+        {"first_sequence": 8760, "last_sequence": 9759, "retained_count": 1000, "session_event_count": 9759}
+      ],
+      "raw_event_copies": 1000,
+      "unique_event_count": 1000,
+      "duplicate_event_count": 0,
+      "differing_duplicate_payload_count": 0,
+      "deduplicated_range": "8760-9759",
+      "runtime_range": "8760-9758",
+      "user_marks": [
+        {"sequence": 9759, "issue": "budget_limit"}
+      ]
+    }
+  ],
+  "cross_document_retention_gap": "2811-8759",
+  "freeze_note": "The prompt-authoring hashes (ee2f... and 0e07...) do not equal this export's raw or normalized readable-export hashes. The files were frozen from the same-session/same-build Drive state before implementation; this discrepancy is recorded rather than hidden. No later Drive mutation may be silently incorporated into this repair cycle."
+}

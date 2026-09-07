@@ -187,7 +187,6 @@ final class BudgetLimitQuickEditGestureController {
 
   void longPressStarted({required double globalY}) {
     if (_disposed) return;
-    _cancelAutoTick();
     late final DashboardBudgetEditContext context;
     try {
       context = _contextForCurrentSelection();
@@ -200,6 +199,18 @@ final class BudgetLimitQuickEditGestureController {
       );
       return;
     }
+    longPressStartedWithContext(context: context, globalY: globalY);
+  }
+
+  /// Begins an already identity-validated edit. The selected Avatar rail uses
+  /// this path so the physical hit target and the canonical Budget context
+  /// cannot diverge between hit testing and persistence.
+  void longPressStartedWithContext({
+    required DashboardBudgetEditContext context,
+    required double globalY,
+  }) {
+    if (_disposed) return;
+    _cancelAutoTick();
     final session = _edits.startContext(context);
     if (session == null) {
       FluviDiagnosticLogger.log(
