@@ -1738,6 +1738,54 @@ void main() {
     );
   });
 
+  testWidgets(
+    'time rail forwards ScrollEnd to the current motion command without a frame',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
+      await tester.pump();
+      final carousel = controller.motion.carouselController;
+      final viewport = find.descendant(
+        of: find.byType(TimeRefinementRail),
+        matching: find.byType(ListView),
+      );
+      expect(viewport, findsOneWidget);
+      FluviDiagnosticLogger.clear();
+      carousel.beginUserMotionCommand();
+      expect(controller.motion.state.activity, DashboardMotionActivity.drag);
+
+      final context = tester.element(viewport);
+      ScrollEndNotification(
+        metrics: carousel.scrollController.position.copyWith(),
+        context: context,
+        dragDetails: DragEndDetails(velocity: Velocity.zero),
+      ).dispatch(context);
+
+      // This must not require a renderer frame: Flutter dispatches the
+      // framework signal immediately before it installs IdleScrollActivity.
+      await tester.idle();
+
+      expect(controller.motion.state.activity, DashboardMotionActivity.idle);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'TM|FLING_SETTLED',
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
   testWidgets('split header lower card reveals from behind the upper card', (
     tester,
   ) async {

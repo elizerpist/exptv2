@@ -32,18 +32,25 @@ them would introduce conflicting edits at the authority boundary.
    probe is compile-time diagnostic opt-in. Avatar
    FrameTiming must be remeasured on the next profile APK before any physics or
    build/raster optimization is considered.
-7. **DONE (local; CI pending) — Protect and validate.**  The current
-   terminal-lifecycle repair passes formatting, analyzer, shared motion
-   (`+35`), Summary (`+48`), CoreDashboard (`+31`), application (`+278`) and
-   fast (`+291`) validation. The full presentation suite is `+583 -19`; its
+7. **PARTIAL (local; CI evidence differs) — Protect and validate.**  The current
+   terminal-lifecycle repair passes analyzer, shared motion (`+38`), Summary
+   (`+48`), CoreDashboard (`+32`), Avatar/cache (`+112`), Mind/visible (`+78`),
+   application (`+278`) and fast (`+291`) validation. The full presentation suite is `+584 -19`; its
    19 failures remain normalized to the clean-9e header/golden/ticker and
    stable render-surface baseline. No golden was regenerated.
-8. **DONE (local; profile CI pending) — Repair terminal Hold→Idle handoff.**
+8. **PARTIAL — Repair terminal Hold→Idle handoff.**
    The shared controller previously sampled a transient non-scrolling
    `HoldScrollActivity` and missed its later idle handoff, leaving the Time
    motion kernel in `drag`. A command-scoped single frame-local retry preserves
-   the existing controller/physics and cannot spin for a persistent Hold.
-9. **NEXT — Deliver.**  Review changed-symbol graph consumers, reread the
+   the existing controller/physics and cannot spin for a persistent Hold. The
+   exact `aca132…` profile run still fails under multi-second software-EGL
+   frames, proving this fallback cannot be the sole terminal delivery path.
+9. **DONE locally — Bind the exact ScrollEnd lifecycle.** The red shared test
+   and persistent `CoreDashboard -> TimeRefinementRail -> DashboardMotionKernel`
+   test now pass through the production `ScrollEndNotification` listener. One
+   command-scoped microtask runs only after Flutter installs Idle; stale,
+   held and new-pointer commands are fenced. Preserve the bounded Hold fallback.
+10. **NEXT — Deliver.**  Review changed-symbol graph consumers, reread the
    checklist, make atomic application commits, push, monitor the exact GitHub
    Actions SHA, download/hash the normal human APK, then regenerate/validate/
    push SCIP from the separate tooling worktree.

@@ -1,5 +1,6 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -88,6 +89,7 @@ class CenteredCarouselController extends ChangeNotifier {
   bool _directPointerIsDown = false;
   bool _terminalActivityCheckScheduled = false;
   int? _terminalHoldRetryCommandId;
+  int? _terminalScrollEndProbeCommandId;
   bool _disposed = false;
   bool _isRebasing = false;
   bool _suppressScrollEvents = false;
@@ -225,6 +227,7 @@ class CenteredCarouselController extends ChangeNotifier {
     final commandId = ++_motionCommandId;
     _activeMotionCommandId = commandId;
     _terminalHoldRetryCommandId = null;
+    _terminalScrollEndProbeCommandId = null;
     onMotionStarted?.call(origin);
     return commandId;
   }
@@ -260,6 +263,32 @@ class CenteredCarouselController extends ChangeNotifier {
   void noteDirectPointerEnded() {
     _directPointerIsDown = false;
     _scheduleTerminalActivityCheck();
+  }
+
+  /// Observes the exact framework terminal lifecycle signal from this
+  /// controller's scrollable.
+  ///
+  /// `ScrollPosition.beginActivity` dispatches [ScrollEndNotification] before
+  /// it installs the replacement [IdleScrollActivity]. A command-scoped
+  /// microtask therefore observes the installed activity without introducing
+  /// a timer, a delay or a renderer-frame dependency. Raw pointer contact,
+  /// a newer command and a non-idle activity retain precedence.
+  void noteScrollEndNotification() {
+    if (_disposed || _directPointerIsDown || !_scrollController.hasClients) {
+      return;
+    }
+    final commandId = _activeMotionCommandId;
+    if (commandId == 0 ||
+        !isCurrentMotionCommand(commandId) ||
+        _terminalScrollEndProbeCommandId == commandId) {
+      return;
+    }
+    _terminalScrollEndProbeCommandId = commandId;
+    scheduleMicrotask(() {
+      if (_disposed || _terminalScrollEndProbeCommandId != commandId) return;
+      _terminalScrollEndProbeCommandId = null;
+      _settleCurrentMotionCommandIfIdle(commandId);
+    });
   }
 
   bool isCurrentMotionCommand(int commandId) => commandId == _motionCommandId;
@@ -553,6 +582,7 @@ class CenteredCarouselController extends ChangeNotifier {
     _activeMotionCommandId = 0;
     _lastSettledCommandId = null;
     _terminalHoldRetryCommandId = null;
+    _terminalScrollEndProbeCommandId = null;
     _isScrolling = false;
   }
 
@@ -672,11 +702,31 @@ class CenteredCarouselController extends ChangeNotifier {
         }
         return;
       }
-      _terminalHoldRetryCommandId = null;
-      rebaseIfNeeded();
-      onMotionIdle?.call(_selectedLogicalIndex);
-      _emitSettledForCommand(commandId);
+      _settleCurrentMotionCommandIfIdle(commandId);
     });
+  }
+
+  /// Publishes the one semantic idle/settle handoff for a still-current
+  /// command only after the real position is idle. Both the bounded Hold
+  /// fallback and the exact ScrollEnd lifecycle use this same gate so a late
+  /// frame callback cannot duplicate `onMotionIdle` after the event-loop
+  /// handoff has already settled.
+  bool _settleCurrentMotionCommandIfIdle(int commandId) {
+    if (_disposed ||
+        _directPointerIsDown ||
+        _isScrolling ||
+        !_scrollController.hasClients ||
+        _activeMotionCommandId != commandId ||
+        !isCurrentMotionCommand(commandId) ||
+        _lastSettledCommandId == commandId ||
+        _scrollController.position.activity is! IdleScrollActivity) {
+      return false;
+    }
+    _terminalHoldRetryCommandId = null;
+    rebaseIfNeeded();
+    onMotionIdle?.call(_selectedLogicalIndex);
+    _emitSettledForCommand(commandId);
+    return true;
   }
 
   /// Invalidates an in-flight programmatic motion when a new drag starts.

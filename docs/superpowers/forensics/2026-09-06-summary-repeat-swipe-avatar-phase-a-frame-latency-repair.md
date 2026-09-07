@@ -264,7 +264,7 @@ Flutter PATH is explicitly exported. The first fast-script attempt failed
 before tests because its inherited shell PATH lacked `flutter`; that is an
 environment invocation result, not an application failure.
 
-The full presentation suite completes at `+582 -19`. A direct clean-base run
+The full presentation suite completes at `+584 -19`. A direct clean-base run
 proves the eight `dashboard_header_space_fabric_temporal_test.dart` failures
 and the `dashboard_logbox_stable_render_surface_test.dart` singleton
 Scrollable failure are inherited; the remaining golden/header failures match
@@ -315,17 +315,50 @@ It adds no timer, timeout increase, cooldown, physics change,
 controller/position recreation, query work, or target-frequency reduction.
 
 The final bounded implementation passes both shared-controller cases and the
-full `core_dashboard_test.dart` suite (`+31`), including the persistent
+full `core_dashboard_test.dart` suite (`+32`), including the persistent
 `CoreDashboard -> TimeRefinementRail -> DashboardMotionKernel` path. This is
 local red/green evidence only; the exact new-SHA profile gate remains required
 before classifying the CI symptom as repaired.
 
-Current changed-SHA validation is clean for formatter, analyzer, shared motion
-(`+35`), Summary (`+48`), application (`+278`) and fast (`+291`) suites. The
-full presentation suite is `+583 -19`: the one additional pass is this new
-regression and the 19 failures retain the clean-9e header/golden/ticker and
-stable-Scrollable signatures. No golden was changed. The final GitHub profile
-matrix remains the acceptance check for the original timeout symptom.
+Current changed-SHA validation is clean for analyzer, shared motion (`+38`),
+Summary (`+48`), CoreDashboard (`+32`), Avatar/cache (`+112`), Mind/visible
+(`+78`), application (`+278`) and fast (`+291`) suites. The full presentation
+suite is `+584 -19`: the two additional passes are the frame-free shared and
+production-parent notification regressions; the 19 failures retain the
+clean-9e header/golden/ticker and stable-Scrollable signatures. No golden was
+changed. The final GitHub profile matrix remains the acceptance check for the
+original timeout symptom.
+
+### Exact profile rerun — frame-starved terminal delivery remains open
+
+The first lifecycle-fix commit `aca132afd3afb5417d6d969f51b42c099d960d45`
+was built by GitHub run
+[`34056602468`](https://github.com/elizerpist/exptv2/actions/runs/34056602468).
+Flutter and core jobs and the normal human APK job passed, but the A–J profile
+job again failed in `I_first_fling` with the same normalized final state:
+
+```
+activity=drag scrollActivity=false
+```
+
+This is not enough evidence to call the first bounded Hold repair wrong: the
+failed interval contains software-EGL samples of 1202 ms, 3715 ms, 2096 ms,
+2219 ms and 2429 ms. It does prove that a terminal signal which waits for a
+renderer frame is not sufficiently prompt for the profile contract.
+
+Flutter source verifies the missing event seam. `ScrollPosition.beginActivity`
+dispatches `ScrollEndNotification` while it is ending the old scrolling
+activity, then installs the new activity and updates `isScrollingNotifier`.
+The carousel now listens for the depth-zero `ScrollEndNotification` from its
+own position. A command-scoped microtask after that exact framework event
+observes the installed `IdleScrollActivity` without a timer or frame callback.
+The new red/green regressions prove the seam: before implementation a real
+notification left the shared settle list empty (`Expected: [2]; Actual: []`)
+and left the persistent production Time motion kernel in `drag`. Stale
+commands, direct pointer ownership and a remaining Hold cannot settle. The
+tests are green without pumping a renderer frame. This is not a timer,
+cooldown or unbounded retry; the exact new-SHA profile job remains required to
+establish the profile/hardware outcome.
 
 ### Independent review reconciliation
 

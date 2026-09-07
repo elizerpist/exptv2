@@ -78,6 +78,20 @@ new pointer contact, scrolling, command invalidation, disposal, or the
 existing idle path remains authoritative. This is lifecycle reconciliation,
 not a timeout, cooldown, physics adjustment, or controller replacement.
 
+The exact profile run for `aca132…` shows that a renderer frame can be delayed
+for seconds in the software-EGL job. The bounded Hold probe remains a fallback
+for the Hold-specific path, but it cannot be the only terminal delivery
+mechanism. Flutter's `ScrollPosition.beginActivity` dispatches
+`ScrollEndNotification` while replacing a scrolling activity; that dispatch
+precedes installation of the new idle activity. The production repair now
+forwards the depth-zero notification from the shared carousel widget, defers
+one command-scoped *microtask* (not a timer or frame callback), then settles
+only after re-checking current command, raw-pointer ownership and
+`IdleScrollActivity`. The direct depth-zero listener is the owner boundary,
+because Flutter supplies copied notification metrics rather than the position
+identity. This is an event-order handoff, not a delay
+or retry loop; the existing single Hold fallback remains bounded.
+
 ## Avatar Phase-A resource authority
 
 The active rail-preview painter determines readiness through

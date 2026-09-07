@@ -400,6 +400,123 @@ void main() {
     hold.cancel();
   });
 
+  testWidgets(
+    'a ScrollEnd notification settles the current command without a frame',
+    (tester) async {
+      final controller = CenteredCarouselController(initialIndex: 2);
+      addTearDown(controller.dispose);
+      final settled = <int>[];
+
+      await tester.pumpWidget(
+        _host(
+          CenteredCarousel<int>(
+            items: const [0, 1, 2, 3, 4],
+            controller: controller,
+            spec: CenteredCarouselSpec(itemExtent: 72),
+            height: 80,
+            onSelectionSettled: settled.add,
+            itemBuilder: (context, item, metrics) =>
+                SizedBox(width: 48, height: 48, child: Text('$item')),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      controller.beginUserMotionCommand();
+      final viewport = find.byType(ListView);
+      final context = tester.element(viewport);
+      ScrollEndNotification(
+        metrics: controller.scrollController.position.copyWith(),
+        context: context,
+        dragDetails: DragEndDetails(velocity: Velocity.zero),
+      ).dispatch(context);
+
+      // The exact framework lifecycle signal is delivered before a future
+      // renderer frame.  A command-scoped event-loop handoff must settle it
+      // after Flutter installs IdleScrollActivity.
+      await tester.idle();
+
+      expect(settled, [2]);
+    },
+  );
+
+  testWidgets('a stale ScrollEnd notification cannot settle a newer command', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 2);
+    addTearDown(controller.dispose);
+    final settled = <int>[];
+
+    await tester.pumpWidget(
+      _host(
+        CenteredCarousel<int>(
+          items: const [0, 1, 2, 3, 4],
+          controller: controller,
+          spec: CenteredCarouselSpec(itemExtent: 72),
+          height: 80,
+          onSelectionSettled: settled.add,
+          itemBuilder: (context, item, metrics) =>
+              SizedBox(width: 48, height: 48, child: Text('$item')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.beginUserMotionCommand();
+    final viewport = find.byType(ListView);
+    final context = tester.element(viewport);
+    ScrollEndNotification(
+      metrics: controller.scrollController.position.copyWith(),
+      context: context,
+      dragDetails: DragEndDetails(velocity: Velocity.zero),
+    ).dispatch(context);
+
+    // A replacement command invalidates the pending event-loop handoff before
+    // it can settle the old visual target.
+    controller.beginUserMotionCommand();
+    await tester.idle();
+
+    expect(settled, isEmpty);
+  });
+
+  testWidgets('a ScrollEnd notification cannot settle a held command', (
+    tester,
+  ) async {
+    final controller = CenteredCarouselController(initialIndex: 2);
+    addTearDown(controller.dispose);
+    final settled = <int>[];
+
+    await tester.pumpWidget(
+      _host(
+        CenteredCarousel<int>(
+          items: const [0, 1, 2, 3, 4],
+          controller: controller,
+          spec: CenteredCarouselSpec(itemExtent: 72),
+          height: 80,
+          onSelectionSettled: settled.add,
+          itemBuilder: (context, item, metrics) =>
+              SizedBox(width: 48, height: 48, child: Text('$item')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.beginUserMotionCommand();
+    final hold = controller.scrollController.position.hold(() {});
+    final viewport = find.byType(ListView);
+    final context = tester.element(viewport);
+    ScrollEndNotification(
+      metrics: controller.scrollController.position.copyWith(),
+      context: context,
+      dragDetails: DragEndDetails(velocity: Velocity.zero),
+    ).dispatch(context);
+    await tester.idle();
+
+    expect(controller.hasActiveScrollActivity, isTrue);
+    expect(settled, isEmpty);
+    hold.cancel();
+  });
+
   testWidgets('latest tap owns the settled callback', (tester) async {
     final controller = CenteredCarouselController(initialIndex: 0);
     addTearDown(controller.dispose);

@@ -202,10 +202,18 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                       );
                       return false;
                     },
-                    child: NotificationListener<ScrollStartNotification>(
+                    child: NotificationListener<ScrollNotification>(
                       onNotification: (notification) {
-                        if (notification.dragDetails != null) {
+                        if (notification is ScrollStartNotification &&
+                            notification.dragDetails != null) {
                           widget.controller.beginUserMotionCommand();
+                        }
+                        if (notification is ScrollEndNotification &&
+                            notification.depth == 0) {
+                          // Flutter supplies a copied ScrollMetrics snapshot
+                          // here. This direct depth-zero listener is therefore
+                          // the ownership boundary, not metrics identity.
+                          widget.controller.noteScrollEndNotification();
                         }
                         return false;
                       },
