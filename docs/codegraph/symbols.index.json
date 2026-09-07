@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 9736,
+  "record_count": 9737,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -32,10 +32,10 @@
     },
     {
       "path": "symbols/part-004.jsonl",
-      "record_count": 1736,
+      "record_count": 1737,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_segmented_target_acceptance.dart`/DashboardSegmentedTargetAcceptance#acceptedExact.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "e37cc7cb5dbe3620aa3f175bf3a11cf31f51907d372235f7119bad8fc8002ef9"
+      "sha256": "b21ebb0768e54e752fbe3437dc203aeaadd61e00ecfaad169445ee9eba6afb7f"
     }
   ]
 }
