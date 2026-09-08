@@ -1,5 +1,50 @@
 # Milestone commits
 
+## 2026-09-09 — Foreground Phase-A direct-manipulation performance milestone
+
+- Behavioural milestone:
+  `e8b73e3e939104164e55b09caf592f84ee59fb14` —
+  `fix(dashboard): classify Avatar Phase-A rich fallback correctly`.
+- Parent: `b7f168dfee250a2435852e43d2499eee24ca1fb8`.
+- Status: **PHYSICALLY ACCEPTED BY THE USER ON ANDROID AS THE BEST-KNOWN
+  DIRECT-MANIPULATION PERFORMANCE BASELINE.**
+- Physically accepted behavior:
+  - Avatar carousel movement is smooth;
+  - Time carousel movement is smooth;
+  - the current result has the best overall physical interaction performance
+    achieved so far.
+- This is human physical evidence, not an inferred FPS value and not a claim
+  that every correctness edge case is complete.
+- Known open defects explicitly excluded from acceptance:
+  1. the first Avatar fling loads its data slightly late, while subsequent
+     flings become fast;
+  2. the refreshed e8 Time trace proves an out-of-prepared-window temporal
+     target split and a user-marked target jump;
+  3. after that invalid temporal state, Avatar Phase-A admission may throw and
+     reject every crossed target while retaining the previous Budget progress;
+  4. the healthy primary Avatar flight aged out of the rolling diagnostic
+     window and requires a retained flight record.
+- Permanent regression policy:
+  - no later change may make Avatar or Time physical motion worse;
+  - no performance pass may be obtained by dropping semantic targets or data
+    publications;
+  - preserve stable carousel controller, ScrollPosition and physics identities;
+  - preserve one Core, one visible-frame store, one prepared-scene cache, one
+    LogBox viewport and one LogBox render surface;
+  - preserve exact painter-readable Phase A, latest-wins stale safety and
+    target-correlated Header/progress/LogBox paint;
+  - preserve zero repository/index/query/TextPainter/rich-scene work at direct
+    semantic crossings;
+  - preserve dashboard geometry, z-order, clipping and hit-test ownership;
+  - preserve Mind/Slider behavior;
+  - compare every future candidate physically and diagnostically against e8.
+- Rollback anchor: `e8b73e3e939104164e55b09caf592f84ee59fb14`.
+- A later candidate must not replace e8 as the preferred milestone until:
+  - deterministic correctness gates pass;
+  - same-device physical behavior is equal or better;
+  - accepted-target counts are not reduced;
+  - the user explicitly accepts the later APK.
+
 ## 2026-08-30 — Home interaction performance physical baseline
 
 - Functional checkpoint: `dfa90b6741108f824244dbc11a3d73a6c5174472` —
