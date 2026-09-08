@@ -26,6 +26,7 @@ one timeline.
 | FPA-14 | User §26 and global delivery rule | App delivery + SCIP tooling | Each production app commit is pushed, its exact online human APK is downloaded and hashed, and a separately committed SCIP graph indexes the final app SHA. | GitHub Actions evidence, APK SHA-256, final graph manifest and deterministic regeneration. | NOT DONE |
 | FPA-15 | User §21 / §28 | Physical device | Physical correctness and performance are not claimed by the agent. | User-only physical validation. | PENDING — USER ONLY |
 | FPA-16 | User §25; delivery profile artifact audit | `integration_test/dashboard_interaction_profile_test.dart` | The online profile matrix includes a real production-composition Avatar crossing with an accepted exact publication and records its bounded pipeline/paint evidence. | A dedicated profile artifact plus source-level integration test assertions. | PARTIAL |
+| FPA-17 | CI run `34259701012`; User §10 and §15 | Initial LogBox render/readiness boundary | A cold non-empty Time payload never reaches a LogBox paint attempt without exact readable Phase A, including while the normal startup readiness layer is mounted. | New production-shell regression with a populated prepared index; online A–K profile rerun. | PARTIAL |
 
 ## Protected prior work
 
@@ -77,3 +78,27 @@ FrameTiming was pending. This checklist does not reopen either semantic design.
   first-target terminal pipeline result. Local report-contract and boundary
   tests pass; the required online profile artifact is still pending, so FPA-16
   remains `PARTIAL`.
+- The first A–K profile run (`34259701012`) reached K but failed its final
+  report audit because `I_first_fling` recorded one
+  `visiblePayloadWithoutDrawable`. Source and timestamp inspection localised
+  this to the cold first-render interval: the non-empty payload reaches the
+  stable render surface before its exact-width Phase-A warmup completes. The
+  startup overlay prevents the user from seeing that frame, but it is still a
+  renderer contract violation and must be repaired rather than waived. Until
+  its production-parent regression and a new online profile pass, FPA-17
+  remains incomplete.
+- The FPA-17 production-shell regression was red on `c2a9046f`: its populated
+  cold Time payload produced `visiblePayloadWithoutDrawable=1`. The repaired
+  path now passes with `0`, waits for the exact `timePreview` readable bank,
+  records one bounded initial defer event, and then records actual row paint on
+  the same stable surface. The local proof does not replace the required
+  online A–K profile rerun, so FPA-17 remains `PARTIAL`.
+- Follow-up validation after the FPA-17 repair passed: format check and
+  analyzer; FPA-17 (`1`), complete app shell (`17`), LogBox viewport (`32`),
+  query-preview paint (`24`), visible-scene continuity (`2`), core ephemeral
+  focus (`56`), Avatar rail (`47`), dashboard application (`286`), fast
+  suite (`294`), and protected Mind/Slider range/query (`16`). The complete
+  presentation command finished `595` tests with the same `19` inherited
+  failures already recorded against `fc35c1b`; the generated golden-diff PNGs
+  were discarded rather than accepted. This closes the local-validation record
+  in FPA-13 but does not close online delivery/profile FPA-14/FPA-16/FPA-17.

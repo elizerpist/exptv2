@@ -9,8 +9,10 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/categories/domain/category_repository.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -18,6 +20,8 @@ import 'package:fluvi/shared/presentation/fluvi_slide_up_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../features/dashboard/runtime/dashboard_runtime_test_fixtures.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -86,6 +90,94 @@ void main() {
     expect(gate.absorbing, isFalse);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
   });
+
+  testWidgets(
+    'FPA-17 RED: a cold non-empty Time frame never paints before exact Phase A is ready',
+    (tester) async {
+      tester.view.devicePixelRatio = 2.625;
+      tester.view.physicalSize = const Size(1081.5, 2100);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final repository = _PopulatedDashboardRepository();
+      FluviDiagnosticLogger.clear();
+
+      await tester.pumpWidget(
+        FluviApp(
+          dashboardRepository: repository,
+          initialDate: DateTime(2026, 7, 14),
+          initialRailOpen: true,
+          initialDirection: LedgerDirection.expense,
+        ),
+      );
+      final dashboard = find.byType(CoreDashboard);
+      for (var frame = 0; frame < 240; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (dashboard.evaluate().length == 1 &&
+            find
+                .byKey(const ValueKey('dashboard-bootstrap-surface'))
+                .evaluate()
+                .isEmpty) {
+          break;
+        }
+      }
+      if (dashboard.evaluate().isEmpty) {
+        fail(
+          'Populated production shell did not mount CoreDashboard. '
+          'failureSurface=${find.byKey(const ValueKey('dashboard-bootstrap-failure-surface')).evaluate().isNotEmpty}; '
+          'diagnostics=${FluviDiagnosticLogger.entries.map((event) => event.toLine()).join(' | ')}',
+        );
+      }
+      expect(dashboard, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('dashboard-bootstrap-surface')),
+        findsNothing,
+      );
+      await tester.pump();
+
+      final controller = tester.widget<CoreDashboard>(dashboard).controller;
+      final sceneWindow = Map<String, Object?>.from(
+        controller.exportPhysicalRailReport()['sceneWindow']! as Map,
+      );
+
+      expect(controller.visibleFrames.value?.logBox.previewRowCount, 2);
+      expect(
+        controller.hasTimePreviewLiveResourceFor(controller.navigation.state),
+        isTrue,
+      );
+      expect(
+        controller.performanceCounters.value(
+          DashboardPerformanceMetric.logVisibleSlotPaint,
+        ),
+        greaterThanOrEqualTo(2),
+        reason:
+            'Once the exact bank is ready, the same stable LogBox surface must '
+            'produce an actual non-empty row paint before startup becomes '
+            'interactive.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) => event.stage == 'LOGBOX_INITIAL_PHASE_A_PAINT_DEFERRED',
+            )
+            .map((event) => event.entryCount),
+        <int>[2],
+        reason:
+            'The first unready exact target is deferred once at the existing '
+            'readiness boundary, never painted as an unreadable payload.',
+      );
+      expect(
+        sceneWindow['visiblePayloadWithoutDrawable'],
+        0,
+        reason:
+            'The production shell may expose a non-empty Time frame only once '
+            'its exact-width Phase-A rows are painter-readable. The readiness '
+            'overlay is not permission for the hidden LogBox surface to paint '
+            'an unready semantic payload.',
+      );
+    },
+  );
 
   testWidgets(
     'MR-01: the production app shell carries a native canonical range to Mind after readiness',
@@ -896,6 +988,45 @@ final class _FailOnceDashboardRepository
       );
     }
     return _empty.prepareIndex(request, token);
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => _empty.readCommittedPage(request);
+
+  @override
+  Map<String, Object?> performanceReport() => _empty.performanceReport();
+}
+
+final class _PopulatedDashboardRepository
+    implements DashboardDataRuntimeRepository {
+  final EmptyDashboardDataRuntimeRepository _empty =
+      const EmptyDashboardDataRuntimeRepository();
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    request.reason.requireIndexBuild();
+    if (token.isCancelled) {
+      throw StateError('Index preparation was cancelled.');
+    }
+    return buildRuntimeTestIndex(
+      revision: request.key.coreRevision,
+      generation: token.generation,
+      initialYear: request.initialYear,
+      directionalQueries: request.directionalQueries,
+      yearWindowRadius:
+          (request.key.yearWindowEndInclusive - request.key.yearWindowStart) ~/
+          2,
+      entryCountOverride: 2,
+      previewRowCountForScope: (_) => 2,
+    );
   }
 
   @override

@@ -71,6 +71,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.onWarmupSurfaceLaidOut,
     this.onWarmupTextLayoutsPrepared,
     this.onWarmupError,
+    this.initialLogBoxReadinessActive = false,
     this.onTextLayoutsPrepared,
     this.performanceCounters,
     this.renderDiagnostics,
@@ -114,6 +115,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onWarmupError;
+  final bool initialLogBoxReadinessActive;
   final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
@@ -720,6 +722,8 @@ final class _DashboardLogBoxViewportState
                               onWarmupTextLayoutsPrepared:
                                   widget.onWarmupTextLayoutsPrepared,
                               onWarmupError: widget.onWarmupError,
+                              initialLogBoxReadinessActive:
+                                  widget.initialLogBoxReadinessActive,
                               onTextLayoutsPrepared:
                                   widget.onTextLayoutsPrepared,
                               performanceCounters: widget.performanceCounters,
@@ -1699,6 +1703,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.onWarmupSurfaceLaidOut,
     required this.onWarmupTextLayoutsPrepared,
     required this.onWarmupError,
+    required this.initialLogBoxReadinessActive,
     required this.onTextLayoutsPrepared,
     required this.performanceCounters,
     required this.renderDiagnostics,
@@ -1735,6 +1740,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardLogBoxWarmupTaskCallback? onWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onWarmupError;
+  final bool initialLogBoxReadinessActive;
   final DashboardLogBoxTextLayoutPreparedCallback? onTextLayoutsPrepared;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
@@ -2197,6 +2203,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                   onWarmupSurfaceLaidOut: onWarmupSurfaceLaidOut,
                   onWarmupTextLayoutsPrepared: onWarmupTextLayoutsPrepared,
                   onWarmupError: onWarmupError,
+                  initialLogBoxReadinessActive: initialLogBoxReadinessActive,
                   onTextLayoutsPrepared: onTextLayoutsPrepared,
                   performanceCounters: performanceCounters,
                   renderDiagnostics: renderDiagnostics,

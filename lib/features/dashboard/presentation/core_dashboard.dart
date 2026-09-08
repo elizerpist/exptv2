@@ -84,6 +84,7 @@ class CoreDashboard extends StatefulWidget {
     this.onLogBoxWarmupSurfaceLaidOut,
     this.onLogBoxWarmupTextLayoutsPrepared,
     this.onLogBoxWarmupError,
+    this.initialLogBoxReadinessActive = false,
     this.shellPresentation,
     this.mindQueryFacetLoader,
   });
@@ -98,6 +99,7 @@ class CoreDashboard extends StatefulWidget {
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupTextLayoutsPrepared;
   final DashboardLogBoxWarmupErrorCallback? onLogBoxWarmupError;
+  final bool initialLogBoxReadinessActive;
   final DashboardShellPresentationController? shellPresentation;
   final DashboardAppliedQueryFacetLoader? mindQueryFacetLoader;
 
@@ -1080,6 +1082,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               },
                                               onWarmupError:
                                                   widget.onLogBoxWarmupError,
+                                              initialLogBoxReadinessActive: widget
+                                                  .initialLogBoxReadinessActive,
                                               onTextLayoutsPrepared: controller
                                                   .recordLogBoxTextLayoutCache,
                                             ),

@@ -135,6 +135,40 @@ artifact and its real output remain required before this profile evidence can
 be marked complete; emulator FrameTiming remains non-physical and cannot close
 AVP-04/AVP-10 or physical acceptance.
 
+## Follow-up — initial cold LogBox paint is also Phase-A-gated
+
+The first A–K profile attempt (`34259701012`) reached the new Avatar scenario
+but failed its final report audit because `I_first_fling` contained one
+`visiblePayloadWithoutDrawable`. This is not a DPR diagnosis or a reason to
+weaken the audit. During normal app startup `FluviAppShell` mounts the real
+`CoreDashboard` at `renderCriticalWarmup` behind its opaque readiness surface.
+The stable LogBox surface receives the non-empty initial Time payload before
+its first exact-width `timePreview` bank has finished; its layout callback
+correctly starts the warmup, but its same-frame `CustomPaint` also attempted to
+paint the unreadable payload.
+
+The production-shell FPA-17 test supplies a real populated prepared index and
+the physical device metrics used by the profile. It was red on `c2a9046f` with
+`visiblePayloadWithoutDrawable=1`. The repair threads the existing
+`DashboardInteractionReadiness` state through the existing one Core,
+viewport, and render surface. Only while that startup readiness state is
+active, a non-empty target without a complete exact Phase-A bank:
+
+- remains on the same stable surface and still reports attach/layout so the
+  exact-width warmup starts;
+- suppresses presentation and extent acknowledgement, as well as the actual
+  `CustomPaint`, for that one unready viewport; and
+- emits one bounded `LOGBOX_INITIAL_PHASE_A_PAINT_DEFERRED` diagnostic.
+
+When the cache notifies exact completion, the same surface resumes its normal
+paint and acknowledgement path. The green regression proves an exact live
+Time resource, two actual row paints, one defer event, and no unreadable
+payload counter. It does not create a cache, store, LogBox, overlay, retry, or
+general cold-publication exception; later direct-manipulation cold targets
+remain protected by the existing Time/Avatar Phase-A contracts. An online A–K
+profile rerun is still required before this profile-derived invariant can be
+closed.
+
 ## Source and test impact audit
 
 | Shared owner | Current role and protected consumer | Repair / regression coverage |
@@ -166,6 +200,12 @@ continues to own expensive work outside that exact binder boundary.
   suites, focused tests, protected Mind/Slider and carousel physics tests
   passed. The full presentation suite's 19 failures are exactly baseline
   failures on `fc35c1b`; no unrelated golden update was made.
+- The later initial-readiness repair repeated that validation: format and
+  analyzer passed; its production-shell regression, app shell, LogBox
+  viewport/query-preview/continuity, Core, Avatar rail, dashboard application,
+  fast, and protected Mind/Slider tests all passed. Its full presentation run
+  again ended at `595` passing and `19` inherited failures; generated golden
+  failure images were discarded.
 - Physical performance: still unproven. New device/profile data must establish
   first-target latency split, actual Header/progress pixel timing and whether
   a measured render isolation is warranted.

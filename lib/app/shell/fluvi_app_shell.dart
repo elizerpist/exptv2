@@ -734,6 +734,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                             onLogBoxWarmupError: (error, _) {
                               _readiness.fail(error);
                             },
+                            initialLogBoxReadinessActive: !_readiness.isReady,
                           ),
                         )
                       else if (_readiness.phase ==
