@@ -691,8 +691,16 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       }
     }
     final priorKey = _liveInteractionResourceKeys[lane];
+    // A retained candidate with the same payload key is not automatically a
+    // usable live resource: the render surface may have changed width or DPR
+    // since it was prepared. Reuse only the exact lane-owned painter-ready
+    // bank, otherwise replace it atomically at the current surface metrics.
     if (priorKey == resourceKey &&
-        hasCandidateWindow(window, candidateKey: resourceKey)) {
+        hasLiveInteractionResourceWindow(
+          window,
+          lane: lane,
+          resourceKey: resourceKey,
+        )) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'RESOURCE|REUSE',
@@ -1179,11 +1187,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   bool cancelInFlightPreparation({
     DashboardLogBoxScenePreparationIntent intent =
         DashboardLogBoxScenePreparationIntent.foregroundInteraction,
+    bool allowEqualPriorityTakeover = false,
   }) {
     final active = _activePreparation;
     if (active != null &&
         intent != active.intent &&
-        !intent.canSupersede(active.intent)) {
+        !intent.canSupersede(active.intent) &&
+        !(allowEqualPriorityTakeover &&
+            intent.priority == active.intent.priority)) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SCENE_WINDOW_PREPARE_CANCELLATION_REJECTED',
@@ -1199,6 +1210,44 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     _discardStagedBank();
     _activePreparation = null;
     return active != null;
+  }
+
+  /// Releases only an obsolete in-flight direct-interaction resource lease.
+  ///
+  /// A newer physical producer may take foreground scheduling from another
+  /// producer before that older carousel emits `ScrollEnd`.  The cache still
+  /// owns cancellation tokens and retention; this method merely makes that
+  /// handoff lane-specific so generic input maintenance cannot cancel an
+  /// unrelated resource preparation.
+  bool cancelLiveInteractionResourcePreparation({
+    required DashboardLiveInteractionResourceLane lane,
+  }) {
+    final resourceKey = _preparingLiveInteractionResourceKeys[lane];
+    final active = _activePreparation;
+    // A same-priority request can be queued behind a different live-resource
+    // lane. Only the lane that owns the *active* cache request is eligible for
+    // foreground takeover; otherwise a later cancellation could accidentally
+    // revoke the producer that is currently doing the useful bounded work.
+    if (resourceKey == null ||
+        active == null ||
+        active.intent !=
+            DashboardLogBoxScenePreparationIntent.liveInteractionResource ||
+        active.candidateKey != resourceKey) {
+      return false;
+    }
+    final cancelled = cancelInFlightPreparation(
+      intent: DashboardLogBoxScenePreparationIntent.liveInteractionResource,
+      allowEqualPriorityTakeover: true,
+    );
+    if (cancelled) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'RESOURCE|LEASE_SUPERSEDED',
+          scope: 'lane=${lane.name} reason=newerForegroundProducer',
+        ),
+      );
+    }
+    return cancelled;
   }
 
   /// Prepares but does not make [window] the active structural bank. Previous

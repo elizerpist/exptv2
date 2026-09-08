@@ -1622,11 +1622,12 @@ final class _HierarchyValueSelectorState
             _lastEmittedTarget = candidate;
             _latestDesiredTarget = candidate;
             final acceptance = widget.onCrossed(candidate);
-            if (!acceptance.isExactLivePublication) return;
-            // The coordinator has synchronously selected this complete
-            // prepared frame into the shared visible lane.  A later paint
-            // acknowledgement is diagnostic evidence; an emitted candidate
-            // without this acceptance can never own release settlement.
+            if (!acceptance.isAcceptedSemanticIntent) return;
+            // An exact target has synchronously entered the shared visible
+            // lane. A cold target remains the latest physical semantic intent
+            // but Core retains the old valid visible frame until its exact
+            // painter resource binds. In both cases an emitted/rejected
+            // candidate cannot own release settlement.
             _latestAcceptedTarget = candidate;
             _latestPaintSelectedTarget = candidate;
             // An accepted exact Phase-A frame owns release settlement. Rich

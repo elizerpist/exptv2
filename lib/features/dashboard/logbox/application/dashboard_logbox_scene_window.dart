@@ -362,6 +362,15 @@ typedef DashboardLogBoxLiveInteractionResourceLookup =
       required String candidateKey,
     });
 
+/// Cancels only an obsolete in-flight foreground resource in [lane].
+///
+/// The prepared-scene cache remains the physical owner of both lanes and its
+/// capacity. Core uses this narrow capability only when a newer physical
+/// direct-manipulation producer takes foreground ownership; it is not a
+/// general scene-maintenance cancellation hook.
+typedef DashboardLogBoxLiveInteractionResourcePreparationCanceller =
+    bool Function({required DashboardLiveInteractionResourceLane lane});
+
 /// Binds one exact live payload to the Phase-A resources that the active
 /// rail-preview painter will actually query.
 ///

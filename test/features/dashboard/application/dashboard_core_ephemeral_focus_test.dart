@@ -3632,6 +3632,432 @@ void main() {
     },
   );
 
+  testWidgets(
+    'RED FPA baseline control: a Summary pointer starts Time resource preparation while Avatar motion is still active',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          initialYear: 2026,
+          entryCountOverride: 4,
+          previewRowCountForScope: (_) => 4,
+          deferredLogBoxes: true,
+        ),
+        publicationState: core.navigation.state,
+      );
+
+      final timeResourceStarted = Completer<void>();
+      core.beginBudgetAvatarMotion();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              _, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              if (lane == DashboardLiveInteractionResourceLane.timePreview &&
+                  !timeResourceStarted.isCompleted) {
+                timeResourceStarted.complete();
+              }
+            },
+      );
+
+      // Coordinator attachment during active Avatar motion is intentionally
+      // not the trigger. The new physical Summary pointer is the required
+      // handoff boundary, before its gesture arena has resolved.
+      await tester.pump();
+      expect(timeResourceStarted.isCompleted, isFalse);
+
+      core.noteSummaryDirectPointerDown();
+      await tester.pump();
+
+      expect(
+        timeResourceStarted.isCompleted,
+        isTrue,
+        reason:
+            'Time resource preparation must start on the foreground pointer, '
+            'not after the old Avatar ScrollEnd.',
+      );
+    },
+  );
+
+  testWidgets(
+    'RED FPA: an Avatar-active Summary pointer acquires the cold Time Phase-A resource before Avatar lifecycle end',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      // This production-parent index provides a real non-empty prepared
+      // Time payload. The test intentionally does not preinstall the
+      // `timePreview` resource bank: that remains cold until the Summary
+      // pointer takes foreground ownership below.
+      await core.installPreparedIndex(
+        buildRuntimeTestIndex(
+          revision: 2,
+          generation: 2,
+          initialYear: 2026,
+          entryCountOverride: 4,
+          previewRowCountForScope: (_) => 4,
+          deferredLogBoxes: true,
+        ),
+        publicationState: core.navigation.state,
+      );
+
+      final initialWindow = core.railCriticalSceneWindow();
+      await cache.prepareWindow(window: initialWindow, surfaceWidth: 378);
+      cache.activateWindow(initialWindow);
+      core.recordInitialSceneWindowActivation(initialWindow);
+
+      final timeResourceStarted = Completer<void>();
+      final releaseTimeResource = Completer<void>();
+      final cancelledResourceLanes = <DashboardLiveInteractionResourceLane>[];
+      core.beginBudgetAvatarMotion();
+      final visibleBeforeTakeover = core.visibleFrames.value!;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: cache.activateWindow,
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              if (lane == DashboardLiveInteractionResourceLane.timePreview) {
+                if (!timeResourceStarted.isCompleted) {
+                  timeResourceStarted.complete();
+                }
+                await releaseTimeResource.future;
+              }
+              await cache.prepareLiveInteractionResourceWindow(
+                lane: lane,
+                resourceKey: retainedKey,
+                window: window,
+                retainViewportId: retainViewportId,
+                surfaceWidth: 378,
+              );
+            },
+        hasLiveInteractionResources:
+            (window, {required lane, required candidateKey}) =>
+                cache.hasLiveInteractionResourceWindow(
+                  window,
+                  lane: lane,
+                  resourceKey: candidateKey,
+                ),
+        cancelLiveInteractionResourcePreparation: ({required lane}) {
+          cancelledResourceLanes.add(lane);
+          return cache.cancelLiveInteractionResourcePreparation(lane: lane);
+        },
+        bindLiveInteractionReadablePhaseA:
+            (payload, {required lane, required resourceKey}) =>
+                cache.bindLiveInteractionReadablePhaseA(
+                  payload,
+                  lane: lane,
+                  resourceKey: resourceKey,
+                ),
+      );
+
+      // Attaching during Avatar motion must not be enough to start Time work:
+      // the tested boundary is the newer Summary pointer, before its pan wins.
+      await tester.pump();
+      expect(timeResourceStarted.isCompleted, isFalse);
+
+      FluviDiagnosticLogger.clear();
+      core.noteSummaryDirectPointerDown();
+      await tester.pump();
+
+      expect(
+        timeResourceStarted.isCompleted,
+        isTrue,
+        reason:
+            'The new foreground Time producer must request its bounded '
+            'timePreview resource now, not after the old Avatar ScrollEnd.',
+      );
+      expect(
+        core.isMotionLaneActive(DashboardMotionLane.budgetAvatar),
+        isFalse,
+        reason:
+            'The physical Avatar controller may finish later, but its old '
+            'foreground scheduling lane cannot survive the Time pointer.',
+      );
+      expect(
+        cancelledResourceLanes,
+        contains(DashboardLiveInteractionResourceLane.budgetAvatarPreview),
+        reason:
+            'The controller must explicitly release the old producer\'s '
+            'resource lease before it starts Time work; the cache remains the '
+            'only owner that decides whether an active lane can be cancelled.',
+      );
+      // The old physical Avatar ScrollEnd may arrive after the Time pointer.
+      // It must remain cleanup-only: no Avatar Phase-B drain or resource
+      // re-prime may regain foreground scheduling from that stale lifecycle.
+      core.endBudgetAvatarMotion();
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'FOREGROUND_PRODUCER_STALE_MOTION_END' &&
+              event.scope?.contains('producer=budgetAvatar') == true,
+        ),
+        isTrue,
+      );
+
+      final origin = core.navigation.state;
+      final candidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+      final latestCandidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 2,
+        base: origin,
+      )!;
+      core.beginSegmentedSummaryMotion();
+      final firstAcceptance = core
+          .navigateExperimentalTemporalComponentCandidate(
+            candidate: candidate,
+            component: DashboardTemporalAnchorComponent.day,
+          );
+      final latestAcceptance = core
+          .navigateExperimentalTemporalComponentCandidate(
+            candidate: latestCandidate,
+            component: DashboardTemporalAnchorComponent.day,
+          );
+      await tester.pump();
+
+      expect(firstAcceptance.isAcceptedSemanticIntent, isTrue);
+      expect(latestAcceptance.isAcceptedSemanticIntent, isTrue);
+
+      expect(
+        core.visibleFrames.value,
+        same(visibleBeforeTakeover),
+        reason:
+            'A cold non-empty Time target retains the last valid visual; it '
+            'may not publish an unreadable preview before the exact binder.',
+      );
+
+      releaseTimeResource.complete();
+      await tester.pump();
+      await tester.pump();
+
+      final promoted = core.visibleFrames.logBoxLane.value!;
+      expect(
+        promoted.queryKey,
+        latestCandidate.temporalAnchor.sourceChildQueryKey,
+        reason:
+            'Two Time semantic targets in one render opportunity coalesce to '
+            'the latest exact painter-ready candidate; the earlier target '
+            'never becomes a 13 px visible frame.',
+      );
+      expect(cache.hasCompleteReadablePhaseAFor(promoted.logBox), isTrue);
+
+      // Release/settle is allowed to arrive before the render surface reports
+      // paint, but it cannot be the first moment Time becomes visible or the
+      // authority for canonical navigation.  This exact Phase-A paint report
+      // is intentionally independent from every Header expansion transition.
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: latestCandidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      expect(core.navigation.state, same(origin));
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(promoted));
+      await tester.pump();
+
+      expect(
+        core.segmentedTargetPainted.value?.target.dayCursor,
+        latestCandidate.dayCursor,
+      );
+      expect(core.navigation.state.dayCursor, latestCandidate.dayCursor);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'TIME_PHASE_A_CANDIDATE_TERMINAL' &&
+              event.scope?.contains(
+                    'terminalOutcome=coalescedBeforeReadiness',
+                  ) ==
+                  true,
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'TIME_PHASE_A_CANDIDATE_TERMINAL' &&
+              event.scope?.contains('terminalOutcome=exactPhaseAPainted') ==
+                  true,
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_LIVE_ROOT_MISS',
+        ),
+        isEmpty,
+        reason:
+            'A cold target is pending rather than entering visible authority '
+            'as a painter-resource miss.',
+      );
+
+      // Header collapse/expand is an unrelated geometry owner. It cannot
+      // promote a deferred target, transfer the timePreview lease, or emit a
+      // second exact-paint acknowledgement after the resource completion has
+      // already made the target visible.
+      final paintedBeforeCollapse = core.segmentedTargetPainted.value;
+      final terminalCountBeforeCollapse = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'TIME_PHASE_A_CANDIDATE_TERMINAL')
+          .length;
+      final resourceReadyCountBeforeCollapse = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'TM|LIVE_ROOT_RESOURCES_READY')
+          .length;
+      core.expansion.setProgress(core.metrics.collapseTravel);
+      core.expansion.setProgress(0);
+      await tester.pump();
+
+      expect(core.visibleFrames.logBoxLane.value!.queryKey, promoted.queryKey);
+      expect(core.segmentedTargetPainted.value, same(paintedBeforeCollapse));
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'TIME_PHASE_A_CANDIDATE_TERMINAL')
+            .length,
+        terminalCountBeforeCollapse,
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'TM|LIVE_ROOT_RESOURCES_READY')
+            .length,
+        resourceReadyCountBeforeCollapse,
+      );
+    },
+  );
+
+  testWidgets(
+    'RED FPA: an Avatar pointer supersedes Time foreground settlement while retaining the last Time visual until Avatar Phase A publishes',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          // The Time candidate remains a real prepared component crossing;
+          // this bounded membership seed gives every nearby date one Avatar
+          // category row so the post-takeover Header/amount/LogBox assertion
+          // verifies a non-empty Avatar semantic transaction as well.
+          rows: List<DashboardLedgerEntry>.generate(
+            90,
+            (index) => DashboardLedgerEntry(
+              id: 'reverse-handoff-utility-$index',
+              partnerId: 'reverse-handoff-partner',
+              categoryId: 'utilities',
+              direction: 'income',
+              amountMinor: 500,
+              bookedLocalEpochDay: 20600 + index,
+              bookedLocalTimeMinutes: 600,
+              partnerDisplayName: 'Utility partner',
+              categoryDisplayName: 'Utilities',
+              categoryColorId: 'fallback',
+              categoryIconId: 'fallback',
+            ),
+            growable: false,
+          ),
+        ),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      final origin = core.navigation.state;
+      final timeCandidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+      core.beginSegmentedSummaryMotion();
+      final timeAcceptance = core
+          .navigateExperimentalTemporalComponentCandidate(
+            candidate: timeCandidate,
+            component: DashboardTemporalAnchorComponent.day,
+          );
+      expect(timeAcceptance.isExactLivePublication, isTrue);
+      await tester.pump();
+      final visibleTimeFrame = core.visibleFrames.value!;
+
+      core.noteBudgetAvatarDirectPointerDown();
+
+      expect(
+        core.isMotionLaneActive(DashboardMotionLane.summaryShell),
+        isFalse,
+        reason:
+            'A newer Avatar pointer releases the obsolete Time foreground '
+            'lane before Avatar gesture recognition settles.',
+      );
+      expect(
+        core.visibleFrames.value,
+        same(visibleTimeFrame),
+        reason:
+            'Takeover never blanks the prior valid Time visual while Avatar '
+            'waits to bind its own exact Phase-A target.',
+      );
+
+      // This is the obsolete Time lifecycle callback. It may not canonically
+      // settle or overwrite the newer Avatar intent.
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: timeCandidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+      expect(core.navigation.state, same(origin));
+
+      core.beginBudgetAvatarMotion();
+      expect(
+        await core.requestBudgetCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+          publishDuringMotion: true,
+          targetHandle: 17,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+
+      expect(core.focus.state?.category?.id, 'utilities');
+      expect(core.visibleFrames.amountLane.value!.amount.totalMinor, 500);
+      expect(
+        core.visibleFrames.logBoxLane.value!.logBox.stableRowIdentities,
+        isNotEmpty,
+      );
+      expect(core.navigation.state, same(origin));
+    },
+  );
+
   test(
     'Budget avatar active-resource scene hit publishes the focused LogBox in the crossing epoch',
     () async {

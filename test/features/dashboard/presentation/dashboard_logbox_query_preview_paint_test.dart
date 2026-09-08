@@ -2515,6 +2515,8 @@ void main() {
         sceneCache,
         stageLiveInteractionFromPreparedResources: false,
       );
+      expect(core.preparedIndex, isNotNull);
+      expect(core.dataRuntime.currentIndex, isNotNull);
       final origin = core.navigation.state;
       final candidate = core.experimentalTemporalComponentOffsetCandidate(
         plane: TimePlane.month,
@@ -2558,22 +2560,27 @@ void main() {
         ),
       );
       await tester.pump();
+      // This is an intentionally explicit warm fixture. A generic retained
+      // scene or another producer's live bank is not Time painter readiness.
+      // The real Core/cache path prepares this exact candidate before the
+      // semantic crossing below; no test may rely on an accidental cache hit.
+      core.beginSegmentedSummaryMotion();
+      core.prepareTimePreviewLiveResourceForTesting(origin);
       for (
         var frame = 0;
-        frame < 40 && !sceneCache.hasLiveInteractionResourceBank;
+        frame < 40 && !core.hasTimePreviewLiveResourceFor(origin);
         frame += 1
       ) {
         await tester.pump(const Duration(milliseconds: 16));
       }
       expect(
-        sceneCache.hasLiveInteractionResourceBank,
+        core.hasTimePreviewLiveResourceFor(origin),
         isTrue,
         reason:
-            'Time Phase-A paragraph resources are prepared while idle, not '
-            'during a semantic crossing.',
+            'The warm Time path requires the exact timePreview lane/key/'
+            'window before its semantic crossing.',
       );
       final prepareCountBeforeCrossing = sceneCache.scenePrepareNewCount;
-      core.beginSegmentedSummaryMotion();
       core.navigateExperimentalTemporalComponentCandidate(
         candidate: candidate,
         component: DashboardTemporalAnchorComponent.day,
@@ -2996,9 +3003,20 @@ void main() {
       );
       sceneCache.activateWindow(armedLevels);
       core.recordInitialSceneWindowActivation(armedLevels);
-      final prepareCountBeforeCrossing = sceneCache.scenePrepareNewCount;
-
       core.beginSegmentedSummaryMotion();
+      // Explicitly arm the exact timePreview lane for this parent-changing
+      // level target. The rich window above is intentionally not accepted as
+      // a substitute for painter-readable Phase A.
+      core.prepareTimePreviewLiveResourceForTesting(target);
+      for (
+        var frame = 0;
+        frame < 40 && !core.hasTimePreviewLiveResourceFor(target);
+        frame += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(core.hasTimePreviewLiveResourceFor(target), isTrue);
+      final prepareCountBeforeCrossing = sceneCache.scenePrepareNewCount;
       core.navigateExperimentalTemporalSelection(
         plane: TimePlane.year,
         isRailOpen: false,

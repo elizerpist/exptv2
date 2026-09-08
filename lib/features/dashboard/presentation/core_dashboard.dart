@@ -337,6 +337,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                 lane: lane,
                 resourceKey: candidateKey,
               ),
+      cancelLiveInteractionResourcePreparation: ({required lane}) =>
+          _preparedSceneCache.cancelLiveInteractionResourcePreparation(
+            lane: lane,
+          ),
       bindLiveInteractionReadablePhaseA:
           (payload, {required lane, required resourceKey}) =>
               _preparedSceneCache.bindLiveInteractionReadablePhaseA(

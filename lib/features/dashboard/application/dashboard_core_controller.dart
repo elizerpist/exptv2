@@ -70,6 +70,27 @@ enum DashboardMotionLane {
   budgetAvatar,
 }
 
+/// The producer that owns the current direct-manipulation foreground lease.
+///
+/// This coordinates existing controller, cache and visible-frame owners; it
+/// deliberately contains no carousel, scene or financial data. A physical
+/// outgoing carousel can complete its own lifecycle after a newer claim, but
+/// it can no longer publish or retain foreground resource priority.
+enum _DashboardForegroundDirectProducer { summaryTime, budgetAvatar }
+
+/// The runtime and presentation owners can expose the same immutable index
+/// through distinct wrapper references during an initial attach. Live-resource
+/// safety is revision/query/generation identity, not Dart object identity.
+bool _samePreparedInteractionIndex(
+  PreparedDashboardIndex? left,
+  PreparedDashboardIndex? right,
+) =>
+    left != null &&
+    right != null &&
+    left.key == right.key &&
+    left.generation == right.generation &&
+    left.contentDigest == right.contentDigest;
+
 /// A presentation-owned resource capability. Dashboard navigation owns the
 /// semantic commit, while this callback proves that its Card2 period is
 /// already drawable without giving this application controller any SVG or
@@ -103,6 +124,15 @@ enum _DashboardNavigationSceneRequirement {
 /// and direction navigation own structural selection. Keeping that distinction
 /// typed avoids treating diagnostic reason strings as state ownership.
 enum _SceneCoveredNavigationOwner { structural, railVisibility }
+
+/// Internal outcome for a prepared Time publication attempt. A deferred
+/// result is an accepted semantic intent whose visible frame is intentionally
+/// held until the existing `timePreview` painter-resource authority binds it.
+enum _PreparedSegmentedTemporalPublicationOutcome {
+  published,
+  deferredForPainterResource,
+  rejected,
+}
 
 enum _CommittedReadyAheadPriorityOrigin {
   querySheetRoute,
@@ -191,6 +221,34 @@ final class _PendingBudgetAvatarPhaseACandidate {
   final bool Function() isStillCurrent;
   final Future<bool> Function() publishIfPainterReady;
   final Completer<bool> completion;
+}
+
+/// One bounded, latest-wins non-empty Time target waiting for the existing
+/// `timePreview` resource lane. Core retains only semantic identity and its
+/// original visible-store order; the prepared-scene cache remains the sole
+/// resource owner.
+final class _PendingSegmentedTimePhaseACandidate {
+  _PendingSegmentedTimePhaseACandidate({
+    required this.flightGeneration,
+    required this.candidate,
+    required this.component,
+    required this.source,
+    required this.baseIndex,
+    required this.baseScope,
+    required this.navigationEpoch,
+    required this.interactionOrder,
+  });
+
+  final int flightGeneration;
+  final DashboardNavigationState candidate;
+  final DashboardTemporalAnchorComponent? component;
+  final String source;
+  final PreparedDashboardIndex baseIndex;
+  final CurrentLedgerQueryScope baseScope;
+  final int navigationEpoch;
+  final DashboardInteractionPreviewOrder interactionOrder;
+  bool settleRequested = false;
+  bool terminalOutcomeRecorded = false;
 }
 
 /// The rich scene is visual augmentation of an already exact prepared focus
@@ -928,6 +986,8 @@ final class DashboardCoreController {
   _liveInteractionResourceWindowPreparer;
   DashboardLogBoxLiveInteractionResourceLookup?
   _liveInteractionResourceWindowLookup;
+  DashboardLogBoxLiveInteractionResourcePreparationCanceller?
+  _liveInteractionResourcePreparationCanceller;
   DashboardLogBoxLiveInteractionReadablePhaseABinder?
   _liveInteractionReadablePhaseABinder;
   DashboardLogBoxActiveResourceSceneStager? _liveInteractionResourceSceneStager;
@@ -1038,6 +1098,7 @@ final class DashboardCoreController {
   _SegmentedTemporalPaintTarget? _segmentedLatestAcceptedPaintTarget;
   _SegmentedTemporalPaintTarget? _segmentedLatestPaintedTarget;
   _SegmentedTemporalPaintTarget? _segmentedPendingSettleTarget;
+  _PendingSegmentedTimePhaseACandidate? _pendingSegmentedTimePhaseACandidate;
   _SegmentedPaintedSceneRetention? _segmentedPaintedSceneRetention;
   int _segmentedPaintedSceneRetentionGeneration = 0;
   int _segmentedPaintRejectedCount = 0;
@@ -1110,6 +1171,8 @@ final class DashboardCoreController {
   int _lastSceneRebaseRequiredRows = 0;
   String? _lastSceneWindowError;
   final Set<DashboardMotionLane> _activeMotionLanes = <DashboardMotionLane>{};
+  _DashboardForegroundDirectProducer? _foregroundDirectProducer;
+  int _foregroundDirectProducerEpoch = 0;
 
   DashboardNavigationController get navigation => presentation.navigation;
   DashboardMotionKernel get motion => presentation.motion;
@@ -1120,9 +1183,52 @@ final class DashboardCoreController {
       _activePreparedRevisionBundle;
   PreparedDashboardIndex? get preparedIndex =>
       _activePreparedRevisionBundle?.index ?? presentation.index;
+
+  /// Existing immutable index authority available to a direct interaction.
+  ///
+  /// During initial CoreDashboard attachment the runtime can have published
+  /// the index before Presentation has selected its first frame. Resource
+  /// readiness may use that already-built immutable index, but must never
+  /// create one or observe a pending index.
+  PreparedDashboardIndex? get _interactionPreparedIndex =>
+      presentation.index ?? preparedIndex ?? dataRuntime.currentIndex;
+
   int? get coreRevision => preparedIndex?.coreRevision;
   bool get isBootstrapped => _bootstrapped;
   ValueListenable<bool> get sceneWindowPreparing => _sceneWindowPreparing;
+
+  /// Exact cache-lane assertion for production-parent tests. It observes the
+  /// same lane/key/window identity used by Time Phase-A binding and does not
+  /// prepare, bind or mutate any resource.
+  @visibleForTesting
+  bool hasTimePreviewLiveResourceFor(DashboardNavigationState state) {
+    final base = _interactionPreparedIndex;
+    if (base == null) return false;
+    final baseScope = currentQuery.scopeFor(state.parentQueryScope.direction);
+    final resourceKey = _timePreviewLiveResourceKeyFor(base, baseScope, state);
+    final window = _timePreviewLiveResourceWindowFor(base, state);
+    return _samePreparedInteractionIndex(_timePreviewResourceBase, base) &&
+        _timePreviewResourceKey == resourceKey &&
+        _timePreviewResourceWindow != null &&
+        _hasTimePreviewLiveResource(window, resourceKey: resourceKey);
+  }
+
+  /// Starts the real cache-owned Time Phase-A preparation for one already
+  /// derived target. Test parents use this to make warm-path setup explicit;
+  /// it has no semantic or visible-frame side effect and cannot manufacture a
+  /// query, index or render resource outside the normal coordinator path.
+  @visibleForTesting
+  void prepareTimePreviewLiveResourceForTesting(
+    DashboardNavigationState target,
+  ) {
+    final base = _interactionPreparedIndex;
+    if (base == null) return;
+    _requestTimePreviewLiveRowResources(
+      base,
+      targetState: target,
+      foregroundTakeover: true,
+    );
+  }
 
   /// Complete, invisible candidates for the current applied query's direct
   /// chip-removal neighbours.  The active prepared index has a separate
@@ -1157,6 +1263,8 @@ final class DashboardCoreController {
     DashboardLogBoxLiveInteractionResourcePreparer?
     prepareLiveInteractionResources,
     DashboardLogBoxLiveInteractionResourceLookup? hasLiveInteractionResources,
+    DashboardLogBoxLiveInteractionResourcePreparationCanceller?
+    cancelLiveInteractionResourcePreparation,
     DashboardLogBoxLiveInteractionReadablePhaseABinder?
     bindLiveInteractionReadablePhaseA,
     DashboardLogBoxActiveResourceSceneStager?
@@ -1193,6 +1301,8 @@ final class DashboardCoreController {
     _retainedSceneWindowLookup = hasRetained;
     _liveInteractionResourceWindowPreparer = prepareLiveInteractionResources;
     _liveInteractionResourceWindowLookup = hasLiveInteractionResources;
+    _liveInteractionResourcePreparationCanceller =
+        cancelLiveInteractionResourcePreparation;
     _liveInteractionReadablePhaseABinder = bindLiveInteractionReadablePhaseA;
     _liveInteractionResourceSceneStager =
         stageLiveInteractionFromPreparedResources;
@@ -1220,7 +1330,12 @@ final class DashboardCoreController {
       _activeRailCriticalBankIdentity = null;
     }
     _scheduleSceneRebaseDrain();
-    final currentIndex = presentation.index;
+    // A coordinator commonly mounts just after the immutable index has been
+    // installed but before the presentation controller has selected its
+    // first frame. That index is already the sole prepared-data authority;
+    // skipping it here made the first Time resource depend on a later
+    // lifecycle/rebuild instead of beginning at the cache-attachment boundary.
+    final currentIndex = _interactionPreparedIndex;
     if (currentIndex != null) {
       _requestTimePreviewLiveRowResources(currentIndex);
     }
@@ -1255,6 +1370,7 @@ final class DashboardCoreController {
     _retainedSceneWindowLookup = null;
     _liveInteractionResourceWindowPreparer = null;
     _liveInteractionResourceWindowLookup = null;
+    _liveInteractionResourcePreparationCanceller = null;
     _liveInteractionReadablePhaseABinder = null;
     _liveInteractionResourceSceneStager = null;
     _activeSceneWindowRetainer = null;
@@ -3676,29 +3792,60 @@ final class DashboardCoreController {
   /// idle. It deliberately does not run from a semantic crossing: the
   /// completed bank is a prerequisite for readable rows, whereas the optional
   /// rich scene remains a later Phase-B concern.
-  void _requestTimePreviewLiveRowResources(PreparedDashboardIndex base) {
+  String _timePreviewLiveResourceKeyFor(
+    PreparedDashboardIndex base,
+    CurrentLedgerQueryScope baseScope,
+    DashboardNavigationState state,
+  ) =>
+      'time-live-root:rev:${base.coreRevision}|index:${base.generation}|'
+      'base:${baseScope.key.value}|navigation:${state.navigationEpoch}|'
+      'parent:${state.parentQueryKey.value}';
+
+  DashboardLogBoxSceneWindow _timePreviewLiveResourceWindowFor(
+    PreparedDashboardIndex base,
+    DashboardNavigationState state,
+  ) => _preparedRevisionBundleFor(base, publicationState: state)
+      .railInteractionSceneWindow
+      .withCoverage(_coverageFor(state, indexOverride: base));
+
+  bool _hasTimePreviewLiveResource(
+    DashboardLogBoxSceneWindow window, {
+    required String resourceKey,
+  }) =>
+      _liveInteractionResourceWindowLookup?.call(
+        window,
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        candidateKey: resourceKey,
+      ) ??
+      false;
+
+  void _requestTimePreviewLiveRowResources(
+    PreparedDashboardIndex base, {
+    DashboardNavigationState? targetState,
+    bool pendingCandidateRequest = false,
+    bool foregroundTakeover = false,
+  }) {
     if (_disposed ||
         _liveInteractionResourceWindowPreparer == null ||
-        diagnostics.isMotionActive ||
+        (diagnostics.isMotionActive && !foregroundTakeover) ||
         _verticalPointerIntentActive ||
         _verticalInteractionActive) {
       return;
     }
-    final state = navigation.state;
+    final state = targetState ?? navigation.state;
     final direction = state.parentQueryScope.direction;
     final baseScope = currentQuery.scopeFor(direction);
-    final resourceKey =
-        'time-live-root:rev:${base.coreRevision}|index:${base.generation}|'
-        'base:${baseScope.key.value}|navigation:${state.navigationEpoch}|'
-        'parent:${state.parentQueryKey.value}';
+    final resourceKey = _timePreviewLiveResourceKeyFor(base, baseScope, state);
+    final resourceWindow = _timePreviewLiveResourceWindowFor(base, state);
     if (_timePreviewResourceInFlightGeneration != null &&
-        identical(_timePreviewResourceBase, base) &&
+        _samePreparedInteractionIndex(_timePreviewResourceBase, base) &&
         _timePreviewResourceKey == resourceKey) {
       return;
     }
-    if (identical(_timePreviewResourceBase, base) &&
+    if (_samePreparedInteractionIndex(_timePreviewResourceBase, base) &&
         _timePreviewResourceKey == resourceKey &&
-        _timePreviewResourceWindow != null) {
+        _timePreviewResourceWindow != null &&
+        _hasTimePreviewLiveResource(resourceWindow, resourceKey: resourceKey)) {
       return;
     }
     final generation = ++_timePreviewResourceGeneration;
@@ -3715,6 +3862,7 @@ final class DashboardCoreController {
         base: base,
         baseScope: baseScope,
         state: state,
+        isExactTargetRequest: pendingCandidateRequest,
         resourceKey: resourceKey,
         generation: generation,
       ).whenComplete(() {
@@ -3729,6 +3877,7 @@ final class DashboardCoreController {
     required PreparedDashboardIndex base,
     required CurrentLedgerQueryScope baseScope,
     required DashboardNavigationState state,
+    required bool isExactTargetRequest,
     required String resourceKey,
     required int generation,
   }) async {
@@ -3741,9 +3890,7 @@ final class DashboardCoreController {
       // pre-motion universe instead. Preparing those already-derived roots
       // gives every reachable Time Phase-A payload normal row paragraphs
       // without any work during a semantic tick.
-      final window = _preparedRevisionBundleFor(base, publicationState: state)
-          .railInteractionSceneWindow
-          .withCoverage(_coverageFor(state, indexOverride: base));
+      final window = _timePreviewLiveResourceWindowFor(base, state);
       if (window.previewRowCount > 8192) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -3757,13 +3904,10 @@ final class DashboardCoreController {
         );
         return;
       }
-      final ready =
-          _liveInteractionResourceWindowLookup?.call(
-            window,
-            lane: DashboardLiveInteractionResourceLane.timePreview,
-            candidateKey: resourceKey,
-          ) ??
-          false;
+      final ready = _hasTimePreviewLiveResource(
+        window,
+        resourceKey: resourceKey,
+      );
       if (!ready) {
         await prepare(
           window,
@@ -3775,17 +3919,19 @@ final class DashboardCoreController {
       final stillCurrent =
           !_disposed &&
           generation == _timePreviewResourceGeneration &&
-          identical(presentation.index ?? dataRuntime.currentIndex, base) &&
+          _samePreparedInteractionIndex(_interactionPreparedIndex, base) &&
           currentQuery.scopeFor(baseScope.direction) == baseScope &&
-          navigation.state.navigationEpoch == state.navigationEpoch;
+          (isExactTargetRequest
+              ? _isPendingExactTimePreviewResourceRequestCurrent(
+                  base: base,
+                  candidate: state,
+                )
+              : navigation.state.navigationEpoch == state.navigationEpoch);
       if (!stillCurrent) return;
-      final retained =
-          _liveInteractionResourceWindowLookup?.call(
-            window,
-            lane: DashboardLiveInteractionResourceLane.timePreview,
-            candidateKey: resourceKey,
-          ) ??
-          false;
+      final retained = _hasTimePreviewLiveResource(
+        window,
+        resourceKey: resourceKey,
+      );
       if (!retained) {
         FluviDiagnosticLogger.log(
           FluviDiagnosticEvent(
@@ -3814,6 +3960,11 @@ final class DashboardCoreController {
               'readablePhaseARowsReady=true',
         ),
       );
+      // A cold Time semantic target retains only its original interaction
+      // order while this cache-owned resource prepares. Completion is the
+      // sole event that may retry its exact bind; it never waits for Avatar
+      // ScrollEnd, Header layout, or a generic dashboard-idle transition.
+      unawaited(_promotePendingSegmentedTimePhaseACandidate());
     } on DashboardLogBoxScenePreparationCancelled {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -5316,12 +5467,21 @@ final class DashboardCoreController {
       plane: plane,
       isRailOpen: isRailOpen,
     );
-    if (_publishPreparedSegmentedTemporalTarget(
+    switch (_publishPreparedSegmentedTemporalTarget(
       candidate: candidate,
       source: 'level',
     )) {
-      _recordNavigationSelection('summaryExperimentPreparedLevelCrossed');
-      return;
+      case _PreparedSegmentedTemporalPublicationOutcome.published:
+        _recordNavigationSelection('summaryExperimentPreparedLevelCrossed');
+        return;
+      case _PreparedSegmentedTemporalPublicationOutcome
+          .deferredForPainterResource:
+        // The prior exact visual remains authoritative while the cache-owned
+        // Time Phase-A resource completes. Canonical navigation must not turn
+        // this cold semantic intent into a 13 px unreadable preview.
+        return;
+      case _PreparedSegmentedTemporalPublicationOutcome.rejected:
+        break;
     }
     _navigateExperimentalTemporalCandidate(
       candidate,
@@ -5366,7 +5526,85 @@ final class DashboardCoreController {
     base: base,
   );
 
+  /// Transfers the one foreground scheduling lease between direct producers.
+  ///
+  /// The old carousel's physical lifecycle may finish independently, but its
+  /// logical callbacks and in-flight lane-owned resource can no longer block
+  /// or overwrite the newer pointer's semantic transaction.
+  bool _claimForegroundDirectProducer(
+    _DashboardForegroundDirectProducer producer, {
+    required String reason,
+  }) {
+    final prior = _foregroundDirectProducer;
+    if (prior == producer) return false;
+    _foregroundDirectProducer = producer;
+    final epoch = ++_foregroundDirectProducerEpoch;
+    var releasedMotionLane = false;
+    var releasedResourceLease = false;
+    if (prior == _DashboardForegroundDirectProducer.budgetAvatar) {
+      _supersedePendingBudgetAvatarPhaseACandidate(reason: 'staleRejected');
+      _cancelDeferredFocusedSceneInstall();
+      _deferredLiveFacetSceneAugmentation = null;
+      _cancelAvatarLivePaintWaiter(retainCurrentExactPaintedTarget: true);
+      releasedResourceLease =
+          _liveInteractionResourcePreparationCanceller?.call(
+            lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          ) ??
+          false;
+      releasedMotionLane = _activeMotionLanes.contains(
+        DashboardMotionLane.budgetAvatar,
+      );
+      _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
+    } else if (prior == _DashboardForegroundDirectProducer.summaryTime) {
+      _supersedePendingSegmentedTimePhaseACandidate(reason: 'staleRejected');
+      presentation.discardQueuedExperimentalTemporalCandidate();
+      _invalidateSegmentedForegroundContinuations(
+        outcome: _SegmentedTargetVisualOutcome.cancelledByNewInteraction,
+      );
+      releasedResourceLease =
+          _liveInteractionResourcePreparationCanceller?.call(
+            lane: DashboardLiveInteractionResourceLane.timePreview,
+          ) ??
+          false;
+      releasedMotionLane = _activeMotionLanes.contains(
+        DashboardMotionLane.summaryShell,
+      );
+      _setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+    }
+    if (prior != null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'FOREGROUND_PRODUCER_SUPERSEDED',
+          queryKey: navigation.state.parentQueryScope.key.value,
+          coreRevision: preparedIndex?.coreRevision,
+          scope:
+              'prior=${prior.name} next=${producer.name} epoch=$epoch '
+              'reason=$reason releasedMotionLane=$releasedMotionLane '
+              'releasedResourceLease=$releasedResourceLease',
+        ),
+      );
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'FOREGROUND_PRODUCER_CLAIMED',
+        queryKey: navigation.state.parentQueryScope.key.value,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'producer=${producer.name} epoch=$epoch reason=$reason '
+            'prior=${prior?.name ?? 'none'}',
+      ),
+    );
+    return true;
+  }
+
   void beginSegmentedSummaryMotion() {
+    _claimForegroundDirectProducer(
+      _DashboardForegroundDirectProducer.summaryTime,
+      reason: 'segmentedMotionStarted',
+    );
+    _supersedePendingSegmentedTimePhaseACandidate(
+      reason: 'cancelledByNewInteraction',
+    );
     _cancelSceneWindowMaintenanceForInput();
     _discardRetainedSegmentedPaintedScene();
     _recordSegmentedTargetVisualOutcome(
@@ -5391,6 +5629,10 @@ final class DashboardCoreController {
     segmentedTargetPainted.value = null;
     _segmentedTimeCadence.reset();
     _setMotionLaneActive(DashboardMotionLane.summaryShell, true);
+    final index = _interactionPreparedIndex;
+    if (index != null) {
+      _requestTimePreviewLiveRowResources(index, foregroundTakeover: true);
+    }
     diagnostics.record(
       DashboardInteractionEvent.motionGestureStarted,
       context: _diagnosticContext(),
@@ -5400,6 +5642,31 @@ final class DashboardCoreController {
 
   void endSegmentedSummaryMotion() =>
       _setMotionLaneActive(DashboardMotionLane.summaryShell, false);
+
+  /// Revokes Time paint/settle continuations without touching the currently
+  /// visible frame. The next foreground producer may keep that last exact
+  /// visual on screen until it has bound its own Phase-A target.
+  bool _invalidateSegmentedForegroundContinuations({
+    required _SegmentedTargetVisualOutcome outcome,
+  }) {
+    final invalidated =
+        _segmentedLatestAcceptedPaintTarget != null ||
+        _segmentedLatestPaintedTarget != null ||
+        _segmentedPendingSettleTarget != null;
+    if (!invalidated) return false;
+    _recordSegmentedTargetVisualOutcome(
+      _segmentedLatestAcceptedPaintTarget,
+      outcome,
+    );
+    _segmentedLatestAcceptedPaintTarget = null;
+    _segmentedLatestPaintedTarget = null;
+    _segmentedPendingSettleTarget = null;
+    _segmentedPaintRejectedForLatestTarget = false;
+    _segmentedPaintIdentityRejectionReportedForLatestTarget = false;
+    segmentedTargetPainted.value = null;
+    _discardRetainedSegmentedPaintedScene();
+    return true;
+  }
 
   /// A Summary pointer is foreground intent before its pan recognizer wins a
   /// gesture arena. It must be able to interrupt speculative time-neighbour
@@ -5412,6 +5679,9 @@ final class DashboardCoreController {
   void noteSummaryDirectPointerDown() {
     if (_disposed) return;
     final interruptedTimeMotion = motion.interruptForForegroundTakeover();
+    _supersedePendingSegmentedTimePhaseACandidate(
+      reason: 'cancelledByNewPointer',
+    );
     final latestSemanticTarget =
         _segmentedLatestAcceptedPaintTarget ?? _segmentedLatestPaintedTarget;
     // A new pointer may interrupt an old ballistic flight, but it must not
@@ -5434,27 +5704,11 @@ final class DashboardCoreController {
         .discardQueuedExperimentalTemporalCandidate();
     // A frame can have left the display-frame coalescer and still be awaiting
     // its LogBox paint acknowledgement. Foreground pointer intent must revoke
-    // its settlement ownership in both states: a pending coalescer slot and a
-    // published-but-rich-unpainted preview. A previously accepted exact
-    // target has already been promoted above, so clearing these references
-    // cannot strand a preview/canonical divergence after a tap or cancel.
+    // settlement ownership in both states without blanking the last visual.
     final invalidatedSegmentedSettleTarget =
-        _segmentedLatestAcceptedPaintTarget != null ||
-        _segmentedLatestPaintedTarget != null ||
-        _segmentedPendingSettleTarget != null;
-    if (invalidatedSegmentedSettleTarget) {
-      _recordSegmentedTargetVisualOutcome(
-        _segmentedLatestAcceptedPaintTarget,
-        _SegmentedTargetVisualOutcome.cancelledByNewInteraction,
-      );
-      _segmentedLatestAcceptedPaintTarget = null;
-      _segmentedLatestPaintedTarget = null;
-      _segmentedPendingSettleTarget = null;
-      _segmentedPaintRejectedForLatestTarget = false;
-      _segmentedPaintIdentityRejectionReportedForLatestTarget = false;
-      segmentedTargetPainted.value = null;
-      _discardRetainedSegmentedPaintedScene();
-    }
+        _invalidateSegmentedForegroundContinuations(
+          outcome: _SegmentedTargetVisualOutcome.cancelledByNewInteraction,
+        );
     final cancelledRailWarmup = _cancelBackgroundSceneWarmup();
     final hadSummaryParentHotset = _summaryParentHotsetInFlight;
     _summaryParentHotsetGeneration += 1;
@@ -5467,6 +5721,16 @@ final class DashboardCoreController {
       _sceneWindowPreparationCanceller?.call();
     }
     _cancelSceneWindowMaintenanceForInput();
+    final foregroundClaimed = _claimForegroundDirectProducer(
+      _DashboardForegroundDirectProducer.summaryTime,
+      reason: 'summaryPointerDown',
+    );
+    final pointerOrder = presentation
+        .claimPreparedExperimentalTemporalForegroundIntent();
+    final index = _interactionPreparedIndex;
+    if (index != null) {
+      _requestTimePreviewLiveRowResources(index, foregroundTakeover: true);
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'SUMMARY_DIRECT_POINTER_PREEMPTED',
@@ -5481,6 +5745,8 @@ final class DashboardCoreController {
             '$invalidatedSegmentedSettleTarget '
             'cancelledRailWarmup=$cancelledRailWarmup '
             'cancelledSummaryParentHotset=$hadSummaryParentHotset '
+            'foregroundClaimed=$foregroundClaimed '
+            'pointerInteractionEpoch=${pointerOrder?.interactionEpoch ?? '-'} '
             'motionLanes=${_activeMotionLanes.map((lane) => lane.name).join(',')}',
       ),
     );
@@ -5519,6 +5785,10 @@ final class DashboardCoreController {
   /// receive the same foreground-preemption boundary as Summary motion while
   /// keeping their distinct focus semantics out of the temporal rail lane.
   void beginBudgetAvatarMotion() {
+    _claimForegroundDirectProducer(
+      _DashboardForegroundDirectProducer.budgetAvatar,
+      reason: 'budgetAvatarMotionStarted',
+    );
     _cancelSceneWindowMaintenanceForInput();
     _setMotionLaneActive(DashboardMotionLane.budgetAvatar, true);
     diagnostics.record(
@@ -5530,6 +5800,25 @@ final class DashboardCoreController {
 
   void endBudgetAvatarMotion() {
     _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
+    if (_foregroundDirectProducer !=
+        _DashboardForegroundDirectProducer.budgetAvatar) {
+      // A newer Summary pointer may preempt the old Avatar while Flutter is
+      // still delivering that carousel's eventual ScrollEnd. The physical
+      // lifecycle remains valid, but it cannot re-arm Avatar Phase-B/resource
+      // maintenance into the newer producer's foreground interval.
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'FOREGROUND_PRODUCER_STALE_MOTION_END',
+          queryKey: navigation.state.parentQueryScope.key.value,
+          coreRevision: preparedIndex?.coreRevision,
+          scope:
+              'producer=budgetAvatar '
+              'foreground=${_foregroundDirectProducer?.name ?? 'none'} '
+              'skippedDeferredPhaseB=true skippedAvatarResourcePrime=true',
+        ),
+      );
+      return;
+    }
     _drainDeferredLiveFacetSceneAugmentation();
     // A raw pointer may have cancelled the low-priority bounded live-resource
     // warmup. Re-arm it only after the physical lane is released; this is
@@ -5786,12 +6075,24 @@ final class DashboardCoreController {
   /// non-drag touch cannot strand the dashboard in an input-blocking state.
   void noteBudgetAvatarDirectPointerDown() {
     if (_disposed) return;
+    final interruptedTimeMotion = motion.interruptForForegroundTakeover();
+    final foregroundClaimed = _claimForegroundDirectProducer(
+      _DashboardForegroundDirectProducer.budgetAvatar,
+      reason: 'budgetAvatarPointerDown',
+    );
     final supersededFocusGeneration = _focusPublicationGeneration;
     // The new physical pointer becomes the boundary for outstanding Avatar
     // work even before it crosses a target. Do not clear the currently
     // painted frame; only invalidate old publication completions so they
     // cannot overwrite the next generation in that pointer-to-crossing gap.
     _focusPublicationGeneration += 1;
+    final pointerOrder = visibleFrames.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.budgetAvatar,
+      localGeneration: _focusPublicationGeneration,
+    );
+    final pointerOrderClaimed = visibleFrames.claimInteractionPublicationIntent(
+      pointerOrder,
+    );
     _supersedePendingBudgetAvatarPhaseACandidate(
       reason: 'cancelledByNewPointer',
       replacementGeneration: _focusPublicationGeneration,
@@ -5815,6 +6116,10 @@ final class DashboardCoreController {
         scope:
             'supersededFocusGeneration=$supersededFocusGeneration '
             'focusGeneration=$_focusPublicationGeneration '
+            'interruptedTimeMotion=$interruptedTimeMotion '
+            'foregroundClaimed=$foregroundClaimed '
+            'pointerInteractionEpoch=${pointerOrder.interactionEpoch} '
+            'pointerOrderClaimed=$pointerOrderClaimed '
             'cancelledRailWarmup=$cancelledRailWarmup '
             'cancelledSummaryParentHotset=$hadSummaryParentHotset',
       ),
@@ -5843,96 +6148,36 @@ final class DashboardCoreController {
     if (_disposed) {
       return DashboardSegmentedTargetAcceptance.rejectedDisposed;
     }
+    // A newer Summary pointer claims foreground intent before gesture-arena
+    // resolution. Conversely, an obsolete Avatar lane must not be able to
+    // accept a late Time callback until the user has actually taken Time
+    // foreground ownership.
+    if (_foregroundDirectProducer ==
+        _DashboardForegroundDirectProducer.budgetAvatar) {
+      return DashboardSegmentedTargetAcceptance.rejectedStaleGeneration;
+    }
     _segmentedTimePreviewCrossings += 1;
     _segmentedTimeCadence.recordTick(_segmentedTimePreviewCrossings);
-    final supersededTarget = _segmentedLatestAcceptedPaintTarget;
-    final supersededTargetWasVisible =
-        supersededTarget != null &&
-        _isSegmentedTargetCurrentVisible(supersededTarget);
-    if (_publishPreparedSegmentedTemporalTarget(
+    switch (_publishPreparedSegmentedTemporalTarget(
       candidate: candidate,
       source: component.name,
+      component: component,
     )) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SUMMARY_COMPONENT_PREPARED_PUBLICATION',
-          queryKey: candidate.isRailOpen
-              ? candidate.temporalAnchor.sourceChildQueryKey.value
-              : candidate.parentQueryKey.value,
-          coreRevision: preparedIndex?.coreRevision,
-          scope:
-              'summaryLayout=segmented component=${component.name} '
-              'candidateScope=${candidate.effectiveScope} '
-              'preparedPublicationHit=true '
-              'repositoryCalls=0 indexBuilds=0 scenePrepares=0 '
-              'completeLivePublications=1',
-        ),
-      );
-      _recordNavigationSelection(switch (component) {
-        DashboardTemporalAnchorComponent.year =>
-          'summaryExperimentPreparedYearCrossed',
-        DashboardTemporalAnchorComponent.month =>
-          'summaryExperimentPreparedMonthCrossed',
-        DashboardTemporalAnchorComponent.day =>
-          'summaryExperimentPreparedDayCrossed',
-      });
-      final queryKey = _segmentedTargetQueryKey(candidate);
-      final index = presentation.index ?? preparedIndex;
-      // The prepared crossing is queued for the next display frame, so the
-      // current lane can still describe the prior semantic target here. Bind
-      // acceptance to the queued exact frame; its generation is later
-      // required again by the physical LogBox paint acknowledgement.
-      final visible = presentation.queuedPreparedExperimentalTemporalFrame;
-      if (index == null ||
-          index.coreRevision != candidate.temporalAnchor.revision) {
-        return DashboardSegmentedTargetAcceptance.rejectedRevisionMismatch;
-      }
-      if (visible == null ||
-          visible.queryKey != queryKey ||
-          visible.coreRevision != index.coreRevision) {
-        return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
-      }
-      try {
-        final exactEmpty = index.frameForKey(queryKey).entryCount == 0;
-        final interactionOrder =
-            presentation.queuedPreparedExperimentalTemporalInteractionOrder ??
-            visibleFrames.interactionPreviewOrder;
-        if (interactionOrder == null) {
-          return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
-        }
-        final acceptedTarget = _SegmentedTemporalPaintTarget(
+      case _PreparedSegmentedTemporalPublicationOutcome.published:
+        _recordPreparedSegmentedTemporalComponentPublication(
           candidate: candidate,
           component: component,
-          queryKey: queryKey.value,
-          coreRevision: index.coreRevision,
-          presentationEpoch: visible.presentationEpoch,
-          frameGeneration: visible.frameGeneration,
-          viewportId: visible.logBox.viewportId,
-          interactionGeneration: _segmentedTimeFlightGeneration,
-          exactEmpty: exactEmpty,
-          interactionOrder: interactionOrder,
         );
-        if (supersededTarget != null) {
-          _recordSegmentedTargetVisualOutcome(
-            supersededTarget,
-            supersededTargetWasVisible
-                ? _SegmentedTargetVisualOutcome.cancelledByNewInteraction
-                : _SegmentedTargetVisualOutcome.coalescedBeforePaint,
-          );
-        }
-        _segmentedLatestAcceptedPaintTarget = acceptedTarget;
-        // Keep the last real paint until this new accepted target itself is
-        // acknowledged. A raw pointer can then restore that exact last-painted
-        // target if this newer preview is interrupted before paint.
-        _segmentedPendingSettleTarget = null;
-        _segmentedPaintRejectedForLatestTarget = false;
-        _segmentedPaintIdentityRejectionReportedForLatestTarget = false;
-        return exactEmpty
-            ? DashboardSegmentedTargetAcceptance.acceptedExactEmpty
-            : DashboardSegmentedTargetAcceptance.acceptedExact;
-      } on StateError {
-        return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
-      }
+        return _acceptPublishedSegmentedTemporalComponentTarget(
+          candidate: candidate,
+          component: component,
+        );
+      case _PreparedSegmentedTemporalPublicationOutcome
+          .deferredForPainterResource:
+        return DashboardSegmentedTargetAcceptance
+            .acceptedDeferredForPainterResource;
+      case _PreparedSegmentedTemporalPublicationOutcome.rejected:
+        break;
     }
     // This compatibility path is an explicit readiness invariant failure. It
     // preserves semantic correctness for a structurally unavailable target,
@@ -5968,29 +6213,458 @@ final class DashboardCoreController {
       ? candidate.temporalAnchor.sourceChildQueryKey
       : candidate.parentQueryKey;
 
-  bool _publishPreparedSegmentedTemporalTarget({
+  void _recordPreparedSegmentedTemporalComponentPublication({
     required DashboardNavigationState candidate,
+    required DashboardTemporalAnchorComponent component,
+  }) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'SUMMARY_COMPONENT_PREPARED_PUBLICATION',
+        queryKey: _segmentedTargetQueryKey(candidate).value,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'summaryLayout=segmented component=${component.name} '
+            'candidateScope=${candidate.effectiveScope} '
+            'preparedPublicationHit=true '
+            'repositoryCalls=0 indexBuilds=0 scenePrepares=0 '
+            'completeLivePublications=1',
+      ),
+    );
+    _recordNavigationSelection(switch (component) {
+      DashboardTemporalAnchorComponent.year =>
+        'summaryExperimentPreparedYearCrossed',
+      DashboardTemporalAnchorComponent.month =>
+        'summaryExperimentPreparedMonthCrossed',
+      DashboardTemporalAnchorComponent.day =>
+        'summaryExperimentPreparedDayCrossed',
+    });
+  }
+
+  /// Attaches accepted Time semantic ownership to the exact queued frame that
+  /// will be selected at the next display opportunity. This stays separate
+  /// from resource readiness: callers reach here only after the cache's
+  /// `timePreview` Phase-A binder has accepted the payload.
+  DashboardSegmentedTargetAcceptance
+  _acceptPublishedSegmentedTemporalComponentTarget({
+    required DashboardNavigationState candidate,
+    required DashboardTemporalAnchorComponent component,
+  }) {
+    final queryKey = _segmentedTargetQueryKey(candidate);
+    final index = _interactionPreparedIndex;
+    final visible = presentation.queuedPreparedExperimentalTemporalFrame;
+    if (index == null ||
+        index.coreRevision != candidate.temporalAnchor.revision) {
+      return DashboardSegmentedTargetAcceptance.rejectedRevisionMismatch;
+    }
+    if (visible == null ||
+        visible.queryKey != queryKey ||
+        visible.coreRevision != index.coreRevision) {
+      return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
+    }
+    try {
+      final exactEmpty = index.frameForKey(queryKey).entryCount == 0;
+      final interactionOrder =
+          presentation.queuedPreparedExperimentalTemporalInteractionOrder ??
+          visibleFrames.interactionPreviewOrder;
+      if (interactionOrder == null) {
+        return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
+      }
+      final supersededTarget = _segmentedLatestAcceptedPaintTarget;
+      final supersededTargetWasVisible =
+          supersededTarget != null &&
+          _isSegmentedTargetCurrentVisible(supersededTarget);
+      final acceptedTarget = _SegmentedTemporalPaintTarget(
+        candidate: candidate,
+        component: component,
+        queryKey: queryKey.value,
+        coreRevision: index.coreRevision,
+        presentationEpoch: visible.presentationEpoch,
+        frameGeneration: visible.frameGeneration,
+        viewportId: visible.logBox.viewportId,
+        interactionGeneration: _segmentedTimeFlightGeneration,
+        exactEmpty: exactEmpty,
+        interactionOrder: interactionOrder,
+      );
+      if (supersededTarget != null) {
+        _recordSegmentedTargetVisualOutcome(
+          supersededTarget,
+          supersededTargetWasVisible
+              ? _SegmentedTargetVisualOutcome.cancelledByNewInteraction
+              : _SegmentedTargetVisualOutcome.coalescedBeforePaint,
+        );
+      }
+      _segmentedLatestAcceptedPaintTarget = acceptedTarget;
+      // Keep the last real paint until this new accepted target itself is
+      // acknowledged. A raw pointer can then restore that exact last-painted
+      // target if this newer preview is interrupted before paint.
+      _segmentedPendingSettleTarget = null;
+      _segmentedPaintRejectedForLatestTarget = false;
+      _segmentedPaintIdentityRejectionReportedForLatestTarget = false;
+      return exactEmpty
+          ? DashboardSegmentedTargetAcceptance.acceptedExactEmpty
+          : DashboardSegmentedTargetAcceptance.acceptedExact;
+    } on StateError {
+      return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
+    }
+  }
+
+  /// Mirrors the existing Avatar continuation guard. A current Time resource
+  /// completion may retain and replay its original order, but a later direct
+  /// producer wins before it can enter the visible-frame store.
+  bool _isSegmentedTimeInteractionOrderCurrent(
+    DashboardInteractionPreviewOrder candidate,
+  ) {
+    if (_foregroundDirectProducer ==
+        _DashboardForegroundDirectProducer.budgetAvatar) {
+      return false;
+    }
+    final owner = visibleFrames.interactionPreviewOrder;
+    return owner == null ||
+        owner.hasSameIdentity(candidate) ||
+        owner.interactionEpoch < candidate.interactionEpoch;
+  }
+
+  /// Binds the exact Time payload through the actual `timePreview` cache lane.
+  /// The broad retained window is not sufficient on its own: only this binder
+  /// proves that the LogBox painter can read every non-empty Phase-A row.
+  bool _bindSegmentedTimeLivePhaseA({
+    required PreparedDashboardIndex baseIndex,
+    required DashboardNavigationState candidate,
+    required DashboardLogViewportState payload,
+    required DashboardInteractionPreviewOrder interactionOrder,
     required String source,
   }) {
+    final resourceWindow = _timePreviewResourceWindow;
+    final resourceKey = _timePreviewResourceKey;
+    final phaseABinder = _liveInteractionReadablePhaseABinder;
+    final resourcesReady =
+        _samePreparedInteractionIndex(_timePreviewResourceBase, baseIndex) &&
+        resourceWindow != null &&
+        resourceKey != null &&
+        (_liveInteractionResourceWindowLookup?.call(
+              resourceWindow,
+              lane: DashboardLiveInteractionResourceLane.timePreview,
+              candidateKey: resourceKey,
+            ) ??
+            false);
+    // Headless Core tests deliberately exercise prepared semantic authority
+    // without a render-cache attachment. Production CoreDashboard always
+    // provides the binder and therefore cannot bypass the painter contract.
+    var phaseAReady = payload.previewRowCount == 0 || phaseABinder == null;
+    if (!phaseAReady && resourcesReady) {
+      phaseAReady = phaseABinder(
+        payload,
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: resourceKey,
+      );
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TIME_PHASE_A_EXACT_BIND_RESULT',
+        queryKey: _segmentedTargetQueryKey(candidate).value,
+        direction: candidate.parentQueryScope.direction.name,
+        coreRevision: baseIndex.coreRevision,
+        entryCount: payload.previewRowCount,
+        scope:
+            'source=$source interactionEpoch=${interactionOrder.interactionEpoch} '
+            'localGeneration=${interactionOrder.localGeneration} '
+            'resourcesReady=$resourcesReady phaseAReady=$phaseAReady '
+            'resourceOwner=${phaseABinder == null ? 'unattachedModel' : 'preparedSceneCache'} '
+            'resourceKey=${resourceKey == null ? 'none' : FluviDiagnosticKeyDigest.of(resourceKey)} '
+            'repositoryRequests=0 indexBuilds=0 textPainterCreates=0 '
+            'richProjection=0',
+      ),
+    );
+    return phaseAReady;
+  }
+
+  void _deferPendingSegmentedTimePhaseACandidate(
+    _PendingSegmentedTimePhaseACandidate candidate,
+  ) {
+    _supersedePendingSegmentedTimePhaseACandidate(
+      reason: 'coalescedBeforeReadiness',
+    );
+    _pendingSegmentedTimePhaseACandidate = candidate;
+    _requestTimePreviewLiveRowResources(
+      candidate.baseIndex,
+      targetState: candidate.candidate,
+      pendingCandidateRequest: true,
+      foregroundTakeover: true,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TIME_PHASE_A_CANDIDATE_PENDING',
+        queryKey: _segmentedTargetQueryKey(candidate.candidate).value,
+        direction: candidate.candidate.parentQueryScope.direction.name,
+        coreRevision: candidate.baseIndex.coreRevision,
+        scope:
+            'source=${candidate.source} '
+            'component=${candidate.component?.name ?? 'level'} '
+            'flightGeneration=${candidate.flightGeneration} '
+            'navigationEpoch=${candidate.navigationEpoch} '
+            'interactionEpoch=${candidate.interactionOrder.interactionEpoch} '
+            'localGeneration=${candidate.interactionOrder.localGeneration} '
+            'resourceLane=timePreview latestWins=true '
+            'visibleAuthority=retainedPreviousExact',
+      ),
+    );
+  }
+
+  void _supersedePendingSegmentedTimePhaseACandidate({required String reason}) {
+    final pending = _pendingSegmentedTimePhaseACandidate;
+    if (pending == null) return;
+    _pendingSegmentedTimePhaseACandidate = null;
+    if (pending.terminalOutcomeRecorded) return;
+    pending.terminalOutcomeRecorded = true;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TIME_PHASE_A_CANDIDATE_TERMINAL',
+        queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+        direction: pending.candidate.parentQueryScope.direction.name,
+        coreRevision: pending.baseIndex.coreRevision,
+        scope:
+            'source=${pending.source} '
+            'component=${pending.component?.name ?? 'level'} '
+            'flightGeneration=${pending.flightGeneration} '
+            'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+            'localGeneration=${pending.interactionOrder.localGeneration} '
+            'terminalOutcome=$reason',
+      ),
+    );
+  }
+
+  bool _isPendingSegmentedTimePhaseACandidateCurrent(
+    _PendingSegmentedTimePhaseACandidate pending,
+  ) =>
+      !_disposed &&
+      pending.flightGeneration == _segmentedTimeFlightGeneration &&
+      _foregroundDirectProducer !=
+          _DashboardForegroundDirectProducer.budgetAvatar &&
+      _samePreparedInteractionIndex(
+        _interactionPreparedIndex,
+        pending.baseIndex,
+      ) &&
+      pending.baseIndex.coreRevision ==
+          pending.candidate.temporalAnchor.revision &&
+      currentQuery.scopeFor(pending.baseScope.direction) == pending.baseScope &&
+      navigation.state.navigationEpoch == pending.navigationEpoch &&
+      _isSegmentedTimeInteractionOrderCurrent(pending.interactionOrder);
+
+  /// A candidate-specific resource request may outlive the current visible
+  /// navigation state because the candidate has not painted or settled yet.
+  /// Its sole continuation authority is the one latest pending Time target;
+  /// this prevents a completed cache slice from adopting an unrelated
+  /// candidate merely because it shares a parent scope or epoch.
+  bool _isPendingExactTimePreviewResourceRequestCurrent({
+    required PreparedDashboardIndex base,
+    required DashboardNavigationState candidate,
+  }) {
+    final pending = _pendingSegmentedTimePhaseACandidate;
+    return pending != null &&
+        identical(pending.baseIndex, base) &&
+        pending.navigationEpoch == candidate.navigationEpoch &&
+        _sameTemporalTarget(pending.candidate, candidate) &&
+        _isPendingSegmentedTimePhaseACandidateCurrent(pending);
+  }
+
+  Future<void> _promotePendingSegmentedTimePhaseACandidate() async {
+    final pending = _pendingSegmentedTimePhaseACandidate;
+    if (pending == null) return;
+    if (!_isPendingSegmentedTimePhaseACandidateCurrent(pending)) {
+      _supersedePendingSegmentedTimePhaseACandidate(reason: 'staleRejected');
+      return;
+    }
+    final result = _publishPreparedSegmentedTemporalTarget(
+      candidate: pending.candidate,
+      source: pending.source,
+      component: pending.component,
+      interactionOrder: pending.interactionOrder,
+      replayingPendingCandidate: true,
+    );
+    if (!identical(_pendingSegmentedTimePhaseACandidate, pending)) return;
+    switch (result) {
+      case _PreparedSegmentedTemporalPublicationOutcome.published:
+        if (pending.component != null) {
+          _recordPreparedSegmentedTemporalComponentPublication(
+            candidate: pending.candidate,
+            component: pending.component!,
+          );
+          final acceptance = _acceptPublishedSegmentedTemporalComponentTarget(
+            candidate: pending.candidate,
+            component: pending.component!,
+          );
+          if (!acceptance.isExactLivePublication) {
+            _supersedePendingSegmentedTimePhaseACandidate(
+              reason: 'staleRejected',
+            );
+            return;
+          }
+        } else {
+          _recordNavigationSelection('summaryExperimentPreparedLevelCrossed');
+        }
+        // Do not clear this candidate until the existing visible-frame
+        // acceptance boundary has also succeeded. Otherwise a rare
+        // publication/acceptance mismatch would lose its required explicit
+        // stale terminal outcome.
+        _pendingSegmentedTimePhaseACandidate = null;
+        pending.terminalOutcomeRecorded = true;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'TIME_PHASE_A_CANDIDATE_BOUND',
+            queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+            direction: pending.candidate.parentQueryScope.direction.name,
+            coreRevision: pending.baseIndex.coreRevision,
+            scope:
+                'source=${pending.source} '
+                'component=${pending.component?.name ?? 'level'} '
+                'flightGeneration=${pending.flightGeneration} '
+                'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+                'localGeneration=${pending.interactionOrder.localGeneration} '
+                'resourceLane=timePreview awaitingActualPaint=true',
+          ),
+        );
+        if (pending.settleRequested) {
+          final accepted = _segmentedLatestAcceptedPaintTarget;
+          if (accepted != null &&
+              pending.component != null &&
+              accepted.component == pending.component &&
+              _sameTemporalTarget(accepted.candidate, pending.candidate)) {
+            _segmentedPendingSettleTarget = accepted;
+            _trySettleLatestAcceptedSegmentedTarget();
+          }
+        }
+        return;
+      case _PreparedSegmentedTemporalPublicationOutcome
+          .deferredForPainterResource:
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'TIME_PHASE_A_CANDIDATE_AWAITING_EXACT_BIND',
+            queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+            direction: pending.candidate.parentQueryScope.direction.name,
+            coreRevision: pending.baseIndex.coreRevision,
+            scope:
+                'source=${pending.source} '
+                'flightGeneration=${pending.flightGeneration} '
+                'resourceOwner=preparedSceneCache accepted=false',
+          ),
+        );
+        return;
+      case _PreparedSegmentedTemporalPublicationOutcome.rejected:
+        _supersedePendingSegmentedTimePhaseACandidate(reason: 'staleRejected');
+        return;
+    }
+  }
+
+  _PreparedSegmentedTemporalPublicationOutcome
+  _publishPreparedSegmentedTemporalTarget({
+    required DashboardNavigationState candidate,
+    required String source,
+    DashboardTemporalAnchorComponent? component,
+    DashboardInteractionPreviewOrder? interactionOrder,
+    bool replayingPendingCandidate = false,
+  }) {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
+    final index = _interactionPreparedIndex;
+    if (index == null ||
+        index.coreRevision != candidate.temporalAnchor.revision) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PHASE_A_PREPARED_REJECTED',
+          queryKey: _segmentedTargetQueryKey(candidate).value,
+          coreRevision: index?.coreRevision,
+          scope:
+              'reason=revisionMismatch indexRevision=${index?.coreRevision ?? '-'} '
+              'candidateRevision=${candidate.temporalAnchor.revision}',
+        ),
+      );
+      return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+    }
+    // Preserve the existing bounded prepared-frame materialization boundary.
+    // A compact deterministic zero frame is eligible only after this prepared
+    // scene-window owner has materialized it; this performs no query, index,
+    // rich-scene or TextPainter work at the semantic tick.
     final requiredWindow = source == 'level'
         ? structuralPublicationSceneWindowFor(candidate)
         : railInteractionSceneWindowFor(candidate);
+    final queryKey = _segmentedTargetQueryKey(candidate);
+    final DashboardLogViewportState payload;
+    try {
+      payload = index.frameForKey(queryKey).logBox;
+    } on StateError {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PHASE_A_PREPARED_REJECTED',
+          queryKey: queryKey.value,
+          coreRevision: index.coreRevision,
+          scope: 'reason=preparedFrameUnavailable',
+        ),
+      );
+      return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+    }
+    // The physical semantic crossing, not an eventual resource callback,
+    // owns interaction order. A cold candidate retains this one order until
+    // cache completion either binds it or a newer intent supersedes it.
+    final issuedInteractionOrder =
+        interactionOrder ??
+        presentation.claimPreparedExperimentalTemporalForegroundIntent();
+    if (issuedInteractionOrder == null ||
+        !_isSegmentedTimeInteractionOrderCurrent(issuedInteractionOrder)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PHASE_A_PREPARED_REJECTED',
+          queryKey: queryKey.value,
+          coreRevision: index.coreRevision,
+          scope:
+              'reason=staleInteractionOrder '
+              'issued=${issuedInteractionOrder?.interactionEpoch ?? '-'} '
+              'owner=${visibleFrames.interactionPreviewOrder?.interactionEpoch ?? '-'}',
+        ),
+      );
+      return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+    }
+    if (!_bindSegmentedTimeLivePhaseA(
+      baseIndex: index,
+      candidate: candidate,
+      payload: payload,
+      interactionOrder: issuedInteractionOrder,
+      source: source,
+    )) {
+      if (!replayingPendingCandidate) {
+        _deferPendingSegmentedTimePhaseACandidate(
+          _PendingSegmentedTimePhaseACandidate(
+            flightGeneration: _segmentedTimeFlightGeneration,
+            candidate: candidate,
+            component: component,
+            source: source,
+            baseIndex: index,
+            baseScope: currentQuery.scopeFor(
+              navigation.state.parentQueryScope.direction,
+            ),
+            navigationEpoch: navigation.state.navigationEpoch,
+            interactionOrder: issuedInteractionOrder,
+          ),
+        );
+      }
+      return _PreparedSegmentedTemporalPublicationOutcome
+          .deferredForPainterResource;
+    }
     final retainedHit =
         _retainedSceneWindowLookup?.call(requiredWindow) ?? false;
     final activeHit = _activeSceneWindowCovers(requiredWindow);
     if (_sceneWindowActivator != null && !retainedHit && !activeHit) {
-      _segmentedTimeLiveRootMisses += 1;
+      // Rich-scene coverage is optional after exact Phase-A binds. Keep the
+      // old valid scene for continuity, but never classify this as a painter
+      // resource miss or publish a non-empty 13 px fallback.
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
-          stage: 'SUMMARY_LIVE_ROOT_MISS',
+          stage: 'SUMMARY_RICH_SCENE_UNAVAILABLE',
           queryKey: candidate.isRailOpen
               ? candidate.temporalAnchor.sourceChildQueryKey.value
               : candidate.parentQueryKey.value,
           coreRevision: preparedIndex?.coreRevision,
           scope:
               'source=$source retained=false active=false '
-              'phaseAContinues=true',
+              'phaseAReady=true richPhaseBOptional=true',
         ),
       );
     }
@@ -6001,7 +6675,6 @@ final class DashboardCoreController {
     if (retainedHit &&
         !activeHit &&
         !_retainLatestPaintedSegmentedSceneBeforeReplacement()) {
-      _segmentedTimeLiveRootMisses += 1;
       // Retention is only a rich-scene continuity optimisation.  The exact
       // prepared temporal frame remains valid Phase-A semantic authority.
       FluviDiagnosticLogger.log(
@@ -6021,9 +6694,9 @@ final class DashboardCoreController {
     if (!presentation.publishPreparedExperimentalTemporalCandidate(
       candidate,
       deferCanonicalCommit: source != 'level',
+      interactionOrder: issuedInteractionOrder,
     )) {
-      _segmentedTimeLiveRootMisses += 1;
-      return false;
+      return _PreparedSegmentedTemporalPublicationOutcome.rejected;
     }
     final queued = presentation.queuedPreparedExperimentalTemporalFrame;
     final expectedQueryKey = _segmentedTargetQueryKey(candidate);
@@ -6036,10 +6709,11 @@ final class DashboardCoreController {
       );
     }
     _segmentedTimeLivePublications += 1;
-    final interactionOrder =
+    final publishedInteractionOrder =
         presentation.queuedPreparedExperimentalTemporalInteractionOrder ??
         visibleFrames.interactionPreviewOrder;
-    if (interactionOrder == null) {
+    if (publishedInteractionOrder == null ||
+        !publishedInteractionOrder.hasSameIdentity(issuedInteractionOrder)) {
       throw StateError(
         'Prepared Segmented publication did not retain its shared '
         'interaction-order identity.',
@@ -6049,11 +6723,11 @@ final class DashboardCoreController {
       source: source == 'level'
           ? DashboardLiveInteractionSource.summaryLevel
           : DashboardLiveInteractionSource.temporalSelector,
-      interactionOrder: interactionOrder,
+      interactionOrder: publishedInteractionOrder,
       temporalCandidate: candidate,
       visibleFrame: queued,
     );
-    return true;
+    return _PreparedSegmentedTemporalPublicationOutcome.published;
   }
 
   void _adoptCoveredActiveSceneWindow(
@@ -6238,6 +6912,30 @@ final class DashboardCoreController {
         accepted.interactionGeneration != _segmentedTimeFlightGeneration ||
         accepted.component != component ||
         !_sameTemporalTarget(accepted.candidate, candidate)) {
+      final pending = _pendingSegmentedTimePhaseACandidate;
+      if (pending != null &&
+          _isPendingSegmentedTimePhaseACandidateCurrent(pending) &&
+          pending.component == component &&
+          _sameTemporalTarget(pending.candidate, candidate)) {
+        // Release may arrive before the cold cache resource. It records only
+        // this exact latest semantic target; cache completion later arms the
+        // usual paint acknowledgement rather than treating settle as the
+        // moment data first becomes visible.
+        pending.settleRequested = true;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SUMMARY_SETTLE_AWAITING_EXACT_PHASE_A',
+            queryKey: _segmentedTargetQueryKey(candidate).value,
+            coreRevision: pending.baseIndex.coreRevision,
+            scope:
+                'component=${component.name} '
+                'generation=${pending.flightGeneration} '
+                'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+                'resourceLane=timePreview',
+          ),
+        );
+        return;
+      }
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'SUMMARY_SETTLE_REJECTED_UNACCEPTED_TARGET',
@@ -6461,6 +7159,28 @@ final class DashboardCoreController {
             'frameGeneration=${target.frameGeneration} '
             'viewportId=${target.viewportId} '
             'exactEmpty=${target.exactEmpty}',
+      ),
+    );
+    // This is the actual visual terminal event. A preceding Phase-A bind
+    // proves readability, but only the render acknowledgement below may call
+    // a non-empty Time target painted.
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TIME_PHASE_A_CANDIDATE_TERMINAL',
+        queryKey: target.queryKey,
+        coreRevision: target.coreRevision,
+        scope:
+            'component=${target.component.name} '
+            'interactionEpoch=${target.interactionOrder.interactionEpoch} '
+            'localGeneration=${target.interactionOrder.localGeneration} '
+            'presentationEpoch=${target.presentationEpoch} '
+            'frameGeneration=${target.frameGeneration} '
+            'terminalOutcome=${switch (outcome) {
+              _SegmentedTargetVisualOutcome.exactPainted => 'exactPhaseAPainted',
+              _SegmentedTargetVisualOutcome.exactEmptyPainted => 'exactEmpty',
+              _SegmentedTargetVisualOutcome.coalescedBeforePaint => 'coalescedBeforePaint',
+              _SegmentedTargetVisualOutcome.cancelledByNewInteraction => 'cancelledByNewPointer',
+            }}',
       ),
     );
   }
@@ -6892,6 +7612,14 @@ final class DashboardCoreController {
     PreparedDashboardIndex base,
     CurrentLedgerQueryScope baseScope,
   ) {
+    // A newer Time pointer owns the foreground resource lease until another
+    // direct producer claims it.  An obsolete Avatar retry must not queue
+    // equal-priority cache work behind that Time resource simply because its
+    // physical ScrollEnd has not arrived yet.
+    if (_foregroundDirectProducer ==
+        _DashboardForegroundDirectProducer.summaryTime) {
+      return;
+    }
     final inFlight = _budgetAvatarLiveResourceInFlightGeneration;
     if (inFlight != null &&
         identical(_budgetAvatarLiveResourcePreparingBase, base) &&
@@ -6916,6 +7644,10 @@ final class DashboardCoreController {
     PreparedDashboardIndex base,
     CurrentLedgerQueryScope baseScope,
   ) async {
+    if (_foregroundDirectProducer ==
+        _DashboardForegroundDirectProducer.summaryTime) {
+      return false;
+    }
     if (_liveInteractionResourceWindowPreparer == null) return true;
     final resourceKey = _budgetAvatarLiveResourceKeyFor(base, baseScope);
     final identityChanged =
@@ -6934,6 +7666,8 @@ final class DashboardCoreController {
         resourceKey: resourceKey,
         diagnosticPrefix: 'AV',
         isStillCurrent: () =>
+            _foregroundDirectProducer !=
+                _DashboardForegroundDirectProducer.summaryTime &&
             identical(_focusBaseIndex ?? dataRuntime.currentIndex, base) &&
             currentQuery.scopeFor(baseScope.direction) == baseScope,
       );
@@ -7003,7 +7737,9 @@ final class DashboardCoreController {
         _budgetAvatarLiveResourceRetryScheduled = false;
         if (_disposed ||
             diagnostics.isMotionActive ||
-            _verticalPointerIntentActive) {
+            _verticalPointerIntentActive ||
+            _foregroundDirectProducer ==
+                _DashboardForegroundDirectProducer.summaryTime) {
           return;
         }
         _primeRequestedBudgetAvatarFocusHotset();
@@ -7175,18 +7911,29 @@ final class DashboardCoreController {
     bool publishDuringMotion = false,
     int? targetHandle,
     VoidCallback? onVisibleSemanticCommit,
-  }) => _requestEphemeralFocus(
-    category: facet,
-    source: DashboardLiveInteractionSource.budgetAvatar,
-    budgetTargetHandle: targetHandle,
-    // A discrete avatar crossing is a foreground presentation target, not a
-    // settle-only bookkeeping event.  It may start the bounded scene install
-    // during the physical fling; normal programmatic/settled focus keeps the
-    // established coalesced policy.
-    deferSceneInstallation: !publishDuringMotion,
-    publishDuringMotion: publishDuringMotion,
-    onVisibleSemanticCommit: onVisibleSemanticCommit,
-  );
+  }) {
+    // Model-only and legacy production-parent callers may reach this exact
+    // prepared Avatar publication seam without a mounted physical rail. Only
+    // an affirmative newer Time foreground claim is stale evidence; `null`
+    // must preserve the protected fc35 Avatar transaction.
+    if (publishDuringMotion &&
+        _foregroundDirectProducer ==
+            _DashboardForegroundDirectProducer.summaryTime) {
+      return Future<bool>.value(false);
+    }
+    return _requestEphemeralFocus(
+      category: facet,
+      source: DashboardLiveInteractionSource.budgetAvatar,
+      budgetTargetHandle: targetHandle,
+      // A discrete avatar crossing is a foreground presentation target, not a
+      // settle-only bookkeeping event.  It may start the bounded scene install
+      // during the physical fling; normal programmatic/settled focus keeps the
+      // established coalesced policy.
+      deferSceneInstallation: !publishDuringMotion,
+      publishDuringMotion: publishDuringMotion,
+      onVisibleSemanticCommit: onVisibleSemanticCommit,
+    );
+  }
 
   /// Requests a transient partner narrowing after the viewport-owned swipe
   /// arbiter has committed one intentional leftward gesture.
@@ -7202,14 +7949,21 @@ final class DashboardCoreController {
     int? targetHandle,
     bool publishDuringMotion = false,
     VoidCallback? onVisibleSemanticCommit,
-  }) => _requestEphemeralFocus(
-    clearCategory: true,
-    source: DashboardLiveInteractionSource.budgetAvatar,
-    budgetTargetHandle: targetHandle,
-    deferSceneInstallation: !publishDuringMotion,
-    publishDuringMotion: publishDuringMotion,
-    onVisibleSemanticCommit: onVisibleSemanticCommit,
-  );
+  }) {
+    if (publishDuringMotion &&
+        _foregroundDirectProducer ==
+            _DashboardForegroundDirectProducer.summaryTime) {
+      return Future<bool>.value(false);
+    }
+    return _requestEphemeralFocus(
+      clearCategory: true,
+      source: DashboardLiveInteractionSource.budgetAvatar,
+      budgetTargetHandle: targetHandle,
+      deferSceneInstallation: !publishDuringMotion,
+      publishDuringMotion: publishDuringMotion,
+      onVisibleSemanticCommit: onVisibleSemanticCommit,
+    );
+  }
 
   /// Applies one live SearchPill edit through the same prepared facet path as
   /// category and partner interactions. The semantic state is accepted before

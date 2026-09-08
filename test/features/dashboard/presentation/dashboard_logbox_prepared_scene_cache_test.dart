@@ -1472,6 +1472,82 @@ void main() {
   );
 
   test(
+    'FPA: a same-key live Time resource rebinds at changed surface metrics',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _deferredPayload(month: 7, rowCount: 3);
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'time-resource-surface-metrics',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+      const resourceKey = 'time-resource-surface-metrics-key';
+
+      // Live resources are painter-readable only relative to the active
+      // surface. Establish the original viewport exactly as production does
+      // before arming the lane-specific bank.
+      await cache.prepareWindow(
+        window: window,
+        surfaceWidth: 378,
+        devicePixelRatio: 1,
+      );
+      cache.activateWindow(window);
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: resourceKey,
+        window: window,
+        surfaceWidth: 378,
+        devicePixelRatio: 1,
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          window,
+          lane: DashboardLiveInteractionResourceLane.timePreview,
+          resourceKey: resourceKey,
+        ),
+        isTrue,
+      );
+
+      // The real viewport can attach after an idle prewarm and establish a
+      // different width/DPR. Its stale bank must not be reported ready and a
+      // same-key foreground request must replace it, not silently reuse it.
+      await cache.prepareWindow(
+        window: window,
+        surfaceWidth: 800,
+        devicePixelRatio: 3,
+      );
+      cache.activateWindow(window);
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          window,
+          lane: DashboardLiveInteractionResourceLane.timePreview,
+          resourceKey: resourceKey,
+        ),
+        isFalse,
+      );
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: resourceKey,
+        window: window,
+        surfaceWidth: 800,
+        devicePixelRatio: 3,
+      );
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          window,
+          lane: DashboardLiveInteractionResourceLane.timePreview,
+          resourceKey: resourceKey,
+        ),
+        isTrue,
+      );
+      expect(cache.hasCompleteReadablePhaseAFor(payload), isTrue);
+    },
+  );
+
+  test(
     'RED REENTRANT-MIND: a borrowing release candidate coexists with an oversized bounded live resource bank',
     () async {
       final cache = DashboardLogBoxPreparedSceneCache(
@@ -1726,6 +1802,177 @@ void main() {
           (event) =>
               event.stage == 'RESOURCE|REJECT' &&
               (event.scope?.contains('supersededBeforeRetention') ?? false),
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'FPA: a newer Time foreground lease cancels an in-flight Avatar resource without delaying Time readiness',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 6,
+        maximumRetainedCandidateRows: 32,
+      );
+      addTearDown(cache.dispose);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'active-before-foreground-resource-takeover',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 7, rowCount: 1),
+        ],
+      );
+      final avatar = DashboardLogBoxSceneWindow(
+        identity: 'avatar-in-flight-resource',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 8, rowCount: 4),
+        ],
+      );
+      final time = DashboardLogBoxSceneWindow(
+        identity: 'time-new-foreground-resource',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 9, rowCount: 3),
+        ],
+      );
+      final avatarYielded = Completer<void>();
+      final releaseAvatar = Completer<void>();
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+
+      final avatarPreparation = cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: 'avatar-in-flight',
+        window: avatar,
+        surfaceWidth: 378,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          if (!avatarYielded.isCompleted) avatarYielded.complete();
+          return releaseAvatar.future;
+        },
+      );
+      await avatarYielded.future;
+
+      expect(
+        cache.cancelLiveInteractionResourcePreparation(
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        ),
+        isTrue,
+      );
+
+      // The newer Time preparation begins immediately, before the old Avatar
+      // task receives its final yielded turn. The prior populated visual is
+      // never an input gate for the new lane.
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'time-new-foreground',
+        window: time,
+        surfaceWidth: 378,
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          time,
+          lane: DashboardLiveInteractionResourceLane.timePreview,
+          resourceKey: 'time-new-foreground',
+        ),
+        isTrue,
+        reason: cache.report().toString(),
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          avatar,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: 'avatar-in-flight',
+        ),
+        isFalse,
+      );
+
+      releaseAvatar.complete();
+      await expectLater(
+        avatarPreparation,
+        throwsA(isA<DashboardLogBoxScenePreparationCancelled>()),
+      );
+      expect(cache.report()['liveInteractionResourcePreparingLanes'], 0);
+    },
+  );
+
+  test(
+    'FPA: a deferred Time lease cannot cancel a different active Avatar lane',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'active-before-lane-identity-guard',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 7, rowCount: 1),
+        ],
+      );
+      final avatar = DashboardLogBoxSceneWindow(
+        identity: 'avatar-active-lane-identity-guard',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 8, rowCount: 4),
+        ],
+      );
+      final time = DashboardLogBoxSceneWindow(
+        identity: 'time-deferred-lane-identity-guard',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 9, rowCount: 3),
+        ],
+      );
+      final avatarYielded = Completer<void>();
+      final releaseAvatar = Completer<void>();
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+      final avatarPreparation = cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        resourceKey: 'avatar-active-lane',
+        window: avatar,
+        surfaceWidth: 378,
+        yieldEveryRows: 1,
+        yieldToBackground: () {
+          if (!avatarYielded.isCompleted) avatarYielded.complete();
+          return releaseAvatar.future;
+        },
+      );
+      await avatarYielded.future;
+
+      // Same-priority Time work is correctly queued behind the actual Avatar
+      // preparation. It is not itself an active cache lease and therefore may
+      // not cancel the other lane merely because it is awaiting that future.
+      final timePreparation = cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        resourceKey: 'time-deferred-lane',
+        window: time,
+        surfaceWidth: 378,
+      );
+      await Future<void>.microtask(() {});
+      expect(
+        cache.cancelLiveInteractionResourcePreparation(
+          lane: DashboardLiveInteractionResourceLane.timePreview,
+        ),
+        isFalse,
+      );
+
+      final avatarCancellation = expectLater(
+        avatarPreparation,
+        throwsA(isA<DashboardLogBoxScenePreparationCancelled>()),
+      );
+      expect(
+        cache.cancelLiveInteractionResourcePreparation(
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+        ),
+        isTrue,
+      );
+      releaseAvatar.complete();
+      await avatarCancellation;
+      await timePreparation;
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          time,
+          lane: DashboardLiveInteractionResourceLane.timePreview,
+          resourceKey: 'time-deferred-lane',
         ),
         isTrue,
       );

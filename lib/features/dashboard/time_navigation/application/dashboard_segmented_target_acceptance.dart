@@ -12,16 +12,35 @@ import 'dashboard_time_navigation_state.dart';
 enum DashboardSegmentedTargetAcceptance {
   acceptedExact,
   acceptedExactEmpty,
+  acceptedDeferredForPainterResource,
   rejectedDisposed,
   rejectedNotPrepared,
   rejectedStaleGeneration,
   rejectedRevisionMismatch;
 
-  /// Both accepted values identify a complete, atomically selected visible
-  /// frame.  Empty is a valid exact result, never a loading surrogate.
+  /// Exact accepted values identify a complete, atomically selected visible
+  /// frame. Empty is a valid exact result, never a loading surrogate. The
+  /// deferred value is accepted semantic intent whose visible frame is held
+  /// until the exact painter resource is ready.
   bool get isExactLivePublication => switch (this) {
     DashboardSegmentedTargetAcceptance.acceptedExact ||
     DashboardSegmentedTargetAcceptance.acceptedExactEmpty => true,
+    DashboardSegmentedTargetAcceptance.acceptedDeferredForPainterResource ||
+    DashboardSegmentedTargetAcceptance.rejectedDisposed ||
+    DashboardSegmentedTargetAcceptance.rejectedNotPrepared ||
+    DashboardSegmentedTargetAcceptance.rejectedStaleGeneration ||
+    DashboardSegmentedTargetAcceptance.rejectedRevisionMismatch => false,
+  };
+
+  /// A deferred target remains the latest physical semantic intent, but has
+  /// not yet been given visible authority. The selector may retain it for
+  /// release settlement; Core promotes it only after its exact Phase-A
+  /// resource binds and paints.
+  bool get isAcceptedSemanticIntent => switch (this) {
+    DashboardSegmentedTargetAcceptance.acceptedExact ||
+    DashboardSegmentedTargetAcceptance.acceptedExactEmpty ||
+    DashboardSegmentedTargetAcceptance.acceptedDeferredForPainterResource =>
+      true,
     DashboardSegmentedTargetAcceptance.rejectedDisposed ||
     DashboardSegmentedTargetAcceptance.rejectedNotPrepared ||
     DashboardSegmentedTargetAcceptance.rejectedStaleGeneration ||

@@ -146,6 +146,22 @@ final class DashboardPresentationController {
   DashboardInteractionPreviewOrder?
   get queuedPreparedExperimentalTemporalInteractionOrder =>
       _queuedPreparedExperimentalTemporalInteractionOrder;
+
+  /// Claims Summary/Time foreground authority at raw-pointer time without
+  /// changing a visible lane. A later semantic crossing receives its own
+  /// newer local order; this early claim exists solely to prevent an outgoing
+  /// producer from publishing in the pointer-to-crossing gap.
+  DashboardInteractionPreviewOrder?
+  claimPreparedExperimentalTemporalForegroundIntent() {
+    final order = visibleFrames.nextInteractionPreviewOrder(
+      producer: DashboardInteractionPreviewProducer.summaryTime,
+      localGeneration: ++_summaryInteractionLocalGeneration,
+    );
+    return visibleFrames.claimInteractionPublicationIntent(order)
+        ? order
+        : null;
+  }
+
   LedgerQueryKey? get expectedVisibleQueryKey {
     final installed = _index;
     if (installed == null) return null;
@@ -345,6 +361,7 @@ final class DashboardPresentationController {
   bool publishPreparedExperimentalTemporalCandidate(
     DashboardNavigationState candidate, {
     bool deferCanonicalCommit = false,
+    DashboardInteractionPreviewOrder? interactionOrder,
   }) {
     final installed = _index;
     if (installed == null) return false;
@@ -371,11 +388,17 @@ final class DashboardPresentationController {
     // its shared order must be claimed before that deferred callback. This
     // makes a later Avatar/Mind intent win immediately and prevents an older
     // completion from treating its callback time as user-intent time.
-    final interactionOrder = visibleFrames.nextInteractionPreviewOrder(
-      producer: DashboardInteractionPreviewProducer.summaryTime,
-      localGeneration: ++_summaryInteractionLocalGeneration,
-    );
-    if (!visibleFrames.claimInteractionPublicationIntent(interactionOrder)) {
+    final issuedInteractionOrder =
+        interactionOrder ??
+        visibleFrames.nextInteractionPreviewOrder(
+          producer: DashboardInteractionPreviewProducer.summaryTime,
+          localGeneration: ++_summaryInteractionLocalGeneration,
+        );
+    if (issuedInteractionOrder.producer !=
+            DashboardInteractionPreviewProducer.summaryTime ||
+        !visibleFrames.claimInteractionPublicationIntent(
+          issuedInteractionOrder,
+        )) {
       return false;
     }
     final state = deferCanonicalCommit
@@ -419,7 +442,8 @@ final class DashboardPresentationController {
           : DashboardVisibleMode.committed,
     );
     _queuedPreparedExperimentalTemporalFrame = frame;
-    _queuedPreparedExperimentalTemporalInteractionOrder = interactionOrder;
+    _queuedPreparedExperimentalTemporalInteractionOrder =
+        issuedInteractionOrder;
     frameCoalescer.request(frame);
     return true;
   }
