@@ -366,7 +366,12 @@ final class _DashboardLogBoxRenderSurfaceState
                 committedViewport: _committedViewport,
                 hasExactRailScene:
                     payload != null &&
-                    _sceneCache.railCriticalSceneFor(payload) != null,
+                    _sceneCache.railCriticalSceneFor(
+                          payload,
+                          hasCompleteReadablePhaseAFallback:
+                              hasCompleteReadablePhaseA,
+                        ) !=
+                        null,
                 hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
               );
               _recordRenderDomainTransition(frame, presentation, renderDomain);
@@ -401,7 +406,11 @@ final class _DashboardLogBoxRenderSurfaceState
               // introducing per-frame console traffic on a fling.
               final selectedScene = payload == null
                   ? null
-                  : _sceneCache.railCriticalSceneFor(payload);
+                  : _sceneCache.railCriticalSceneFor(
+                      payload,
+                      hasCompleteReadablePhaseAFallback:
+                          hasCompleteReadablePhaseA,
+                    );
               assert(
                 selectedScene == null || selectedScene.isCompletelyPrepared,
               );
@@ -1546,14 +1555,25 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       _recordPaintDuration(started, measure);
       return;
     }
-    final scene = sceneCache.railCriticalSceneFor(state);
+    final hasCompleteReadablePhaseA = sceneCache.hasCompleteReadablePhaseAFor(
+      state,
+    );
+    final scene = sceneCache.railCriticalSceneFor(
+      state,
+      hasCompleteReadablePhaseAFallback: hasCompleteReadablePhaseA,
+    );
     if (scene == null) {
       // Phase A owns the exact semantic list even when its optional rich
       // scene is still preparing or was cancelled.  Painting these bounded
       // source-identity slots deliberately avoids `flatItems`, TextPainter
       // allocation and rich projection on the pointer path; Phase B replaces
       // the same identity with full prepared row content when available.
-      _paintSemanticPreviewSlots(canvas, size, state);
+      _paintSemanticPreviewSlots(
+        canvas,
+        size,
+        state,
+        hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
+      );
       _recordPaintDuration(started, measure);
       return;
     }
@@ -1609,8 +1629,9 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   void _paintSemanticPreviewSlots(
     Canvas canvas,
     Size size,
-    DashboardLogViewportState state,
-  ) {
+    DashboardLogViewportState state, {
+    required bool hasCompleteReadablePhaseA,
+  }) {
     final totalRows = state.previewRowCount;
     _lastDrawableRowCount = totalRows;
     _lastReadablePhaseARowCount = sceneCache.readablePhaseARowCountFor(state);
@@ -1627,7 +1648,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     // absent would make an invariant failure look like legitimate financial
     // data. The scene-cache activation listener rebuilds this stable surface
     // as soon as the complete immutable bank arrives.
-    if (!sceneCache.hasCompleteReadablePhaseAFor(state)) {
+    if (!hasCompleteReadablePhaseA) {
       _lastPaintedRowCount = 0;
       sceneCache.recordVisiblePayloadWithoutDrawable();
       return;
@@ -2198,7 +2219,11 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     var rowTop = swipe.target.localRowTop;
     if (renderDomain == DashboardLogBoxRenderDomain.railPreview) {
       item = _itemForEntryId(state.flatItems, swipe.target.row.entryId);
-      final scene = sceneCache.railCriticalSceneFor(state);
+      final scene = sceneCache.railCriticalSceneFor(
+        state,
+        hasCompleteReadablePhaseAFallback: sceneCache
+            .hasCompleteReadablePhaseAFor(state),
+      );
       preparedText = item == null ? null : scene?.rowFor(item.row);
       if (item != null) rowTop = _rowTop(item);
     } else {

@@ -1143,17 +1143,30 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   /// Exact renderer lookup for the revision-critical rail presentation bank.
   ///
   /// This is intentionally synchronous and complete-only. A null return is a
-  /// production invariant violation for any non-empty visible rail payload;
-  /// callers must never build, await, or repair a scene on the hot path.
+  /// production invariant violation only when no exact readable Phase-A
+  /// fallback owns the visible payload. Rich Phase B is optional for an exact
+  /// live interaction frame, so callers that have already proven its Phase-A
+  /// bank may set [hasCompleteReadablePhaseAFallback]. That keeps a normal
+  /// Phase-B absence out of the rail-critical failure counter without changing
+  /// the cache lookup or creating work on the hot path.
   DashboardPreparedLogBoxScene? railCriticalSceneFor(
     DashboardLogViewportState payload, {
     double? devicePixelRatio,
+    bool hasCompleteReadablePhaseAFallback = false,
   }) {
+    assert(
+      !hasCompleteReadablePhaseAFallback ||
+          hasCompleteReadablePhaseAFor(payload),
+      'Only the exact readable Phase-A cache contract may suppress a rich '
+      'Phase-B rail lookup miss.',
+    );
     final scene = _activeBank.sceneFor(
       payload,
       devicePixelRatio: devicePixelRatio,
     );
-    if (scene == null && _activeBank.isComplete) {
+    if (scene == null &&
+        _activeBank.isComplete &&
+        !hasCompleteReadablePhaseAFallback) {
       _railCriticalLookupMissCount += 1;
     } else if (scene != null) {
       _railCriticalLookupHitCount += 1;

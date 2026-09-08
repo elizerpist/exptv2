@@ -1797,15 +1797,19 @@ final class _DashboardLogScrollArea extends StatelessWidget {
         layoutProfile: layoutProfile,
       );
     }
+    final hasCompleteReadablePhaseA =
+        preparedSceneCache?.hasCompleteReadablePhaseAFor(frame.logBox) ?? false;
     final renderDomain = resolveDashboardLogBoxRenderDomain(
       payload: frame.logBox,
       presentation: presentation,
       committedViewport: committed,
       hasExactRailScene:
-          preparedSceneCache?.railCriticalSceneFor(frame.logBox) != null,
-      hasCompleteReadablePhaseA:
-          preparedSceneCache?.hasCompleteReadablePhaseAFor(frame.logBox) ??
-          false,
+          preparedSceneCache?.railCriticalSceneFor(
+            frame.logBox,
+            hasCompleteReadablePhaseAFallback: hasCompleteReadablePhaseA,
+          ) !=
+          null,
+      hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
     );
     if (renderDomain == DashboardLogBoxRenderDomain.committedVertical &&
         hasExactCommittedLogBoxGeometry(
@@ -2390,16 +2394,23 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required DashboardVisibleFrame visible,
     required DashboardLogBoxPresentationBinding binding,
     required CommittedLogViewportCache committed,
-  }) => resolveDashboardLogBoxRenderDomain(
-    payload: visible.logBox,
-    presentation: binding,
-    committedViewport: committed,
-    hasExactRailScene:
-        preparedSceneCache?.railCriticalSceneFor(visible.logBox) != null,
-    hasCompleteReadablePhaseA:
+  }) {
+    final hasCompleteReadablePhaseA =
         preparedSceneCache?.hasCompleteReadablePhaseAFor(visible.logBox) ??
-        false,
-  ).name;
+        false;
+    return resolveDashboardLogBoxRenderDomain(
+      payload: visible.logBox,
+      presentation: binding,
+      committedViewport: committed,
+      hasExactRailScene:
+          preparedSceneCache?.railCriticalSceneFor(
+            visible.logBox,
+            hasCompleteReadablePhaseAFallback: hasCompleteReadablePhaseA,
+          ) !=
+          null,
+      hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
+    ).name;
+  }
 
   void _rejectStaleVerticalUpdate({
     required ScrollController controller,

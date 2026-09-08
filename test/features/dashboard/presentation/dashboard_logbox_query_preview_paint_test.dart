@@ -2140,8 +2140,19 @@ void main() {
       );
       await tester.pump();
 
+      expect(
+        sceneCache.railCriticalLookupMissCount,
+        0,
+        reason:
+            'An Avatar target with its exact budgetAvatarPreview Phase-A bank '
+            'must not classify the absent optional Time rich scene as a '
+            'rail-critical lookup failure.',
+      );
       final payload = core.visibleFrames.logBoxLane.value!.logBox;
-      final scene = sceneCache.railCriticalSceneFor(payload);
+      final scene = sceneCache.railCriticalSceneFor(
+        payload,
+        hasCompleteReadablePhaseAFallback: true,
+      );
       final snapshot = snapshots.lastWhere(
         (value) => value.presentation?.queryKey == payload.queryKey,
       );
@@ -2154,6 +2165,7 @@ void main() {
             'This production Avatar crossing deliberately withholds Phase B; '
             'the matching Phase-A rows must remain readable on their own.',
       );
+      expect(sceneCache.railCriticalLookupMissCount, 0);
       expect(snapshot.payloadRowCount, payload.previewRowCount);
       expect(snapshot.drawableRowCount, payload.previewRowCount);
       expect(snapshot.paintedRowCount, greaterThan(0));

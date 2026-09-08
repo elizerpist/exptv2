@@ -27,6 +27,7 @@ one timeline.
 | FPA-15 | User §21 / §28 | Physical device | Physical correctness and performance are not claimed by the agent. | User-only physical validation. | PENDING — USER ONLY |
 | FPA-16 | User §25; delivery profile artifact audit | `integration_test/dashboard_interaction_profile_test.dart` | The online profile matrix includes a real production-composition Avatar crossing with an accepted exact publication and records its bounded pipeline/paint evidence. | A dedicated profile artifact plus source-level integration test assertions. | PARTIAL |
 | FPA-17 | CI run `34259701012`; User §10 and §15 | Initial LogBox render/readiness boundary | A cold non-empty Time payload never reaches a LogBox paint attempt without exact readable Phase A, including while the normal startup readiness layer is mounted. | New production-shell regression with a populated prepared index; online A–K profile rerun. | PARTIAL |
+| FPA-18 | CI run `34268569777`; User §13 and §21 | LogBox rich Phase-B diagnostic classification | An Avatar target backed by its exact `budgetAvatarPreview` Phase-A bank treats an absent active Time rich Phase-B scene as an optional fallback, not a rail-critical failure; an actually unreadable target remains fail-closed. | Production-parent Avatar paint regression red/green plus online A–K profile artifact. | PARTIAL |
 
 ## Protected prior work
 
@@ -102,3 +103,21 @@ FrameTiming was pending. This checklist does not reopen either semantic design.
   failures already recorded against `fc35c1b`; the generated golden-diff PNGs
   were discarded rather than accepted. This closes the local-validation record
   in FPA-13 but does not close online delivery/profile FPA-14/FPA-16/FPA-17.
+- The FPA-17 online rerun (`34268569777`) removed the initial unreadable-paint
+  failure (`visiblePayloadWithoutDrawable=0`) but then reached the previously
+  masked K Avatar audit. K reported `railCriticalLookupMiss=28` while its
+  exact `budgetAvatarPreview` Phase-A rows, actual paint, progress paint and
+  `criticalCacheMisses=0` all remained valid. The active rich bank was the
+  Time rail (`rail-critical:rev:2|index:6`), so its absence for an Avatar
+  category payload is expected optional Phase B, not a missing required paint
+  source. The real production-parent Avatar test was red on `b7f168d` with
+  four such false critical misses, then passed after the explicit
+  `hasCompleteReadablePhaseAFallback` contract. The next A–K artifact remains
+  required before FPA-18, FPA-16 and FPA-17 can be closed.
+- Local FPA-18 validation passed after that correction: the named
+  production-parent Avatar regression, LogBox cache/viewport/query-preview
+  group, Avatar rail/Core group and profile contract/boundary group all passed;
+  `flutter analyze --no-pub` reported no issues. The complete presentation
+  command again finished at `595` tests with the same `19` inherited failures
+  and no changed LogBox failure. FPA-18 remains `PARTIAL` until its online A–K
+  artifact validates the real profile counters.

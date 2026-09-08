@@ -169,6 +169,45 @@ remain protected by the existing Time/Avatar Phase-A contracts. An online A–K
 profile rerun is still required before this profile-derived invariant can be
 closed.
 
+## Follow-up — exact Avatar Phase A is not a missing rich Time scene
+
+The subsequent A–K rerun (`34268569777`) proved that the initial cold-paint
+gate removed the earlier unreadable-payload failure: its report has
+`visiblePayloadWithoutDrawable=0`. It then exposed a different K-scenario
+audit failure: `railCriticalLookupMiss=28` despite all of the following being
+true for the Avatar target:
+
+- its exact `budgetAvatarPreview` Phase-A rows were readable and painted;
+- the current target's Budget-progress paint acknowledgement existed;
+- `visiblePayloadWithoutPaint=0`; and
+- the actual `criticalCacheMisses` counter remained `0`.
+
+Current-source inspection established the precise mismatch. The diagnostic
+helper `railCriticalSceneFor` only queries the active *Time* rich-scene bank.
+During the Avatar profile scenario that bank was
+`rail-critical:rev:2|index:6`, while the Category-filtered Avatar target
+rightly uses its retained `budgetAvatarPreview` Phase-A lane and has no
+required rich Phase-B scene. The existing render contract already paints that
+exact Phase-A fallback when the optional rich scene is null; the metric was
+therefore classifying an optional enrichment miss as a required rail-critical
+failure.
+
+The new production-parent regression is deliberately red on `b7f168d`: after
+the real Avatar crossing it observes four `railCriticalLookupMiss` increments
+while exact Phase A is available. The repair threads the existing exact
+Phase-A readiness fact to the existing optional rich-scene lookup in the
+render surface and viewport. The cache still performs the same lookup and
+still counts a null rich scene as a critical failure whenever no exact
+Phase-A fallback exists; a debug assertion prevents callers from suppressing
+that metric without the exact cache contract. No new cache, visible-frame
+authority, resource request, data calculation, controller or paint path was
+introduced. The green production-parent regression returns zero false misses.
+
+This is a diagnostic-contract correction, not evidence that the Avatar
+FrameTiming problem is fixed. A fresh online A–K profile must show both the
+previous I invariant and K's `railCriticalLookupMiss=0` before the profile
+items can be closed.
+
 ## Source and test impact audit
 
 | Shared owner | Current role and protected consumer | Repair / regression coverage |
@@ -185,6 +224,20 @@ The current-source audit found no new `Future.delayed`, repository read, index
 build, canonical query commit, rich-scene preparation or `TextPainter`
 construction in the Time/Avatar semantic bind path. Existing cache preparation
 continues to own expensive work outside that exact binder boundary.
+
+### FPA-18 direct source impact
+
+`DashboardLogBoxPreparedSceneCache.railCriticalSceneFor` remains the sole
+definition and only changes its *diagnostic-counter classification*. Its direct
+production consumers are the stable render surface's render-domain selection,
+its selected-scene diagnostic, its custom painter and rail-preview swipe
+lookup, plus the viewport's authoritative extent and render-domain-name
+queries. Those live-interaction consumers now supply the exact Phase-A fact
+they already read from the same cache; committed-vertical consumers retain the
+strict default. Direct test consumers are the prepared-scene-cache tests and
+the production-parent query-preview paint tests. No consumer gains a new cache
+or rendering authority, and no consumer changes the actual Phase-A paint
+fallback or rich-scene lookup result.
 
 ## Validation classification
 
