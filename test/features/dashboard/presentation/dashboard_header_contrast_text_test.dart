@@ -120,4 +120,32 @@ void main() {
       baseline,
     );
   });
+
+  testWidgets(
+    'FPA: Header text acknowledges the current identity only after its paint pass',
+    (tester) async {
+      final painted = <Object>[];
+      final first = Object();
+      final second = Object();
+
+      Widget host(Object identity) => MaterialApp(
+        home: Scaffold(
+          body: DashboardHeaderContrastText(
+            data: '75 000 Ft / 100 000 Ft',
+            style: const TextStyle(fontSize: 14, height: 1),
+            foreground: Colors.white,
+            contrastStyle: DashboardHeaderTextContrastStyle.none,
+            paintIdentity: identity,
+            onPainted: () => painted.add(identity),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(host(first));
+      expect(painted, contains(same(first)));
+
+      await tester.pumpWidget(host(second));
+      expect(painted.last, same(second));
+    },
+  );
 }

@@ -5,6 +5,7 @@ import 'package:fluvi/core/design/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
@@ -52,6 +53,29 @@ void main() {
       expect(amount.data, isNot(contains('12000,00 Ft / 30000,00 Ft')));
       expect(find.text('Napi tempó'), findsOneWidget);
       expect(find.text('tempó'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'FPA: Budget Header emits its actual paint acknowledgement with the current model identity',
+    (tester) async {
+      final harness = _BudgetHeaderHarness(
+        initialFrame: _dayVisibleFrame(),
+        snapshotForCurrentFrame: _dayHeaderSnapshot,
+      );
+      addTearDown(harness.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(_host(harness, collapseProgress: 180));
+      await tester.pump();
+
+      final painted = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_HEADER_PAINTED',
+      );
+      expect(painted.scope, contains('targetHandle=0'));
+      expect(painted.scope, contains('interactionGeneration='));
+      expect(painted.scope, contains('visiblePresentationEpoch='));
     },
   );
 

@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:ui' show FramePhase;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -143,6 +144,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   int _ballisticMatchingLogBoxPaints = 0;
   int _retainedExactPaints = 0;
   int _matchingRichPhaseBPaints = 0;
+  int _budgetProgressPaintedCount = 0;
   int? _latestPaintedTargetHandle;
   int? _latestRichPaintedTargetHandle;
   _AvatarPreviewPaintExpectation? _pendingPaintExpectation;
@@ -176,6 +178,10 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   _acknowledgedFrameToRasterLatency = _collectFrameTimingDiagnostics
       ? CenteredCarouselLatencyDistributionAccumulator()
       : null;
+  final CenteredCarouselLatencyDistributionAccumulator?
+  _budgetProgressPaintToRasterLatency = _collectFrameTimingDiagnostics
+      ? CenteredCarouselLatencyDistributionAccumulator()
+      : null;
   final Map<int, int>? _semanticTargetMicros = _collectFrameTimingDiagnostics
       ? <int, int>{}
       : null;
@@ -185,7 +191,12 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   TimingsCallback? _frameTimingsCallback;
   int? _lastRawScrollMicros;
   int? _awaitingPaintFrameVsyncMicros;
+  _BudgetProgressPaintExpectation? _awaitingBudgetProgressRaster;
+  int? _lastBudgetProgressBuildSignature;
+  int? _lastBudgetProgressPaintSignature;
+  int? _lastBudgetProgressStaleSignature;
   int _motionAvatarRailBuilds = 0;
+  _AvatarFirstTargetPipeline? _firstTargetPipeline;
 
   @override
   void initState() {
@@ -338,6 +349,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (_items.isEmpty) return;
     final targetHandle =
         _items[_modulo(logicalIndex, _items.length)].targetHandle;
+    _recordFirstAvatarSemanticCrossing(targetHandle);
     if (_activeMotionOrigin != null) {
       if (_collectFrameTimingDiagnostics) {
         final now = developer.Timeline.now;
@@ -363,10 +375,41 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _previewPublisher.submit(targetHandle);
   }
 
+  /// Records only the first discrete boundary after a physical Avatar pointer.
+  /// The generic carousel remains the sole geometry/gesture authority; this
+  /// is a bounded diagnostic correlation record for splitting first-feedback
+  /// latency from later ballistic crossings.
+  void _recordFirstAvatarSemanticCrossing(int targetHandle) {
+    if (!_collectFrameTimingDiagnostics) return;
+    final pipeline = _firstTargetPipeline;
+    if (pipeline == null || pipeline.motionGeneration != _motionGeneration) {
+      return;
+    }
+    final firstTargetHandle = pipeline.targetHandle;
+    if (firstTargetHandle != null && firstTargetHandle != targetHandle) {
+      _emitFirstTargetPipelineSummary(
+        pipeline,
+        terminalOutcome: pipeline.exactPhaseAStoreMicros == null
+            ? 'coalescedBeforeReadiness'
+            : 'coalescedBeforePaint',
+      );
+      return;
+    }
+    if (firstTargetHandle != null) return;
+    pipeline.targetHandle = targetHandle;
+    pipeline.firstSemanticMicros = developer.Timeline.now;
+  }
+
   void _publishPreviewTargetHandle(int targetHandle) {
     if (!mounted) return;
     final phase = _activeMotionPhase;
     final generation = _motionGeneration;
+    final firstTargetPipeline = _firstTargetPipeline;
+    if (firstTargetPipeline?.motionGeneration == generation &&
+        firstTargetPipeline?.targetHandle == targetHandle &&
+        firstTargetPipeline?.previewRequestedMicros == null) {
+      firstTargetPipeline!.previewRequestedMicros = developer.Timeline.now;
+    }
     final semanticCrossedAtMicros = _collectFrameTimingDiagnostics
         ? _semanticTargetMicros![targetHandle]
         : null;
@@ -474,6 +517,20 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'reason=${error == null ? (accepted ? 'acceptedExact' : 'coordinatorRejected') : 'exception'}',
       ),
     );
+    final firstTargetPipeline = _firstTargetPipeline;
+    if (firstTargetPipeline?.motionGeneration == generation &&
+        firstTargetPipeline?.targetHandle == targetHandle) {
+      if (accepted && error == null) {
+        firstTargetPipeline!.exactPhaseAStoreMicros = developer.Timeline.now;
+      } else {
+        _emitFirstTargetPipelineSummary(
+          firstTargetPipeline!,
+          terminalOutcome: error == null
+              ? 'staleRejected'
+              : 'exactPhaseAAdmissionException',
+        );
+      }
+    }
     if (accepted && error == null) {
       if (_collectFrameTimingDiagnostics) {
         final acceptedAtMicros = developer.Timeline.now;
@@ -583,6 +640,21 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'paintOccurrence=${retainedAtExpectation ? 'alreadyVisibleBeforeExpectation' : 'actualExtentAfterExpectation'}',
       ),
     );
+    final firstTargetPipeline = _firstTargetPipeline;
+    if (!retainedAtExpectation &&
+        _collectFrameTimingDiagnostics &&
+        firstTargetPipeline?.motionGeneration == expectation.generation &&
+        firstTargetPipeline?.targetHandle == painted.targetHandle) {
+      firstTargetPipeline!.logBoxPaintMicros = developer.Timeline.now;
+      firstTargetPipeline.logBoxPaintVsyncMicros =
+          SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
+      _emitFirstTargetPipelineSummary(
+        firstTargetPipeline,
+        terminalOutcome: painted.exactEmpty
+            ? 'exactEmpty'
+            : 'exactPhaseAPainted',
+      );
+    }
     if (terminalSummary == null ||
         terminalSummary.generation != expectation.generation) {
       return;
@@ -626,6 +698,14 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _activeMotionOrigin = origin;
     _activeMotionPhase = BudgetTargetAvatarMotionPhase.directDrag;
     _motionGeneration += 1;
+    final firstTargetPipeline = _firstTargetPipeline;
+    if (_collectFrameTimingDiagnostics &&
+        origin == CenteredCarouselMotionOrigin.userDrag &&
+        firstTargetPipeline != null &&
+        firstTargetPipeline.motionGeneration == null) {
+      firstTargetPipeline.motionGeneration = _motionGeneration;
+      firstTargetPipeline.recognizerOwnedMicros = developer.Timeline.now;
+    }
     _motionSemanticCrossings = 0;
     _motionPreviewPublications = 0;
     _motionRawScrollUpdates = 0;
@@ -641,6 +721,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     _ballisticMatchingLogBoxPaints = 0;
     _retainedExactPaints = 0;
     _matchingRichPhaseBPaints = 0;
+    _budgetProgressPaintedCount = 0;
     _latestPaintedTargetHandle = null;
     _latestRichPaintedTargetHandle = null;
     _pendingPaintExpectation = null;
@@ -659,10 +740,15 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       _semanticToStoreLatency!.reset();
       _storeToPaintLatency!.reset();
       _acknowledgedFrameToRasterLatency!.reset();
+      _budgetProgressPaintToRasterLatency!.reset();
       _semanticTargetMicros!.clear();
       _acceptedTargetMicros!.clear();
       _lastRawScrollMicros = null;
       _awaitingPaintFrameVsyncMicros = null;
+      _awaitingBudgetProgressRaster = null;
+      _lastBudgetProgressBuildSignature = null;
+      _lastBudgetProgressPaintSignature = null;
+      _lastBudgetProgressStaleSignature = null;
       _motionAvatarRailBuilds = 0;
     }
     FluviDiagnosticLogger.log(
@@ -819,6 +905,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     final acknowledgedFrameToRaster = timingDiagnostics
         ? _acknowledgedFrameToRasterLatency!.snapshot()
         : null;
+    final budgetProgressPaintToRaster = timingDiagnostics
+        ? _budgetProgressPaintToRasterLatency!.snapshot()
+        : null;
     final pendingPaint = _pendingPaintExpectation;
     final awaitingExactPaint =
         pendingPaint?.generation == _motionGeneration &&
@@ -889,6 +978,9 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'storeToPaintP95Micros=${storeToPaint?.p95Micros ?? -1} '
             'acknowledgedFrameToRasterP95Micros='
             '${acknowledgedFrameToRaster?.p95Micros ?? -1} '
+            'budgetProgressPainted=$_budgetProgressPaintedCount '
+            'budgetProgressPaintToRasterP95Micros='
+            '${budgetProgressPaintToRaster?.p95Micros ?? -1} '
             'frameTimingDiagnostics=$timingDiagnostics '
             'firstTickMicros=${cadence.firstTickLatencyMicros} '
             'interTickMinMicros=${cadence.interTickMinimumMicros} '
@@ -921,7 +1013,13 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (_activeMotionOrigin != null) {
       _motionRawScrollUpdates += 1;
       if (_collectFrameTimingDiagnostics) {
-        _lastRawScrollMicros = developer.Timeline.now;
+        final now = developer.Timeline.now;
+        _lastRawScrollMicros = now;
+        final firstTargetPipeline = _firstTargetPipeline;
+        if (firstTargetPipeline?.motionGeneration == _motionGeneration &&
+            firstTargetPipeline?.firstRawScrollMicros == null) {
+          firstTargetPipeline!.firstRawScrollMicros = now;
+        }
       }
     }
   }
@@ -929,21 +1027,136 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   void _onFrameTimings(List<FrameTiming> timings) {
     if (!_collectFrameTimingDiagnostics) return;
     final motionActive = _activeMotionOrigin != null;
-    final awaitingPaintFrameVsyncMicros = _awaitingPaintFrameVsyncMicros;
-    if (!motionActive && awaitingPaintFrameVsyncMicros == null) return;
+    var awaitingPaintFrameVsyncMicros = _awaitingPaintFrameVsyncMicros;
+    var awaitingBudgetProgressRaster = _awaitingBudgetProgressRaster;
+    if (!motionActive &&
+        awaitingPaintFrameVsyncMicros == null &&
+        awaitingBudgetProgressRaster == null) {
+      return;
+    }
     for (final timing in timings) {
       if (motionActive) _frameTimings!.recordFrameTiming(timing);
       if (awaitingPaintFrameVsyncMicros != null &&
           timing.timestampInMicroseconds(FramePhase.rasterFinish) >=
               awaitingPaintFrameVsyncMicros) {
-        _acknowledgedFrameToRasterLatency!.record(
-          timing.timestampInMicroseconds(FramePhase.rasterFinish) -
-              awaitingPaintFrameVsyncMicros,
+        final rasterFinishMicros = timing.timestampInMicroseconds(
+          FramePhase.rasterFinish,
         );
+        _acknowledgedFrameToRasterLatency!.record(
+          rasterFinishMicros - awaitingPaintFrameVsyncMicros,
+        );
+        final firstTargetPipeline = _firstTargetPipeline;
+        if (firstTargetPipeline?.logBoxPaintVsyncMicros ==
+            awaitingPaintFrameVsyncMicros) {
+          firstTargetPipeline!.logBoxRasterFinishMicros = rasterFinishMicros;
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'AVATAR_FIRST_TARGET_RASTER_ACCOUNTED',
+              coreRevision: firstTargetPipeline.coreRevision,
+              scope:
+                  'pointerId=${firstTargetPipeline.pointerId} '
+                  'targetHandle=${firstTargetPipeline.targetHandle ?? '-'} '
+                  'interactionGeneration='
+                  '${firstTargetPipeline.motionGeneration ?? '-'} '
+                  'paintVsyncMicros='
+                  '${firstTargetPipeline.logBoxPaintVsyncMicros} '
+                  'rasterFinishMicros=$rasterFinishMicros '
+                  'paintToRasterMicros='
+                  '${rasterFinishMicros - awaitingPaintFrameVsyncMicros}',
+            ),
+          );
+        }
         _awaitingPaintFrameVsyncMicros = null;
+        awaitingPaintFrameVsyncMicros = null;
+      }
+      if (awaitingBudgetProgressRaster != null &&
+          timing.timestampInMicroseconds(FramePhase.rasterFinish) >=
+              awaitingBudgetProgressRaster.paintVsyncMicros) {
+        final rasterLatencyMicros =
+            timing.timestampInMicroseconds(FramePhase.rasterFinish) -
+            awaitingBudgetProgressRaster.paintVsyncMicros;
+        _budgetProgressPaintToRasterLatency!.record(rasterLatencyMicros);
+        _awaitingBudgetProgressRaster = null;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'BUDGET_PROGRESS_RASTER_ACCOUNTED',
+            coreRevision: awaitingBudgetProgressRaster.coreRevision,
+            scope:
+                'targetHandle=${awaitingBudgetProgressRaster.targetHandle} '
+                'interactionGeneration='
+                '${awaitingBudgetProgressRaster.interactionGeneration} '
+                'visiblePresentationEpoch='
+                '${awaitingBudgetProgressRaster.visiblePresentationEpoch ?? '-'} '
+                'visibleFrameGeneration='
+                '${awaitingBudgetProgressRaster.visibleFrameGeneration ?? '-'} '
+                'paintVsyncMicros=${awaitingBudgetProgressRaster.paintVsyncMicros} '
+                'rasterFinishMicros='
+                '${timing.timestampInMicroseconds(FramePhase.rasterFinish)} '
+                'rasterLatencyMicros=$rasterLatencyMicros',
+          ),
+        );
+        awaitingBudgetProgressRaster = null;
+      }
+      if (_awaitingPaintFrameVsyncMicros == null &&
+          _awaitingBudgetProgressRaster == null) {
         break;
       }
     }
+  }
+
+  /// Emits one bounded timeline for the first discrete Avatar target reached
+  /// after a raw pointer.  It is diagnostic-only: completion neither chooses
+  /// a target nor affects Phase-A publication, paint, settle, or physics.
+  void _emitFirstTargetPipelineSummary(
+    _AvatarFirstTargetPipeline pipeline, {
+    required String terminalOutcome,
+  }) {
+    if (pipeline.summaryEmitted) return;
+    pipeline.summaryEmitted = true;
+
+    int elapsedMicros(int? timestampMicros) {
+      if (timestampMicros == null) return -1;
+      final elapsed = timestampMicros - pipeline.pointerAcceptedMicros;
+      return elapsed < 0 ? 0 : elapsed;
+    }
+
+    final paintToRasterMicros =
+        pipeline.logBoxPaintVsyncMicros == null ||
+            pipeline.logBoxRasterFinishMicros == null
+        ? -1
+        : pipeline.logBoxRasterFinishMicros! - pipeline.logBoxPaintVsyncMicros!;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AVATAR_FIRST_TARGET_PIPELINE_SUMMARY',
+        coreRevision: pipeline.coreRevision,
+        scope:
+            'pointerId=${pipeline.pointerId} '
+            'initialSelectedTargetHandle=${pipeline.initialSelectedTargetHandle} '
+            'targetHandle=${pipeline.targetHandle ?? '-'} '
+            'interactionGeneration=${pipeline.motionGeneration ?? '-'} '
+            'startingRawCenteredLogicalIndex='
+            '${pipeline.startingRawCenteredLogicalIndex.toStringAsFixed(4)} '
+            'distanceToNearestSemanticBoundaryItems='
+            '${pipeline.distanceToNearestSemanticBoundaryItems.toStringAsFixed(4)} '
+            'distanceToNearestSemanticBoundaryPixels='
+            '${(pipeline.distanceToNearestSemanticBoundaryItems * _itemExtent).toStringAsFixed(2)} '
+            'touchSlopThresholdPixels=${pipeline.touchSlopThresholdPixels} '
+            'pointerToRecognizerMicros='
+            '${elapsedMicros(pipeline.recognizerOwnedMicros)} '
+            'pointerToFirstRawScrollMicros='
+            '${elapsedMicros(pipeline.firstRawScrollMicros)} '
+            'pointerToFirstSemanticMicros='
+            '${elapsedMicros(pipeline.firstSemanticMicros)} '
+            'pointerToPreviewMicros='
+            '${elapsedMicros(pipeline.previewRequestedMicros)} '
+            'pointerToExactPhaseAStoreMicros='
+            '${elapsedMicros(pipeline.exactPhaseAStoreMicros)} '
+            'pointerToLogBoxPaintMicros='
+            '${elapsedMicros(pipeline.logBoxPaintMicros)} '
+            'logBoxPaintToRasterMicros=$paintToRasterMicros '
+            'terminalOutcome=$terminalOutcome',
+      ),
+    );
   }
 
   void _recordTargetTimestamp(Map<int, int> timestamps, int target, int now) {
@@ -1009,6 +1222,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                 semanticsLabelBuilder: (item) => item.title,
                 onPreviewChanged: _onPreviewChanged,
                 onDirectPointerDown: _onDirectPointerDown,
+                onPointerDownDecision: _recordAvatarPointerDecision,
                 onSelectionSettled: _onSelectionSettled,
                 onMotionStarted: _onMotionStarted,
                 onBallisticStarted: _onBallisticStarted,
@@ -1026,6 +1240,14 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                           : null,
                       onSelectionVisualIdentityMismatch: () =>
                           _recordProgressIdentityMismatch(item.targetHandle),
+                      onSelectionProgressBuilt:
+                          _collectFrameTimingDiagnostics && metrics.isSelected
+                          ? _recordBudgetProgressWidgetBuilt
+                          : null,
+                      onSelectionProgressPainted:
+                          _collectFrameTimingDiagnostics && metrics.isSelected
+                          ? _recordBudgetProgressPainted
+                          : null,
                     ),
                   );
                   final interaction = BudgetTargetAvatarInteraction(
@@ -1071,7 +1293,36 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     );
   }
 
+  void _recordAvatarPointerDecision(
+    CenteredCarouselPointerDownDecision decision,
+  ) {
+    if (!_collectFrameTimingDiagnostics || !decision.accepted) return;
+    final previous = _firstTargetPipeline;
+    if (previous != null && !previous.summaryEmitted) {
+      _emitFirstTargetPipelineSummary(
+        previous,
+        terminalOutcome: 'cancelledByNewPointer',
+      );
+    }
+    final rawCenteredLogicalIndex = _controller.rawCenteredLogicalIndex;
+    final distanceToNearestSemanticBoundaryItems =
+        (.5 - (rawCenteredLogicalIndex - rawCenteredLogicalIndex.round()).abs())
+            .clamp(0.0, .5)
+            .toDouble();
+    _firstTargetPipeline = _AvatarFirstTargetPipeline(
+      pointerId: decision.pointerId,
+      pointerAcceptedMicros: developer.Timeline.now,
+      startingRawCenteredLogicalIndex: rawCenteredLogicalIndex,
+      distanceToNearestSemanticBoundaryItems:
+          distanceToNearestSemanticBoundaryItems,
+      touchSlopThresholdPixels: kTouchSlop,
+      initialSelectedTargetHandle: widget.presentation.value.selectedHandle,
+      coreRevision: widget.presentation.value.liveSelection.coreRevision,
+    );
+  }
+
   void _onDirectPointerDown() {
+    final firstTargetPipeline = _firstTargetPipeline;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AV|POINTER_ACCEPTED',
@@ -1080,6 +1331,13 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         scope:
             'liveRootReady=${widget.liveTargetReadiness?.value ?? true} '
             'motionActive=${_activeMotionOrigin != null} '
+            'pointerId=${firstTargetPipeline?.pointerId ?? '-'} '
+            'startingRawCenteredLogicalIndex='
+            '${firstTargetPipeline?.startingRawCenteredLogicalIndex ?? '-'} '
+            'distanceToNearestSemanticBoundaryPixels='
+            '${firstTargetPipeline == null ? '-' : (firstTargetPipeline.distanceToNearestSemanticBoundaryItems * _itemExtent).toStringAsFixed(2)} '
+            'touchSlopThresholdPixels='
+            '${firstTargetPipeline?.touchSlopThresholdPixels ?? '-'} '
             'controllerIdentity=${identityHashCode(_controller)} '
             'physicsCreationCount=${_controller.physicsCreationCount}',
       ),
@@ -1103,6 +1361,114 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'avatarTargetHandle=$avatarTargetHandle '
             'visualTargetHandle=${visual.targetHandle} '
             'limitKey=${visual.limitKey.runtimeType}',
+      ),
+    );
+  }
+
+  _BudgetProgressPaintExpectation? _currentBudgetProgressPaintExpectation(
+    BudgetCategoryAvatarSelectedLimitVisualState visual,
+  ) {
+    final presentation = widget.presentation.value;
+    final currentVisual = presentation.selectedLimitVisual;
+    if (presentation.selectedHandle != visual.targetHandle ||
+        !currentVisual.sameVisualAs(visual)) {
+      if (_collectFrameTimingDiagnostics) {
+        final signature = Object.hash(
+          presentation.selectedHandle,
+          visual.targetHandle,
+          visual.limitKey,
+          visual.displayNumeratorScaled100,
+          visual.displayDenominatorScaled100,
+          visual.visualProgress,
+        );
+        if (_lastBudgetProgressStaleSignature != signature) {
+          _lastBudgetProgressStaleSignature = signature;
+          FluviDiagnosticLogger.log(
+            FluviDiagnosticEvent(
+              stage: 'BUDGET_PROGRESS_PAINT_STALE_REJECTED',
+              coreRevision: presentation.liveAnalysis.coreRevision,
+              scope:
+                  'selectedHandle=${presentation.selectedHandle} '
+                  'visualTargetHandle=${visual.targetHandle} '
+                  'interactionGeneration='
+                  '${presentation.liveAnalysis.interactionGeneration}',
+            ),
+          );
+        }
+      }
+      return null;
+    }
+    return _BudgetProgressPaintExpectation(
+      targetHandle: visual.targetHandle,
+      interactionGeneration: presentation.liveAnalysis.interactionGeneration,
+      coreRevision: presentation.liveAnalysis.coreRevision,
+      visiblePresentationEpoch:
+          widget.presentation.visiblePresentationEpochForDiagnostics,
+      visibleFrameGeneration:
+          widget.presentation.visibleFrameGenerationForDiagnostics,
+      visual: visual,
+      paintVsyncMicros: 0,
+    );
+  }
+
+  void _recordBudgetProgressWidgetBuilt(
+    BudgetCategoryAvatarSelectedLimitVisualState visual,
+  ) {
+    if (!_collectFrameTimingDiagnostics || !mounted) return;
+    final expectation = _currentBudgetProgressPaintExpectation(visual);
+    if (expectation == null) return;
+    final signature = expectation.signature;
+    if (_lastBudgetProgressBuildSignature == signature) return;
+    _lastBudgetProgressBuildSignature = signature;
+    final buildVsyncMicros =
+        SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PROGRESS_WIDGET_BUILT',
+        coreRevision: expectation.coreRevision,
+        totalMinor: expectation.visual.displayNumeratorScaled100,
+        scope:
+            'targetHandle=${expectation.targetHandle} '
+            'interactionGeneration=${expectation.interactionGeneration} '
+            'visiblePresentationEpoch='
+            '${expectation.visiblePresentationEpoch ?? '-'} '
+            'visibleFrameGeneration=${expectation.visibleFrameGeneration ?? '-'} '
+            'visualProgress=${expectation.visual.visualProgress} '
+            'buildVsyncMicros=$buildVsyncMicros',
+      ),
+    );
+  }
+
+  void _recordBudgetProgressPainted(
+    BudgetCategoryAvatarSelectedLimitVisualState visual,
+  ) {
+    if (!_collectFrameTimingDiagnostics || !mounted) return;
+    final expectation = _currentBudgetProgressPaintExpectation(visual);
+    if (expectation == null) return;
+    final signature = expectation.signature;
+    if (_lastBudgetProgressPaintSignature == signature) return;
+    _lastBudgetProgressPaintSignature = signature;
+    _budgetProgressPaintedCount += 1;
+    final paintVsyncMicros =
+        SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
+    final painted = expectation.withPaintVsyncMicros(paintVsyncMicros);
+    _awaitingBudgetProgressRaster = painted;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_PROGRESS_PAINTED',
+        coreRevision: painted.coreRevision,
+        totalMinor: painted.visual.displayNumeratorScaled100,
+        scope:
+            'targetHandle=${painted.targetHandle} '
+            'interactionGeneration=${painted.interactionGeneration} '
+            'visiblePresentationEpoch=${painted.visiblePresentationEpoch ?? '-'} '
+            'visibleFrameGeneration=${painted.visibleFrameGeneration ?? '-'} '
+            'displayNumeratorScaled100='
+            '${painted.visual.displayNumeratorScaled100 ?? '-'} '
+            'displayDenominatorScaled100='
+            '${painted.visual.displayDenominatorScaled100 ?? '-'} '
+            'visualProgress=${painted.visual.visualProgress} '
+            'paintVsyncMicros=$paintVsyncMicros',
       ),
     );
   }
@@ -1199,6 +1565,95 @@ final class _AvatarTerminalPaintSummary {
   final int generation;
   final CenteredCarouselMotionOrigin origin;
   final String terminalReason;
+}
+
+/// Mutable only within one rail State while a diagnostic interaction is
+/// active. It contains timestamps and identities, never presentation data or
+/// a second scheduling authority.
+final class _AvatarFirstTargetPipeline {
+  _AvatarFirstTargetPipeline({
+    required this.pointerId,
+    required this.pointerAcceptedMicros,
+    required this.startingRawCenteredLogicalIndex,
+    required this.distanceToNearestSemanticBoundaryItems,
+    required this.touchSlopThresholdPixels,
+    required this.initialSelectedTargetHandle,
+    required this.coreRevision,
+  });
+
+  final int pointerId;
+  final int pointerAcceptedMicros;
+  final double startingRawCenteredLogicalIndex;
+  final double distanceToNearestSemanticBoundaryItems;
+  final double touchSlopThresholdPixels;
+  final int initialSelectedTargetHandle;
+  final int? coreRevision;
+  int? motionGeneration;
+  int? recognizerOwnedMicros;
+  int? firstRawScrollMicros;
+  int? firstSemanticMicros;
+  int? previewRequestedMicros;
+  int? exactPhaseAStoreMicros;
+  int? logBoxPaintMicros;
+  int? logBoxPaintVsyncMicros;
+  int? logBoxRasterFinishMicros;
+  int? targetHandle;
+  bool summaryEmitted = false;
+}
+
+/// A renderer-owned acknowledgement for the exact immutable progress visual
+/// that reached the selected Avatar chrome.  It deliberately carries no
+/// mutable presentation authority: the existing presentation controller and
+/// visible-frame store remain the source of truth.
+final class _BudgetProgressPaintExpectation {
+  const _BudgetProgressPaintExpectation({
+    required this.targetHandle,
+    required this.interactionGeneration,
+    required this.coreRevision,
+    required this.visiblePresentationEpoch,
+    required this.visibleFrameGeneration,
+    required this.visual,
+    required this.paintVsyncMicros,
+  });
+
+  final int targetHandle;
+  final int interactionGeneration;
+  final int? coreRevision;
+  final int? visiblePresentationEpoch;
+  final int? visibleFrameGeneration;
+  final BudgetCategoryAvatarSelectedLimitVisualState visual;
+  final int paintVsyncMicros;
+
+  /// This is bounded debug/profile correlation only, so a value hash keeps
+  /// repeated builds and paints from generating unbounded diagnostics.
+  int get signature => Object.hashAll(<Object?>[
+    targetHandle,
+    interactionGeneration,
+    coreRevision,
+    visiblePresentationEpoch,
+    visibleFrameGeneration,
+    visual.targetHandle,
+    visual.limitKey,
+    visual.displayNumeratorScaled100,
+    visual.displayDenominatorScaled100,
+    visual.rawProgress,
+    visual.visualProgress,
+    visual.chromeGeometry,
+    visual.breakEvenGaugeRatio,
+    visual.annualSegments,
+    visual.typicalMarkerPosition,
+  ]);
+
+  _BudgetProgressPaintExpectation withPaintVsyncMicros(int value) =>
+      _BudgetProgressPaintExpectation(
+        targetHandle: targetHandle,
+        interactionGeneration: interactionGeneration,
+        coreRevision: coreRevision,
+        visiblePresentationEpoch: visiblePresentationEpoch,
+        visibleFrameGeneration: visibleFrameGeneration,
+        visual: visual,
+        paintVsyncMicros: value,
+      );
 }
 
 final class _PreparedBudgetTargetAvatar {
@@ -1308,6 +1763,10 @@ final class _PreparedBudgetTargetAvatar {
     BudgetCategoryAvatarSelectedLimitVisualState Function()?
     selectedLimitVisualForLiveSelection,
     VoidCallback? onSelectionVisualIdentityMismatch,
+    ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+    onSelectionProgressBuilt,
+    ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+    onSelectionProgressPainted,
   }) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-target-avatar-center') : null,
     color: color,
@@ -1322,6 +1781,8 @@ final class _PreparedBudgetTargetAvatar {
     selectedLiveSelectionListenable: selectedLiveSelectionListenable,
     selectedLimitVisualForLiveSelection: selectedLimitVisualForLiveSelection,
     onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
+    onSelectionProgressBuilt: onSelectionProgressBuilt,
+    onSelectionProgressPainted: onSelectionProgressPainted,
   );
 }
 

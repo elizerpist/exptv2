@@ -1054,6 +1054,99 @@ void main() {
   );
 
   testWidgets(
+    'RED FPA: first Avatar target records the bounded pointer-to-exact-paint pipeline',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(2));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      final painted = ValueNotifier<DashboardAvatarTargetPainted?>(null);
+      final acceptedTargets = <int>[];
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      addTearDown(painted.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                liveTargetPainted: painted,
+                onTargetPreviewAccepted: (targetHandle) {
+                  acceptedTargets.add(targetHandle);
+                  return Future<bool>.value(true);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final rail = find.byKey(const ValueKey('budget-target-avatar-carousel'));
+      final pointer = await tester.startGesture(tester.getCenter(rail));
+      // The first move lets the real Scrollable claim its drag arena; the
+      // second then crosses exactly one 58px Avatar semantic boundary.
+      await pointer.moveBy(const Offset(-20, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      await pointer.moveBy(const Offset(-50, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(acceptedTargets, isNotEmpty);
+
+      painted.value = DashboardAvatarTargetPainted(
+        targetHandle: acceptedTargets.last,
+        focusGeneration: 7,
+        queryKey: 'test/avatar-first-target-pipeline',
+        coreRevision: 1,
+        presentationEpoch: 3,
+        frameGeneration: 5,
+        exactEmpty: false,
+        readablePhaseARowsPainted: 1,
+        richPhaseBRowsPainted: 0,
+      );
+      await tester.pump();
+      await pointer.up();
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final summary = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'AVATAR_FIRST_TARGET_PIPELINE_SUMMARY',
+      );
+      expect(summary.scope, contains('pointerId='));
+      expect(summary.scope, contains('startingRawCenteredLogicalIndex='));
+      expect(
+        summary.scope,
+        contains('distanceToNearestSemanticBoundaryPixels='),
+      );
+      expect(summary.scope, contains('touchSlopThresholdPixels='));
+      expect(summary.scope, contains('pointerToRecognizerMicros='));
+      expect(summary.scope, contains('pointerToFirstRawScrollMicros='));
+      expect(summary.scope, contains('pointerToFirstSemanticMicros='));
+      expect(summary.scope, contains('pointerToPreviewMicros='));
+      expect(summary.scope, contains('pointerToExactPhaseAStoreMicros='));
+      expect(summary.scope, contains('pointerToLogBoxPaintMicros='));
+      expect(summary.scope, contains('terminalOutcome=exactPhaseAPainted'));
+    },
+  );
+
+  testWidgets(
     'RED: a retained exact Avatar paint is accounted when a same-target preview is accepted',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
@@ -2347,6 +2440,163 @@ void main() {
     },
   );
 
+  testWidgets(
+    'FPA: the selected Budget progress callback acknowledges the exact visual only from CustomPaint',
+    (tester) async {
+      final first = BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 1,
+        limitKey: null,
+        displayNumeratorScaled100: 25,
+        displayDenominatorScaled100: 100,
+      );
+      final second = BudgetCategoryAvatarSelectedLimitVisualState.available(
+        targetHandle: 2,
+        limitKey: null,
+        displayNumeratorScaled100: 75,
+        displayDenominatorScaled100: 100,
+      );
+      final painted = <BudgetCategoryAvatarSelectedLimitVisualState>[];
+
+      Widget host(BudgetCategoryAvatarSelectedLimitVisualState visual) =>
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: BudgetCategoryAvatarSelectionChrome(
+                  categoryColor: const Color(0xff2374ab),
+                  progressColor: const Color(0xff2374ab),
+                  sourceProgress: visual.visualProgress,
+                  visualIdentity: visual,
+                  onProgressPainted: painted.add,
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(host(first));
+      expect(painted, isNotEmpty);
+      expect(painted.last.targetHandle, 1);
+      expect(painted.last.visualProgress, .25);
+
+      await tester.pumpWidget(host(second));
+      expect(painted.last.targetHandle, 2);
+      expect(painted.last.visualProgress, .75);
+    },
+  );
+
+  testWidgets(
+    'FPA: the production Avatar rail correlates Budget progress build and paint with its current target',
+    (tester) async {
+      final harness = _InteractiveRailHarness();
+      addTearDown(harness.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        _host(
+          harness.presentation,
+          limitEditController: harness.edits,
+          height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+        ),
+      );
+      await tester.pump();
+
+      final built = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'BUDGET_PROGRESS_WIDGET_BUILT')
+          .toList(growable: false);
+      final painted = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'BUDGET_PROGRESS_PAINTED')
+          .toList(growable: false);
+
+      expect(built, isNotEmpty);
+      expect(painted, isNotEmpty);
+      expect(built.last.scope, contains('targetHandle=0'));
+      expect(painted.last.scope, contains('targetHandle=0'));
+      expect(painted.last.scope, contains('visualProgress=0.5'));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'BUDGET_PROGRESS_PAINT_STALE_REJECTED',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  testWidgets(
+    'FPA: two successive production Avatar targets receive distinct current Budget progress paint acknowledgements',
+    (tester) async {
+      final harness = _InteractiveRailHarness(
+        initialSnapshot: _twoTargetPositiveSnapshotForCategories(),
+      );
+      final navigation = BudgetTargetAvatarRailController();
+      addTearDown(harness.dispose);
+      addTearDown(navigation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: harness.presentation,
+                limitEditController: harness.edits,
+                navigationController: navigation,
+                onTargetPreviewAccepted: (targetHandle) async {
+                  harness.presentation.setTargetHandle(targetHandle);
+                  return true;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final route = navigation.animateToTargetHandle(
+        1,
+        source: BudgetTargetNavigationSource.pieSlice,
+      );
+      await tester.pumpAndSettle();
+      await route;
+      await tester.pump();
+
+      final painted = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'BUDGET_PROGRESS_PAINTED')
+          .toList(growable: false);
+      final bound = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_PROGRESS_BOUND',
+      );
+      final built = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'BUDGET_PROGRESS_WIDGET_BUILT')
+          .toList(growable: false);
+      expect(
+        painted.any(
+          (event) => event.scope?.contains('targetHandle=0') ?? false,
+        ),
+        isTrue,
+      );
+      expect(
+        painted.any(
+          (event) => event.scope?.contains('targetHandle=1') ?? false,
+        ),
+        isTrue,
+      );
+      expect(painted.last.scope, contains('targetHandle=1'));
+      expect(bound.scope, contains('targetHandle=1'));
+      expect(bound.scope, contains('modelBindVsyncMicros='));
+      expect(built.last.scope, contains('buildVsyncMicros='));
+      expect(painted.last.scope, contains('paintVsyncMicros='));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'BUDGET_PROGRESS_PAINT_STALE_REJECTED',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test('selection chrome keeps the Budget2 continuous sweep contract', () {
     expect(
       BudgetCategoryAvatarSelectionChrome.sweepRadiansForVisualProgress(0),
@@ -2519,14 +2769,14 @@ final class _Harness {
 }
 
 final class _InteractiveRailHarness {
-  _InteractiveRailHarness()
+  _InteractiveRailHarness({PreparedBudgetLimitSnapshot? initialSnapshot})
     : categoryCollection = ValueNotifier<List<FluviCategory>>(_categories(1)),
       visibleFrame = ValueNotifier<DashboardVisibleFrame?>(_interactiveFrame()),
       direction = TransactionDirectionController(
         initialDirection: TransactionDirection.expense,
       ),
       snapshot = ValueNotifier<PreparedBudgetLimitSnapshot?>(
-        _positiveSnapshotForCategories(),
+        initialSnapshot ?? _positiveSnapshotForCategories(),
       ) {
     edits = DashboardBudgetLimitEditController(
       repository: repository,
@@ -2590,6 +2840,35 @@ PreparedBudgetLimitSnapshot _positiveSnapshotForCategories() {
   // Month/January is slice 2. Handle 0 is the selected aggregate target.
   cells[4] = const PreparedBudgetLimitCell(
     actualScaled100: 50000,
+    limitScaled100: 100000,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['category-0'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
+PreparedBudgetLimitSnapshot _twoTargetPositiveSnapshotForCategories() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // Month/January is slice 2, with the aggregate at handle 0 followed by
+  // category-0 at handle 1. Both are genuine positive-limit visuals so the
+  // production selected chrome must paint twice as the carousel crosses.
+  cells[4] = const PreparedBudgetLimitCell(
+    actualScaled100: 50000,
+    limitScaled100: 100000,
+  );
+  cells[5] = const PreparedBudgetLimitCell(
+    actualScaled100: 75000,
     limitScaled100: 100000,
   );
   PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(

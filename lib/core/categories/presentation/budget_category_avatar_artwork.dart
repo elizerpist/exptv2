@@ -759,6 +759,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
     this.selectedLiveSelectionListenable,
     this.selectedLimitVisualForLiveSelection,
     this.onSelectionVisualIdentityMismatch,
+    this.onSelectionProgressBuilt,
+    this.onSelectionProgressPainted,
     super.key,
   });
 
@@ -792,6 +794,14 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   selectedLimitVisualForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
 
+  /// Narrow renderer-only acknowledgements for the selected progress chrome.
+  /// The parent owns correlation and diagnostics; this artwork reports only
+  /// the immutable visual that its build or [CustomPaint] has reached.
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onSelectionProgressBuilt;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onSelectionProgressPainted;
+
   @override
   Widget build(BuildContext context) {
     if (selected) {
@@ -807,6 +817,8 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
         selectedLimitVisualForLiveSelection:
             selectedLimitVisualForLiveSelection,
         onSelectionVisualIdentityMismatch: onSelectionVisualIdentityMismatch,
+        onSelectionProgressBuilt: onSelectionProgressBuilt,
+        onSelectionProgressPainted: onSelectionProgressPainted,
       );
     }
     return SizedBox.square(
@@ -838,6 +850,8 @@ final class _BudgetCategoryAvatarSelectedComposition extends StatefulWidget {
     required this.selectedLiveSelectionListenable,
     required this.selectedLimitVisualForLiveSelection,
     required this.onSelectionVisualIdentityMismatch,
+    required this.onSelectionProgressBuilt,
+    required this.onSelectionProgressPainted,
   });
 
   final Color color;
@@ -852,6 +866,10 @@ final class _BudgetCategoryAvatarSelectedComposition extends StatefulWidget {
   final BudgetCategoryAvatarSelectedLimitVisualState Function()?
   selectedLimitVisualForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onSelectionProgressBuilt;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onSelectionProgressPainted;
 
   @override
   State<_BudgetCategoryAvatarSelectedComposition> createState() =>
@@ -942,6 +960,8 @@ final class _BudgetCategoryAvatarSelectedCompositionState
                 widget.selectedLimitVisualForLiveSelection,
             onSelectionVisualIdentityMismatch:
                 widget.onSelectionVisualIdentityMismatch,
+            onSelectionProgressBuilt: widget.onSelectionProgressBuilt,
+            onSelectionProgressPainted: widget.onSelectionProgressPainted,
           ),
           _BudgetCategoryAvatarDisc(
             source: source,
@@ -964,6 +984,8 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
     required this.selectedLiveSelectionListenable,
     required this.selectedLimitVisualForLiveSelection,
     required this.onSelectionVisualIdentityMismatch,
+    required this.onSelectionProgressBuilt,
+    required this.onSelectionProgressPainted,
   });
 
   final Color color;
@@ -974,6 +996,10 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
   final BudgetCategoryAvatarSelectedLimitVisualState Function()?
   selectedLimitVisualForLiveSelection;
   final VoidCallback? onSelectionVisualIdentityMismatch;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onSelectionProgressBuilt;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onSelectionProgressPainted;
 
   @override
   Widget build(BuildContext context) {
@@ -987,6 +1013,7 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
         return const SizedBox();
       }
       if (!visual.paintsProgressChrome) return const SizedBox();
+      onSelectionProgressBuilt?.call(visual);
       return OverflowBox(
         alignment: Alignment.center,
         minWidth: BudgetCategoryAvatarGeometry.selectionShellVisualDiameter,
@@ -1005,6 +1032,8 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
           breakEvenGaugeRatio: visual.breakEvenGaugeRatio,
           annualSegments: visual.annualSegments,
           typicalMarkerPosition: visual.typicalMarkerPosition,
+          visualIdentity: visual,
+          onProgressPainted: onSelectionProgressPainted,
         ),
       );
     }
@@ -1079,6 +1108,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
     this.breakEvenGaugeRatio,
     this.annualSegments = const <BudgetProgressRingAnnualSegment>[],
     this.typicalMarkerPosition,
+    this.visualIdentity,
+    this.onProgressPainted,
     super.key,
   }) : faceColor = BudgetCategoryAvatarGeometry.selectionFaceColor;
 
@@ -1089,6 +1120,9 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   final double? breakEvenGaugeRatio;
   final List<BudgetProgressRingAnnualSegment> annualSegments;
   final double? typicalMarkerPosition;
+  final BudgetCategoryAvatarSelectedLimitVisualState? visualIdentity;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onProgressPainted;
   final Color faceColor;
 
   /// Exposed as a small visual contract so the shell and authored SVG floor
@@ -1145,6 +1179,8 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
             typicalMarkerPosition: typicalMarkerPosition,
             sumRingStyle: ringPresentation.sumRingStyle,
             healthyColorMode: ringPresentation.healthyColorMode,
+            progressVisual: visualIdentity,
+            onProgressPainted: onProgressPainted,
           ),
         ),
       ),
@@ -1197,6 +1233,8 @@ final class _SelectionChromePainter extends CustomPainter {
     required this.typicalMarkerPosition,
     required this.sumRingStyle,
     required this.healthyColorMode,
+    this.progressVisual,
+    this.onProgressPainted,
   });
 
   final BudgetProgressRingGeometry ringGeometry;
@@ -1213,6 +1251,9 @@ final class _SelectionChromePainter extends CustomPainter {
   final double? typicalMarkerPosition;
   final BudgetSumRingStyle sumRingStyle;
   final BudgetHealthyColorMode healthyColorMode;
+  final BudgetCategoryAvatarSelectedLimitVisualState? progressVisual;
+  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
+  onProgressPainted;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1309,6 +1350,8 @@ final class _SelectionChromePainter extends CustomPainter {
         _paintTypicalMarker(canvas, trackRect);
     }
     canvas.restore();
+    final visual = progressVisual;
+    if (visual != null) onProgressPainted?.call(visual);
   }
 
   Color get _healthyColor => BudgetHealthyVisualColorResolver.resolve(
@@ -1614,7 +1657,15 @@ final class _SelectionChromePainter extends CustomPainter {
       !listEquals(oldDelegate.annualSegments, annualSegments) ||
       oldDelegate.typicalMarkerPosition != typicalMarkerPosition ||
       oldDelegate.sumRingStyle != sumRingStyle ||
-      oldDelegate.healthyColorMode != healthyColorMode;
+      oldDelegate.healthyColorMode != healthyColorMode ||
+      !_sameProgressVisual(oldDelegate.progressVisual, progressVisual);
+
+  static bool _sameProgressVisual(
+    BudgetCategoryAvatarSelectedLimitVisualState? left,
+    BudgetCategoryAvatarSelectedLimitVisualState? right,
+  ) =>
+      identical(left, right) ||
+      (left != null && right != null && left.sameVisualAs(right));
 }
 
 /// Literal source vector contract from the local visual reference.

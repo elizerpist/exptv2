@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show ValueListenable, kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
@@ -37,6 +38,9 @@ import 'dashboard_header_visual_engine.dart';
 
 /// Budget owns its header and two future data-card presentation slots.
 class BudgetDashboardCoreSurface extends StatelessWidget {
+  static const _collectBudgetPaintDiagnostics =
+      bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS') || kDebugMode;
+
   const BudgetDashboardCoreSurface({
     super.key,
     required this.presentation,
@@ -207,6 +211,16 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                     : ValueListenableBuilder<DashboardBudgetPresentationState>(
                         valueListenable: presentationController!,
                         builder: (context, state, child) {
+                          final controller = presentationController!;
+                          if (_collectBudgetPaintDiagnostics) {
+                            controller.recordHeaderWidgetBuilt(
+                              state,
+                              buildVsyncMicros: SchedulerBinding
+                                  .instance
+                                  .currentSystemFrameTimeStamp
+                                  .inMicroseconds,
+                            );
+                          }
                           final header = state.header;
                           final metric = header.metric;
                           final amount = header.isAvailable
@@ -311,6 +325,22 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                             contrastStyle: headerProfile
                                                 .settings
                                                 .textContrastStyle,
+                                            paintIdentity:
+                                                _collectBudgetPaintDiagnostics
+                                                ? state
+                                                : null,
+                                            onPainted:
+                                                !_collectBudgetPaintDiagnostics
+                                                ? null
+                                                : () => controller
+                                                      .recordHeaderPainted(
+                                                        state,
+                                                        paintVsyncMicros:
+                                                            SchedulerBinding
+                                                                .instance
+                                                                .currentSystemFrameTimeStamp
+                                                                .inMicroseconds,
+                                                      ),
                                           ),
                                         ),
                                       ],

@@ -15,6 +15,8 @@ final class DashboardHeaderContrastText extends StatelessWidget {
     this.maxLines,
     this.overflow,
     this.textAlign,
+    this.paintIdentity,
+    this.onPainted,
   }) : _textKey = key,
        super(key: null);
 
@@ -25,6 +27,15 @@ final class DashboardHeaderContrastText extends StatelessWidget {
   final int? maxLines;
   final TextOverflow? overflow;
   final TextAlign? textAlign;
+
+  /// Immutable identity that the owning presentation controller correlates
+  /// with its exact Header model. It is observation-only and has no visual,
+  /// semantic, layout or state authority.
+  final Object? paintIdentity;
+
+  /// Invoked by a no-op foreground painter after this text subtree's paint
+  /// pass. Callers must keep it bounded and free of widget state mutation.
+  final VoidCallback? onPainted;
   final Key? _textKey;
 
   Color get _opposite =>
@@ -54,25 +65,55 @@ final class DashboardHeaderContrastText extends StatelessWidget {
             ]
           : null,
     );
-    if (contrastStyle != DashboardHeaderTextContrastStyle.oppositeOutline) {
-      return _text(fill);
-    }
-    return Stack(
-      alignment: Alignment.topLeft,
-      children: <Widget>[
-        ExcludeSemantics(
-          child: _text(
-            style.copyWith(
-              foreground: Paint()
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = .75
-                ..color = _opposite,
-            ),
-            semanticFill: false,
-          ),
-        ),
-        _text(fill),
-      ],
+    final Widget text =
+        contrastStyle != DashboardHeaderTextContrastStyle.oppositeOutline
+        ? _text(fill)
+        : Stack(
+            alignment: Alignment.topLeft,
+            children: <Widget>[
+              ExcludeSemantics(
+                child: _text(
+                  style.copyWith(
+                    foreground: Paint()
+                      ..style = PaintingStyle.stroke
+                      ..strokeWidth = .75
+                      ..color = _opposite,
+                  ),
+                  semanticFill: false,
+                ),
+              ),
+              _text(fill),
+            ],
+          );
+    final callback = onPainted;
+    if (callback == null) return text;
+    return CustomPaint(
+      foregroundPainter: _DashboardHeaderPaintAcknowledgementPainter(
+        identity: paintIdentity,
+        onPainted: callback,
+      ),
+      child: text,
     );
   }
+}
+
+/// Paint-only acknowledgement wrapper. It deliberately draws no pixels and
+/// lives after the child in [CustomPaint]'s foreground phase, so a callback is
+/// evidence that the matching Header text subtree reached the paint pipeline.
+final class _DashboardHeaderPaintAcknowledgementPainter extends CustomPainter {
+  const _DashboardHeaderPaintAcknowledgementPainter({
+    required this.identity,
+    required this.onPainted,
+  });
+
+  final Object? identity;
+  final VoidCallback onPainted;
+
+  @override
+  void paint(Canvas canvas, Size size) => onPainted();
+
+  @override
+  bool shouldRepaint(
+    covariant _DashboardHeaderPaintAcknowledgementPainter oldDelegate,
+  ) => !identical(oldDelegate.identity, identity);
 }

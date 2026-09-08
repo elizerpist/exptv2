@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -595,6 +596,11 @@ final class _TypicalMonthAverageCacheKey {
 /// one dense RAM cell and publishes only this narrow presentation state.
 final class DashboardBudgetPresentationController
     extends ValueNotifier<DashboardBudgetPresentationState> {
+  // Mirrors the rail's bounded device/profile instrumentation switch. Normal
+  // release builds do not add a Header paint wrapper or per-paint callback.
+  static const _collectRendererPaintDiagnostics =
+      bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS') || kDebugMode;
+
   DashboardBudgetPresentationController({
     required ValueListenable<List<FluviCategory>> categoryCollection,
     required ValueListenable<DashboardVisibleFrame?> visibleFrame,
@@ -631,6 +637,137 @@ final class DashboardBudgetPresentationController
   final ValueChanged<int>? _onInputUpdated;
   DashboardBudgetEditContext? _lastDirectInputEditContext;
 
+  /// Read-only correlation metadata for a renderer acknowledgement. The
+  /// visible-frame store remains the sole owner; Budget presentation merely
+  /// exposes the current immutable identifiers beside its own live analysis.
+  int? get visiblePresentationEpochForDiagnostics =>
+      _visibleFrame.value?.presentationEpoch;
+  int? get visibleFrameGenerationForDiagnostics =>
+      _visibleFrame.value?.frameGeneration;
+
+  /// Narrow build acknowledgement from the actual Budget Header subtree.
+  /// This observes the immutable state already owned by this controller; it
+  /// neither changes selection nor creates another presentation authority.
+  void recordHeaderWidgetBuilt(
+    DashboardBudgetPresentationState renderedState, {
+    required int buildVsyncMicros,
+  }) {
+    if (!_collectRendererPaintDiagnostics) return;
+    final current = value;
+    if (!identical(current, renderedState)) {
+      _recordStaleHeaderRendererAcknowledgement(
+        renderedState,
+        stage: 'BUDGET_HEADER_BUILD_STALE_REJECTED',
+      );
+      return;
+    }
+    final signature = _headerRendererAcknowledgementSignature(renderedState);
+    if (_lastHeaderBuildDiagnosticSignature == signature) return;
+    _lastHeaderBuildDiagnosticSignature = signature;
+    final header = renderedState.header;
+    final analysis = renderedState.liveAnalysis;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_HEADER_WIDGET_BUILT',
+        coreRevision: analysis.coreRevision,
+        direction: analysis.direction.name,
+        totalMinor: header.displayNumeratorScaled100,
+        scope:
+            'interactionGeneration=${analysis.interactionGeneration} '
+            'targetHandle=${header.target.handle} '
+            'visiblePresentationEpoch=${visiblePresentationEpochForDiagnostics ?? '-'} '
+            'visibleFrameGeneration=${visibleFrameGenerationForDiagnostics ?? '-'} '
+            'buildVsyncMicros=$buildVsyncMicros',
+      ),
+    );
+  }
+
+  /// Actual foreground-painter acknowledgement for the Budget Header amount
+  /// text. The callback occurs after the text child paints and is rejected if
+  /// a newer immutable presentation state won during the same frame.
+  void recordHeaderPainted(
+    DashboardBudgetPresentationState renderedState, {
+    required int paintVsyncMicros,
+  }) {
+    if (!_collectRendererPaintDiagnostics) return;
+    final current = value;
+    if (!identical(current, renderedState)) {
+      _recordStaleHeaderRendererAcknowledgement(
+        renderedState,
+        stage: 'BUDGET_HEADER_PAINT_STALE_REJECTED',
+      );
+      return;
+    }
+    final signature = _headerRendererAcknowledgementSignature(renderedState);
+    if (_lastHeaderPaintDiagnosticSignature == signature) return;
+    _lastHeaderPaintDiagnosticSignature = signature;
+    final header = renderedState.header;
+    final analysis = renderedState.liveAnalysis;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'BUDGET_HEADER_PAINTED',
+        coreRevision: analysis.coreRevision,
+        direction: analysis.direction.name,
+        totalMinor: header.displayNumeratorScaled100,
+        scope:
+            'interactionGeneration=${analysis.interactionGeneration} '
+            'targetHandle=${header.target.handle} '
+            'visiblePresentationEpoch=${visiblePresentationEpochForDiagnostics ?? '-'} '
+            'visibleFrameGeneration=${visibleFrameGenerationForDiagnostics ?? '-'} '
+            'displayNumeratorScaled100=${header.displayNumeratorScaled100 ?? '-'} '
+            'displayDenominatorScaled100=${header.displayDenominatorScaled100 ?? '-'} '
+            'paintVsyncMicros=$paintVsyncMicros',
+      ),
+    );
+  }
+
+  int _headerRendererAcknowledgementSignature(
+    DashboardBudgetPresentationState state,
+  ) {
+    final header = state.header;
+    final analysis = state.liveAnalysis;
+    return Object.hash(
+      analysis.interactionGeneration,
+      analysis.coreRevision,
+      header.target.handle,
+      header.title,
+      header.displayNumeratorScaled100,
+      header.displayDenominatorScaled100,
+      visiblePresentationEpochForDiagnostics,
+      visibleFrameGenerationForDiagnostics,
+    );
+  }
+
+  void _recordStaleHeaderRendererAcknowledgement(
+    DashboardBudgetPresentationState renderedState, {
+    required String stage,
+  }) {
+    final header = renderedState.header;
+    final analysis = renderedState.liveAnalysis;
+    final signature = Object.hash(
+      stage,
+      analysis.interactionGeneration,
+      analysis.coreRevision,
+      header.target.handle,
+      header.displayNumeratorScaled100,
+      header.displayDenominatorScaled100,
+    );
+    if (_lastHeaderStaleDiagnosticSignature == signature) return;
+    _lastHeaderStaleDiagnosticSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        coreRevision: analysis.coreRevision,
+        direction: analysis.direction.name,
+        scope:
+            'renderedTargetHandle=${header.target.handle} '
+            'currentTargetHandle=${value.selectedHandle} '
+            'renderedInteractionGeneration=${analysis.interactionGeneration} '
+            'currentInteractionGeneration=${value.liveAnalysis.interactionGeneration}',
+      ),
+    );
+  }
+
   static DashboardBudgetPresentationState _initialState() {
     const aggregate = DashboardBudgetTarget.aggregate();
     return DashboardBudgetPresentationState(
@@ -658,6 +795,9 @@ final class DashboardBudgetPresentationController
       <LedgerDirection, DashboardBudgetTargetIdentity?>{};
   List<FluviCategory>? _lastReportedCategoryInput;
   int? _lastHeaderDiagnosticSignature;
+  int? _lastHeaderBuildDiagnosticSignature;
+  int? _lastHeaderPaintDiagnosticSignature;
+  int? _lastHeaderStaleDiagnosticSignature;
   String? _lastLimitStateDiagnosticSummary;
   int? _lastLimitUnavailabilityDiagnosticSignature;
   int? _lastProgressDiagnosticSignature;
@@ -1895,6 +2035,7 @@ final class DashboardBudgetPresentationController
     DashboardBudgetLiveSelectionState header,
     DashboardBudgetLiveAnalysisProjection liveAnalysis,
   ) {
+    final modelBindVsyncMicros = _rendererDiagnosticVsyncMicros;
     final signature = Object.hash(
       liveAnalysis.interactionGeneration,
       liveAnalysis.coreRevision,
@@ -1958,6 +2099,7 @@ final class DashboardBudgetPresentationController
             'generation=${liveAnalysis.interactionGeneration} '
             'plane=${_planeDiagnosticName(scope)} '
             'targetHandle=${header.target.handle} '
+            'modelBindVsyncMicros=$modelBindVsyncMicros '
             'displayNumeratorScaled100=${header.displayNumeratorScaled100} '
             'displayDenominatorScaled100=${header.displayDenominatorScaled100 ?? '-'} '
             'hasLimit=${header.hasLimit} '
@@ -2045,6 +2187,8 @@ final class DashboardBudgetPresentationController
     DashboardBudgetLiveAnalysisProjection liveAnalysis,
   ) {
     final visual = selection.visual;
+    final visible = _visibleFrame.value;
+    final modelBindVsyncMicros = _rendererDiagnosticVsyncMicros;
     final signature = Object.hash(
       liveAnalysis.interactionGeneration,
       visual.targetHandle,
@@ -2066,6 +2210,9 @@ final class DashboardBudgetPresentationController
             'generation=${liveAnalysis.interactionGeneration} '
             'targetHandle=${visual.targetHandle} '
             'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
+            'visiblePresentationEpoch=${visible?.presentationEpoch ?? '-'} '
+            'visibleFrameGeneration=${visible?.frameGeneration ?? '-'} '
+            'modelBindVsyncMicros=$modelBindVsyncMicros '
             'displayNumeratorScaled100=${visual.displayNumeratorScaled100 ?? '-'} '
             'hasPositiveLimit=${visual.hasPositiveLimit} '
             'displayDenominatorScaled100=${visual.displayDenominatorScaled100 ?? '-'} '
@@ -2084,6 +2231,20 @@ final class DashboardBudgetPresentationController
         ),
       );
     }
+  }
+
+  /// Pure application tests intentionally construct this presentation owner
+  /// without a rendering binding. They still exercise the immutable model
+  /// transaction; only the renderer-correlated timestamp is unavailable.
+  ///
+  /// A running debug/profile/release application has initialized the binding
+  /// before this controller is created. The explicit debug check keeps the
+  /// instrumentation observational instead of making the model depend on a
+  /// widget-test binding.
+  int get _rendererDiagnosticVsyncMicros {
+    if (!_collectRendererPaintDiagnostics) return -1;
+    if (kDebugMode && BindingBase.debugBindingType() == null) return -1;
+    return SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
   }
 
   void _recordPartitionBinding(
