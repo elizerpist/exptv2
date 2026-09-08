@@ -88,6 +88,46 @@ void main() {
     );
   });
 
+  test(
+    'Avatar profile evidence requires an exact painted target and matching progress pixels',
+    () {
+      final evidence = _avatarFirstTargetEvidence();
+
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        returnsNormally,
+      );
+
+      evidence['budget_progress_matches_exact_paint'] = false;
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('budget_progress_matches_exact_paint'),
+          ),
+        ),
+      );
+
+      evidence['budget_progress_matches_exact_paint'] = true;
+      evidence['first_pipeline_terminal_outcomes'] = <String>['unknown'];
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('terminal outcome'),
+          ),
+        ),
+      );
+    },
+  );
+
   test('motion isolation gate records renderer misses without masking I/O', () {
     final reports = <String, Map<String, Object?>>{
       'A': _motionGateReport(buildMisses: 2, rasterMisses: 36),
@@ -369,6 +409,23 @@ Map<String, Object?> _railFlightMetrics() => <String, Object?>{
   'layout_duration_micros': 0,
   'paint_duration_micros': 0,
   'raster_duration_micros': 0,
+};
+
+Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
+  'motion_lane_observed': true,
+  'pointer_accepted_count': 1,
+  'avatar_semantic_crossings': 1,
+  'preview_accepted_count': 1,
+  'exact_phase_a_paint_count': 1,
+  'exact_phase_a_target_handles': <int>[3],
+  'exact_phase_a_all_readable': true,
+  'latest_exact_paint_matches_visible': true,
+  'budget_progress_painted_count': 1,
+  'budget_progress_target_handles': <int>[3],
+  'budget_progress_matches_exact_paint': true,
+  'first_pipeline_summary_count': 1,
+  'first_pipeline_terminal_outcomes': <String>['exactPhaseAPainted'],
+  'avatar_motion_summary_count': 1,
 };
 
 Map<String, Object?> _motionGateReport({

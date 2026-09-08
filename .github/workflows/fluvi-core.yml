@@ -250,7 +250,7 @@ jobs:
             > "$profile_curl_home/.curlrc"
           printf 'CURL_HOME=%s\n' "$profile_curl_home" >> "$GITHUB_ENV"
 
-      - name: Run A-J dashboard profile gate
+      - name: Run A-K dashboard profile gate
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35

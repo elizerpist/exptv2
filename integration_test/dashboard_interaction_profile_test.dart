@@ -8,6 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
@@ -27,7 +30,7 @@ void main() {
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets(
-    'profiles dashboard motion-data isolation scenarios A through J',
+    'profiles dashboard motion-data isolation scenarios A through K',
     (tester) async {
       final seedReport = await const MethodChannelDemoDataBridge()
           .seedDemoDataset(forceReset: true);
@@ -149,6 +152,17 @@ void main() {
         reports[_ProfileScenario.tenthFling.reportKey]!,
         label: 'first/tenth fling',
       );
+      final avatarFirstTarget = Map<String, Object?>.from(
+        reports[_ProfileScenario
+                .avatarFirstTarget
+                .reportKey]!['avatar_first_target']!
+            as Map,
+      );
+      DashboardProfileReport.validateAvatarFirstTargetEvidence(
+        avatarFirstTarget,
+      );
+      binding.reportData!['dashboard_avatar_first_target_evidence'] =
+          avatarFirstTarget;
       binding.reportData!['dashboard_physical_frame_targets'] =
           DashboardProfileReport.physicalFrameTargetReport(reports);
       DashboardProfileReport.validateMotionIsolationGate(reports);
@@ -156,7 +170,7 @@ void main() {
         DashboardProfileReport.validatePhysicalFrameTargets(reports);
       }
     },
-    timeout: const Timeout(Duration(minutes: 20)),
+    timeout: const Timeout(Duration(minutes: 25)),
   );
 }
 
@@ -165,6 +179,11 @@ enum _ProfileScenario {
   // cold-first fixture has to run before any other Dashboard mounts or raster
   // preparation in this integration-test process.
   firstFling,
+  // This starts from a new production dashboard and performs the real mode
+  // transition and Avatar drag. The global immutable vector atlas is already
+  // warm from I; its report is intentionally a real Avatar transaction
+  // proof, not a replacement for user-only cold-device performance evidence.
+  avatarFirstTarget,
   summaryPlane,
   yearPopulated,
   yearEmpty,
@@ -186,6 +205,7 @@ enum _ProfileScenario {
     pulseWithParentNavigation => 'H_pulse_parent_navigation',
     firstFling => 'I_first_fling',
     tenthFling => 'J_tenth_fling',
+    avatarFirstTarget => 'K_avatar_first_target',
   };
 
   DateTime get initialDate => switch (this) {
@@ -313,8 +333,36 @@ Future<Map<String, dynamic>> _runScenario(
     }
   }
 
+  final isAvatarFirstTarget = scenario == _ProfileScenario.avatarFirstTarget;
+  final avatarPaints = <DashboardAvatarTargetPainted>[];
+  var avatarMotionLaneObserved = false;
+  void collectAvatarPaint() {
+    final painted = controller.budgetAvatarTargetPainted.value;
+    if (painted == null ||
+        avatarPaints.any(
+          (candidate) =>
+              candidate.targetHandle == painted.targetHandle &&
+              candidate.focusGeneration == painted.focusGeneration &&
+              candidate.presentationEpoch == painted.presentationEpoch &&
+              candidate.frameGeneration == painted.frameGeneration,
+        )) {
+      return;
+    }
+    avatarPaints.add(painted);
+  }
+
+  void collectAvatarMotionLane() {
+    avatarMotionLaneObserved =
+        avatarMotionLaneObserved ||
+        controller.isMotionLaneActive(DashboardMotionLane.budgetAvatar);
+  }
+
   controller.motion.addListener(collectMotionTraversal);
   controller.visibleFrames.addListener(collectVisible);
+  if (isAvatarFirstTarget) {
+    controller.budgetAvatarTargetPainted.addListener(collectAvatarPaint);
+    controller.foregroundInputMotion.addListener(collectAvatarMotionLane);
+  }
   controller.performanceCounters.reset();
   final railFlightRecorder = controller.railFlightRecorder;
   expect(
@@ -341,6 +389,7 @@ Future<Map<String, dynamic>> _runScenario(
   // action, immediately before the measured gesture, so a completed
   // pre-capture warmup is never attributed to motion.
   late int completedScenePreparationEpochAtMotionStart;
+  var avatarDiagnosticSequenceBefore = 0;
   final frameKey = '${scenario.reportKey}_frames';
   final timelineKey = '${scenario.reportKey}_timeline';
   final motionDuration = Stopwatch();
@@ -348,6 +397,9 @@ Future<Map<String, dynamic>> _runScenario(
   await _captureProfilePerformance(
     binding,
     () => _timelineStep(scenario.reportKey, () async {
+      if (isAvatarFirstTarget) {
+        avatarDiagnosticSequenceBefore = _lastDiagnosticSequence();
+      }
       completedScenePreparationEpochAtMotionStart = _scenePreparationEpoch(
         Map<String, Object?>.from(
           controller.exportPhysicalRailReport()['sceneWindow']! as Map,
@@ -355,7 +407,13 @@ Future<Map<String, dynamic>> _runScenario(
       );
       motionDuration.start();
       try {
-        await _runMeasuredScenario(tester, controller, scenario);
+        await _runMeasuredScenario(
+          tester,
+          controller,
+          scenario,
+          avatarPaints: avatarPaints,
+          avatarMotionLaneObserved: () => avatarMotionLaneObserved,
+        );
       } finally {
         motionDuration.stop();
       }
@@ -368,6 +426,10 @@ Future<Map<String, dynamic>> _runScenario(
   );
   controller.motion.removeListener(collectMotionTraversal);
   controller.visibleFrames.removeListener(collectVisible);
+  if (isAvatarFirstTarget) {
+    controller.budgetAvatarTargetPainted.removeListener(collectAvatarPaint);
+    controller.foregroundInputMotion.removeListener(collectAvatarMotionLane);
+  }
 
   final rawFrameReport = binding.reportData?[frameKey];
   expect(rawFrameReport, isA<Map>());
@@ -375,6 +437,16 @@ Future<Map<String, dynamic>> _runScenario(
   DashboardProfileReport.addRequiredPercentiles(report);
   final railFlightEvents = railFlightRecorder.snapshot();
   final visible = controller.visibleFrames.value!;
+  final avatarFirstTargetEvidence = isAvatarFirstTarget
+      ? _avatarFirstTargetEvidence(
+          controller: controller,
+          paints: avatarPaints,
+          diagnosticEvents: _diagnosticEventsAfter(
+            avatarDiagnosticSequenceBefore,
+          ),
+          motionLaneObserved: avatarMotionLaneObserved,
+        )
+      : null;
   final identitiesAfter = <String, int>{
     'motion_kernel': identityHashCode(controller.motion),
     'carousel_controller': identityHashCode(
@@ -545,6 +617,7 @@ Future<Map<String, dynamic>> _runScenario(
     'visible_parent_query_key': visible.parentQueryKey.value,
     'visible_revision': visible.coreRevision,
     'verbose_flow_enabled': false,
+    'avatar_first_target': ?avatarFirstTargetEvidence,
   });
   binding.reportData!
     ..remove(frameKey)
@@ -683,6 +756,124 @@ Map<String, Object?> _railFlightReport(
         .toList(growable: false),
   };
 }
+
+int _lastDiagnosticSequence() {
+  final entries = FluviDiagnosticLogger.entries;
+  return entries.isEmpty ? 0 : entries.last.sequence ?? 0;
+}
+
+List<FluviDiagnosticEvent> _diagnosticEventsAfter(int sequence) =>
+    FluviDiagnosticLogger.entries
+        .where((event) => (event.sequence ?? 0) > sequence)
+        .toList(growable: false);
+
+/// Produces a bounded, JSON-safe proof for the one real Avatar fling in the
+/// profile matrix. It only observes existing Core paint acknowledgement and
+/// bounded diagnostics; neither this harness nor the report owns selection,
+/// resource readiness, or presentation state.
+Map<String, Object?> _avatarFirstTargetEvidence({
+  required DashboardCoreController controller,
+  required List<DashboardAvatarTargetPainted> paints,
+  required List<FluviDiagnosticEvent> diagnosticEvents,
+  required bool motionLaneObserved,
+}) {
+  final stageCounts = <String, int>{};
+  for (final event in diagnosticEvents) {
+    stageCounts.update(
+      event.stage,
+      (count) => count + event.repeatCount,
+      ifAbsent: () => event.repeatCount,
+    );
+  }
+  Iterable<FluviDiagnosticEvent> eventsFor(String stage) =>
+      diagnosticEvents.where((event) => event.stage == stage);
+  List<int> targetHandlesFor(String stage) => eventsFor(stage)
+      .map((event) => _scopeInt(event.scope, 'targetHandle'))
+      .whereType<int>()
+      .toSet()
+      .toList(growable: false);
+
+  final exactPaintTargetHandles = paints
+      .map((paint) => paint.targetHandle)
+      .toSet()
+      .toList(growable: false);
+  final progressTargetHandles = targetHandlesFor('BUDGET_PROGRESS_PAINTED');
+  final firstTargetPipelines = eventsFor(
+    'AVATAR_FIRST_TARGET_PIPELINE_SUMMARY',
+  ).toList(growable: false);
+  final motionSummaries = eventsFor(
+    'BUDGET_AVATAR_MOTION_SUMMARY',
+  ).toList(growable: false);
+  final terminalOutcomes = firstTargetPipelines
+      .map((event) => _scopeField(event.scope, 'terminalOutcome'))
+      .whereType<String>()
+      .toSet()
+      .toList(growable: false);
+  final latestPaint = paints.isEmpty ? null : paints.last;
+  final visible = controller.visibleFrames.value;
+  final latestExactPaintMatchesVisible =
+      latestPaint != null &&
+      visible != null &&
+      latestPaint.queryKey == visible.queryKey.value &&
+      latestPaint.coreRevision == visible.coreRevision;
+  final latestMotionSummary = motionSummaries.isEmpty
+      ? null
+      : motionSummaries.last;
+
+  return <String, Object?>{
+    'motion_lane_observed': motionLaneObserved,
+    'pointer_accepted_count': stageCounts['AV|POINTER_ACCEPTED'] ?? 0,
+    'preview_accepted_count': stageCounts['AV|PREVIEW_ACCEPTED'] ?? 0,
+    'exact_phase_a_paint_count': paints.length,
+    'exact_phase_a_target_handles': exactPaintTargetHandles,
+    'exact_phase_a_all_readable':
+        paints.isNotEmpty &&
+        paints.every((paint) => paint.hasReadablePhaseAPaint),
+    'latest_exact_paint_matches_visible': latestExactPaintMatchesVisible,
+    'latest_exact_paint': latestPaint == null
+        ? null
+        : <String, Object?>{
+            'target_handle': latestPaint.targetHandle,
+            'focus_generation': latestPaint.focusGeneration,
+            'query_key': latestPaint.queryKey,
+            'core_revision': latestPaint.coreRevision,
+            'presentation_epoch': latestPaint.presentationEpoch,
+            'frame_generation': latestPaint.frameGeneration,
+            'exact_empty': latestPaint.exactEmpty,
+            'readable_phase_a_rows_painted':
+                latestPaint.readablePhaseARowsPainted,
+            'rich_phase_b_rows_painted': latestPaint.richPhaseBRowsPainted,
+          },
+    'budget_progress_painted_count':
+        stageCounts['BUDGET_PROGRESS_PAINTED'] ?? 0,
+    'budget_progress_target_handles': progressTargetHandles,
+    'budget_progress_matches_exact_paint':
+        progressTargetHandles.isNotEmpty &&
+        progressTargetHandles.every(exactPaintTargetHandles.contains),
+    'first_pipeline_summary_count': firstTargetPipelines.length,
+    'first_pipeline_terminal_outcomes': terminalOutcomes,
+    'first_pipeline_scopes': firstTargetPipelines
+        .map((event) => event.scope ?? '')
+        .toList(growable: false),
+    'avatar_motion_summary_count': motionSummaries.length,
+    'avatar_semantic_crossings':
+        _scopeInt(latestMotionSummary?.scope, 'avatarSemanticCrossings') ?? 0,
+    'avatar_motion_summary_scopes': motionSummaries
+        .map((event) => event.scope ?? '')
+        .toList(growable: false),
+    'diagnostic_stage_counts': stageCounts,
+  };
+}
+
+String? _scopeField(String? scope, String key) {
+  if (scope == null || scope.isEmpty) return null;
+  return RegExp(
+    '(?:^|\\s)${RegExp.escape(key)}=([^\\s]+)',
+  ).firstMatch(scope)?.group(1);
+}
+
+int? _scopeInt(String? scope, String key) =>
+    int.tryParse(_scopeField(scope, key) ?? '');
 
 int _durationListDelta(
   Map<String, Object?> before,
@@ -833,6 +1024,9 @@ Future<void> _prepareScenario(
         .entryCount,
     expectedParentEntryCount,
   );
+  if (scenario == _ProfileScenario.avatarFirstTarget) {
+    await _showBudgetAvatarRail(tester);
+  }
   if (scenario == _ProfileScenario.tenthFling) {
     for (var index = 0; index < 9; index += 1) {
       await _resetRailToIndex(tester, controller, 13);
@@ -840,6 +1034,33 @@ Future<void> _prepareScenario(
     }
     await _resetRailToIndex(tester, controller, 13);
   }
+}
+
+/// Reaches Budget through the real production header gesture. This keeps the
+/// Avatar profile on the same persistent FluviApp/CoreDashboard composition as
+/// the Time matrix and deliberately does not install a category scene itself.
+Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
+  await tester.drag(
+    find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
+    const Offset(-260, 0),
+  );
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump();
+    final carousel = find.byKey(
+      const ValueKey('budget-target-avatar-carousel'),
+    );
+    if (carousel.evaluate().length == 1 &&
+        find
+                .descendant(of: carousel, matching: find.byType(ListView))
+                .evaluate()
+                .length ==
+            1) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  fail('Budget Avatar rail did not mount after the real header mode gesture.');
 }
 
 Future<void> _resetRailToIndex(
@@ -903,9 +1124,18 @@ Future<void> _waitForVisibleReset(
 Future<void> _runMeasuredScenario(
   WidgetTester tester,
   DashboardCoreController controller,
-  _ProfileScenario scenario,
-) async {
+  _ProfileScenario scenario, {
+  required List<DashboardAvatarTargetPainted> avatarPaints,
+  required bool Function() avatarMotionLaneObserved,
+}) async {
   switch (scenario) {
+    case _ProfileScenario.avatarFirstTarget:
+      await _flingBudgetAvatar(
+        tester,
+        controller,
+        avatarPaints: avatarPaints,
+        avatarMotionLaneObserved: avatarMotionLaneObserved,
+      );
     case _ProfileScenario.summaryPlane:
       await _flingSummary(tester, const Offset(0, -180));
       await _flingSummary(tester, const Offset(0, -180));
@@ -936,6 +1166,69 @@ Future<void> _runMeasuredScenario(
       );
       await _settle(tester);
   }
+}
+
+Future<void> _flingBudgetAvatar(
+  WidgetTester tester,
+  DashboardCoreController controller, {
+  required List<DashboardAvatarTargetPainted> avatarPaints,
+  required bool Function() avatarMotionLaneObserved,
+}) async {
+  final carousel = find.byKey(const ValueKey('budget-target-avatar-carousel'));
+  expect(carousel, findsOneWidget);
+  await tester.fling(carousel, const Offset(-420, 0), 2200);
+  await _waitForBudgetAvatarMotionEnd(
+    tester,
+    controller,
+    motionLaneObserved: avatarMotionLaneObserved,
+  );
+  await _waitForAvatarExactPaint(tester, controller, avatarPaints);
+}
+
+Future<void> _waitForBudgetAvatarMotionEnd(
+  WidgetTester tester,
+  DashboardCoreController controller, {
+  required bool Function() motionLaneObserved,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  var consecutiveIdleSamples = 0;
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump();
+    final active = controller.isMotionLaneActive(
+      DashboardMotionLane.budgetAvatar,
+    );
+    if (motionLaneObserved() && !active) {
+      consecutiveIdleSamples += 1;
+      if (consecutiveIdleSamples >= 3) return;
+    } else {
+      consecutiveIdleSamples = 0;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  fail(
+    'Budget Avatar motion did not complete: '
+    'motionLaneObserved=${motionLaneObserved()} '
+    'active=${controller.isMotionLaneActive(DashboardMotionLane.budgetAvatar)}.',
+  );
+}
+
+Future<void> _waitForAvatarExactPaint(
+  WidgetTester tester,
+  DashboardCoreController controller,
+  List<DashboardAvatarTargetPainted> avatarPaints,
+) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  while (DateTime.now().isBefore(deadline)) {
+    await tester.pump();
+    if (avatarPaints.isNotEmpty) return;
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  fail(
+    'Budget Avatar fling ended without an exact Phase-A LogBox paint: '
+    'visibleQuery=${controller.visibleFrames.value?.queryKey.value} '
+    'visibleRevision=${controller.visibleFrames.value?.coreRevision} '
+    'activeMotionLanes=${controller.activeMotionLaneNames}.',
+  );
 }
 
 Future<void> _flingRail(

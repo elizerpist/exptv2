@@ -25,6 +25,7 @@ one timeline.
 | FPA-13 | User §25 | Flutter validation in Ubuntu proot | Focused regressions, dashboard application/presentation suites, fast suite, analyzer and protected Slider tests are honestly recorded. | Exact commands and normalized outputs. | DONE |
 | FPA-14 | User §26 and global delivery rule | App delivery + SCIP tooling | Each production app commit is pushed, its exact online human APK is downloaded and hashed, and a separately committed SCIP graph indexes the final app SHA. | GitHub Actions evidence, APK SHA-256, final graph manifest and deterministic regeneration. | NOT DONE |
 | FPA-15 | User §21 / §28 | Physical device | Physical correctness and performance are not claimed by the agent. | User-only physical validation. | PENDING — USER ONLY |
+| FPA-16 | User §25; delivery profile artifact audit | `integration_test/dashboard_interaction_profile_test.dart` | The online profile matrix includes a real production-composition Avatar crossing with an accepted exact publication and records its bounded pipeline/paint evidence. | A dedicated profile artifact plus source-level integration test assertions. | PARTIAL |
 
 ## Protected prior work
 
@@ -65,3 +66,14 @@ FrameTiming was pending. This checklist does not reopen either semantic design.
   assertions are present, but no new physical-device FrameTiming run has been
   obtained. A local Termux profile drive is intentionally not substituted for
   the required physical/device CI evidence.
+- The first online A–J profile delivery passed but its exported scenarios
+  contain no Avatar/Budget Avatar semantic publication. It is therefore not
+  evidence for FPA-16 and triggered the dedicated production-profile follow-up.
+- The follow-up adds `K_avatar_first_target`: a fresh app mount reaches Budget
+  through the production Header gesture, then flings the actual Avatar rail
+  without preinstalling a category scene. Its bounded report must contain the
+  real Avatar motion-lane claim, semantic crossing, exact Phase-A LogBox
+  paint, coherent current visible frame, actual Budget-progress paint and one
+  first-target terminal pipeline result. Local report-contract and boundary
+  tests pass; the required online profile artifact is still pending, so FPA-16
+  remains `PARTIAL`.

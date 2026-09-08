@@ -50,11 +50,11 @@ trap capture_profile_host_diagnostics EXIT
 adb "${adb_device_args[@]}" shell am wait-for-broadcast-barrier --flush-broadcast-loopers --flush-application-threads
 adb "${adb_device_args[@]}" shell am wait-for-application-barrier
 
-# The profile scenario itself allows 20 minutes. Keep a finite CI watchdog,
+# The profile scenario itself allows 25 minutes. Keep a finite CI watchdog,
 # but give flutter-drive teardown/reporting headroom beyond that test deadline:
-# an equal 20-minute shell timeout races the test's final report and can
-# terminate an otherwise-completing A–J run with exit 124.
-profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 25m)
+# an equal 25-minute shell timeout races the test's final report and can
+# terminate an otherwise-completing A–K run with exit 124.
+profile_run_timeout=(timeout --foreground --signal=TERM --kill-after=30s 30m)
 "${profile_run_timeout[@]}" flutter drive "${device_args[@]}" \
   --driver=test_driver/dashboard_profile_driver.dart \
   --target=integration_test/dashboard_interaction_profile_test.dart \

@@ -214,6 +214,84 @@ abstract final class DashboardProfileReport {
     }
   }
 
+  /// Validates the bounded evidence from the profile matrix's real Budget
+  /// Avatar interaction. The persistent production Core remains the authority
+  /// for every field: this only prevents a Time-only profile artifact from
+  /// being mistaken for Avatar publication or actual progress paint proof.
+  static void validateAvatarFirstTargetEvidence(Map<String, Object?> evidence) {
+    void requirePositive(String key) {
+      final value = evidence[key];
+      if (value is! num || value < 1) {
+        throw StateError(
+          'Avatar profile evidence $key must be a positive count; got $value.',
+        );
+      }
+    }
+
+    void requireTrue(String key) {
+      if (evidence[key] != true) {
+        throw StateError(
+          'Avatar profile evidence $key must be true; got ${evidence[key]}.',
+        );
+      }
+    }
+
+    requireTrue('motion_lane_observed');
+    requirePositive('pointer_accepted_count');
+    requirePositive('avatar_semantic_crossings');
+    requirePositive('preview_accepted_count');
+    requirePositive('exact_phase_a_paint_count');
+    requireTrue('exact_phase_a_all_readable');
+    requireTrue('latest_exact_paint_matches_visible');
+    requirePositive('budget_progress_painted_count');
+    requireTrue('budget_progress_matches_exact_paint');
+    requirePositive('avatar_motion_summary_count');
+
+    final exactTargets = evidence['exact_phase_a_target_handles'];
+    if (exactTargets is! List ||
+        exactTargets.isEmpty ||
+        exactTargets.any((target) => target is! int)) {
+      throw StateError(
+        'Avatar profile evidence must retain exact painted target handles; '
+        'got $exactTargets.',
+      );
+    }
+    final progressTargets = evidence['budget_progress_target_handles'];
+    if (progressTargets is! List ||
+        progressTargets.isEmpty ||
+        progressTargets.any((target) => target is! int)) {
+      throw StateError(
+        'Avatar profile evidence must retain actual progress-paint target '
+        'handles; got $progressTargets.',
+      );
+    }
+
+    final pipelineCount = evidence['first_pipeline_summary_count'];
+    if (pipelineCount is! num || pipelineCount != 1) {
+      throw StateError(
+        'Avatar profile must emit one first-target pipeline summary; '
+        'got $pipelineCount.',
+      );
+    }
+    final outcomes = evidence['first_pipeline_terminal_outcomes'];
+    const allowedOutcomes = <String>{
+      'exactPhaseAPainted',
+      'exactEmpty',
+      'coalescedBeforeReadiness',
+      'coalescedBeforePaint',
+    };
+    if (outcomes is! List ||
+        outcomes.isEmpty ||
+        outcomes.any(
+          (outcome) => outcome is! String || !allowedOutcomes.contains(outcome),
+        )) {
+      throw StateError(
+        'Avatar profile has an invalid first-target terminal outcome: '
+        '$outcomes.',
+      );
+    }
+  }
+
   /// Validates the causal motion/data boundary while retaining frame-budget
   /// misses as measured evidence.
   ///

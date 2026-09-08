@@ -104,6 +104,37 @@ retained evidence establishes a post-store cost but does not yet identify one
 specific invalidation as the device culprit. Implementing a speculative
 render-isolation change would have violated the measured-only constraint.
 
+## Follow-up — close the profile artifact gap without faking physical evidence
+
+The first online delivery's A–J profile matrix passed, but inspection of every
+exported JSON found no `avatar`, `budget_avatar`, or `BUDGET_AVATAR` event.
+`I_first_fling` is a Time-rail flight, so its FrameTiming cannot substantiate
+an Avatar acceptance or Avatar presentation claim.
+
+The follow-up adds `K_avatar_first_target` to the same production-composition
+matrix. It mounts a new `FluviApp`/`CoreDashboard`, reaches Budget through the
+real Header gesture, and flings `budget-target-avatar-carousel`; it does not
+call a test-only focus, cache, scene or presentation preinstaller. A bounded
+observer reads only the existing Core `budgetAvatarTargetPainted` notifier and
+diagnostic events produced by the existing Avatar rail. The exported evidence
+requires:
+
+- a real Avatar motion-lane claim and semantic crossing;
+- an accepted preview and exact readable Phase-A LogBox paint;
+- the final exact paint's query/revision to match the current visible frame;
+- an actual `BUDGET_PROGRESS_PAINTED` acknowledgement for an exact-painted
+  Avatar target; and
+- exactly one first-target terminal pipeline summary, including explicit
+  coalescing when the first crossed target is superseded in the same fling.
+
+The A–K widget-test timeout and finite driver watchdog are extended to keep
+the expanded deterministic matrix from racing report upload. This does not
+alter production gesture, scheduler, cache or physics behavior. Local
+report-contract, boundary, Avatar-rail and app-shell tests pass. The online
+artifact and its real output remain required before this profile evidence can
+be marked complete; emulator FrameTiming remains non-physical and cannot close
+AVP-04/AVP-10 or physical acceptance.
+
 ## Source and test impact audit
 
 | Shared owner | Current role and protected consumer | Repair / regression coverage |

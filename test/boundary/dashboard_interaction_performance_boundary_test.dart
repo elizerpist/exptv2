@@ -266,8 +266,22 @@ void main() {
       profileHarness,
       contains('DashboardProfileReport.validateMotionIsolationGate(reports);'),
       reason:
-          'The A-J gate must validate data isolation and UI-isolate work while '
+          'The A-K gate must validate data isolation and UI-isolate work while '
           'still reporting software-renderer misses.',
+    );
+    expect(
+      profileHarness,
+      contains('_ProfileScenario.avatarFirstTarget'),
+      reason:
+          'The profile matrix must retain one real production Avatar fling, '
+          'not only Time-rail traversal.',
+    );
+    expect(
+      profileHarness,
+      contains('DashboardProfileReport.validateAvatarFirstTargetEvidence('),
+      reason:
+          'Avatar pipeline, exact paint and actual progress paint evidence '
+          'must be rejected if a future profile change stops recording it.',
     );
     expect(profileHarness, contains("'rail_flight': _railFlightReport("));
     expect(profileHarness, contains('_expectEquivalentRailFlight('));
@@ -515,11 +529,11 @@ void main() {
       profileRunner,
       contains(
         'profile_run_timeout=(timeout --foreground --signal=TERM '
-        '--kill-after=30s 25m)',
+        '--kill-after=30s 30m)',
       ),
       reason:
           'A lost VM-service connection must not hold a profile job open, '
-          'but the runner must leave headroom beyond the A–J test deadline '
+          'but the runner must leave headroom beyond the A–K test deadline '
           'for its final report and teardown.',
     );
     expect(
