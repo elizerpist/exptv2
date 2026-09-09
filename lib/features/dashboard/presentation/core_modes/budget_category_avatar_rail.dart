@@ -12,6 +12,7 @@ import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_avatar_target_painted.dart';
@@ -469,10 +470,12 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   }) async {
     var accepted = false;
     Object? error;
+    StackTrace? errorStackTrace;
     try {
       accepted = await acceptance;
-    } on Object catch (caught) {
+    } on Object catch (caught, stackTrace) {
       error = caught;
+      errorStackTrace = stackTrace;
     }
     if (!mounted || generation != _motionGeneration) {
       _stalePreviewCompletions += 1;
@@ -485,6 +488,31 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         ),
       );
       return;
+    }
+    if (error != null) {
+      final selection = widget.presentation.value.liveSelection;
+      // The Core logs the full temporal/base identity at its own failure
+      // boundary. This presentation seam adds only its local, bounded source
+      // evidence; neither raw error text nor a full stack is exported.
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AVATAR_PHASE_A_ADMISSION_EXCEPTION',
+          direction: selection.direction.name,
+          coreRevision: selection.coreRevision,
+          scope:
+              'boundary=onTargetPreviewAccepted '
+              'errorType=${error.runtimeType} '
+              'errorDigest=${FluviDiagnosticKeyDigest.of(error.toString())} '
+              'stackFingerprint=${FluviDiagnosticKeyDigest.of(errorStackTrace.toString())} '
+              'targetHandle=$targetHandle '
+              'presentationTargetHandle=${selection.target.handle} '
+              'presentationEpoch=${widget.presentation.value.visibleModeEpoch} '
+              'analysisScopeDigest=${FluviDiagnosticKeyDigest.of(selection.analysisScopeLabel)} '
+              'coreRevision=${selection.coreRevision ?? 0} '
+              'motionGeneration=$generation '
+              'phase=${phase?.name ?? 'idle'}',
+        ),
+      );
     }
     switch (phase) {
       case BudgetTargetAvatarMotionPhase.directDrag:

@@ -41,6 +41,7 @@ import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -3051,6 +3052,250 @@ void main() {
   );
 
   testWidgets(
+    'E8M: an out-of-window Time target retains the painted frame and leaves Avatar Phase-A admissible',
+    (tester) async {
+      final preparedWindowGate = Completer<void>();
+      final repository = _NonEmptyQueryRepository(
+        prepareAfterBootstrapGate: preparedWindowGate,
+        focusRows: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'post-time-utilities',
+            partnerId: 'post-time-partner',
+            categoryId: 'utilities',
+            direction: 'expense',
+            amountMinor: -1200,
+            bookedLocalEpochDay: 15915,
+            bookedLocalTimeMinutes: 600,
+            partnerDisplayName: 'Post-Time Partner',
+            categoryDisplayName: 'Utilities',
+            categoryColorId: 'fallback',
+            categoryIconId: 'fallback',
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      final sceneCache = DashboardLogBoxPreparedSceneCache();
+      final snapshots = <DashboardLogBoxRenderExtentSnapshot>[];
+      addTearDown(() {
+        if (!preparedWindowGate.isCompleted) preparedWindowGate.complete();
+        core.dispose();
+      });
+      addTearDown(sceneCache.dispose);
+      await core.bootstrap();
+      await _attachAndActivateInitialScene(core, sceneCache);
+      final origin = core.navigation.state;
+      final originVisible = core.visibleFrames.value!;
+      final target = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -13,
+        base: origin,
+      );
+      expect(target, isNotNull);
+      expect(target!.yearCursor, 2013);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 378,
+            height: 700,
+            child: DashboardLogBoxViewport(
+              bounds: const DashboardBounds(
+                left: 0,
+                top: 28,
+                width: 378,
+                height: 28,
+              ),
+              visibleFrames: core.visibleFrames,
+              committedViewport: core.committedLogViewport,
+              preparedSceneCache: sceneCache,
+              preparedRasters: PreparedVectorAssetAtlas.instance
+                  .logBoxRastersFor(3),
+              onLoadNextPage: (_) {},
+              performanceCounters: core.performanceCounters,
+              renderDiagnostics: core.renderReadinessDiagnostics,
+              renderDiagnosticContextProvider: () =>
+                  core.renderDiagnosticContext,
+              onExtentPublished: (snapshot) {
+                snapshots.add(snapshot);
+                core.recordLogBoxRenderExtent(snapshot);
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      FluviDiagnosticLogger.clear();
+      core.beginSegmentedSummaryMotion();
+      final acceptance = core.navigateExperimentalTemporalComponentCandidate(
+        candidate: target,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+
+      expect(
+        acceptance,
+        DashboardSegmentedTargetAcceptance.acceptedDeferredForPainterResource,
+      );
+      expect(core.navigation.state, same(origin));
+      expect(core.visibleFrames.value, same(originVisible));
+      expect(
+        snapshots
+            .where(
+              (snapshot) =>
+                  snapshot.presentation?.queryKey ==
+                  target.temporalAnchor.sourceChildQueryKey,
+            )
+            .toList(growable: false),
+        isEmpty,
+        reason:
+            'The gated next prepared window may not expose a non-empty 13 px '
+            'or mixed-authority preview before its own Phase-A rows exist.',
+      );
+
+      preparedWindowGate.complete();
+      for (var frame = 0; frame < 80; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (snapshots.any(
+          (snapshot) =>
+              snapshot.presentation?.queryKey ==
+                  target.temporalAnchor.sourceChildQueryKey &&
+              snapshot.readablePhaseARowsPainted > 0,
+        )) {
+          break;
+        }
+      }
+
+      final targetFrame = core.visibleFrames.value!;
+      final targetSnapshot = snapshots.lastWhere(
+        (snapshot) =>
+            snapshot.presentation?.queryKey ==
+            target.temporalAnchor.sourceChildQueryKey,
+      );
+      expect(core.preparedIndex!.key.yearWindowStart, 2001);
+      expect(core.preparedIndex!.key.yearWindowEndInclusive, 2025);
+      expect(core.navigation.state.yearCursor, 2013);
+      expect(targetFrame.queryKey, target.temporalAnchor.sourceChildQueryKey);
+      expect(targetFrame.logBox.previewRowCount, greaterThan(0));
+      expect(
+        targetSnapshot.renderDomain,
+        DashboardLogBoxRenderDomain.railPreview,
+      );
+      expect(
+        targetSnapshot.drawableRowCount,
+        targetFrame.logBox.previewRowCount,
+      );
+      expect(targetSnapshot.paintedRowCount, greaterThan(0));
+      expect(targetSnapshot.readablePhaseARowsPainted, greaterThan(0));
+      expect(sceneCache.visiblePayloadWithoutPaintCount, 0);
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_COMPONENT_LIVE_ROOT_MISS',
+        ),
+        isEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_TARGET_PAINT_REJECTED',
+        ),
+        isEmpty,
+      );
+
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: target,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+      expect(core.visibleFrames.value!.mode, DashboardVisibleMode.committed);
+      expect(core.navigation.state.yearCursor, 2013);
+      core.endSegmentedSummaryMotion();
+
+      // Exercise the real Core/cache/viewport composition after the Time
+      // authority has moved to its new prepared window. This is the physical
+      // sequence that previously swallowed every Avatar admission exception.
+      const utilities = DashboardFocusFacet(
+        id: 'utilities',
+        displayName: 'Utilities',
+      );
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[utilities]);
+      core.noteBudgetAvatarDirectPointerDown();
+      for (
+        var frame = 0;
+        frame < 80 && !core.budgetAvatarLiveRootReady.value;
+        frame += 1
+      ) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(
+        core.budgetAvatarLiveRootReady.value,
+        isTrue,
+        reason:
+            '${sceneCache.report()}\n'
+            '${FluviDiagnosticLogger.entries.where((event) => event.stage.startsWith('AV') || event.stage.startsWith('BUDGET_AVATAR') || event.stage.startsWith('FOREGROUND')).map((event) => '${event.stage}:${event.scope}').join('\n')}',
+      );
+      core.beginBudgetAvatarMotion();
+      expect(
+        await core.requestBudgetCategoryFocus(
+          utilities,
+          publishDuringMotion: true,
+          targetHandle: 1,
+        ),
+        isTrue,
+      );
+      for (var frame = 0; frame < 30; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (core.visibleFrames.value!.scope.categoryIds.contains('utilities')) {
+          break;
+        }
+      }
+      final avatarFrame = core.visibleFrames.logBoxLane.value!;
+      final avatarSnapshot = snapshots.lastWhere(
+        (snapshot) => snapshot.presentation?.queryKey == avatarFrame.queryKey,
+      );
+      expect(
+        avatarFrame.scope.categoryIds,
+        <String>{'utilities'},
+        reason: FluviDiagnosticLogger.entries
+            .where(
+              (event) =>
+                  event.stage.startsWith('AV') ||
+                  event.stage.startsWith('FOCUS') ||
+                  event.stage.startsWith('CATEGORY'),
+            )
+            .map((event) => '${event.stage}:${event.queryKey}:${event.scope}')
+            .join('\n'),
+      );
+      expect(avatarSnapshot.readablePhaseARowsPainted, greaterThan(0));
+      expect(avatarSnapshot.paintedRowCount, greaterThan(0));
+      expect(
+        sceneCache.hasCompleteReadablePhaseAFor(avatarFrame.logBox),
+        isTrue,
+      );
+
+      expect(
+        await core.clearBudgetCategoryFocus(
+          targetHandle: 0,
+          publishDuringMotion: true,
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      expect(core.focus.state, isNull);
+      expect(core.visibleFrames.logBoxLane.value!.scope.categoryIds, isEmpty);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  testWidgets(
     'RED: a new non-empty rail-preview presentation epoch repaints without a scroll notification',
     (tester) async {
       final store = DashboardVisibleFrameStore();
@@ -3350,6 +3595,15 @@ final class _MindLivePreviewRepository
 }
 
 final class _NonEmptyQueryRepository implements DashboardDataRuntimeRepository {
+  _NonEmptyQueryRepository({
+    this.prepareAfterBootstrapGate,
+    List<DashboardLedgerEntry>? focusRows,
+  }) : _focusRows = focusRows;
+
+  final Completer<void>? prepareAfterBootstrapGate;
+  final List<DashboardLedgerEntry>? _focusRows;
+  var prepareIndexCalls = 0;
+
   @override
   Stream<int> watchCoreRevision() => Stream<int>.value(1);
 
@@ -3357,16 +3611,50 @@ final class _NonEmptyQueryRepository implements DashboardDataRuntimeRepository {
   Future<PreparedDashboardIndex> prepareIndex(
     PreparedDashboardIndexRequest request,
     DashboardIndexPreparationToken token,
-  ) async => buildRuntimeTestIndex(
-    revision: request.key.coreRevision,
-    generation: token.generation,
-    directionalQueries: request.directionalQueries,
-    initialYear: request.initialYear,
-    yearWindowRadius: request.key.yearWindowEndInclusive - request.initialYear,
-    entryCountForScope: _entryCountFor,
-    previewRowCountForScope: _previewRowCountFor,
-    deferredLogBoxes: true,
-  );
+  ) async {
+    prepareIndexCalls += 1;
+    final gate = prepareAfterBootstrapGate;
+    if (prepareIndexCalls > 1 && gate != null) {
+      await gate.future;
+    }
+    final index = buildRuntimeTestIndex(
+      revision: request.key.coreRevision,
+      generation: token.generation,
+      directionalQueries: request.directionalQueries,
+      initialYear: request.initialYear,
+      yearWindowRadius:
+          request.key.yearWindowEndInclusive - request.initialYear,
+      entryCountForScope: _entryCountFor,
+      previewRowCountForScope: _previewRowCountFor,
+      deferredLogBoxes: true,
+    );
+    final focusRows = _focusRows;
+    if (focusRows == null) return index;
+    return PreparedDashboardIndex.complete(
+      key: index.key,
+      frames: index.frames,
+      catalogs: index.catalogs,
+      scopes: <LedgerQueryKey, CurrentLedgerQueryScope>{
+        for (final zero in index.compactZeroFrames.values)
+          zero.queryKey: zero.scope,
+        for (final frame in index.frames.values) frame.queryKey: frame.scope,
+      },
+      origins: index.origins,
+      geometrySeedsByDirection:
+          <LedgerDirection, List<CommittedVerticalGeometryDayBucket>>{
+            for (final direction in LedgerDirection.values)
+              direction: index.partitionFor(direction).verticalGeometrySeed,
+          },
+      focusMembershipSeedsByDirection:
+          <LedgerDirection, DashboardFocusMembershipSeed>{
+            LedgerDirection.expense: DashboardFocusMembershipSeed(focusRows),
+          },
+      generation: index.generation,
+      contentDigest: index.contentDigest,
+      preparedAt: index.preparedAt,
+      buildMetrics: index.buildMetrics,
+    );
+  }
 
   @override
   Future<CommittedLogPage> readCommittedPage(

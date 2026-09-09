@@ -251,6 +251,40 @@ final class _PendingSegmentedTimePhaseACandidate {
   bool terminalOutcomeRecorded = false;
 }
 
+/// One bounded, latest-wins direct Time target whose immutable frame lies
+/// outside the currently installed physical prepared-year window.
+///
+/// This is scheduling metadata only. The existing data runtime continues to
+/// own index construction, the prepared-scene cache owns painter resources,
+/// and Presentation remains the sole visible-frame owner. Keeping the
+/// original interaction order here prevents an asynchronous window completion
+/// from becoming a producer-less canonical fallback.
+final class _PendingSegmentedTimePreparedWindowCandidate {
+  _PendingSegmentedTimePreparedWindowCandidate({
+    required this.flightGeneration,
+    required this.candidate,
+    required this.component,
+    required this.source,
+    required this.baseIndex,
+    required this.baseScope,
+    required this.navigationEpoch,
+    required this.interactionOrder,
+    required this.requestTemplate,
+  });
+
+  final int flightGeneration;
+  final DashboardNavigationState candidate;
+  final DashboardTemporalAnchorComponent? component;
+  final String source;
+  final PreparedDashboardIndex baseIndex;
+  final CurrentLedgerQueryScope baseScope;
+  final int navigationEpoch;
+  final DashboardInteractionPreviewOrder interactionOrder;
+  final DashboardIndexRequestTemplate requestTemplate;
+  bool settleRequested = false;
+  bool terminalOutcomeRecorded = false;
+}
+
 /// The rich scene is visual augmentation of an already exact prepared focus
 /// frame. Avatar crossings retain only the latest augmentation until direct
 /// motion releases the foreground lane.
@@ -271,10 +305,17 @@ final class _BudgetAvatarFocusHotsetEntry {
   const _BudgetAvatarFocusHotsetEntry({
     required this.key,
     required this.derivation,
+    required this.resourcePayload,
   });
 
   final String key;
   final DashboardEphemeralFocusDerivation derivation;
+
+  /// The already materialized compact root that this exact local category
+  /// target can place on the rail during the next direct manipulation. This
+  /// is intentionally not a second scene/cache authority: it is an immutable
+  /// input to the existing prepared-scene cache's Avatar resource lane.
+  final DashboardLogViewportState resourcePayload;
 }
 
 /// A concrete ahead-of-input target. It intentionally carries no Widget or
@@ -1078,6 +1119,7 @@ final class DashboardCoreController {
   int? _budgetAvatarLiveResourceInFlightGeneration;
   PreparedDashboardIndex? _budgetAvatarLiveResourcePreparingBase;
   CurrentLedgerQueryScope? _budgetAvatarLiveResourcePreparingScope;
+  String? _budgetAvatarLiveResourcePreparingKey;
   bool _budgetAvatarLiveResourceRetryScheduled = false;
   int _mindAmountPreviewPrimeGeneration = 0;
   int _mindAmountPreviewGeneration = 0;
@@ -1099,6 +1141,8 @@ final class DashboardCoreController {
   _SegmentedTemporalPaintTarget? _segmentedLatestPaintedTarget;
   _SegmentedTemporalPaintTarget? _segmentedPendingSettleTarget;
   _PendingSegmentedTimePhaseACandidate? _pendingSegmentedTimePhaseACandidate;
+  _PendingSegmentedTimePreparedWindowCandidate?
+  _pendingSegmentedTimePreparedWindowCandidate;
   _SegmentedPaintedSceneRetention? _segmentedPaintedSceneRetention;
   int _segmentedPaintedSceneRetentionGeneration = 0;
   int _segmentedPaintRejectedCount = 0;
@@ -2094,11 +2138,23 @@ final class DashboardCoreController {
     final partnerSnapshot =
         partnerDistributionSnapshot ??
         _activePreparedRevisionBundle?.partnerDistributionSnapshot;
-    if ((snapshot != null && snapshot.coreRevision != index.coreRevision) ||
-        (partnerSnapshot != null &&
-            partnerSnapshot.coreRevision != index.coreRevision)) {
-      // Fail closed: Budget never borrows a dense cell bank from a prior
-      // revision. The header renders its explicit unavailable state instead.
+    final snapshotMatchesIndex =
+        snapshot == null ||
+        (snapshot.coreRevision == index.coreRevision &&
+            snapshot.yearWindowStart == index.key.yearWindowStart &&
+            snapshot.yearWindowEndInclusive ==
+                index.key.yearWindowEndInclusive);
+    final partnerSnapshotMatchesIndex =
+        partnerSnapshot == null ||
+        (partnerSnapshot.coreRevision == index.coreRevision &&
+            partnerSnapshot.yearWindowStart == index.key.yearWindowStart &&
+            partnerSnapshot.yearWindowEndInclusive ==
+                index.key.yearWindowEndInclusive);
+    if (!snapshotMatchesIndex || !partnerSnapshotMatchesIndex) {
+      // Fail closed: Budget never borrows dense cells from a different
+      // physical prepared-year window, even when a Time rebase keeps the same
+      // Core revision. The header renders its explicit unavailable state until
+      // the exact window snapshot reaches this publication boundary.
       return DashboardPreparedRevisionBundle.forIndex(
         index,
         publicationState: publicationState,
@@ -3684,10 +3740,15 @@ final class DashboardCoreController {
     return true;
   }
 
-  /// The three direct producers share one bounded, pre-motion row universe.
-  /// It is a Phase-A readability dependency, not a rich-scene activation:
-  /// after this returns, a live frame can paint its exact normal LogBox
-  /// paragraphs even if no candidate scene reaches Phase B.
+  /// Prepares one bounded Phase-A resource input through the existing shared
+  /// cache lane. Mind deliberately retains its source-row universe because a
+  /// continuous amount range cannot enumerate its next Query key. Avatar and
+  /// Time pass already-projected exact local payloads instead, so their first
+  /// direct target never waits for every base-membership row to be laid out.
+  ///
+  /// This is a readability dependency, not a rich-scene activation: after it
+  /// returns, a live frame can paint exact normal LogBox paragraphs even if no
+  /// candidate scene reaches Phase B.
   Future<_LiveInteractionRowResource?> _prepareLiveInteractionRowResource({
     required PreparedDashboardIndex base,
     required CurrentLedgerQueryScope baseScope,
@@ -3695,36 +3756,33 @@ final class DashboardCoreController {
     required String resourceKey,
     required String diagnosticPrefix,
     required bool Function() isStillCurrent,
+    String Function()? staleReason,
+    DashboardLogBoxSceneWindow? exactLocalWindow,
   }) async {
     final prepare = _liveInteractionResourceWindowPreparer;
     if (prepare == null) return null;
-    final seed = base.partitionFor(baseScope.direction).focusMembershipSeed;
-    if (seed == null || seed.entryCount > 8192) {
+    final resourceWindow =
+        exactLocalWindow ??
+        _sourceMembershipResourceWindow(
+          base: base,
+          baseScope: baseScope,
+          resourceKey: resourceKey,
+          diagnosticPrefix: diagnosticPrefix,
+        );
+    if (resourceWindow == null) return null;
+    if (resourceWindow.previewRowCount > 8192) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: '$diagnosticPrefix|LIVE_ROOT_RESOURCE_REJECTED',
           queryKey: baseScope.key.value,
           direction: baseScope.direction.name,
           coreRevision: base.coreRevision,
-          entryCount: seed?.entryCount,
-          scope: seed == null
-              ? 'reason=focusMembershipSeedUnavailable'
-              : 'reason=boundedRowCapacity maxRows=8192',
+          entryCount: resourceWindow.previewRowCount,
+          scope: 'reason=boundedRowCapacity maxRows=8192',
         ),
       );
       return null;
     }
-    final resourcePayload = DashboardLogViewportState.deferredPreparedOrdered(
-      scope: baseScope,
-      revision: base.coreRevision,
-      entries: seed.entries,
-      entryCount: seed.entryCount,
-      nextCursor: null,
-    );
-    final resourceWindow = DashboardLogBoxSceneWindow(
-      identity: resourceKey,
-      payloads: <DashboardLogViewportState>[resourcePayload],
-    );
     if (!(_liveInteractionResourceWindowLookup?.call(
           resourceWindow,
           lane: lane,
@@ -3738,7 +3796,20 @@ final class DashboardCoreController {
         retainViewportId: visibleFrames.value?.logBox.viewportId,
       );
     }
-    if (_disposed || !isStillCurrent()) return null;
+    if (_disposed || !isStillCurrent()) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: '$diagnosticPrefix|LIVE_ROOT_RESOURCE_REJECTED',
+          queryKey: baseScope.key.value,
+          direction: baseScope.direction.name,
+          coreRevision: base.coreRevision,
+          entryCount: resourceWindow.previewRowCount,
+          scope:
+              'reason=${_disposed ? 'disposed' : staleReason?.call() ?? 'stale'}',
+        ),
+      );
+      return null;
+    }
     final ready =
         _liveInteractionResourceWindowLookup?.call(
           resourceWindow,
@@ -3746,11 +3817,55 @@ final class DashboardCoreController {
           candidateKey: resourceKey,
         ) ??
         false;
-    if (!ready) return null;
+    if (!ready) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: '$diagnosticPrefix|LIVE_ROOT_RESOURCE_REJECTED',
+          queryKey: baseScope.key.value,
+          direction: baseScope.direction.name,
+          coreRevision: base.coreRevision,
+          entryCount: resourceWindow.previewRowCount,
+          scope: 'reason=resourceRetentionUnavailable',
+        ),
+      );
+      return null;
+    }
     return _LiveInteractionRowResource(
       resourceKey: resourceKey,
       window: resourceWindow,
+      entryCount: resourceWindow.previewRowCount,
+    );
+  }
+
+  DashboardLogBoxSceneWindow? _sourceMembershipResourceWindow({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope baseScope,
+    required String resourceKey,
+    required String diagnosticPrefix,
+  }) {
+    final seed = base.partitionFor(baseScope.direction).focusMembershipSeed;
+    if (seed == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: '$diagnosticPrefix|LIVE_ROOT_RESOURCE_REJECTED',
+          queryKey: baseScope.key.value,
+          direction: baseScope.direction.name,
+          coreRevision: base.coreRevision,
+          scope: 'reason=focusMembershipSeedUnavailable',
+        ),
+      );
+      return null;
+    }
+    final resourcePayload = DashboardLogViewportState.deferredPreparedOrdered(
+      scope: baseScope,
+      revision: base.coreRevision,
+      entries: seed.entries,
       entryCount: seed.entryCount,
+      nextCursor: null,
+    );
+    return DashboardLogBoxSceneWindow(
+      identity: resourceKey,
+      payloads: <DashboardLogViewportState>[resourcePayload],
     );
   }
 
@@ -5481,12 +5596,12 @@ final class DashboardCoreController {
         // this cold semantic intent into a 13 px unreadable preview.
         return;
       case _PreparedSegmentedTemporalPublicationOutcome.rejected:
-        break;
+        _recordPreparedSegmentedTemporalDirectRejection(
+          candidate: candidate,
+          source: 'level',
+        );
+        return;
     }
-    _navigateExperimentalTemporalCandidate(
-      candidate,
-      reason: 'summaryExperimentLevelLiveRootMiss',
-    );
   }
 
   void navigateExperimentalTemporalComponentOffset({
@@ -5557,6 +5672,9 @@ final class DashboardCoreController {
       _setMotionLaneActive(DashboardMotionLane.budgetAvatar, false);
     } else if (prior == _DashboardForegroundDirectProducer.summaryTime) {
       _supersedePendingSegmentedTimePhaseACandidate(reason: 'staleRejected');
+      _supersedePendingSegmentedTimePreparedWindowCandidate(
+        reason: 'staleRejected',
+      );
       presentation.discardQueuedExperimentalTemporalCandidate();
       _invalidateSegmentedForegroundContinuations(
         outcome: _SegmentedTargetVisualOutcome.cancelledByNewInteraction,
@@ -5603,6 +5721,9 @@ final class DashboardCoreController {
       reason: 'segmentedMotionStarted',
     );
     _supersedePendingSegmentedTimePhaseACandidate(
+      reason: 'cancelledByNewInteraction',
+    );
+    _supersedePendingSegmentedTimePreparedWindowCandidate(
       reason: 'cancelledByNewInteraction',
     );
     _cancelSceneWindowMaintenanceForInput();
@@ -5680,6 +5801,9 @@ final class DashboardCoreController {
     if (_disposed) return;
     final interruptedTimeMotion = motion.interruptForForegroundTakeover();
     _supersedePendingSegmentedTimePhaseACandidate(
+      reason: 'cancelledByNewPointer',
+    );
+    _supersedePendingSegmentedTimePreparedWindowCandidate(
       reason: 'cancelledByNewPointer',
     );
     final latestSemanticTarget =
@@ -6124,6 +6248,13 @@ final class DashboardCoreController {
             'cancelledSummaryParentHotset=$hadSummaryParentHotset',
       ),
     );
+    // A Summary-owned flight may have already derived the bounded Avatar
+    // hotset while its own foreground lease correctly prevented an Avatar
+    // cache request. Once this physical Avatar pointer takes the lease, rearm
+    // that same exact local resource request immediately. Do not wait for the
+    // obsolete Summary ScrollEnd or for a widget rebuild to make the first
+    // crossed Avatar target painter-ready.
+    _primeRequestedBudgetAvatarFocusHotset();
   }
 
   void _drainDeferredLiveFacetSceneAugmentation() {
@@ -6177,35 +6308,40 @@ final class DashboardCoreController {
         return DashboardSegmentedTargetAcceptance
             .acceptedDeferredForPainterResource;
       case _PreparedSegmentedTemporalPublicationOutcome.rejected:
-        break;
+        _recordPreparedSegmentedTemporalDirectRejection(
+          candidate: candidate,
+          source: component.name,
+          component: component,
+        );
+        return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
     }
-    // This compatibility path is an explicit readiness invariant failure. It
-    // preserves semantic correctness for a structurally unavailable target,
-    // while profile metrics distinguish it from the required zero-work
-    // prepared path. Hotset tests must make it unreachable for every active
-    // Segmented target.
+  }
+
+  /// A direct Time crossing may never escape the prepared authority through
+  /// the legacy canonical navigation path. In particular, that old fallback
+  /// could commit navigation/Budget metadata while the visible LogBox still
+  /// belonged to a different prepared year window. The specific failing
+  /// prepared boundary has already emitted its own event; this is the bounded
+  /// terminal record for the direct interaction itself.
+  void _recordPreparedSegmentedTemporalDirectRejection({
+    required DashboardNavigationState candidate,
+    required String source,
+    DashboardTemporalAnchorComponent? component,
+  }) {
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'SUMMARY_COMPONENT_LIVE_ROOT_MISS',
-        queryKey: candidate.isRailOpen
-            ? candidate.temporalAnchor.sourceChildQueryKey.value
-            : candidate.parentQueryKey.value,
+        stage: 'TIME_PHASE_A_DIRECT_REJECTED',
+        queryKey: _segmentedTargetQueryKey(candidate).value,
+        direction: candidate.parentQueryScope.direction.name,
         coreRevision: preparedIndex?.coreRevision,
         scope:
-            'component=${component.name} '
-            'fallback=canonicalNavigation',
+            'source=$source '
+            'component=${component?.name ?? 'level'} '
+            'terminalOutcome=staleRejected '
+            'canonicalFallback=false '
+            'visibleAuthority=retainedPreviousExact',
       ),
     );
-    _navigateExperimentalTemporalCandidate(
-      candidate,
-      reason: switch (component) {
-        DashboardTemporalAnchorComponent.year => 'summaryExperimentYearCrossed',
-        DashboardTemporalAnchorComponent.month =>
-          'summaryExperimentMonthCrossed',
-        DashboardTemporalAnchorComponent.day => 'summaryExperimentDayCrossed',
-      },
-    );
-    return DashboardSegmentedTargetAcceptance.rejectedNotPrepared;
   }
 
   LedgerQueryKey _segmentedTargetQueryKey(DashboardNavigationState candidate) =>
@@ -6376,6 +6512,358 @@ final class DashboardCoreController {
       ),
     );
     return phaseAReady;
+  }
+
+  DashboardIndexRequestTemplate _timePreparedWindowTemplateFor(
+    DashboardNavigationState candidate,
+    PreparedDashboardIndex baseIndex,
+  ) {
+    final priorWindow = DashboardPreparedYearWindow.fromIndex(baseIndex);
+    final targetYear = candidate.yearCursor;
+    final targetWindow = DashboardPreparedYearWindow(
+      start: targetYear - priorWindow.radius,
+      endInclusive: targetYear + priorWindow.radius,
+      centerYear: targetYear,
+    );
+    return DashboardIndexRequestTemplate.forPreparedYearWindow(
+      directionalQueries: currentQuery.queries,
+      pageSize: pageSize,
+      yearWindow: targetWindow,
+    );
+  }
+
+  void _deferPendingSegmentedTimePreparedWindowCandidate(
+    _PendingSegmentedTimePreparedWindowCandidate candidate,
+  ) {
+    _supersedePendingSegmentedTimePhaseACandidate(
+      reason: 'coalescedBeforeWindowReady',
+    );
+    _supersedePendingSegmentedTimePreparedWindowCandidate(
+      reason: 'coalescedBeforeWindowReady',
+    );
+    _pendingSegmentedTimePreparedWindowCandidate = candidate;
+    final targetWindow = candidate.requestTemplate.preparedYearWindow;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TIME_PREPARED_WINDOW_CANDIDATE_PENDING',
+        queryKey: _segmentedTargetQueryKey(candidate.candidate).value,
+        direction: candidate.candidate.parentQueryScope.direction.name,
+        coreRevision: candidate.baseIndex.coreRevision,
+        scope:
+            'source=${candidate.source} '
+            'component=${candidate.component?.name ?? 'level'} '
+            'flightGeneration=${candidate.flightGeneration} '
+            'interactionEpoch=${candidate.interactionOrder.interactionEpoch} '
+            'localGeneration=${candidate.interactionOrder.localGeneration} '
+            'previousWindow=${DashboardPreparedYearWindow.fromIndex(candidate.baseIndex).cacheIdentity} '
+            'targetWindow=${targetWindow.cacheIdentity} '
+            'terminalOutcome=pendingPreparedWindowRebase '
+            'visibleAuthority=retainedPreviousExact',
+      ),
+    );
+    unawaited(_preparePendingSegmentedTimePreparedWindowCandidate(candidate));
+  }
+
+  void _supersedePendingSegmentedTimePreparedWindowCandidate({
+    required String reason,
+  }) {
+    final pending = _pendingSegmentedTimePreparedWindowCandidate;
+    if (pending == null) return;
+    _pendingSegmentedTimePreparedWindowCandidate = null;
+    if (pending.terminalOutcomeRecorded) return;
+    pending.terminalOutcomeRecorded = true;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'TIME_PREPARED_WINDOW_CANDIDATE_TERMINAL',
+        queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+        direction: pending.candidate.parentQueryScope.direction.name,
+        coreRevision: pending.baseIndex.coreRevision,
+        scope:
+            'source=${pending.source} '
+            'component=${pending.component?.name ?? 'level'} '
+            'flightGeneration=${pending.flightGeneration} '
+            'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+            'localGeneration=${pending.interactionOrder.localGeneration} '
+            'terminalOutcome=$reason',
+      ),
+    );
+  }
+
+  bool _isPendingSegmentedTimePreparedWindowCandidateCurrent(
+    _PendingSegmentedTimePreparedWindowCandidate pending,
+  ) =>
+      !_disposed &&
+      identical(_pendingSegmentedTimePreparedWindowCandidate, pending) &&
+      pending.flightGeneration == _segmentedTimeFlightGeneration &&
+      _foregroundDirectProducer !=
+          _DashboardForegroundDirectProducer.budgetAvatar &&
+      _samePreparedInteractionIndex(
+        _interactionPreparedIndex,
+        pending.baseIndex,
+      ) &&
+      currentQuery.scopeFor(pending.baseScope.direction) == pending.baseScope &&
+      navigation.state.navigationEpoch == pending.navigationEpoch &&
+      _isSegmentedTimeInteractionOrderCurrent(pending.interactionOrder);
+
+  Future<_LiveInteractionRowResource?>
+  _preparePendingSegmentedTimePreparedWindowPhaseA(
+    _PendingSegmentedTimePreparedWindowCandidate pending,
+    PreparedDashboardIndex index,
+    DashboardPreparedRevisionBundle bundle,
+  ) async {
+    final window = bundle.railInteractionSceneWindow.withCoverage(
+      _coverageFor(pending.candidate, indexOverride: index),
+    );
+    if (window.previewRowCount > 8192) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PREPARED_WINDOW_PHASE_A_REJECTED',
+          queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+          direction: pending.candidate.parentQueryScope.direction.name,
+          coreRevision: index.coreRevision,
+          entryCount: window.previewRowCount,
+          scope: 'reason=boundedRowCapacity maxRows=8192',
+        ),
+      );
+      return null;
+    }
+    final resourceKey = _timePreviewLiveResourceKeyFor(
+      index,
+      pending.baseScope,
+      pending.candidate,
+    );
+    final prepare = _liveInteractionResourceWindowPreparer;
+    if (prepare != null &&
+        !_hasTimePreviewLiveResource(window, resourceKey: resourceKey)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'LIVE_RESOURCE_LEASE_REQUESTED',
+          queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+          direction: pending.candidate.parentQueryScope.direction.name,
+          coreRevision: index.coreRevision,
+          entryCount: window.previewRowCount,
+          scope:
+              'producer=summaryTime lane=timePreview '
+              'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+              'localGeneration=${pending.interactionOrder.localGeneration} '
+              'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)} '
+              'reason=preparedWindowRebase',
+        ),
+      );
+      await prepare(
+        window,
+        lane: DashboardLiveInteractionResourceLane.timePreview,
+        retainedKey: resourceKey,
+        retainViewportId: visibleFrames.value?.logBox.viewportId,
+      );
+    }
+    if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
+      return null;
+    }
+    if (prepare != null &&
+        !_hasTimePreviewLiveResource(window, resourceKey: resourceKey)) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PREPARED_WINDOW_PHASE_A_REJECTED',
+          queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+          direction: pending.candidate.parentQueryScope.direction.name,
+          coreRevision: index.coreRevision,
+          entryCount: window.previewRowCount,
+          scope: 'reason=resourceRetentionUnavailable',
+        ),
+      );
+      return null;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LIVE_RESOURCE_LEASE_READY',
+        queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+        direction: pending.candidate.parentQueryScope.direction.name,
+        coreRevision: index.coreRevision,
+        entryCount: window.previewRowCount,
+        scope:
+            'producer=summaryTime lane=timePreview '
+            'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+            'localGeneration=${pending.interactionOrder.localGeneration} '
+            'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)}',
+      ),
+    );
+    return _LiveInteractionRowResource(
+      resourceKey: resourceKey,
+      window: window,
+      entryCount: window.previewRowCount,
+    );
+  }
+
+  Future<void> _preparePendingSegmentedTimePreparedWindowCandidate(
+    _PendingSegmentedTimePreparedWindowCandidate pending,
+  ) async {
+    try {
+      final index = await dataRuntime.prepareQuery(pending.requestTemplate);
+      if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'staleRejected',
+        );
+        return;
+      }
+      final queryKey = _segmentedTargetQueryKey(pending.candidate);
+      try {
+        // The next immutable index is built off the direct-motion callback,
+        // so its compact deterministic target may be materialized here before
+        // it becomes any visible authority. This is intentionally outside the
+        // semantic tick and does not perform scene preparation or text work.
+        index.materializeFrameForPreparation(queryKey);
+      } on StateError {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'TIME_PREPARED_WINDOW_REBASE_REJECTED',
+            queryKey: queryKey.value,
+            direction: pending.candidate.parentQueryScope.direction.name,
+            coreRevision: index.coreRevision,
+            scope:
+                'reason=targetFrameUnavailableAfterRebase '
+                'window=${DashboardPreparedYearWindow.fromIndex(index).cacheIdentity}',
+          ),
+        );
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'staleRejected',
+        );
+        return;
+      }
+      final budgetLimitSnapshot = await dataRuntime
+          .prepareBudgetLimitSnapshotFor(index);
+      if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'staleRejected',
+        );
+        return;
+      }
+      final partnerDistributionSnapshot = await dataRuntime
+          .prepareBudgetPartnerDistributionSnapshotFor(index);
+      if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'staleRejected',
+        );
+        return;
+      }
+      final bundle = _preparedRevisionBundleFor(
+        index,
+        publicationState: pending.candidate,
+        budgetLimitSnapshot: budgetLimitSnapshot,
+        partnerDistributionSnapshot: partnerDistributionSnapshot,
+      );
+      final resource = await _preparePendingSegmentedTimePreparedWindowPhaseA(
+        pending,
+        index,
+        bundle,
+      );
+      if (resource == null) {
+        if (_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
+          _supersedePendingSegmentedTimePreparedWindowCandidate(
+            reason: 'staleRejected',
+          );
+        }
+        return;
+      }
+      if (!_isPendingSegmentedTimePreparedWindowCandidateCurrent(pending)) {
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'staleRejected',
+        );
+        return;
+      }
+      _timePreviewResourceBase = index;
+      _timePreviewResourceWindow = resource.window;
+      _timePreviewResourceKey = resource.resourceKey;
+      final outcome = _publishPreparedSegmentedTemporalTarget(
+        candidate: pending.candidate,
+        source: pending.source,
+        component: pending.component,
+        interactionOrder: pending.interactionOrder,
+        replayingPendingCandidate: true,
+        replacementIndex: index,
+        replacementBundle: bundle,
+        replacementRequestTemplate: pending.requestTemplate,
+      );
+      if (!identical(_pendingSegmentedTimePreparedWindowCandidate, pending)) {
+        return;
+      }
+      if (outcome != _PreparedSegmentedTemporalPublicationOutcome.published) {
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'staleRejected',
+        );
+        return;
+      }
+      if (pending.component != null) {
+        _recordPreparedSegmentedTemporalComponentPublication(
+          candidate: pending.candidate,
+          component: pending.component!,
+        );
+        final acceptance = _acceptPublishedSegmentedTemporalComponentTarget(
+          candidate: pending.candidate,
+          component: pending.component!,
+        );
+        if (!acceptance.isExactLivePublication) {
+          _supersedePendingSegmentedTimePreparedWindowCandidate(
+            reason: 'staleRejected',
+          );
+          return;
+        }
+      } else {
+        _recordNavigationSelection('summaryExperimentPreparedLevelCrossed');
+      }
+      _pendingSegmentedTimePreparedWindowCandidate = null;
+      pending.terminalOutcomeRecorded = true;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PREPARED_WINDOW_CANDIDATE_BOUND',
+          queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+          direction: pending.candidate.parentQueryScope.direction.name,
+          coreRevision: index.coreRevision,
+          scope:
+              'source=${pending.source} '
+              'component=${pending.component?.name ?? 'level'} '
+              'flightGeneration=${pending.flightGeneration} '
+              'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
+              'localGeneration=${pending.interactionOrder.localGeneration} '
+              'terminalOutcome=exactPreparedPaintedOrAwaitingPaint',
+        ),
+      );
+      if (pending.settleRequested) {
+        final accepted = _segmentedLatestAcceptedPaintTarget;
+        if (accepted != null &&
+            pending.component != null &&
+            accepted.component == pending.component &&
+            _sameTemporalTarget(accepted.candidate, pending.candidate)) {
+          _segmentedPendingSettleTarget = accepted;
+          _trySettleLatestAcceptedSegmentedTarget();
+        }
+      }
+    } on DashboardIndexPreparationDiscarded {
+      if (identical(_pendingSegmentedTimePreparedWindowCandidate, pending)) {
+        _supersedePendingSegmentedTimePreparedWindowCandidate(
+          reason: 'coalescedBeforeWindowReady',
+        );
+      }
+    } on Object catch (error, stackTrace) {
+      if (!identical(_pendingSegmentedTimePreparedWindowCandidate, pending)) {
+        return;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PREPARED_WINDOW_REBASE_FAILED',
+          queryKey: _segmentedTargetQueryKey(pending.candidate).value,
+          direction: pending.candidate.parentQueryScope.direction.name,
+          coreRevision: pending.baseIndex.coreRevision,
+          scope:
+              'errorType=${error.runtimeType} '
+              'errorDigest=${FluviDiagnosticKeyDigest.of(error.toString())} '
+              'stackFingerprint=${FluviDiagnosticKeyDigest.of(stackTrace.toString())}',
+        ),
+      );
+      _supersedePendingSegmentedTimePreparedWindowCandidate(
+        reason: 'staleRejected',
+      );
+    }
   }
 
   void _deferPendingSegmentedTimePhaseACandidate(
@@ -6562,9 +7050,19 @@ final class DashboardCoreController {
     DashboardTemporalAnchorComponent? component,
     DashboardInteractionPreviewOrder? interactionOrder,
     bool replayingPendingCandidate = false,
+    PreparedDashboardIndex? replacementIndex,
+    DashboardPreparedRevisionBundle? replacementBundle,
+    DashboardIndexRequestTemplate? replacementRequestTemplate,
   }) {
     _supersedeAcceptedQueryApplyForDashboardNavigation();
-    final index = _interactionPreparedIndex;
+    if ((replacementIndex == null) != (replacementBundle == null) ||
+        (replacementIndex == null) != (replacementRequestTemplate == null)) {
+      throw ArgumentError(
+        'A direct Time window replacement requires its exact index, bundle '
+        'and request template together.',
+      );
+    }
+    final index = replacementIndex ?? _interactionPreparedIndex;
     if (index == null ||
         index.coreRevision != candidate.temporalAnchor.revision) {
       FluviDiagnosticLogger.log(
@@ -6579,31 +7077,12 @@ final class DashboardCoreController {
       );
       return _PreparedSegmentedTemporalPublicationOutcome.rejected;
     }
-    // Preserve the existing bounded prepared-frame materialization boundary.
-    // A compact deterministic zero frame is eligible only after this prepared
-    // scene-window owner has materialized it; this performs no query, index,
-    // rich-scene or TextPainter work at the semantic tick.
-    final requiredWindow = source == 'level'
-        ? structuralPublicationSceneWindowFor(candidate)
-        : railInteractionSceneWindowFor(candidate);
     final queryKey = _segmentedTargetQueryKey(candidate);
-    final DashboardLogViewportState payload;
-    try {
-      payload = index.frameForKey(queryKey).logBox;
-    } on StateError {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'TIME_PHASE_A_PREPARED_REJECTED',
-          queryKey: queryKey.value,
-          coreRevision: index.coreRevision,
-          scope: 'reason=preparedFrameUnavailable',
-        ),
-      );
-      return _PreparedSegmentedTemporalPublicationOutcome.rejected;
-    }
-    // The physical semantic crossing, not an eventual resource callback,
-    // owns interaction order. A cold candidate retains this one order until
-    // cache completion either binds it or a newer intent supersedes it.
+    // The physical semantic crossing, not an eventual frame/resource
+    // completion, owns interaction order.  This deliberately precedes the
+    // prepared-frame check: an out-of-window target must retain its original
+    // direct Time identity while the existing runtime builds its bounded
+    // replacement window.
     final issuedInteractionOrder =
         interactionOrder ??
         presentation.claimPreparedExperimentalTemporalForegroundIntent();
@@ -6622,6 +7101,87 @@ final class DashboardCoreController {
       );
       return _PreparedSegmentedTemporalPublicationOutcome.rejected;
     }
+    final preparedYearWindow = DashboardPreparedYearWindow.fromIndex(index);
+    final targetIsOutsidePreparedWindow =
+        candidate.yearCursor < preparedYearWindow.start ||
+        candidate.yearCursor > preparedYearWindow.endInclusive;
+    if (targetIsOutsidePreparedWindow) {
+      if (replacementIndex != null) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'TIME_PREPARED_WINDOW_REBASE_REJECTED',
+            queryKey: queryKey.value,
+            coreRevision: index.coreRevision,
+            scope: 'reason=targetOutsideReplacementWindow',
+          ),
+        );
+        return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PREPARED_WINDOW_REBASE_REQUIRED',
+          queryKey: queryKey.value,
+          coreRevision: index.coreRevision,
+          scope:
+              'reason=preparedFrameUnavailable '
+              'source=$source '
+              'component=${component?.name ?? 'level'} '
+              'interactionEpoch=${issuedInteractionOrder.interactionEpoch} '
+              'localGeneration=${issuedInteractionOrder.localGeneration}',
+        ),
+      );
+      _deferPendingSegmentedTimePreparedWindowCandidate(
+        _PendingSegmentedTimePreparedWindowCandidate(
+          flightGeneration: _segmentedTimeFlightGeneration,
+          candidate: candidate,
+          component: component,
+          source: source,
+          baseIndex: index,
+          baseScope: currentQuery.scopeFor(
+            candidate.parentQueryScope.direction,
+          ),
+          navigationEpoch: navigation.state.navigationEpoch,
+          interactionOrder: issuedInteractionOrder,
+          requestTemplate: _timePreparedWindowTemplateFor(candidate, index),
+        ),
+      );
+      return _PreparedSegmentedTemporalPublicationOutcome
+          .deferredForPainterResource;
+    }
+    // A frame inside the installed physical year window can still be a lazy,
+    // compact deterministic target. Preserve the existing scene-window
+    // materialization boundary for that normal path. Only the physical window
+    // test above may initiate a new index transaction; otherwise in-window
+    // zero/compact frames would be misclassified as a costly rebase.
+    final requiredWindow = source == 'level'
+        ? structuralPublicationSceneWindowFor(candidate, indexOverride: index)
+        : railInteractionSceneWindowFor(candidate, indexOverride: index);
+    final DashboardLogViewportState payload;
+    try {
+      payload = index.frameForKey(queryKey).logBox;
+    } on StateError {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: replacementIndex == null
+              ? 'TIME_PHASE_A_PREPARED_REJECTED'
+              : 'TIME_PREPARED_WINDOW_REBASE_REJECTED',
+          queryKey: queryKey.value,
+          coreRevision: index.coreRevision,
+          scope: replacementIndex == null
+              ? 'reason=preparedFrameUnavailableWithinWindow'
+              : 'reason=targetFrameUnavailableAfterRebase',
+        ),
+      );
+      return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+    }
+    if (!replayingPendingCandidate && replacementIndex == null) {
+      // A newer exact in-window crossing is still newer user intent than an
+      // older missing-frame rebase. The older asynchronous window may finish,
+      // but it can no longer publish over this candidate.
+      _supersedePendingSegmentedTimePreparedWindowCandidate(
+        reason: 'coalescedBeforeWindowReady',
+      );
+    }
     if (!_bindSegmentedTimeLivePhaseA(
       baseIndex: index,
       candidate: candidate,
@@ -6629,6 +7189,17 @@ final class DashboardCoreController {
       interactionOrder: issuedInteractionOrder,
       source: source,
     )) {
+      if (replacementIndex != null) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'TIME_PREPARED_WINDOW_PHASE_A_REJECTED',
+            queryKey: queryKey.value,
+            coreRevision: index.coreRevision,
+            scope: 'reason=exactBinderRejectedAfterReadyRebase',
+          ),
+        );
+        return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+      }
       if (!replayingPendingCandidate) {
         _deferPendingSegmentedTimePhaseACandidate(
           _PendingSegmentedTimePhaseACandidate(
@@ -6694,9 +7265,43 @@ final class DashboardCoreController {
     if (!presentation.publishPreparedExperimentalTemporalCandidate(
       candidate,
       deferCanonicalCommit: source != 'level',
+      commitNavigationWithPreview: replacementIndex != null,
       interactionOrder: issuedInteractionOrder,
+      replacementIndex: replacementIndex,
     )) {
       return _PreparedSegmentedTemporalPublicationOutcome.rejected;
+    }
+    if (replacementIndex != null) {
+      final bundle = replacementBundle!;
+      _activePreparedRevisionBundle = bundle;
+      _activeRailCriticalBankIdentity = bundle.railCriticalSceneBankIdentity;
+      dataRuntime.commitPreparedQuery(
+        replacementIndex,
+        replacementRequestTemplate!,
+      );
+      // A focus base is index-local even when the Core revision does not
+      // change.  Keep the user's facet state, but force the next Avatar
+      // derivation to start from the exact rebased temporal index instead of
+      // accepting a category against the retired year-window.
+      _focusBaseIndex = null;
+      _provisionalFocusBaseIndex = null;
+      _provisionalFocusBaseScope = null;
+      _clearBudgetAvatarFocusHotset();
+      _discardRetainedFocusBaseScene();
+      _discardRetainedFocusBasePaging();
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'TIME_PREPARED_WINDOW_REBASED',
+          queryKey: queryKey.value,
+          direction: candidate.parentQueryScope.direction.name,
+          coreRevision: replacementIndex.coreRevision,
+          scope:
+              'window=${DashboardPreparedYearWindow.fromIndex(replacementIndex).cacheIdentity} '
+              'interactionEpoch=${issuedInteractionOrder.interactionEpoch} '
+              'localGeneration=${issuedInteractionOrder.localGeneration} '
+              'atomicPublication=true',
+        ),
+      );
     }
     final queued = presentation.queuedPreparedExperimentalTemporalFrame;
     final expectedQueryKey = _segmentedTargetQueryKey(candidate);
@@ -6932,6 +7537,32 @@ final class DashboardCoreController {
                 'generation=${pending.flightGeneration} '
                 'interactionEpoch=${pending.interactionOrder.interactionEpoch} '
                 'resourceLane=timePreview',
+          ),
+        );
+        return;
+      }
+      final pendingWindow = _pendingSegmentedTimePreparedWindowCandidate;
+      if (pendingWindow != null &&
+          _isPendingSegmentedTimePreparedWindowCandidateCurrent(
+            pendingWindow,
+          ) &&
+          pendingWindow.component == component &&
+          _sameTemporalTarget(pendingWindow.candidate, candidate)) {
+        // The physical rail may settle while its latest target is still
+        // building a bounded next prepared window. That release is only a
+        // deferred request for the eventual exact painted target; it may not
+        // commit the old window or turn settle into the first visible update.
+        pendingWindow.settleRequested = true;
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'SUMMARY_SETTLE_AWAITING_PREPARED_WINDOW',
+            queryKey: _segmentedTargetQueryKey(candidate).value,
+            coreRevision: pendingWindow.baseIndex.coreRevision,
+            scope:
+                'component=${component.name} '
+                'generation=${pendingWindow.flightGeneration} '
+                'interactionEpoch=${pendingWindow.interactionOrder.interactionEpoch} '
+                'window=${pendingWindow.requestTemplate.preparedYearWindow.cacheIdentity}',
           ),
         );
         return;
@@ -7195,46 +7826,6 @@ final class DashboardCoreController {
       left.temporalAnchor.visibleYear == right.temporalAnchor.visibleYear &&
       left.temporalAnchor.visibleMonth == right.temporalAnchor.visibleMonth &&
       left.temporalAnchor.visibleDay == right.temporalAnchor.visibleDay;
-
-  void _navigateExperimentalTemporalCandidate(
-    DashboardNavigationState candidate, {
-    required String reason,
-  }) {
-    final state = navigation.state;
-    if (_sameTemporalTarget(candidate, state)) {
-      return;
-    }
-    _supersedeAcceptedQueryApplyForDashboardNavigation();
-    _acceptLiveInteraction(
-      source: DashboardLiveInteractionSource.temporalSelector,
-      temporalCandidate: candidate,
-    );
-    // This is the same parent-hotset activation used by Legacy sibling
-    // navigation. A prepared adjacent scene is made active before the
-    // canonical commit, so an experimental discrete crossing never waits for
-    // a second foreground scene preparation after its carousel has settled.
-    final interaction = railInteractionSceneWindowFor(candidate);
-    final retainedHit = _retainedSceneWindowLookup?.call(interaction) ?? false;
-    if (retainedHit) {
-      _activateSceneWindow(interaction);
-    }
-    Future<void> commitCandidate() =>
-        _commitTimeNavigationWithBudgetDistributionReadiness(
-          candidate: candidate,
-          reason: reason,
-          settledQueryKey: candidate.isRailOpen
-              ? candidate.temporalAnchor.sourceChildQueryKey
-              : candidate.parentQueryKey,
-          requiredSceneWindow: candidate.isRailOpen || retainedHit
-              ? interaction
-              : null,
-          commit: () {
-            presentation.commitTemporalCandidate(candidate);
-            _recordNavigationSelection('summaryExperimentCrossed');
-          },
-        );
-    unawaited(commitCandidate());
-  }
 
   Future<void> _commitTimeNavigationWithBudgetDistributionReadiness({
     required DashboardNavigationState candidate,
@@ -7524,7 +8115,6 @@ final class DashboardCoreController {
     final publicationState = navigation.state;
     if (_requestedBudgetAvatarFocusTargets.isEmpty) return;
     budgetAvatarLiveRootReady.value = false;
-    _requestBudgetAvatarLiveRowResources(baseIndex, baseScope);
 
     final plans = <_BudgetAvatarFocusHotsetPlan>[];
     final requiredKeys = <String>[];
@@ -7578,6 +8168,7 @@ final class DashboardCoreController {
     }
     _budgetAvatarRequiredHotsetKeys = List<String>.unmodifiable(requiredKeys);
     if (plans.isEmpty) {
+      _requestBudgetAvatarLiveRowResources(baseIndex, baseScope);
       _refreshBudgetAvatarLiveRootReadiness();
       return;
     }
@@ -7601,6 +8192,12 @@ final class DashboardCoreController {
     } else {
       _drainBudgetAvatarFocusHotset();
     }
+    // The initial hotset drains synchronously. Start its cache preparation
+    // only after every exact local root is available, so the first Avatar
+    // gesture cannot be gated by the broad base-membership row universe.
+    if (_pendingBudgetAvatarFocusPlans.isEmpty) {
+      _requestBudgetAvatarLiveRowResources(baseIndex, baseScope);
+    }
   }
 
   /// Owns one cancellable maintenance attempt for the fixed Avatar resource
@@ -7620,22 +8217,26 @@ final class DashboardCoreController {
         _DashboardForegroundDirectProducer.summaryTime) {
       return;
     }
+    final resourceKey = _budgetAvatarLiveResourceKeyFor(base, baseScope);
     final inFlight = _budgetAvatarLiveResourceInFlightGeneration;
     if (inFlight != null &&
         identical(_budgetAvatarLiveResourcePreparingBase, base) &&
-        _budgetAvatarLiveResourcePreparingScope == baseScope) {
+        _budgetAvatarLiveResourcePreparingScope == baseScope &&
+        _budgetAvatarLiveResourcePreparingKey == resourceKey) {
       return;
     }
     final generation = ++_budgetAvatarLiveResourcePrimeGeneration;
     _budgetAvatarLiveResourceInFlightGeneration = generation;
     _budgetAvatarLiveResourcePreparingBase = base;
     _budgetAvatarLiveResourcePreparingScope = baseScope;
+    _budgetAvatarLiveResourcePreparingKey = resourceKey;
     unawaited(
       _primeBudgetAvatarLiveRowResources(base, baseScope).whenComplete(() {
         if (_budgetAvatarLiveResourceInFlightGeneration != generation) return;
         _budgetAvatarLiveResourceInFlightGeneration = null;
         _budgetAvatarLiveResourcePreparingBase = null;
         _budgetAvatarLiveResourcePreparingScope = null;
+        _budgetAvatarLiveResourcePreparingKey = null;
       }),
     );
   }
@@ -7650,6 +8251,23 @@ final class DashboardCoreController {
     }
     if (_liveInteractionResourceWindowPreparer == null) return true;
     final resourceKey = _budgetAvatarLiveResourceKeyFor(base, baseScope);
+    final exactLocalWindow = _budgetAvatarExactLocalResourceWindowFor(
+      base: base,
+      baseScope: baseScope,
+      resourceKey: resourceKey,
+    );
+    if (exactLocalWindow == null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|LIVE_ROOT_RESOURCE_DEFERRED',
+          queryKey: baseScope.key.value,
+          direction: baseScope.direction.name,
+          coreRevision: base.coreRevision,
+          scope: 'reason=exactLocalHotsetUnavailable inputGateHeld=false',
+        ),
+      );
+      return false;
+    }
     final identityChanged =
         _budgetAvatarLiveResourceKey != resourceKey ||
         !identical(_budgetAvatarLiveResourceBase, base);
@@ -7665,11 +8283,29 @@ final class DashboardCoreController {
         lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
         resourceKey: resourceKey,
         diagnosticPrefix: 'AV',
+        exactLocalWindow: exactLocalWindow,
         isStillCurrent: () =>
             _foregroundDirectProducer !=
                 _DashboardForegroundDirectProducer.summaryTime &&
             identical(_focusBaseIndex ?? dataRuntime.currentIndex, base) &&
-            currentQuery.scopeFor(baseScope.direction) == baseScope,
+            currentQuery.scopeFor(baseScope.direction) == baseScope &&
+            _budgetAvatarLiveResourceKeyFor(base, baseScope) == resourceKey,
+        staleReason: () {
+          if (_foregroundDirectProducer ==
+              _DashboardForegroundDirectProducer.summaryTime) {
+            return 'summaryTimeForeground';
+          }
+          if (!identical(_focusBaseIndex ?? dataRuntime.currentIndex, base)) {
+            return 'baseChanged';
+          }
+          if (currentQuery.scopeFor(baseScope.direction) != baseScope) {
+            return 'baseScopeChanged';
+          }
+          if (_budgetAvatarLiveResourceKeyFor(base, baseScope) != resourceKey) {
+            return 'hotsetChanged';
+          }
+          return 'stale';
+        },
       );
     } on DashboardLogBoxScenePreparationCancelled {
       FluviDiagnosticLogger.log(
@@ -7711,7 +8347,9 @@ final class DashboardCoreController {
         direction: baseScope.direction.name,
         coreRevision: base.coreRevision,
         entryCount: resource.entryCount,
-        scope: 'maxRows=8192 bounded=true textPaintersReady=true',
+        scope:
+            'resourceMode=exactLocalHotset payloadCount=${resource.window.sceneCount} '
+            'maxRows=8192 bounded=true textPaintersReady=true',
       ),
     );
     // This is the existing cache-completion boundary.  A cold semantic
@@ -7725,9 +8363,50 @@ final class DashboardCoreController {
   String _budgetAvatarLiveResourceKeyFor(
     PreparedDashboardIndex base,
     CurrentLedgerQueryScope baseScope,
-  ) =>
-      'avatar-live-root:rev:${base.coreRevision}|index:${base.generation}|'
-      'base:${baseScope.key.value}';
+  ) {
+    final targetKeys = _budgetAvatarRequiredHotsetKeys.toList()..sort();
+    return 'avatar-live-root:rev:${base.coreRevision}|index:${base.generation}|'
+        'base:${baseScope.key.value}|targets:${targetKeys.join(',')}';
+  }
+
+  /// Builds the exact current/nearby Avatar Phase-A payload set from the
+  /// already-derived hotset. The source membership seed deliberately stays
+  /// out of this normal path: it can be much larger than the visible local
+  /// rail horizon and belongs only to the immutable focus derivation owner.
+  DashboardLogBoxSceneWindow? _budgetAvatarExactLocalResourceWindowFor({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope baseScope,
+    required String resourceKey,
+  }) {
+    if (_pendingBudgetAvatarFocusPlans.isNotEmpty ||
+        _budgetAvatarRequiredHotsetKeys.isEmpty) {
+      return null;
+    }
+    final payloads = <String, DashboardLogViewportState>{};
+    try {
+      final baseCurrentScope = baseScope.copyWith(
+        timeScope: navigation.state.effectiveScope,
+      );
+      final aggregatePayload = base.frameFor(baseCurrentScope).logBox;
+      payloads[aggregatePayload.queryKey.value] = aggregatePayload;
+      for (final key in _budgetAvatarRequiredHotsetKeys) {
+        final entry = _budgetAvatarFocusHotset[key];
+        if (entry == null) return null;
+        final payload = entry.resourcePayload;
+        payloads[payload.queryKey.value] = payload;
+      }
+    } on StateError {
+      // A newer Time/window authority can retire the old base between the
+      // synchronous hotset derivation and this cache request. Let the
+      // existing latest-wins candidate path retry from its new exact base;
+      // never substitute the full source membership or a mixed scope.
+      return null;
+    }
+    return DashboardLogBoxSceneWindow(
+      identity: resourceKey,
+      payloads: payloads.values.toList(growable: false),
+    );
+  }
 
   void _scheduleBudgetAvatarLiveResourceRetry() {
     if (_disposed || _budgetAvatarLiveResourceRetryScheduled) return;
@@ -7911,7 +8590,7 @@ final class DashboardCoreController {
     bool publishDuringMotion = false,
     int? targetHandle,
     VoidCallback? onVisibleSemanticCommit,
-  }) {
+  }) async {
     // Model-only and legacy production-parent callers may reach this exact
     // prepared Avatar publication seam without a mounted physical rail. Only
     // an affirmative newer Time foreground claim is stale evidence; `null`
@@ -7921,18 +8600,28 @@ final class DashboardCoreController {
             _DashboardForegroundDirectProducer.summaryTime) {
       return Future<bool>.value(false);
     }
-    return _requestEphemeralFocus(
-      category: facet,
-      source: DashboardLiveInteractionSource.budgetAvatar,
-      budgetTargetHandle: targetHandle,
-      // A discrete avatar crossing is a foreground presentation target, not a
-      // settle-only bookkeeping event.  It may start the bounded scene install
-      // during the physical fling; normal programmatic/settled focus keeps the
-      // established coalesced policy.
-      deferSceneInstallation: !publishDuringMotion,
-      publishDuringMotion: publishDuringMotion,
-      onVisibleSemanticCommit: onVisibleSemanticCommit,
-    );
+    try {
+      return await _requestEphemeralFocus(
+        category: facet,
+        source: DashboardLiveInteractionSource.budgetAvatar,
+        budgetTargetHandle: targetHandle,
+        // A discrete avatar crossing is a foreground presentation target, not
+        // a settle-only bookkeeping event. It may start the bounded scene
+        // install during the physical fling; normal programmatic/settled focus
+        // keeps the established coalesced policy.
+        deferSceneInstallation: !publishDuringMotion,
+        publishDuringMotion: publishDuringMotion,
+        onVisibleSemanticCommit: onVisibleSemanticCommit,
+      );
+    } on Object catch (error, stackTrace) {
+      _recordBudgetAvatarAdmissionException(
+        boundary: 'requestBudgetCategoryFocus',
+        targetHandle: targetHandle,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
   }
 
   /// Requests a transient partner narrowing after the viewport-owned swipe
@@ -7949,19 +8638,72 @@ final class DashboardCoreController {
     int? targetHandle,
     bool publishDuringMotion = false,
     VoidCallback? onVisibleSemanticCommit,
-  }) {
+  }) async {
     if (publishDuringMotion &&
         _foregroundDirectProducer ==
             _DashboardForegroundDirectProducer.summaryTime) {
       return Future<bool>.value(false);
     }
-    return _requestEphemeralFocus(
-      clearCategory: true,
-      source: DashboardLiveInteractionSource.budgetAvatar,
-      budgetTargetHandle: targetHandle,
-      deferSceneInstallation: !publishDuringMotion,
-      publishDuringMotion: publishDuringMotion,
-      onVisibleSemanticCommit: onVisibleSemanticCommit,
+    try {
+      return await _requestEphemeralFocus(
+        clearCategory: true,
+        source: DashboardLiveInteractionSource.budgetAvatar,
+        budgetTargetHandle: targetHandle,
+        deferSceneInstallation: !publishDuringMotion,
+        publishDuringMotion: publishDuringMotion,
+        onVisibleSemanticCommit: onVisibleSemanticCommit,
+      );
+    } on Object catch (error, stackTrace) {
+      _recordBudgetAvatarAdmissionException(
+        boundary: 'clearBudgetCategoryFocus',
+        targetHandle: targetHandle,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  /// Emits the bounded production-facing evidence required when an Avatar
+  /// Phase-A admission fails before the physical rail can safely reject that
+  /// one target. The error is rethrown to the rail; this method never turns an
+  /// invariant failure into a successful publication.
+  void _recordBudgetAvatarAdmissionException({
+    required String boundary,
+    required int? targetHandle,
+    required Object error,
+    required StackTrace stackTrace,
+  }) {
+    final baseIndex = _focusBaseIndex ?? dataRuntime.currentIndex;
+    final state = navigation.state;
+    final visible = visibleFrames.value;
+    final interactionOrder = visibleFrames.interactionPreviewOrder;
+    final baseWindow = baseIndex == null
+        ? 'none'
+        : DashboardPreparedYearWindow.fromIndex(baseIndex).cacheIdentity;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AVATAR_PHASE_A_ADMISSION_EXCEPTION_CORE',
+        queryKey: visible?.queryKey.value ?? state.parentQueryKey.value,
+        direction: state.parentQueryScope.direction.name,
+        coreRevision: baseIndex?.coreRevision,
+        scope:
+            'boundary=$boundary '
+            'errorType=${error.runtimeType} '
+            'errorDigest=${FluviDiagnosticKeyDigest.of(error.toString())} '
+            'stackFingerprint=${FluviDiagnosticKeyDigest.of(stackTrace.toString())} '
+            'targetHandle=${targetHandle ?? '-'} '
+            'baseWindow=$baseWindow '
+            'baseIndexGeneration=${baseIndex?.generation ?? -1} '
+            'temporalScopeDigest=${FluviDiagnosticKeyDigest.of(state.effectiveScope.toString())} '
+            'navigationScopeDigest=${FluviDiagnosticKeyDigest.of(state.parentQueryScope.toString())} '
+            'visibleQueryDigest=${visible == null ? 'none' : FluviDiagnosticKeyDigest.of(visible.queryKey.value)} '
+            'visibleScopeDigest=${visible == null ? 'none' : FluviDiagnosticKeyDigest.of(visible.scope.toString())} '
+            'interactionProducer=${interactionOrder?.producer.name ?? 'none'} '
+            'interactionEpoch=${interactionOrder?.interactionEpoch ?? 0} '
+            'localGeneration=${interactionOrder?.localGeneration ?? 0} '
+            'foregroundProducer=${_foregroundDirectProducer?.name ?? 'none'}',
+      ),
     );
   }
 
@@ -8094,9 +8836,18 @@ final class DashboardCoreController {
         !identical(_focusBaseIndex ?? dataRuntime.currentIndex, plan.base)) {
       return;
     }
+    final resourceScope = plan.effectiveQueries
+        .scopeFor(plan.direction)
+        .copyWith(
+          timeScope:
+              plan.initialSelectedChildScope?.timeScope ??
+              plan.initialParentScope.timeScope,
+        );
+    final resourcePayload = derivation.index.frameFor(resourceScope).logBox;
     _budgetAvatarFocusHotset[plan.key] = _BudgetAvatarFocusHotsetEntry(
       key: plan.key,
       derivation: derivation,
+      resourcePayload: resourcePayload,
     );
     while (_budgetAvatarFocusHotset.length > _budgetAvatarFocusHotsetCapacity) {
       _budgetAvatarFocusHotset.remove(_budgetAvatarFocusHotset.keys.first);
@@ -8114,6 +8865,9 @@ final class DashboardCoreController {
             'uiIsolateMicros=${derivation.currentRootProjectionMicros}',
       ),
     );
+    if (_pendingBudgetAvatarFocusPlans.isEmpty) {
+      _requestBudgetAvatarLiveRowResources(plan.base, plan.baseScope);
+    }
     _refreshBudgetAvatarLiveRootReadiness();
     _drainBudgetAvatarFocusHotset();
   }
@@ -8125,6 +8879,7 @@ final class DashboardCoreController {
     _budgetAvatarLiveResourceInFlightGeneration = null;
     _budgetAvatarLiveResourcePreparingBase = null;
     _budgetAvatarLiveResourcePreparingScope = null;
+    _budgetAvatarLiveResourcePreparingKey = null;
     _pendingBudgetAvatarFocusPlans = const <_BudgetAvatarFocusHotsetPlan>[];
     _budgetAvatarRequiredHotsetKeys = const <String>[];
     _budgetAvatarFocusHotset.clear();

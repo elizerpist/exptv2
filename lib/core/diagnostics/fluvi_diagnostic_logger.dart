@@ -78,6 +78,7 @@ final class _FluviDiagnosticRingBuffer<T> {
 /// The single debug-only sink used by the on-screen diagnostic projection.
 abstract final class FluviDiagnosticLogger {
   static const maxEntries = 1000;
+  static const _exceptionalDirectManipulationOutcomeCapacity = 12;
   // Capture/export is another on-screen diagnostic projection. Keeping this
   // at the same boundary prevents a hidden second history from exposing a
   // different retention contract than the panel and its Copy action.
@@ -89,6 +90,18 @@ abstract final class FluviDiagnosticLogger {
       _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(maxEntries);
   static final _FluviDiagnosticRingBuffer<FluviDiagnosticEvent> _capture =
       _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(captureMaxEntries);
+  // These are intentionally summaries and exceptional terminal outcomes, not
+  // a second event history. A USER_MARK commonly happens after a flight has
+  // already scrolled out of the live tail, so keep just enough evidence to
+  // attribute that marker to the last direct-manipulation result.
+  static FluviDiagnosticEvent? _lastAvatarFlight;
+  static FluviDiagnosticEvent? _lastTimeFlight;
+  static FluviDiagnosticEvent? _lastAvatarFirstTargetPipeline;
+  static final _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>
+  _exceptionalDirectManipulationOutcomes =
+      _FluviDiagnosticRingBuffer<FluviDiagnosticEvent>(
+        _exceptionalDirectManipulationOutcomeCapacity,
+      );
   // Header backend binding happens while the surface is created, whereas a
   // human commonly starts the on-screen capture later. Retain only these
   // low-frequency physical-renderer facts so a new capture can prove the
@@ -108,6 +121,8 @@ abstract final class FluviDiagnosticLogger {
   static var _captureId = 0;
   static var _captureActive = false;
   static var _captureFrozen = false;
+  static var _liveEvictedEntryCount = 0;
+  static var _structuralDiagnosticCoalescedEntryCount = 0;
   static DateTime? _captureStartedAt;
   static DateTime? _captureStoppedAt;
 
@@ -124,7 +139,14 @@ abstract final class FluviDiagnosticLogger {
         !(stamped.scope?.contains('captureReplay=true') ?? false)) {
       _headerRendererEvidence[stamped.stage] = stamped;
     }
-    _append(_entries, stamped);
+    _retainDirectManipulationEvidence(stamped);
+    final liveTailWasFull = _entries.length == _entries.capacity;
+    final liveEntryCoalesced = _append(_entries, stamped);
+    if (liveEntryCoalesced && _isStructuralDiagnostic(stamped)) {
+      _structuralDiagnosticCoalescedEntryCount += 1;
+    } else if (!liveEntryCoalesced && liveTailWasFull) {
+      _liveEvictedEntryCount += 1;
+    }
     _emitBoundedStartupSceneTrace(stamped);
     if (_captureActive && !_captureFrozen) {
       _append(_capture, stamped.withCaptureId(_captureId));
@@ -187,7 +209,10 @@ abstract final class FluviDiagnosticLogger {
   static void clear() {
     _entries.clear();
     _headerRendererEvidence.clear();
+    _clearRetainedDirectManipulationEvidence();
     _sessionEventCount = 0;
+    _liveEvictedEntryCount = 0;
+    _structuralDiagnosticCoalescedEntryCount = 0;
     _clearCapture(notify: false);
     _scheduleNotify();
   }
@@ -198,6 +223,9 @@ abstract final class FluviDiagnosticLogger {
   static void clearLive() {
     _entries.clear();
     _headerRendererEvidence.clear();
+    _clearRetainedDirectManipulationEvidence();
+    _liveEvictedEntryCount = 0;
+    _structuralDiagnosticCoalescedEntryCount = 0;
     _scheduleNotify();
   }
 
@@ -206,6 +234,9 @@ abstract final class FluviDiagnosticLogger {
   static int get retainedEntryCount => _entries.length;
   static int get sessionEventCount => _sessionEventCount;
   static int get uiPublicationCount => _uiPublicationCount;
+  static int get liveEvictedEntryCount => _liveEvictedEntryCount;
+  static int get structuralDiagnosticCoalescedEntryCount =>
+      _structuralDiagnosticCoalescedEntryCount;
   static String get sessionId => _sessionId;
 
   /// Indexed access lets the virtualized console build only visible rows.
@@ -369,6 +400,7 @@ abstract final class FluviDiagnosticLogger {
             .where((entry) => entry.value != null)
             .map((entry) => '${entry.key}=${entry.value}')
             .join(' ');
+    _mirrorRetainedDirectManipulationEvidenceAtUserMark();
     log(FluviDiagnosticEvent(stage: 'USER_MARK', scope: fields));
   }
 
@@ -407,6 +439,12 @@ abstract final class FluviDiagnosticLogger {
       'retainedCount=${events.length}',
       'firstRetainedSequence=${firstSequence ?? '-'}',
       'lastRetainedSequence=${lastSequence ?? '-'}',
+      'liveEvictedEntryCount=$_liveEvictedEntryCount',
+      'structuralDiagnosticCoalescedEntryCount=$_structuralDiagnosticCoalescedEntryCount',
+      'retainedAvatarFlight=${_lastAvatarFlight == null ? 0 : 1}',
+      'retainedTimeFlight=${_lastTimeFlight == null ? 0 : 1}',
+      'retainedAvatarFirstTargetPipeline=${_lastAvatarFirstTargetPipeline == null ? 0 : 1}',
+      'retainedExceptionalDirectManipulationOutcomes=${_exceptionalDirectManipulationOutcomes.length}',
     ].join(' ');
     if (events.isEmpty) return header;
     return '$header\n${events.map((event) => event.toLine()).join('\n')}';
@@ -414,28 +452,178 @@ abstract final class FluviDiagnosticLogger {
 
   static ValueNotifier<int> get notifier => _version;
 
-  static void _append(
+  /// Returns whether [event] was folded into the preceding retained entry.
+  static bool _append(
     _FluviDiagnosticRingBuffer<FluviDiagnosticEvent> buffer,
     FluviDiagnosticEvent event,
   ) {
     final previous = buffer.last;
-    if (previous != null && _sameRepeatedFailure(previous, event)) {
+    if (previous != null && _sameRepeatedDiagnostic(previous, event)) {
       buffer.replaceLast(previous.withRepeatCount(previous.repeatCount + 1));
-      return;
+      return true;
     }
     buffer.add(event);
+    return false;
   }
 
-  static bool _sameRepeatedFailure(
+  static bool _sameRepeatedDiagnostic(
     FluviDiagnosticEvent previous,
     FluviDiagnosticEvent next,
-  ) =>
-      previous.stage == next.stage &&
-      previous.queryKey == next.queryKey &&
-      previous.coreRevision == next.coreRevision &&
-      previous.error == next.error &&
-      previous.message == next.message &&
-      (next.stage == 'VERTICAL_CACHE_MISS' || next.stage == 'TEXT_LAYOUT_MISS');
+  ) {
+    if (previous.stage != next.stage ||
+        previous.queryKey != next.queryKey ||
+        previous.coreRevision != next.coreRevision ||
+        previous.error != next.error ||
+        previous.message != next.message) {
+      return false;
+    }
+    if (next.stage == 'VERTICAL_CACHE_MISS' ||
+        next.stage == 'TEXT_LAYOUT_MISS') {
+      return true;
+    }
+    if (!_isStructuralDiagnostic(next) || next.error != null) return false;
+    return _structuralDiagnosticSignature(previous) ==
+        _structuralDiagnosticSignature(next);
+  }
+
+  static bool _isStructuralDiagnostic(FluviDiagnosticEvent event) =>
+      switch (event.stage) {
+        'COLLAPSE|LAYER' || 'HOME|LAYER_STACK' || 'COLLAPSE|GEOMETRY' => true,
+        _ => false,
+      };
+
+  /// Coarse dimensions keep normal collapse movement from becoming a separate
+  /// log record every frame, while a material width/height change remains
+  /// observable. Position intentionally is not part of this signature: it is
+  /// expected to move during collapse and is still sampled at start/mid/end.
+  static String? _structuralDiagnosticSignature(FluviDiagnosticEvent event) {
+    final scope = event.scope;
+    if (scope == null) return null;
+    final fields = switch (event.stage) {
+      'COLLAPSE|LAYER' => <String>[
+        _scopeField(scope, 'candidate'),
+        _scopeField(scope, 'renderObject'),
+        _scopeField(scope, 'clip'),
+        _scopeField(scope, 'material'),
+        _scopeField(scope, 'zOrder'),
+        _scopeField(scope, 'progressBucket'),
+        _quantizedBounds(scope, 'globalBounds'),
+        _quantizedBounds(scope, 'paintBounds'),
+      ],
+      'HOME|LAYER_STACK' => <String>[
+        _scopeField(scope, 'mode'),
+        _scopeField(scope, 'collapseMilestone'),
+        _scopeField(scope, 'budgetLayout'),
+        _scopeField(scope, 'budgetOrder'),
+        _scopeField(scope, 'pagerMilestone'),
+        _scopeField(scope, 'physicalSurface'),
+        _quantizedBounds(scope, 'zone2'),
+        _quantizedBounds(scope, 'modeContent'),
+      ],
+      'COLLAPSE|GEOMETRY' => <String>[
+        _scopeField(scope, 'mode'),
+        _scopeField(scope, 'progressBucket'),
+        _scopeField(scope, 'surfaceOwner'),
+        _scopeField(scope, 'pageViewportClip'),
+        _quantizedBounds(scope, 'header'),
+        _quantizedBounds(scope, 'chart'),
+        _quantizedBounds(scope, 'modeContent'),
+      ],
+      _ => const <String>[],
+    };
+    if (fields.isEmpty) return null;
+    return <String>[
+      event.stage,
+      event.queryKey ?? '-',
+      '${event.coreRevision ?? '-'}',
+      ...fields,
+    ].join('|');
+  }
+
+  static String _scopeField(String scope, String key) {
+    final match = RegExp(
+      '(?:^|\\s)${RegExp.escape(key)}=([^\\s]+)',
+    ).firstMatch(scope);
+    return '$key=${match?.group(1) ?? '-'}';
+  }
+
+  static String _quantizedBounds(String scope, String key) {
+    final match = RegExp(
+      '${RegExp.escape(key)}=[^\\s]+\\s+([+-]?[0-9.]+)x([+-]?[0-9.]+)',
+    ).firstMatch(scope);
+    final width = double.tryParse(match?.group(1) ?? '');
+    final height = double.tryParse(match?.group(2) ?? '');
+    if (width == null || height == null) return '$key=-';
+    return '$key=${(width / 8).round()}x${(height / 8).round()}';
+  }
+
+  static void _retainDirectManipulationEvidence(FluviDiagnosticEvent event) {
+    switch (event.stage) {
+      case 'BUDGET_AVATAR_MOTION_SUMMARY':
+        _lastAvatarFlight = event;
+        return;
+      case 'TM|FLIGHT_SUMMARY':
+        _lastTimeFlight = event;
+        return;
+      case 'AVATAR_FIRST_TARGET_PIPELINE_SUMMARY':
+        _lastAvatarFirstTargetPipeline = event;
+        return;
+      default:
+        if (_isExceptionalDirectManipulationOutcome(event.stage)) {
+          _exceptionalDirectManipulationOutcomes.add(event);
+        }
+    }
+  }
+
+  static bool _isExceptionalDirectManipulationOutcome(String stage) =>
+      stage == 'AVATAR_PHASE_A_ADMISSION_EXCEPTION' ||
+      stage == 'AVATAR_PHASE_A_ADMISSION_EXCEPTION_CORE' ||
+      stage == 'TIME_PHASE_A_PREPARED_REJECTED' ||
+      stage == 'TIME_PREPARED_WINDOW_PHASE_A_REJECTED' ||
+      stage == 'TIME_PREPARED_WINDOW_REBASE_FAILED' ||
+      stage == 'TIME_PREPARED_WINDOW_REBASE_REJECTED' ||
+      stage == 'SUMMARY_SETTLE_REJECTED_UNACCEPTED_TARGET' ||
+      stage == 'SUMMARY_SETTLE_REJECTED_UNPAINTED_OR_SUPERSEDED' ||
+      stage == 'SUMMARY_SETTLE_REJECTED_STALE_SEMANTIC_TARGET' ||
+      stage == 'SUMMARY_TARGET_PAINT_REJECTED' ||
+      stage == 'SUMMARY_TARGET_PAINT_IDENTITY_REJECTED';
+
+  static void _mirrorRetainedDirectManipulationEvidenceAtUserMark() {
+    _mirrorRetainedEvent('USER_MARK_RETAINED_AVATAR_FLIGHT', _lastAvatarFlight);
+    _mirrorRetainedEvent('USER_MARK_RETAINED_TIME_FLIGHT', _lastTimeFlight);
+    _mirrorRetainedEvent(
+      'USER_MARK_RETAINED_FIRST_AVATAR_PIPELINE',
+      _lastAvatarFirstTargetPipeline,
+    );
+    for (final event in _exceptionalDirectManipulationOutcomes.snapshot()) {
+      _mirrorRetainedEvent('USER_MARK_RETAINED_EXCEPTIONAL_OUTCOME', event);
+    }
+  }
+
+  static void _mirrorRetainedEvent(String stage, FluviDiagnosticEvent? event) {
+    if (event == null) return;
+    final summary = event.scope ?? event.message ?? '-';
+    log(
+      FluviDiagnosticEvent(
+        stage: stage,
+        scope:
+            'originalStage=${event.stage} '
+            'originalSequence=${event.sequence ?? '-'} '
+            'originalElapsedMicros=${event.elapsedMicros ?? '-'} '
+            'summary=${_truncateDiagnosticSummary(summary)}',
+      ),
+    );
+  }
+
+  static String _truncateDiagnosticSummary(String value) =>
+      value.length <= 768 ? value : '${value.substring(0, 765)}...';
+
+  static void _clearRetainedDirectManipulationEvidence() {
+    _lastAvatarFlight = null;
+    _lastTimeFlight = null;
+    _lastAvatarFirstTargetPipeline = null;
+    _exceptionalDirectManipulationOutcomes.clear();
+  }
 
   static void _clearCapture({required bool notify}) {
     _capture.clear();

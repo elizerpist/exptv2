@@ -30,6 +30,7 @@ import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_p
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
+import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -3590,6 +3591,164 @@ void main() {
   );
 
   test(
+    'RED E8M: the first Avatar resource bank contains only exact local hotset roots',
+    () async {
+      const categoryIds = <String>['utilities', 'food', 'travel', 'home'];
+      final rows = List<DashboardLedgerEntry>.generate(240, (index) {
+        final categoryId = categoryIds[index % categoryIds.length];
+        return DashboardLedgerEntry(
+          id: 'avatar-cold-$index',
+          partnerId: 'partner-$index',
+          categoryId: categoryId,
+          direction: 'income',
+          amountMinor: 100 + index,
+          bookedLocalEpochDay: 20636 - index,
+          bookedLocalTimeMinutes: 600,
+          partnerDisplayName: 'Partner $index',
+          categoryDisplayName: categoryId,
+          categoryColorId: 'fallback',
+          categoryIconId: 'fallback',
+        );
+      });
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(core.dispose);
+      addTearDown(cache.dispose);
+      await core.bootstrap();
+      final initialWindow = DashboardLogBoxSceneWindow(
+        identity: 'e8m-avatar-cold-local-resource-base',
+        payloads: <DashboardLogViewportState>[
+          core.visibleFrames.logBoxLane.value!.logBox,
+        ],
+      );
+      await cache.prepareWindow(window: initialWindow, surfaceWidth: 378);
+      cache.activateWindow(initialWindow);
+
+      DashboardLogBoxSceneWindow? avatarResourceWindow;
+      final avatarResourcePrepared = Completer<void>();
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              if (lane ==
+                  DashboardLiveInteractionResourceLane.budgetAvatarPreview) {
+                avatarResourceWindow = window;
+              }
+              await cache.prepareLiveInteractionResourceWindow(
+                lane: lane,
+                resourceKey: retainedKey,
+                window: window,
+                surfaceWidth: 378,
+                retainViewportId: retainViewportId,
+              );
+              if (lane ==
+                      DashboardLiveInteractionResourceLane
+                          .budgetAvatarPreview &&
+                  !avatarResourcePrepared.isCompleted) {
+                avatarResourcePrepared.complete();
+              }
+            },
+        hasLiveInteractionResources:
+            (window, {required lane, required candidateKey}) =>
+                cache.hasLiveInteractionResourceWindow(
+                  window,
+                  lane: lane,
+                  resourceKey: candidateKey,
+                ),
+        bindLiveInteractionReadablePhaseA:
+            (payload, {required lane, required resourceKey}) =>
+                cache.bindLiveInteractionReadablePhaseA(
+                  payload,
+                  lane: lane,
+                  resourceKey: resourceKey,
+                ),
+      );
+
+      core.primeBudgetAvatarFocusHotset(const <DashboardFocusFacet>[
+        DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        DashboardFocusFacet(id: 'food', displayName: 'Food'),
+      ]);
+      await avatarResourcePrepared.future.timeout(const Duration(seconds: 3));
+      for (
+        var turn = 0;
+        turn < 40 && !core.budgetAvatarLiveRootReady.value;
+        turn += 1
+      ) {
+        await pumpEventQueue();
+      }
+
+      final window = avatarResourceWindow;
+      final baseMembership = core.preparedIndex!
+          .partitionFor(LedgerDirection.income)
+          .focusMembershipSeed!;
+      expect(window, isNotNull);
+      expect(baseMembership.entryCount, 240);
+      expect(
+        window!.payloads,
+        hasLength(3),
+        reason:
+            'The aggregate/current root plus the two immediately reachable '
+            'Avatar targets are the only normal-path Phase-A inputs.',
+      );
+      expect(
+        window.previewRowCount,
+        lessThan(baseMembership.entryCount),
+        reason:
+            'The first Avatar gesture may not wait for a broad reusable '
+            'focus-membership universe.',
+      );
+      expect(
+        window.payloads.every(
+          (payload) => payload.previewRowCount <= core.preparedIndex!.pageSize,
+        ),
+        isTrue,
+        reason:
+            'Every Avatar resource payload must remain a compact exact '
+            'preview root rather than the complete source membership.',
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          window,
+          lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+          resourceKey: window.identity,
+        ),
+        isTrue,
+      );
+      expect(
+        core.budgetAvatarLiveRootReady.value,
+        isTrue,
+        reason: 'hotset=${core.budgetAvatarFocusHotsetDiagnostics}',
+      );
+
+      core.beginBudgetAvatarMotion();
+      expect(
+        await core.requestBudgetCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+          publishDuringMotion: true,
+          targetHandle: 1,
+        ),
+        isTrue,
+      );
+      final visible = core.visibleFrames.logBoxLane.value!;
+      expect(visible.scope.categoryIds, <String>{'utilities'});
+      expect(cache.hasCompleteReadablePhaseAFor(visible.logBox), isTrue);
+      core.endBudgetAvatarMotion();
+    },
+  );
+
+  test(
     'RG-G3: Summary raw input cancels a retained time-neighbour preparation before arena resolution',
     () async {
       final repository = _FocusSeedRepository();
@@ -4410,6 +4569,540 @@ void main() {
       expect(core.currentQuery.scopeFor(LedgerDirection.income), newerBase);
       expect(await core.clearAllEphemeralFocus(), isFalse);
       expect(core.currentQuery.scopeFor(LedgerDirection.income), newerBase);
+    },
+  );
+  test(
+    'RED E8M: an out-of-window direct Time year remains pending instead of canonically splitting authority',
+    () async {
+      final preparedWindowGate = Completer<void>();
+      final repository = _FocusSeedRepository(
+        prepareAfterBootstrapGate: preparedWindowGate,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      addTearDown(() {
+        if (!preparedWindowGate.isCompleted) preparedWindowGate.complete();
+        core.dispose();
+      });
+      await core.bootstrap();
+
+      final origin = core.navigation.state;
+      final originVisible = core.visibleFrames.value!;
+      final originIndex = core.preparedIndex!;
+      expect(originIndex.key.yearWindowStart, 2014);
+      expect(originIndex.key.yearWindowEndInclusive, 2038);
+
+      final target = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -16,
+        base: origin,
+      );
+      expect(target, isNotNull);
+      expect(target!.yearCursor, 2010);
+
+      FluviDiagnosticLogger.clear();
+      core.beginSegmentedSummaryMotion();
+      DashboardSegmentedTargetAcceptance? acceptance;
+      Object? thrown;
+      try {
+        acceptance = core.navigateExperimentalTemporalComponentCandidate(
+          candidate: target,
+          component: DashboardTemporalAnchorComponent.year,
+        );
+      } on Object catch (error) {
+        thrown = error;
+      }
+      await pumpEventQueue();
+
+      expect(
+        thrown,
+        isNull,
+        reason:
+            'A missing target frame must enter the bounded prepared-window '
+            'transaction before any scene-window/frame materialization.',
+      );
+      if (thrown != null) return;
+      expect(
+        acceptance!.isAcceptedSemanticIntent,
+        isTrue,
+        reason:
+            'An unavailable frame is a bounded prepared-window transition, '
+            'not a rejected direct user intent.',
+      );
+      expect(
+        core.navigation.state,
+        same(origin),
+        reason:
+            'Until the gated exact target window exists, canonical navigation '
+            'must retain the last coherent temporal authority.',
+      );
+      expect(core.visibleFrames.value, same(originVisible));
+      expect(core.preparedIndex, same(originIndex));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'SUMMARY_COMPONENT_LIVE_ROOT_MISS' &&
+              event.scope?.contains('fallback=canonicalNavigation') == true,
+        ),
+        isEmpty,
+      );
+
+      preparedWindowGate.complete();
+      await pumpEventQueue();
+      await pumpEventQueue();
+      core.frameCoalescer.flush();
+
+      final rebased = core.preparedIndex!;
+      expect(rebased.key.yearWindowStart, 1998);
+      expect(rebased.key.yearWindowEndInclusive, 2022);
+      final rebasedVisible = core.visibleFrames.value!;
+      expect(
+        rebasedVisible.queryKey,
+        target.temporalAnchor.sourceChildQueryKey,
+        reason:
+            'The exact rebased target, not the old prepared window, must be '
+            'the next visible Phase-A authority.',
+      );
+      expect(
+        core.liveInteractions.frame?.temporalCandidate.effectiveScope,
+        target.effectiveScope,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'TIME_PREPARED_WINDOW_REBASED',
+        ),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'RED E8M: Avatar category and aggregate admission use the rebased Time base',
+    () async {
+      final preparedWindowGate = Completer<void>();
+      final repository = _FocusSeedRepository(
+        prepareAfterBootstrapGate: preparedWindowGate,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      addTearDown(() {
+        if (!preparedWindowGate.isCompleted) preparedWindowGate.complete();
+        core.dispose();
+      });
+      await core.bootstrap();
+
+      final origin = core.navigation.state;
+      final timeTarget = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -16,
+        base: origin,
+      )!;
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: timeTarget,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isAcceptedSemanticIntent,
+        isTrue,
+      );
+      preparedWindowGate.complete();
+      await pumpEventQueue();
+      await pumpEventQueue();
+      core.frameCoalescer.flush();
+      final timeFrame = core.visibleFrames.value!;
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: timeTarget,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(timeFrame));
+      await pumpEventQueue();
+
+      expect(
+        core.navigation.state.yearCursor,
+        2010,
+        reason: FluviDiagnosticLogger.entries
+            .map((event) => '${event.stage}:${event.scope}')
+            .join('\n'),
+      );
+      expect(core.preparedIndex!.key.yearWindowStart, 1998);
+      expect(core.preparedIndex!.key.yearWindowEndInclusive, 2022);
+
+      core.beginBudgetAvatarMotion();
+      expect(
+        await core.requestBudgetCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+          targetHandle: 1,
+          publishDuringMotion: true,
+        ),
+        isTrue,
+        reason:
+            'A category target after a Time window transition must derive '
+            'against the exact rebased base rather than throw or silently '
+            'reject its Phase-A admission.',
+      );
+      expect(core.focus.state?.category?.id, 'utilities');
+
+      expect(
+        await core.clearBudgetCategoryFocus(
+          targetHandle: 0,
+          publishDuringMotion: true,
+        ),
+        isTrue,
+        reason:
+            'The aggregate target follows the same exact rebased base and '
+            'must not retain a stale Budget progress identity.',
+      );
+      expect(core.focus.state?.category, isNull);
+      core.endBudgetAvatarMotion();
+    },
+  );
+  test(
+    'E8M: latest out-of-window Time target coalesces an older pending window rebase',
+    () async {
+      final preparedWindowGate = Completer<void>();
+      final repository = _FocusSeedRepository(
+        prepareAfterBootstrapGate: preparedWindowGate,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      addTearDown(() {
+        if (!preparedWindowGate.isCompleted) preparedWindowGate.complete();
+        core.dispose();
+      });
+      await core.bootstrap();
+
+      final origin = core.navigation.state;
+      final first = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -16,
+        base: origin,
+      )!;
+      final latest = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -17,
+        base: origin,
+      )!;
+      expect(first.yearCursor, 2010);
+      expect(latest.yearCursor, 2009);
+
+      FluviDiagnosticLogger.clear();
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: first,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isAcceptedSemanticIntent,
+        isTrue,
+      );
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: latest,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isAcceptedSemanticIntent,
+        isTrue,
+      );
+      await pumpEventQueue();
+
+      expect(core.navigation.state, same(origin));
+      expect(
+        core.visibleFrames.value!.queryKey,
+        isNot(first.temporalAnchor.sourceChildQueryKey),
+      );
+
+      preparedWindowGate.complete();
+      for (var index = 0; index < 4; index += 1) {
+        await pumpEventQueue();
+      }
+      core.frameCoalescer.flush();
+
+      final visible = core.visibleFrames.value!;
+      expect(core.navigation.state.yearCursor, latest.yearCursor);
+      expect(core.preparedIndex!.key.yearWindowStart, 1997);
+      expect(core.preparedIndex!.key.yearWindowEndInclusive, 2021);
+      expect(visible.queryKey, latest.temporalAnchor.sourceChildQueryKey);
+      expect(
+        core.liveInteractions.frame?.temporalCandidate.effectiveScope,
+        latest.effectiveScope,
+      );
+      expect(
+        core.liveInteractions.frame?.interactionPublicationEpoch,
+        greaterThan(0),
+      );
+      expect(
+        core.liveInteractions.frame?.producerLocalGeneration,
+        greaterThan(0),
+      );
+      expect(
+        core.liveInteractions.frame?.source,
+        DashboardLiveInteractionSource.temporalSelector,
+        reason:
+            'A direct Time rebase retains its physical producer instead of '
+            'being accepted later as a producer-less canonical fallback.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'TIME_PREPARED_WINDOW_REBASED',
+        ),
+        hasLength(1),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'TIME_PREPARED_WINDOW_CANDIDATE_TERMINAL' &&
+              event.queryKey ==
+                  first.temporalAnchor.sourceChildQueryKey.value &&
+              event.scope?.contains(
+                    'terminalOutcome=coalescedBeforeWindowReady',
+                  ) ==
+                  true,
+        ),
+        hasLength(1),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'SUMMARY_COMPONENT_LIVE_ROOT_MISS' &&
+              event.scope?.contains('fallback=canonicalNavigation') == true,
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'E8M: a rejected direct Time target cannot invoke canonical fallback or split authority',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.beginSegmentedSummaryMotion();
+      final origin = core.navigation.state;
+      final originVisible = core.visibleFrames.value!;
+      final preparedTarget = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -1,
+        base: origin,
+      );
+      expect(preparedTarget, isNotNull);
+      final invalidRevisionTarget = preparedTarget!.copyWith(
+        temporalAnchor: preparedTarget.temporalAnchor.copyWith(revision: 2),
+      );
+
+      FluviDiagnosticLogger.clear();
+      final acceptance = core.navigateExperimentalTemporalComponentCandidate(
+        candidate: invalidRevisionTarget,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await pumpEventQueue();
+
+      expect(
+        acceptance,
+        DashboardSegmentedTargetAcceptance.rejectedNotPrepared,
+      );
+      expect(core.navigation.state, same(origin));
+      expect(core.visibleFrames.value, same(originVisible));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_COMPONENT_LIVE_ROOT_MISS',
+        ),
+        isEmpty,
+      );
+      final rejection = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'TIME_PHASE_A_DIRECT_REJECTED',
+      );
+      expect(rejection.scope, contains('canonicalFallback=false'));
+      expect(
+        rejection.scope,
+        contains('visibleAuthority=retainedPreviousExact'),
+      );
+    },
+  );
+
+  test(
+    'E8M: month targets remain exact after a bounded prepared-year-window rebase',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.beginSegmentedSummaryMotion();
+      final targetYear = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.sum,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -13,
+        base: core.navigation.state,
+      );
+      expect(targetYear, isNotNull);
+      expect(targetYear!.yearCursor, 2013);
+
+      FluviDiagnosticLogger.clear();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: targetYear,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isAcceptedSemanticIntent,
+        isTrue,
+      );
+      await pumpEventQueue();
+      core.frameCoalescer.flush();
+      final yearFrame = core.visibleFrames.value!;
+      core.recordLogBoxRenderExtent(_exactPaintSnapshot(yearFrame));
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: targetYear,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      expect(core.navigation.state.yearCursor, 2013);
+      expect(core.preparedIndex!.key.yearWindowStart, 2001);
+      expect(core.preparedIndex!.key.yearWindowEndInclusive, 2025);
+
+      var base = core.navigation.state;
+      for (final month in <int>[2, 3, 4, 5, 6, 7, 8]) {
+        final candidate = core.experimentalTemporalComponentOffsetCandidate(
+          plane: TimePlane.sum,
+          isRailOpen: true,
+          component: DashboardTemporalAnchorComponent.month,
+          offset: 1,
+          base: base,
+        );
+        expect(candidate, isNotNull);
+        expect(candidate!.yearCursor, 2013);
+        expect(candidate.monthCursor.month, month);
+        expect(
+          core
+              .navigateExperimentalTemporalComponentCandidate(
+                candidate: candidate,
+                component: DashboardTemporalAnchorComponent.month,
+              )
+              .isExactLivePublication,
+          isTrue,
+        );
+        core.frameCoalescer.flush();
+        final frame = core.visibleFrames.value!;
+        expect(frame.queryKey, candidate.temporalAnchor.sourceChildQueryKey);
+        core.recordLogBoxRenderExtent(_exactPaintSnapshot(frame));
+        core.settleExperimentalTemporalComponentCandidate(
+          candidate: candidate,
+          component: DashboardTemporalAnchorComponent.month,
+        );
+        expect(core.navigation.state.yearCursor, 2013);
+        expect(core.navigation.state.monthCursor.month, month);
+        expect(core.visibleFrames.value!.queryKey, frame.queryKey);
+        base = core.navigation.state;
+      }
+
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'TIME_PHASE_A_PREPARED_REJECTED' &&
+              event.scope?.contains('preparedFrameUnavailable') == true,
+        ),
+        isEmpty,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_COMPONENT_LIVE_ROOT_MISS',
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'E8M: Core preserves bounded temporal-base evidence when Avatar admission throws',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 1, 29),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      addTearDown(FluviDiagnosticLogger.clear);
+      await core.bootstrap();
+      core.beginBudgetAvatarMotion();
+      FluviDiagnosticLogger.clear();
+
+      await expectLater(
+        core.requestBudgetCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+          targetHandle: 1,
+          publishDuringMotion: true,
+          onVisibleSemanticCommit: () {
+            throw StateError('forced admission metadata failure');
+          },
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      final evidence = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'AVATAR_PHASE_A_ADMISSION_EXCEPTION_CORE',
+      );
+      expect(evidence.scope, contains('boundary=requestBudgetCategoryFocus'));
+      expect(evidence.scope, contains('errorType=StateError'));
+      expect(evidence.scope, contains('errorDigest='));
+      expect(evidence.scope, contains('stackFingerprint='));
+      expect(evidence.scope, contains('targetHandle=1'));
+      expect(evidence.scope, contains('baseWindow=window:2014-2038'));
+      expect(evidence.scope, contains('temporalScopeDigest='));
+      expect(evidence.scope, contains('navigationScopeDigest='));
+      expect(evidence.scope, contains('visibleQueryDigest='));
+      expect(evidence.scope, contains('interactionEpoch='));
+      expect(evidence.scope, contains('foregroundProducer=budgetAvatar'));
     },
   );
 }

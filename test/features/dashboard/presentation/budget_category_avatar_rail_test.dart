@@ -964,6 +964,84 @@ void main() {
   );
 
   testWidgets(
+    'E8M: an Avatar admission exception retains bounded typed source evidence',
+    (tester) async {
+      final categories = ValueNotifier<List<FluviCategory>>(_categories(9));
+      final visibleFrame = ValueNotifier<DashboardVisibleFrame?>(
+        _interactiveFrame(),
+      );
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final snapshot = _snapshotForCategories(categories.value);
+      final presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visibleFrame,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: () => snapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+      );
+      addTearDown(categories.dispose);
+      addTearDown(visibleFrame.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(presentation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: presentation,
+                onTargetPreviewAccepted: (_) => Future<bool>.error(
+                  StateError('test temporal base mismatch'),
+                  StackTrace.current,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byKey(const ValueKey('budget-target-avatar-carousel')),
+        const Offset(-220, 0),
+        2200,
+      );
+      for (var frame = 0; frame < 20; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'AVATAR_PHASE_A_ADMISSION_EXCEPTION',
+        )) {
+          break;
+        }
+      }
+
+      final evidence = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'AVATAR_PHASE_A_ADMISSION_EXCEPTION',
+      );
+      expect(evidence.scope, contains('boundary=onTargetPreviewAccepted'));
+      expect(evidence.scope, contains('errorType=StateError'));
+      expect(evidence.scope, contains('errorDigest='));
+      expect(evidence.scope, contains('stackFingerprint='));
+      expect(evidence.scope, contains('targetHandle='));
+      expect(evidence.scope, contains('coreRevision=1'));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'AV|PREVIEW_REJECTED' &&
+              event.scope?.contains('reason=exception') == true,
+        ),
+        isNotEmpty,
+      );
+    },
+  );
+
+  testWidgets(
     'Avatar flight marks a terminal paint as pending and reconciles a late exact Phase-A paint',
     (tester) async {
       final categories = ValueNotifier<List<FluviCategory>>(_categories(9));

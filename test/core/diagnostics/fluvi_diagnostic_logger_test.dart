@@ -291,6 +291,136 @@ void main() {
   });
 
   test(
+    'coalesces structural diagnostic repeats by render identity and progress bucket',
+    () {
+      for (var index = 0; index < 40; index += 1) {
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'COLLAPSE|LAYER',
+            scope:
+                'candidate=BudgetHeader renderObject=RenderBox '
+                'globalBounds=0.0,${index.toStringAsFixed(1)} 320.0x80.0 '
+                'paintBounds=0.0,${index.toStringAsFixed(1)} 320.0x80.0 '
+                'clip=ClipRRect material=shader zOrder=header '
+                'collapseProgress=${index.toStringAsFixed(3)} progressBucket=1',
+          ),
+        );
+      }
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'COLLAPSE|LAYER',
+          scope:
+              'candidate=BudgetHeader renderObject=RenderBox '
+              'globalBounds=0.0,40.0 320.0x80.0 '
+              'paintBounds=0.0,40.0 320.0x80.0 '
+              'clip=ClipRRect material=shader zOrder=header '
+              'collapseProgress=1.000 progressBucket=2',
+        ),
+      );
+
+      final layers = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'COLLAPSE|LAYER')
+          .toList(growable: false);
+      expect(layers, hasLength(2));
+      expect(layers.first.repeatCount, 40);
+      expect(layers.last.repeatCount, 1);
+      expect(FluviDiagnosticLogger.structuralDiagnosticCoalescedEntryCount, 39);
+    },
+  );
+
+  test('keeps a material structural-bounds change and an error observable', () {
+    const baseScope =
+        'candidate=BudgetHeader renderObject=RenderBox '
+        'globalBounds=0.0,0.0 320.0x80.0 '
+        'paintBounds=0.0,0.0 320.0x80.0 '
+        'clip=ClipRRect material=shader zOrder=header progressBucket=1';
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(stage: 'COLLAPSE|LAYER', scope: baseScope),
+    );
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(
+        stage: 'COLLAPSE|LAYER',
+        scope:
+            'candidate=BudgetHeader renderObject=RenderBox '
+            'globalBounds=0.0,1.0 320.0x128.0 '
+            'paintBounds=0.0,1.0 320.0x128.0 '
+            'clip=ClipRRect material=shader zOrder=header progressBucket=1',
+      ),
+    );
+    FluviDiagnosticLogger.log(
+      const FluviDiagnosticEvent(
+        stage: 'COLLAPSE|LAYER',
+        scope: baseScope,
+        error: 'missing-size',
+      ),
+    );
+
+    final layers = FluviDiagnosticLogger.entries
+        .where((event) => event.stage == 'COLLAPSE|LAYER')
+        .toList(growable: false);
+    expect(layers, hasLength(3));
+    expect(layers.last.error, 'missing-size');
+  });
+
+  test(
+    'a user marker mirrors protected direct-manipulation evidence after the rolling tail wraps',
+    () {
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'BUDGET_AVATAR_MOTION_SUMMARY',
+          scope: 'acceptedPublications=3 missedFrames=0',
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'TM|FLIGHT_SUMMARY',
+          scope: 'acceptedLiveSnapshots=4 targetJump=false',
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'AVATAR_FIRST_TARGET_PIPELINE_SUMMARY',
+          scope: 'terminalOutcome=exactPhaseAPainted',
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'AVATAR_PHASE_A_ADMISSION_EXCEPTION_CORE',
+          scope: 'errorType=StateError stackFingerprint=test',
+        ),
+      );
+      for (
+        var index = 0;
+        index < FluviDiagnosticLogger.maxEntries + 20;
+        index += 1
+      ) {
+        FluviDiagnosticLogger.log(FluviDiagnosticEvent(stage: 'NOISE-$index'));
+      }
+
+      FluviDiagnosticLogger.markUserBug('avatar_fling');
+
+      final export = FluviDiagnosticLogger.latestText();
+      expect(export, contains('[FLOW][USER_MARK_RETAINED_AVATAR_FLIGHT]'));
+      expect(export, contains('originalStage=BUDGET_AVATAR_MOTION_SUMMARY'));
+      expect(export, contains('[FLOW][USER_MARK_RETAINED_TIME_FLIGHT]'));
+      expect(export, contains('originalStage=TM|FLIGHT_SUMMARY'));
+      expect(
+        export,
+        contains('[FLOW][USER_MARK_RETAINED_FIRST_AVATAR_PIPELINE]'),
+      );
+      expect(
+        export,
+        contains('[FLOW][USER_MARK_RETAINED_EXCEPTIONAL_OUTCOME]'),
+      );
+      expect(
+        export,
+        contains('originalStage=AVATAR_PHASE_A_ADMISSION_EXCEPTION_CORE'),
+      );
+      expect(export, contains('[FLOW][USER_MARK]'));
+    },
+  );
+
+  test(
     'replays actual bound Header renderer evidence into a later capture',
     () {
       FluviDiagnosticLogger.log(

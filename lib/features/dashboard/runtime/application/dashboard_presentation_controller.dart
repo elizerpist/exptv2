@@ -358,13 +358,35 @@ final class DashboardPresentationController {
   /// no compact-frame materialization, scene-window preparation, query, text
   /// work or settle wait; a strict miss returns false for the existing
   /// fail-closed structural path.
+  ///
+  /// A bounded direct Time window rotation may supply [replacementIndex]. The
+  /// index is validated against the same exact candidate before it replaces
+  /// the resident reference, and is installed only after the interaction
+  /// order has been accepted. This keeps the old visible frame intact until
+  /// the one new exact frame is queued; it is not a general index-installation
+  /// API and intentionally cannot publish an arbitrary current navigation.
   bool publishPreparedExperimentalTemporalCandidate(
     DashboardNavigationState candidate, {
     bool deferCanonicalCommit = false,
+    bool commitNavigationWithPreview = false,
     DashboardInteractionPreviewOrder? interactionOrder,
+    PreparedDashboardIndex? replacementIndex,
   }) {
-    final installed = _index;
+    if (commitNavigationWithPreview && !deferCanonicalCommit) {
+      throw ArgumentError(
+        'A navigation-committed direct preview must remain a preview until '
+        'its exact paint acknowledgement promotes the visible frame.',
+      );
+    }
+    final installed = replacementIndex ?? _index;
     if (installed == null) return false;
+    final current = _index;
+    if (current != null && installed.coreRevision < current.coreRevision) {
+      return false;
+    }
+    if (installed.coreRevision != candidate.temporalAnchor.revision) {
+      return false;
+    }
     final candidateQueryKey = candidate.isRailOpen
         ? candidate.temporalAnchor.sourceChildQueryKey
         : candidate.parentQueryKey;
@@ -401,8 +423,13 @@ final class DashboardPresentationController {
         )) {
       return false;
     }
+    if (replacementIndex != null) {
+      _index = replacementIndex;
+    }
     final state = deferCanonicalCommit
-        ? candidate
+        ? commitNavigationWithPreview
+              ? navigation.commitTemporalCandidate(candidate)
+              : candidate
         : navigation.commitTemporalCandidate(candidate);
     final semanticIndex = _selectedIndex(state, catalog);
     final selectedEntry = catalog.entryAtLogicalIndex(semanticIndex);
@@ -459,6 +486,10 @@ final class DashboardPresentationController {
     final queued = _queuedPreparedExperimentalTemporalFrame;
     final installed = _index;
     final visible = visibleFrames.value;
+    final navigationAlreadyMatchesCandidate = _sameTemporalTarget(
+      navigation.state,
+      candidate,
+    );
     if (queued == null ||
         installed == null ||
         visible == null ||
@@ -474,10 +505,13 @@ final class DashboardPresentationController {
         queued.coreRevision != installed.coreRevision ||
         queued.presentationEpoch != presentationEpoch ||
         queued.frameGeneration != frameGeneration ||
-        navigation.state.navigationEpoch != candidate.navigationEpoch) {
+        (!navigationAlreadyMatchesCandidate &&
+            navigation.state.navigationEpoch != candidate.navigationEpoch)) {
       return false;
     }
-    final state = navigation.commitTemporalCandidate(candidate);
+    final state = navigationAlreadyMatchesCandidate
+        ? navigation.state
+        : navigation.commitTemporalCandidate(candidate);
     final catalog = installed.catalogForKey(state.parentQueryKey);
     if (!state.isRailOpen) {
       _installCatalog(
@@ -1066,6 +1100,19 @@ final class DashboardPresentationController {
       _ => DashboardSemanticInstallPolicy.reconcileCanonicalSelection,
     };
   }
+
+  bool _sameTemporalTarget(
+    DashboardNavigationState left,
+    DashboardNavigationState right,
+  ) =>
+      left.plane == right.plane &&
+      left.isRailOpen == right.isRailOpen &&
+      left.parentQueryKey == right.parentQueryKey &&
+      left.temporalAnchor.sourceChildQueryKey ==
+          right.temporalAnchor.sourceChildQueryKey &&
+      left.temporalAnchor.visibleYear == right.temporalAnchor.visibleYear &&
+      left.temporalAnchor.visibleMonth == right.temporalAnchor.visibleMonth &&
+      left.temporalAnchor.visibleDay == right.temporalAnchor.visibleDay;
 
   void _installCatalog(
     DashboardSemanticCatalog catalog, {
