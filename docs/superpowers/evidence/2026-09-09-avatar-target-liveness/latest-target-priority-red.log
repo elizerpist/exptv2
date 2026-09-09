@@ -1,0 +1,38 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+Resolving dependencies...
+Downloading packages...
+  clock 1.1.2 (1.1.3 available)
+  matcher 0.12.19 (0.12.20 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.17.0 (1.19.0 available)
+  platform 3.1.6 (3.2.0 available)
+  process 5.0.5 (5.0.6 available)
+  stack_trace 1.12.1 (1.12.2 available)
+  test_api 0.7.10 (0.7.14 available)
+  vector_graphics 1.2.2 (1.2.3 available)
+  vector_math 2.2.0 (2.4.2 available)
+  vm_service 15.2.0 (15.3.0 available)
+Got dependencies!
+11 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart
+00:00 +0: current nonempty target prepares exact resources with no broad hotset
+00:01 +1: target 8 coalesces held target 1 and replays its original order once
+00:03 +1 -1: target 8 coalesces held target 1 and replays its original order once [E]
+  Expected: true
+    Actual: <false>
+  The latest exact target must receive foreground priority without waiting for the superseded target preparation to finish.
+  
+  package:matcher                                                                          expect
+  package:flutter_test/src/widget_tester.dart 473:18                                       expect
+  test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart 91:7  main.<fn>
+  
+00:03 +1 -1: new pointer terminally cancels pending work before stale cache completion
+00:05 +2 -1: disposal resolves the pending request exactly once and drops its owner
+00:06 +3 -1: exact preparation failure terminates explicitly
+00:07 +4 -1: exact preparation cancellation terminates explicitly
+00:08 +5 -1: new accepted target replaces the older deferred canonical installation
+00:09 +6 -1: Some tests failed.

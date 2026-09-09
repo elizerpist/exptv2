@@ -1,0 +1,223 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart
+00:00 +0: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: complete exact roots preserve nonempty aggregate and category8 payloads
+00:00 +1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: pending plan cannot be described as a ready window
+00:00 +2: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: empty required keys is distinguished from a missing entry
+00:00 +3: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: retired aggregate frame is classified without swallowing other errors
+00:00 +4: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: nonempty payload from another scope is rejected
+00:00 +5: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: same query from an older revision is rejected
+00:00 +6: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: retired bank identity and foreground ownership are distinct
+00:04 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: (setUpAll)
+00:04 +7: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/boundary/dashboard_avatar_target_liveness_boundary_test.dart: Avatar transaction reuses the single Core/cache/visible/focus owners
+00:05 +8: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=cold
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:20 +9: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=persistent20cycles
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+01:12 +10: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=sparse
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+Carousel snap: stiffness=340.0, settle=1024ms
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+01:18 +11: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: (tearDownAll)
+01:18 +11: All tests passed!

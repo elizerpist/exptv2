@@ -1,0 +1,11 @@
+{
+  "baseline_passed": 23,
+  "current_passed": 25,
+  "baseline_failures": 1,
+  "current_failures": 1,
+  "exact_test_names_and_normalized_outputs_equal": true,
+  "new_failures": 0,
+  "cause": "Unchanged source-text regex counts one actual DashboardLogBoxViewport constructor and two diagnostic string mentions. Both test and production file are byte-identical to aa61242.",
+  "baseline_log_sha256": "ac84975995f1fa22066f09e730498708038134763866af870e945bd18ed36713",
+  "current_log_sha256": "0f2d58252409608e412d5517c10b9424c77e80896e178b439eaf21d1c535a953"
+}

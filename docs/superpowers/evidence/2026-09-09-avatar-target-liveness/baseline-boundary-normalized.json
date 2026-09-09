@@ -1,0 +1,19 @@
+{
+  "raw_log_sha256": "ac84975995f1fa22066f09e730498708038134763866af870e945bd18ed36713",
+  "failure_count": 1,
+  "normalization": [
+    "remove runner progress/test interleaving",
+    "replace worktree path",
+    "replace scheduler callback registration ID; preserve assertion values and stack locations"
+  ],
+  "failures": [
+    {
+      "file": "test/boundary/dashboard_core_mode_boundary_test.dart",
+      "test": "CoreDashboard hosts one mode domain outside its singleton LogBox",
+      "normalized_output": [
+        "Expected: an object with length of <1>\n    Actual: _AllMatchesIterable:[\n              Instance of '_RegExpMatch',\n              Instance of '_RegExpMatch',\n              Instance of '_RegExpMatch'\n            ]\n     Which: has length of <3>\n  \n  package:matcher                                            expect\n  package:flutter_test/src/widget_tester.dart 473:18         expect\n  test/boundary/dashboard_core_mode_boundary_test.dart 90:5  main.<fn>\n  "
+      ],
+      "normalized_sha256": "9b42bdce3e6322454ae08869802f278810659fbf352e14c7d50ab4796225579b"
+    }
+  ]
+}

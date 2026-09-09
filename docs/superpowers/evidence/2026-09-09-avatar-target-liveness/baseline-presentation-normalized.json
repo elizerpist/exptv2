@@ -1,0 +1,178 @@
+{
+  "raw_log_sha256": "54f1c0d602c932cc73dd074bb6edc1d2ff4f07c4677aa7272fd098a614733317",
+  "failure_count": 19,
+  "normalization": [
+    "remove runner progress/test interleaving",
+    "replace worktree path",
+    "replace scheduler callback registration ID; preserve assertion values and stack locations"
+  ],
+  "failures": [
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "test": "balance collapsed Ledger geometry matches golden",
+      "normalized_output": [
+        "The following assertion was thrown while running async test code:\nGolden \"../../../goldens/core_dashboard_collapsed.png\": Pixel test failed, 7.56%, 27789px diff\ndetected.\nFailure feedback can be found at\n<WORKTREE>/test/features/dashboard/presentation/failures\n\nWhen the exception was thrown, this was the stack:\n#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)\n<asynchronous suspension>\n#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)\n<asynchronous suspension>\n<asynchronous suspension>\n#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)\n<asynchronous suspension>\n<asynchronous suspension>\n#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)\n<asynchronous suspension>\n#6      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart:38:7)\n<asynchronous suspension>\n#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe exception was caught asynchronously.",
+        "Test failed. See exception logs above.\n  The test description was: balance collapsed Ledger geometry matches golden"
+      ],
+      "normalized_sha256": "276ad890344d3692e8b9bc72af2b05e564bc83732d1ec3399bd1eff4ace9a07d"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "test": "balance expanded core geometry matches golden",
+      "normalized_output": [
+        "The following assertion was thrown while running async test code:\nGolden \"../../../goldens/core_dashboard_expanded.png\": Pixel test failed, 6.44%, 23653px diff\ndetected.\nFailure feedback can be found at\n<WORKTREE>/test/features/dashboard/presentation/failures\n\nWhen the exception was thrown, this was the stack:\n#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)\n<asynchronous suspension>\n#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)\n<asynchronous suspension>\n<asynchronous suspension>\n#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)\n<asynchronous suspension>\n<asynchronous suspension>\n#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)\n<asynchronous suspension>\n#6      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart:22:7)\n<asynchronous suspension>\n#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe exception was caught asynchronously.",
+        "Test failed. See exception logs above.\n  The test description was: balance expanded core geometry matches golden"
+      ],
+      "normalized_sha256": "f7559006d0624da00cf9ef16751d8567c1f2d3677634d4cd770d19c8127f75b4"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "test": "budget collapsed Ledger geometry matches golden",
+      "normalized_output": [
+        "The following assertion was thrown while running async test code:\nGolden \"../../../goldens/core_dashboard_budget_collapsed.png\": Pixel test failed, 9.37%, 34436px\ndiff detected.\nFailure feedback can be found at\n<WORKTREE>/test/features/dashboard/presentation/failures\n\nWhen the exception was thrown, this was the stack:\n#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)\n<asynchronous suspension>\n#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)\n<asynchronous suspension>\n<asynchronous suspension>\n#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)\n<asynchronous suspension>\n<asynchronous suspension>\n#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)\n<asynchronous suspension>\n#6      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart:38:7)\n<asynchronous suspension>\n#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe exception was caught asynchronously.",
+        "Test failed. See exception logs above.\n  The test description was: budget collapsed Ledger geometry matches golden"
+      ],
+      "normalized_sha256": "359abba0e19d0b40460ec29cdb33a8e3e37be2012340a98aeafe98d065d2d356"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "test": "budget expanded core geometry matches golden",
+      "normalized_output": [
+        "The following assertion was thrown while running async test code:\nGolden \"../../../goldens/core_dashboard_budget_expanded.png\": Pixel test failed, 8.42%, 30936px diff\ndetected.\nFailure feedback can be found at\n<WORKTREE>/test/features/dashboard/presentation/failures\n\nWhen the exception was thrown, this was the stack:\n#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)\n<asynchronous suspension>\n#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)\n<asynchronous suspension>\n<asynchronous suspension>\n#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)\n<asynchronous suspension>\n<asynchronous suspension>\n#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)\n<asynchronous suspension>\n#6      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart:22:7)\n<asynchronous suspension>\n#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe exception was caught asynchronously.",
+        "Test failed. See exception logs above.\n  The test description was: budget expanded core geometry matches golden"
+      ],
+      "normalized_sha256": "0026c71b6d2aa8b79fe3f718d97d8d1eca6c0d7b184627d77333aaf4f0c43002"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "test": "mind collapsed Ledger geometry matches golden",
+      "normalized_output": [
+        "The following assertion was thrown while running async test code:\nGolden \"../../../goldens/core_dashboard_mind_collapsed.png\": Pixel test failed, 7.56%, 27789px diff\ndetected.\nFailure feedback can be found at\n<WORKTREE>/test/features/dashboard/presentation/failures\n\nWhen the exception was thrown, this was the stack:\n#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)\n<asynchronous suspension>\n#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)\n<asynchronous suspension>\n<asynchronous suspension>\n#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)\n<asynchronous suspension>\n<asynchronous suspension>\n#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)\n<asynchronous suspension>\n#6      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart:38:7)\n<asynchronous suspension>\n#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe exception was caught asynchronously.",
+        "Test failed. See exception logs above.\n  The test description was: mind collapsed Ledger geometry matches golden"
+      ],
+      "normalized_sha256": "b4dd0d5b18e8799e02709f8557b689a29b70eee8e1fc19af0984c78ebe4a6cde"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "test": "mind expanded core geometry matches golden",
+      "normalized_output": [
+        "The following assertion was thrown while running async test code:\nGolden \"../../../goldens/core_dashboard_mind_expanded.png\": Pixel test failed, 25.95%, 95385px diff\ndetected.\nFailure feedback can be found at\n<WORKTREE>/test/features/dashboard/presentation/failures\n\nWhen the exception was thrown, this was the stack:\n#0      LocalFileComparator.compare (package:flutter_test/src/_goldens_io.dart:108:5)\n<asynchronous suspension>\n#1      MatchesGoldenFile.matchAsync.<anonymous closure> (package:flutter_test/src/_matchers_io.dart:124:32)\n<asynchronous suspension>\n<asynchronous suspension>\n#3      _expect.<anonymous closure> (package:matcher/src/expect/expect.dart:153:17)\n<asynchronous suspension>\n<asynchronous suspension>\n#5      expectLater.<anonymous closure> (package:flutter_test/src/widget_tester.dart:508:19)\n<asynchronous suspension>\n#6      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart:22:7)\n<asynchronous suspension>\n#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from dart:async and package:stack_trace)\n\nThe exception was caught asynchronously.",
+        "Test failed. See exception logs above.\n  The test description was: mind expanded core geometry matches golden"
+      ],
+      "normalized_sha256": "9ed106a04ff8b557f9acfbb85b74d61d747bb1f1714ba90b41318a4f93a67560"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_classic_reference_parity_test.dart",
+      "test": "classic Header reference lane RED restores the eight historical shader IDs without an ABI revert",
+      "normalized_output": [
+        "Expected: <14>\n    Actual: <18>\n  \n  package:matcher                                                                                expect\n  package:flutter_test/src/widget_tester.dart 473:18                                             expect\n  test/features/dashboard/presentation/dashboard_header_classic_reference_parity_test.dart 20:9  main.<fn>.<fn>"
+      ],
+      "normalized_sha256": "173768b27f1e227e3cd2831060ab09a49c2bdffbf11d5e415ddc1fdbb0983b96"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_deep_drift_test.dart",
+      "test": "Deep Drift production contract accumulates weighted depth before deriving one material colour",
+      "normalized_output": [
+        "RangeError (end): Invalid value: Not in inclusive range 20045..76037: -1\n  dart:core                                                                          _StringBase.substring\n  test/features/dashboard/presentation/dashboard_header_deep_drift_test.dart 389:34  main.<fn>.<fn>"
+      ],
+      "normalized_sha256": "703bc22330b339c7b898de5fb58f5a572a23334123275506391d40dc8f875d08"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_deep_drift_test.dart",
+      "test": "Deep Drift production contract uses an advected continuous carrier field so rotation is not the primary material grammar",
+      "normalized_output": [
+        "RangeError (end): Invalid value: Not in inclusive range 20045..76037: -1\n  dart:core                                                                          _StringBase.substring\n  test/features/dashboard/presentation/dashboard_header_deep_drift_test.dart 369:34  main.<fn>.<fn>"
+      ],
+      "normalized_sha256": "a735d82a4987c0d41f5235e65723678ff7cfdb5e3549c8a4b48a1f997696942d"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_deep_drift_test.dart",
+      "test": "Deep Drift production contract uses one per-fragment three-by-five cubic field after ripple displacement",
+      "normalized_output": [
+        "RangeError (end): Invalid value: Not in inclusive range 20045..76037: -1\n  dart:core                                                                          _StringBase.substring\n  test/features/dashboard/presentation/dashboard_header_deep_drift_test.dart 346:34  main.<fn>.<fn>"
+      ],
+      "normalized_sha256": "e563dfe16f2b38c5201ec9c8821f306e67b0660c3a3ea8257898e671d773dc1b"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED breathingMetric advances through the real ticker and changes a perceptible raster area",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: RED breathingMetric advances through the real ticker and changes a perceptible raster area"
+      ],
+      "normalized_sha256": "6379d9bd7e620e0c2ba9df9bfb23bd7cec17f756a8c9b32584d407b086d309c0"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED breathingMetric remains visually frozen at speed zero",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: RED breathingMetric remains visually frozen at speed zero"
+      ],
+      "normalized_sha256": "7a245c098d45393878d7dbdfc7e41fe85a77568dfc0f4b5c1b2522e1d927ea12"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED gravitationalFabric advances through the real ticker and changes a perceptible raster area",
+      "normalized_output": [
+        "The following TestFailure was thrown running a test:\nExpected: empty\n  Actual: ['5s changed area < 0.4']\nDashboardHeaderEffectId.gravitationalFabric perceptual timeline:\n1s=meanPerChannel=1.2830854506644633 changedPixelFraction=0.26668043792604834\n3s=meanPerChannel=2.1628193210769124 changedPixelFraction=0.4267196860152861\n5s=meanPerChannel=1.8820534669145494 changedPixelFraction=0.3979291468704813\n\nWhen the exception was thrown, this was the stack:\n#4      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:118:11)\n<asynchronous suspension>\n#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThis was caught by the test expectation on the following line:\n  file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart line 118\nThe test description was:\n  RED gravitationalFabric advances through the real ticker and changes a perceptible raster area",
+        "Test failed. See exception logs above.\n  The test description was: RED gravitationalFabric advances through the real ticker and changes a perceptible raster area"
+      ],
+      "normalized_sha256": "da37fc2bd6063f4620b13ab3adf752d0f07577b8a0182d07c4d0e5824eb4e69b"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED gravitationalFabric remains visually frozen at speed zero",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: RED gravitationalFabric remains visually frozen at speed zero"
+      ],
+      "normalized_sha256": "5cf1506d098bb4cd24caa8a20204167a7e898df39802dc0b12ba5caf165bdeb7"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED metricBloom remains visually frozen at speed zero",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: RED metricBloom remains visually frozen at speed zero"
+      ],
+      "normalized_sha256": "8185b8bb4a46d04713badb2f47b93749eb09a73f933500648b7c3679d358f03e"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED tidalCurvature advances through the real ticker and changes a perceptible raster area",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: RED tidalCurvature advances through the real ticker and changes a perceptible raster area"
+      ],
+      "normalized_sha256": "2b1f89040ee10a542fee82971fe1112dd8d2162336083c17efcd071cca4058c5"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract RED tidalCurvature remains visually frozen at speed zero",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: RED tidalCurvature remains visually frozen at speed zero"
+      ],
+      "normalized_sha256": "88a97ae6bc1e6b32cad5ce828c9134251bb0840da795b91c25e3d19ef038c265"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart",
+      "test": "Space Fabric real-ticker perceptual motion contract speed changes ticker-owned phase rate without changing the initial Space Fabric geometry",
+      "normalized_output": [
+        "The following message was thrown:\nAn animation is still running even after the widget tree was disposed.\n\nThere was one transient callback left. The stack trace for when it was registered is as follows:\n── callback <ID> ──\n#2      SchedulerBinding.scheduleFrameCallback (package:flutter/src/scheduler/binding.dart:617:49)\n#3      Ticker.scheduleTick (package:flutter/src/scheduler/ticker.dart:298:46)\n#4      Ticker.start (package:flutter/src/scheduler/ticker.dart:200:7)\n#5      DashboardHeaderVisualController._syncTicker (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2776:15)\n#6      new DashboardHeaderVisualController (package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:2243:5)\n#7      _renderRealTickerTimeline (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:227:22)\n#8      main.<anonymous closure>.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_header_space_fabric_temporal_test.dart:56:34)\n#9      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:29)\n<asynchronous suspension>\n#10     TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided 3 frames from class _FrameCallbackEntry and package:stack_trace)",
+        "Test failed. See exception logs above.\n  The test description was: speed changes ticker-owned phase rate without changing the initial Space Fabric geometry"
+      ],
+      "normalized_sha256": "cb38214363dd3888c9a60e29e2818b9e19bf2dad9f10de3fa6ae86dad3b6f2d4"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_logbox_stable_render_surface_test.dart",
+      "test": "empty and populated frames keep one render surface identity",
+      "normalized_output": [
+        "The following StateError was thrown running a test:\nBad state: Too many elements\n\nWhen the exception was thrown, this was the stack:\n#0      Iterable.single (dart:core/iterable.dart:696:24)\n#1      WidgetController.state (package:flutter_test/src/controller.dart:927:42)\n#2      main.<anonymous closure> (file://<WORKTREE>/test/features/dashboard/presentation/dashboard_logbox_stable_render_surface_test.dart:87:36)\n<asynchronous suspension>\n#3      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)\n<asynchronous suspension>\n#4      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)\n<asynchronous suspension>\n<asynchronous suspension>\n(elided one frame from package:stack_trace)\n\nThe test description was:\n  empty and populated frames keep one render surface identity",
+        "Test failed. See exception logs above.\n  The test description was: empty and populated frames keep one render surface identity"
+      ],
+      "normalized_sha256": "1f1a830901a66cb8b350ea48e8d1c7a90fc2080fee7843521b664c8dce41cbda"
+    }
+  ]
+}

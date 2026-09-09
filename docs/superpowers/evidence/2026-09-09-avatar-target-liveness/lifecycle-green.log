@@ -1,0 +1,13 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart
+00:00 +0: current nonempty target prepares exact resources with no broad hotset
+00:02 +1: target 8 coalesces held target 1 and replays its original order once
+00:03 +2: new pointer terminally cancels pending work before stale cache completion
+00:04 +3: disposal resolves the pending request exactly once and drops its owner
+00:05 +4: exact preparation failure terminates explicitly
+00:06 +5: exact preparation cancellation terminates explicitly
+00:07 +6: new accepted target replaces the older deferred canonical installation
+00:08 +7: All tests passed!

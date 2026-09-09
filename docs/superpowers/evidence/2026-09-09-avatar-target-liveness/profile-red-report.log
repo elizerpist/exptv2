@@ -1,0 +1,230 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
++5 -1: Avatar K rejects the supplied aa61242 empty-only false green [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 141:5  main.<fn>
+  
++5 -2: Avatar K rejects final identity drift in physical_settle_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -3: Avatar K rejects final identity drift in latest_desired_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -4: Avatar K rejects final identity drift in latest_semantic_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -5: Avatar K rejects final identity drift in latest_exact_painted_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -6: Avatar K rejects final identity drift in selected_budget_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -7: Avatar K rejects final identity drift in focus_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -8: Avatar K rejects final identity drift in header_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -9: Avatar K rejects final identity drift in progress_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -10: Avatar K rejects final identity drift in logbox_target_handle [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -11: Avatar K rejects final identity drift in focus_category_digest [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -12: Avatar K rejects final identity drift in visible_query_category_digest [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -13: Avatar K rejects final identity drift in canonical_query_category_digest [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -14: Avatar K rejects final identity drift in logbox_query_digest [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -15: Avatar K rejects final identity drift in header_display_numerator_scaled100 [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -16: Avatar K rejects final identity drift in progress_display_denominator_scaled100 [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 156:7  main.<fn>
+  
++5 -17: Avatar K rejects unresolved or reset-dependent unresolved_pending_candidate_count [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 165:7  main.<fn>
+  
++5 -18: Avatar K rejects unresolved or reset-dependent generic_coordinator_rejected_count [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 165:7  main.<fn>
+  
++5 -19: Avatar K rejects unresolved or reset-dependent time_interaction_count [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 165:7  main.<fn>
+  
++5 -20: Avatar K rejects empty-only nonempty_preview_requested_count despite positive total paints [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 174:7  main.<fn>
+  
++5 -21: Avatar K rejects empty-only nonempty_preview_accepted_count despite positive total paints [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 174:7  main.<fn>
+  
++5 -22: Avatar K rejects empty-only nonempty_preview_painted_count despite positive total paints [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 174:7  main.<fn>
+  
++5 -23: Avatar K rejects earlier paint with final target still pending [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 182:5  main.<fn>
+  
++5 -24: Avatar K rejects a failed earlier flight even when final flight passes [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 187:5  main.<fn>
+  
++5 -25: Avatar K rejects a single real fling [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 191:5  main.<fn>
+  
++17 -25: Some tests failed.

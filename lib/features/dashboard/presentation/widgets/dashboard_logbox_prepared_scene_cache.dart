@@ -833,12 +833,30 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     required String resourceKey,
   }) {
     if (payload.previewRowCount == 0) return true;
-    if (_liveInteractionResourceKeys[lane] != resourceKey) return false;
+    if (_liveInteractionResourceKeys[lane] != resourceKey) {
+      if (lane == DashboardLiveInteractionResourceLane.budgetAvatarPreview) {
+        _recordAvatarPhaseAMissingCoverage(
+          payload,
+          null,
+          'resourceIdentityMismatch',
+          resourceKey,
+        );
+      }
+      return false;
+    }
     final bank = _retainedCandidateBanks[resourceKey];
     if (bank == null ||
         bank.surfaceWidth != _surfaceWidth ||
         bank.devicePixelRatio != _devicePixelRatio ||
         !bank.manifest.isComplete) {
+      if (lane == DashboardLiveInteractionResourceLane.budgetAvatarPreview) {
+        _recordAvatarPhaseAMissingCoverage(
+          payload,
+          bank,
+          'resourceIdentityMismatch',
+          resourceKey,
+        );
+      }
       return false;
     }
 
@@ -857,6 +875,14 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
                 dayLabel: slot.dayLabel,
               ) ==
               null) {
+        if (lane == DashboardLiveInteractionResourceLane.budgetAvatarPreview) {
+          _recordAvatarPhaseAMissingCoverage(
+            payload,
+            bank,
+            'exactPayloadCoverageMissing',
+            resourceKey,
+          );
+        }
         return false;
       }
     }
@@ -865,6 +891,40 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     // by the active rail-preview painter, rather than a parallel readiness
     // definition owned by the controller.
     return hasCompleteReadablePhaseAFor(payload);
+  }
+
+  void _recordAvatarPhaseAMissingCoverage(
+    DashboardLogViewportState payload,
+    _DashboardLogBoxStagedSceneBank? bank,
+    String reason,
+    String resourceKey,
+  ) {
+    var missingRows = 0;
+    final missingHeaders = <String>{};
+    for (var ordinal = 0; ordinal < payload.previewRowCount; ordinal++) {
+      final identity = payload.semanticPreviewRowIdentityAt(ordinal);
+      if (identity == null ||
+          bank?.readablePhaseARowFor(payload, identity) == null) {
+        missingRows++;
+      }
+      final label = payload.semanticPreviewSlotAt(ordinal)?.dayLabel;
+      if (label != null && bank?.dayHeaders.containsKey(label) != true) {
+        missingHeaders.add(label);
+      }
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|EXACT_PHASE_A_BIND_REJECTED',
+        coreRevision: payload.revision,
+        entryCount: payload.previewRowCount,
+        scope:
+            'reason=$reason '
+            'exactPayloadQueryDigest=${FluviDiagnosticKeyDigest.of(payload.queryKey.value)} '
+            'resourceKeyDigest=${FluviDiagnosticKeyDigest.of(resourceKey)} '
+            'missingRowCount=$missingRows missingHeaderCount=${missingHeaders.length} '
+            'bankRevision=${bank?.manifest.coreRevision ?? '-'}',
+      ),
+    );
   }
 
   bool hasRetainedWindow(DashboardLogBoxSceneWindow window) =>

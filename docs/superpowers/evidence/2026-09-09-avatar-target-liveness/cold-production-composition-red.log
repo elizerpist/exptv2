@@ -1,0 +1,468 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time coldPartialHotset=true
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+[AVL COLD] INDEX_BUILD_STARTED acquisitionReason=bootstrap incomeQueryKey=income|all|categories:|partners:|refinements: expenseQueryKey=expense|all|categories:|partners:|refinements:
+[AVL COLD] INDEX_BUILD_READY acquisitionReason=bootstrap builtDirection=both reusedDirection=none
+[AVL COLD] RAIL_CANONICAL_SELECTION_RECONCILED null
+[AVL COLD] VERTICAL_PAGE_COMMITTED null
+[AVL COLD] VERTICAL_END_REACHED null
+[AVL COLD] VERTICAL_READY_AHEAD_TARGET_CHANGED null
+[AVL COLD] INDEX_PUBLISHED null
+[AVL COLD] BUDGET_AVATAR_FOCUS_HOTSET_PREPARED cached=1 pending=0 uiIsolateMicros=7976
+[AVL COLD] BUDGET_LIVE_ANALYSIS_BOUND generation=0 scope=month:2026-07 targetHandle=0 source=visibleFrame
+[AVL COLD] LIMIT|STATE previous=none next=available=true;target=0;numerator=3600;denominator=10000;limit=10000 reason=bound interactionGeneration=0 liveAnalysisAvailable=true analysisScope=month:2026-07 snapshotPresent=true snapshotRevision=1 selectedHandle=0 visibleModeEpoch=0
+[AVL COLD] BUDGET_HEADER_VALUE_BOUND generation=0 plane=month targetHandle=0 modelBindVsyncMicros=1420070400000000 displayNumeratorScaled100=3600 displayDenominatorScaled100=10000 hasLimit=true canonicalLimitScaled100=10000
+[AVL COLD] BUDGET_PROGRESS_BOUND generation=0 targetHandle=0 targetIdentity=FinancialLimitAggregateTarget visiblePresentationEpoch=1 visibleFrameGeneration=1 modelBindVsyncMicros=1420070400000000 displayNumeratorScaled100=3600 hasPositiveLimit=true displayDenominatorScaled100=10000 rawProgress=0.36 visualProgress=0.36
+[AVL COLD] BUDGET_PARTITION_BOUND generation=0 period=month:2026-7 slice=176 aggregateBudgetLimitScaled100=10000 aggregateActualScaled100=3600 preparedAllocatedTotalScaled100=16000 optimisticAllocationDeltaScaled100=0 liveAllocatedTotalScaled100=16000 allocationRawRatio=1.6 allocationVisualCoverage=1.0 selectedTargetHandle=0 segmentCount=8 source=prepared+optimistic
+[AVL COLD] BUDGET_DIRECTION_DOMAIN_READY categoryCount=8 targetCount=9
+[AVL COLD] HEADER_PORTAL_EFFECT_CATALOG_VERIFIED null
+[AVL COLD] BUDGET_HEADER_COOL_COLOR_BOUND source=cool driver=userGlobal positionPct=50 windowWidthPct=28 leftRawPct=36.0 centerRawPct=50.0 rightRawPct=64.0 leftSamplePct=36.0 centerSamplePct=50.0 rightSamplePct=64.0 colorAArgb=4284604923 colorMidArgb=4279551457 colorBArgb=4278423754 settingsGeneration=0
+[AVL COLD] HEADER_VISUAL_POLICY_BOUND null
+[AVL COLD] SPENDING_RHYTHM|STATE availability=unavailable reason=rhythmSnapshotAbsent snapshotRevision=1 rhythmRevision=- analysisAvailable=true analysisRevision=1 analysisDirection=expense analysisTarget=0 analysisScope=month:2026-07 selectionAvailable=true selectionRevision=1 selectionTarget=0 rhythmTargetCount=-
+[AVL COLD] BUDGET_DISTRIBUTION_PREPARE_STARTED analysisScope=month:2026-07 priority=foreground
+[AVL COLD] BUDGET_DISTRIBUTION_SCENE_HOTSET_READY analysisScope=month:2026-07 categorySceneCount=2 partnerSceneCount=0 totalSliceCount=8 estimatedBytes=3072 retainedBytes=3072 uiIsolateMicros=11271 largestContiguousUiSliceMicros=11271 yieldCount=0 pauseCount=0 resumeCount=0 supersededCount=0
+[AVL COLD] BUDGET_DISTRIBUTION_SCOPE_BOUND source=foregroundExactScope analysisScope=month:2026-07 direction=expense targetHandle=0 partnerId=- categorySceneHit=true partnerSceneHit=false
+[AVL COLD] BUDGET_DISTRIBUTION_BOUND generation=0 analysisScope=month:2026-07 targetHandle=0 cacheHit=false published=true
+[AVL COLD] BUDGET_DISTRIBUTION_BOUND generation=0 analysisScope=month:2026-07 targetHandle=0 cacheHit=true published=true
+[AVL COLD] RESOURCE|ACQUIRE lane=timePreview prior=none activeBorrowers=0 boundedBanks=6
+[AVL COLD] HOME|LAYER_STACK mode=budget collapseProgress=0.0 collapseMilestone=0 budgetLayout=split budgetOrder=avatarsThenChart zone2=17.0,457.0 378.0x217.0 modeContent=17.0,374.0 378.0x313.5 collapseHandle=17.0,695.0 378.0x20.0 logBoxHeader=17.0,715.0 378.0x87.8 lowerOpacity=1.000 lowerScale=1.000 pagerPage=- pagerMilestone=- pagerControllerIdentity=439722035 physicalSurface=BudgetDistributionCardShell contentClip=BudgetDistributionCardShell.ClipRRect paintOrder=DashboardCoreModeHost<DashboardLogBoxViewport<DashboardCollapseHandle
+[AVL COLD] COLLAPSE|GEOMETRY mode=budget collapseProgress=0.0 normalizedProgress=0.000 progressBucket=0 header=17.0,104.0 378.0x126.0 chart=17.0,457.0 378.0x217.0 modeContent=17.0,374.0 378.0x313.5 collapseHandle=17.0,695.0 378.0x20.0 logBoxHeader=17.0,715.0 378.0x87.8 lowerOpacity=1.000 lowerScale=1.000 surfaceOwner=BudgetDistributionCardShell pageViewportClip=BudgetDistributionCardShell.ClipRRect
+[AVL COLD] BUDGET_HEADER_WIDGET_BUILT interactionGeneration=0 targetHandle=0 visiblePresentationEpoch=1 visibleFrameGeneration=1 buildVsyncMicros=1420070400000000
+[AVL COLD] LOGBOX_RENDER_DOMAIN_CHANGED null
+[AVL COLD] VERTICAL_ROOT_FALLBACK_PREPARE_STARTED null
+[AVL COLD] SCENE_WINDOW_PREPARE_STARTED owner=renderCriticalReadiness priority=5
+[AVL COLD] SCENE_WINDOW_SLICE_OVER_BUDGET boundary=rowDiscovery elapsedMicros=2224 budgetMicros=1000
+[AVL COLD] HEADER_PALETTE_FIELD_BOUND source=cool positionPct=50.0 windowWidthPct=28.0 categoryColorId=- sourceColorCount=3 sourceStopCount=3 fieldHash=79f93e3b staticAngle=112.0 settingsGeneration=0
+[AVL COLD] HEADER_RENDER_BACKEND_BOUND commitSha=unknown backend=fragmentShader logicalWidth=376.0 logicalHeight=124.0 devicePixelRatio=3.0 physicalWidth=1128.0 physicalHeight=372.0 backendIdentity=935040965
+[AVL COLD] HEADER_EFFECT_PALETTE_TRANSPORT_BOUND effectId=dualTide animationFamily=classicReference transportRevision=classicReference69d109 transportMode=historicalEffectMath transportDomain=sourceUv distributionPreserving=false seamPaletteLock=true genericSeamHighlight=true flowModel=bidirectionalMaterialAdvection shaderAbiVersion=3 endpointColorAuthority=false paletteSampler=canonicalStops fragmentProgramIdentity=935040965 fragmentShaderIdentity=935040965 renderBackend=runtimeEffect fieldEvaluation=perFragment canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b
+[AVL COLD] HEADER_PORTAL_INNER_CHANNEL_BOUND enabled=true effectId=wandering-mist settingsGeneration=0 phaseOwnerIdentity=450626698 controllerIdentity=271919964 fragmentBackendIdentity=935040965 programIdentity=935040965 shaderIdentity=935040965 canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b portalColorModel=paletteCoordinate inputSignature=f57cfa9
+[AVL COLD] HEADER_PORTAL_BACKGROUND_CHANNEL_BOUND enabled=true effectId=wandering-mist settingsGeneration=0 phaseOwnerIdentity=450626698 controllerIdentity=271919964 fragmentBackendIdentity=935040965 programIdentity=935040965 shaderIdentity=935040965 canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b portalColorModel=paletteCoordinate inputSignature=f57cfa9
+[AVL COLD] HEADER_PORTAL_FRAGMENT_INPUT_BOUND innerEnabled=true innerEffect=wandering-mist innerSettingsHash=98437df backgroundEnabled=true backgroundEffect=wandering-mist backgroundSettingsHash=98437df uniformLayoutVersion=3 fragmentConfigurationGeneration=1 fragmentBackendIdentity=935040965 programIdentity=935040965 shaderIdentity=935040965 canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b portalColorModel=paletteCoordinate
+[AVL COLD] BUDGET_HEADER_PAINTED interactionGeneration=0 targetHandle=0 visiblePresentationEpoch=1 visibleFrameGeneration=1 displayNumeratorScaled100=3600 displayDenominatorScaled100=10000 paintVsyncMicros=1420070400000000
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+[AVL] mounted cold=true {capacity: 17, cached: 1, pending: 6, prepared: 1, promotions: 0, misses: 0}
+[AVL] fling 0
+[AVL COLD] AV|POINTER_ACCEPTED liveRootReady=false motionActive=false pointerId=1 startingRawCenteredLogicalIndex=0.0 distanceToNearestSemanticBoundaryPixels=29.00 touchSlopThresholdPixels=18.0 controllerIdentity=871678834 physicsCreationCount=1
+[AVL COLD] FOREGROUND_PRODUCER_CLAIMED producer=budgetAvatar epoch=1 reason=budgetAvatarPointerDown prior=none
+[AVL COLD] SCENE_PREPARATION_RESUMED null
+[AVL COLD] BUDGET_AVATAR_DIRECT_POINTER_PREEMPTED supersededFocusGeneration=0 focusGeneration=1 interruptedTimeMotion=false foregroundClaimed=true pointerInteractionEpoch=1 pointerOrderClaimed=true cancelledRailWarmup=true cancelledSummaryParentHotset=false
+[AVL COLD] AV|FLING_STARTED generation=1 phase=directDrag origin=userDrag selectedHandle=0 controllerIdentity=871678834 physicsCreationCount=1
+[AVL COLD] SCENE_PREPARATION_RESUMED null
+[AVL COLD] BUDGET_DISTRIBUTION_BOUND generation=0 analysisScope=month:2026-07 targetHandle=0 cacheHit=true published=true
+[AVL COLD] SCENE_WINDOW_REBASE_REQUESTED null
+[AVL COLD] SCENE_WINDOW_REBASE_STARTED null
+[AVL COLD] SCENE_WINDOW_PREPARE_STARTED owner=foregroundNavigation priority=3
+[AVL COLD] SCENE_WINDOW_SLICE_OVER_BUDGET boundary=rowDiscovery elapsedMicros=2382 budgetMicros=1000
+[AVL COLD] SCENE_WINDOW_PREPARE_COMPLETED owner=foregroundNavigation priority=3
+[AVL COLD] SCENE_WINDOW_ACTIVATED null
+[AVL COLD] SCENE_COVERAGE_SATISFIED null
+[AVL COLD] SCENE_WINDOW_REBASE_COMPLETED null
+[AVL COLD] SCENE_WINDOW_REBASE_ACTIVATED null
+[AVL COLD] LOGBOX_SCENE_SELECTED null
+[AVL COLD] BUDGET_PROGRESS_WIDGET_BUILT targetHandle=0 interactionGeneration=0 visiblePresentationEpoch=1 visibleFrameGeneration=1 visualProgress=0.36 buildVsyncMicros=1420070400016500
+[AVL COLD] BUDGET_PROGRESS_PAINTED targetHandle=0 interactionGeneration=0 visiblePresentationEpoch=1 visibleFrameGeneration=1 displayNumeratorScaled100=3600 displayDenominatorScaled100=10000 visualProgress=0.36 paintVsyncMicros=1420070400016500
+[AVL COLD] HEADER_RENDER_FIDELITY_CONFIG outputResolutionMode=nativeSurface fieldEvaluationMode=perFragment logicalWidth=376.0 logicalHeight=124.0 physicalWidth=1128.0 physicalHeight=372.0 sourceRenderScale=0.6 effectId=dualTide backend=fragmentShader physicalTarget=1128.0x372.0 parentTransformScale=notObservableInCanvas touchOverlayBackend=fragmentShaderAnalytic shaderFailureFallback=nativeStaticGradient shaderReady=true shaderFailure=false
+[AVL COLD] HEADER_TOUCH_RENDER_PATH_BOUND fieldBackend=fragmentShader overlayBackend=fragmentShaderAnalytic trailBackend=fragmentShaderAnalytic logicalSize=376.0x124.0 physicalSize=1128.0x372.0 usesSaveLayer=false usesOffscreenIntermediate=false
+[AVL COLD] HEADER_EFFECT_PALETTE_TRANSPORT_BOUND effectId=dualTide animationFamily=classicReference transportRevision=classicReference69d109 transportMode=historicalEffectMath transportDomain=sourceUv distributionPreserving=false seamPaletteLock=true genericSeamHighlight=true flowModel=bidirectionalMaterialAdvection shaderAbiVersion=3 endpointColorAuthority=false paletteSampler=canonicalStops fragmentProgramIdentity=496537148 fragmentShaderIdentity=616824856 renderBackend=runtimeEffect fieldEvaluation=perFragment canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b
+[AVL COLD] HEADER_PORTAL_INNER_CHANNEL_BOUND enabled=true effectId=wandering-mist settingsGeneration=0 phaseOwnerIdentity=450626698 controllerIdentity=271919964 fragmentBackendIdentity=935040965 programIdentity=496537148 shaderIdentity=616824856 canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b portalColorModel=paletteCoordinate inputSignature=43e0b29
+[AVL COLD] HEADER_PORTAL_BACKGROUND_CHANNEL_BOUND enabled=true effectId=wandering-mist settingsGeneration=0 phaseOwnerIdentity=450626698 controllerIdentity=271919964 fragmentBackendIdentity=935040965 programIdentity=496537148 shaderIdentity=616824856 canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b portalColorModel=paletteCoordinate inputSignature=43e0b29
+[AVL COLD] HEADER_PORTAL_FRAGMENT_INPUT_BOUND innerEnabled=true innerEffect=wandering-mist innerSettingsHash=98437df backgroundEnabled=true backgroundEffect=wandering-mist backgroundSettingsHash=98437df uniformLayoutVersion=3 fragmentConfigurationGeneration=2 fragmentBackendIdentity=935040965 programIdentity=496537148 shaderIdentity=616824856 canonicalFieldStopCount=3 canonicalFieldStopHash=79f93e3b portalColorModel=paletteCoordinate
+[AVL COLD] VERTICAL_READY_AHEAD_TARGET_CHANGED null
+[AVL COLD] VERTICAL_EXTENT_PUBLISHED null
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=1
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=1 categoryId=avatar-category-1 partnerId=-
+[AVL COLD] FOCUS_BASE_SCENE_RETAINED retainedKeyDigest=6711a159 sharedRows=8
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-1 partner=none generation=2 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-1 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=true workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=125 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=0 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=0 largestContiguousUiSliceMicros=0
+[AVL COLD] AV|LIVE_ROOT_MISS generation=2 targetHandle=1 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=2 targetHandle=1 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=1 focusGeneration=2 interactionEpoch=2 localGeneration=2 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=2
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=2 targetHandle=1 interactionEpoch=2 localGeneration=2 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=1 visualTargetHandle=0 limitKey=FinancialLimitKey
+[AVL COLD] AVATAR_FIRST_TARGET_PIPELINE_SUMMARY pointerId=1 initialSelectedTargetHandle=0 targetHandle=1 interactionGeneration=1 startingRawCenteredLogicalIndex=0.0000 distanceToNearestSemanticBoundaryItems=0.5000 distanceToNearestSemanticBoundaryPixels=29.00 touchSlopThresholdPixels=18.0 pointerToRecognizerMicros=75435 pointerToFirstRawScrollMicros=86057 pointerToFirstSemanticMicros=464912 pointerToPreviewMicros=471046 pointerToExactPhaseAStoreMicros=-1 pointerToLogBoxPaintMicros=-1 logBoxPaintToRasterMicros=-1 terminalOutcome=coalescedBeforeReadiness
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=2
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=2 categoryId=avatar-category-2 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=2 targetHandle=1 interactionEpoch=2 localGeneration=2 reason=coalescedBeforeReadiness replacementGeneration=3 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-2 partner=none generation=3 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-2 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=16 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=6346 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=6346 largestContiguousUiSliceMicros=6346
+[AVL COLD] AV|LIVE_ROOT_MISS generation=3 targetHandle=2 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=3 targetHandle=2 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=2 focusGeneration=3 interactionEpoch=3 localGeneration=3 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=3
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=3 targetHandle=2 interactionEpoch=3 localGeneration=3 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=directDrag targetHandle=1 reason=coordinatorRejected
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=2 visualTargetHandle=0 limitKey=FinancialLimitKey
+Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+Carousel snap: stiffness=340.0, settle=1024ms
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=3
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=3 categoryId=avatar-category-3 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=3 targetHandle=2 interactionEpoch=3 localGeneration=3 reason=coalescedBeforeReadiness replacementGeneration=4 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-3 partner=none generation=4 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-3 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=6 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=1229 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=1229 largestContiguousUiSliceMicros=1229
+[AVL COLD] AV|LIVE_ROOT_MISS generation=4 targetHandle=3 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=4 targetHandle=3 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=3 focusGeneration=4 interactionEpoch=4 localGeneration=4 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=4
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=4 targetHandle=3 interactionEpoch=4 localGeneration=4 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=directDrag targetHandle=2 reason=coordinatorRejected
+[AVL COLD] AV|BALLISTIC_STARTED generation=1 velocity=2400 selectedHandle=0 controllerIdentity=871678834
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=3 visualTargetHandle=0 limitKey=FinancialLimitKey
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=4
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=4 categoryId=avatar-category-4 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=4 targetHandle=3 interactionEpoch=4 localGeneration=4 reason=coalescedBeforeReadiness replacementGeneration=5 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-4 partner=none generation=5 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-4 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=8 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=1180 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=1180 largestContiguousUiSliceMicros=1180
+[AVL COLD] AV|LIVE_ROOT_MISS generation=5 targetHandle=4 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=5 targetHandle=4 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=4 focusGeneration=5 interactionEpoch=5 localGeneration=5 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=5
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=5 targetHandle=4 interactionEpoch=5 localGeneration=5 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=directDrag targetHandle=3 reason=coordinatorRejected
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=4 visualTargetHandle=0 limitKey=FinancialLimitKey
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=5
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=5 categoryId=avatar-category-5 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=5 targetHandle=4 interactionEpoch=5 localGeneration=5 reason=coalescedBeforeReadiness replacementGeneration=6 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-5 partner=none generation=6 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-5 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=8 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=2150 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=2150 largestContiguousUiSliceMicros=2150
+[AVL COLD] AV|LIVE_ROOT_MISS generation=6 targetHandle=5 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=6 targetHandle=5 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=5 focusGeneration=6 interactionEpoch=6 localGeneration=6 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=6
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=6 targetHandle=5 interactionEpoch=6 localGeneration=6 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=4 reason=coordinatorRejected
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=5 visualTargetHandle=0 limitKey=FinancialLimitKey
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=6
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=6 categoryId=avatar-category-6 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=6 targetHandle=5 interactionEpoch=6 localGeneration=6 reason=coalescedBeforeReadiness replacementGeneration=7 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-6 partner=none generation=7 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-6 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=32 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=7813 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=7813 largestContiguousUiSliceMicros=7813
+[AVL COLD] AV|LIVE_ROOT_MISS generation=7 targetHandle=6 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=7 targetHandle=6 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=6 focusGeneration=7 interactionEpoch=7 localGeneration=7 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=7
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=7 targetHandle=6 interactionEpoch=7 localGeneration=7 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=5 reason=coordinatorRejected
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=6 visualTargetHandle=0 limitKey=FinancialLimitKey
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=7
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=7 categoryId=avatar-category-7 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=7 targetHandle=6 interactionEpoch=7 localGeneration=7 reason=coalescedBeforeReadiness replacementGeneration=8 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-7 partner=none generation=8 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-7 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=8 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=1274 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=1274 largestContiguousUiSliceMicros=1274
+[AVL COLD] AV|LIVE_ROOT_MISS generation=8 targetHandle=7 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=8 targetHandle=7 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=7 focusGeneration=8 interactionEpoch=8 localGeneration=8 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=8
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=8 targetHandle=7 interactionEpoch=8 localGeneration=8 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=6 reason=coordinatorRejected
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=7 visualTargetHandle=0 limitKey=FinancialLimitKey
+[AVL COLD] AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=8
+[AVL COLD] BUDGET_LOGBOX_DRILLDOWN_REQUESTED source=avatarPreview targetHandle=8 categoryId=avatar-category-8 partnerId=-
+[AVL COLD] AVATAR_CANDIDATE_SUPERSEDED generation=8 targetHandle=7 interactionEpoch=8 localGeneration=8 reason=coalescedBeforeReadiness replacementGeneration=9 terminalClassification=coalescedBeforeReadiness
+[AVL COLD] CATEGORY_FOCUS_REQUESTED category=avatar-category-8 partner=none generation=9 searchLength=0 baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+[AVL COLD] FOCUS_DERIVED_SCOPE_READY category=avatar-category-8 partner=none searchLength=0 baseEntryCount=8 focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1 membershipLookupMicros=10 intersectionMicros=0 semanticUniverseBuildMicros=0 currentRootProjectionMicros=2146 publicationCriticalFrameCount=1 publicationCriticalRowCount=1 eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1 focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1 reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=2146 largestContiguousUiSliceMicros=2146
+[AVL COLD] AV|LIVE_ROOT_MISS generation=9 targetHandle=8 resourcesReady=false phaseAReady=false resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+[AVL COLD] AV|PHASE_A_PUBLICATION_DEFERRED generation=9 targetHandle=8 reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+[AVL COLD] AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=8 focusGeneration=9 interactionEpoch=9 localGeneration=9 baseGeneration=1 baseContentDigest=456739701 baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd replacementScheduled=false pendingCandidateGeneration=9
+[AVL COLD] AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+[AVL COLD] AVATAR_CANDIDATE_PENDING_RESOURCE generation=9 targetHandle=8 interactionEpoch=9 localGeneration=9 resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+[AVL COLD] AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=7 reason=coordinatorRejected
+[AVL COLD] BUDGET_PROGRESS_IDENTITY_MISMATCH avatarTargetHandle=8 visualTargetHandle=0 limitKey=FinancialLimitKey
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+[AVL COLD] BUDGET_DISTRIBUTION_BOUND generation=0 analysisScope=month:2026-07 targetHandle=0 cacheHit=true published=true
+[AVL COLD] VERTICAL_READY_AHEAD_TARGET_CHANGED null
+[AVL COLD] BUDGET_AVATAR_MOTION_SUMMARY generation=1 origin=userDrag terminalReason=settled avatarSemanticCrossings=8 avatarPreviewPublishes=8 directSemanticCrossings=3 ballisticSemanticCrossings=5 directPreviewRequests=3 ballisticPreviewRequests=5 directPreviewAccepted=0 ballisticPreviewAccepted=0 directPreviewRejected=3 ballisticPreviewRejected=4 directMatchingLogBoxPaints=0 ballisticMatchingLogBoxPaints=0 retainedExactPaints=0 visibleExactPaints=0 paintAccountingState=noAcceptedPaintExpected pendingPaintTargetHandle=- pendingPaintPhase=- stalePreviewCompletions=0 untrackedPreviewCompletions=0 latestSemanticTargetHandle=- latestPaintedTargetHandle=- latestRichPaintedTargetHandle=- settleTargetHandle=8 rawScrollUpdates=108 avatarRailBuilds=0 frameTimingSamples=0 frameTimingDroppedSamples=0 frameTimingMissedFrames=0 frameTimingBuildP50Micros=0 frameTimingBuildP95Micros=0 frameTimingBuildMaxMicros=0 frameTimingRasterP50Micros=0 frameTimingRasterP95Micros=0 frameTimingRasterMaxMicros=0 frameTimingTotalSpanP50Micros=0 frameTimingTotalSpanP95Micros=0 frameTimingTotalSpanMaxMicros=0 rawToSemanticP95Micros=58159 semanticToStoreP95Micros=0 storeToPaintP95Micros=0 acknowledgedFrameToRasterP95Micros=0 budgetProgressPainted=1 budgetProgressPaintToRasterP95Micros=0 frameTimingDiagnostics=true firstTickMicros=392528 interTickMinMicros=62595 interTickMedianMicros=127243 interTickP95Micros=276004 interTickMaxMicros=276004 longGapCount=7 duplicateTickCount=0 skippedSemanticIndexCount=0 acceptedLiveSnapshots=0 semanticFrameAccepted=0 richScenePainted=0 completeLivePublications=0 sameVsyncCoalescedTickCount=0 repositoryRequestsAtTicks=0 indexBuildsAtTicks=0 scenePreparesAtTicks=0 canonicalPersistenceCommitsAtTicks=0 canonicalFocusCommitsAtSettle=0 settleVisualDeltaCount=0 partitionRetainedFromPreviousTarget=false controllerIdentity=871678834 scrollPositionIdentity=243176856 physicsCreationCount=1 headerPalettePath=discretePreparedPreview source=preparedCatalog
+[AVL COLD] AV|FLING_SETTLED origin=userDrag settledLogicalIndex=8 generation=1 phase=settling settledTargetHandle=8 crossingCount=8 previewCount=8
+[AVL COLD] AV|FLING_SETTLE_AWAITING_SEMANTIC_FRAME generation=1 settledTargetHandle=8 latestSemanticTargetHandle=-
+[AVL COLD] RAIL_INTERACTION_WARMUP_STARTED null
+[AVL COLD] SCENE_WINDOW_PREPARE_STARTED owner=foregroundNavigation priority=3
+[AVL COLD] SCENE_WINDOW_ATOMIC_WORK_UNIT_OVER_BUDGET workUnit=richProjection elapsedMicros=3294 budgetMicros=1000
+[AVL COLD] SCENE_WINDOW_SLICE_OVER_BUDGET boundary=richProjection elapsedMicros=3301 budgetMicros=1000
+[AVL COLD] SCENE_WINDOW_PREPARE_COMPLETED owner=foregroundNavigation priority=3
+[AVL COLD] SCENE_WINDOW_ACTIVATED null
+[AVL COLD] RAIL_INTERACTION_WARMUP_COMPLETED null
+[AVL COLD] NEXT_PLANE_PUBLICATION_WARMUP_READY null
+[AVL COLD] VERTICAL_READY_AHEAD_TARGET_CHANGED null
+[AVL COLD] VERTICAL_EXTENT_PUBLISHED null
+[AVL COLD] BUDGET_DISTRIBUTION_SCENE_HOTSET_PLANNED source=committedNavigation parentScope=month:2026-07 childScopeCount=31 retainedBytes=3072 requiredScopes=month:2026-07,day:2026-07-01,day:2026-07-02,day:2026-07-03,day:2026-07-04,day:2026-07-05,day:2026-07-06,day:2026-07-07,day:2026-07-08,day:2026-07-09,day:2026-07-10,day:2026-07-11,day:2026-07-12,day:2026-07-13,day:2026-07-14,day:2026-07-15,day:2026-07-16,day:2026-07-17,day:2026-07-18,day:2026-07-19,day:2026-07-20,day:2026-07-21,day:2026-07-22,day:2026-07-23,day:2026-07-24,day:2026-07-25,day:2026-07-26,day:2026-07-27,day:2026-07-28,day:2026-07-29,day:2026-07-30,day:2026-07-31
+[AVL COLD] BUDGET_DISTRIBUTION_PREPARE_STARTED analysisScope=day:2026-07-01 priority=maintenance
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: <8>
+  Actual: <0>
+flight=0
+AV|POINTER_ACCEPTED liveRootReady=false motionActive=false pointerId=1
+startingRawCenteredLogicalIndex=0.0 distanceToNearestSemanticBoundaryPixels=29.00
+touchSlopThresholdPixels=18.0 controllerIdentity=871678834 physicsCreationCount=1
+AV|FLING_STARTED generation=1 phase=directDrag origin=userDrag selectedHandle=0
+controllerIdentity=871678834 physicsCreationCount=1
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=1
+FOCUS_BASE_SCENE_RETAINED retainedKeyDigest=6711a159 sharedRows=8
+CATEGORY_FOCUS_REQUESTED category=avatar-category-1 partner=none generation=2 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-1 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=true workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=125 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=0 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=0
+largestContiguousUiSliceMicros=0
+AV|LIVE_ROOT_MISS generation=2 targetHandle=1 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=2 targetHandle=1
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=1 focusGeneration=2
+interactionEpoch=2 localGeneration=2 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=2
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=2 targetHandle=1 interactionEpoch=2 localGeneration=2
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AVATAR_FIRST_TARGET_PIPELINE_SUMMARY pointerId=1 initialSelectedTargetHandle=0 targetHandle=1
+interactionGeneration=1 startingRawCenteredLogicalIndex=0.0000
+distanceToNearestSemanticBoundaryItems=0.5000 distanceToNearestSemanticBoundaryPixels=29.00
+touchSlopThresholdPixels=18.0 pointerToRecognizerMicros=75435 pointerToFirstRawScrollMicros=86057
+pointerToFirstSemanticMicros=464912 pointerToPreviewMicros=471046 pointerToExactPhaseAStoreMicros=-1
+pointerToLogBoxPaintMicros=-1 logBoxPaintToRasterMicros=-1 terminalOutcome=coalescedBeforeReadiness
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=2
+AVATAR_CANDIDATE_SUPERSEDED generation=2 targetHandle=1 interactionEpoch=2 localGeneration=2
+reason=coalescedBeforeReadiness replacementGeneration=3
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-2 partner=none generation=3 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-2 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=16 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=6346 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=6346
+largestContiguousUiSliceMicros=6346
+AV|LIVE_ROOT_MISS generation=3 targetHandle=2 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=3 targetHandle=2
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=2 focusGeneration=3
+interactionEpoch=3 localGeneration=3 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=3
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=3 targetHandle=2 interactionEpoch=3 localGeneration=3
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=directDrag targetHandle=1 reason=coordinatorRejected
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=3
+AVATAR_CANDIDATE_SUPERSEDED generation=3 targetHandle=2 interactionEpoch=3 localGeneration=3
+reason=coalescedBeforeReadiness replacementGeneration=4
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-3 partner=none generation=4 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-3 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=6 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=1229 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=1229
+largestContiguousUiSliceMicros=1229
+AV|LIVE_ROOT_MISS generation=4 targetHandle=3 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=4 targetHandle=3
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=3 focusGeneration=4
+interactionEpoch=4 localGeneration=4 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=4
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=4 targetHandle=3 interactionEpoch=4 localGeneration=4
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=directDrag targetHandle=2 reason=coordinatorRejected
+AV|BALLISTIC_STARTED generation=1 velocity=2400 selectedHandle=0 controllerIdentity=871678834
+AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=4
+AVATAR_CANDIDATE_SUPERSEDED generation=4 targetHandle=3 interactionEpoch=4 localGeneration=4
+reason=coalescedBeforeReadiness replacementGeneration=5
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-4 partner=none generation=5 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-4 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=8 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=1180 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=1180
+largestContiguousUiSliceMicros=1180
+AV|LIVE_ROOT_MISS generation=5 targetHandle=4 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=5 targetHandle=4
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=4 focusGeneration=5
+interactionEpoch=5 localGeneration=5 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=5
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=5 targetHandle=4 interactionEpoch=5 localGeneration=5
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=directDrag targetHandle=3 reason=coordinatorRejected
+AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=5
+AVATAR_CANDIDATE_SUPERSEDED generation=5 targetHandle=4 interactionEpoch=5 localGeneration=5
+reason=coalescedBeforeReadiness replacementGeneration=6
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-5 partner=none generation=6 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-5 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=8 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=2150 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=2150
+largestContiguousUiSliceMicros=2150
+AV|LIVE_ROOT_MISS generation=6 targetHandle=5 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=6 targetHandle=5
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=5 focusGeneration=6
+interactionEpoch=6 localGeneration=6 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=6
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=6 targetHandle=5 interactionEpoch=6 localGeneration=6
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=4 reason=coordinatorRejected
+AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=6
+AVATAR_CANDIDATE_SUPERSEDED generation=6 targetHandle=5 interactionEpoch=6 localGeneration=6
+reason=coalescedBeforeReadiness replacementGeneration=7
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-6 partner=none generation=7 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-6 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=32 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=7813 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=7813
+largestContiguousUiSliceMicros=7813
+AV|LIVE_ROOT_MISS generation=7 targetHandle=6 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=7 targetHandle=6
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=6 focusGeneration=7
+interactionEpoch=7 localGeneration=7 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=7
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=7 targetHandle=6 interactionEpoch=7 localGeneration=7
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=5 reason=coordinatorRejected
+AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=7
+AVATAR_CANDIDATE_SUPERSEDED generation=7 targetHandle=6 interactionEpoch=7 localGeneration=7
+reason=coalescedBeforeReadiness replacementGeneration=8
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-7 partner=none generation=8 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-7 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=8 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=1274 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=1274
+largestContiguousUiSliceMicros=1274
+AV|LIVE_ROOT_MISS generation=8 targetHandle=7 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=8 targetHandle=7
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=7 focusGeneration=8
+interactionEpoch=8 localGeneration=8 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=8
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=8 targetHandle=7 interactionEpoch=8 localGeneration=8
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=6 reason=coordinatorRejected
+AV|PREVIEW_REQUESTED generation=1 phase=ballistic targetHandle=8
+AVATAR_CANDIDATE_SUPERSEDED generation=8 targetHandle=7 interactionEpoch=8 localGeneration=8
+reason=coalescedBeforeReadiness replacementGeneration=9
+terminalClassification=coalescedBeforeReadiness
+CATEGORY_FOCUS_REQUESTED category=avatar-category-8 partner=none generation=9 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-8 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=10 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=2146 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=2146
+largestContiguousUiSliceMicros=2146
+AV|LIVE_ROOT_MISS generation=9 targetHandle=8 resourcesReady=false phaseAReady=false
+resourceOwner=preparedSceneCache resourceKey=none repositoryRequests=0 indexBuilds=0
+textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=9 targetHandle=8
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AV|EXACT_LOCAL_WINDOW_REJECTED reason=pendingHotsetPlans targetHandle=8 focusGeneration=9
+interactionEpoch=9 localGeneration=9 baseGeneration=1 baseContentDigest=456739701
+baseScopeDigest=5bd721a7 visibleScopeDigest=878cf4ca navigationScopeDigest=878cf4ca
+requiredKeyCount=8 cachedKeyCount=1 pendingPlanCount=7 missingKeyCount=7 missingKeyDigest=5b88b9cd
+replacementScheduled=false pendingCandidateGeneration=9
+AV|LIVE_ROOT_RESOURCE_DEFERRED reason=exactLocalHotsetUnavailable inputGateHeld=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=9 targetHandle=8 interactionEpoch=9 localGeneration=9
+resourceKey=2dc9bf04 latestWins=true richSceneStaged=false
+AV|PREVIEW_REJECTED generation=1 phase=ballistic targetHandle=7 reason=coordinatorRejected
+AV|FLING_SETTLED origin=userDrag settledLogicalIndex=8 generation=1 phase=settling
+settledTargetHandle=8 crossingCount=8 previewCount=8
+AV|FLING_SETTLE_AWAITING_SEMANTIC_FRAME generation=1 settledTargetHandle=8
+latestSemanticTargetHandle=-
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart:127:9)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart line 127
+The test description was:
+  AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time
+  coldPartialHotset=true
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:10 +0 -1: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time coldPartialHotset=true [E]
+  Test failed. See exception logs above.
+  The test description was: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time coldPartialHotset=true
+  
+00:10 +0 -1: (tearDownAll)
+00:11 +0 -1: Some tests failed.

@@ -51,6 +51,7 @@ import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_avatar_target_painted.dart';
+import 'dashboard_avatar_resource_window.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
 import 'dashboard_vertical_background_work_snapshot.dart';
 import 'dashboard_interaction_diagnostics.dart';
@@ -205,10 +206,12 @@ final class _PendingBudgetAvatarPhaseACandidate {
     required this.baseIndex,
     required this.baseScope,
     required this.visibleScope,
+    required this.payload,
     required this.interactionOrder,
     required this.exactEmpty,
     required this.isStillCurrent,
     required this.publishIfPainterReady,
+    this.onPreviewTerminated,
   }) : completion = Completer<bool>();
 
   final int generation;
@@ -216,10 +219,12 @@ final class _PendingBudgetAvatarPhaseACandidate {
   final PreparedDashboardIndex baseIndex;
   final CurrentLedgerQueryScope baseScope;
   final CurrentLedgerQueryScope visibleScope;
+  final DashboardLogViewportState payload;
   final DashboardInteractionPreviewOrder interactionOrder;
   final bool exactEmpty;
   final bool Function() isStillCurrent;
   final Future<bool> Function() publishIfPainterReady;
+  final ValueChanged<AvatarPreviewTerminal>? onPreviewTerminated;
   final Completer<bool> completion;
 }
 
@@ -8251,11 +8256,42 @@ final class DashboardCoreController {
     }
     if (_liveInteractionResourceWindowPreparer == null) return true;
     final resourceKey = _budgetAvatarLiveResourceKeyFor(base, baseScope);
-    final exactLocalWindow = _budgetAvatarExactLocalResourceWindowFor(
-      base: base,
-      baseScope: baseScope,
-      resourceKey: resourceKey,
-    );
+    final candidate = _pendingBudgetAvatarPhaseACandidate;
+    final exactTarget =
+        candidate != null &&
+        identical(candidate.baseIndex, base) &&
+        candidate.baseScope == baseScope;
+    if (exactTarget && !candidate.isStillCurrent()) {
+      _supersedePendingBudgetAvatarPhaseACandidate(reason: 'staleRejected');
+      return false;
+    }
+    if (exactTarget &&
+        (candidate.payload.queryKey != candidate.visibleScope.key ||
+            candidate.payload.revision != base.coreRevision)) {
+      _recordAvatarResourceWindowRejection(
+        candidate.payload.revision != base.coreRevision
+            ? AvatarResourceWindowRejection.resourcePayloadBaseMismatch
+            : AvatarResourceWindowRejection.resourcePayloadScopeMismatch,
+        base: base,
+        baseScope: baseScope,
+      );
+      _supersedePendingBudgetAvatarPhaseACandidate(
+        reason: 'explicitInvariantFailure',
+      );
+      return false;
+    }
+    // The current target already owns an immutable exact projection. A
+    // cancelled neighbour warmup cannot be its readiness dependency.
+    final exactLocalWindow = exactTarget
+        ? DashboardLogBoxSceneWindow(
+            identity: resourceKey,
+            payloads: [candidate.payload],
+          )
+        : _budgetAvatarExactLocalResourceWindowFor(
+            base: base,
+            baseScope: baseScope,
+            resourceKey: resourceKey,
+          );
     if (exactLocalWindow == null) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -8276,6 +8312,23 @@ final class DashboardCoreController {
       budgetAvatarLiveRootReady.value = false;
     }
     final _LiveInteractionRowResource? resource;
+    if (exactTarget) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|TARGET_RESOURCE_PREPARATION_SCHEDULED',
+          coreRevision: base.coreRevision,
+          entryCount: candidate.payload.previewRowCount,
+          scope:
+              'targetHandle=${candidate.targetHandle ?? '-'} '
+              'focusGeneration=${candidate.generation} '
+              'interactionEpoch=${candidate.interactionOrder.interactionEpoch} '
+              'exactPayloadQueryDigest=${FluviDiagnosticKeyDigest.of(candidate.payload.queryKey.value)} '
+              'resourceKeyDigest=${FluviDiagnosticKeyDigest.of(resourceKey)} '
+              'pendingPlanCount=${_pendingBudgetAvatarFocusPlans.length} '
+              'replacementScheduled=true payloadCount=1 maxRows=8192',
+        ),
+      );
+    }
     try {
       resource = await _prepareLiveInteractionRowResource(
         base: base,
@@ -8285,6 +8338,9 @@ final class DashboardCoreController {
         diagnosticPrefix: 'AV',
         exactLocalWindow: exactLocalWindow,
         isStillCurrent: () =>
+            (!exactTarget ||
+                (identical(_pendingBudgetAvatarPhaseACandidate, candidate) &&
+                    candidate.isStillCurrent())) &&
             _foregroundDirectProducer !=
                 _DashboardForegroundDirectProducer.summaryTime &&
             identical(_focusBaseIndex ?? dataRuntime.currentIndex, base) &&
@@ -8315,11 +8371,21 @@ final class DashboardCoreController {
           direction: baseScope.direction.name,
           coreRevision: base.coreRevision,
           scope:
-              'reason=scenePreparationCancelled retry=nextDisplayFrame '
+              'reason=scenePreparationCancelled retry=${exactTarget ? 'noneTerminal' : 'nextDisplayFrame'} '
               'inputGateHeld=false',
         ),
       );
-      _scheduleBudgetAvatarLiveResourceRetry();
+      if (exactTarget) {
+        if (identical(_pendingBudgetAvatarPhaseACandidate, candidate)) {
+          _supersedePendingBudgetAvatarPhaseACandidate(
+            reason: candidate.isStillCurrent()
+                ? 'explicitInvariantFailure'
+                : 'staleRejected',
+          );
+        }
+      } else {
+        _scheduleBudgetAvatarLiveResourceRetry();
+      }
       return false;
     } on Object catch (error) {
       FluviDiagnosticLogger.log(
@@ -8332,9 +8398,25 @@ final class DashboardCoreController {
           error: '$error',
         ),
       );
+      if (exactTarget &&
+          identical(_pendingBudgetAvatarPhaseACandidate, candidate)) {
+        _supersedePendingBudgetAvatarPhaseACandidate(
+          reason: 'explicitInvariantFailure',
+        );
+      }
       return false;
     }
-    if (resource == null) return false;
+    if (resource == null) {
+      if (exactTarget &&
+          identical(_pendingBudgetAvatarPhaseACandidate, candidate)) {
+        _supersedePendingBudgetAvatarPhaseACandidate(
+          reason: candidate.isStillCurrent()
+              ? 'explicitInvariantFailure'
+              : 'staleRejected',
+        );
+      }
+      return false;
+    }
     _budgetAvatarLiveResourceWindow = resource.window;
     _budgetAvatarLiveResourceKey = resource.resourceKey;
     _budgetAvatarLiveResourceBase = base;
@@ -8348,7 +8430,7 @@ final class DashboardCoreController {
         coreRevision: base.coreRevision,
         entryCount: resource.entryCount,
         scope:
-            'resourceMode=exactLocalHotset payloadCount=${resource.window.sceneCount} '
+            'resourceMode=${exactTarget ? 'exactCurrentTarget' : 'exactLocalHotset'} payloadCount=${resource.window.sceneCount} '
             'maxRows=8192 bounded=true textPaintersReady=true',
       ),
     );
@@ -8364,6 +8446,15 @@ final class DashboardCoreController {
     PreparedDashboardIndex base,
     CurrentLedgerQueryScope baseScope,
   ) {
+    final candidate = _pendingBudgetAvatarPhaseACandidate;
+    if (candidate != null &&
+        identical(candidate.baseIndex, base) &&
+        candidate.baseScope == baseScope) {
+      return 'avatar-live-root:rev:${base.coreRevision}|index:${base.generation}|'
+          'digest:${base.contentDigest}|base:${baseScope.key.value}|'
+          'target:${candidate.targetHandle}|query:${candidate.payload.queryKey.value}|'
+          'order:${candidate.interactionOrder.interactionEpoch}:${candidate.generation}';
+    }
     final targetKeys = _budgetAvatarRequiredHotsetKeys.toList()..sort();
     return 'avatar-live-root:rev:${base.coreRevision}|index:${base.generation}|'
         'base:${baseScope.key.value}|targets:${targetKeys.join(',')}';
@@ -8378,33 +8469,120 @@ final class DashboardCoreController {
     required CurrentLedgerQueryScope baseScope,
     required String resourceKey,
   }) {
-    if (_pendingBudgetAvatarFocusPlans.isNotEmpty ||
-        _budgetAvatarRequiredHotsetKeys.isEmpty) {
-      return null;
-    }
-    final payloads = <String, DashboardLogViewportState>{};
-    try {
-      final baseCurrentScope = baseScope.copyWith(
-        timeScope: navigation.state.effectiveScope,
+    final visibleTime = navigation.state.effectiveScope;
+    final aggregateScope = baseScope.copyWith(timeScope: visibleTime);
+    final prior = focus.state;
+    final priorValid =
+        prior != null &&
+        prior.anchor.matches(baseScope: baseScope, revision: base.coreRevision);
+    final partner = priorValid ? prior.partner : null;
+    final search = priorValid ? prior.normalizedSearch : null;
+    final resolution = resolveAvatarResourceWindow(
+      resourceKey: resourceKey,
+      expectedResourceKey: _budgetAvatarLiveResourceKeyFor(base, baseScope),
+      expectedRevision: base.coreRevision,
+      aggregateQuery: aggregateScope.key,
+      aggregatePayload: () => base.frameFor(aggregateScope).logBox,
+      requiredKeys: _budgetAvatarRequiredHotsetKeys,
+      pendingPlanCount: _pendingBudgetAvatarFocusPlans.length,
+      foregroundCurrent:
+          _foregroundDirectProducer !=
+          _DashboardForegroundDirectProducer.summaryTime,
+      cachedPayloads: {
+        for (final key in _budgetAvatarRequiredHotsetKeys)
+          if (_budgetAvatarFocusHotset[key] case final entry?)
+            key: entry.resourcePayload,
+      },
+      expectedPayloadQueries: {
+        for (
+          var index = 0;
+          index < _budgetAvatarRequiredHotsetKeys.length &&
+              index < _requestedBudgetAvatarFocusTargets.length;
+          index++
+        )
+          _budgetAvatarRequiredHotsetKeys[index]: baseScope
+              .copyWith(
+                timeScope: visibleTime,
+                categoryIds: {_requestedBudgetAvatarFocusTargets[index].id},
+                partnerIds: partner == null
+                    ? baseScope.partnerIds
+                    : {partner.id},
+                normalizedSearch: search,
+              )
+              .key,
+      },
+    );
+    final rejection = resolution.rejection;
+    if (rejection != null) {
+      _recordAvatarResourceWindowRejection(
+        rejection,
+        base: base,
+        baseScope: baseScope,
+        resolution: resolution,
       );
-      final aggregatePayload = base.frameFor(baseCurrentScope).logBox;
-      payloads[aggregatePayload.queryKey.value] = aggregatePayload;
-      for (final key in _budgetAvatarRequiredHotsetKeys) {
-        final entry = _budgetAvatarFocusHotset[key];
-        if (entry == null) return null;
-        final payload = entry.resourcePayload;
-        payloads[payload.queryKey.value] = payload;
-      }
-    } on StateError {
-      // A newer Time/window authority can retire the old base between the
-      // synchronous hotset derivation and this cache request. Let the
-      // existing latest-wins candidate path retry from its new exact base;
-      // never substitute the full source membership or a mixed scope.
-      return null;
     }
-    return DashboardLogBoxSceneWindow(
-      identity: resourceKey,
-      payloads: payloads.values.toList(growable: false),
+    return resolution.window;
+  }
+
+  void _recordAvatarResourceWindowRejection(
+    AvatarResourceWindowRejection reason, {
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope baseScope,
+    bool replacementScheduled = false,
+    AvatarResourceWindowResolution? resolution,
+  }) {
+    final missing = _budgetAvatarRequiredHotsetKeys
+        .where((key) => !_budgetAvatarFocusHotset.containsKey(key))
+        .toList(growable: false);
+    final pending = _pendingBudgetAvatarPhaseACandidate;
+    final aggregateScope = baseScope.copyWith(
+      timeScope: navigation.state.effectiveScope,
+    );
+    DashboardLogViewportState? aggregatePayload;
+    try {
+      aggregatePayload = base.frameFor(aggregateScope).logBox;
+    } on StateError {
+      // An unavailable frame is evidence, not an empty aggregate payload.
+    }
+    final exactQuery =
+        resolution?.expectedPayloadQuery ?? pending?.payload.queryKey;
+    final targetPayload = _budgetAvatarFocusHotset.values
+        .where((entry) => entry.resourcePayload.queryKey == exactQuery)
+        .firstOrNull
+        ?.resourcePayload;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|EXACT_LOCAL_WINDOW_REJECTED',
+        coreRevision: base.coreRevision,
+        scope:
+            'reason=${reason.name} '
+            'targetHandle=${pending?.targetHandle ?? '-'} '
+            'focusGeneration=$_focusPublicationGeneration '
+            'interactionEpoch=${pending?.interactionOrder.interactionEpoch ?? 0} '
+            'localGeneration=${pending?.interactionOrder.localGeneration ?? 0} '
+            'baseGeneration=${base.generation} baseContentDigest=${base.contentDigest} '
+            'baseKeyDigest=${FluviDiagnosticKeyDigest.of(base.key.diagnosticIdentity)} '
+            'baseScopeDigest=${FluviDiagnosticKeyDigest.of(baseScope.key.value)} '
+            'visibleScopeDigest=${FluviDiagnosticKeyDigest.of(visibleFrames.logBoxLane.value?.scope.key.value ?? '-')} '
+            'navigationScopeDigest=${FluviDiagnosticKeyDigest.of(navigation.state.parentQueryScope.key.value)} '
+            'requiredKeyCount=${_budgetAvatarRequiredHotsetKeys.length} '
+            'cachedKeyCount=${_budgetAvatarFocusHotset.length} '
+            'pendingPlanCount=${_pendingBudgetAvatarFocusPlans.length} '
+            'missingKeyCount=${missing.length} '
+            'missingKeyDigest=${FluviDiagnosticKeyDigest.of(missing.join(','))} '
+            'aggregatePayloadQueryDigest=${aggregatePayload == null ? '-' : FluviDiagnosticKeyDigest.of(aggregatePayload.queryKey.value)} '
+            'targetResourcePayloadQueryDigest=${resolution?.actualPayloadQuery != null
+                ? FluviDiagnosticKeyDigest.of(resolution!.actualPayloadQuery!.value)
+                : targetPayload == null
+                ? '-'
+                : FluviDiagnosticKeyDigest.of(targetPayload.queryKey.value)} '
+            'broadResourceKeyDigest=${FluviDiagnosticKeyDigest.of(_budgetAvatarLiveResourceKey ?? '-')} '
+            'exactPayloadQueryDigest=${exactQuery == null ? '-' : FluviDiagnosticKeyDigest.of(exactQuery.value)} '
+            'exactMissingRowCount=unknown exactMissingHeaderCount=unknown '
+            'coverageEvidence=AV|EXACT_PHASE_A_BIND_REJECTED '
+            'replacementScheduled=$replacementScheduled '
+            'pendingCandidateGeneration=${pending?.generation ?? '-'}',
+      ),
     );
   }
 
@@ -8454,10 +8632,6 @@ final class DashboardCoreController {
       replacementGeneration: candidate.generation,
     );
     _pendingBudgetAvatarPhaseACandidate = candidate;
-    _requestBudgetAvatarLiveRowResources(
-      candidate.baseIndex,
-      candidate.baseScope,
-    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AVATAR_CANDIDATE_PENDING_RESOURCE',
@@ -8474,6 +8648,12 @@ final class DashboardCoreController {
             'latestWins=true richSceneStaged=false',
       ),
     );
+    // This call starts real work before yielding the request's completion.
+    // Every retained candidate has its own exact payload on the existing lane.
+    _requestBudgetAvatarLiveRowResources(
+      candidate.baseIndex,
+      candidate.baseScope,
+    );
     return candidate.completion.future;
   }
 
@@ -8484,6 +8664,20 @@ final class DashboardCoreController {
     final pending = _pendingBudgetAvatarPhaseACandidate;
     if (pending == null) return;
     _pendingBudgetAvatarPhaseACandidate = null;
+    // The superseded target has relinquished its foreground resource lease.
+    // Cancel only this existing lane so the newest exact target can prepare
+    // before a suspended old slice returns. The old visible bank stays valid.
+    _liveInteractionResourcePreparationCanceller?.call(
+      lane: DashboardLiveInteractionResourceLane.budgetAvatarPreview,
+    );
+    pending.onPreviewTerminated?.call(switch (reason) {
+      'coalescedBeforeReadiness' =>
+        AvatarPreviewTerminal.coalescedBeforeResourceReady,
+      'cancelledByNewPointer' => AvatarPreviewTerminal.cancelledByNewPointer,
+      'disposed' => AvatarPreviewTerminal.disposed,
+      'staleRejected' => AvatarPreviewTerminal.staleRejected,
+      _ => AvatarPreviewTerminal.explicitInvariantFailure,
+    });
     if (!pending.completion.isCompleted) {
       pending.completion.complete(false);
     }
@@ -8554,10 +8748,8 @@ final class DashboardCoreController {
       _supersedePendingBudgetAvatarPhaseACandidate(reason: 'staleRejected');
       return;
     }
-    // A live resource completion is allowed to be asynchronous, but its
-    // readiness claim must be the exact cache authority queried by the
-    // painter. Keep the one candidate pending for the next real completion
-    // rather than publishing an unreadable 13 px placeholder.
+    // Its one exact preparation has completed. Failure to bind now is a
+    // terminal invariant failure, never a wait for nonexistent future work.
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'AVATAR_PENDING_CANDIDATE_AWAITING_EXACT_BIND',
@@ -8571,6 +8763,9 @@ final class DashboardCoreController {
             'accepted=false',
       ),
     );
+    _supersedePendingBudgetAvatarPhaseACandidate(
+      reason: 'explicitInvariantFailure',
+    );
   }
 
   /// Fixed numeric evidence for profile logs and regression tests. No target
@@ -8583,26 +8778,41 @@ final class DashboardCoreController {
         'prepared': _budgetAvatarFocusHotsetPrepared,
         'promotions': _budgetAvatarFocusHotsetPromotions,
         'misses': _budgetAvatarFocusHotsetMisses,
+        'pendingCandidate': _pendingBudgetAvatarPhaseACandidate == null ? 0 : 1,
+        'focusGeneration': _focusPublicationGeneration,
+        'disposed': _disposed ? 1 : 0,
       });
+
+  AvatarPreviewTerminal? _avatarPreviewAdmissionRejection(bool livePreview) {
+    if (_disposed) return AvatarPreviewTerminal.disposed;
+    if (livePreview &&
+        _foregroundDirectProducer ==
+            _DashboardForegroundDirectProducer.summaryTime) {
+      return AvatarPreviewTerminal.staleRejected;
+    }
+    return null;
+  }
 
   Future<bool> requestBudgetCategoryFocus(
     DashboardFocusFacet facet, {
     bool publishDuringMotion = false,
     int? targetHandle,
     VoidCallback? onVisibleSemanticCommit,
+    ValueChanged<AvatarPreviewTerminal>? onPreviewTerminated,
   }) async {
     // Model-only and legacy production-parent callers may reach this exact
     // prepared Avatar publication seam without a mounted physical rail. Only
     // an affirmative newer Time foreground claim is stale evidence; `null`
     // must preserve the protected fc35 Avatar transaction.
-    if (publishDuringMotion &&
-        _foregroundDirectProducer ==
-            _DashboardForegroundDirectProducer.summaryTime) {
-      return Future<bool>.value(false);
+    final rejection = _avatarPreviewAdmissionRejection(publishDuringMotion);
+    if (rejection != null) {
+      onPreviewTerminated?.call(rejection);
+      return false;
     }
     try {
       return await _requestEphemeralFocus(
         category: facet,
+        onPreviewTerminated: onPreviewTerminated,
         source: DashboardLiveInteractionSource.budgetAvatar,
         budgetTargetHandle: targetHandle,
         // A discrete avatar crossing is a foreground presentation target, not
@@ -8638,15 +8848,17 @@ final class DashboardCoreController {
     int? targetHandle,
     bool publishDuringMotion = false,
     VoidCallback? onVisibleSemanticCommit,
+    ValueChanged<AvatarPreviewTerminal>? onPreviewTerminated,
   }) async {
-    if (publishDuringMotion &&
-        _foregroundDirectProducer ==
-            _DashboardForegroundDirectProducer.summaryTime) {
-      return Future<bool>.value(false);
+    final rejection = _avatarPreviewAdmissionRejection(publishDuringMotion);
+    if (rejection != null) {
+      onPreviewTerminated?.call(rejection);
+      return false;
     }
     try {
       return await _requestEphemeralFocus(
         clearCategory: true,
+        onPreviewTerminated: onPreviewTerminated,
         source: DashboardLiveInteractionSource.budgetAvatar,
         budgetTargetHandle: targetHandle,
         deferSceneInstallation: !publishDuringMotion,
@@ -8898,6 +9110,18 @@ final class DashboardCoreController {
   /// a newly focused payload. Bind the focused payload through the exact cache
   /// authority that the rail-preview painter consults instead. Rich Phase-B
   /// staging is intentionally not attempted at a semantic crossing.
+  // A new Avatar intent can retain identical pixels while the visible store
+  // accepts its newer order. Category re-entry and aggregate restore must use
+  // the same admission rule before replacing their canonical continuation.
+  bool _avatarPhaseAPublicationAccepted(
+    bool published,
+    DashboardInteractionPreviewOrder order,
+  ) =>
+      published ||
+      (visibleFrames.lastInteractionPreviewRejectionReason == null &&
+          visibleFrames.interactionPreviewOrder?.hasSameIdentity(order) ==
+              true);
+
   bool _bindBudgetAvatarLivePhaseA({
     required PreparedDashboardIndex baseIndex,
     required PreparedDashboardIndex liveIndex,
@@ -8946,6 +9170,10 @@ final class DashboardCoreController {
           scope:
               'generation=$generation targetHandle=${budgetTargetHandle ?? '-'} '
               'resourcesReady=$resourcesReady phaseAReady=false '
+              'exactPayloadQueryDigest=${FluviDiagnosticKeyDigest.of(payload.queryKey.value)} '
+              'resourceKeyDigest=${FluviDiagnosticKeyDigest.of(resourceKey ?? '-')} '
+              'focusGeneration=$generation '
+              'visibleOwnerInteractionEpoch=${visibleFrames.interactionPreviewOrder?.interactionEpoch ?? 0} '
               'resourceOwner=preparedSceneCache '
               'resourceKey=${resourceKey == null ? 'none' : FluviDiagnosticKeyDigest.of(resourceKey)} '
               'repositoryRequests=0 indexBuilds=0 textPainterCreates=0 '
@@ -8974,6 +9202,7 @@ final class DashboardCoreController {
   }
 
   Future<bool> _requestEphemeralFocus({
+    ValueChanged<AvatarPreviewTerminal>? onPreviewTerminated,
     DashboardFocusFacet? category,
     DashboardFocusFacet? partner,
     String? normalizedSearch,
@@ -9041,6 +9270,7 @@ final class DashboardCoreController {
         : normalizedSearch ?? (priorIsValid ? prior.normalizedSearch : null);
     if (nextCategory == null && nextPartner == null && nextSearch == null) {
       return _restoreBaseAfterFocus(
+        onPreviewTerminated: onPreviewTerminated,
         deferSceneInstallation: deferSceneInstallation,
         source: source,
         budgetTargetHandle: budgetTargetHandle,
@@ -9051,12 +9281,16 @@ final class DashboardCoreController {
     final canReuseAlreadyActiveAvatarTarget =
         source != DashboardLiveInteractionSource.budgetAvatar ||
         !publishDuringMotion ||
-        _isCurrentAvatarSemanticTarget(
-          targetHandle: budgetTargetHandle,
-          category: nextCategory,
-          partner: nextPartner,
-          normalizedSearch: nextSearch,
-        );
+        // Returning to the old visual is a new intent if another target is
+        // pending. Reuse the normal transaction to retire that target and
+        // replace its deferred canonical install before accepting this one.
+        (_pendingBudgetAvatarPhaseACandidate == null &&
+            _isCurrentAvatarSemanticTarget(
+              targetHandle: budgetTargetHandle,
+              category: nextCategory,
+              partner: nextPartner,
+              normalizedSearch: nextSearch,
+            ));
     if (priorIsValid &&
         prior.category?.id == nextCategory?.id &&
         prior.partner?.id == nextPartner?.id &&
@@ -9345,6 +9579,8 @@ final class DashboardCoreController {
             baseScope: baseScope,
             visibleScope: visibleScope,
             interactionOrder: interactionOrder!,
+            payload: derived.frameFor(visibleScope).logBox,
+            onPreviewTerminated: onPreviewTerminated,
             exactEmpty: false,
             isStillCurrent: stillCurrent,
             publishIfPainterReady: publishIfPainterReady,
@@ -9424,7 +9660,10 @@ final class DashboardCoreController {
             state: publicationState,
             previewGeneration: generation,
           );
-    if (completeAvatarLivePublication && !phaseAPublished) {
+    final phaseAAccepted = completeAvatarLivePublication
+        ? _avatarPhaseAPublicationAccepted(phaseAPublished, interactionOrder!)
+        : phaseAPublished;
+    if (completeAvatarLivePublication && !phaseAAccepted) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
           stage: 'AV|SEMANTIC_FRAME_REJECTED',
@@ -9451,7 +9690,7 @@ final class DashboardCoreController {
         );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: phaseAPublished
+        stage: phaseAAccepted
             ? completeAvatarLivePublication
                   ? 'FOCUS_PHASE_A_INTERACTION_FRAME_PUBLISHED'
                   : 'FOCUS_PREVIEW_AMOUNT_PUBLISHED'
@@ -9467,6 +9706,7 @@ final class DashboardCoreController {
             'localGeneration=${interactionOrder?.localGeneration ?? 0} '
             'searchLength=${normalizedSearch?.length ?? 0} '
             'phaseAResourcesReady=$phaseAResourcesReady '
+            'alreadyVisible=${!phaseAPublished && phaseAAccepted} '
             'richSceneStaged=$richSceneStaged '
             'amountPresentationId=${derived.frameFor(publicationState.parentQueryScope).amountPresentationId}',
       ),
@@ -9501,6 +9741,10 @@ final class DashboardCoreController {
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
         richSceneStaged: richSceneStaged,
+        exactCurrentVisualAlreadyPainted:
+            !phaseAPublished &&
+            phaseAAccepted &&
+            _hasCurrentExactAvatarTargetPaint(targetHandle: budgetTargetHandle),
       );
     }
     final installation = _scheduleFocusedSceneInstall(
@@ -9702,6 +9946,7 @@ final class DashboardCoreController {
   }
 
   Future<bool> _restoreBaseAfterFocus({
+    ValueChanged<AvatarPreviewTerminal>? onPreviewTerminated,
     bool deferSceneInstallation = false,
     bool publishDuringMotion = false,
     DashboardLiveInteractionSource source =
@@ -9818,10 +10063,13 @@ final class DashboardCoreController {
           baseScope: baseScope,
           visibleScope: visibleScope,
           interactionOrder: interactionOrder!,
+          payload: baseIndex.frameFor(visibleScope).logBox,
+          onPreviewTerminated: onPreviewTerminated,
           exactEmpty:
               baseIndex.frameFor(visibleScope).logBox.previewRowCount == 0,
           isStillCurrent: stillCurrent,
           publishIfPainterReady: () => _restoreBaseAfterFocus(
+            onPreviewTerminated: onPreviewTerminated,
             deferSceneInstallation: deferSceneInstallation,
             publishDuringMotion: publishDuringMotion,
             source: source,
@@ -9850,15 +10098,9 @@ final class DashboardCoreController {
     // aggregate frame is still on screen. The visible store correctly claims
     // the new order but reports no lane change for identical pixels. That is
     // an exact visible aggregate outcome, not a rejected semantic target.
-    final phaseAAlreadyVisible =
-        completeAvatarLivePublication &&
-        !phaseAPublished &&
-        visibleFrames.lastInteractionPreviewRejectionReason == null &&
-        visibleFrames.interactionPreviewOrder?.hasSameIdentity(
-              interactionOrder,
-            ) ==
-            true;
-    final phaseAAccepted = phaseAPublished || phaseAAlreadyVisible;
+    final phaseAAccepted = completeAvatarLivePublication
+        ? _avatarPhaseAPublicationAccepted(phaseAPublished, interactionOrder!)
+        : phaseAPublished;
     if (completeAvatarLivePublication && !phaseAAccepted) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -9906,7 +10148,7 @@ final class DashboardCoreController {
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
         richSceneStaged: richSceneStaged,
-        exactCurrentVisualAlreadyPainted: phaseAAlreadyVisible,
+        exactCurrentVisualAlreadyPainted: !phaseAPublished && phaseAAccepted,
       );
     }
     final installation = _scheduleFocusedSceneInstall(
@@ -12596,6 +12838,7 @@ final class DashboardCoreController {
 
   void dispose() {
     if (_disposed) return;
+    _supersedePendingBudgetAvatarPhaseACandidate(reason: 'disposed');
     _cancelAvatarLivePaintWaiter();
     _cancelActiveComposerApply(reason: 'disposed');
     _supersedeQueryChipPrewarm();

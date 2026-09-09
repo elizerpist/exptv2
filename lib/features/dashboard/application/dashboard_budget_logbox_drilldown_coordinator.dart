@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'dashboard_avatar_target_painted.dart';
+import 'dashboard_avatar_resource_window.dart';
 import 'dashboard_budget_presentation_controller.dart';
 import 'dashboard_budget_target.dart';
 import 'dashboard_core_controller.dart';
@@ -119,15 +122,18 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
       targetHandle: target.handle,
       categoryId: target.category?.id,
     );
-    final published = target.isAggregate
-        ? await core.clearBudgetCategoryFocus(
+    AvatarPreviewTerminal? terminal;
+    void onTerminated(AvatarPreviewTerminal outcome) => terminal = outcome;
+    final publication = target.isAggregate
+        ? core.clearBudgetCategoryFocus(
+            onPreviewTerminated: onTerminated,
             targetHandle: target.handle,
             publishDuringMotion: publishDuringMotion,
             onVisibleSemanticCommit: presentation == null
                 ? null
                 : () => presentation!.setTargetHandle(target.handle),
           )
-        : await core.requestBudgetCategoryFocus(
+        : core.requestBudgetCategoryFocus(
             DashboardFocusFacet(
               id: target.category!.id,
               displayName: target.category!.displayName,
@@ -135,15 +141,60 @@ final class DashboardBudgetLogboxDrilldownCoordinator {
               iconId: target.category!.iconId,
             ),
             publishDuringMotion: publishDuringMotion,
+            onPreviewTerminated: onTerminated,
             targetHandle: target.handle,
             onVisibleSemanticCommit: presentation == null
                 ? null
                 : () => presentation!.setTargetHandle(target.handle),
           );
-    if (!published || !publishDuringMotion || !awaitExactPaint) {
-      return published;
+    final generation =
+        core.budgetAvatarFocusHotsetDiagnostics['focusGeneration'];
+    void recordTerminal() {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'AV|PREVIEW_TERMINAL',
+          scope:
+              'targetHandle=${target.handle} focusGeneration=$generation '
+              'terminalClassification=${(terminal ?? AvatarPreviewTerminal.explicitInvariantFailure).name}',
+        ),
+      );
     }
-    return core.awaitBudgetAvatarTargetPaint(targetHandle: target.handle);
+
+    try {
+      final published = await publication;
+      if (!publishDuringMotion || source != 'avatarPreview') return published;
+      Future<bool> completePaintEvidence() async {
+        final painted =
+            published &&
+            await core.awaitBudgetAvatarTargetPaint(
+              targetHandle: target.handle,
+            );
+        final exactPaint = core.budgetAvatarTargetPainted.value;
+        final accepted = painted && exactPaint?.targetHandle == target.handle;
+        terminal ??= accepted
+            ? exactPaint!.exactEmpty
+                  ? AvatarPreviewTerminal.acceptedExactEmptyPainted
+                  : AvatarPreviewTerminal.acceptedExactNonEmptyPainted
+            : core.budgetAvatarFocusHotsetDiagnostics['disposed'] == 1
+            ? AvatarPreviewTerminal.disposed
+            : core.budgetAvatarFocusHotsetDiagnostics['focusGeneration'] !=
+                  generation
+            ? AvatarPreviewTerminal.staleRejected
+            : AvatarPreviewTerminal.explicitInvariantFailure;
+        recordTerminal();
+        return accepted;
+      }
+
+      final completion = completePaintEvidence();
+      if (awaitExactPaint) return completion;
+      // Observe actual paint separately; preserve the existing rail's semantic
+      // admission and settlement timing. No second state or selection owner.
+      unawaited(completion);
+      return published;
+    } on Object {
+      if (publishDuringMotion && source == 'avatarPreview') recordTerminal();
+      rethrow;
+    }
   }
 
   Future<bool> commitPartner({

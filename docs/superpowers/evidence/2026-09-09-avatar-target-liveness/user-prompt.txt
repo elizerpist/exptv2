@@ -1,0 +1,1030 @@
+FLUVI — AVATAR-ONLY REPAIR
+
+REPAIR NON-EMPTY AVATAR PHASE-A RESOURCE LIVENESS,
+FINAL-TARGET ATOMICITY, AND PERSISTENT FOCUS CORRECTNESS.
+
+DO NOT MODIFY TIME PRODUCTION BEHAVIOR.
+
+This is an implementation-authorized, evidence-driven production task.
+
+The previous delivery is physically rejected for Avatar correctness even though
+its Avatar carousel motion is physically smooth and its CI/profile pipeline is
+green. Preserve the motion. Repair the data transaction.
+
+Do not stop after another diagnosis-only patch, diagnostic-only patch, isolated
+headless test, one-target cache test, or one green profile fling. Continue
+through deterministic production-composition reproduction, proven root-cause
+repair, repeated multi-flight validation, CI, human APK delivery, exact-SHA SCIP
+regeneration, and a completion report unless an explicit stop condition is met.
+
+======================================================================
+1. ABSOLUTE SCOPE LOCK
+======================================================================
+
+Work only on the Budget category Avatar direct-manipulation path:
+
+- BudgetTargetAvatarRail;
+- DashboardBudgetLogboxDrilldownCoordinator;
+- DashboardCoreController Avatar focus/resource/candidate code;
+- DashboardEphemeralFocusDeriver only if current evidence proves a defect there;
+- DashboardBudgetPresentationController target promotion;
+- the existing budgetAvatarPreview lane in
+  DashboardLogBoxPreparedSceneCache;
+- the existing visible-frame, Header, progress and LogBox acknowledgement seams;
+- Avatar diagnostics, tests and profile acceptance.
+
+Do not implement or retune Time.
+
+Do not modify Time navigation, Time prepared-window rebase, Summary segmented
+motion, Time physics, Time cache lanes, or Time product semantics.
+
+A Time interaction may appear only in:
+- a reproduction showing that it accidentally perturbs/reset the Avatar state;
+- a negative control proving the repaired Avatar no longer needs that reset.
+
+The repair must work from app start and across repeated Avatar flings without
+any Time interaction.
+
+======================================================================
+2. AUTHORITATIVE BASE AND DELIVERY EVIDENCE
+======================================================================
+
+Repository:
+
+  elizerpist/exptv2
+
+Application base:
+
+  aa61242c4b933ad9d650361ae1014d67fd184186
+
+Commit subject:
+
+  fix(dashboard): rebase Time windows before Avatar admission
+
+Parent:
+
+  024fdbc1fd5d9677c93090a1d18f5446fd6f2845
+
+Current branch:
+
+  fix/e8-milestone-time-window-avatar-first-load-codex-20260909
+
+Prior CI run:
+
+  34317086666
+
+Prior human APK:
+
+  /storage/emulated/0/Download/fluvi/
+  fluvi_HUMAN_DIAGNOSTIC_aa61242.apk
+
+Prior APK SHA-256:
+
+  38fae5e1f463eac1ae987ceed4a0d8a7b2d434e66fb41d1d02f44922ace4ffeb
+
+Matching SCIP graph commit:
+
+  c8a4996842ec9738c2082a3b953e5ccd7c52cb85
+
+Expected graph manifest:
+
+  source_head:
+  aa61242c4b933ad9d650361ae1014d67fd184186
+
+  source_parent:
+  024fdbc1fd5d9677c93090a1d18f5446fd6f2845
+
+  scip_dart_version:
+  1.6.2
+
+  index_sha256:
+  215dc25247e686a6468f665ae706d9b530402ae0301dc89194d0223234370837
+
+  document_count:
+  429
+
+  repository_defined_symbol_count:
+  9859
+
+  refs:
+  70299
+
+  edges:
+  20918
+
+  changed-impact records:
+  76
+
+Verify these values before graph use. The graph is for static impact discovery;
+it does not prove runtime completion, paint, liveness or physical correctness.
+
+Do not promote aa61242 as a physical correctness milestone. Its motion is the
+protected baseline, but the exact human APK is physically rejected for Avatar
+data behavior. e8 remains the preferred user-accepted motion rollback anchor
+until the user accepts a newer exact APK.
+
+======================================================================
+3. IMMUTABLE CURRENT AVATAR EVIDENCE
+======================================================================
+
+Google Drive document:
+
+  Fluvi logs avatar fling
+
+Drive ID:
+
+  1FF1BnHJHOEygG3QhMeDfrehzjo0YzIztaGJfNTWZqNs
+
+Modified timestamp observed during prompt preparation:
+
+  2026-09-09T07:26:30.407Z
+
+Exact build/session:
+
+  session:
+  fluvi-1788938720595789
+
+  build:
+  profile/aa61242c4b93
+
+  exact application SHA:
+  aa61242c4b933ad9d650361ae1014d67fd184186
+
+Text export:
+
+  size:
+  689397 bytes
+
+  SHA-256:
+  dcab9c791ba80d09ad79f20ab01cb33ce8c07d366757c241428f76f3bc4183d3
+
+The document contains two overlapping LIVE_TAIL snapshots:
+
+  2329–3328
+  2354–3353
+
+Deduplication by sequence:
+
+  raw event copies:
+  2000
+
+  unique sequences:
+  1025
+
+  exact duplicate copies:
+  975
+
+  conflicting duplicate payloads:
+  0
+
+Freeze the export again before implementation. If its bytes changed, record
+both expected and actual hashes; do not silently blend sessions.
+
+Current deduplicated Avatar totals include:
+
+  AV|PREVIEW_REQUESTED:
+  34
+
+  AV|PREVIEW_ACCEPTED:
+  17
+
+  AV|PREVIEW_REJECTED:
+  18
+
+  AVATAR_CANDIDATE_PENDING_RESOURCE:
+  18
+
+  AV|LIVE_ROOT_MISS:
+  17
+
+  AV|LIVE_ROOT_RESOURCE_DEFERRED:
+  18
+
+  BUDGET_PROGRESS_IDENTITY_MISMATCH:
+  20
+
+  AV|LOGBOX_TARGET_PAINTED:
+  17
+
+  BUDGET_AVATAR_MOTION_SUMMARY:
+  7
+
+======================================================================
+4. PHYSICAL USER VERDICT
+======================================================================
+
+The exact aa61242 human APK behaves as follows:
+
+- Avatar fling motion is smooth;
+- Avatar crossings often receive no data;
+- category focus does not update;
+- the Avatar circle progress does not appear/update;
+- the transaction list does not update;
+- the Header does not update;
+- a Time change temporarily appears to revive some Avatar targets;
+- even then focus is wrong: one target may become the persistent focus while
+  later physical targets do not replace it.
+
+This is a correctness failure, not a physics failure.
+
+A smooth flight with no exact data publication is an automatic failure.
+
+======================================================================
+5. COMMIT-LOOP AUDIT
+======================================================================
+
+GitHub comparison from:
+
+  5ba6c01eb391339c27861762ba888e29aae38593
+
+to:
+
+  aa61242c4b933ad9d650361ae1014d67fd184186
+
+contains ten commits after 5ba, eleven commits inclusive.
+
+The immediate lineage repeatedly changed the same transaction through:
+
+- fc35c1b — restore Avatar painter-ready Phase A;
+- f39091d — foreground Time/Avatar handoff;
+- 5b43a647 — Avatar target-paint instrumentation;
+- c2a9046 — real Avatar profile scenario;
+- b7f168d — startup Phase-A paint gate;
+- e8b73e3 — rich-scene fallback classification;
+- aa61242 — Time-window rebase plus post-rebase Avatar coherence;
+- intervening evidence/milestone commits.
+
+Across the comparison, DashboardCoreController accumulated approximately
++2229/-318 lines, BudgetTargetAvatarRail approximately +546/-7, and the Core
+focus test approximately +3357/-1612.
+
+Do not add another local boolean, fallback, retry-shaped timer or profile-only
+waiver on top of this chain. The next repair must close the end-to-end liveness
+contract.
+
+======================================================================
+6. PROVEN CURRENT FAILURE
+======================================================================
+
+6.1 THE MOTION PATH IS HEALTHY
+
+Flight generation 22:
+
+- requested targets:
+  3, 2, 1, 0, 8, 7, 6;
+- accepted targets:
+  none;
+- final settled target:
+  6;
+- accepted live snapshots:
+  0;
+- semantic frames accepted:
+  0;
+- exact LogBox paints:
+  0;
+- missed physical frames:
+  0.
+
+The carousel can therefore look smooth while every data target fails.
+
+Do not touch physics, velocity, spring, friction, item extent, target spacing,
+semantic threshold, controller identity or ScrollPosition ownership.
+
+6.2 FOCUS DERIVATION IS NOT THE FAILING BOUNDARY
+
+At the final marked failure, physical target 7:
+
+- reaches AV|PREVIEW_REQUESTED;
+- reaches BUDGET_LOGBOX_DRILLDOWN_REQUESTED;
+- reaches CATEGORY_FOCUS_REQUESTED;
+- completes FOCUS_DERIVED_SCOPE_READY;
+- uses the prepared membership;
+- dispatches no worker;
+- performs no full-base scan;
+- copies no prepared rows;
+- completes current-root projection in 324 microseconds.
+
+The next boundary fails:
+
+  resourcesReady=true
+  phaseAReady=false
+  resourceOwner=preparedSceneCache
+  resourceKey=12d3e6e2
+
+Then:
+
+  AV|LIVE_ROOT_RESOURCE_DEFERRED
+  reason=exactLocalHotsetUnavailable
+
+Then:
+
+  AVATAR_CANDIDATE_PENDING_RESOURCE
+
+Then:
+
+  BUDGET_PROGRESS_IDENTITY_MISMATCH
+  avatarTargetHandle=7
+  visualTargetHandle=1
+
+No later real resource completion promotes that candidate.
+
+6.3 THE TIME “RECOVERY” IS AN EMPTY-TARGET BYPASS
+
+Before the Time interaction, the month-scoped non-empty Avatar targets fail.
+
+After the Time interaction changes the visible scope to day:2026-07-09:
+
+- category targets 5, 4, 3, 2, 1 and 6 are accepted only with entryCount=0;
+- aggregate target 0 has entryCount=3 and fails;
+- category target 8 is non-empty and fails;
+- category target 7 has entryCount=1 and fails.
+
+Current source explicitly sets:
+
+  phaseAReady =
+    payload.previewRowCount == 0 || phaseABinder == null
+
+Therefore the temporary recovery is not proof that Time repaired Avatar. Empty
+payloads bypass the exact row/header binder. The non-empty Avatar Phase-A path
+remains broken.
+
+Time is merely an accidental state perturbation and sparse-scope probe.
+
+6.4 FINAL TARGET AUTHORITY SPLITS
+
+Flight generation 26:
+
+- physical settle target:
+  8;
+- latest accepted semantic target:
+  1;
+- latest painted target:
+  1;
+- visible Budget target:
+  1;
+- candidate 8:
+  pending/rejected.
+
+Final flight generation 27:
+
+- physical settle target:
+  7;
+- latest semantic target:
+  none;
+- accepted publications:
+  0;
+- exact paints:
+  0;
+- progress remains target:
+  1.
+
+At USER_MARK avatar_filter_stuck, the canonical committed Query still contains
+the category associated with target 5.
+
+The current system can therefore expose at least three Avatar truths at once:
+
+  physical carousel center:
+  7
+
+  transient visual/progress target:
+  1
+
+  canonical focus/committed Query:
+  5
+
+This is forbidden.
+
+======================================================================
+7. SOURCE-PROVEN LIVENESS GAP
+======================================================================
+
+Current aa61242 source has the following exact structure:
+
+A. `_bindBudgetAvatarLivePhaseA` distinguishes broad resource-bank readiness
+   from exact target-payload readability.
+
+B. Empty payloads pass without using the binder.
+
+C. A non-empty exact payload can see:
+     resourcesReady=true
+     phaseAReady=false
+
+D. `_budgetAvatarExactLocalResourceWindowFor` returns null when:
+   - pending hotset plans exist;
+   - required hotset keys are empty;
+   - any required hotset key is missing;
+   - aggregate/current frame lookup throws.
+
+E. `_primeBudgetAvatarLiveRowResources` handles a null exact-local window by
+   logging exactLocalHotsetUnavailable and returning false.
+
+F. That branch does not invalidate the stale broad-ready claim and does not
+   schedule `_scheduleBudgetAvatarLiveResourceRetry`.
+
+G. The retry scheduler is used for scene-preparation cancellation, not for
+   exactLocalHotsetUnavailable.
+
+H. `_deferBudgetAvatarPhaseACandidate` stores one latest candidate and invokes
+   `_requestBudgetAvatarLiveRowResources`.
+
+I. `_promotePendingBudgetAvatarPhaseACandidate` is invoked from a successful
+   real resource completion.
+
+J. If promotion still cannot bind, it leaves the candidate pending for “the
+   next real completion”, but it does not itself establish that a next
+   completion exists.
+
+This is a closed liveness loop:
+
+  exact binder miss
+    ->
+  exact local window unavailable
+    ->
+  no replacement preparation
+    ->
+  candidate waits for a completion that was never scheduled
+    ->
+  physical settle waits for a semantic target that never arrives.
+
+The four visible failures are downstream consequences of this one failed
+transaction. DashboardBudgetLogboxDrilldownCoordinator changes
+presentation.setTargetHandle only in the matching onVisibleSemanticCommit
+callback. When exact publication fails, target selection, Header, circle
+progress and LogBox correctly remain on the older target rather than showing a
+mixed partial update.
+
+Do not “fix” those four surfaces independently.
+
+======================================================================
+8. UNPROVEN SUBCAUSES — INSTRUMENT BEFORE CLAIMING
+======================================================================
+
+The exact reason `_budgetAvatarExactLocalResourceWindowFor` returns null is not
+currently encoded in the physical trace.
+
+Add a typed bounded diagnostic before production repair with one of:
+
+- pendingHotsetPlans;
+- requiredHotsetKeysEmpty;
+- missingHotsetEntry;
+- aggregateFrameUnavailable;
+- resourcePayloadScopeMismatch;
+- resourcePayloadBaseMismatch;
+- resourceIdentityMismatch;
+- staleForegroundProducer;
+- otherUnexpected.
+
+For every rejection record only bounded identity metadata:
+
+- target handle;
+- focus generation;
+- interaction epoch/local generation;
+- base key/generation/content digest;
+- base scope digest;
+- visible scope digest;
+- navigation scope digest;
+- required-key count;
+- cached-key count;
+- pending-plan count;
+- missing-key count/digest;
+- aggregate payload query digest;
+- target resource-payload query digest;
+- broad resource key digest;
+- exact target payload query digest;
+- exact missing row/header counts;
+- whether replacement work was scheduled;
+- pending candidate generation.
+
+Do not log transaction contents.
+
+Investigate but do not assume:
+
+- `_budgetAvatarFocusHotsetKey` uses `identityHashCode(base)` while other
+  interaction identity helpers compare semantic index identity. This may
+  invalidate/reuse hotset entries incorrectly across equivalent wrappers.
+- hotset `resourcePayload` may have been derived for an older temporal scope;
+- required-key and cache maps may diverge during canonical focus publication;
+- a pending-plan guard may survive into foreground motion;
+- aggregate payload and category payloads may require different exact resource
+  coverage.
+
+Claim the final sub-root only after a deterministic red test and trace prove it.
+
+======================================================================
+9. REQUIRED ARCHITECTURAL RESULT
+======================================================================
+
+Keep the existing owners:
+
+- one DashboardCoreController;
+- one DashboardEphemeralFocusDeriver;
+- one DashboardVisibleFrameStore;
+- one DashboardBudgetPresentationController;
+- one DashboardLogBoxPreparedSceneCache;
+- the existing budgetAvatarPreview resource lane;
+- one BudgetTargetAvatarRail/controller/ScrollPosition;
+- one Header, one progress surface, one LogBox.
+
+Required direct-target transaction:
+
+  physical semantic crossing
+    ->
+  exact prepared focus derivation
+    ->
+  exact target-local non-empty Phase-A resource request
+    ->
+  exact cache binder success
+    ->
+  one atomic visible-frame + Budget target commit
+    ->
+  Header/progress/LogBox paint acknowledgement
+    ->
+  optional rich Phase B
+    ->
+  final settled-target canonical focus commit.
+
+9.1 TARGET-LOCAL RESOURCE LIVENESS
+
+A current non-empty target must not depend on every historical/prearmed hotset
+entry still being present.
+
+When the exact binder misses:
+
+- retain only the latest still-current candidate;
+- prepare the exact current target payload through the existing
+  budgetAvatarPreview lane;
+- optionally include only immediate bounded neighbours;
+- use the already-derived immutable `liveIndex` and exact visible payload;
+- do not rescan Room or build another index;
+- replace/promote the lane resource atomically;
+- retain the old valid visual until the new exact payload is readable;
+- on completion, replay the original candidate/order exactly once;
+- reject stale completion before any visible mutation.
+
+A stale broad bank must not continue to report the target as ready.
+
+The resource identity must distinguish the exact target payload/scope that the
+painter will bind. Use semantic base identity rather than object identity if
+the red test proves wrapper identity drift.
+
+9.2 NO UNRESOLVED PENDING STATE
+
+Every preview request must receive exactly one terminal classification:
+
+- acceptedExactNonEmptyPainted;
+- acceptedExactEmptyPainted;
+- coalescedBeforeResourceReady;
+- cancelledByNewPointer;
+- staleRejected;
+- disposed;
+- explicitInvariantFailure.
+
+Forbidden terminal states:
+
+- pendingForever;
+- coordinatorRejected because readiness work was never scheduled;
+- no completion;
+- unknown;
+- smoothWithZeroData.
+
+9.3 FINAL PHYSICAL TARGET IS AUTHORITATIVE
+
+At motion end, the final centered target may remain visually pending behind
+exact preparation, but:
+
+- it must receive foreground resource priority;
+- no earlier target may be canonically committed as the final focus;
+- the prior exact visual may remain temporarily;
+- the final target must either become exact and commit, or receive an explicit
+  terminal invariant failure;
+- no second fling and no Time interaction may be required.
+
+The final equality invariant is:
+
+  physical centered target
+    ==
+  latest desired target
+    ==
+  latest exact accepted target
+    ==
+  latest exact painted target
+    ==
+  DashboardBudgetPresentation selected handle
+    ==
+  ephemeral focus category/aggregate
+    ==
+  visible-frame Query category
+    ==
+  Header target/value
+    ==
+  circle-progress target/value
+    ==
+  LogBox target/query
+    ==
+  canonical committed focus Query after settle.
+
+======================================================================
+10. REQUIRED RED TESTS BEFORE REPAIR
+======================================================================
+
+Do not use a model-only Core test as the main proof.
+
+Use a persistent production composition with the real:
+
+- CoreDashboard;
+- BudgetTargetAvatarRail;
+- DashboardBudgetLogboxDrilldownCoordinator;
+- DashboardCoreController;
+- DashboardBudgetPresentationController;
+- DashboardLogBoxPreparedSceneCache;
+- exact Phase-A binder;
+- visible-frame store;
+- Header/progress/LogBox paint probes.
+
+10.1 CURRENT AA61242 PHYSICAL SEQUENCE
+
+Create a deterministic fixture in which all nine Avatar handles have distinct,
+non-empty current-scope payloads.
+
+Drive the actual rail through at least:
+
+  3 -> 2 -> 1 -> 0 -> 8 -> 7 -> 6
+
+without Time input.
+
+On unmodified aa61242 require the test to fail at the source-proven exact
+binder/liveness boundary.
+
+10.2 REPEATED CYCLIC FLIGHTS
+
+Run repeated forward and reverse flights across:
+
+  0, 1, 2, 3, 4, 5, 6, 7, 8
+
+for at least twenty full target cycles using one persistent app/Core/cache/rail
+instance.
+
+Do not recreate the widget between flights.
+
+10.3 MIXED EMPTY/NON-EMPTY CONTROL
+
+Use a sparse day-like fixture where some category targets are empty and
+aggregate/category endpoints are non-empty.
+
+Assert:
+
+- empty-target success does not count as non-empty resource readiness proof;
+- every non-empty target binds and paints;
+- the test fails if only empty targets succeed.
+
+10.4 EXACT-LOCAL-HOTSET-UNAVAILABLE LIVENESS
+
+Deterministically force each null branch separately:
+
+- pending plan;
+- empty required keys;
+- missing hotset entry;
+- aggregate frame StateError;
+- scope mismatch.
+
+Assert that the latest current target either schedules bounded exact
+replacement work or terminates explicitly. It may not wait for an event that
+cannot occur.
+
+10.5 FINAL-TARGET MISMATCH
+
+Reproduce:
+
+- earlier target 1 accepted/painted;
+- final physical target 8 binder miss;
+- physical settle on 8.
+
+Assert unmodified aa61242 exposes the mismatch.
+
+After repair require target 8 to become the exact selected/painted/canonical
+target without another gesture.
+
+10.6 AGGREGATE TARGET 0
+
+Test aggregate independently with non-empty rows. It must clear category focus,
+paint base rows, update Header/progress and become canonical at settle.
+
+10.7 ENDPOINT CATEGORIES 7 AND 8
+
+Test both with non-empty disjoint rows. They are specifically required because
+the physical trace repeatedly rejects them after the apparent Time recovery.
+
+10.8 CANONICAL INSTALL RACE
+
+Delay an older accepted target's deferred canonical install, cross and accept a
+newer target, then complete the older install.
+
+Assert the older target cannot replace the newer live or canonical authority.
+
+10.9 POINTER SUPERSEDE
+
+Start one exact target preparation, cross a newer target, then deliver the old
+completion.
+
+Assert latest-wins coalescing, bounded resource ownership and one terminal
+outcome per request.
+
+10.10 SURFACE ATOMICITY
+
+For every final target assert actual—not model-only—identity equality across:
+
+- Header build/paint;
+- circle-progress build/paint;
+- selected Avatar;
+- visible-frame Query;
+- LogBox payload/presentation/paint;
+- canonical focus after settle.
+
+10.11 NO TIME RESET DEPENDENCY
+
+Run the complete sequence from app start with no Time gesture.
+
+Then perform one Time gesture only as a negative control and prove it does not
+change Avatar correctness, resource readiness, pending count, or final target.
+
+10.12 MEMORY AND OWNER BOUNDS
+
+After twenty cycles assert bounded:
+
+- hotset entries;
+- pending plans;
+- resource banks;
+- retained scenes;
+- pending candidates;
+- focus indexes;
+- listeners;
+- diagnostics.
+
+======================================================================
+11. REPAIR THE TEST AND PROFILE GAPS
+======================================================================
+
+11.1 POST-REBASE MODEL TEST IS NOT PRODUCTION PHASE-A PROOF
+
+The existing “Avatar category and aggregate admission use the rebased Time
+base” test calls Core directly and does not attach the real cache/binder. Current
+production source intentionally treats `phaseABinder == null` as a headless
+model bypass.
+
+Keep that test as a model-level base-coherence test only. Do not cite it as
+proof of production Avatar Phase-A readiness.
+
+11.2 EXISTING EXACT-LOCAL TEST IS TOO NARROW
+
+The existing exact-local resource test prepares two category targets and makes
+one category request. Extend production-composition coverage to:
+
+- all nine handles;
+- distinct non-empty rows;
+- aggregate;
+- repeated target churn;
+- persistent owner instance;
+- final settle identity;
+- missing-hotset recovery.
+
+11.3 HARDEN K_AVATAR_FIRST_TARGET
+
+The current K validator requires positive accepted/paint counts and checks that
+the last paint matches the visible frame. It does not require the physical
+settle target to be the final exact target, zero unresolved pending candidates,
+or final canonical focus parity.
+
+Add required K evidence:
+
+- physical_settle_target_handle;
+- latest_desired_target_handle;
+- latest_semantic_target_handle;
+- latest_exact_painted_target_handle;
+- selected_budget_target_handle;
+- focus_target_handle/category digest;
+- visible_query_category digest;
+- canonical_query_category digest;
+- unresolved_pending_candidate_count;
+- exact_local_hotset_unavailable_count;
+- nonempty_preview_requested_count;
+- nonempty_preview_accepted_count;
+- nonempty_preview_painted_count;
+- final_target_exact_painted;
+- final_target_progress_painted;
+- final_target_header_painted;
+- final_target_canonicalized;
+- final_target_identity_equal;
+- generic_coordinator_rejected_count.
+
+K must fail when:
+
+- an earlier target paints but the final target remains pending;
+- all accepted targets are empty;
+- the physical settle target differs from the last exact paint;
+- progress/Header/List belong to different handles;
+- canonical focus belongs to an older target;
+- a candidate is still unresolved after the bounded completion window;
+- a Time gesture is required.
+
+Use more than one real fling and a non-empty/disjoint target fixture.
+
+======================================================================
+12. NO-TOUCH BOUNDARIES
+======================================================================
+
+Do not change:
+
+- Avatar physics;
+- velocity/friction/spring/snap;
+- item extent;
+- target spacing;
+- semantic crossing threshold;
+- carousel controller or ScrollPosition ownership;
+- Time production code;
+- Summary segmented behavior;
+- Mind/Slider;
+- financial formulas;
+- database schema;
+- Room/Kotlin;
+- Header design;
+- circle-progress design;
+- dashboard layout/z-order/clipping/hit testing;
+- cache capacity without measured need.
+
+Do not introduce:
+
+- Future.delayed retry;
+- polling;
+- cooldown;
+- settle-only data publication;
+- second cache;
+- second visible store;
+- second focus authority;
+- new controller;
+- global setState authority;
+- fake empty payload;
+- swallowed exception;
+- target dropping to improve frame metrics;
+- blanket golden regeneration.
+
+======================================================================
+13. IMPLEMENTATION ORDER
+======================================================================
+
+1. Exact preflight and clean worktree.
+2. Freeze/hash the latest Avatar Drive export.
+3. Verify aa61242 and c8a49968 graph manifest.
+4. Audit the ten-commit post-5ba lineage and all changed Avatar consumers.
+5. Add a follow-up forensic record stating that aa61242 physical Avatar
+   correctness is rejected; do not rewrite historical evidence.
+6. Add typed exact-local-window and binder-miss diagnostics.
+7. Reproduce the current physical failure in a persistent real-cache test.
+8. Reproduce the empty-target-only false recovery.
+9. Reproduce the final settle/semantic/canonical identity split.
+10. Prove the exact null-window subcause.
+11. Implement the smallest target-local resource-liveness repair.
+12. Add final-target foreground completion and stale canonical-install fencing.
+13. Harden K and its validator.
+14. Run focused red/green tests after each logical change.
+15. Run repeated 20-cycle production-composition stress.
+16. Run broad application/fast/presentation/analyzer gates.
+17. Compare motion/controller/physics evidence with aa61242/e8.
+18. Commit atomically, push, run CI and inspect artifacts.
+19. Build/hash exact human diagnostic APK.
+20. Regenerate/push matching SCIP graph.
+21. Return the completion report.
+
+======================================================================
+14. COMMIT DISCIPLINE
+======================================================================
+
+Suggested commits:
+
+1. test(dashboard): reproduce persistent nonempty Avatar Phase-A starvation
+2. chore(diagnostics): classify exact Avatar resource-window rejection
+3. fix(dashboard): guarantee latest Avatar target Phase-A resource liveness
+4. fix(dashboard): make Avatar settle and canonical focus target-atomic
+5. test(profile): reject empty-only and final-target-mismatched Avatar passes
+6. docs(forensics): record aa61242 physical Avatar rejection and repair evidence
+
+Do not mix Time production changes into these commits.
+
+Every commit body must include:
+
+Why:
+- exact physical symptom;
+- exact aa61242 source boundary;
+- protected smooth motion.
+
+Evidence:
+- current log session/hash/sequences;
+- red production-composition test;
+- current source;
+- SCIP-assisted consumer map;
+- rejected hypotheses.
+
+Changed:
+- exact owners;
+- tests;
+- diagnostics;
+- intentionally unchanged Time/physics/Mind/layout.
+
+Validation:
+- exact commands;
+- exact counts;
+- inherited failures separately identified.
+
+Physical validation:
+
+  PENDING — USER ONLY
+
+======================================================================
+15. VALIDATION
+======================================================================
+
+At minimum:
+
+  dart format --output=none --set-exit-if-changed <changed Dart files>
+
+  flutter analyze --no-pub
+
+Focused Avatar tests:
+
+- real-cache nonempty 9-target cycle;
+- repeated multi-flight stress;
+- exact-local-window null branches;
+- latest-wins pending resource;
+- final settle target parity;
+- aggregate target 0;
+- endpoint categories 7/8;
+- stale canonical install;
+- Header/progress/LogBox actual paint;
+- K report contract;
+- owner/memory bounds;
+- controller/physics stability.
+
+Then:
+
+  flutter test test/features/dashboard/application \
+    --reporter failures-only
+
+  bash scripts/test-fluvi-fast.sh
+
+  flutter test test/features/dashboard/presentation \
+    --reporter failures-only
+
+The aa/e8 lineage has 19 inherited presentation failures. Compare exact test
+names and normalized output. Do not hide any new failure and do not regenerate
+unrelated goldens.
+
+Profile:
+
+- run the hardened Avatar scenario;
+- inspect its actual JSON, not only workflow status;
+- require non-empty final-target proof;
+- require exact final identity equality;
+- require zero unresolved pending candidates.
+
+======================================================================
+16. DEFINITION OF DONE
+======================================================================
+
+Complete only when all are true:
+
+1. Avatar works from app start without Time input.
+2. Every non-empty final target receives exact Phase-A resource coverage.
+3. No target remains indefinitely pending.
+4. exactLocalHotsetUnavailable always schedules bounded replacement work or
+   terminates explicitly.
+5. Empty-target acceptance is not used as proof of non-empty correctness.
+6. Aggregate target 0 works.
+7. Endpoint categories 7 and 8 work.
+8. Repeated forward/reverse cycles work on one persistent owner instance.
+9. Physical center equals latest desired, accepted, painted and selected target.
+10. Ephemeral focus equals the final target.
+11. Visible Query equals the final target.
+12. Header equals and actually paints the final target.
+13. Circle progress equals and actually paints the final target.
+14. Transaction list equals and actually paints the final target.
+15. Canonical focus after settle equals the final target.
+16. An older deferred canonical install cannot overwrite a newer target.
+17. No second fling is required.
+18. No Time reset is required.
+19. Smooth-with-zero-data fails every gate.
+20. K fails an earlier-paint/final-target-pending scenario.
+21. K includes non-empty disjoint target rows and repeated flings.
+22. No Avatar physics/controller/ScrollPosition change exists.
+23. No Time production-source change exists.
+24. No new cache/store/controller/focus authority exists.
+25. Memory/resource ownership remains bounded.
+26. Automated validation is honestly reported.
+27. Human APK and final SCIP graph index the same exact final SHA.
+28. New candidate physical acceptance remains PENDING — USER ONLY.
+
+Final report status must say:
+
+  AA61242 AVATAR CORRECTNESS — PHYSICALLY REJECTED BASELINE
+
+  AA61242 / E8 MOTION — PRESERVED
+
+  NEW AVATAR CANDIDATE — PHYSICAL VALIDATION PENDING, USER ONLY

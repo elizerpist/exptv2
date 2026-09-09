@@ -9,6 +9,12 @@ flutter test \
   test/boundary/dashboard_interaction_performance_boundary_test.dart \
   test/boundary/dashboard_motion_data_isolation_boundary_test.dart \
   test/boundary/dashboard_single_data_runtime_boundary_test.dart \
+  test/boundary/dashboard_avatar_target_liveness_boundary_test.dart \
+  test/boundary/dashboard_avatar_profile_boundary_test.dart \
+  test/features/dashboard/application/dashboard_avatar_resource_window_test.dart \
+  test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart \
+  test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart \
+  test/performance/dashboard_profile_report_test.dart \
   test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart \
   test/features/dashboard/runtime/dashboard_presentation_controller_test.dart \
   test/features/dashboard/application/dashboard_scene_window_rotation_test.dart \

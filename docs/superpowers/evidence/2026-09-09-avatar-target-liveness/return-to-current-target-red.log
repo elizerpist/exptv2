@@ -1,0 +1,16 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart
+00:00 +0: returning to current target 1 coalesces held target 8 in the same pointer
+00:03 +0 -1: returning to current target 1 coalesces held target 8 in the same pointer [E]
+  Expected: true
+    Actual: <false>
+  Returning to the exact current target must coalesce target 8 before the already-active fast path returns.
+  
+  package:matcher                                                                           expect
+  package:flutter_test/src/widget_tester.dart 473:18                                        expect
+  test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart 148:7  main.<fn>
+  
+00:03 +0 -1: Some tests failed.

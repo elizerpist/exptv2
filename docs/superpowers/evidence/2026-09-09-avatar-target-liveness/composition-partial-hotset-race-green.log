@@ -1,0 +1,116 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart
+00:00 +0: (setUpAll)
+00:01 +0: AVL retained painted target 1 yields to cold final 8 after partial hotset expansion
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: non-empty
+  Actual: WhereIterable<FluviDiagnosticEvent>:[]
+AV|POINTER_ACCEPTED liveRootReady=true motionActive=false pointerId=1
+startingRawCenteredLogicalIndex=0.0 distanceToNearestSemanticBoundaryPixels=29.00
+touchSlopThresholdPixels=18.0 controllerIdentity=919078643 physicsCreationCount=1
+AV|LIVE_ROOT_RESOURCES_READY resourceMode=exactLocalHotset payloadCount=2 maxRows=8192 bounded=true
+textPaintersReady=true
+AV|FLING_STARTED generation=1 phase=directDrag origin=userDrag selectedHandle=0
+controllerIdentity=919078643 physicsCreationCount=1
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=1
+FOCUS_BASE_SCENE_RETAINED retainedKeyDigest=6711a159 sharedRows=8
+CATEGORY_FOCUS_REQUESTED category=avatar-category-1 partner=none generation=2 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-1 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=true workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=275 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=0 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=0
+largestContiguousUiSliceMicros=0
+AV|PHASE_A_RESOURCE_READY generation=2 targetHandle=1 resourceOwner=preparedSceneCache
+resourceKey=e6a7dd59 phaseAReady=true repositoryRequests=0 indexBuilds=0 textPainterCreates=0
+richProjection=0
+FOCUS_PHASE_A_INTERACTION_FRAME_PUBLISHED category=avatar-category-1 partner=none generation=2
+producer=budgetAvatar interactionEpoch=2 localGeneration=2 searchLength=0 phaseAResourcesReady=true
+alreadyVisible=false richSceneStaged=true amountPresentationId=136490893
+AV|VISIBLE_PUBLICATION_ACCEPTED focusGeneration=2 targetHandle=1 richSceneStaged=true
+presentationEpoch=1 frameGeneration=2 exactEmpty=false acknowledgementSource=semanticPublication
+budgetTargetSelected=true mixedProjectionCount=0
+AV|PREVIEW_ACCEPTED generation=1 phase=directDrag targetHandle=1 reason=acceptedExact
+AV|LOGBOX_TARGET_PAINT_ACCOUNTED generation=1 phase=directDrag targetHandle=1 focusGeneration=2
+presentationEpoch=1 frameGeneration=2 readablePhaseARowsPainted=0 richPhaseBRowsPainted=1
+source=richPhaseB paintOccurrence=actualExtentAfterExpectation
+AVATAR_FIRST_TARGET_PIPELINE_SUMMARY pointerId=1 initialSelectedTargetHandle=0 targetHandle=1
+interactionGeneration=1 startingRawCenteredLogicalIndex=0.0000
+distanceToNearestSemanticBoundaryItems=0.5000 distanceToNearestSemanticBoundaryPixels=29.00
+touchSlopThresholdPixels=18.0 pointerToRecognizerMicros=198578 pointerToFirstRawScrollMicros=290269
+pointerToFirstSemanticMicros=1167125 pointerToPreviewMicros=1178863
+pointerToExactPhaseAStoreMicros=1340005 pointerToLogBoxPaintMicros=1878909
+logBoxPaintToRasterMicros=-1 terminalOutcome=exactPhaseAPainted
+AV|LOGBOX_TARGET_PAINTED focusGeneration=2 targetHandle=1 presentationEpoch=1 frameGeneration=2
+exactEmpty=false drawableRows=1 paintedRows=1
+AV|LOGBOX_PAINT_WAIT_ACCEPTED targetHandle=1 focusGeneration=2 painted=true stillCurrent=true
+AV|PREVIEW_TERMINAL targetHandle=1 focusGeneration=2
+terminalClassification=acceptedExactNonEmptyPainted
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=8
+CATEGORY_FOCUS_REQUESTED category=avatar-category-8 partner=none generation=3 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-8 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=true workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=32 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=0 publicationCriticalFrameCount=1 publicationCriticalRowCount=1
+eagerFocusedFrameCount=1 lazyFocusedFrameCacheCount=1 focusedOrdinalsVisitedBeforePublication=1
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=0
+largestContiguousUiSliceMicros=0
+AV|PHASE_A_RESOURCE_READY generation=3 targetHandle=8 resourceOwner=preparedSceneCache
+resourceKey=e6a7dd59 phaseAReady=true repositoryRequests=0 indexBuilds=0 textPainterCreates=0
+richProjection=0
+FOCUS_PHASE_A_INTERACTION_FRAME_PUBLISHED category=avatar-category-8 partner=none generation=3
+producer=budgetAvatar interactionEpoch=3 localGeneration=3 searchLength=0 phaseAResourcesReady=true
+alreadyVisible=false richSceneStaged=false amountPresentationId=509409077
+AV|VISIBLE_PUBLICATION_ACCEPTED focusGeneration=3 targetHandle=8 richSceneStaged=false
+presentationEpoch=1 frameGeneration=3 exactEmpty=false acknowledgementSource=semanticPublication
+budgetTargetSelected=true mixedProjectionCount=0
+AV|PREVIEW_ACCEPTED generation=1 phase=directDrag targetHandle=8 reason=acceptedExact
+AV|FLING_SETTLED origin=userDrag settledLogicalIndex=-1 generation=1 phase=settling
+settledTargetHandle=8 crossingCount=2 previewCount=2
+FOCUS_REQUEST_ALREADY_ACTIVE category=avatar-category-8 partner=none searchLength=0
+presentationEpoch=1 avatarPaintAcknowledgement=notApplicable avatarSemanticFrameCurrent=true
+AV|FLING_SETTLED_AFTER_SEMANTIC_FRAME generation=1 settledTargetHandle=8 settleVisualDeltaCount=0
+FOCUS_PUBLICATION_STARTED null
+FOCUS_BASE_VIEWPORT_RETAINED null
+AV|RICH_ACK_RETARGETED focusGeneration=3 targetHandle=8 presentationEpoch=2 frameGeneration=4
+AV|CANONICAL_PUBLICATION_RECONCILED targetHandle=8 phaseAAlreadyAuthoritative=true
+FOCUS_PUBLICATION_COMPLETED null
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart:460:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart line 460
+The test description was:
+  AVL retained painted target 1 yields to cold final 8 after partial hotset expansion
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:20 +0 -1: AVL retained painted target 1 yields to cold final 8 after partial hotset expansion [E]
+  Test failed. See exception logs above.
+  The test description was: AVL retained painted target 1 yields to cold final 8 after partial hotset expansion
+  
+00:20 +0 -1: (tearDownAll)
+00:21 +0 -1: Some tests failed.

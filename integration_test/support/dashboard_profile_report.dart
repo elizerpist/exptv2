@@ -215,9 +215,9 @@ abstract final class DashboardProfileReport {
   }
 
   /// Validates the bounded evidence from the profile matrix's real Budget
-  /// Avatar interaction. The persistent production Core remains the authority
-  /// for every field: this only prevents a Time-only profile artifact from
-  /// being mistaken for Avatar publication or actual progress paint proof.
+  /// Avatar interaction. Existing production owners provide every identity
+  /// and paint acknowledgement. Each real fling must finish with an exact
+  /// nonempty final target and fully accounted request terminals.
   static void validateAvatarFirstTargetEvidence(Map<String, Object?> evidence) {
     void requirePositive(String key) {
       final value = evidence[key];
@@ -267,9 +267,9 @@ abstract final class DashboardProfileReport {
     }
 
     final pipelineCount = evidence['first_pipeline_summary_count'];
-    if (pipelineCount is! num || pipelineCount != 1) {
+    if (pipelineCount is! num || pipelineCount < 1) {
       throw StateError(
-        'Avatar profile must emit one first-target pipeline summary; '
+        'Avatar profile must emit first-target pipeline summaries; '
         'got $pipelineCount.',
       );
     }
@@ -279,6 +279,11 @@ abstract final class DashboardProfileReport {
       'exactEmpty',
       'coalescedBeforeReadiness',
       'coalescedBeforePaint',
+      // The first crossing may be superseded; the per-request terminals and
+      // each physical final-target proof below remain mandatory.
+      'coalescedBeforeResourceReady',
+      'cancelledByNewPointer',
+      'staleRejected',
     };
     if (outcomes is! List ||
         outcomes.isEmpty ||
@@ -289,6 +294,148 @@ abstract final class DashboardProfileReport {
         'Avatar profile has an invalid first-target terminal outcome: '
         '$outcomes.',
       );
+    }
+    validateAvatarFinalTargetEvidence(evidence);
+    final flingCount = evidence['real_fling_count'];
+    final flights = evidence['flights'];
+    if (flingCount is! int ||
+        flingCount < 2 ||
+        flights is! List ||
+        flights.length != flingCount ||
+        (evidence['pointer_accepted_count'] as num) < flingCount ||
+        (evidence['avatar_motion_summary_count'] as num) < flingCount) {
+      throw StateError(
+        'Avatar K requires repeated real flings and each final snapshot.',
+      );
+    }
+    for (final flight in flights) {
+      if (flight is! Map) {
+        throw StateError('Avatar flight evidence must be a map.');
+      }
+      validateAvatarFinalTargetEvidence(Map<String, Object?>.from(flight));
+    }
+    final categories = evidence['fixture_category_row_counts'];
+    if (categories is! Map ||
+        categories.length != 8 ||
+        [
+          for (var handle = 1; handle <= 8; handle++) categories['$handle'],
+        ].any((count) => count is! int || count < 1) ||
+        evidence['fixture_category_rows_disjoint'] != true ||
+        evidence['fixture_aggregate_row_count'] is! int ||
+        (evidence['fixture_aggregate_row_count'] as int) < 8) {
+      throw StateError(
+        'Avatar K requires eight nonempty disjoint categories and aggregate.',
+      );
+    }
+  }
+
+  /// Checks one bounded physical settle against the existing owners and actual
+  /// painter acknowledgements. Positive paints from an earlier target cannot
+  /// stand in for this target's final transaction.
+  static void validateAvatarFinalTargetEvidence(Map<String, Object?> evidence) {
+    Never reject(String key) => throw StateError(
+      'Avatar final-target evidence $key is invalid: ${evidence[key]}.',
+    );
+    final physical = evidence['physical_settle_target_handle'];
+    if (physical is! int || physical < 0 || physical > 8) {
+      reject('physical_settle_target_handle');
+    }
+    for (final key in const [
+      'latest_desired_target_handle',
+      'latest_semantic_target_handle',
+      'latest_exact_painted_target_handle',
+      'selected_budget_target_handle',
+      'focus_target_handle',
+      'header_target_handle',
+      'progress_target_handle',
+      'logbox_target_handle',
+    ]) {
+      if (evidence[key] != physical) reject(key);
+    }
+    final category = evidence['expected_category_digest'];
+    if (category is! String || category.isEmpty) {
+      reject('expected_category_digest');
+    }
+    for (final key in const [
+      'focus_category_digest',
+      'visible_query_category_digest',
+      'canonical_query_category_digest',
+    ]) {
+      if (evidence[key] != category) reject(key);
+    }
+    final query = evidence['visible_query_digest'];
+    if (query is! String || query.isEmpty) reject('visible_query_digest');
+    for (final key in const ['logbox_query_digest', 'canonical_query_digest']) {
+      if (evidence[key] != query) reject(key);
+    }
+    for (final key in const [
+      'unresolved_pending_candidate_count',
+      'generic_coordinator_rejected_count',
+      'time_interaction_count',
+    ]) {
+      if (evidence[key] != 0) reject(key);
+    }
+    for (final key in const [
+      'nonempty_preview_requested_count',
+      'nonempty_preview_accepted_count',
+      'nonempty_preview_painted_count',
+      'final_target_row_count',
+    ]) {
+      final value = evidence[key];
+      if (value is! int || value < 1) reject(key);
+    }
+    final requested = evidence['preview_requested_count'];
+    final terminal = evidence['preview_terminal_count'];
+    final classifications = evidence['preview_terminal_classifications'];
+    const allowedClassifications = {
+      'acceptedExactNonEmptyPainted',
+      'acceptedExactEmptyPainted',
+      'coalescedBeforeResourceReady',
+      'cancelledByNewPointer',
+      'staleRejected',
+      'disposed',
+    };
+    if (requested is! int ||
+        requested < 1 ||
+        terminal != requested ||
+        classifications is! Map ||
+        classifications.isEmpty) {
+      reject('preview_terminal_count');
+    }
+    var classified = 0;
+    for (final entry in classifications.entries) {
+      if (!allowedClassifications.contains(entry.key) ||
+          entry.value is! int ||
+          (entry.value as int) < 1) {
+        reject('preview_terminal_classifications');
+      }
+      classified += entry.value as int;
+    }
+    if (classified != terminal ||
+        classifications['acceptedExactNonEmptyPainted'] is! int ||
+        (classifications['acceptedExactNonEmptyPainted'] as int) < 1) {
+      reject('preview_terminal_classifications');
+    }
+    final unavailable = evidence['exact_local_hotset_unavailable_count'];
+    if (unavailable is! int || unavailable < 0) {
+      reject('exact_local_hotset_unavailable_count');
+    }
+    for (final key in const [
+      'final_target_exact_painted',
+      'final_target_progress_painted',
+      'final_target_header_painted',
+      'final_target_canonicalized',
+      'final_target_identity_equal',
+    ]) {
+      if (evidence[key] != true) reject(key);
+    }
+    for (final value in const ['numerator', 'denominator']) {
+      final expected = evidence['expected_display_${value}_scaled100'];
+      if (expected is! int) reject('expected_display_${value}_scaled100');
+      for (final surface in const ['header', 'progress']) {
+        final key = '${surface}_display_${value}_scaled100';
+        if (evidence[key] != expected) reject(key);
+      }
     }
   }
 

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../integration_test/support/dashboard_profile_report.dart';
@@ -124,6 +127,155 @@ void main() {
             contains('terminal outcome'),
           ),
         ),
+      );
+    },
+  );
+
+  test('Avatar K rejects the supplied aa61242 empty-only false green', () {
+    final baseline =
+        jsonDecode(
+              File(
+                'docs/superpowers/evidence/2026-09-09-avatar-target-liveness/baseline-K-avatar-first-target.json',
+              ).readAsStringSync(),
+            )
+            as Map;
+    final evidence = Map<String, Object?>.from(
+      baseline['avatar_first_target'] as Map,
+    );
+    expect(evidence['exact_phase_a_paint_count'], greaterThan(0));
+    expect((evidence['latest_exact_paint'] as Map)['exact_empty'], isTrue);
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      throwsStateError,
+    );
+  });
+
+  for (final key in <String>[
+    'physical_settle_target_handle',
+    'latest_desired_target_handle',
+    'latest_semantic_target_handle',
+    'latest_exact_painted_target_handle',
+    'selected_budget_target_handle',
+    'focus_target_handle',
+    'header_target_handle',
+    'progress_target_handle',
+    'logbox_target_handle',
+    'focus_category_digest',
+    'visible_query_category_digest',
+    'canonical_query_category_digest',
+    'logbox_query_digest',
+    'header_display_numerator_scaled100',
+    'progress_display_denominator_scaled100',
+  ]) {
+    test('Avatar K rejects final identity drift in $key', () {
+      final evidence = _avatarFirstTargetEvidence();
+      evidence[key] = evidence[key] is int ? 8 : 'older-category';
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsStateError,
+      );
+    });
+  }
+  for (final key in <String>[
+    'unresolved_pending_candidate_count',
+    'generic_coordinator_rejected_count',
+    'time_interaction_count',
+  ]) {
+    test('Avatar K rejects unresolved or reset-dependent $key', () {
+      final evidence = _avatarFirstTargetEvidence()..[key] = 1;
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsStateError,
+      );
+    });
+  }
+  for (final key in <String>[
+    'nonempty_preview_requested_count',
+    'nonempty_preview_accepted_count',
+    'nonempty_preview_painted_count',
+  ]) {
+    test('Avatar K rejects empty-only $key despite positive total paints', () {
+      final evidence = _avatarFirstTargetEvidence()..[key] = 0;
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsStateError,
+      );
+    });
+  }
+  test('Avatar K rejects earlier paint with final target still pending', () {
+    final evidence = _avatarFirstTargetEvidence()
+      ..['physical_settle_target_handle'] = 8
+      ..['latest_desired_target_handle'] = 8
+      ..['unresolved_pending_candidate_count'] = 1;
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      throwsStateError,
+    );
+  });
+  test(
+    'Avatar K rejects a failed earlier flight even when final flight passes',
+    () {
+      final evidence = _avatarFirstTargetEvidence();
+      (evidence['flights'] as List).first['canonical_query_category_digest'] =
+          'old';
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsStateError,
+      );
+    },
+  );
+  test('Avatar K rejects a single real fling', () {
+    final evidence = _avatarFirstTargetEvidence()..['real_fling_count'] = 1;
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      throwsStateError,
+    );
+  });
+
+  test(
+    'Avatar K permits a superseded first request with strict final proof',
+    () {
+      final evidence = _avatarFirstTargetEvidence()
+        ..['first_pipeline_terminal_outcomes'] = ['staleRejected'];
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        returnsNormally,
+      );
+    },
+  );
+
+  for (final classification in ['unknown', 'explicitInvariantFailure']) {
+    test('Avatar K rejects terminal classification $classification', () {
+      final evidence = _avatarFirstTargetEvidence()
+        ..['preview_terminal_classifications'] = {classification: 3};
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsStateError,
+      );
+    });
+  }
+  test('Avatar K rejects requests without exactly one terminal completion', () {
+    final evidence = _avatarFirstTargetEvidence()
+      ..['preview_terminal_count'] = 2;
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      throwsStateError,
+    );
+  });
+  test(
+    'Avatar K accepts accounted coalescing with an exact nonempty final paint',
+    () {
+      final evidence = _avatarFirstTargetEvidence();
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        returnsNormally,
       );
     },
   );
@@ -413,7 +565,15 @@ Map<String, Object?> _railFlightMetrics() => <String, Object?>{
 
 Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
   'motion_lane_observed': true,
-  'pointer_accepted_count': 1,
+  ..._avatarFinalTargetEvidence(),
+  'real_fling_count': 2,
+  'flights': [_avatarFinalTargetEvidence(), _avatarFinalTargetEvidence()],
+  'fixture_category_row_counts': {
+    for (var handle = 1; handle <= 8; handle++) '$handle': 1,
+  },
+  'fixture_aggregate_row_count': 8,
+  'fixture_category_rows_disjoint': true,
+  'pointer_accepted_count': 2,
   'avatar_semantic_crossings': 1,
   'preview_accepted_count': 1,
   'exact_phase_a_paint_count': 1,
@@ -425,7 +585,7 @@ Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
   'budget_progress_matches_exact_paint': true,
   'first_pipeline_summary_count': 1,
   'first_pipeline_terminal_outcomes': <String>['exactPhaseAPainted'],
-  'avatar_motion_summary_count': 1,
+  'avatar_motion_summary_count': 2,
 };
 
 Map<String, Object?> _motionGateReport({
@@ -480,4 +640,57 @@ Map<String, Object?> _physicalFrameReport() => <String, Object?>{
   '99th_percentile_frame_rasterizer_time_millis': 23,
   'worst_frame_build_time_millis': 47,
   'worst_frame_rasterizer_time_millis': 47,
+};
+
+Map<String, Object?> _avatarFinalTargetEvidence() => <String, Object?>{
+  for (final key in [
+    'physical_settle_target_handle',
+    'latest_desired_target_handle',
+    'latest_semantic_target_handle',
+    'latest_exact_painted_target_handle',
+    'selected_budget_target_handle',
+    'focus_target_handle',
+    'header_target_handle',
+    'progress_target_handle',
+    'logbox_target_handle',
+  ])
+    key: 3,
+  for (final key in [
+    'expected_category_digest',
+    'focus_category_digest',
+    'visible_query_category_digest',
+    'canonical_query_category_digest',
+  ])
+    key: 'category-3',
+  for (final key in [
+    'visible_query_digest',
+    'logbox_query_digest',
+    'canonical_query_digest',
+  ])
+    key: 'query-3',
+  'preview_requested_count': 3,
+  'preview_terminal_count': 3,
+  'preview_terminal_classifications': {
+    'acceptedExactNonEmptyPainted': 1,
+    'coalescedBeforeResourceReady': 2,
+  },
+  'unresolved_pending_candidate_count': 0,
+  'exact_local_hotset_unavailable_count': 0,
+  'generic_coordinator_rejected_count': 0,
+  'time_interaction_count': 0,
+  'nonempty_preview_requested_count': 3,
+  'nonempty_preview_accepted_count': 2,
+  'nonempty_preview_painted_count': 1,
+  'final_target_row_count': 1,
+  'final_target_exact_painted': true,
+  'final_target_progress_painted': true,
+  'final_target_header_painted': true,
+  'final_target_canonicalized': true,
+  'final_target_identity_equal': true,
+  'expected_display_numerator_scaled100': 100,
+  'header_display_numerator_scaled100': 100,
+  'progress_display_numerator_scaled100': 100,
+  'expected_display_denominator_scaled100': 200,
+  'header_display_denominator_scaled100': 200,
+  'progress_display_denominator_scaled100': 200,
 };

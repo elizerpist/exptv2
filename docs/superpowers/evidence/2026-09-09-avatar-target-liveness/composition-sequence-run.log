@@ -1,0 +1,217 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart
+00:00 +0: (setUpAll)
+00:00 +0: AVL physical startup sequence 3 2 1 0 8 7 6 withTimeControl=false
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:14 +1: AVL physical startup sequence 3 2 1 0 8 7 6 withTimeControl=true
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Final physical target 3 must become exact and canonical without a second gesture.
+AV|POINTER_ACCEPTED liveRootReady=false motionActive=false pointerId=8
+startingRawCenteredLogicalIndex=0.0 distanceToNearestSemanticBoundaryPixels=29.00
+touchSlopThresholdPixels=18.0 controllerIdentity=197895500 physicsCreationCount=1
+AV|FLING_STARTED generation=1 phase=directDrag origin=userDrag selectedHandle=0
+controllerIdentity=197895500 physicsCreationCount=1
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=1
+FOCUS_BASE_SCENE_RETAINED retainedKeyDigest=6711a159 sharedRows=8
+CATEGORY_FOCUS_REQUESTED category=avatar-category-1 partner=none generation=2 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-1 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=true workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=14 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=0 publicationCriticalFrameCount=2 publicationCriticalRowCount=1
+eagerFocusedFrameCount=2 lazyFocusedFrameCacheCount=2 focusedOrdinalsVisitedBeforePublication=2
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=0
+largestContiguousUiSliceMicros=0
+AV|LIVE_ROOT_MISS generation=2 targetHandle=1 resourcesReady=false phaseAReady=false
+exactPayloadQueryDigest=9350c89e resourceKeyDigest=280c9438 focusGeneration=2
+visibleOwnerInteractionEpoch=1 resourceOwner=preparedSceneCache resourceKey=none
+repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=2 targetHandle=1
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=2 targetHandle=1 interactionEpoch=2 localGeneration=2
+resourceKey=9ec35e52 latestWins=true richSceneStaged=false
+AV|TARGET_RESOURCE_PREPARATION_SCHEDULED targetHandle=1 focusGeneration=2 interactionEpoch=2
+exactPayloadQueryDigest=9350c89e resourceKeyDigest=9ec35e52 pendingPlanCount=7
+replacementScheduled=true payloadCount=1 maxRows=8192
+AV|LIVE_ROOT_RESOURCES_READY resourceMode=exactCurrentTarget payloadCount=1 maxRows=8192
+bounded=true textPaintersReady=true
+AV|PHASE_A_RESOURCE_READY generation=2 targetHandle=1 resourceOwner=preparedSceneCache
+resourceKey=9ec35e52 phaseAReady=true repositoryRequests=0 indexBuilds=0 textPainterCreates=0
+richProjection=0
+FOCUS_PHASE_A_INTERACTION_FRAME_PUBLISHED category=avatar-category-1 partner=none generation=2
+producer=budgetAvatar interactionEpoch=2 localGeneration=2 searchLength=0 phaseAResourcesReady=true
+richSceneStaged=false amountPresentationId=159358261
+AV|VISIBLE_PUBLICATION_ACCEPTED focusGeneration=2 targetHandle=1 richSceneStaged=false
+presentationEpoch=1 frameGeneration=2 exactEmpty=false acknowledgementSource=semanticPublication
+budgetTargetSelected=true mixedProjectionCount=0
+AVATAR_PENDING_CANDIDATE_PROMOTED generation=2 targetHandle=1 interactionEpoch=2 localGeneration=2
+terminalClassification=exactPhaseAPaintedOrAwaitingPaint
+AV|PREVIEW_ACCEPTED generation=1 phase=directDrag targetHandle=1 reason=acceptedExact
+AV|LOGBOX_TARGET_PAINT_REJECTED focusGeneration=2 targetHandle=1 presentationEpoch=1
+frameGeneration=2 exactEmpty=false payloadRows=1 drawableRows=0 paintedRows=0
+AVATAR_FIRST_TARGET_PIPELINE_SUMMARY pointerId=8 initialSelectedTargetHandle=0 targetHandle=1
+interactionGeneration=1 startingRawCenteredLogicalIndex=0.0000
+distanceToNearestSemanticBoundaryItems=0.5000 distanceToNearestSemanticBoundaryPixels=29.00
+touchSlopThresholdPixels=18.0 pointerToRecognizerMicros=93898 pointerToFirstRawScrollMicros=302930
+pointerToFirstSemanticMicros=392634 pointerToPreviewMicros=393566
+pointerToExactPhaseAStoreMicros=412099 pointerToLogBoxPaintMicros=-1 logBoxPaintToRasterMicros=-1
+terminalOutcome=coalescedBeforePaint
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=2
+CATEGORY_FOCUS_REQUESTED category=avatar-category-2 partner=none generation=3 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-2 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=11 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=9814 publicationCriticalFrameCount=2 publicationCriticalRowCount=1
+eagerFocusedFrameCount=2 lazyFocusedFrameCacheCount=2 focusedOrdinalsVisitedBeforePublication=2
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=9814
+largestContiguousUiSliceMicros=9814
+AV|EXACT_PHASE_A_BIND_REJECTED reason=exactPayloadCoverageMissing exactPayloadQueryDigest=fef6fb55
+resourceKeyDigest=9ec35e52 missingRowCount=1 missingHeaderCount=0 bankRevision=1
+AV|LIVE_ROOT_MISS generation=3 targetHandle=2 resourcesReady=true phaseAReady=false
+exactPayloadQueryDigest=fef6fb55 resourceKeyDigest=9ec35e52 focusGeneration=3
+visibleOwnerInteractionEpoch=2 resourceOwner=preparedSceneCache resourceKey=9ec35e52
+repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=3 targetHandle=2
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=3 targetHandle=2 interactionEpoch=3 localGeneration=3
+resourceKey=b4a1c72e latestWins=true richSceneStaged=false
+AV|TARGET_RESOURCE_PREPARATION_SCHEDULED targetHandle=2 focusGeneration=3 interactionEpoch=3
+exactPayloadQueryDigest=fef6fb55 resourceKeyDigest=b4a1c72e pendingPlanCount=7
+replacementScheduled=true payloadCount=1 maxRows=8192
+AV|LOGBOX_PAINT_WAIT_REJECTED targetHandle=1 focusGeneration=2 painted=false stillCurrent=false
+AV|PREVIEW_TERMINAL targetHandle=1 focusGeneration=2 terminalClassification=staleRejected
+AV|LIVE_ROOT_RESOURCES_READY resourceMode=exactCurrentTarget payloadCount=1 maxRows=8192
+bounded=true textPaintersReady=true
+AV|PHASE_A_RESOURCE_READY generation=3 targetHandle=2 resourceOwner=preparedSceneCache
+resourceKey=b4a1c72e phaseAReady=true repositoryRequests=0 indexBuilds=0 textPainterCreates=0
+richProjection=0
+FOCUS_PHASE_A_INTERACTION_FRAME_PUBLISHED category=avatar-category-2 partner=none generation=3
+producer=budgetAvatar interactionEpoch=3 localGeneration=3 searchLength=0 phaseAResourcesReady=true
+richSceneStaged=false amountPresentationId=238389351
+AV|VISIBLE_PUBLICATION_ACCEPTED focusGeneration=3 targetHandle=2 richSceneStaged=false
+presentationEpoch=1 frameGeneration=3 exactEmpty=false acknowledgementSource=semanticPublication
+budgetTargetSelected=true mixedProjectionCount=0
+AVATAR_PENDING_CANDIDATE_PROMOTED generation=3 targetHandle=2 interactionEpoch=3 localGeneration=3
+terminalClassification=exactPhaseAPaintedOrAwaitingPaint
+AV|PREVIEW_ACCEPTED generation=1 phase=directDrag targetHandle=2 reason=acceptedExact
+AV|LOGBOX_TARGET_PAINT_REJECTED focusGeneration=3 targetHandle=2 presentationEpoch=1
+frameGeneration=3 exactEmpty=false payloadRows=1 drawableRows=0 paintedRows=0
+AV|PREVIEW_REQUESTED generation=1 phase=directDrag targetHandle=3
+CATEGORY_FOCUS_REQUESTED category=avatar-category-3 partner=none generation=4 searchLength=0
+baseEntryCount=8 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+FOCUS_DERIVED_SCOPE_READY category=avatar-category-3 partner=none searchLength=0 baseEntryCount=8
+focusedEntryCount=1 baseMembershipEstimatedBytes=1136 preparedMembershipHit=true
+avatarFocusHotsetHit=false workerDispatched=false fullBaseRowsScanned=0 membershipOrdinalCount=1
+membershipLookupMicros=10 intersectionMicros=0 semanticUniverseBuildMicros=0
+currentRootProjectionMicros=2126 publicationCriticalFrameCount=2 publicationCriticalRowCount=1
+eagerFocusedFrameCount=2 lazyFocusedFrameCacheCount=2 focusedOrdinalsVisitedBeforePublication=2
+focusedOrdinalsVisitedAfterPublication=0 reusedBaseCatalogCount=1 newFocusedCatalogCount=1
+reusedPreparedRows=1 copiedPreparedRows=0 reusedSceneCount=0 newSceneCount=0 uiIsolateMicros=2126
+largestContiguousUiSliceMicros=2126
+AV|EXACT_PHASE_A_BIND_REJECTED reason=exactPayloadCoverageMissing exactPayloadQueryDigest=17d3bcc0
+resourceKeyDigest=b4a1c72e missingRowCount=1 missingHeaderCount=0 bankRevision=1
+AV|LIVE_ROOT_MISS generation=4 targetHandle=3 resourcesReady=true phaseAReady=false
+exactPayloadQueryDigest=17d3bcc0 resourceKeyDigest=b4a1c72e focusGeneration=4
+visibleOwnerInteractionEpoch=3 resourceOwner=preparedSceneCache resourceKey=b4a1c72e
+repositoryRequests=0 indexBuilds=0 textPainterCreates=0 richProjection=0
+AV|PHASE_A_PUBLICATION_DEFERRED generation=4 targetHandle=3
+reason=actualPainterReadablePhaseAUnavailable richSceneStaged=false
+AVATAR_CANDIDATE_PENDING_RESOURCE generation=4 targetHandle=3 interactionEpoch=4 localGeneration=4
+resourceKey=c9068336 latestWins=true richSceneStaged=false
+AV|TARGET_RESOURCE_PREPARATION_SCHEDULED targetHandle=3 focusGeneration=4 interactionEpoch=4
+exactPayloadQueryDigest=17d3bcc0 resourceKeyDigest=c9068336 pendingPlanCount=7
+replacementScheduled=true payloadCount=1 maxRows=8192
+AV|LOGBOX_PAINT_WAIT_REJECTED targetHandle=2 focusGeneration=3 painted=false stillCurrent=false
+AV|PREVIEW_TERMINAL targetHandle=2 focusGeneration=3 terminalClassification=staleRejected
+AV|LIVE_ROOT_RESOURCES_READY resourceMode=exactCurrentTarget payloadCount=1 maxRows=8192
+bounded=true textPaintersReady=true
+AV|PHASE_A_RESOURCE_READY generation=4 targetHandle=3 resourceOwner=preparedSceneCache
+resourceKey=c9068336 phaseAReady=true repositoryRequests=0 indexBuilds=0 textPainterCreates=0
+richProjection=0
+FOCUS_PHASE_A_INTERACTION_FRAME_PUBLISHED category=avatar-category-3 partner=none generation=4
+producer=budgetAvatar interactionEpoch=4 localGeneration=4 searchLength=0 phaseAResourcesReady=true
+richSceneStaged=false amountPresentationId=294429297
+AV|VISIBLE_PUBLICATION_ACCEPTED focusGeneration=4 targetHandle=3 richSceneStaged=false
+presentationEpoch=1 frameGeneration=4 exactEmpty=false acknowledgementSource=semanticPublication
+budgetTargetSelected=true mixedProjectionCount=0
+AVATAR_PENDING_CANDIDATE_PROMOTED generation=4 targetHandle=3 interactionEpoch=4 localGeneration=4
+terminalClassification=exactPhaseAPaintedOrAwaitingPaint
+AV|PREVIEW_ACCEPTED generation=1 phase=directDrag targetHandle=3 reason=acceptedExact
+AV|LOGBOX_TARGET_PAINT_REJECTED focusGeneration=4 targetHandle=3 presentationEpoch=1
+frameGeneration=4 exactEmpty=false payloadRows=1 drawableRows=0 paintedRows=0
+AV|FLING_SETTLED origin=userDrag settledLogicalIndex=3 generation=1 phase=settling
+settledTargetHandle=3 crossingCount=3 previewCount=3
+FOCUS_REQUEST_ALREADY_ACTIVE category=avatar-category-3 partner=none searchLength=0
+presentationEpoch=1 avatarPaintAcknowledgement=notApplicable avatarSemanticFrameCurrent=true
+AV|FLING_SETTLED_AFTER_SEMANTIC_FRAME generation=1 settledTargetHandle=3 settleVisualDeltaCount=0
+FOCUS_PUBLICATION_STARTED null
+FOCUS_BASE_VIEWPORT_RETAINED null
+AV|RICH_ACK_RETARGETED focusGeneration=4 targetHandle=3 presentationEpoch=2 frameGeneration=5
+AV|CANONICAL_PUBLICATION_RECONCILED targetHandle=3 phaseAAlreadyAuthoritative=true
+FOCUS_PUBLICATION_COMPLETED null
+AV|LOGBOX_TARGET_PAINT_REJECTED focusGeneration=4 targetHandle=3 presentationEpoch=2
+frameGeneration=5 exactEmpty=false payloadRows=1 drawableRows=0 paintedRows=0
+
+When the exception was thrown, this was the stack:
+#0      fail (package:matcher/src/expect/expect.dart:187:31)
+#1      _PhysicalAvatarSequence.waitFor (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart:538:5)
+<asynchronous suspension>
+#2      _PhysicalAvatarSequence.expectFinalTarget (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart:547:5)
+<asynchronous suspension>
+#3      main.<anonymous closure> (file:///data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart:292:11)
+<asynchronous suspension>
+#4      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#5      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  AVL physical startup sequence 3 2 1 0 8 7 6 withTimeControl=true
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:20 +1 -1: AVL physical startup sequence 3 2 1 0 8 7 6 withTimeControl=true [E]
+  Test failed. See exception logs above.
+  The test description was: AVL physical startup sequence 3 2 1 0 8 7 6 withTimeControl=true
+  
+00:21 +1 -1: AVL earlier target 1 paints before final physical target 8 exact binder miss
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+00:24 +2 -1: (tearDownAll)
+00:24 +2 -1: Some tests failed.

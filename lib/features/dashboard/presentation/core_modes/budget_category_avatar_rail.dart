@@ -542,7 +542,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         scope:
             'generation=$generation phase=${phase?.name ?? 'idle'} '
             'targetHandle=$targetHandle '
-            'reason=${error == null ? (accepted ? 'acceptedExact' : 'coordinatorRejected') : 'exception'}',
+            'reason=${error == null ? (accepted ? 'acceptedExact' : 'previewNotPainted') : 'exception'}',
       ),
     );
     final firstTargetPipeline = _firstTargetPipeline;

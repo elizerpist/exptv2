@@ -10,6 +10,9 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_key_digest.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -180,7 +183,7 @@ enum _ProfileScenario {
   // preparation in this integration-test process.
   firstFling,
   // This starts from a new production dashboard and performs the real mode
-  // transition and Avatar drag. The global immutable vector atlas is already
+  // transition and repeated Avatar flings. The global vector atlas is already
   // warm from I; its report is intentionally a real Avatar transaction
   // proof, not a replacement for user-only cold-device performance evidence.
   avatarFirstTarget,
@@ -220,7 +223,7 @@ enum _ProfileScenario {
   };
 
   bool get initialRailOpen => switch (this) {
-    summaryPlane => false,
+    summaryPlane || avatarFirstTarget => false,
     _ => true,
   };
 
@@ -335,6 +338,12 @@ Future<Map<String, dynamic>> _runScenario(
 
   final isAvatarFirstTarget = scenario == _ProfileScenario.avatarFirstTarget;
   final avatarPaints = <DashboardAvatarTargetPainted>[];
+  final avatarFlights = <Map<String, Object?>>[];
+  final avatarEvents = <FluviDiagnosticEvent>[];
+  final avatarFixture = isAvatarFirstTarget
+      ? _verifyAvatarNonemptyFixture(tester, controller)
+      : <String, Object?>{};
+  var timeInteractionCount = 0;
   var avatarMotionLaneObserved = false;
   void collectAvatarPaint() {
     final painted = controller.budgetAvatarTargetPainted.value;
@@ -352,6 +361,10 @@ Future<Map<String, dynamic>> _runScenario(
   }
 
   void collectAvatarMotionLane() {
+    if (controller.isMotionLaneActive(DashboardMotionLane.rail) ||
+        controller.isMotionLaneActive(DashboardMotionLane.summaryShell)) {
+      timeInteractionCount += 1;
+    }
     avatarMotionLaneObserved =
         avatarMotionLaneObserved ||
         controller.isMotionLaneActive(DashboardMotionLane.budgetAvatar);
@@ -389,7 +402,6 @@ Future<Map<String, dynamic>> _runScenario(
   // action, immediately before the measured gesture, so a completed
   // pre-capture warmup is never attributed to motion.
   late int completedScenePreparationEpochAtMotionStart;
-  var avatarDiagnosticSequenceBefore = 0;
   final frameKey = '${scenario.reportKey}_frames';
   final timelineKey = '${scenario.reportKey}_timeline';
   final motionDuration = Stopwatch();
@@ -397,9 +409,6 @@ Future<Map<String, dynamic>> _runScenario(
   await _captureProfilePerformance(
     binding,
     () => _timelineStep(scenario.reportKey, () async {
-      if (isAvatarFirstTarget) {
-        avatarDiagnosticSequenceBefore = _lastDiagnosticSequence();
-      }
       completedScenePreparationEpochAtMotionStart = _scenePreparationEpoch(
         Map<String, Object?>.from(
           controller.exportPhysicalRailReport()['sceneWindow']! as Map,
@@ -413,6 +422,18 @@ Future<Map<String, dynamic>> _runScenario(
           scenario,
           avatarPaints: avatarPaints,
           avatarMotionLaneObserved: () => avatarMotionLaneObserved,
+          avatarFlights: avatarFlights,
+          avatarEvents: avatarEvents,
+          avatarFixture: avatarFixture,
+          timeInteractionCount: () => timeInteractionCount,
+          onAvatarEvidence: (evidence) {
+            binding
+                .reportData!['dashboard_avatar_target_completion_evidence'] = {
+              ...avatarFixture,
+              'completed_flights': List<Map<String, Object?>>.of(avatarFlights),
+              'current_flight': evidence,
+            };
+          },
         );
       } finally {
         motionDuration.stop();
@@ -431,6 +452,28 @@ Future<Map<String, dynamic>> _runScenario(
     controller.foregroundInputMotion.removeListener(collectAvatarMotionLane);
   }
 
+  if (isAvatarFirstTarget) {
+    // Performance capture waits for the renderer after the last gesture.
+    // Re-read final owners now as well: a delayed older canonical install
+    // must not overwrite an already checked final target during that wait.
+    final lastFlight = avatarFlights.last;
+    final finalEvidence = _avatarFinalTargetEvidence(
+      tester,
+      controller,
+      paints: avatarPaints.sublist(
+        lastFlight['flight_start_paint_count']! as int,
+      ),
+      events: _diagnosticEventsAfter(
+        lastFlight['flight_start_sequence']! as int,
+      ),
+      fixture: avatarFixture,
+      timeInteractionCount: timeInteractionCount,
+    );
+    binding.reportData!['dashboard_avatar_final_target_evidence'] =
+        finalEvidence;
+    DashboardProfileReport.validateAvatarFinalTargetEvidence(finalEvidence);
+    avatarFlights[avatarFlights.length - 1] = {...lastFlight, ...finalEvidence};
+  }
   final rawFrameReport = binding.reportData?[frameKey];
   expect(rawFrameReport, isA<Map>());
   final report = Map<String, dynamic>.from(rawFrameReport! as Map);
@@ -441,9 +484,9 @@ Future<Map<String, dynamic>> _runScenario(
       ? _avatarFirstTargetEvidence(
           controller: controller,
           paints: avatarPaints,
-          diagnosticEvents: _diagnosticEventsAfter(
-            avatarDiagnosticSequenceBefore,
-          ),
+          diagnosticEvents: avatarEvents,
+          flights: avatarFlights,
+          fixture: avatarFixture,
           motionLaneObserved: avatarMotionLaneObserved,
         )
       : null;
@@ -767,7 +810,7 @@ List<FluviDiagnosticEvent> _diagnosticEventsAfter(int sequence) =>
         .where((event) => (event.sequence ?? 0) > sequence)
         .toList(growable: false);
 
-/// Produces a bounded, JSON-safe proof for the one real Avatar fling in the
+/// Produces bounded, JSON-safe evidence for repeated real Avatar flings in the
 /// profile matrix. It only observes existing Core paint acknowledgement and
 /// bounded diagnostics; neither this harness nor the report owns selection,
 /// resource readiness, or presentation state.
@@ -775,6 +818,8 @@ Map<String, Object?> _avatarFirstTargetEvidence({
   required DashboardCoreController controller,
   required List<DashboardAvatarTargetPainted> paints,
   required List<FluviDiagnosticEvent> diagnosticEvents,
+  required List<Map<String, Object?>> flights,
+  required Map<String, Object?> fixture,
   required bool motionLaneObserved,
 }) {
   final stageCounts = <String, int>{};
@@ -816,11 +861,34 @@ Map<String, Object?> _avatarFirstTargetEvidence({
       visible != null &&
       latestPaint.queryKey == visible.queryKey.value &&
       latestPaint.coreRevision == visible.coreRevision;
-  final latestMotionSummary = motionSummaries.isEmpty
-      ? null
-      : motionSummaries.last;
 
   return <String, Object?>{
+    ...flights.last,
+    ...fixture,
+    'real_fling_count': flights.length,
+    'preview_requested_count': flights.fold<int>(
+      0,
+      (n, flight) => n + (flight['preview_requested_count']! as int),
+    ),
+    'preview_terminal_count': flights.fold<int>(
+      0,
+      (n, flight) => n + (flight['preview_terminal_count']! as int),
+    ),
+    'preview_terminal_classifications': _avatarTerminalClassifications(
+      diagnosticEvents,
+    ),
+    'flights': flights,
+    for (final key in const [
+      'nonempty_preview_requested_count',
+      'nonempty_preview_accepted_count',
+      'nonempty_preview_painted_count',
+      'exact_local_hotset_unavailable_count',
+      'generic_coordinator_rejected_count',
+    ])
+      key: flights.fold<int>(
+        0,
+        (count, flight) => count + (flight[key]! as int),
+      ),
     'motion_lane_observed': motionLaneObserved,
     'pointer_accepted_count': stageCounts['AV|POINTER_ACCEPTED'] ?? 0,
     'preview_accepted_count': stageCounts['AV|PREVIEW_ACCEPTED'] ?? 0,
@@ -856,8 +924,11 @@ Map<String, Object?> _avatarFirstTargetEvidence({
         .map((event) => event.scope ?? '')
         .toList(growable: false),
     'avatar_motion_summary_count': motionSummaries.length,
-    'avatar_semantic_crossings':
-        _scopeInt(latestMotionSummary?.scope, 'avatarSemanticCrossings') ?? 0,
+    'avatar_semantic_crossings': motionSummaries.fold<int>(
+      0,
+      (count, summary) =>
+          count + (_scopeInt(summary.scope, 'avatarSemanticCrossings') ?? 0),
+    ),
     'avatar_motion_summary_scopes': motionSummaries
         .map((event) => event.scope ?? '')
         .toList(growable: false),
@@ -1127,15 +1198,40 @@ Future<void> _runMeasuredScenario(
   _ProfileScenario scenario, {
   required List<DashboardAvatarTargetPainted> avatarPaints,
   required bool Function() avatarMotionLaneObserved,
+  required List<Map<String, Object?>> avatarFlights,
+  required List<FluviDiagnosticEvent> avatarEvents,
+  required Map<String, Object?> avatarFixture,
+  required int Function() timeInteractionCount,
+  required ValueChanged<Map<String, Object?>> onAvatarEvidence,
 }) async {
   switch (scenario) {
     case _ProfileScenario.avatarFirstTarget:
-      await _flingBudgetAvatar(
-        tester,
-        controller,
-        avatarPaints: avatarPaints,
-        avatarMotionLaneObserved: avatarMotionLaneObserved,
-      );
+      // One persistent production composition. Alternating real pointers
+      // exercise both directions; each flight must finish exactly before the
+      // next starts, so a later fling cannot rescue an unresolved predecessor.
+      for (var flight = 0; flight < 4; flight++) {
+        final sequenceBefore = _lastDiagnosticSequence();
+        final paintCountBefore = avatarPaints.length;
+        await _flingBudgetAvatar(
+          tester,
+          controller,
+          offset: Offset(flight.isEven ? -420 : 420, 0),
+          avatarMotionLaneObserved: avatarMotionLaneObserved,
+        );
+        final evidence = await _waitForAvatarExactPaint(
+          tester,
+          controller,
+          avatarPaints,
+          paintCountBefore: paintCountBefore,
+          sequenceBefore: sequenceBefore,
+          fixture: avatarFixture,
+          timeInteractionCount: timeInteractionCount,
+          onEvidence: onAvatarEvidence,
+        );
+        DashboardProfileReport.validateAvatarFinalTargetEvidence(evidence);
+        avatarFlights.add(evidence);
+        avatarEvents.addAll(_diagnosticEventsAfter(sequenceBefore));
+      }
     case _ProfileScenario.summaryPlane:
       await _flingSummary(tester, const Offset(0, -180));
       await _flingSummary(tester, const Offset(0, -180));
@@ -1171,18 +1267,17 @@ Future<void> _runMeasuredScenario(
 Future<void> _flingBudgetAvatar(
   WidgetTester tester,
   DashboardCoreController controller, {
-  required List<DashboardAvatarTargetPainted> avatarPaints,
+  required Offset offset,
   required bool Function() avatarMotionLaneObserved,
 }) async {
   final carousel = find.byKey(const ValueKey('budget-target-avatar-carousel'));
   expect(carousel, findsOneWidget);
-  await tester.fling(carousel, const Offset(-420, 0), 2200);
+  await tester.fling(carousel, offset, 2200);
   await _waitForBudgetAvatarMotionEnd(
     tester,
     controller,
     motionLaneObserved: avatarMotionLaneObserved,
   );
-  await _waitForAvatarExactPaint(tester, controller, avatarPaints);
 }
 
 Future<void> _waitForBudgetAvatarMotionEnd(
@@ -1212,23 +1307,290 @@ Future<void> _waitForBudgetAvatarMotionEnd(
   );
 }
 
-Future<void> _waitForAvatarExactPaint(
+Future<Map<String, Object?>> _waitForAvatarExactPaint(
   WidgetTester tester,
   DashboardCoreController controller,
-  List<DashboardAvatarTargetPainted> avatarPaints,
-) async {
+  List<DashboardAvatarTargetPainted> avatarPaints, {
+  required int paintCountBefore,
+  required int sequenceBefore,
+  required Map<String, Object?> fixture,
+  required int Function() timeInteractionCount,
+  required ValueChanged<Map<String, Object?>> onEvidence,
+}) async {
   final deadline = DateTime.now().add(const Duration(seconds: 8));
+  Map<String, Object?>? evidence;
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump();
-    if (avatarPaints.isNotEmpty) return;
+    evidence = _avatarFinalTargetEvidence(
+      tester,
+      controller,
+      paints: avatarPaints.sublist(paintCountBefore),
+      events: _diagnosticEventsAfter(sequenceBefore),
+      fixture: fixture,
+      timeInteractionCount: timeInteractionCount(),
+    );
+    try {
+      DashboardProfileReport.validateAvatarFinalTargetEvidence(evidence);
+      evidence['flight_start_sequence'] = sequenceBefore;
+      evidence['flight_start_paint_count'] = paintCountBefore;
+      onEvidence(evidence);
+      return evidence;
+    } on StateError {
+      // This is a bounded test completion window; production owns readiness.
+    }
     await Future<void>.delayed(const Duration(milliseconds: 16));
   }
-  fail(
-    'Budget Avatar fling ended without an exact Phase-A LogBox paint: '
-    'visibleQuery=${controller.visibleFrames.value?.queryKey.value} '
-    'visibleRevision=${controller.visibleFrames.value?.coreRevision} '
-    'activeMotionLanes=${controller.activeMotionLaneNames}.',
+  if (evidence != null) onEvidence(evidence);
+  fail('Avatar final target did not bind, paint and canonicalize: $evidence');
+}
+
+Map<String, Object?> _verifyAvatarNonemptyFixture(
+  WidgetTester tester,
+  DashboardCoreController controller,
+) {
+  final rail = tester.widget<BudgetTargetAvatarRail>(
+    find.byType(BudgetTargetAvatarRail),
   );
+  final membership = controller.preparedIndex!
+      .partitionFor(controller.navigation.state.parentQueryScope.direction)
+      .focusMembershipSeed!;
+  final start =
+      DateTime.utc(2026, 7).millisecondsSinceEpoch ~/
+      Duration.millisecondsPerDay;
+  final end =
+      DateTime.utc(2026, 8).millisecondsSinceEpoch ~/
+      Duration.millisecondsPerDay;
+  // Inspect the existing immutable membership outside the measured gesture.
+  // No synthetic acceptance data and no second index/resource owner.
+  final rows = membership.entries
+      .where(
+        (row) =>
+            row.bookedLocalEpochDay >= start && row.bookedLocalEpochDay < end,
+      )
+      .toList();
+  final seen = <String>{};
+  final counts = <String, int>{};
+  for (var handle = 1; handle <= 8; handle++) {
+    final category = rail.presentation.targetForHandle(handle)?.category?.id;
+    expect(category, isNotNull, reason: 'K requires category handle $handle.');
+    final ids = rows
+        .where((row) => row.categoryId == category)
+        .map((row) => row.id)
+        .toSet();
+    expect(
+      ids,
+      isNotEmpty,
+      reason: 'K category $handle must be nonempty in July.',
+    );
+    expect(
+      seen.intersection(ids),
+      isEmpty,
+      reason: 'K category rows must be disjoint.',
+    );
+    seen.addAll(ids);
+    counts['$handle'] = ids.length;
+  }
+  expect(rail.presentation.targetForHandle(9), isNull);
+  expect(rows.length, greaterThanOrEqualTo(8));
+  expect(
+    rows.length,
+    controller.preparedIndex!
+        .frameFor(controller.navigation.state.parentQueryScope)
+        .entryCount,
+  );
+  return {
+    'fixture_category_row_counts': counts,
+    'fixture_aggregate_row_count': rows.length,
+    'fixture_category_rows_disjoint':
+        seen.length == counts.values.fold<int>(0, (a, b) => a + b),
+  };
+}
+
+Map<String, Object?> _avatarFinalTargetEvidence(
+  WidgetTester tester,
+  DashboardCoreController controller, {
+  required List<DashboardAvatarTargetPainted> paints,
+  required List<FluviDiagnosticEvent> events,
+  required Map<String, Object?> fixture,
+  required int timeInteractionCount,
+}) {
+  final rail = tester.widget<BudgetTargetAvatarRail>(
+    find.byType(BudgetTargetAvatarRail),
+  );
+  final carousel = tester.widget<CenteredCarousel<dynamic>>(
+    find.byKey(const ValueKey('budget-target-avatar-carousel')),
+  );
+  final rawCenter = carousel.controller.rawCenteredLogicalIndex;
+  final count = rail.presentation.value.items.length;
+  final physical = ((rawCenter.round() % count) + count) % count;
+  final target = rail.presentation.targetForHandle(physical)!;
+  Iterable<FluviDiagnosticEvent> eventsFor(String stage) =>
+      events.where((e) => e.stage == stage);
+  FluviDiagnosticEvent? last(Iterable<FluviDiagnosticEvent> values) =>
+      values.lastOrNull;
+  int? handle(FluviDiagnosticEvent? event) =>
+      _scopeInt(event?.scope, 'targetHandle');
+  final desired = handle(last(eventsFor('AV|PREVIEW_REQUESTED')));
+  final semantic = controller.liveInteractions.frame?.budgetTargetHandle;
+  final paint = paints.lastOrNull;
+  final header = last(eventsFor('BUDGET_HEADER_PAINTED'));
+  final progress = last(eventsFor('BUDGET_PROGRESS_PAINTED'));
+  final visible = controller.visibleFrames.value;
+  final payload = controller.visibleFrames.logBoxLane.value;
+  final focusCategory = controller.focus.state?.category?.id;
+  final focusHandle = rail.presentation.value.items
+      .where((item) => item.target.category?.id == focusCategory)
+      .map((item) => item.target.handle)
+      .firstOrNull;
+  String digest(Iterable<String> ids) =>
+      FluviDiagnosticKeyDigest.of((ids.toList()..sort()).join(','));
+  final expectedCategory = digest([
+    if (target.category != null) target.category!.id,
+  ]);
+  final focusDigest = digest([?focusCategory]);
+  final visibleCategory = payload == null
+      ? null
+      : digest(payload.scope.categoryIds);
+  final canonicalCategory = digest(
+    controller.navigation.state.parentQueryScope.categoryIds,
+  );
+  final canonicalKey = controller.paging.committedQueryKey?.value;
+  final numerator = rail.presentation.value.header.displayNumeratorScaled100;
+  final denominator =
+      rail.presentation.value.header.displayDenominatorScaled100;
+  bool surfaceMatches(FluviDiagnosticEvent? event) =>
+      event != null &&
+      handle(event) == physical &&
+      event.coreRevision == visible?.coreRevision &&
+      _scopeInt(event.scope, 'displayNumeratorScaled100') == numerator &&
+      _scopeInt(event.scope, 'displayDenominatorScaled100') == denominator;
+  final exactPainted =
+      paint != null &&
+      !paint.exactEmpty &&
+      paint.hasReadablePhaseAPaint &&
+      paint.targetHandle == physical &&
+      paint.queryKey == visible?.queryKey.value &&
+      paint.coreRevision == visible?.coreRevision;
+  final canonicalized =
+      canonicalCategory == expectedCategory &&
+      canonicalKey == visible?.queryKey.value;
+  final counts = fixture['fixture_category_row_counts']! as Map;
+  bool nonempty(FluviDiagnosticEvent event) {
+    final target = handle(event);
+    return target == 0
+        ? (fixture['fixture_aggregate_row_count']! as int) > 0
+        : (counts['$target'] as int? ?? 0) > 0;
+  }
+
+  final headerPainted = surfaceMatches(header);
+  final progressPainted = surfaceMatches(progress);
+  return {
+    'physical_settle_target_handle': physical,
+    'physical_raw_center': rawCenter,
+    'latest_desired_target_handle': desired,
+    'latest_semantic_target_handle': semantic,
+    'latest_exact_painted_target_handle': paint?.targetHandle,
+    'selected_budget_target_handle': rail.presentation.value.selectedHandle,
+    'focus_target_handle': focusHandle,
+    'header_target_handle': handle(header),
+    'progress_target_handle': handle(progress),
+    'logbox_target_handle': paint?.targetHandle,
+    'expected_category_digest': expectedCategory,
+    'focus_category_digest': focusDigest,
+    'visible_query_category_digest': visibleCategory,
+    'canonical_query_category_digest': canonicalCategory,
+    'visible_query_digest': visible == null
+        ? null
+        : FluviDiagnosticKeyDigest.of(visible.queryKey.value),
+    'logbox_query_digest': paint == null
+        ? null
+        : FluviDiagnosticKeyDigest.of(paint.queryKey),
+    'canonical_query_digest': canonicalKey == null
+        ? null
+        : FluviDiagnosticKeyDigest.of(canonicalKey),
+    'preview_requested_count': eventsFor('AV|PREVIEW_REQUESTED').length,
+    'preview_terminal_count': eventsFor('AV|PREVIEW_TERMINAL').length,
+    'preview_terminal_classifications': _avatarTerminalClassifications(events),
+    'unresolved_pending_candidate_count':
+        controller.budgetAvatarFocusHotsetDiagnostics['pendingCandidate'],
+    'exact_local_hotset_unavailable_count': events
+        .where(
+          (e) =>
+              _scopeField(e.scope, 'reason') == 'exactLocalHotsetUnavailable',
+        )
+        .length,
+    'nonempty_preview_requested_count': eventsFor(
+      'AV|PREVIEW_REQUESTED',
+    ).where(nonempty).length,
+    'nonempty_preview_accepted_count': eventsFor(
+      'AV|VISIBLE_PUBLICATION_ACCEPTED',
+    ).where((event) => (event.entryCount ?? 0) > 0).length,
+    'nonempty_preview_painted_count': paints
+        .where((p) => !p.exactEmpty && p.hasReadablePhaseAPaint)
+        .length,
+    'final_target_row_count': payload?.logBox.previewRowCount,
+    'final_target_exact_painted': exactPainted,
+    'final_target_progress_painted': progressPainted,
+    'final_target_header_painted': headerPainted,
+    'final_target_canonicalized': canonicalized,
+    'final_target_identity_equal':
+        exactPainted &&
+        headerPainted &&
+        progressPainted &&
+        canonicalized &&
+        physical == desired &&
+        physical == semantic &&
+        physical == focusHandle &&
+        physical == rail.presentation.value.selectedHandle &&
+        focusDigest == expectedCategory &&
+        visibleCategory == expectedCategory &&
+        (rawCenter - rawCenter.round()).abs() < 0.01,
+    'generic_coordinator_rejected_count': eventsFor('AV|PREVIEW_REJECTED')
+        .where((e) => _scopeField(e.scope, 'reason') == 'coordinatorRejected')
+        .length,
+    'time_interaction_count': timeInteractionCount,
+    'expected_display_numerator_scaled100': numerator,
+    'header_display_numerator_scaled100': _scopeInt(
+      header?.scope,
+      'displayNumeratorScaled100',
+    ),
+    'progress_display_numerator_scaled100': _scopeInt(
+      progress?.scope,
+      'displayNumeratorScaled100',
+    ),
+    'expected_display_denominator_scaled100': denominator,
+    'header_display_denominator_scaled100': _scopeInt(
+      header?.scope,
+      'displayDenominatorScaled100',
+    ),
+    'progress_display_denominator_scaled100': _scopeInt(
+      progress?.scope,
+      'displayDenominatorScaled100',
+    ),
+    'header_paint_scope': header?.scope,
+    'progress_paint_scope': progress?.scope,
+    'exact_paint_focus_generation': paint?.focusGeneration,
+    'exact_paint_presentation_epoch': paint?.presentationEpoch,
+    'exact_paint_frame_generation': paint?.frameGeneration,
+  };
+}
+
+Map<String, int> _avatarTerminalClassifications(
+  List<FluviDiagnosticEvent> events,
+) {
+  final counts = <String, int>{};
+  for (final event in events.where(
+    (event) => event.stage == 'AV|PREVIEW_TERMINAL',
+  )) {
+    final classification =
+        _scopeField(event.scope, 'terminalClassification') ?? 'unknown';
+    counts.update(
+      classification,
+      (count) => count + event.repeatCount,
+      ifAbsent: () => event.repeatCount,
+    );
+  }
+  return counts;
 }
 
 Future<void> _flingRail(

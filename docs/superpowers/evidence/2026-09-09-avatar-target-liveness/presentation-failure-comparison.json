@@ -1,0 +1,13 @@
+{
+  "baseline_source": "aa61242c4b933ad9d650361ae1014d67fd184186",
+  "baseline_checkout": "b2865023463dc9f9496a2f338f4fe40b6ad1a9c9",
+  "baseline_application_test_workflow_diff": "empty",
+  "baseline_passed": 597,
+  "current_passed": 605,
+  "baseline_failures": 19,
+  "current_failures": 19,
+  "exact_test_names_and_normalized_outputs_equal": true,
+  "new_failures": 0,
+  "baseline_log_sha256": "54f1c0d602c932cc73dd074bb6edc1d2ff4f07c4677aa7272fd098a614733317",
+  "current_log_sha256": "3fbbc4614b87db7b6190be46d8718a20585f41aa1d35644eae03189987738f59"
+}

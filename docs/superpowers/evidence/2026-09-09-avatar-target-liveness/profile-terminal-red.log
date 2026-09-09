@@ -1,0 +1,32 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
++25 -1: Avatar K rejects terminal classification unknown [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 243:7  main.<fn>
+  
++25 -2: Avatar K rejects terminal classification explicitInvariantFailure [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 243:7  main.<fn>
+  
++25 -3: Avatar K rejects requests without exactly one terminal completion [E]
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => void>
+     Which: returned <null>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 248:5  main.<fn>
+  
++26 -3: Some tests failed.

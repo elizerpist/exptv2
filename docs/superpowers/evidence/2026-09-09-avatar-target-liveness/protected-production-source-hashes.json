@@ -1,0 +1,936 @@
+{
+  "baseline": "aa61242c4b933ad9d650361ae1014d67fd184186",
+  "protected_production_file_count": 232,
+  "all_match_baseline": true,
+  "avatar_rail_only_change": "terminal diagnostic reason coordinatorRejected -> previewNotPainted",
+  "files": [
+    {
+      "path": "lib/app/debug/demo_seed_coordinator.dart",
+      "sha256": "8706b635956f7252102e44812e25116724f9ea1af96eb9f951a6da125bc149cc"
+    },
+    {
+      "path": "lib/app/fluvi_app.dart",
+      "sha256": "e1b5cc26517e00ce37d9fd5d53965381dc0973b314cfa085c187527cdc16fed1"
+    },
+    {
+      "path": "lib/app/shell/bnb03_bottom_navigation.dart",
+      "sha256": "58459df39acc4b5acf1f168187f4970f58b5de5afc6f2e04f98bac852135f81d"
+    },
+    {
+      "path": "lib/app/shell/fluvi_app_shell.dart",
+      "sha256": "28be40417f09afc123e98f08fdc21330e59296e3cd73ad91b0ca12508f4dd799"
+    },
+    {
+      "path": "lib/app/shell/fluvi_bottom_navigation.dart",
+      "sha256": "a4ad375915c25451bf0f2dfe125560a73d153008cd7c5d9967cd8e510edebe6c"
+    },
+    {
+      "path": "lib/app/shell/fluvi_center_fab.dart",
+      "sha256": "95640f41c58c93e1b06b10194e35ce677b372ec574de3a655c2b4418d6df93d8"
+    },
+    {
+      "path": "lib/core/assets/prepared_vector_asset_atlas.dart",
+      "sha256": "ae93b678e68d2f2a159a895a8255a05eeb9158f2f612e482746ba2a88b63d697"
+    },
+    {
+      "path": "lib/core/categories/application/category_collection_controller.dart",
+      "sha256": "e94e725ab13fd1784a67497bb9677a3bdc4bf4da19547581c1e91724c8e7dc35"
+    },
+    {
+      "path": "lib/core/categories/catalog/category_catalog.dart",
+      "sha256": "c56309325037df83a5a84b3c3cc05d3e3478870d5bb44235eacccdded9fcfb1d"
+    },
+    {
+      "path": "lib/core/categories/catalog/category_catalog_ids.dart",
+      "sha256": "6ae72be363543259eee36d75908c88009a124eba4323e71e78bdd18332edf37e"
+    },
+    {
+      "path": "lib/core/categories/catalog/category_color_catalog.dart",
+      "sha256": "cede78b0a29ff06bcc33ee8fbf00864cda7665a83443b0fa72dc22e1a0de959d"
+    },
+    {
+      "path": "lib/core/categories/catalog/category_icon_catalog.dart",
+      "sha256": "384c93a5bff6c02a0b0d9df5d6b952c427cf688fd783eb141060b9e894a756a2"
+    },
+    {
+      "path": "lib/core/categories/catalog/category_visual_resolver.dart",
+      "sha256": "b8f65e3f777c2f4f8adad83da7f36dfcf3c21eccd0635bf62cb7b329a34c047a"
+    },
+    {
+      "path": "lib/core/categories/categories.dart",
+      "sha256": "f6371709c1b8111c9a7ff2fec033a2dc0e490c7bd3c1bc4ff7c18266fa2dce7c"
+    },
+    {
+      "path": "lib/core/categories/data/empty_category_repository.dart",
+      "sha256": "98c3cb62c2359b9ff333c567115a7804b26ac24189d26c3266f86d8b85b9c3e7"
+    },
+    {
+      "path": "lib/core/categories/data/method_channel_category_repository.dart",
+      "sha256": "8322e9e27ee6b060362c069e92191386e5e6594a773d5ebb15a20700a499cad4"
+    },
+    {
+      "path": "lib/core/categories/domain/budget_progress_health.dart",
+      "sha256": "22e5c71818cefb18070fafe66e4222cb968577b6977d200a814d6d82dda095dd"
+    },
+    {
+      "path": "lib/core/categories/domain/category_repository.dart",
+      "sha256": "4802911316fdf83f83cbb595fe3057dfea04f4b779403df7d6a9eeba68b2ae4f"
+    },
+    {
+      "path": "lib/core/categories/domain/fluvi_category.dart",
+      "sha256": "d57e542bf5445b7ed74176cd12d2cb47bea1886ada21862d56443a127e2fd4ca"
+    },
+    {
+      "path": "lib/core/categories/presentation/budget_category_avatar_artwork.dart",
+      "sha256": "17bee7dda1e9c502ee6db318919cc2b744f79d1c7682b6b3aed20c87a36fc65b"
+    },
+    {
+      "path": "lib/core/categories/presentation/category_icon_view.dart",
+      "sha256": "21f8fe06622b842205a2cfa2120a89c93abe2de956f7f6a2df96c6a9105fc22a"
+    },
+    {
+      "path": "lib/core/categories/presentation/category_visual_badge.dart",
+      "sha256": "8937b1ea1f3f1f145ced6e07d7959a3f18ec6f41b8b4822ca02b8391864fa526"
+    },
+    {
+      "path": "lib/core/categories/presentation/glossy_category_avatar.dart",
+      "sha256": "0ec5f88752e869a6e32bcd10b9db815b08f98db3d12586dc08d496ec19ad891e"
+    },
+    {
+      "path": "lib/core/debug/debug_console.dart",
+      "sha256": "0fdb218fa27992a23dc4c3a9a233da980692344651868c9495e07a6dbd3dcd17"
+    },
+    {
+      "path": "lib/core/debug/debug_floating_button.dart",
+      "sha256": "c93769bf076f36086d73f9159d96d8d5671969816b1c3231c0546384b9a253ec"
+    },
+    {
+      "path": "lib/core/demo_data/demo_data_bridge.dart",
+      "sha256": "653ed6b0a6af922a194f333020ac7bab685d2b5ecbc88ecb940227477c272457"
+    },
+    {
+      "path": "lib/core/demo_data/demo_seed_report.dart",
+      "sha256": "d0f95bc5be794d9e493d036188be4dfad1de248d8b90327e4d26ad0809de9088"
+    },
+    {
+      "path": "lib/core/design/app_control_metrics.dart",
+      "sha256": "b11a6f303c4c259ff199764f03722cb3433e3607e2ab377f29bb1c8406dd05f5"
+    },
+    {
+      "path": "lib/core/design/dashboard_body_order.dart",
+      "sha256": "6d59d4b4998fd09bff12a80ed748b232fc439514d6344d881201cfd1378a975f"
+    },
+    {
+      "path": "lib/core/design/dashboard_border_profile.dart",
+      "sha256": "3d86567bbb5e2df7a14d14040152e2e2732f19a9c82b4c78999717fbe6f33b6d"
+    },
+    {
+      "path": "lib/core/design/dashboard_core_mode_presentation.dart",
+      "sha256": "b04adc5e91c4483715d2f486c0255f29cc2d09536062dfc4bbb11370f6cf8389"
+    },
+    {
+      "path": "lib/core/design/dashboard_corner_profile.dart",
+      "sha256": "ae64cc91267cba51af96ff2d814ca1116cd8c6946f893d7d5238261179195550"
+    },
+    {
+      "path": "lib/core/design/dashboard_geometry_resolver.dart",
+      "sha256": "c76ca320040ad1ef65ded11072325bf37a00e88b8673eaf4573391d2b9138b02"
+    },
+    {
+      "path": "lib/core/design/dashboard_layout_frame.dart",
+      "sha256": "c80b04c00fce2d36262a8d9377cfb9c35f8a9134be67f8c81ed6c1d364f82e82"
+    },
+    {
+      "path": "lib/core/design/dashboard_layout_metrics.dart",
+      "sha256": "222f8cbeff5a439b92be9697c66c8b79f3139277f153ea494742b4d8694c56a1"
+    },
+    {
+      "path": "lib/core/design/dashboard_logbox_layout_profile.dart",
+      "sha256": "508b7af6ad235bb9932b3039a6c8920990657147bfae31c333541b72fc8a26e2"
+    },
+    {
+      "path": "lib/core/design/dashboard_mode_palette.dart",
+      "sha256": "e6b4c41c943fc63a6f1e59069b27d7cb5274c5dabf29644adf326be27c661ce2"
+    },
+    {
+      "path": "lib/core/design/dashboard_shadow_profile.dart",
+      "sha256": "31bdaae5c3c78730701526cf95dccae36b2652b65b8b25f75021b86b11380dec"
+    },
+    {
+      "path": "lib/core/design/fluvi_highlight.dart",
+      "sha256": "b1ef5c4d5d1c456df60113166033dc6e7b8674715fc8dcc5501e6e276397aad1"
+    },
+    {
+      "path": "lib/core/design/fluvi_rounded_box.dart",
+      "sha256": "ce5af99f4f32bc715d508ec28b7396c3c9acfeeadec932359fc682db871c2980"
+    },
+    {
+      "path": "lib/core/design/header_cascade_motion.dart",
+      "sha256": "a0add26472c5386a362f9b4b27f1ee1db7bad0c2bedc9b9cbb519942e241f0d4"
+    },
+    {
+      "path": "lib/core/diagnostics/fluvi_build_identity.dart",
+      "sha256": "99243ae21407ce18643065524073b9cc91ceec2a51528c25636da880b98cc005"
+    },
+    {
+      "path": "lib/core/diagnostics/fluvi_diagnostic_bridge.dart",
+      "sha256": "67b8043f675786c7f5cef66d589f749b52573ca063079544217a500c83a66724"
+    },
+    {
+      "path": "lib/core/diagnostics/fluvi_diagnostic_event.dart",
+      "sha256": "19fda6f341944ba91e099e20389a2347a3a1befc86072ed2b279595d9551c25a"
+    },
+    {
+      "path": "lib/core/diagnostics/fluvi_diagnostic_key_digest.dart",
+      "sha256": "b0357b83c3b659de58f5a163d94cda336a919965c2f6fa9778e0d3788570b417"
+    },
+    {
+      "path": "lib/core/diagnostics/fluvi_diagnostic_logger.dart",
+      "sha256": "766e02063eb44433218923f3326db6f6b7fb6d9de6f5d1d6c11d1ade2efa88d9"
+    },
+    {
+      "path": "lib/core/diagnostics/fluvi_onscreen_diagnostics.dart",
+      "sha256": "472f814ed2076773ae84bfe0c87063c52326e0ed986a598619a0730017a5a1e8"
+    },
+    {
+      "path": "lib/core/financial_limits/data/method_channel_financial_limit_repository.dart",
+      "sha256": "315ce42e22fb87039fb0bf71d95427f423b806f95326dcc36d619f3ab915bdaa"
+    },
+    {
+      "path": "lib/core/financial_limits/domain/financial_limit.dart",
+      "sha256": "882976a7386bdde455ea36411d6c0db2354a4270053d0346d1b21dc5fe4e1880"
+    },
+    {
+      "path": "lib/core/financial_limits/domain/financial_limit_repository.dart",
+      "sha256": "1ec38d6dd4e53f709cb607bbeea696a4b7dcd4aca63b02dcb094d1c0dc782cf9"
+    },
+    {
+      "path": "lib/core/financial_limits/presentation/budget_ring_presentation.dart",
+      "sha256": "93c230a1ec81d00f91986bc62ed5bfd4fdcc9c9fb2d8a5c273f3cb4dd4ef56c8"
+    },
+    {
+      "path": "lib/core/motion/dashboard_motion_host.dart",
+      "sha256": "de103bee32f60e48823a6a615d4f488fbe1eadced040cfeae0f11932fbfe002f"
+    },
+    {
+      "path": "lib/core/motion/gesture_direction_arbiter.dart",
+      "sha256": "e754c1c1d886c15d0e3ea4433c43927a5dcb9392e9928fd98de3b6e2e1b27c5f"
+    },
+    {
+      "path": "lib/core/time/fluvi_clock.dart",
+      "sha256": "73955d11d351b7005c8fcc2d6cd3d8a527c82dc56bdd71dc75ec0f10f865a268"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_avatar_target_painted.dart",
+      "sha256": "789014064d492d9d06b2504e9b5e821048a673d23aa6b1f3a641fbc2990ad544"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_category_distribution_controller.dart",
+      "sha256": "fb8c59975c85f270402c780d190a02cb57952f9bf523235c8f0e5e839ffcd492"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_limit_edit_controller.dart",
+      "sha256": "c7144ebe1815069473fe79f6e3b5fe1a112758bb9e67056efc1cb54552f2a528"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_live_analysis_projection.dart",
+      "sha256": "9ff12ff44e0ac225548d6f1ca458286533a79a01d60367e847f2aacbcbccdaa6"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_month_end_projection.dart",
+      "sha256": "6421ed3974408e6b8a5b3125ddd1873ae27cc0eb74040179eb177f206df035d6"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart",
+      "sha256": "31d30064245c539a2118805536c40ac97d91f5500bb593f774b1ef370eef1b45"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_period.dart",
+      "sha256": "99b7aed2e8acba13d5f48f6b16a7b9507c46b487e5be7be9d35cc8c8e546564b"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_presentation_controller.dart",
+      "sha256": "796a183328a446425e0259afa24c0db3504b4623f7b878fce38049a43f98c570"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_scope_analysis.dart",
+      "sha256": "6d7f4d6e0da53dccebfd4afed7e135d8f7d762ce043d23b1a336f73a5af0ea1d"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_budget_target.dart",
+      "sha256": "b3bf99d9bbf60e87ff897ed2441bff35414970de31c40adea108a582e013c862"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_core_mode_controller.dart",
+      "sha256": "064a10bc201b69dc08d51cefc12087d7febc1c771a0abf6ee49fca5c3ed3f90a"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_ephemeral_focus_controller.dart",
+      "sha256": "ee11f581a499df17e88086da86b25f413086d7d55258e0b63334034fb5eb8459"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_expansion_controller.dart",
+      "sha256": "70de4a1469eb2442311dc059dbd94bf694974cfa4fb93d69424c15e16546cbdc"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_interaction_diagnostics.dart",
+      "sha256": "5cb20884ff45f43d6c96ffe8e71411922e7d2f707d7feec886b2cb64c3a9a87c"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_interaction_readiness.dart",
+      "sha256": "99cb2fd1e3cd4e2ffcdbc3ce44b3716cad16245af3c9d145d30a446e2383f610"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_live_interaction_coordinator.dart",
+      "sha256": "242b89ba730c05efa42cdf4292c44aa83e29b06355bbd51470190cab59fdeb72"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_mode_spec.dart",
+      "sha256": "de5e13b40cce31499b6f14ae3bacfb5dd7af93b9e160fae3428936aaedfd09b2"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_performance_counters.dart",
+      "sha256": "f863c3b1221ec63a1b63a3cb8c3f89f6970723eabb85fe4367ea2c1c39b4b736"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_rail_flight_recorder.dart",
+      "sha256": "ec7ae8bb68244aa89eb89921d7897e8fa99d3e7eed02736f0dbed830332e5182"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_render_readiness_diagnostics.dart",
+      "sha256": "1959a421d0a5809893edcbc5dd930c9b7b5f1e0cbe17959d6c61925ff5c13ce0"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_spending_rhythm_controller.dart",
+      "sha256": "af40731c3bb27a8ec350c663896a4a4575c6fd95fb2e87b391fbd00e70c9743e"
+    },
+    {
+      "path": "lib/features/dashboard/application/dashboard_vertical_background_work_snapshot.dart",
+      "sha256": "b1e006f38a2181d8c74e15fa005ee1b14e5c8c7afe31ab325f12cf6b0c6962b9"
+    },
+    {
+      "path": "lib/features/dashboard/application/prepared_query_candidate.dart",
+      "sha256": "6e28de90e5e745e8ebfbe67e3d8284d408a5de007c6f1b964d358077341c74ab"
+    },
+    {
+      "path": "lib/features/dashboard/application/transaction_direction_controller.dart",
+      "sha256": "8c9ceea5158d1f04fa4af48394b3771e1a437f130db90e6b7895ea9c54fd379c"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/committed_log_viewport_cache.dart",
+      "sha256": "a03d56442c2186c36cf2044d218ed183f79c65827bf6473235f900d7f6ef09bd"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/committed_vertical_demand_planner.dart",
+      "sha256": "91af6cde43721da2c51af889d7c45a2766546b7f95f483c5e369a7decad15f79"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart",
+      "sha256": "c81f4b28c7738c16afc016ece0acb756c3b731d2cf0e3424787e7339f8f40fb2"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/dashboard_log_view_models.dart",
+      "sha256": "4680d1792ee9938b69c5570e7d96469cc7ab433e33865352e1aee098740a8033"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/dashboard_log_viewport_state.dart",
+      "sha256": "1135e24734fd0a4760fd530408fcc918fa25818606b39f8400065b224f9dc4a2"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart",
+      "sha256": "51a34d85c0f77a5b93a987f47d2c4255a18d8a4fe60b7773eb55be9f696fab18"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart",
+      "sha256": "c208db162238fe0f02923cb844ba6f1352dd2abe4b0c81e0f558952fe6414b64"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart",
+      "sha256": "7b78e1ef693a49f2bfd10a9b964d1bb159dcd4f0edb36e4fa7c11b75c0067162"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/application/dashboard_logbox_terminal_extent.dart",
+      "sha256": "524e60862b99718224c6656b380d2369460436873e547e53763b8abbf2467c08"
+    },
+    {
+      "path": "lib/features/dashboard/logbox/presentation/dashboard_logbox_prepared_row_text_layout.dart",
+      "sha256": "5c520b1a3e700928f999569318f90fb0920e5ff385aee6878d910b3421a88589"
+    },
+    {
+      "path": "lib/features/dashboard/motion/dashboard_display_frame_coalescer.dart",
+      "sha256": "d55926cd4905a6b664c7d3a475425f6fe0b781285daa56532777027fc6dcbc53"
+    },
+    {
+      "path": "lib/features/dashboard/motion/dashboard_motion_kernel.dart",
+      "sha256": "bb5f32043a684954d42007f08aa60982ca4a877fb0bed31a7d388ae703959d33"
+    },
+    {
+      "path": "lib/features/dashboard/motion/dashboard_motion_state.dart",
+      "sha256": "bbd3a7b5ffd01340fd1cc7199f25618191a20117b92f433f5e962b433e31bd8c"
+    },
+    {
+      "path": "lib/features/dashboard/motion/dashboard_semantic_catalog.dart",
+      "sha256": "20e1829ce2a373cc59a1127dba5acaeebe2476ba39bcc47a3be6642354e473e5"
+    },
+    {
+      "path": "lib/features/dashboard/prepared/data/dashboard_prepared_formatter.dart",
+      "sha256": "abe0d5029720b6857c175e89ebe8c848ed5128a49d813140811cadeaed44abb2"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/budget_content_card_style.dart",
+      "sha256": "2e55f627ccd6cd147431defcb4858e166d2600ba57de8c34ee9c26ac9aed21c4"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/budget_section_order.dart",
+      "sha256": "8da758083bbfdf0cf960af5bc324cd039fbc9436177671eb67d182e529b940ff"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_dashboard.dart",
+      "sha256": "5a5829550742c1d2b053dd73b653da6444de0f347073e1066a5b2c1fbcf06d47"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart",
+      "sha256": "5eb04978b3b929f701fe077c9447de6733c5c2e564c6c92fba6fd913b373e74c"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_allocation_partition_lane.dart",
+      "sha256": "dd4ed7988044ca46b1e45bd3245a12a4f0713e4f43a9874cb8769fddc5515715"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart",
+      "sha256": "5d550d7651700019a3f648d9b596c4dd0307f3d04b4c7349dd6581871daa0f7d"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_category_distribution_svg.dart",
+      "sha256": "6c8b4ca3b4c77b77c902a671aa818a3ff3116741222af069d5ea4b3a0c33ec02"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart",
+      "sha256": "7c222add0dc5031054edf2514fe8eef257de2d4a3d147c9a953dde090a7b2559"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_clay_donut_scene.dart",
+      "sha256": "2c51b08d751c22490e9ee1ae9165a021de338b4607f3ff644fc6b1486e43fb39"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart",
+      "sha256": "85e920344f2c38a47bf25c473f4dfca622a74b507bbc88287fb49d53ba1672a0"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart",
+      "sha256": "0a6db7446d691331de7a2b9c75b5d6b1a270408199bce4a2c8ff959ee81cfed8"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_distribution_pager.dart",
+      "sha256": "a2623ab720b953b8f8ca04b03b22b010669521d171e4f64b09d8985a312f7df4"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart",
+      "sha256": "e17b35b3cc4817b8c33acadac370949759613e98dbada5f3ab581330dd5fe4c6"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart",
+      "sha256": "f3fbae46d7b1f2cdb231d5eb443518e0c93aaa8fd9d1ea9817508d29911f25f9"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart",
+      "sha256": "455e24d2c67fda3c96a30b6e34ce94886e36386c1409c6b7e45b30e8e04e5ac4"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_partner_visual_intent.dart",
+      "sha256": "298bac82220402ea66eb4166701501320ad0fe0bf3cb046dd6a5df3bc18cc372"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_target_avatar_interaction.dart",
+      "sha256": "b522fe63f4c5519135a79b435b0317b81f8c5ef3d80f6d5b7b5ccfa26eb8039c"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_target_avatar_preview_coalescer.dart",
+      "sha256": "8051b4cd8dcad7541d2acffe0e82dc6c24ce295c7076535ea037acdb75fec163"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart",
+      "sha256": "fbd720a833fdb946e129596cf6abb458b03b222f1e9f3963b43e066597566fd0"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart",
+      "sha256": "db410a4a126a025be137df607d69ee0fbc5c0720ca499624f3ee4ebcca4b4d0c"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart",
+      "sha256": "1f90943b1dec91e7ecaa98aa6f7b90172c3f71e10b0ceae751f28e3c8f45be0f"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart",
+      "sha256": "d2bc033b8c03c882778b825f3371e172e3486682148b57a88ffd7a6cb00b783a"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_budget_cool_source.dart",
+      "sha256": "51c969c4aee7991805d5c8bda8c04d9b0b4160f11aadbe1c50524f35ae80d1bd"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart",
+      "sha256": "53b5f3d9663e012b664cfa79d7a3d16dc037f69a56b228e8f46f4dd23fbcb5c7"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_contrast_text.dart",
+      "sha256": "de7db10caba36fb8d319555f646b5cece4cc2c8ed89460e85a46be5d95de2ec5"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_deep_drift.dart",
+      "sha256": "7820cee6642a26002aa77c2479e6c13183cfef9bbf5b35ba3ef8d208b816e440"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart",
+      "sha256": "5e6180db929f9ed0ec91e2711632aa24b5211bb18dfec318449f5d12d67581c8"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_fragment_backend.dart",
+      "sha256": "63db33cbac2c46e665df6ab18dfbbf509b6d11eb45e2aefc3a59a17891acb1d7"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart",
+      "sha256": "465a07af3d3da806712d6528b194e78bd476f6b4b8e42bffddc27f22ae27d7e9"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart",
+      "sha256": "219aef8cd69eb40b04370a92977e885a82321a5a22e88c060b6f7312bd85fb3d"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_tap_wave.dart",
+      "sha256": "05eca7f5eff95401f51a9f647074b6dc6a7c7688de39d859d03dd45f9ad85870"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_visual_control.dart",
+      "sha256": "e113316ab8f43cae0b30b8699a074c2b9eb46237c7e78fb71ccb4133eeebbb00"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart",
+      "sha256": "7acd734025feb5702d98307a59136ce7487c50268459792f35c81ae7b4aa6a80"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart",
+      "sha256": "ee9824d936df2784a738dfbfe5105df0a5e0a76fb847c4bded02a6a97a2fb764"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/mind_dashboard_core_surface.dart",
+      "sha256": "6438a253df1c5db6ad276aff1404ec77f91ae33b67a39f5972de014f356cb792"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/spending_rhythm_bar_chart.dart",
+      "sha256": "f521b8a7bb54cf7b2e1b160ab7a16a9c7af34c93763f21ade0fd25117b01dc70"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/core_modes/spending_rhythm_bar_layout.dart",
+      "sha256": "debe4e730456a59444149a46a73d290064c7f6fdb80db5732ca362daeb5bb0ac"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_amount_update_policy.dart",
+      "sha256": "eae589cdcb106a0178cb62362926b479f0aa98fe41d087d2de1f42d89d39ca4b"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_border_style.dart",
+      "sha256": "3ef3856d21373db9deca27fd724e8e4b5f4f244ef4a22143ec4758c1aaa3ae20"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_budget_header_presentation.dart",
+      "sha256": "7337d0fe6da21f633f8604b20601a442773ed06d0e51156fcf9edc3a26e71ef8"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_corner_roundness.dart",
+      "sha256": "9088a6e90defbc4ad277c5c49cdd8727ef1a44338149fdad5c4d2d58fb146b97"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_logbox_amount_palette.dart",
+      "sha256": "d8c2f9383cba308d3a1553a62ed920646f8b3681e8449279154737c0924edab3"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_logbox_height.dart",
+      "sha256": "24b00f819bc4252e630c738a9dfbafe8bae5bcd24a030007984e7aa1a83ba45f"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_logbox_search_pill_visibility.dart",
+      "sha256": "15fac313d2ce211ab97503eecb0d1119d6bb3b93b9f0cff4f7db36aba5f66d37"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_shadow_style.dart",
+      "sha256": "fedfdfe692a452631c90cf71d81befdf318157a17bff177b08d533b11b11b2cd"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_shell_presentation.dart",
+      "sha256": "aabf5161502cc0d425ab0a11a120ef093df3d17e4a6ed592ec86bb5e669973b0"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_summary_auto_reset_controller.dart",
+      "sha256": "08df8759b7b9ab27b837572999a0452206da384f870f3b097bb3d1b2422bf52e"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_summary_presentation.dart",
+      "sha256": "239ed4149b4c618c755a018217e4b9cbfba3dd755fb2e58d406d871a17cd3398"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart",
+      "sha256": "0066599728ea05560a05959d7a468b638a4297e49e114262c2e628b1e62825b8"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/summary_navigation_motion_controller.dart",
+      "sha256": "613f4b0ab4c61ec2c6d3a44d744a1a779c2e4d8ca7c274d91d0b76b9da90040f"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/summary_pill_variant.dart",
+      "sha256": "e62ea3990da185f9ccc6fa31711684a66af83747fdbd8372abff6417ef8f5e52"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/summary_text_content.dart",
+      "sha256": "71c25c1a48db08d68446e1f6f9319e1b5a098d2b873747c1fcc5b803d502ddce"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_collapse_handle.dart",
+      "sha256": "046ff42b9c6f9ecedf406a314f9c2a76e0800288b299ba83929c4fef2468a93d"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_logbox_header.dart",
+      "sha256": "6c3d0499c387e26a81cdb4bba56e6037c538331b6e0b0d1e25c8bd52af04dee0"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_logbox_partner_swipe.dart",
+      "sha256": "fa93bb155a84767f48bdeafafda7cf9220c7a86f13e0e692cc65bb2e9cf72c9f"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_logbox_render_surface.dart",
+      "sha256": "450c34e0c407078c0ef3043459a38b9cb1762ff6f1aae42dc7a2608556cc327f"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_logbox_text_layout_cache.dart",
+      "sha256": "ccc6534b7f41dcf1eb9bd619755e920bed55c1c859d608a7465d5713d986781f"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart",
+      "sha256": "4b919e0eeffbeeb47addb2fa74b0560c8376ea028356e4ca5e0b6faee09393ae"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart",
+      "sha256": "911f37091a96e07e7683181ed0102e480fbc1c1030b7996ee5326aef1dc073b7"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_query_facet_chips.dart",
+      "sha256": "26be9a95faf9c5ad0c07a304f12c338b3e12563dd630756ab23e21f481bb9edd"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_render_diagnostic_probe.dart",
+      "sha256": "669bda46627f7357f64ac940a84cfff3a5e49c49424d799061c05ce78d32f5ad"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_render_phase_probe.dart",
+      "sha256": "982d49e496f9581a781ca79d38b6b315e894c21690a3ef67bd8d3218d3e24364"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_summary_pill.dart",
+      "sha256": "99e2895c2101f4c114b374da93005a437d5021cb8277ae69541362c05a17f47a"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/dashboard_vertical_scroll_observer.dart",
+      "sha256": "25e8038570e3cf47d6f5b18cf2b48aab1fbb0acf03c68bd931b67899411a459a"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/fluvi_brand_lockup.dart",
+      "sha256": "07b88e17aa262d591303c018f3890c3c1041446842beae81b4c49df352c33501"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/summary_navigation_motion_region.dart",
+      "sha256": "f70ad8ce84d2701c27e7a49fab084a693b8405aff30bb38b3656237c9d4a2c13"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/summary_pill_experiments.dart",
+      "sha256": "dddf7f42c5b0b1e1cce61da3f52360e541f26bc7be1af852f347d06767220cf4"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/summary_pill_primary_controls.dart",
+      "sha256": "84118d7a583a73b66b284e8d93a5d8bff10a6206dbd9b502e81b440c8484c8fa"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/summary_pill_text_transition.dart",
+      "sha256": "c951a8c32a1d325ef2890ff064bc9858ff9c273558ca880f5b9da9797e2bbb02"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/time_refinement_rail.dart",
+      "sha256": "5cb67e0aaf92b44430534d28da68832daa9ff52bd95989e0262e60a5a15feaa9"
+    },
+    {
+      "path": "lib/features/dashboard/presentation/widgets/transaction_direction_toggle.dart",
+      "sha256": "dafd5fed6b40c9a50e087fc7910baa1eebeb83a66210cda039930b247c6f8b03"
+    },
+    {
+      "path": "lib/features/dashboard/query/application/current_query_controller.dart",
+      "sha256": "ead5c17472ea10f6b660cc20dc77a1487eccef163dbb7f073760c1c2f45dfa52"
+    },
+    {
+      "path": "lib/features/dashboard/query/application/dashboard_applied_query_facet_loader.dart",
+      "sha256": "72086a9a9a882927b5662fc9f42d9e57dc04ac8d7c8caba3318ac426e7eb338e"
+    },
+    {
+      "path": "lib/features/dashboard/query/application/query_composer_controller.dart",
+      "sha256": "b15fc1f7e44b7bb05ecc6c73b11981893b7f8deb1f339fefa8c730d1edb1d785"
+    },
+    {
+      "path": "lib/features/dashboard/query/application/query_menu_data_controller.dart",
+      "sha256": "3739e484f9a266b7e314465e7c970449d1cbc19a4025e85fcb04632ec44a2062"
+    },
+    {
+      "path": "lib/features/dashboard/query/application/saved_query_controller.dart",
+      "sha256": "d4ef3ab9d098bc242735e88650e674373f4a18607a837dfad86d36efc039dfd6"
+    },
+    {
+      "path": "lib/features/dashboard/query/data/current_ledger_query_scope_wire_codec.dart",
+      "sha256": "93cb983016ca642668204a93250434321a025ef967e69a5c025668de69074076"
+    },
+    {
+      "path": "lib/features/dashboard/query/data/dashboard_ledger_entry.dart",
+      "sha256": "ea897d39292a74d5da3cb7da5ddd9b9e16f5b79872cbe5700b95b08be5c2eb9f"
+    },
+    {
+      "path": "lib/features/dashboard/query/data/method_channel_query_menu_repository.dart",
+      "sha256": "3d48e1862bcb75d0ccf8b8f638ce2414e868c7ef27c34dc517e0eb8689d59281"
+    },
+    {
+      "path": "lib/features/dashboard/query/data/query_menu_repository.dart",
+      "sha256": "752a01e95fb4d149e76b47bf00b14284a848b1a55671aa571d6e468e65664137"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/current_ledger_query_scope.dart",
+      "sha256": "1a6f718b252056acd390748953384015a9782edbffc7915776213a960535399a"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/dashboard_directional_query_set.dart",
+      "sha256": "7e265af233836cd0c0868d3b4f9f8a22366c088ddd24bac745f138eae0f6f244"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/ledger_direction.dart",
+      "sha256": "2fc1cc8d89aefa0129a73565f47f1f43af7cd803ce8a611ebf7cb0bc350d636c"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/query_amount_range.dart",
+      "sha256": "f7674d5a8b05a35cfdd4ee13a5b96c06b9e0c35df5cbfeb73395356f6f61bf05"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/query_menu_data.dart",
+      "sha256": "f6edbe37a2ffa4cb973e9b012166a3b9e32757f91683cfb0932850c6062a569a"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/query_temporal_filter.dart",
+      "sha256": "d6d2e532b03b3f3596bbe85274850d3a21c5032b767738fb97a8bb2f64e240c0"
+    },
+    {
+      "path": "lib/features/dashboard/query/domain/query_temporal_presets.dart",
+      "sha256": "99488a680a374fa1f14059038016bb2e0641dfc64c4a23de0f521f885bb94cd6"
+    },
+    {
+      "path": "lib/features/dashboard/query/presentation/facet_picker_morph_host.dart",
+      "sha256": "d1ad084b2cf9cc9fafad81a1932f89bc393b273f1dd821ad63b4e6d2f895b183"
+    },
+    {
+      "path": "lib/features/dashboard/query/presentation/query_amount_range_control.dart",
+      "sha256": "47b763b597fef97ec06c4c3018a809d2cfddccb758f88165c5c700b3b82677d9"
+    },
+    {
+      "path": "lib/features/dashboard/query/presentation/query_menu_formatters.dart",
+      "sha256": "b925d3ea11750c121a5e76d72eb4276be0895c0bab75a9e664f4f95cf245bc6f"
+    },
+    {
+      "path": "lib/features/dashboard/query/presentation/query_menu_sheet.dart",
+      "sha256": "42b4045ab45331a46c6d52abaafd1fa89836333ca239243bd6d5118a561a87b0"
+    },
+    {
+      "path": "lib/features/dashboard/query/presentation/query_menu_tokens.dart",
+      "sha256": "288360005ea4ae6234b8918df502db94ee6ffd58a1d0d3fef273845549e13654"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/application/dashboard_data_runtime.dart",
+      "sha256": "bce4fb72318e1ec13b15db2aec370f193b6eef643571abfdc905838d90a8aaa7"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/application/dashboard_presentation_controller.dart",
+      "sha256": "09546acfd9461a94fd7a771b92c43630c549bbf581041deb7105256d6bbf92c2"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/application/explicit_committed_paging_controller.dart",
+      "sha256": "a83aba7eecc5179d201b7386420ed6da30f4a1bba478a1344cf202eb82cd9a5d"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/dashboard_binary_reader.dart",
+      "sha256": "e9c31cb0c0a299aa785d10e23985daf1f78c9522bea96f4aea807a67addbb7d4"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/dashboard_committed_page_binary_codec.dart",
+      "sha256": "9f7249138e8002eb513a7a178b4a8f785687f9116c5a9465ced6bd4f7a2cb1fb"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart",
+      "sha256": "61b23a66432d954c38394b43e1adae975ab06532ef52243bbd962f4a752d5c58"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart",
+      "sha256": "e236c9be186051fb483ae5edfa21a81ab8a672b4b1a8bfe736720146be5a9f16"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart",
+      "sha256": "674bff5f0d2a2f185f384a8031c509d799b1a3d9ee8031e9dc151b6f380891e2"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/prepared_budget_limit_snapshot_binary_codec.dart",
+      "sha256": "d7cfbf334b7b233f72901bf3a4eb77f28cf24750db8510961d610c7f49eadf46"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/prepared_budget_partner_distribution_snapshot_binary_codec.dart",
+      "sha256": "f1b65f4f0183f09d447cfca269b3f1099646c66db75aa69f4553d9fbc69b6c40"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/data/prepared_dashboard_index_binary_codec.dart",
+      "sha256": "e2c2a37921870dda59a6a66f747f9e7ecd5b4656160e01f396142d4d8400888b"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/dashboard_ephemeral_focus_deriver.dart",
+      "sha256": "97022aeb3e6c86b94f8072e70621b7d43311fc4a3bee92c070a58e616d3de3f6"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart",
+      "sha256": "7df0f9bb9229205e8225baba0cf6e1dc6d7277595a6100cae43d6530a730b207"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/dashboard_prepared_revision_bundle.dart",
+      "sha256": "42742ada386d2409049dbe6a285f50af663ab315e1a50ec10818bd57bbd4d54b"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart",
+      "sha256": "61186e9a036353b51ad1d042212ad9fe36b58ba9ec359a5c440e0ef57d02f1c1"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart",
+      "sha256": "2cbb82f6373d1588603912ea08e38117943fe7baeb5fddde14d3fc953afa31aa"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/prepared_dashboard_index.dart",
+      "sha256": "f31fe1a1fad831278c1911bcd456ebd65fadb68523249878e1f22ef2c097e014"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/prepared_presentation_frame.dart",
+      "sha256": "ab8ed64227bfe587f2666264319352d562553e6d1d150a0f03a5aaf12fe92819"
+    },
+    {
+      "path": "lib/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart",
+      "sha256": "88cebfceb91b7a5cf26e3832cb57eb18da68e3e11d37b9a4bacd9e7cf08270b7"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart",
+      "sha256": "4966a56264ab8804375887c0a0e1b8290db7852e534584a18cc2c45813571dc5"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart",
+      "sha256": "68ec4ffccb593662b04fe48003e9ec719d43fdfab808736381f365dd53cdd814"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart",
+      "sha256": "5bb312189212da7840e458973c3de142dc5ef0d14889afda8cc171ff4bfdbdbc"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/application/summary_timing_debug.dart",
+      "sha256": "d045eae50990accec8d4c575db811ebb5286be2cc34a8c6515d59afb7f376909"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/dashboard_temporal_anchor.dart",
+      "sha256": "799639e9c38d2a1cab35e22a6aace0ee00c373eb111f7d06695c66ff61b6ecae"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart",
+      "sha256": "f29986e7eb733ec9a9eb9c58415d132eadfe662ad575ddb7501b9fd731421fb5"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/ledger_time_scope.dart",
+      "sha256": "b8f4a19423968bd98a96acd816e2e9cba0ca1f7c68a4ad68f049c524a2c8d6ea"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/local_date.dart",
+      "sha256": "cde69aca2e551b7ef6cbb2f0325e8cb495f1046205ed4c8942f2634636676bea"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/time_plane.dart",
+      "sha256": "0aac4cbe23f5408a3655484997042799741b4ec9e87387c79a02c643f0eaaef3"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/time_scope_boundaries.dart",
+      "sha256": "b5dd0b0d6669dafc5e9f5fd2ef31547ed1f13e242906f2ca38d532c69f916148"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/domain/year_month.dart",
+      "sha256": "5e10c543f81508b3e61f59b9f95857daa775456052f9dcc6ad9a405c0b4cb0c4"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/presentation/summary_navigation_presentation.dart",
+      "sha256": "2604f4c63a5f1c7fd857f0d9c800c5bf7193c4a9af3b483be6b851f55e3fa172"
+    },
+    {
+      "path": "lib/features/dashboard/time_navigation/presentation/time_label_formatter.dart",
+      "sha256": "3019d74d1e1b1dd99828e6799007d6bd2cac927bb28cee3b72c56135cc1a5c49"
+    },
+    {
+      "path": "lib/features/dashboard/visible/application/dashboard_visible_frame_store.dart",
+      "sha256": "10c0319e8f72c25f4c25f3066ac6ff1575acbb1efe8bf85d349347b23655b194"
+    },
+    {
+      "path": "lib/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart",
+      "sha256": "87940b96ac1b4599b7a994580491f8b382614ad0e81221e88bc24fb6252cb211"
+    },
+    {
+      "path": "lib/features/dashboard/visible/domain/dashboard_visible_frame.dart",
+      "sha256": "1f8fe7b4b1b13d05d40cd1d2dc1d5ea8bd263d3577519d559c46f8ba3e7a0a8c"
+    },
+    {
+      "path": "lib/features/dashboard/widgets/time_refinement_rail.dart",
+      "sha256": "2409f6722767af704769fa62eb23d2390390d8133d011792385574ca774d8511"
+    },
+    {
+      "path": "lib/features/profile/widgets/avatar_carousel.dart",
+      "sha256": "b795419175aeac2071d472da1caf5499aaa435da96959b66c7913cb61a71da3b"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "ef7094d690ddabd92f4662692090d0faed0949c5a5277e91e1dbdb4d4f4a0487"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel.dart",
+      "sha256": "e0ed94014e3a85f7abc4a64b3f056b193b2f7f4b5c9d6d49066301bd35737811"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_controller.dart",
+      "sha256": "fa91eec43299b0f5775d139183a74c3c68a894c140aaa802b308ef238bf4632b"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_data_source.dart",
+      "sha256": "c592d4450a91f56bce71f5f8eaa3032e04df604d3af28e445c890042c1c50142"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_math.dart",
+      "sha256": "5558bf2bf909a6316c337e07a777addfc44430060f03cc3070e28a3ad366a6e8"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_metrics.dart",
+      "sha256": "6d9d73066afcf6cef698ec2bb3939b2d3f4ea6168ae9253bf782b6081fa7008a"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_motion_diagnostics.dart",
+      "sha256": "2e9c1d765f0d8d40eb17671ea87a5337569613b67281c6aa36b7f0db86731aeb"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_physics.dart",
+      "sha256": "1b3539cea8ac2870f7fae2c64e78f657187df0046b01d77e21c295c8c2c8a5ec"
+    },
+    {
+      "path": "lib/shared/motion/centered_carousel/centered_carousel_spec.dart",
+      "sha256": "aa153cf876250c28a614f85b73c58a9b5a0936a51bf56b09e43fdc6fa4538c74"
+    },
+    {
+      "path": "lib/shared/presentation/fluvi_slide_up_sheet.dart",
+      "sha256": "159f7ef6dd8d6bb1191a2fd7c5614a76fb4f33c1d9e3478e5c9899e4fa7cbbcb"
+    }
+  ]
+}

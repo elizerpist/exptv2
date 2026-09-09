@@ -1,0 +1,14 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
++0 -1: Avatar K permits a superseded first request with strict final proof [E]
+  Expected: return normally
+    Actual: <Closure: () => void>
+     Which: threw StateError:<Bad state: Avatar profile has an invalid first-target terminal outcome: [staleRejected].>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/performance/dashboard_profile_report_test.dart 242:5  main.<fn>
+  
++0 -1: Some tests failed.

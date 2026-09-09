@@ -1,0 +1,18 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
++11 -1: /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/boundary/dashboard_core_mode_boundary_test.dart: CoreDashboard hosts one mode domain outside its singleton LogBox [E]
+  Expected: an object with length of <1>
+    Actual: _AllMatchesIterable:[
+              Instance of '_RegExpMatch',
+              Instance of '_RegExpMatch',
+              Instance of '_RegExpMatch'
+            ]
+     Which: has length of <3>
+  
+  package:matcher                                            expect
+  package:flutter_test/src/widget_tester.dart 473:18         expect
+  test/boundary/dashboard_core_mode_boundary_test.dart 90:5  main.<fn>
+  
++25 -1: Some tests failed.
