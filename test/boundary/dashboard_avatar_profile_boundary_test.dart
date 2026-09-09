@@ -2,6 +2,95 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('profile host persists raw response before fail-closed acceptance', () {
+    final driver = File(
+      'test_driver/dashboard_profile_driver.dart',
+    ).readAsStringSync();
+    expect(driver, contains('support/dashboard_profile_report.dart'));
+    expect(driver, contains('writeResponseOnFailure: true'));
+    expect(driver, isNot(contains('if (data == null) return;')));
+    final persist = driver.indexOf('await writeResponseData(');
+    final validate = driver.indexOf(
+      'DashboardProfileReport.validateCompleteSuite(data)',
+    );
+    expect(persist, greaterThanOrEqualTo(0));
+    expect(validate, greaterThan(persist));
+    expect(
+      driver,
+      contains("testOutputFilename: 'dashboard_profile_complete_response'"),
+    );
+  });
+
+  test('suite completion is written after every existing suite assertion', () {
+    final source = File(
+      'integration_test/dashboard_interaction_profile_test.dart',
+    ).readAsStringSync();
+    final main = source.substring(0, source.indexOf('\nenum _ProfileScenario'));
+    final marker = main.indexOf('DashboardProfileReport.suiteCompletionKey');
+    expect(
+      marker,
+      greaterThan(main.indexOf('validatePhysicalFrameTargets(reports)')),
+    );
+    expect(
+      marker,
+      greaterThan(main.indexOf('validateMotionIsolationGate(reports)')),
+    );
+    expect(
+      'DashboardProfileReport.suiteCompletionKey'.allMatches(main),
+      hasLength(1),
+    );
+    expect(main, contains("'scenario_report_keys': reports.keys.toList"));
+  });
+
+  test('suite budgets are finite and leave reporting and teardown margins', () {
+    final source = File(
+      'integration_test/dashboard_interaction_profile_test.dart',
+    ).readAsStringSync();
+    final driver = File(
+      'test_driver/dashboard_profile_driver.dart',
+    ).readAsStringSync();
+    final script = File('scripts/run-dashboard-profile.sh').readAsStringSync();
+    final workflow = File(
+      '.github/workflows/fluvi-core.yml',
+    ).readAsStringSync();
+    final profileJob = workflow
+        .split('  run-dashboard-profile:\n')[1]
+        .split('    steps:')[0];
+    final suiteMinutes = int.parse(
+      RegExp(
+        r'timeout:\s*const Timeout\(Duration\(minutes:\s*(\d+)\)\)',
+      ).firstMatch(source)!.group(1)!,
+    );
+    final sdkMinutes = int.parse(
+      RegExp(
+        r'timeout:\s*const Duration\(minutes:\s*(\d+)\)',
+      ).firstMatch(driver)!.group(1)!,
+    );
+    final shellMatch = RegExp(
+      r'--kill-after=(\d+)s\s+(\d+)m',
+    ).firstMatch(script)!;
+    final killGraceSeconds = int.parse(shellMatch.group(1)!);
+    final shellMinutes = int.parse(shellMatch.group(2)!);
+    final workflowMinutes = int.parse(
+      RegExp(r'timeout-minutes:\s*(\d+)').firstMatch(profileJob)!.group(1)!,
+    );
+    for (final budget in [
+      suiteMinutes,
+      sdkMinutes,
+      shellMinutes,
+      workflowMinutes,
+    ]) {
+      expect(budget, greaterThan(0));
+    }
+    expect(killGraceSeconds, greaterThan(0));
+    expect(suiteMinutes, lessThan(sdkMinutes));
+    expect(sdkMinutes, lessThan(shellMinutes));
+    expect(
+      shellMinutes * 60 + killGraceSeconds,
+      lessThan(workflowMinutes * 60),
+    );
+  });
+
   test('K observes production owners and validates each actual fling', () {
     final source = File(
       'integration_test/dashboard_interaction_profile_test.dart',

@@ -42,3 +42,9 @@ A return to the still-visible category while another target is pending cannot us
 The coordinator observes actual renderer completion asynchronously while preserving the rail's existing semantic-return timing. Each preview records one typed terminal; the existing Avatar admission guards classify Time ownership and disposal explicitly. No additional listener owner or request queue is added.
 
 Typed window resolution is stateless and records the expected and actual offending payload queries. Cache-only exact row/header counts correlate with Core target/order metadata through resource and payload digests. Unknown cache coverage at the application-only window boundary is labeled unknown, not zero. Actual scheduling is emitted at the real preparer call, separately from the earlier rejection.
+
+## Complete profile handoff after a047 CI
+
+The existing pure `DashboardProfileReport` owns report acceptance. The integration test's existing `binding.reportData` is the only scenario/completion writer; the existing host driver persists diagnostics and invokes the shared acceptance rule. Extend these owners with a final suite completion record rather than create another validator or state authority. The marker is written only after all existing A–K assertions. Missing/partial/malformed reports or missing completion must throw even when Flutter's integration response reports success after a test timeout.
+
+This is a test-harness contract under approved Task4, not an application feature or Time behavior change. Verification uses the unchanged actual partial artifact, complete/incomplete contract fixtures, a focused driver boundary test and the next exact-SHA actual full suite. Overall finite test/host budgets may account for the measured two-minute K plus four approximately four-minute density scenarios and J; no per-flight or performance acceptance threshold changes. Production source remains byte-identical to174ad841.

@@ -1,0 +1,23 @@
+{
+  "build/dashboard-profile-diagnostics/android-logcat.txt": "15df176586130d34e0376c5cbf352f000c7e8e381b3d532f12665d5f86ba6b89",
+  "build/dashboard-profile-diagnostics/emu-crash-36.5.10.db/settings.dat": "52ef3f24eceb6f853e8f6a255c4e0813c997a7ef3bf5aa8fdcc0618ed379370d",
+  "build/dashboard-profile-diagnostics/host-state.txt": "a5379e3ff03f8ab92253843563f977458f45d6e59b513fc095e9ca23d3f09f19",
+  "build/dashboard-profile-diagnostics/kernel-dmesg.txt": "359f9da102044c0bbd7c1caedd3822508c6d52efa3a2e126bf41980d52b54a6b",
+  "build/dashboard-profile-diagnostics/kernel-journal.txt": "b4a4268d9c4acf14528c08395af1d15e089b3c868a234c969c15be78c3da616a",
+  "build/dashboard-profile-diagnostics/memory-pressure.txt": "e9c6f9fbbe47a868dd8af39eb845ef7ede50964fdd164654e9163fab1224e1a8",
+  "build/dashboard_profile_A_summary_sum_year_month.json": "c237129365b6032368c3651d95a5fe8c2755c7c68e523e20e746abf4de0ff166",
+  "build/dashboard_profile_B_year_month_rail_populated.json": "14c8c624ecdee80261114d5419c0f6903118eafc6cb41bf06fe615bd4c26807e",
+  "build/dashboard_profile_C_year_month_rail_empty.json": "ecaa5fef4993cdb9b0ba85464b669e8b0bb2044bab18d9646bb82b70dd069a79",
+  "build/dashboard_profile_D_month_day_rail_94.json": "eb3a2d9a14239773761e3810899e316e2f4c298fea7b326ebd6fac3f2ec67d11",
+  "build/dashboard_profile_E_month_day_rail_empty.json": "ce8d06ba1ba2b3b4966fd3e1f514103094b62ac0e4100b02cf5f51429f26586e",
+  "build/dashboard_profile_F_parent_while_rail_open.json": "8157f25c713fcba84435f773587585bd521f1d4f6e6c54e52b980b20b6419eee",
+  "build/dashboard_profile_G_direction_while_rail_open.json": "4794ff4ea0d8f270c941b8420c63025fb616966d77b31eae781cd63813034041",
+  "build/dashboard_profile_H_pulse_parent_navigation.json": "33aa91361006a9fe9d6485bcaf1578c2a7a50010918a42ced6a6af6ecb406106",
+  "build/dashboard_profile_I_first_fling.json": "369b9129357231f3c1cb9ea365a43a3c858e75cffecf6a1aed5cede94db01e23",
+  "build/dashboard_profile_K_avatar_first_target.json": "a2425d3fbf94ec53340c453eee2ec4e45130b046c5acddd1a762fc0d3d5497c8",
+  "build/dashboard_profile_dashboard_avatar_final_target_evidence.json": "270f87b161156d183d173e2ad110ecf74b2a3618d7a4f63322ba596da1cf319f",
+  "build/dashboard_profile_dashboard_avatar_target_completion_evidence.json": "b7937a96ea9e1c57da6e2bca1f0e03dc094f46be265cb28c0269744eefcb23ae",
+  "build/dashboard_profile_dashboard_native_seed.json": "144ee189205c41644787d9cbdc79f2b31f55f7ded85a9a1b5d5ecb3d857be369",
+  "scripts/run-dashboard-profile.sh": "720f1f5a68d1b6c48987fc89bc868bb0a20354f09d33e196e6d8d8592d48ffc9",
+  "test_driver/dashboard_profile_driver.dart": "8a494cd062f2e6e0773b231c3ef7e0d3d3427fc5505d4b0e6dec1ab30fc9ca61"
+}

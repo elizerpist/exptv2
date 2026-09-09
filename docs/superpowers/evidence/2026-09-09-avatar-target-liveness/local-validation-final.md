@@ -33,3 +33,7 @@ AA61242 AVATAR CORRECTNESS — PHYSICALLY REJECTED BASELINE
 AA61242 / E8 MOTION — PRESERVED
 
 NEW AVATAR CANDIDATE — PHYSICAL VALIDATION PENDING, USER ONLY
+
+## Complete-suite driver follow-up
+
+The later a047 attempt provides valid four-flight K evidence but its whole A-K test times out during J and is falsely marked successful by the SDK host. That original artifact/log is retained; no complete-suite success is claimed. The follow-up adds a shared fail-closed complete-suite guard and a last-only completion marker, preserving raw partial evidence and every existing per-flight/performance condition. Final focused report/boundary tests pass96, five Dart files format with0changes, shell syntax passes, focused analysis and root full `flutter analyze --no-pub` are clean. The unchanged actual incomplete a047 response is rejected; its raw K/post-renderer evidence and all21artifact hashes remain valid. The full production lib/android delta since174ad841 is empty, so prior full application/presentation/inherited-boundary evidence remains applicable. The next exact-SHA CI reruns the curated tests and must produce all eleven reports and the final completion marker. Normal human APK and SCIP must be regenerated at that new exact SHA.

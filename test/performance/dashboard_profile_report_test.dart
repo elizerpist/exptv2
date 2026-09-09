@@ -6,6 +6,133 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../integration_test/support/dashboard_profile_report.dart';
 
 void main() {
+  test('complete A-K suite response is accepted', () {
+    expect(
+      () => DashboardProfileReport.validateCompleteSuite(
+        _completeSuiteResponse(),
+      ),
+      returnsNormally,
+    );
+  });
+
+  test('observed a047 response without J and completion is rejected', () {
+    final response = _completeSuiteResponse()
+      ..remove('J_tenth_fling')
+      ..remove(DashboardProfileReport.suiteCompletionKey);
+    expect(
+      () => DashboardProfileReport.validateCompleteSuite(response),
+      throwsStateError,
+    );
+  });
+
+  for (final invalid in <String, Object?>{
+    'null': null,
+    'list': <Object?>[],
+    'empty map': <String, Object?>{},
+    'non-string keys': <Object?, Object?>{1: true},
+  }.entries) {
+    test('complete suite rejects ${invalid.key} response', () {
+      expect(
+        () => DashboardProfileReport.validateCompleteSuite(invalid.value),
+        throwsStateError,
+      );
+    });
+  }
+
+  for (final invalid in <String, Object?>{
+    'missing completion': null,
+    'scalar completion': true,
+    'empty completion': <String, Object?>{},
+    'unsupported completion schema': {
+      'schema_version': 2,
+      'all_assertions_passed': true,
+      'scenario_report_keys': DashboardProfileReport.requiredSuiteScenarioKeys,
+    },
+    'failed suite assertions': {
+      'schema_version': 1,
+      'all_assertions_passed': false,
+      'scenario_report_keys': DashboardProfileReport.requiredSuiteScenarioKeys,
+    },
+    'incomplete completion keys': {
+      'schema_version': 1,
+      'all_assertions_passed': true,
+      'scenario_report_keys': ['K_avatar_first_target'],
+    },
+    'duplicate completion key': {
+      'schema_version': 1,
+      'all_assertions_passed': true,
+      'scenario_report_keys': [
+        ...DashboardProfileReport.requiredSuiteScenarioKeys,
+        'K_avatar_first_target',
+      ],
+    },
+    'non-string completion key': {
+      'schema_version': 1,
+      'all_assertions_passed': true,
+      'scenario_report_keys': [
+        ...DashboardProfileReport.requiredSuiteScenarioKeys.take(10),
+        11,
+      ],
+    },
+  }.entries) {
+    test('complete suite rejects ${invalid.key}', () {
+      final response = _completeSuiteResponse()
+        ..[DashboardProfileReport.suiteCompletionKey] = invalid.value;
+      expect(
+        () => DashboardProfileReport.validateCompleteSuite(response),
+        throwsStateError,
+      );
+    });
+  }
+
+  for (final key in DashboardProfileReport.requiredSuiteScenarioKeys) {
+    test('completion marker cannot replace missing $key report', () {
+      final response = _completeSuiteResponse()..remove(key);
+      expect(
+        () => DashboardProfileReport.validateCompleteSuite(response),
+        throwsStateError,
+      );
+    });
+  }
+
+  for (final invalid in <String, Object?>{
+    'null report': null,
+    'scalar report': 1,
+    'empty report': <String, Object?>{},
+    'non-string report keys': <Object?, Object?>{1: 2},
+  }.entries) {
+    test('complete suite rejects ${invalid.key}', () {
+      final response = _completeSuiteResponse()
+        ..['J_tenth_fling'] = invalid.value;
+      expect(
+        () => DashboardProfileReport.validateCompleteSuite(response),
+        throwsStateError,
+      );
+    });
+  }
+
+  test('complete suite retains K and post-renderer exact-paint validation', () {
+    final response = _completeSuiteResponse();
+    (response['dashboard_avatar_final_target_evidence']!
+            as Map)['exact_paint_rich_phase_b_rows_painted'] =
+        -1;
+    expect(
+      () => DashboardProfileReport.validateCompleteSuite(response),
+      throwsStateError,
+    );
+  });
+
+  test('complete suite retains motion-isolation thresholds', () {
+    final response = _completeSuiteResponse();
+    ((response['J_tenth_fling']! as Map)['performance_counters']
+            as Map)['sqlCallsDuringMotion'] =
+        1;
+    expect(
+      () => DashboardProfileReport.validateCompleteSuite(response),
+      throwsStateError,
+    );
+  });
+
   test('Avatar exact renderer accepts a real rich-only nonempty paint', () {
     expect(
       DashboardProfileReport.hasExactNonemptyAvatarPaint(
@@ -624,6 +751,24 @@ void main() {
     expect(reverse, <int>[21, 20, 19, 18, 17, 16, 15, 14, 13]);
   });
 }
+
+Map<String, Object?> _completeSuiteResponse() => {
+  for (final key in DashboardProfileReport.requiredSuiteScenarioKeys)
+    key: <String, Object?>{
+      for (final metric in DashboardProfileReport.requiredScenarioMetricKeys)
+        metric: 0,
+      ..._motionGateReport(buildMisses: 0, rasterMisses: 0),
+      'startup_index_metrics': _startupMetrics(),
+      if (key == 'K_avatar_first_target')
+        'avatar_first_target': _avatarFirstTargetEvidence(),
+    },
+  'dashboard_avatar_final_target_evidence': _avatarFinalTargetEvidence(),
+  DashboardProfileReport.suiteCompletionKey: {
+    'schema_version': 1,
+    'all_assertions_passed': true,
+    'scenario_report_keys': DashboardProfileReport.requiredSuiteScenarioKeys,
+  },
+};
 
 Map<String, Object?> _startupMetrics() => <String, Object?>{
   'sql_call_count': 5,

@@ -172,8 +172,17 @@ void main() {
       if (const bool.fromEnvironment('FLUVI_REQUIRE_PHYSICAL_FRAME_TARGETS')) {
         DashboardProfileReport.validatePhysicalFrameTargets(reports);
       }
+      // This is the only completion write: every existing scenario and suite
+      // assertion above must finish before the host may accept the response.
+      binding.reportData![DashboardProfileReport.suiteCompletionKey] = {
+        'schema_version': 1,
+        'all_assertions_passed': true,
+        'scenario_report_keys': reports.keys.toList(growable: false),
+      };
     },
-    timeout: const Timeout(Duration(minutes: 25)),
+    // The observed complete density scenarios each need about 4m18 on CI;
+    // retain all ten-flight coverage plus K/J and leave bounded suite margin.
+    timeout: const Timeout(Duration(minutes: 35)),
   );
 }
 

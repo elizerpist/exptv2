@@ -70,3 +70,11 @@ Profile174ad841 rejects final exact target3 despite complete matching identity/t
 Profile correction local implementation and root diff review complete:62 focused tests,4-file format and focused analyzer pass; production delta is empty. Full analyzer and the next exact-SHA CI/K/APK/SCIP delivery remain required.
 
 Full follow-up analyzer now passes with no issues(34.1s). Exact-SHA online delivery follows this profile-only commit.
+
+## Task4 follow-up — reject incomplete integration-driver success
+
+Actual a047 CI34351134148 contains valid four-flight K evidence, including raw rich-only final paints, but the whole A–K integration test times out at25minutes during J. Flutter's host driver nevertheless prints success and the workflow is green. The artifact lacks J and final suite comparisons. Do not deliver this as a complete A–K pass.
+
+Before code, add AVL-16b. Extend the existing pure DashboardProfileReport owner with one fail-closed complete-suite contract. The collector writes its completion record only after every existing suite assertion; the existing driver retains partial evidence before checking that contract. No production owner changes. Reproduce rejection using the unchanged actual incomplete artifact and test missing/malformed completion and scenario reports. Inspect SDK driver behavior to establish the timeout propagation boundary. Retain every per-flight, identity, motion and performance threshold. A finite overall suite/host budget may be adjusted only to fit the measured completed scenario durations plus remaining J; keep workflow bounds and do not add retries or reduce coverage.
+
+Profile agent owns the existing integration collector/report, host driver, profile script and focused report/boundary tests. Root owns immutable failed-attempt preservation, acceptance/architecture documentation, review and exact-SHA CI/APK/SCIP delivery. These are independent file boundaries under the approved Task4/Task5 plan. Next source requires a new exact-SHA human APK and graph; neither earlier candidate is silently relabelled final.

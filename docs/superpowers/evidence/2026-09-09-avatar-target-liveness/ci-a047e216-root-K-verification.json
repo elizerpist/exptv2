@@ -1,0 +1,28 @@
+{
+  "source_head": "a047e216803d3ac01d97b4d5ffd03842a1579db3",
+  "root_independent_K_raw_validation": "passed",
+  "final_handles": [
+    3,
+    0,
+    3,
+    0
+  ],
+  "final_raw_phase_a_rows": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "final_raw_rich_phase_b_rows": [
+    2,
+    3,
+    2,
+    3
+  ],
+  "requests_per_flight": 8,
+  "accepted_nonempty_terminals_per_flight": 8,
+  "pending_each": 0,
+  "all_identity_query_value_revision_fields_equal": true,
+  "whole_A_K_suite": "INCOMPLETE: test timeout during J; SDK driver false success is not accepted",
+  "existing_motion_isolation_gate_completed_reports": "PASS on all10 completed A-H/I/K reports; J missing, so not whole-suite acceptance"
+}

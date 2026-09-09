@@ -1,6 +1,66 @@
 import 'dart:math' as math;
 
 abstract final class DashboardProfileReport {
+  static const suiteCompletionKey = 'dashboard_profile_suite_completion';
+  static const requiredSuiteScenarioKeys = <String>[
+    'A_summary_sum_year_month',
+    'B_year_month_rail_populated',
+    'C_year_month_rail_empty',
+    'D_month_day_rail_94',
+    'E_month_day_rail_empty',
+    'F_parent_while_rail_open',
+    'G_direction_while_rail_open',
+    'H_pulse_parent_navigation',
+    'I_first_fling',
+    'J_tenth_fling',
+    'K_avatar_first_target',
+  ];
+
+  /// Rejects incomplete driver responses even when the SDK reports success.
+  /// The completion record is written only after every suite assertion.
+  static void validateCompleteSuite(Object? responseData) {
+    Map<String, Object?> requireMap(Object? value, String name) {
+      if (value is! Map || value.keys.any((key) => key is! String)) {
+        throw StateError('Dashboard profile $name must be a report map.');
+      }
+      return Map<String, Object?>.from(value);
+    }
+
+    final data = requireMap(responseData, 'response');
+    final reports = <String, Map<String, Object?>>{};
+    for (final key in requiredSuiteScenarioKeys) {
+      reports[key] = requireMap(data[key], key);
+    }
+    final completion = requireMap(data[suiteCompletionKey], suiteCompletionKey);
+    final keys = completion['scenario_report_keys'];
+    if (completion['schema_version'] is! int ||
+        completion['schema_version'] != 1 ||
+        completion['all_assertions_passed'] != true ||
+        keys is! List ||
+        keys.any((key) => key is! String) ||
+        keys.length != requiredSuiteScenarioKeys.length ||
+        keys.toSet().length != requiredSuiteScenarioKeys.length ||
+        !keys.toSet().containsAll(requiredSuiteScenarioKeys)) {
+      throw StateError('Dashboard profile suite completion is invalid.');
+    }
+    for (final report in reports.values) {
+      validateRequiredScenarioMetrics(report);
+    }
+    validateAvatarFirstTargetEvidence(
+      requireMap(
+        reports['K_avatar_first_target']!['avatar_first_target'],
+        'K avatar_first_target',
+      ),
+    );
+    validateAvatarFinalTargetEvidence(
+      requireMap(
+        data['dashboard_avatar_final_target_evidence'],
+        'post-renderer Avatar final target',
+      ),
+    );
+    validateMotionIsolationGate(reports);
+  }
+
   /// Classifies the actual nonempty renderer counters supplied by Core's
   /// exact post-paint acknowledgement. Identity is validated separately.
   static bool hasExactNonemptyAvatarPaint({
