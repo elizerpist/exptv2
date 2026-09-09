@@ -1,0 +1,45 @@
+{
+  "application_source": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+  "graph_artifact_commit": "924847d4356f2c9806cc2f7c257bc6499ece11c7",
+  "graph_source_head": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+  "normal_human_apk_source": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+  "normal_human_apk_sha256": "44d02722a48bedd8a4a36efd0d8605476a7d65a0c52d65e6d96c74f1974e97f1",
+  "required_ci_run": 34358444008,
+  "required_ci_conclusion": "success",
+  "remote_refs_verified": {
+    "refs/heads/fix/avatar-target-liveness-codex-20260909": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+    "refs/heads/separated-core-modes": "df1d4a3ca9ca83565260a6f7618ab3786ca5650e",
+    "refs/heads/tooling/scip-codegraph-v1": "924847d4356f2c9806cc2f7c257bc6499ece11c7"
+  },
+  "graph_docs_only_workflow": {
+    "tooling_commit": "924847d4356f2c9806cc2f7c257bc6499ece11c7",
+    "remote_branch": "tooling/scip-codegraph-v1",
+    "remote_head_verified": "924847d4356f2c9806cc2f7c257bc6499ece11c7",
+    "changed_paths_all_docs_only": true,
+    "observed_push_runs": [
+      {
+        "conclusion": "cancelled",
+        "databaseId": 34363707945,
+        "event": "push",
+        "headSha": "924847d4356f2c9806cc2f7c257bc6499ece11c7",
+        "status": "completed",
+        "workflowName": "Fluvi Verification"
+      }
+    ],
+    "final_run_states": [
+      {
+        "conclusion": "cancelled",
+        "databaseId": 34363707945,
+        "event": "push",
+        "headSha": "924847d4356f2c9806cc2f7c257bc6499ece11c7",
+        "status": "completed",
+        "workflowName": "Fluvi Verification"
+      }
+    ],
+    "apk_started_by_agent": false,
+    "apk_delivery_required_for_this_commit": false
+  },
+  "physical_validation": "PENDING \u2014 USER ONLY",
+  "closure_record_branch": "tooling/scip-codegraph-v1",
+  "closure_record_follows_published_graph": true
+}
