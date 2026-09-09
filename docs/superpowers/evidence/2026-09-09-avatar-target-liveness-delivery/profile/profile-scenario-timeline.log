@@ -1,0 +1,46 @@
+2026-09-09T13:52:17.6908730Z I/flutter ( 2279): [PROFILE][SCENARIO_START] I_first_fling
+2026-09-09T13:52:23.4273527Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] I_first_fling plane=month
+2026-09-09T13:52:23.4287573Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] I_first_fling
+2026-09-09T13:52:53.5196710Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] I_first_fling
+2026-09-09T13:52:53.5214788Z I/flutter ( 2279): [PROFILE][SCENARIO_START] K_avatar_first_target
+2026-09-09T13:53:00.0771354Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] K_avatar_first_target plane=month
+2026-09-09T13:53:00.0798461Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] K_avatar_first_target
+2026-09-09T13:55:11.2929041Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] K_avatar_first_target
+2026-09-09T13:55:11.2957259Z I/flutter ( 2279): [PROFILE][SCENARIO_START] A_summary_sum_year_month
+2026-09-09T13:55:15.6557603Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] A_summary_sum_year_month plane=sum
+2026-09-09T13:55:15.6567844Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] A_summary_sum_year_month
+2026-09-09T13:55:52.6450623Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] A_summary_sum_year_month
+2026-09-09T13:55:52.6454312Z I/flutter ( 2279): [PROFILE][SCENARIO_START] B_year_month_rail_populated
+2026-09-09T13:55:58.9596150Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] B_year_month_rail_populated plane=year
+2026-09-09T13:55:58.9616399Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] B_year_month_rail_populated
+2026-09-09T14:00:15.4667502Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] B_year_month_rail_populated
+2026-09-09T14:00:15.4716702Z I/flutter ( 2279): [PROFILE][SCENARIO_START] C_year_month_rail_empty
+2026-09-09T14:00:20.6507584Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] C_year_month_rail_empty plane=year
+2026-09-09T14:00:20.6536849Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] C_year_month_rail_empty
+2026-09-09T14:04:37.6359956Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] C_year_month_rail_empty
+2026-09-09T14:04:37.6387509Z I/flutter ( 2279): [PROFILE][SCENARIO_START] D_month_day_rail_94
+2026-09-09T14:04:42.1952378Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] D_month_day_rail_94 plane=month
+2026-09-09T14:04:42.1958125Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] D_month_day_rail_94
+2026-09-09T14:08:59.8017309Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] D_month_day_rail_94
+2026-09-09T14:08:59.8026785Z I/flutter ( 2279): [PROFILE][SCENARIO_START] E_month_day_rail_empty
+2026-09-09T14:09:04.8047282Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] E_month_day_rail_empty plane=month
+2026-09-09T14:09:04.8049171Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] E_month_day_rail_empty
+2026-09-09T14:13:24.4105108Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] E_month_day_rail_empty
+2026-09-09T14:13:24.4136818Z I/flutter ( 2279): [PROFILE][SCENARIO_START] F_parent_while_rail_open
+2026-09-09T14:13:29.1304057Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] F_parent_while_rail_open plane=month
+2026-09-09T14:13:29.1306846Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] F_parent_while_rail_open
+2026-09-09T14:13:49.7345662Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] F_parent_while_rail_open
+2026-09-09T14:13:49.7398365Z I/flutter ( 2279): [PROFILE][SCENARIO_START] G_direction_while_rail_open
+2026-09-09T14:13:56.1276941Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] G_direction_while_rail_open plane=month
+2026-09-09T14:13:56.1296883Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] G_direction_while_rail_open
+2026-09-09T14:14:03.7468583Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] G_direction_while_rail_open
+2026-09-09T14:14:03.7496687Z I/flutter ( 2279): [PROFILE][SCENARIO_START] H_pulse_parent_navigation
+2026-09-09T14:14:08.9076883Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] H_pulse_parent_navigation plane=month
+2026-09-09T14:14:08.9116730Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] H_pulse_parent_navigation
+2026-09-09T14:14:28.4507645Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] H_pulse_parent_navigation
+2026-09-09T14:14:28.4537224Z I/flutter ( 2279): [PROFILE][SCENARIO_START] J_tenth_fling
+2026-09-09T14:19:59.6081153Z I/flutter ( 2279): [PROFILE][SCENARIO_PREPARED] J_tenth_fling plane=month
+2026-09-09T14:20:01.1097267Z I/flutter ( 2279): [PROFILE][SCENARIO_STABLE] J_tenth_fling
+2026-09-09T14:20:30.6931554Z I/flutter ( 2279): [PROFILE][SCENARIO_READY] J_tenth_fling
+2026-09-09T14:20:30.6956713Z I/flutter ( 2279): 28:20 +1: (tearDownAll)
+2026-09-09T14:20:34.6792874Z All tests passed.

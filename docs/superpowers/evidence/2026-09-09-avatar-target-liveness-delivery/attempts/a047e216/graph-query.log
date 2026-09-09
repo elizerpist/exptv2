@@ -1,0 +1,25 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 integration_test/support/`dashboard_profile_report.dart`/DashboardProfileReport#hasExactNonemptyAvatarPaint().
+DEFINITION
+integration_test/support/dashboard_profile_report.dart:5
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 integration_test/support/`dashboard_profile_report.dart`/DashboardProfileReport#hasExactNonemptyAvatarPaint().
+REFERENCES
+total=7 production=0 tests=7
+CONSUMER FILES
+integration_test/dashboard_interaction_profile_test.dart
+integration_test/support/dashboard_profile_report.dart
+test/performance/dashboard_profile_report_test.dart
+PRODUCTION REFERENCES
+TEST REFERENCES
+integration_test/dashboard_interaction_profile_test.dart:842:42 reference
+integration_test/dashboard_interaction_profile_test.dart:1490:29 reference
+integration_test/dashboard_interaction_profile_test.dart:1554:44 reference
+integration_test/support/dashboard_profile_report.dart:392:9 reference
+test/performance/dashboard_profile_report_test.dart:10:29 reference
+test/performance/dashboard_profile_report_test.dart:21:29 reference
+test/performance/dashboard_profile_report_test.dart:37:31 reference

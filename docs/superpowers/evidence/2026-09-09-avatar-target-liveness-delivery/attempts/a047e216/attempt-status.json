@@ -1,0 +1,9 @@
+{
+  "source_head": "a047e216803d3ac01d97b4d5ffd03842a1579db3",
+  "K_actual_validation": "passed: four flights, real rich paint, all final parity, pending0",
+  "whole_suite": "NOT COMPLETE: 25-minute timeout during J hidden by SDK host success",
+  "human_apk_verified": true,
+  "graph_generated_but_not_published": true,
+  "final_delivery": false,
+  "next_required": "Fail closed on incomplete profile suite, fit finite whole-suite budget, new exact-SHA CI/APK/SCIP"
+}

@@ -1,0 +1,20 @@
+{
+  "year_empty_vs_populated": {
+    "frame_build_p95_delta_percent": -69.22336328626444,
+    "frame_raster_p95_delta_percent": -6.334581658099456,
+    "target_equal": true,
+    "settle_equal": true
+  },
+  "month_empty_vs_populated": {
+    "frame_build_p95_delta_percent": -75.8732227774157,
+    "frame_raster_p95_delta_percent": 51.63117830845524,
+    "target_equal": true,
+    "settle_equal": true
+  },
+  "first_vs_tenth_fling": {
+    "frame_build_p95_delta_percent": -90.41803717150565,
+    "frame_raster_p95_delta_percent": 23.321566830025045,
+    "target_equal": true,
+    "settle_equal": true
+  }
+}

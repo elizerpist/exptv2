@@ -1,0 +1,8 @@
+{
+  "failure_count": 0,
+  "matches": [],
+  "passing_log_lines": [
+    "2026-09-09T14:20:32.4507440Z I/flutter ( 2279): 28:21 +2: All tests passed!",
+    "2026-09-09T14:20:34.6792874Z All tests passed."
+  ]
+}

@@ -1,0 +1,187 @@
+{
+  "validation": "passed",
+  "source_sha": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+  "completion": {
+    "schema_version": 1,
+    "all_assertions_passed": true,
+    "scenario_report_keys": [
+      "I_first_fling",
+      "K_avatar_first_target",
+      "A_summary_sum_year_month",
+      "B_year_month_rail_populated",
+      "C_year_month_rail_empty",
+      "D_month_day_rail_94",
+      "E_month_day_rail_empty",
+      "F_parent_while_rail_open",
+      "G_direction_while_rail_open",
+      "H_pulse_parent_navigation",
+      "J_tenth_fling"
+    ]
+  },
+  "first_ten_fling_count": 10,
+  "density_flight_counts": {
+    "E_month_day_rail_empty": 10,
+    "D_month_day_rail_94": 10,
+    "C_year_month_rail_empty": 10,
+    "B_year_month_rail_populated": 10
+  },
+  "fixture_category_row_counts": {
+    "1": 5,
+    "2": 11,
+    "3": 7,
+    "4": 2,
+    "5": 4,
+    "6": 10,
+    "7": 18,
+    "8": 37
+  },
+  "fixture_aggregate_row_count": 94,
+  "fixture_category_rows_disjoint": true,
+  "exact_renderer_paint_count": 32,
+  "exact_phase_a_paint_count": 27,
+  "painted_target_handles": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    0,
+    8
+  ],
+  "flights": [
+    {
+      "physical_settle_target_handle": 3,
+      "latest_desired_target_handle": 3,
+      "latest_semantic_target_handle": 3,
+      "latest_exact_painted_target_handle": 3,
+      "selected_budget_target_handle": 3,
+      "focus_target_handle": 3,
+      "header_target_handle": 3,
+      "progress_target_handle": 3,
+      "logbox_target_handle": 3,
+      "final_target_row_count": 7,
+      "exact_paint_exact_empty": false,
+      "exact_paint_readable_phase_a_rows_painted": 0,
+      "exact_paint_rich_phase_b_rows_painted": 2,
+      "exact_paint_core_revision": 2,
+      "visible_core_revision": 2,
+      "unresolved_pending_candidate_count": 0,
+      "preview_requested_count": 8,
+      "preview_terminal_count": 8,
+      "preview_terminal_classifications": {
+        "acceptedExactNonEmptyPainted": 8
+      },
+      "generic_coordinator_rejected_count": 0,
+      "time_interaction_count": 0
+    },
+    {
+      "physical_settle_target_handle": 0,
+      "latest_desired_target_handle": 0,
+      "latest_semantic_target_handle": 0,
+      "latest_exact_painted_target_handle": 0,
+      "selected_budget_target_handle": 0,
+      "focus_target_handle": 0,
+      "header_target_handle": 0,
+      "progress_target_handle": 0,
+      "logbox_target_handle": 0,
+      "final_target_row_count": 24,
+      "exact_paint_exact_empty": false,
+      "exact_paint_readable_phase_a_rows_painted": 0,
+      "exact_paint_rich_phase_b_rows_painted": 3,
+      "exact_paint_core_revision": 2,
+      "visible_core_revision": 2,
+      "unresolved_pending_candidate_count": 0,
+      "preview_requested_count": 8,
+      "preview_terminal_count": 8,
+      "preview_terminal_classifications": {
+        "acceptedExactNonEmptyPainted": 8
+      },
+      "generic_coordinator_rejected_count": 0,
+      "time_interaction_count": 0
+    },
+    {
+      "physical_settle_target_handle": 3,
+      "latest_desired_target_handle": 3,
+      "latest_semantic_target_handle": 3,
+      "latest_exact_painted_target_handle": 3,
+      "selected_budget_target_handle": 3,
+      "focus_target_handle": 3,
+      "header_target_handle": 3,
+      "progress_target_handle": 3,
+      "logbox_target_handle": 3,
+      "final_target_row_count": 7,
+      "exact_paint_exact_empty": false,
+      "exact_paint_readable_phase_a_rows_painted": 0,
+      "exact_paint_rich_phase_b_rows_painted": 2,
+      "exact_paint_core_revision": 2,
+      "visible_core_revision": 2,
+      "unresolved_pending_candidate_count": 0,
+      "preview_requested_count": 8,
+      "preview_terminal_count": 8,
+      "preview_terminal_classifications": {
+        "acceptedExactNonEmptyPainted": 8
+      },
+      "generic_coordinator_rejected_count": 0,
+      "time_interaction_count": 0
+    },
+    {
+      "physical_settle_target_handle": 0,
+      "latest_desired_target_handle": 0,
+      "latest_semantic_target_handle": 0,
+      "latest_exact_painted_target_handle": 0,
+      "selected_budget_target_handle": 0,
+      "focus_target_handle": 0,
+      "header_target_handle": 0,
+      "progress_target_handle": 0,
+      "logbox_target_handle": 0,
+      "final_target_row_count": 24,
+      "exact_paint_exact_empty": false,
+      "exact_paint_readable_phase_a_rows_painted": 0,
+      "exact_paint_rich_phase_b_rows_painted": 3,
+      "exact_paint_core_revision": 2,
+      "visible_core_revision": 2,
+      "unresolved_pending_candidate_count": 0,
+      "preview_requested_count": 8,
+      "preview_terminal_count": 8,
+      "preview_terminal_classifications": {
+        "acceptedExactNonEmptyPainted": 8
+      },
+      "generic_coordinator_rejected_count": 0,
+      "time_interaction_count": 0
+    }
+  ],
+  "post_renderer_final": {
+    "physical_settle_target_handle": 0,
+    "latest_desired_target_handle": 0,
+    "latest_semantic_target_handle": 0,
+    "latest_exact_painted_target_handle": 0,
+    "selected_budget_target_handle": 0,
+    "focus_target_handle": 0,
+    "header_target_handle": 0,
+    "progress_target_handle": 0,
+    "logbox_target_handle": 0,
+    "final_target_row_count": 24,
+    "exact_paint_exact_empty": false,
+    "exact_paint_readable_phase_a_rows_painted": 0,
+    "exact_paint_rich_phase_b_rows_painted": 3,
+    "exact_paint_core_revision": 2,
+    "visible_core_revision": 2,
+    "unresolved_pending_candidate_count": 0,
+    "preview_requested_count": 8,
+    "preview_terminal_count": 8,
+    "preview_terminal_classifications": {
+      "acceptedExactNonEmptyPainted": 8
+    },
+    "generic_coordinator_rejected_count": 0,
+    "time_interaction_count": 0
+  },
+  "critical_raw_sha256": {
+    "dashboard_profile_complete_response.json": "016400d624f7b1ab8d9da6be4378bb5d972e46dafb5ddd6f85881a1751c651a8",
+    "dashboard_profile_K_avatar_first_target.json": "5a7e8c7a58a0799131073c9e887cecbe6c957afa880c516f1f2398a91d5bf2c9",
+    "dashboard_profile_dashboard_avatar_final_target_evidence.json": "2da62891ef1ff9a746e794c89df08c6fd516c239a8822e0630cafc5973bbab15",
+    "dashboard_profile_dashboard_profile_suite_completion.json": "4bb28b10135ca43f04e088e42ea7d5b8d190761073ada0974c27a5a9e1a1d908",
+    "dashboard_profile_dashboard_profile_comparisons.json": "300fc78123278b51cd29f8ad54357ff92eb541e9158891d64f5b7ba4433be772"
+  }
+}

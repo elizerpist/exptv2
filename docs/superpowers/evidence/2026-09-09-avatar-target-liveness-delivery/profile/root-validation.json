@@ -1,0 +1,81 @@
+{
+  "validation": "passed",
+  "reviewer": "root independent raw-data and archive inspection",
+  "source_head": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+  "scenario_count": 11,
+  "completion_marker_valid": true,
+  "separate_reports_equal_full_response": true,
+  "first_ten_fling_count": 10,
+  "density_flight_counts": [
+    10,
+    10,
+    10,
+    10
+  ],
+  "flights": [
+    {
+      "target": 3,
+      "phase_a_rows": 0,
+      "rich_rows": 2,
+      "requests": 8,
+      "accepted_nonempty_terminals": 8,
+      "pending": 0,
+      "identity_and_values_equal": true,
+      "revision": 2
+    },
+    {
+      "target": 0,
+      "phase_a_rows": 0,
+      "rich_rows": 3,
+      "requests": 8,
+      "accepted_nonempty_terminals": 8,
+      "pending": 0,
+      "identity_and_values_equal": true,
+      "revision": 2
+    },
+    {
+      "target": 3,
+      "phase_a_rows": 0,
+      "rich_rows": 2,
+      "requests": 8,
+      "accepted_nonempty_terminals": 8,
+      "pending": 0,
+      "identity_and_values_equal": true,
+      "revision": 2
+    },
+    {
+      "target": 0,
+      "phase_a_rows": 0,
+      "rich_rows": 3,
+      "requests": 8,
+      "accepted_nonempty_terminals": 8,
+      "pending": 0,
+      "identity_and_values_equal": true,
+      "revision": 2
+    }
+  ],
+  "post_renderer_final": {
+    "target": 0,
+    "phase_a_rows": 0,
+    "rich_rows": 3,
+    "requests": 8,
+    "accepted_nonempty_terminals": 8,
+    "pending": 0,
+    "identity_and_values_equal": true,
+    "revision": 2
+  },
+  "fixture_aggregate_rows": 94,
+  "actual_renderer_paints": 32,
+  "artifact_zip_sha256": "adb92df9fd0bd2eb593dcff77037ba237a88ea767a6336221b80c6129d327218",
+  "archive_files_byte_identical_after_extraction": 28,
+  "hidden_failure_hits": [],
+  "actual_test_duration": "28:21",
+  "optional_physical_device_frame_report": {
+    "passed": false,
+    "limit_exceedances": 59,
+    "environment_requirement": "physical-device-profile",
+    "ci_environment": "Android emulator, swangle GPU",
+    "not_required_by_normal_ci_gate": true,
+    "physical_acceptance": "PENDING \u2014 USER ONLY"
+  }
+}

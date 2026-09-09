@@ -1,0 +1,16 @@
+{
+  "source_head": "a047e216803d3ac01d97b4d5ffd03842a1579db3",
+  "run_id": 34351134148,
+  "job_id": 102466312696,
+  "job_conclusion": "success",
+  "release_tag": "fluvi-human-diagnostic-a047e21",
+  "release_target_commitish": "a047e216803d3ac01d97b4d5ffd03842a1579db3",
+  "entrypoint": "lib/main.dart (Flutter default; existing scripts/build-human-diagnostic-apk.sh has no alternate target)",
+  "build_purpose": "human_diagnostic",
+  "normal_human_apk": true,
+  "local_path": "/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_a047e21.apk",
+  "bytes": 82236721,
+  "sha256": "8a95b39b0a0428cf94414544b266a614edf7c34daec10b825c9745def532a99e",
+  "github_asset_digest": "sha256:8a95b39b0a0428cf94414544b266a614edf7c34daec10b825c9745def532a99e",
+  "download_url": "https://github.com/elizerpist/exptv2/releases/download/fluvi-human-diagnostic-a047e21/fluvi_HUMAN_DIAGNOSTIC_a047e21.apk"
+}

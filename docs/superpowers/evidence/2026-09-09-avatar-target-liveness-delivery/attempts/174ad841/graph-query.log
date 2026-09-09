@@ -1,0 +1,19 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_avatar_resource_window.dart`/resolveAvatarResourceWindow().
+DEFINITION
+lib/features/dashboard/application/dashboard_avatar_resource_window.dart:46
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_avatar_resource_window.dart`/resolveAvatarResourceWindow().
+REFERENCES
+total=2 production=1 tests=1
+CONSUMER FILES
+lib/features/dashboard/application/dashboard_core_controller.dart
+test/features/dashboard/application/dashboard_avatar_resource_window_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/application/dashboard_core_controller.dart:8479:23 reference
+TEST REFERENCES
+test/features/dashboard/application/dashboard_avatar_resource_window_test.dart:23:8 reference

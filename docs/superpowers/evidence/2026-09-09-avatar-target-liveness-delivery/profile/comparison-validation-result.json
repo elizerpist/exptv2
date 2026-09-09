@@ -1,0 +1,56 @@
+{
+  "validation": "passed",
+  "checks_owner": "independent review of committed _expectEquivalentMotion/_expectEquivalentRailFlight/_p95Comparison and scene counters",
+  "comparisons": {
+    "year_empty_vs_populated": {
+      "first_motion_micros": 253369152,
+      "second_motion_micros": 252198324,
+      "tolerance_micros": 38005373,
+      "target_equal": true,
+      "settle_equal": true,
+      "semantic_sequence_equal": true,
+      "relative_velocity_differences": {
+        "drag_end_velocity": 0.0,
+        "ballistic_input_velocity": 0.0
+      },
+      "physical_endpoint_difference_pixels": 0.0,
+      "logical_endpoint_difference": 0,
+      "frame_build_p95_delta_percent": -69.22336328626444,
+      "frame_raster_p95_delta_percent": -6.334581658099456
+    },
+    "month_empty_vs_populated": {
+      "first_motion_micros": 251914688,
+      "second_motion_micros": 254035049,
+      "tolerance_micros": 37787203,
+      "target_equal": true,
+      "settle_equal": true,
+      "semantic_sequence_equal": true,
+      "relative_velocity_differences": {
+        "drag_end_velocity": 0.0,
+        "ballistic_input_velocity": 0.0
+      },
+      "physical_endpoint_difference_pixels": 0.0,
+      "logical_endpoint_difference": 0,
+      "frame_build_p95_delta_percent": -75.8732227774157,
+      "frame_raster_p95_delta_percent": 51.63117830845524
+    },
+    "first_vs_tenth_fling": {
+      "first_motion_micros": 25957142,
+      "second_motion_micros": 24031117,
+      "tolerance_micros": 3893571,
+      "target_equal": true,
+      "settle_equal": true,
+      "semantic_sequence_equal": true,
+      "relative_velocity_differences": {
+        "drag_end_velocity": 0.0,
+        "ballistic_input_velocity": 0.0
+      },
+      "physical_endpoint_difference_pixels": 0.0,
+      "logical_endpoint_difference": 0,
+      "frame_build_p95_delta_percent": -90.41803717150565,
+      "frame_raster_p95_delta_percent": 23.321566830025045
+    }
+  },
+  "all_scene_counters_zero": true,
+  "failures": []
+}

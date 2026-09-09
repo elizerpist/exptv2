@@ -1,0 +1,1047 @@
+﻿2026-09-09T13:39:14.1369669Z Current runner version: '2.337.0'
+2026-09-09T13:39:14.1397340Z ##[group]Runner Image Provisioner
+2026-09-09T13:39:14.1398289Z Hosted Compute Agent
+2026-09-09T13:39:14.1398878Z Version: 20260828.587
+2026-09-09T13:39:14.1399587Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-09T13:39:14.1400333Z Build Date: 2026-08-28T16:44:25Z
+2026-09-09T13:39:14.1401093Z Worker ID: {1e30337d-84bd-4a9c-91bf-e0261509e590}
+2026-09-09T13:39:14.1401857Z Azure Region: eastus
+2026-09-09T13:39:14.1402425Z ##[endgroup]
+2026-09-09T13:39:14.1404273Z ##[group]Operating System
+2026-09-09T13:39:14.1404947Z Ubuntu
+2026-09-09T13:39:14.1405549Z 24.04.4
+2026-09-09T13:39:14.1406335Z LTS
+2026-09-09T13:39:14.1406860Z ##[endgroup]
+2026-09-09T13:39:14.1407482Z ##[group]Runner Image
+2026-09-09T13:39:14.1408086Z Image: ubuntu-24.04
+2026-09-09T13:39:14.1408751Z Version: 20260831.293.1
+2026-09-09T13:39:14.1409984Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260831.293/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-09T13:39:14.1411581Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260831.293
+2026-09-09T13:39:14.1412584Z ##[endgroup]
+2026-09-09T13:39:14.1413853Z ##[group]GITHUB_TOKEN Permissions
+2026-09-09T13:39:14.1416333Z Contents: read
+2026-09-09T13:39:14.1417123Z Metadata: read
+2026-09-09T13:39:14.1417718Z PullRequests: read
+2026-09-09T13:39:14.1418260Z ##[endgroup]
+2026-09-09T13:39:14.1420982Z Secret source: Actions
+2026-09-09T13:39:14.1422304Z Prepare workflow directory
+2026-09-09T13:39:14.1751978Z Prepare all required actions
+2026-09-09T13:39:14.1800244Z Getting action download info
+2026-09-09T13:39:14.4077329Z Download action repository 'actions/checkout@v5' (SHA:fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09)
+2026-09-09T13:39:14.6354951Z Complete job name: test-flutter
+2026-09-09T13:39:14.7226183Z ##[group]Run actions/checkout@v5
+2026-09-09T13:39:14.7227460Z with:
+2026-09-09T13:39:14.7227939Z   repository: elizerpist/exptv2
+2026-09-09T13:39:14.7231916Z   token: ***
+2026-09-09T13:39:14.7232390Z   ssh-strict: true
+2026-09-09T13:39:14.7232825Z   ssh-user: git
+2026-09-09T13:39:14.7233276Z   persist-credentials: true
+2026-09-09T13:39:14.7233763Z   clean: true
+2026-09-09T13:39:14.7234203Z   sparse-checkout-cone-mode: true
+2026-09-09T13:39:14.7234722Z   fetch-depth: 1
+2026-09-09T13:39:14.7235157Z   fetch-tags: false
+2026-09-09T13:39:14.7235620Z   show-progress: true
+2026-09-09T13:39:14.7236540Z   lfs: false
+2026-09-09T13:39:14.7236969Z   submodules: false
+2026-09-09T13:39:14.7237421Z   set-safe-directory: true
+2026-09-09T13:39:14.7237934Z   allow-unsafe-pr-checkout: false
+2026-09-09T13:39:14.7238803Z ##[endgroup]
+2026-09-09T13:39:14.8251964Z Syncing repository: elizerpist/exptv2
+2026-09-09T13:39:14.8254582Z ##[group]Getting Git version info
+2026-09-09T13:39:14.8256062Z Working directory is '/home/runner/work/exptv2/exptv2'
+2026-09-09T13:39:14.8257731Z [command]/usr/bin/git version
+2026-09-09T13:39:14.8347876Z git version 2.55.0
+2026-09-09T13:39:14.8375053Z ##[endgroup]
+2026-09-09T13:39:14.8391157Z Temporarily overriding HOME='/home/runner/work/_temp/9c90a750-d924-4127-a9cb-751bad9bcaca' before making global git config changes
+2026-09-09T13:39:14.8393489Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-09T13:39:14.8398477Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/exptv2/exptv2
+2026-09-09T13:39:14.8454437Z Deleting the contents of '/home/runner/work/exptv2/exptv2'
+2026-09-09T13:39:14.8460629Z ##[group]Initializing the repository
+2026-09-09T13:39:14.8464917Z [command]/usr/bin/git init /home/runner/work/exptv2/exptv2
+2026-09-09T13:39:14.8592392Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-09T13:39:14.8594076Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-09T13:39:14.8595597Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-09T13:39:14.8597106Z hint: call:
+2026-09-09T13:39:14.8598097Z hint:
+2026-09-09T13:39:14.8599241Z hint: 	git config --global init.defaultBranch <name>
+2026-09-09T13:39:14.8600225Z hint:
+2026-09-09T13:39:14.8601207Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-09T13:39:14.8602784Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-09T13:39:14.8604000Z hint:
+2026-09-09T13:39:14.8604646Z hint: 	git branch -m <name>
+2026-09-09T13:39:14.8605391Z hint:
+2026-09-09T13:39:14.8606660Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-09T13:39:14.8608557Z Initialized empty Git repository in /home/runner/work/exptv2/exptv2/.git/
+2026-09-09T13:39:14.8612954Z [command]/usr/bin/git remote add origin https://github.com/elizerpist/exptv2
+2026-09-09T13:39:14.8666896Z ##[endgroup]
+2026-09-09T13:39:14.8668227Z ##[group]Disabling automatic garbage collection
+2026-09-09T13:39:14.8670706Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-09T13:39:14.8703810Z ##[endgroup]
+2026-09-09T13:39:14.8705014Z ##[group]Setting up auth
+2026-09-09T13:39:14.8711935Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-09T13:39:14.8750471Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-09T13:39:14.9197156Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-09T13:39:14.9233894Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-09T13:39:14.9459001Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-09T13:39:14.9493941Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-09T13:39:14.9717922Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-09T13:39:14.9756744Z ##[endgroup]
+2026-09-09T13:39:14.9766217Z ##[group]Fetching the repository
+2026-09-09T13:39:14.9768270Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +33ee878b070345c336bb73df2b087d9a63c87c5a:refs/remotes/origin/fix/avatar-target-liveness-codex-20260909
+2026-09-09T13:39:15.8303688Z From https://github.com/elizerpist/exptv2
+2026-09-09T13:39:15.8305717Z  * [new ref]         33ee878b070345c336bb73df2b087d9a63c87c5a -> origin/fix/avatar-target-liveness-codex-20260909
+2026-09-09T13:39:15.8309958Z ##[endgroup]
+2026-09-09T13:39:15.8311210Z ##[group]Determining the checkout info
+2026-09-09T13:39:15.8312817Z ##[endgroup]
+2026-09-09T13:39:15.8317809Z [command]/usr/bin/git sparse-checkout disable
+2026-09-09T13:39:15.8371635Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-09T13:39:15.8406054Z ##[group]Checking out the ref
+2026-09-09T13:39:15.8417787Z [command]/usr/bin/git checkout --progress --force -B fix/avatar-target-liveness-codex-20260909 refs/remotes/origin/fix/avatar-target-liveness-codex-20260909
+2026-09-09T13:39:15.9727704Z Switched to a new branch 'fix/avatar-target-liveness-codex-20260909'
+2026-09-09T13:39:15.9737204Z branch 'fix/avatar-target-liveness-codex-20260909' set up to track 'origin/fix/avatar-target-liveness-codex-20260909'.
+2026-09-09T13:39:15.9744971Z ##[endgroup]
+2026-09-09T13:39:15.9796760Z [command]/usr/bin/git log -1 --format=%H
+2026-09-09T13:39:15.9824262Z 33ee878b070345c336bb73df2b087d9a63c87c5a
+2026-09-09T13:39:16.0100328Z Prepare all required actions
+2026-09-09T13:39:16.0101009Z Getting action download info
+2026-09-09T13:39:16.1118849Z Download action repository 'subosito/flutter-action@v2' (SHA:1a449444c387b1966244ae4d4f8c696479add0b2)
+2026-09-09T13:39:16.2382078Z Getting action download info
+2026-09-09T13:39:16.3168555Z Download action repository 'actions/cache@v5' (SHA:caa296126883cff596d87d8935842f9db880ef25)
+2026-09-09T13:39:16.4552050Z ##[group]Run ./.github/actions/setup-fluvi-flutter
+2026-09-09T13:39:16.4552475Z ##[endgroup]
+2026-09-09T13:39:16.4610692Z ##[start-action display=Run subosito/flutter-action@v2;id=__self.__subosito_flutter-action]
+2026-09-09T13:39:16.4801894Z ##[group]Run subosito/flutter-action@v2
+2026-09-09T13:39:16.4802275Z with:
+2026-09-09T13:39:16.4802533Z   flutter-version: 3.41.4
+2026-09-09T13:39:16.4802820Z   channel: stable
+2026-09-09T13:39:16.4803068Z   cache: true
+2026-09-09T13:39:16.4803309Z   architecture: X64
+2026-09-09T13:39:16.4803576Z   pub-cache-path: default
+2026-09-09T13:39:16.4803924Z   dry-run: false
+2026-09-09T13:39:16.4804278Z   git-source: https://github.com/flutter/flutter.git
+2026-09-09T13:39:16.4804643Z ##[endgroup]
+2026-09-09T13:39:16.4812077Z ##[start-action display=Make yq tool available on Windows runners;id=__self.__subosito_flutter-action.__run]
+2026-09-09T13:39:16.4835951Z ##[end-action id=__self.__subosito_flutter-action.__run;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-09-09T13:39:16.4838691Z ##[start-action display=Make setup script executable;id=__self.__subosito_flutter-action.__run_2]
+2026-09-09T13:39:16.4915224Z ##[group]Run chmod +x "$GITHUB_ACTION_PATH/setup.sh"
+2026-09-09T13:39:16.4915998Z [36;1mchmod +x "$GITHUB_ACTION_PATH/setup.sh"[0m
+2026-09-09T13:39:16.4957745Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-09T13:39:16.4958197Z ##[endgroup]
+2026-09-09T13:39:16.5064672Z ##[end-action id=__self.__subosito_flutter-action.__run_2;outcome=success;conclusion=success;duration_ms=22]
+2026-09-09T13:39:16.5068040Z ##[start-action display=Set action inputs;id=__self.__subosito_flutter-action.flutter-action]
+2026-09-09T13:39:16.5107530Z ##[group]Run $GITHUB_ACTION_PATH/setup.sh -p \
+2026-09-09T13:39:16.5108007Z [36;1m$GITHUB_ACTION_PATH/setup.sh -p \[0m
+2026-09-09T13:39:16.5108363Z [36;1m  -n '3.41.4' \[0m
+2026-09-09T13:39:16.5108648Z [36;1m  -f '' \[0m
+2026-09-09T13:39:16.5108930Z [36;1m  -a 'X64' \[0m
+2026-09-09T13:39:16.5109202Z [36;1m  -k '' \[0m
+2026-09-09T13:39:16.5109450Z [36;1m  -c '' \[0m
+2026-09-09T13:39:16.5109694Z [36;1m  -l '' \[0m
+2026-09-09T13:39:16.5109950Z [36;1m  -d 'default' \[0m
+2026-09-09T13:39:16.5110323Z [36;1m  -g 'https://github.com/flutter/flutter.git' \[0m
+2026-09-09T13:39:16.5110709Z [36;1m  stable[0m
+2026-09-09T13:39:16.5146426Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-09T13:39:16.5146855Z ##[endgroup]
+2026-09-09T13:39:16.6927299Z ##[end-action id=__self.__subosito_flutter-action.flutter-action;outcome=success;conclusion=success;duration_ms=185]
+2026-09-09T13:39:16.6933028Z ##[start-action display=Cache Flutter;id=__self.__subosito_flutter-action.cache-flutter]
+2026-09-09T13:39:16.6990198Z ##[group]Run actions/cache@v5
+2026-09-09T13:39:16.6990525Z with:
+2026-09-09T13:39:16.6990834Z   path: /opt/hostedtoolcache/flutter/stable-3.41.4-x64
+2026-09-09T13:39:16.6991382Z   key: flutter-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0
+2026-09-09T13:39:16.6991906Z   enableCrossOsArchive: false
+2026-09-09T13:39:16.6992213Z   fail-on-cache-miss: false
+2026-09-09T13:39:16.6992496Z   lookup-only: false
+2026-09-09T13:39:16.6992755Z   save-always: false
+2026-09-09T13:39:16.6993010Z ##[endgroup]
+2026-09-09T13:39:16.8906901Z Cache hit for: flutter-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0
+2026-09-09T13:39:17.9754963Z Received 234881024 of 1660707274 (14.1%), 223.3 MBs/sec
+2026-09-09T13:39:18.9758040Z Received 532676608 of 1660707274 (32.1%), 253.6 MBs/sec
+2026-09-09T13:39:19.9838004Z Received 792723456 of 1660707274 (47.7%), 251.5 MBs/sec
+2026-09-09T13:39:20.9797528Z Received 1065353216 of 1660707274 (64.2%), 253.6 MBs/sec
+2026-09-09T13:39:21.9881864Z Received 1337982976 of 1660707274 (80.6%), 254.8 MBs/sec
+2026-09-09T13:39:22.9807579Z Received 1577058304 of 1660707274 (95.0%), 250.3 MBs/sec
+2026-09-09T13:39:23.4093946Z Received 1660707274 of 1660707274 (100.0%), 246.0 MBs/sec
+2026-09-09T13:39:23.4097736Z Cache Size: ~1584 MB (1660707274 B)
+2026-09-09T13:39:23.4231094Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e4e7ba5b-0510-45ef-8d02-7700b2c64799/cache.tzst -P -C /home/runner/work/exptv2/exptv2 --use-compress-program unzstd
+2026-09-09T13:39:28.3342438Z Cache restored successfully
+2026-09-09T13:39:28.4100489Z Cache restored from key: flutter-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0
+2026-09-09T13:39:28.4238088Z ##[end-action id=__self.__subosito_flutter-action.cache-flutter;outcome=success;conclusion=success;duration_ms=11730]
+2026-09-09T13:39:28.4241798Z ##[start-action display=Cache pub dependencies;id=__self.__subosito_flutter-action.cache-pub]
+2026-09-09T13:39:28.6200616Z ##[group]Run actions/cache@v5
+2026-09-09T13:39:28.6200901Z with:
+2026-09-09T13:39:28.6201139Z   path: /home/runner/.pub-cache
+2026-09-09T13:39:28.6201890Z   key: flutter-pub-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0-3da74abe0bcb4ea3ee040ccd40bcdef95f40382992cc63b2474d58c085587002
+2026-09-09T13:39:28.6202677Z   enableCrossOsArchive: false
+2026-09-09T13:39:28.6202945Z   fail-on-cache-miss: false
+2026-09-09T13:39:28.6203188Z   lookup-only: false
+2026-09-09T13:39:28.6203412Z   save-always: false
+2026-09-09T13:39:28.6203639Z ##[endgroup]
+2026-09-09T13:39:28.8168463Z Cache hit for: flutter-pub-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0-3da74abe0bcb4ea3ee040ccd40bcdef95f40382992cc63b2474d58c085587002
+2026-09-09T13:39:29.0505312Z Received 24689928 of 24689928 (100.0%), 128.0 MBs/sec
+2026-09-09T13:39:29.0506577Z Cache Size: ~24 MB (24689928 B)
+2026-09-09T13:39:29.0553259Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ea579701-3a11-4732-bd62-a2b8fe069bae/cache.tzst -P -C /home/runner/work/exptv2/exptv2 --use-compress-program unzstd
+2026-09-09T13:39:29.7781167Z Cache restored successfully
+2026-09-09T13:39:29.7875149Z Cache restored from key: flutter-pub-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0-3da74abe0bcb4ea3ee040ccd40bcdef95f40382992cc63b2474d58c085587002
+2026-09-09T13:39:29.7946260Z ##[end-action id=__self.__subosito_flutter-action.cache-pub;outcome=success;conclusion=success;duration_ms=1370]
+2026-09-09T13:39:29.7949153Z ##[start-action display=Run setup script;id=__self.__subosito_flutter-action.__run_3]
+2026-09-09T13:39:29.8007980Z ##[group]Run $GITHUB_ACTION_PATH/setup.sh \
+2026-09-09T13:39:29.8008357Z [36;1m$GITHUB_ACTION_PATH/setup.sh \[0m
+2026-09-09T13:39:29.8008648Z [36;1m  -n '3.41.4' \[0m
+2026-09-09T13:39:29.8008889Z [36;1m  -a 'x64' \[0m
+2026-09-09T13:39:29.8009200Z [36;1m  -c '/opt/hostedtoolcache/flutter/stable-3.41.4-x64' \[0m
+2026-09-09T13:39:29.8009590Z [36;1m  -d '/home/runner/.pub-cache' \[0m
+2026-09-09T13:39:29.8009870Z [36;1m  stable[0m
+2026-09-09T13:39:29.8048226Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-09T13:39:29.8048609Z ##[endgroup]
+2026-09-09T13:39:29.9453864Z ##[end-action id=__self.__subosito_flutter-action.__run_3;outcome=success;conclusion=success;duration_ms=150]
+2026-09-09T13:39:29.9488802Z ##[end-action id=__self.__subosito_flutter-action;outcome=success;conclusion=success;duration_ms=13487]
+2026-09-09T13:39:29.9490958Z ##[start-action display=Get Flutter packages;id=__self.__run]
+2026-09-09T13:39:29.9508244Z ##[group]Run flutter pub get
+2026-09-09T13:39:29.9508535Z [36;1mflutter pub get[0m
+2026-09-09T13:39:29.9548746Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-09-09T13:39:29.9549120Z env:
+2026-09-09T13:39:29.9549441Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter
+2026-09-09T13:39:29.9549868Z   PUB_CACHE: /home/runner/.pub-cache
+2026-09-09T13:39:29.9550324Z ##[endgroup]
+2026-09-09T13:39:30.3826821Z Resolving dependencies...
+2026-09-09T13:39:30.4227394Z Downloading packages...
+2026-09-09T13:39:30.4501648Z   clock 1.1.2 (1.1.3 available)
+2026-09-09T13:39:30.4502282Z   matcher 0.12.19 (0.12.20 available)
+2026-09-09T13:39:30.4502920Z   material_color_utilities 0.13.0 (0.13.1 available)
+2026-09-09T13:39:30.4503485Z   meta 1.17.0 (1.19.0 available)
+2026-09-09T13:39:30.4504220Z   platform 3.1.6 (3.2.0 available)
+2026-09-09T13:39:30.4504693Z   process 5.0.5 (5.0.6 available)
+2026-09-09T13:39:30.4505169Z   stack_trace 1.12.1 (1.12.2 available)
+2026-09-09T13:39:30.4505649Z   test_api 0.7.10 (0.7.14 available)
+2026-09-09T13:39:30.4506411Z   vector_graphics 1.2.2 (1.2.3 available)
+2026-09-09T13:39:30.4506924Z   vector_math 2.2.0 (2.4.2 available)
+2026-09-09T13:39:30.4507402Z   vm_service 15.2.0 (15.3.0 available)
+2026-09-09T13:39:30.4507889Z Got dependencies!
+2026-09-09T13:39:30.4508498Z 11 packages have newer versions incompatible with dependency constraints.
+2026-09-09T13:39:30.4509286Z Try `flutter pub outdated` for more information.
+2026-09-09T13:39:30.6886664Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=739]
+2026-09-09T13:39:30.6916394Z ##[group]Run flutter analyze --no-fatal-infos
+2026-09-09T13:39:30.6916824Z [36;1mflutter analyze --no-fatal-infos[0m
+2026-09-09T13:39:30.6954094Z shell: /usr/bin/bash -e {0}
+2026-09-09T13:39:30.6954377Z env:
+2026-09-09T13:39:30.6954695Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter
+2026-09-09T13:39:30.6955132Z   PUB_CACHE: /home/runner/.pub-cache
+2026-09-09T13:39:30.6955409Z ##[endgroup]
+2026-09-09T13:39:30.8714072Z Resolving dependencies...
+2026-09-09T13:39:30.9106951Z Downloading packages...
+2026-09-09T13:39:30.9384175Z   clock 1.1.2 (1.1.3 available)
+2026-09-09T13:39:30.9384647Z   matcher 0.12.19 (0.12.20 available)
+2026-09-09T13:39:30.9385265Z   material_color_utilities 0.13.0 (0.13.1 available)
+2026-09-09T13:39:30.9385697Z   meta 1.17.0 (1.19.0 available)
+2026-09-09T13:39:30.9386368Z   platform 3.1.6 (3.2.0 available)
+2026-09-09T13:39:30.9386752Z   process 5.0.5 (5.0.6 available)
+2026-09-09T13:39:30.9387099Z   stack_trace 1.12.1 (1.12.2 available)
+2026-09-09T13:39:30.9387529Z   test_api 0.7.10 (0.7.14 available)
+2026-09-09T13:39:30.9388021Z   vector_graphics 1.2.2 (1.2.3 available)
+2026-09-09T13:39:30.9388400Z   vector_math 2.2.0 (2.4.2 available)
+2026-09-09T13:39:30.9388777Z   vm_service 15.2.0 (15.3.0 available)
+2026-09-09T13:39:30.9389121Z Got dependencies!
+2026-09-09T13:39:30.9389573Z 11 packages have newer versions incompatible with dependency constraints.
+2026-09-09T13:39:30.9390175Z Try `flutter pub outdated` for more information.
+2026-09-09T13:39:55.0232786Z Analyzing exptv2...                                             
+2026-09-09T13:39:55.0274039Z No issues found! (ran in 23.6s)
+2026-09-09T13:39:55.0477624Z ##[group]Run ./scripts/test-fluvi-fast.sh
+2026-09-09T13:39:55.0478213Z [36;1m./scripts/test-fluvi-fast.sh[0m
+2026-09-09T13:39:55.0525206Z shell: /usr/bin/bash -e {0}
+2026-09-09T13:39:55.0525607Z env:
+2026-09-09T13:39:55.0526281Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter
+2026-09-09T13:39:55.0526966Z   PUB_CACHE: /home/runner/.pub-cache
+2026-09-09T13:39:55.0527407Z ##[endgroup]
+2026-09-09T13:39:55.2466954Z Resolving dependencies...
+2026-09-09T13:39:55.2863457Z Downloading packages...
+2026-09-09T13:39:55.3126067Z   clock 1.1.2 (1.1.3 available)
+2026-09-09T13:39:55.3126672Z   matcher 0.12.19 (0.12.20 available)
+2026-09-09T13:39:55.3127237Z   material_color_utilities 0.13.0 (0.13.1 available)
+2026-09-09T13:39:55.3127791Z   meta 1.17.0 (1.19.0 available)
+2026-09-09T13:39:55.3128234Z   platform 3.1.6 (3.2.0 available)
+2026-09-09T13:39:55.3128691Z   process 5.0.5 (5.0.6 available)
+2026-09-09T13:39:55.3129153Z   stack_trace 1.12.1 (1.12.2 available)
+2026-09-09T13:39:55.3129723Z   test_api 0.7.10 (0.7.14 available)
+2026-09-09T13:39:55.3130202Z   vector_graphics 1.2.2 (1.2.3 available)
+2026-09-09T13:39:55.3130708Z   vector_math 2.2.0 (2.4.2 available)
+2026-09-09T13:39:55.3131180Z   vm_service 15.2.0 (15.3.0 available)
+2026-09-09T13:39:55.3131636Z Got dependencies!
+2026-09-09T13:39:55.3132233Z 11 packages have newer versions incompatible with dependency constraints.
+2026-09-09T13:39:55.3132992Z Try `flutter pub outdated` for more information.
+2026-09-09T13:40:25.2324991Z 
+2026-09-09T13:40:33.5996634Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_interaction_performance_boundary_test.dart: keeps scene-window maintenance off dashboard input gates
+2026-09-09T13:40:33.6004247Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/query_menu_boundary_test.dart: Query Menu keeps one SQL owner and one reusable sheet boundary
+2026-09-09T13:40:33.9768360Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_interaction_performance_boundary_test.dart: keeps dashboard interaction ownership fail closed
+2026-09-09T13:40:34.1483513Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: records live committed demand while deferring ready work during vertical input
+2026-09-09T13:40:34.1540762Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: keeps committed page preparation free of scheduler handoffs
+2026-09-09T13:40:34.1583915Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: keeps reverse committed-page demand owned by signed viewport intent
+2026-09-09T13:40:34.6408395Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_motion_data_isolation_boundary_test.dart: keeps dashboard motion and data ownership fail closed
+2026-09-09T13:40:34.8410369Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_single_data_runtime_boundary_test.dart: dashboard production has one index runtime and no live/deck fallback
+2026-09-09T13:40:35.3970743Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_avatar_profile_boundary_test.dart: profile host persists raw response before fail-closed acceptance
+2026-09-09T13:40:35.4070041Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_avatar_profile_boundary_test.dart: suite completion is written after every existing suite assertion
+2026-09-09T13:40:35.4363614Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_avatar_profile_boundary_test.dart: suite budgets are finite and leave reporting and teardown margins
+2026-09-09T13:40:35.4528409Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_avatar_profile_boundary_test.dart: K observes production owners and validates each actual fling
+2026-09-09T13:40:35.4973130Z ✅ /home/runner/work/exptv2/exptv2/test/boundary/dashboard_avatar_target_liveness_boundary_test.dart: Avatar transaction reuses the single Core/cache/visible/focus owners
+2026-09-09T13:40:36.3904242Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: complete exact roots preserve nonempty aggregate and category8 payloads
+2026-09-09T13:40:36.3932877Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: pending plan cannot be described as a ready window
+2026-09-09T13:40:36.3961648Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: empty required keys is distinguished from a missing entry
+2026-09-09T13:40:36.3989514Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: retired aggregate frame is classified without swallowing other errors
+2026-09-09T13:40:36.4017782Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: nonempty payload from another scope is rejected
+2026-09-09T13:40:36.4044269Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: same query from an older revision is rejected
+2026-09-09T13:40:36.4070010Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: retired bank identity and foreground ownership are distinct
+2026-09-09T13:40:36.4095540Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_resource_window_test.dart: scope rejection preserves the actual wrong payload identity
+2026-09-09T13:40:37.7491020Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: current nonempty target prepares exact resources with no broad hotset
+2026-09-09T13:40:38.0553010Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: target 8 coalesces held target 1 and replays its original order once
+2026-09-09T13:40:38.3288139Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: returning to current target 1 coalesces held target 8 in the same pointer
+2026-09-09T13:40:38.5316794Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: new pointer terminally cancels pending work before stale cache completion
+2026-09-09T13:40:38.7547330Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: disposal resolves the pending request exactly once and drops its owner
+2026-09-09T13:40:38.9823948Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: Avatar category and aggregate requests behind Time foreground terminate as staleRejected
+2026-09-09T13:40:39.2557963Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: Avatar category and aggregate requests after disposal terminate as disposed
+2026-09-09T13:40:39.5148064Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: exact preparation failure terminates explicitly
+2026-09-09T13:40:39.7827229Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: exact preparation cancellation terminates explicitly
+2026-09-09T13:40:40.0147698Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_avatar_candidate_lifecycle_test.dart: new accepted target replaces the older deferred canonical installation
+2026-09-09T13:40:40.6682680Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete A-K suite response is accepted
+2026-09-09T13:40:40.6748142Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: observed a047 response without J and completion is rejected
+2026-09-09T13:40:40.6773016Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects null response
+2026-09-09T13:40:40.6793723Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects list response
+2026-09-09T13:40:40.6816013Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects empty map response
+2026-09-09T13:40:40.6836891Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects non-string keys response
+2026-09-09T13:40:40.6868243Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects missing completion
+2026-09-09T13:40:40.6905438Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects scalar completion
+2026-09-09T13:40:40.6935000Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects empty completion
+2026-09-09T13:40:40.6962880Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects unsupported completion schema
+2026-09-09T13:40:40.6990468Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects failed suite assertions
+2026-09-09T13:40:40.7021105Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects incomplete completion keys
+2026-09-09T13:40:40.7048307Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects duplicate completion key
+2026-09-09T13:40:40.7096421Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects non-string completion key
+2026-09-09T13:40:40.7103102Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing A_summary_sum_year_month report
+2026-09-09T13:40:40.7130242Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing B_year_month_rail_populated report
+2026-09-09T13:40:40.7161581Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing C_year_month_rail_empty report
+2026-09-09T13:40:40.7184914Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing D_month_day_rail_94 report
+2026-09-09T13:40:40.7212578Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing E_month_day_rail_empty report
+2026-09-09T13:40:40.7239816Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing F_parent_while_rail_open report
+2026-09-09T13:40:40.7265546Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing G_direction_while_rail_open report
+2026-09-09T13:40:40.7298579Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing H_pulse_parent_navigation report
+2026-09-09T13:40:40.7326146Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing I_first_fling report
+2026-09-09T13:40:40.7354618Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing J_tenth_fling report
+2026-09-09T13:40:40.7374259Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: completion marker cannot replace missing K_avatar_first_target report
+2026-09-09T13:40:40.7396766Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects null report
+2026-09-09T13:40:40.7420147Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects scalar report
+2026-09-09T13:40:40.7465185Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects empty report
+2026-09-09T13:40:40.7490639Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite rejects non-string report keys
+2026-09-09T13:40:40.7522730Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite retains K and post-renderer exact-paint validation
+2026-09-09T13:40:40.7551965Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: complete suite retains motion-isolation thresholds
+2026-09-09T13:40:40.7573257Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar exact renderer accepts a real rich-only nonempty paint
+2026-09-09T13:40:40.7591881Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar exact renderer accepts a positive Phase-A nonempty paint
+2026-09-09T13:40:40.7617960Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar exact renderer rejects empty and zero-row paint counters
+2026-09-09T13:40:40.7642861Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K accepts rich-only exact paints without claiming Phase A
+2026-09-09T13:40:40.7663870Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty despite claimed final paint
+2026-09-09T13:40:40.7685035Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects zero rows in both renderer phases
+2026-09-09T13:40:40.7722852Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects negative Phase A despite positive rich rows
+2026-09-09T13:40:40.7735430Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects negative rich rows despite positive Phase A
+2026-09-09T13:40:40.7765309Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects missing raw empty flag
+2026-09-09T13:40:40.7786347Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects missing raw paint counters
+2026-09-09T13:40:40.7807315Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects stale painted core revision
+2026-09-09T13:40:40.7836381Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects missing visible core revision
+2026-09-09T13:40:40.7847983Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects zero overall renderer paints
+2026-09-09T13:40:40.7866184Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects not every renderer acknowledgement is nonempty painted
+2026-09-09T13:40:40.7905186Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: adds exact p50 p90 p95 and p99 frame percentiles
+2026-09-09T13:40:40.7947127Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: required scenario schema includes every requested duration lane
+2026-09-09T13:40:40.7979841Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: scenario schema validation rejects a missing metric
+2026-09-09T13:40:40.8047088Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: scenario schema rejects invalid rail-flight evidence
+2026-09-09T13:40:40.8079260Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar profile evidence requires an exact painted target and matching progress pixels
+2026-09-09T13:40:40.8280884Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects the supplied aa61242 empty-only false green
+2026-09-09T13:40:40.8317428Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in physical_settle_target_handle
+2026-09-09T13:40:40.8347017Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in latest_desired_target_handle
+2026-09-09T13:40:40.8375667Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in latest_semantic_target_handle
+2026-09-09T13:40:40.8402624Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in latest_exact_painted_target_handle
+2026-09-09T13:40:40.8428685Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in selected_budget_target_handle
+2026-09-09T13:40:40.8457347Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in focus_target_handle
+2026-09-09T13:40:40.8494453Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in header_target_handle
+2026-09-09T13:40:40.8521753Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in progress_target_handle
+2026-09-09T13:40:40.8543845Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in logbox_target_handle
+2026-09-09T13:40:40.8565194Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in focus_category_digest
+2026-09-09T13:40:40.8587389Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in visible_query_category_digest
+2026-09-09T13:40:40.8608956Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in canonical_query_category_digest
+2026-09-09T13:40:40.8630013Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in logbox_query_digest
+2026-09-09T13:40:40.8651586Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in header_display_numerator_scaled100
+2026-09-09T13:40:40.8673969Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects final identity drift in progress_display_denominator_scaled100
+2026-09-09T13:40:40.8697656Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects unresolved or reset-dependent unresolved_pending_candidate_count
+2026-09-09T13:40:40.8719578Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects unresolved or reset-dependent generic_coordinator_rejected_count
+2026-09-09T13:40:40.8740977Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects unresolved or reset-dependent time_interaction_count
+2026-09-09T13:40:40.8773314Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty-only nonempty_preview_requested_count despite positive total paints
+2026-09-09T13:40:40.8798660Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty-only nonempty_preview_accepted_count despite positive total paints
+2026-09-09T13:40:40.8821945Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects empty-only nonempty_preview_painted_count despite positive total paints
+2026-09-09T13:40:40.8846812Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects earlier paint with final target still pending
+2026-09-09T13:40:40.8878655Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects a failed earlier flight even when final flight passes
+2026-09-09T13:40:40.8908855Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects a single real fling
+2026-09-09T13:40:40.8925431Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K permits a superseded first request with strict final proof
+2026-09-09T13:40:40.8950404Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects terminal classification unknown
+2026-09-09T13:40:40.8972669Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects terminal classification explicitInvariantFailure
+2026-09-09T13:40:40.8994173Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K rejects requests without exactly one terminal completion
+2026-09-09T13:40:40.9015216Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: Avatar K accepts accounted coalescing with an exact nonempty final paint
+2026-09-09T13:40:40.9052224Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate records renderer misses without masking I/O
+2026-09-09T13:40:40.9072909Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate retains a long CI frame sample when direct preparation slices remain bounded
+2026-09-09T13:40:40.9094284Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate retains an atomic scene-layout measurement without device-time rejection
+2026-09-09T13:40:40.9117031Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects an invalid scene-layout measurement
+2026-09-09T13:40:40.9137289Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion-scoped scene preparation ignores a completed pre-capture bank
+2026-09-09T13:40:40.9172040Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects paint-time LogBox text layout
+2026-09-09T13:40:40.9197305Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects vector decoding during motion
+2026-09-09T13:40:40.9220069Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate rejects rail-flight interruption evidence
+2026-09-09T13:40:40.9242758Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: motion isolation gate permits one structural LogBox bind but rejects a rebuild stream
+2026-09-09T13:40:40.9281080Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: physical frame targets report and reject exact p95/p99 lanes
+2026-09-09T13:40:40.9304597Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: semantic traversal retains every crossed cyclic boundary
+2026-09-09T13:40:40.9325510Z ✅ /home/runner/work/exptv2/exptv2/test/performance/dashboard_profile_report_test.dart: semantic traversal is deterministic in both directions
+2026-09-09T13:40:41.5353250Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: combined visual motion remains active until every lane is idle
+2026-09-09T13:40:41.8853472Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: database revision stays pending until every visual lane reaches idle
+2026-09-09T13:40:42.0465259Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: all dashboard navigation remains RAM-only after one bootstrap
+2026-09-09T13:40:42.0902332Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_navigation_zero_io_acceptance_test.dart: multiple crossings in one display frame publish only the last target
+2026-09-09T13:40:43.8710730Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: a SUM preview is retained before close and reopen synchronously recenters it
+2026-09-09T13:40:43.8717182Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:40:43.8718820Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=5, target=5, delta=0
+2026-09-09T13:40:43.8720465Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+2026-09-09T13:40:43.8722147Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+2026-09-09T13:40:43.8723762Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+2026-09-09T13:40:43.8725184Z ##[endgroup]
+2026-09-09T13:40:44.1513278Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: a settled SUM rail child reopens at that canonical retained year
+2026-09-09T13:40:44.1517419Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:40:44.1519583Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=5, target=5, delta=0
+2026-09-09T13:40:44.1522009Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+2026-09-09T13:40:44.1524039Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+2026-09-09T13:40:44.1526158Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=1, target=1, delta=0
+2026-09-09T13:40:44.1528300Z ##[endgroup]
+2026-09-09T13:40:44.3743928Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: structural rail exits retain the one hierarchical year month and day anchor
+2026-09-09T13:40:44.4050735Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: bootstrap and every structural target select only the installed index
+2026-09-09T13:40:44.4368259Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: crossing publishes prepared values and settle is a visual no-op
+2026-09-09T13:40:44.4949047Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental DAY crossing publishes the existing prepared child directly
+2026-09-09T13:40:44.5247879Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental MONTH crossing publishes its exact prepared frame directly
+2026-09-09T13:40:44.5668680Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: RED POST-df1: an unpainted Segmented target cannot become canonical before its queued display frame
+2026-09-09T13:40:44.7204776Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: POST-df1: Segmented painted promotion keeps the real SummaryPill on its exact live child
+2026-09-09T13:40:44.7643098Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental YEAR crossing publishes its exact prepared frame directly
+2026-09-09T13:40:44.7981401Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: experimental component projection validates a frozen selector origin through the installed canonical catalog
+2026-09-09T13:40:44.8658348Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: separate display frames expose intermediate values on the first fling
+2026-09-09T13:40:44.9205464Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: revision index replacement keeps motion/controller/physics identity
+2026-09-09T13:40:44.9775202Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: open-rail parent changes publish the deterministically retained child
+2026-09-09T13:40:45.0056285Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: year parent and rapid A-B-C changes retain the exact child key
+2026-09-09T13:40:45.0643361Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: Year 2024 then 2026 switches to Month 2026 in one atomic frame
+2026-09-09T13:40:45.1099863Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: Month to Year to Month roundtrip retains the canonical July
+2026-09-09T13:40:45.1421999Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: bounded index rejects an out-of-window parent in RAM
+2026-09-09T13:40:45.1763518Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: direction replacement rejects an unflushed old-direction preview
+2026-09-09T13:40:45.2536441Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/runtime/dashboard_presentation_controller_test.dart: seeded random navigation preserves visible index invariants
+2026-09-09T13:40:45.3057132Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=cold
+2026-09-09T13:40:45.3059738Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:40:45.3061449Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:40:45.3063042Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3064938Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3067062Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:40:45.3068350Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:40:45.3069550Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:40:45.3071299Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3073573Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:40:45.3074800Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:40:45.3076356Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3078040Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3079713Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:40:45.3080864Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:40:45.3081942Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:40:45.3083574Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3085226Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:40:45.3086555Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:40:45.3087550Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3089160Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:40:45.3090766Z ##[endgroup]
+2026-09-09T13:40:46.9640108Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: rail-critical window covers every prepared query exactly once
+2026-09-09T13:40:47.1467830Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: query publication bundle separates the visible parent from its immediate rail domain
+2026-09-09T13:40:47.4387476Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a prepared revision bundle rejects a Budget bank from another revision
+2026-09-09T13:40:47.6677422Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an initially open rail activates its full immediate interaction domain before the first fling
+2026-09-09T13:40:47.8734400Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail structural publication includes only its retained child twins
+2026-09-09T13:40:48.0144417Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: initial activation retains the exact minimal scene window it activated
+2026-09-09T13:40:48.3183088Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: demanded navigation window stays canonical when a full bank is active
+2026-09-09T13:40:48.4853279Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: input cancels speculative preparation without rejecting navigation
+2026-09-09T13:40:48.6917955Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a revision publishes its index and complete rail bank together
+2026-09-09T13:40:48.9458503Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail revision activates its immediate sibling domain before the first fling
+2026-09-09T13:40:51.4609658Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a complete active rail bank eliminates sibling rebase work
+2026-09-09T13:40:51.6537194Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: minimal publication bank keeps the direction twin paint-ready synchronously
+2026-09-09T13:40:51.8970003Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: minimal publication bank rebases exact scenes across plane transitions
+2026-09-09T13:40:52.0235123Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: plane navigation keeps the current visible scope until its exact window is active
+2026-09-09T13:40:52.1517829Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: parent navigation keeps the current visible scope until its exact window is active
+2026-09-09T13:40:52.3125682Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail Summary parent transition publishes its O(1) first frame before interaction warmup
+2026-09-09T13:40:52.4420707Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an idle adjacent parent hotset makes the next open-rail Summary move a retained interaction hit
+2026-09-09T13:40:52.6061773Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: RED LIVE-TIME: an experimental MONTH crossing activates its retained root before settle
+2026-09-09T13:40:52.8364319Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: restricted Summary parent hotset retains the wrapped boundary target
+2026-09-09T13:40:53.0262163Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: input keeps an in-flight required scene preparation alive instead of restarting it
+2026-09-09T13:40:53.2168294Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a newer deferred coverage target supersedes a cancelled in-flight target
+2026-09-09T13:40:53.4363397Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: motion keeps rail warming deferred while foreground plane publication proceeds
+2026-09-09T13:40:53.6146522Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an old SUM settle cannot supersede a pending SUM to YEAR transition
+2026-09-09T13:40:53.7808249Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: repeated identical Summary Pill intents join one pending preparation
+2026-09-09T13:40:53.9438756Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an old settle and repeated same target keep one pending YEAR intent
+2026-09-09T13:40:54.1128608Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: prepared-index publication cancels old-index scene work immediately
+2026-09-09T13:40:54.2564683Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: rail interaction warmup follows structural publication without delaying it
+2026-09-09T13:40:54.3695990Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: idle rail warmup prewarms both adjacent Summary Pill publication targets
+2026-09-09T13:40:54.5225547Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: opening an unwarmed rail keeps the current frame until its interaction bank is ready
+2026-09-09T13:40:54.6528632Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a close intent supersedes an in-flight rail-open preparation
+2026-09-09T13:40:54.7973506Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a rapid open close open sequence commits only the latest rail intent
+2026-09-09T13:40:55.1860378Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: structural plane publication windows stay independent of rail sibling count
+2026-09-09T13:40:55.3179030Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: an open-rail Summary plane transition prepares only its first-frame hotset
+2026-09-09T13:40:55.4603827Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_scene_window_rotation_test.dart: a structural foreground publication request begins while summary motion is active
+2026-09-09T13:40:56.0541713Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: emits the canonical profile-safe event envelope
+2026-09-09T13:40:56.0580278Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: semantic diagnostics are disabled by default without losing counts
+2026-09-09T13:40:56.0635648Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: motion hot-path data operations fail hard and emit violations
+2026-09-09T13:40:56.0662419Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: data work is counted for the complete physical motion interval
+2026-09-09T13:40:56.0713489Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: defines every required diagnostic event wire name
+2026-09-09T13:40:56.5058156Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: core emits the complete runtime and RAM-navigation lifecycle
+2026-09-09T13:40:56.7164249Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_interaction_diagnostics_test.dart: core records canonical temporal derivation in the bounded ring
+2026-09-09T13:40:57.7515663Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction selection reads the independent applied Query before opening a draft
+2026-09-09T13:40:57.9355033Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction selection is ignored while a Query draft is open
+2026-09-09T13:40:58.1478286Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction tap updates the live direction owner before held scene coverage commits
+2026-09-09T13:40:58.4317069Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: Apply publishes one prepared restricted query scope atomically
+2026-09-09T13:40:58.7080073Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: accepted Query Menu Apply binds its exact facet presentation before hotset replacement
+2026-09-09T13:40:58.8478285Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: same applied composer draft closes without building another index
+2026-09-09T13:40:59.0598236Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: closing and reopening the composer cancels an older Apply before it can publish
+2026-09-09T13:40:59.2730518Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: Query Apply publishes after its local critical window without waiting for full-bank warmup
+2026-09-09T13:40:59.4659209Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: Query Apply invalidates a blocked old-index structural scene transition
+2026-09-09T13:40:59.6711257Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a 2025 category Query publishes through the symmetric backing window
+2026-09-09T13:40:59.8608465Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a zero-result restrictive Query is a valid publication
+2026-09-09T13:41:00.0996552Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a failed Query index preparation returns false and can be retried
+2026-09-09T13:41:00.3591872Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: concurrent Apply intents share one Query index preparation
+2026-09-09T13:41:00.6096083Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: draft preparation stays invisible and Apply consumes that exact index
+2026-09-09T13:41:00.9353116Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a staged Query candidate includes the current parent interaction domain before Apply
+2026-09-09T13:41:01.2272451Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: Apply re-stages a ready candidate whose bounded retained bank was evicted
+2026-09-09T13:41:01.5294505Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: discarding a ready draft candidate has no rollback publication
+2026-09-09T13:41:01.7728364Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: closing and reopening an exact ready draft reuses its immutable index
+2026-09-09T13:41:02.1638648Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: an Expense draft keeps the active prepared year window after parent navigation
+2026-09-09T13:41:02.6301460Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a prewarmed category chip removes its Query without a tap-time build
+2026-09-09T13:41:03.8240828Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: a seven-target chip hotset defers clear-all before its Query index build
+2026-09-09T13:41:03.8907914Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=persistent20cycles
+2026-09-09T13:41:03.8910419Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:03.8912471Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:03.8914640Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8916994Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8918949Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.8920326Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8922087Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.8924521Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8926795Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.8928424Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8929798Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8931699Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8933599Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.8934945Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8936423Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.8938307Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8940238Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.8941864Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8943172Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8945056Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8947224Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.8948588Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8949922Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.8951797Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8953752Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.8955125Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8956627Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8958511Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8960417Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.8961769Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8963075Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.8964942Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8967327Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.8968719Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8970032Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8971927Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8973829Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.8975193Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8976678Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.8978628Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8980553Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.8981954Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8983290Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8987781Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8989504Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.8990673Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8991788Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.8993456Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8995163Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.8996500Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.8997598Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.8999270Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9000946Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9002095Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9003193Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9004845Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9019767Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9020988Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9022370Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9023947Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9025572Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9026883Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9027936Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9029531Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9031250Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9032412Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9033516Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9035159Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9037022Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9038384Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9039475Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9041127Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9042841Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9043995Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9045101Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9057378Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9058927Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9076503Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9077700Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9079349Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9081067Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9082237Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9083347Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9085010Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9087221Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9088463Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9089576Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9091208Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9092895Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9094043Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9095144Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9104993Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9107025Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9108239Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9109387Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9111341Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9113090Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9114444Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9115588Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9117529Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9119256Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9120460Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9121604Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9123294Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9125038Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9126654Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9127792Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9129521Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9130891Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9131592Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9132262Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9133400Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9135466Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9137299Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9138458Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9140172Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9141938Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9143123Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9144260Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9146185Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9148971Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9150433Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9151596Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9153303Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9155031Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9156436Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9157554Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9159792Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9161575Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9162792Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9163934Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9165620Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9167632Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9168810Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9170289Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9172021Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9173912Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9175315Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9176675Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9178390Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9180109Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9181595Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9182681Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9184395Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9186450Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9187647Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9188823Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9191934Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9194049Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9195245Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9196656Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9198376Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9200105Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9201289Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9202771Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9204489Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9206442Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:03.9207610Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9208738Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:03.9210437Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9212199Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:03.9213803Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:03.9214924Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9216983Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:03.9218452Z ##[endgroup]
+2026-09-09T13:41:04.2508163Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a deferred clear-all candidate is foreground-admitted once and then reused
+2026-09-09T13:41:05.4611417Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: five applied category chips retain every removal target plus clear-all
+2026-09-09T13:41:05.8345697Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL persistent real CoreDashboard nonempty Avatar final-target liveness without Time scenario=sparse
+2026-09-09T13:41:05.8356696Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:05.8358683Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:05.8360633Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8362617Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8364636Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:05.8366766Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:05.8368174Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:05.8370519Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8372206Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:05.8373311Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:05.8374001Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8374949Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8376266Z Carousel fling: raw=2400.0px/s, effective=1584.0px/s, itemExtent=58.00, speed=27.31 items/s, band=max-5, maxStep=5, projected=100016, target=100008, delta=5
+2026-09-09T13:41:05.8377320Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:05.8378322Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100008, target=100008, delta=0
+2026-09-09T13:41:05.8379867Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8381407Z Carousel fling: raw=-2400.0px/s, effective=-1584.0px/s, itemExtent=58.00, speed=-27.31 items/s, band=max-5, maxStep=5, projected=99992, target=100000, delta=-5
+2026-09-09T13:41:05.8382610Z Carousel snap: stiffness=340.0, settle=1024ms
+2026-09-09T13:41:05.8383742Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8385382Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:05.8388809Z ##[endgroup]
+2026-09-09T13:41:06.5738301Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: an editor foreground candidate displaces a full applied chip hotset and activates
+2026-09-09T13:41:07.2225025Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL physical startup sequence 3 2 1 0 8 7 6 scenario=month
+2026-09-09T13:41:07.2227563Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:07.2229663Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:07.2231591Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2233216Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2235159Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+2026-09-09T13:41:07.2237267Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2239288Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+2026-09-09T13:41:07.2241556Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2243521Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+2026-09-09T13:41:07.2245381Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2247422Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2249313Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2251319Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+2026-09-09T13:41:07.2253181Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2255037Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+2026-09-09T13:41:07.2257133Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2258933Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+2026-09-09T13:41:07.2260799Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:07.2262350Z ##[endgroup]
+2026-09-09T13:41:07.9141747Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: direction commit replaces the protected chip hotset before an Income editor stages
+2026-09-09T13:41:08.1661349Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: Cancel restores the active direction chip-hotset protection without publication
+2026-09-09T13:41:08.5630686Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a prewarmed partner chip removes its Query without a tap-time build
+2026-09-09T13:41:09.0116556Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: Query chip speculation waits for the explicit sheet-removal boundary
+2026-09-09T13:41:09.5004660Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL physical startup sequence 3 2 1 0 8 7 6 scenario=monthTimeControl
+2026-09-09T13:41:09.5007350Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:09.5009167Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:09.5011292Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5013267Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5015120Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+2026-09-09T13:41:09.5017714Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5019581Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+2026-09-09T13:41:09.5021434Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5023316Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+2026-09-09T13:41:09.5025176Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5027246Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5029091Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5030946Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+2026-09-09T13:41:09.5032807Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5034664Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+2026-09-09T13:41:09.5036693Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5038539Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+2026-09-09T13:41:09.5040392Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5042490Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99994, target=99994, delta=0
+2026-09-09T13:41:09.5044354Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5046377Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99993, target=99993, delta=0
+2026-09-09T13:41:09.5048222Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5050078Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99992, target=99992, delta=0
+2026-09-09T13:41:09.5051897Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5053747Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99991, target=99991, delta=0
+2026-09-09T13:41:09.5055584Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5057670Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99990, target=99990, delta=0
+2026-09-09T13:41:09.5059512Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5061619Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99989, target=99989, delta=0
+2026-09-09T13:41:09.5063481Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5065307Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99988, target=99988, delta=0
+2026-09-09T13:41:09.5067467Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:09.5070124Z ##[endgroup]
+2026-09-09T13:41:09.5327358Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: direct prepared chip publication settles committed ready-ahead before speculation
+2026-09-09T13:41:10.1263250Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: each admitted Query-chip neighbour needs a fresh input-fair idle grant
+2026-09-09T13:41:10.4472571Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: disposing revokes a pending input-fair Query idle grant
+2026-09-09T13:41:10.6008446Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a capacity-rejected Summary hotset is deferred once per cache admission epoch
+2026-09-09T13:41:11.1038845Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL physical startup sequence 3 2 1 0 8 7 6 scenario=day
+2026-09-09T13:41:11.1040874Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:11.1042511Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:11.1044120Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1046363Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1048112Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100003, target=100003, delta=0
+2026-09-09T13:41:11.1049791Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1051455Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100002, target=100002, delta=0
+2026-09-09T13:41:11.1053246Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1054941Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+2026-09-09T13:41:11.1056791Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1058460Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1060133Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1062027Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+2026-09-09T13:41:11.1063695Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1065352Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99998, target=99998, delta=0
+2026-09-09T13:41:11.1069220Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1070919Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99997, target=99997, delta=0
+2026-09-09T13:41:11.1072596Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.1073950Z ##[endgroup]
+2026-09-09T13:41:11.2578067Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: direct prepared chip publication rejects a scene-owner warmup callback before ready-ahead settles
+2026-09-09T13:41:11.5786127Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a queued rail warmup callback fails closed after direct publication reservation
+2026-09-09T13:41:11.7140477Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL earlier target 1 paints before final physical target 8 exact binder miss
+2026-09-09T13:41:11.7143034Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:11.7144809Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:11.7146862Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.7149090Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.7150953Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+2026-09-09T13:41:11.7152791Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:11.7154540Z ##[endgroup]
+2026-09-09T13:41:12.1392075Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a direct prepared miss holds scene-owner speculation behind exact ready-ahead
+2026-09-09T13:41:12.3020208Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart: AVL retained painted target 1 yields to cold final 8 after real resource replacement
+2026-09-09T13:41:12.3037362Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:12.3049913Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:12.3067191Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=58.00, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:12.3069639Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:12.3072285Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=100001, target=100001, delta=0
+2026-09-09T13:41:12.3073481Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:12.3074647Z Carousel fling: raw=-0.0px/s, effective=-0.0px/s, itemExtent=58.00, speed=-0.00 items/s, band=nearest, maxStep=0, projected=99999, target=99999, delta=0
+2026-09-09T13:41:12.3076075Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=77.20, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:12.3077710Z ##[endgroup]
+2026-09-09T13:41:12.4167013Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a zero-page direct publication binds and releases readiness without a page read
+2026-09-09T13:41:13.0407513Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: editing a composer draft does not mutate the applied query
+2026-09-09T13:41:13.0459515Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: each edit session and draft mutation has a new cancellation identity
+2026-09-09T13:41:13.0530915Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: the composer only closes after the core has committed its draft
+2026-09-09T13:41:13.0561798Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: an accepted Apply survives visual dismissal but not a newer edit session
+2026-09-09T13:41:13.0589031Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: a failed accepted Apply restores the same editable draft session
+2026-09-09T13:41:13.0617680Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: the applied owner retains bounded facet presentation with its scope
+2026-09-09T13:41:13.0651093Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_composer_controller_test.dart: opening a direction-scoped draft never copies the other direction
+2026-09-09T13:41:13.7478169Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_menu_data_controller_test.dart: latest draft facet response wins without clearing the prior result
+2026-09-09T13:41:13.7544772Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_menu_data_controller_test.dart: RED: Apply joins the exact in-flight facet request without a second read
+2026-09-09T13:41:13.7574091Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/query_menu_data_controller_test.dart: a superseded facet response cannot resolve a newer Apply identity
+2026-09-09T13:41:14.3564354Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/saved_query_controller_test.dart: loading a saved query changes the draft but never the applied scope
+2026-09-09T13:41:14.3634715Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/application/saved_query_controller_test.dart: named save update rename and delete stay separate from applied scope
+2026-09-09T13:41:14.5152139Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a multi-page direct publication settles exact ready-ahead before speculation
+2026-09-09T13:41:15.0780814Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/data/method_channel_query_menu_repository_test.dart: facet bridge carries real bounded months and canonical time filter
+2026-09-09T13:41:15.6588173Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/domain/query_temporal_filter_test.dart: canonicalizes one multi-period time group independently of navigation
+2026-09-09T13:41:15.6717777Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/domain/query_temporal_filter_test.dart: all time remains a non-restrictive canonical filter
+2026-09-09T13:41:16.2082487Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a one-page direct publication settles its reservation without a repository read
+2026-09-09T13:41:16.6413536Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a structurally superseded publication cannot release newer readiness reservation
+2026-09-09T13:41:16.9419012Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a publication activation failure releases only its own reservation
+2026-09-09T13:41:17.5980542Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: foreground chip Apply promotes a matching in-flight hotset acquisition
+2026-09-09T13:41:18.0304203Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: opens the HTML query hierarchy and its category picker in one sheet
+2026-09-09T13:41:18.1511751Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: foreground chip Apply adopts an exact hotset candidate already scene-preparing
+2026-09-09T13:41:18.2884420Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: keeps the query sheet inside standard mobile widths
+2026-09-09T13:41:18.5025135Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: keeps amount-slider movement local until the range ends
+2026-09-09T13:41:18.5372983Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/query/presentation/query_menu_sheet_test.dart: keeps the last confirmed CTA count visible while the latest draft loads
+2026-09-09T13:41:18.7228232Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a different foreground chip target still supersedes hotset work
+2026-09-09T13:41:19.2893363Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: a promoted hotset continuation cannot publish after a newer chip target
+2026-09-09T13:41:19.3068047Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a sparse deferred payload arms Phase-A geometry only through its bounded resource owner
+2026-09-09T13:41:19.3534812Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: preview frames always select the prepared rail-scene domain
+2026-09-09T13:41:19.3650470Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: only the exact active committed root selects the vertical domain
+2026-09-09T13:41:19.3698459Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a committed presentation binding activates the vertical domain without a payload rebind
+2026-09-09T13:41:19.5844071Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a ready committed root fallback paints automatically when its rail scene is absent
+2026-09-09T13:41:19.6005962Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/dashboard_logbox_render_domain_test.dart: a complete readable Phase-A bank keeps a dormant committed fallback in rail preview
+2026-09-09T13:41:19.8783604Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: rapid distinct chip removals acquire each exact target at most once
+2026-09-09T13:41:20.3809153Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: raw pointer intent pauses direct-chip speculation before formal vertical drag
+2026-09-09T13:41:20.5148138Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: RED: exact committed resources arm before O(1) vertical domain activation
+2026-09-09T13:41:20.5303943Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: rail preview root stages before takeover and transfers without pointer work
+2026-09-09T13:41:20.5550212Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a complete page advances only resource state, never immutable geometry
+2026-09-09T13:41:20.5602558Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a new committed scope clears an obsolete row-height transition
+2026-09-09T13:41:20.5780465Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: idle ready-ahead commit has complete text resources before publication
+2026-09-09T13:41:20.5954417Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: RED: ready drawable frontier and visible resource gap stay distinct from immutable virtual geometry
+2026-09-09T13:41:20.5997546Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a bounded rail preview never activates the virtual surface as a partial root page
+2026-09-09T13:41:20.6197086Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: resumable page preparation publishes only after complete bounded slices
+2026-09-09T13:41:20.6316410Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: superseding a private preparation publishes no partial page
+2026-09-09T13:41:20.6352669Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a stale or noncontiguous page cannot partially publish geometry
+2026-09-09T13:41:20.6388307Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a payload whose local day grouping disagrees with the manifest fails closed
+2026-09-09T13:41:20.7017647Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: root remains pinned while the five movable slots rotate
+2026-09-09T13:41:20.7581296Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a visible ordinal beyond the ready frontier cannot invert retention clamp bounds
+2026-09-09T13:41:20.7841477Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: ephemeral focus transfers and restores the exact bounded base hotset
+2026-09-09T13:41:20.7891625Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a changed base identity rejects and disposes an ephemeral focus hotset
+2026-09-09T13:41:20.8382753Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: backward retention keeps the immediate reverse safety page
+2026-09-09T13:41:20.8636590Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a width change rebuilds complete pages atomically
+2026-09-09T13:41:20.8858173Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a root fallback is prepared before vertical activation
+2026-09-09T13:41:20.8929554Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/logbox/application/committed_log_viewport_cache_test.dart: a superseded scope rejects old page identity without stale rows
+2026-09-09T13:41:21.5134655Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: default scene preparation budget reserves TextPainter headroom
+2026-09-09T13:41:21.5828313Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: an empty retained window reuses the active canonical empty scene without construction
+2026-09-09T13:41:21.6808741Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: render-critical readiness preparation cannot be superseded by Summary maintenance
+2026-09-09T13:41:21.6890904Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: generic maintenance cancellation cannot terminate render-critical readiness
+2026-09-09T13:41:21.6942208Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: retained Summary preparation is denied before layout when every candidate bank is protected
+2026-09-09T13:41:21.7024866Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: rejected retained-candidate diagnostics use a bounded identity digest
+2026-09-09T13:41:21.7138446Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: the active rail-critical bank exposes complete exact scenes and lookup metrics
+2026-09-09T13:41:21.7181324Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a prepared scene window makes each populated row and header atomically available
+2026-09-09T13:41:21.7283752Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: a retained focus base restores exact payloads across a new presentation identity
+2026-09-09T13:41:21.7357885Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: rotation keeps a completed later parent scene private until activation
+2026-09-09T13:41:21.7443110Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a completed staging bank is invisible and discardable until activation
+2026-09-09T13:41:21.7527886Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: bounded Query candidate banks stay invisible and activate independently
+2026-09-09T13:41:21.7598072Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: retained candidate lookup promotes the exact bank before bounded LRU eviction
+2026-09-09T13:41:21.7653881Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: protected chip-neighbour banks survive LRU pressure before unrelated banks
+2026-09-09T13:41:21.7766525Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: candidate preparation rejects self-eviction behind a full protected hotset
+2026-09-09T13:41:21.7903971Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: candidate hotset admission preserves deterministic protected priority before work
+2026-09-09T13:41:21.7963747Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a retained candidate shares exact active layouts without owning their disposal
+2026-09-09T13:41:21.8023196Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: evicting a creator candidate preserves the active borrower resource
+2026-09-09T13:41:21.8101066Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: final candidate lease releases shared resources exactly once
+2026-09-09T13:41:21.8192987Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: creator eviction waits for active and retained sibling leases
+2026-09-09T13:41:21.8258597Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: same-key candidate replacement retains shared resources before old release
+2026-09-09T13:41:21.8360857Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: cache disposal releases active staged retained and focus-base leases once
+2026-09-09T13:41:21.8457009Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: discarding a focus-base lease preserves an active candidate borrower
+2026-09-09T13:41:21.8668211Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: six prepared chip removals keep every active borrower drawable before input
+2026-09-09T13:41:21.8745338Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: an active base window can be retained and restored without rebuilding its scene
+2026-09-09T13:41:21.8839125Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a focused subset can stage from active prepared resources without TextPainter work
+2026-09-09T13:41:21.9017543Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED LIVE-ROOT: a compact focused payload stages from prepared row resources
+2026-09-09T13:41:21.9134332Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED PHASE-A: an invisible live resource bank exposes exact readable rows without rich-scene activation
+2026-09-09T13:41:21.9220426Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED AVATAR PHASE-A AUTHORITY: a prearmed base scene cannot stand in for the focused painter payload
+2026-09-09T13:41:21.9302160Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: FPA: a same-key live Time resource rebinds at changed surface metrics
+2026-09-09T13:41:21.9379556Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED REENTRANT-MIND: a borrowing release candidate coexists with an oversized bounded live resource bank
+2026-09-09T13:41:21.9539070Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: b166 regression: Avatar preparation retains a Mind resource and Mind replacement is lane-local
+2026-09-09T13:41:21.9660768Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: b166 regression: a superseded Avatar preparation releases only its stale lane candidate
+2026-09-09T13:41:21.9807896Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: FPA: a newer Time foreground lease cancels an in-flight Avatar resource without delaying Time readiness
+2026-09-09T13:41:21.9895216Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: FPA: a deferred Time lease cannot cancel a different active Avatar lane
+2026-09-09T13:41:21.9950071Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: live resource baseline does not admit additional unique rows beyond its bounded footprint
+2026-09-09T13:41:22.0003515Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: discarding a stale active-resource stage releases only its exact bank
+2026-09-09T13:41:22.0071619Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: retained candidate memory counts shared layouts once
+2026-09-09T13:41:22.0144261Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: mid-preparation cancellation leaves every active populated and empty scene drawable
+2026-09-09T13:41:22.0286671Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: disposing during a cooperative private lease releases its resources before teardown
+2026-09-09T13:41:22.0662001Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: time-budgeted preparation does not yield once per eight rows when a slice has budget
+2026-09-09T13:41:22.0978614Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: RED: deferred rich projection checkpoints inside one payload before it becomes visible
+2026-09-09T13:41:22.1033133Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: completed preparation epoch advances only for a fully prepared bank
+2026-09-09T13:41:22.1580827Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: 100 deterministic cancellation boundaries preserve the active bank
+2026-09-09T13:41:22.1612305Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: a scene-window cap fails before it can become partially active
+2026-09-09T13:41:22.1636382Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: pointer release resumes an exact deferred page and live ready-ahead while vertical interaction remains active
+2026-09-09T13:41:22.1653246Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: runtime scene lookup requires the exact prepared content and width
+2026-09-09T13:41:22.1810121Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: one complete active bank serves 100 child selections without layout work
+2026-09-09T13:41:22.2023206Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: scene assembly yields by bounded row work rather than by scene count
+2026-09-09T13:41:22.2159112Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: one large scene assembles its row map in bounded work units
+2026-09-09T13:41:22.2231532Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_prepared_scene_cache_test.dart: cooperative preparation yields before a slow row batch reaches its time budget
+2026-09-09T13:41:24.0519642Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: motion idle resumes deferred presentation and live ready-ahead while vertical interaction remains active
+2026-09-09T13:41:24.8433115Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart: 2025 June remains drawable when real rail input cancels preparation
+2026-09-09T13:41:25.3261383Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_visible_scene_continuity_test.dart: the first vertical drag takes over the current dense 2025 rail preview
+2026-09-09T13:41:25.8328020Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: structural motion idle without vertical input uses the full ready-ahead drain after a deferred page
+2026-09-09T13:41:26.9144219Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: SearchPill resolves the global Search family
+2026-09-09T13:41:26.9223168Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: query facet presentation defaults and hidden SearchPill fallback are stable
+2026-09-09T13:41:27.3056530Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger chrome orders count, SearchPill, and scroll lane without a result amount
+2026-09-09T13:41:27.4613202Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: RED: decorative summary text motion does not strand committed ready-ahead
+2026-09-09T13:41:27.5740161Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: SearchPill owns stable editable focus and keeps text on unfocus
+2026-09-09T13:41:27.5770061Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: an aborted accepted Apply releases the route-sensitive speculative boundary
+2026-09-09T13:41:27.6908606Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: hiding SearchPill removes its exact slot without replacing the LogBox scroll position
+2026-09-09T13:41:27.7658639Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: SearchPill header has no clipping envelope around its own physical surface
+2026-09-09T13:41:27.7687357Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a constrained LogBox header clips before its structural slot
+2026-09-09T13:41:27.8256966Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger count tracks one committed frame across query states
+2026-09-09T13:41:27.9145452Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger count follows the accepted live count lane instead of the committed payload
+2026-09-09T13:41:27.9276613Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/application/dashboard_core_query_application_test.dart: income and expense applied queries remain independent across selection
+2026-09-09T13:41:27.9529474Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: Ledger chrome keeps count and SearchPill inside scaled structural slots
+2026-09-09T13:41:28.0302338Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: the LogBox scroll viewport owns a hard physical paint clip
+2026-09-09T13:41:28.1714608Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a raw LogBox pointer forwards foreground intent before drag recognition
+2026-09-09T13:41:28.3261796Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: the first single vertical partner-row move after direct Query publication advances the existing scrollable
+2026-09-09T13:41:28.3835139Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: the physical hard-edge host begins at screen left while the resting LogBox surface remains inset
+2026-09-09T13:41:28.4498925Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: the active canonical segment crosses the resting inset inside the same hard-edged vertical viewport
+2026-09-09T13:41:28.5193437Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: the LogBox scroll viewport begins below its structural count header
+2026-09-09T13:41:28.6779178Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: the LogBox scroll viewport begins below active Query facet chips
+2026-09-09T13:41:28.7764570Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: inside SearchPill facets remove external chrome and hidden SearchPill falls back safely
+2026-09-09T13:41:28.8773853Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: hidden SearchPill exposes an active search facet in the body-top fallback
+2026-09-09T13:41:28.9561719Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: rail-preview keeps its own bounded extent until a real vertical gesture takes ownership
+2026-09-09T13:41:29.0629057Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: first real vertical gesture activates already-armed committed resources only
+2026-09-09T13:41:29.1336025Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a genuinely unavailable committed virtual page remains fail-closed
+2026-09-09T13:41:29.1958908Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: interaction summaries retain a current visible resource gap after virtual-miss deduplication
+2026-09-09T13:41:29.3219908Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a common fling adopts the idle-ready bank without foreground reads or identity replacement
+2026-09-09T13:41:29.4063769Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: one interaction emits one aggregate ready-ahead summary without per-frame logs
+2026-09-09T13:41:29.5154405Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: interaction diagnostics keep preparation, pointer, and ballistic scopes explicit
+2026-09-09T13:41:29.6423779Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: a no-scroll pointer summary cannot inherit an older ballistic velocity
+2026-09-09T13:41:29.7476617Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: a boundary-suppressed framework handoff has one no-ballistic terminal classification
+2026-09-09T13:41:29.8728938Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: page resource commits do not change full virtual extent or restart ballistic metrics
+2026-09-09T13:41:29.9773465Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: RED: a row-height geometry generation keeps the same logical page anchor and scroll owner
+2026-09-09T13:41:30.0252980Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: deferred exact-page presentation during ballistic preserves scroll identities and geometry
+2026-09-09T13:41:30.1137839Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_logbox_viewport_test.dart: only a signed backward update asks for an immediate reverse page
+2026-09-09T13:41:31.6361014Z ##[group]✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart: structural dashboard changes preserve the rail controller, position and physics
+2026-09-09T13:41:31.6376583Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=0, target=0, delta=0
+2026-09-09T13:41:31.6378307Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6379978Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6381673Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6383286Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6384906Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6386852Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=6, target=6, delta=0
+2026-09-09T13:41:31.6388405Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6390157Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6391686Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6393213Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6394835Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6396738Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=6, target=6, delta=0
+2026-09-09T13:41:31.6398315Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6400820Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6402537Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6418966Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6420632Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6421908Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=6, target=6, delta=0
+2026-09-09T13:41:31.6422833Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6423733Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6424935Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=11, target=11, delta=0
+2026-09-09T13:41:31.6426423Z Carousel fling: raw=0.0px/s, effective=0.0px/s, itemExtent=52.45, speed=0.00 items/s, band=nearest, maxStep=0, projected=100000, target=100000, delta=0
+2026-09-09T13:41:31.6428138Z ##[endgroup]
+2026-09-09T13:41:31.6715085Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: renders applied category and partner chips and removes one facet
+2026-09-09T13:41:31.7407690Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: RED: projects focus chips without mutating or removing base-query facets
+2026-09-09T13:41:31.7918074Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: solid facet style uses the canonical avatar color at full opacity
+2026-09-09T13:41:31.8365670Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/presentation/dashboard_query_facet_chips_test.dart: a hidden SearchPill fallback exposes and individually clears live search
+2026-09-09T13:41:32.1681357Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart: all-time availability keeps the rail domain unrestricted
+2026-09-09T13:41:32.1836957Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart: a restricted time filter omits excluded years and months
+2026-09-09T13:41:32.1867596Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/domain/dashboard_temporal_availability_test.dart: broader OR time selections do not accidentally restrict day rails
+2026-09-09T13:41:32.3845333Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: navigation state contains structural identity and no preview lane
+2026-09-09T13:41:32.3975052Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: rail open is structural but settle retention emits no notification
+2026-09-09T13:41:32.4028598Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: stale settle cannot mutate a replaced navigation target
+2026-09-09T13:41:32.4071343Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: July day 31 to June clamps to day 30
+2026-09-09T13:41:32.4104000Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: June day 30 to July preserves day 30
+2026-09-09T13:41:32.4167666Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: year parent navigation preserves retained May and December
+2026-09-09T13:41:32.4197252Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: parent candidate is read-only and uses the exact future key
+2026-09-09T13:41:32.4254683Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: plane transitions preserve semantic child intent
+2026-09-09T13:41:32.4307715Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: settled primary targets stay canonical for axis and mother controls
+2026-09-09T13:41:32.4337301Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: mother offsets fail closed outside the supported calendar range
+2026-09-09T13:41:32.4383224Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: direction changes exact key but preserves time navigation
+2026-09-09T13:41:32.4415529Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: seed demo navigation uses the same structural month intent
+2026-09-09T13:41:32.4567308Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: applying a restricted Query reconciles an excluded current child
+2026-09-09T13:41:32.4610800Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: removing a query restores unrestricted time availability
+2026-09-09T13:41:32.4675307Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: restricted parent navigation wraps excluded years and months
+2026-09-09T13:41:32.4718397Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: restricted month parents wrap through allowed semantic values only
+2026-09-09T13:41:32.4760101Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: a single restricted parent does not create a self-navigation target
+2026-09-09T13:41:32.4813864Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: restricted multi-offsets never resolve back to the current parent
+2026-09-09T13:41:32.4869347Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: direct hierarchy targets reuse the canonical day child scope
+2026-09-09T13:41:32.4918755Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: segmented month offsets wrap within the selected year without carry
+2026-09-09T13:41:32.4987574Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: segmented day offsets wrap within the selected calendar month
+2026-09-09T13:41:32.5049275Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: segmented field cycles respect restricted local availability
+2026-09-09T13:41:32.5092291Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/time_navigation/dashboard_time_navigation_controller_test.dart: one experimental fling stays anchored while each crossing publishes
+2026-09-09T13:41:32.7956662Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: memoizes the exact canonical QueryKey object
+2026-09-09T13:41:32.8090215Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: month parent catalog precomputes exact day keys and labels
+2026-09-09T13:41:32.8127339Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: year parent catalog preserves Hungarian month labels
+2026-09-09T13:41:32.8173070Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: SUM catalog is an explicit retained year plus-minus twelve window
+2026-09-09T13:41:32.8250529Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: restricted availability removes excluded years and months from rail data
+2026-09-09T13:41:32.8273551Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: a single restricted value remains stationary instead of duplicating
+2026-09-09T13:41:32.8297074Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: three consecutive restricted months wrap in both logical directions
+2026-09-09T13:41:32.8328544Z ✅ /home/runner/work/exptv2/exptv2/test/features/dashboard/motion/dashboard_semantic_catalog_test.dart: rejects an incompatible parent and child kind
+2026-09-09T13:41:33.7134332Z ✅ /home/runner/work/exptv2/exptv2/test/shared/presentation/fluvi_slide_up_sheet_test.dart: reports reverse completion only after the sheet layer is removed
+2026-09-09T13:41:33.7566825Z ✅ /home/runner/work/exptv2/exptv2/test/shared/presentation/fluvi_slide_up_sheet_test.dart: uses one slide-up layer with a sticky footer and releases hits after close
+2026-09-09T13:41:33.7726234Z 
+2026-09-09T13:41:33.7733007Z 🎉 417 tests passed.
+2026-09-09T13:41:33.8531166Z Post job cleanup.
+2026-09-09T13:41:33.8535077Z ##[start-action display=Run subosito/flutter-action@v2;id=__cab9b0ea-b667-4a1f-a9fb-cc944eeefc5e.__subosito_flutter-action]
+2026-09-09T13:41:33.8661140Z Post job cleanup.
+2026-09-09T13:41:33.8664592Z ##[start-action display=Cache pub dependencies;id=__cab9b0ea-b667-4a1f-a9fb-cc944eeefc5e.__subosito_flutter-action.cache-pub]
+2026-09-09T13:41:34.0810078Z Post job cleanup.
+2026-09-09T13:41:34.2211599Z Cache hit occurred on the primary key flutter-pub-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0-3da74abe0bcb4ea3ee040ccd40bcdef95f40382992cc63b2474d58c085587002, not saving cache.
+2026-09-09T13:41:34.2291374Z ##[end-action id=__cab9b0ea-b667-4a1f-a9fb-cc944eeefc5e.__subosito_flutter-action.cache-pub;outcome=success;conclusion=success;duration_ms=362]
+2026-09-09T13:41:34.2294382Z ##[start-action display=Cache Flutter;id=__cab9b0ea-b667-4a1f-a9fb-cc944eeefc5e.__subosito_flutter-action.cache-flutter]
+2026-09-09T13:41:34.2330937Z Post job cleanup.
+2026-09-09T13:41:34.3674157Z Cache hit occurred on the primary key flutter-linux-stable-3.41.4-x64-ff37bef603469fb030f2b72995ab929ccfc227f0, not saving cache.
+2026-09-09T13:41:34.3735192Z ##[end-action id=__cab9b0ea-b667-4a1f-a9fb-cc944eeefc5e.__subosito_flutter-action.cache-flutter;outcome=success;conclusion=success;duration_ms=143]
+2026-09-09T13:41:34.3744026Z ##[end-action id=__cab9b0ea-b667-4a1f-a9fb-cc944eeefc5e.__subosito_flutter-action;outcome=success;conclusion=success;duration_ms=520]
+2026-09-09T13:41:34.3809873Z Post job cleanup.
+2026-09-09T13:41:34.4669096Z [command]/usr/bin/git version
+2026-09-09T13:41:34.4712590Z git version 2.55.0
+2026-09-09T13:41:34.4752451Z Temporarily overriding HOME='/home/runner/work/_temp/ee34e435-3579-4d99-8229-455da454e49c' before making global git config changes
+2026-09-09T13:41:34.4754219Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-09T13:41:34.4759493Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/exptv2/exptv2
+2026-09-09T13:41:34.4798128Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-09T13:41:34.4833785Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-09T13:41:34.5085449Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-09T13:41:34.5114298Z http.https://github.com/.extraheader
+2026-09-09T13:41:34.5125891Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-09-09T13:41:34.5167839Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-09T13:41:34.5449450Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-09T13:41:34.5498570Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-09T13:41:34.5950013Z Cleaning up orphan processes

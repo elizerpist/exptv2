@@ -1,0 +1,28 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+SOURCE_HEAD=174ad84156186aab9bd2bad49ecd9ed823ef0a27
+SOURCE_PARENT=aa61242c4b933ad9d650361ae1014d67fd184186
+SOURCE_REF=fix/avatar-target-liveness-codex-20260909
+INDEX_SHA256=c2f02eabcb08f634fa27c6ca80af716906ce1a2e7ca37edaad9ad1f01cb657e4
+ARTIFACT symbols storage=jsonl_shards records=9957 bytes=4211852
+ARTIFACT refs storage=jsonl_shards records=71917 bytes=23263419
+ARTIFACT edges storage=jsonl_shards records=21341 bytes=7509455
+ARTIFACT changed-impact storage=json records=45 bytes=655375
+First graph generation: 57 artifact hashes captured
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+SOURCE_HEAD=174ad84156186aab9bd2bad49ecd9ed823ef0a27
+SOURCE_PARENT=aa61242c4b933ad9d650361ae1014d67fd184186
+SOURCE_REF=fix/avatar-target-liveness-codex-20260909
+INDEX_SHA256=c2f02eabcb08f634fa27c6ca80af716906ce1a2e7ca37edaad9ad1f01cb657e4
+ARTIFACT symbols storage=jsonl_shards records=9957 bytes=4211852
+ARTIFACT refs storage=jsonl_shards records=71917 bytes=23263419
+ARTIFACT edges storage=jsonl_shards records=21341 bytes=7509455
+ARTIFACT changed-impact storage=json records=45 bytes=655375
+Second graph generation: 57 files exactly equal
+SOURCE_HEAD=174ad84156186aab9bd2bad49ecd9ed823ef0a27
+INDEX_SHA256=c2f02eabcb08f634fa27c6ca80af716906ce1a2e7ca37edaad9ad1f01cb657e4

@@ -1,0 +1,14 @@
+{
+  "source_head": "33ee878b070345c336bb73df2b087d9a63c87c5a",
+  "source_parent": "6adeb42c90f9bef91532c4fe74f37404634ad250",
+  "source_ref": "fix/avatar-target-liveness-codex-20260909",
+  "index_sha256": "3f6a36a51bc29c6798752ce7c6005762ae55985d678339aece0f60ef9fb2d48a",
+  "scip_dart_version": "1.6.2",
+  "graph_file_count": 58,
+  "double_generation_exact_hash_match": true,
+  "graph_tooling_tests_passed": 15,
+  "tooling_source_commit": "c8a4996842ec9738c2082a3b953e5ccd7c52cb85",
+  "source_root": "/data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909",
+  "tracked_application_worktree_clean_at_generation": true,
+  "raw_index_committed": false
+}

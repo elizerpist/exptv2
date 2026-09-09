@@ -1,0 +1,21 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 [32m+0[0m: [1m[90mloading test/scip_graph_extractor_test.dart[0m[0m
+00:00 [32m+0[0m: test/scip_graph_extractor_test.dart: ScipGraphExtractor keeps repository definitions and local references only[0m
+00:00 [32m+1[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+2[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+3[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+4[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+5[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+6[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+7[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+8[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+9[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+10[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:00 [32m+11[0m: test/artifact_writer_test.dart: GraphArtifactWriter writes byte-identical canonical outputs for the same graph[0m
+00:01 [32m+12[0m: test/cli_test.dart: query command reports family and test references from graph artifacts[0m
+00:01 [32m+13[0m: test/cli_test.dart: query command reports family and test references from graph artifacts[0m
+00:01 [32m+14[0m: test/cli_test.dart: query command reports family and test references from graph artifacts[0m
+00:04 [32m+15[0m: All tests passed![0m

@@ -1,0 +1,9 @@
+{
+  "source_head": "6adeb42c90f9bef91532c4fe74f37404634ad250",
+  "CI": "FAILED:416passed/1stale existing30m boundary expectation",
+  "native": "passed",
+  "profile": "skipped",
+  "human_apk": "skipped",
+  "graph_generated_but_not_published": true,
+  "final_delivery": false
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "all_assertions_passed": true,
+  "scenario_report_keys": [
+    "I_first_fling",
+    "K_avatar_first_target",
+    "A_summary_sum_year_month",
+    "B_year_month_rail_populated",
+    "C_year_month_rail_empty",
+    "D_month_day_rail_94",
+    "E_month_day_rail_empty",
+    "F_parent_while_rail_open",
+    "G_direction_while_rail_open",
+    "H_pulse_parent_navigation",
+    "J_tenth_fling"
+  ]
+}
