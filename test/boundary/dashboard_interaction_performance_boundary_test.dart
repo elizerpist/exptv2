@@ -527,14 +527,16 @@ void main() {
     );
     expect(
       profileRunner,
-      contains(
-        'profile_run_timeout=(timeout --foreground --signal=TERM '
-        '--kill-after=30s 30m)',
+      matches(
+        RegExp(
+          r'profile_run_timeout=\(timeout --foreground --signal=TERM '
+          r'--kill-after=30s [1-9]\d*m\)',
+        ),
       ),
       reason:
           'A lost VM-service connection must not hold a profile job open, '
-          'but the runner must leave headroom beyond the A–K test deadline '
-          'for its final report and teardown.',
+          'with a finite TERM/kill watchdog. The profile boundary suite '
+          'verifies ordered test, SDK, shell and workflow budget margins.',
     );
     expect(
       profileRunner,
