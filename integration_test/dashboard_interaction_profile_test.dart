@@ -838,7 +838,21 @@ Map<String, Object?> _avatarFirstTargetEvidence({
       .toSet()
       .toList(growable: false);
 
-  final exactPaintTargetHandles = paints
+  final exactRendererPaints = paints
+      .where(
+        (paint) => DashboardProfileReport.hasExactNonemptyAvatarPaint(
+          exactEmpty: paint.exactEmpty,
+          readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
+          richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
+        ),
+      )
+      .toList(growable: false);
+  final phaseAPaints = paints
+      .where(
+        (paint) => !paint.exactEmpty && paint.readablePhaseARowsPainted > 0,
+      )
+      .toList(growable: false);
+  final exactPaintTargetHandles = exactRendererPaints
       .map((paint) => paint.targetHandle)
       .toSet()
       .toList(growable: false);
@@ -892,11 +906,19 @@ Map<String, Object?> _avatarFirstTargetEvidence({
     'motion_lane_observed': motionLaneObserved,
     'pointer_accepted_count': stageCounts['AV|POINTER_ACCEPTED'] ?? 0,
     'preview_accepted_count': stageCounts['AV|PREVIEW_ACCEPTED'] ?? 0,
-    'exact_phase_a_paint_count': paints.length,
-    'exact_phase_a_target_handles': exactPaintTargetHandles,
+    'exact_renderer_paint_count': exactRendererPaints.length,
+    'exact_renderer_target_handles': exactPaintTargetHandles,
+    'exact_renderer_all_nonempty_painted':
+        paints.isNotEmpty && exactRendererPaints.length == paints.length,
+    // Keep these legacy phase-specific fields literal: a rich-only paint is
+    // accepted by the renderer evidence above, but never counted as Phase A.
+    'exact_phase_a_paint_count': phaseAPaints.length,
+    'exact_phase_a_target_handles': phaseAPaints
+        .map((paint) => paint.targetHandle)
+        .toSet()
+        .toList(growable: false),
     'exact_phase_a_all_readable':
-        paints.isNotEmpty &&
-        paints.every((paint) => paint.hasReadablePhaseAPaint),
+        paints.isNotEmpty && phaseAPaints.length == paints.length,
     'latest_exact_paint_matches_visible': latestExactPaintMatchesVisible,
     'latest_exact_paint': latestPaint == null
         ? null
@@ -1466,8 +1488,11 @@ Map<String, Object?> _avatarFinalTargetEvidence(
       _scopeInt(event.scope, 'displayDenominatorScaled100') == denominator;
   final exactPainted =
       paint != null &&
-      !paint.exactEmpty &&
-      paint.hasReadablePhaseAPaint &&
+      DashboardProfileReport.hasExactNonemptyAvatarPaint(
+        exactEmpty: paint.exactEmpty,
+        readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
+        richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
+      ) &&
       paint.targetHandle == physical &&
       paint.queryKey == visible?.queryKey.value &&
       paint.coreRevision == visible?.coreRevision;
@@ -1526,7 +1551,13 @@ Map<String, Object?> _avatarFinalTargetEvidence(
       'AV|VISIBLE_PUBLICATION_ACCEPTED',
     ).where((event) => (event.entryCount ?? 0) > 0).length,
     'nonempty_preview_painted_count': paints
-        .where((p) => !p.exactEmpty && p.hasReadablePhaseAPaint)
+        .where(
+          (paint) => DashboardProfileReport.hasExactNonemptyAvatarPaint(
+            exactEmpty: paint.exactEmpty,
+            readablePhaseARowsPainted: paint.readablePhaseARowsPainted,
+            richPhaseBRowsPainted: paint.richPhaseBRowsPainted,
+          ),
+        )
         .length,
     'final_target_row_count': payload?.logBox.previewRowCount,
     'final_target_exact_painted': exactPainted,
@@ -1572,6 +1603,12 @@ Map<String, Object?> _avatarFinalTargetEvidence(
     'exact_paint_focus_generation': paint?.focusGeneration,
     'exact_paint_presentation_epoch': paint?.presentationEpoch,
     'exact_paint_frame_generation': paint?.frameGeneration,
+    'exact_paint_exact_empty': paint?.exactEmpty,
+    'exact_paint_readable_phase_a_rows_painted':
+        paint?.readablePhaseARowsPainted,
+    'exact_paint_rich_phase_b_rows_painted': paint?.richPhaseBRowsPainted,
+    'exact_paint_core_revision': paint?.coreRevision,
+    'visible_core_revision': visible?.coreRevision,
   };
 }
 

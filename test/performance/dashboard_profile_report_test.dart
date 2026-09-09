@@ -6,6 +6,98 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../integration_test/support/dashboard_profile_report.dart';
 
 void main() {
+  test('Avatar exact renderer accepts a real rich-only nonempty paint', () {
+    expect(
+      DashboardProfileReport.hasExactNonemptyAvatarPaint(
+        exactEmpty: false,
+        readablePhaseARowsPainted: 0,
+        richPhaseBRowsPainted: 3,
+      ),
+      isTrue,
+    );
+  });
+
+  test('Avatar exact renderer accepts a positive Phase-A nonempty paint', () {
+    expect(
+      DashboardProfileReport.hasExactNonemptyAvatarPaint(
+        exactEmpty: false,
+        readablePhaseARowsPainted: 2,
+        richPhaseBRowsPainted: 0,
+      ),
+      isTrue,
+    );
+  });
+
+  test('Avatar exact renderer rejects empty and zero-row paint counters', () {
+    for (final sample in [
+      (empty: true, phaseA: 2, rich: 3),
+      (empty: false, phaseA: 0, rich: 0),
+      (empty: false, phaseA: -1, rich: 3),
+    ]) {
+      expect(
+        DashboardProfileReport.hasExactNonemptyAvatarPaint(
+          exactEmpty: sample.empty,
+          readablePhaseARowsPainted: sample.phaseA,
+          richPhaseBRowsPainted: sample.rich,
+        ),
+        isFalse,
+        reason: '$sample',
+      );
+    }
+  });
+
+  test('Avatar K accepts rich-only exact paints without claiming Phase A', () {
+    final evidence = _avatarFirstTargetEvidence()
+      ..['exact_phase_a_paint_count'] = 0
+      ..['exact_phase_a_target_handles'] = <int>[]
+      ..['exact_phase_a_all_readable'] = false
+      ..['exact_paint_readable_phase_a_rows_painted'] = 0
+      ..['exact_paint_rich_phase_b_rows_painted'] = 1;
+    for (final flight in evidence['flights']! as List) {
+      (flight as Map)
+        ..['exact_paint_readable_phase_a_rows_painted'] = 0
+        ..['exact_paint_rich_phase_b_rows_painted'] = 1;
+    }
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      returnsNormally,
+    );
+  });
+
+  for (final invalid in <String, Map<String, Object?>>{
+    'empty despite claimed final paint': {'exact_paint_exact_empty': true},
+    'zero rows in both renderer phases': {
+      'exact_paint_readable_phase_a_rows_painted': 0,
+      'exact_paint_rich_phase_b_rows_painted': 0,
+    },
+    'negative Phase A despite positive rich rows': {
+      'exact_paint_readable_phase_a_rows_painted': -1,
+      'exact_paint_rich_phase_b_rows_painted': 3,
+    },
+    'negative rich rows despite positive Phase A': {
+      'exact_paint_rich_phase_b_rows_painted': -1,
+    },
+    'missing raw empty flag': {'exact_paint_exact_empty': null},
+    'missing raw paint counters': {
+      'exact_paint_readable_phase_a_rows_painted': null,
+    },
+    'stale painted core revision': {'exact_paint_core_revision': 0},
+    'missing visible core revision': {'visible_core_revision': null},
+    'zero overall renderer paints': {'exact_renderer_paint_count': 0},
+    'not every renderer acknowledgement is nonempty painted': {
+      'exact_renderer_all_nonempty_painted': false,
+    },
+  }.entries) {
+    test('Avatar K rejects ${invalid.key}', () {
+      final evidence = _avatarFirstTargetEvidence()..addAll(invalid.value);
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsStateError,
+      );
+    });
+  }
+
   test('adds exact p50 p90 p95 and p99 frame percentiles', () {
     final summary = <String, dynamic>{
       'frame_build_times': <int>[5000, 1000, 3000, 2000, 4000],
@@ -579,6 +671,9 @@ Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
   'exact_phase_a_paint_count': 1,
   'exact_phase_a_target_handles': <int>[3],
   'exact_phase_a_all_readable': true,
+  'exact_renderer_paint_count': 1,
+  'exact_renderer_target_handles': <int>[3],
+  'exact_renderer_all_nonempty_painted': true,
   'latest_exact_paint_matches_visible': true,
   'budget_progress_painted_count': 1,
   'budget_progress_target_handles': <int>[3],
@@ -682,6 +777,11 @@ Map<String, Object?> _avatarFinalTargetEvidence() => <String, Object?>{
   'nonempty_preview_accepted_count': 2,
   'nonempty_preview_painted_count': 1,
   'final_target_row_count': 1,
+  'exact_paint_exact_empty': false,
+  'exact_paint_readable_phase_a_rows_painted': 1,
+  'exact_paint_rich_phase_b_rows_painted': 0,
+  'exact_paint_core_revision': 1,
+  'visible_core_revision': 1,
   'final_target_exact_painted': true,
   'final_target_progress_painted': true,
   'final_target_header_painted': true,

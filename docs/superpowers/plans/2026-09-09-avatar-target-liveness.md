@@ -62,3 +62,11 @@ Files: integration_test/dashboard_interaction_profile_test.dart, test_driver/das
 - [ ] Completion report distinguishes physically rejected baseline, preserved motion code, automated evidence, and new physical candidate pending USER ONLY.
 
 Final local verification: see evidence/2026-09-09-avatar-target-liveness/local-validation-final.md. The only full-suite failures exactly match fresh baseline:19 presentation plus one separately identified boundary regex. App commit/push and exact-SHA CI/K/APK/graph delivery remain in progress.
+
+## Task4 follow-up — exact renderer evidence after actual CI
+
+Profile174ad841 rejects final exact target3 despite complete matching identity/terminal/pending fields. Before behavior change, factor the existing nonempty paint-readability predicate into the existing pure report owner and reproduce its rejection of a valid rich-only paint. Then accept positive actual Phase A or Phase B rows, export the final raw counts/empty/revision evidence, and keep empty/zero-row/stale/identity/terminal gates strict. Update every affected collector use and label phase-specific metrics truthfully. Profile agent owns integration collector/report/tests; root owns forensic/checklist/CI/APK/graph delivery. No production source edit. Final sourceSHA/APK/SCIP must be regenerated after this profile correction.
+
+Profile correction local implementation and root diff review complete:62 focused tests,4-file format and focused analyzer pass; production delta is empty. Full analyzer and the next exact-SHA CI/K/APK/SCIP delivery remain required.
+
+Full follow-up analyzer now passes with no issues(34.1s). Exact-SHA online delivery follows this profile-only commit.

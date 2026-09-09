@@ -1,6 +1,18 @@
 import 'dart:math' as math;
 
 abstract final class DashboardProfileReport {
+  /// Classifies the actual nonempty renderer counters supplied by Core's
+  /// exact post-paint acknowledgement. Identity is validated separately.
+  static bool hasExactNonemptyAvatarPaint({
+    required bool exactEmpty,
+    required int readablePhaseARowsPainted,
+    required int richPhaseBRowsPainted,
+  }) =>
+      !exactEmpty &&
+      readablePhaseARowsPainted >= 0 &&
+      richPhaseBRowsPainted >= 0 &&
+      (readablePhaseARowsPainted > 0 || richPhaseBRowsPainted > 0);
+
   static const List<String> requiredScenarioMetricKeys = <String>[
     '50th_percentile_frame_build_time_millis',
     '90th_percentile_frame_build_time_millis',
@@ -240,14 +252,14 @@ abstract final class DashboardProfileReport {
     requirePositive('pointer_accepted_count');
     requirePositive('avatar_semantic_crossings');
     requirePositive('preview_accepted_count');
-    requirePositive('exact_phase_a_paint_count');
-    requireTrue('exact_phase_a_all_readable');
+    requirePositive('exact_renderer_paint_count');
+    requireTrue('exact_renderer_all_nonempty_painted');
     requireTrue('latest_exact_paint_matches_visible');
     requirePositive('budget_progress_painted_count');
     requireTrue('budget_progress_matches_exact_paint');
     requirePositive('avatar_motion_summary_count');
 
-    final exactTargets = evidence['exact_phase_a_target_handles'];
+    final exactTargets = evidence['exact_renderer_target_handles'];
     if (exactTargets is! List ||
         exactTargets.isEmpty ||
         exactTargets.any((target) => target is! int)) {
@@ -367,6 +379,31 @@ abstract final class DashboardProfileReport {
     if (query is! String || query.isEmpty) reject('visible_query_digest');
     for (final key in const ['logbox_query_digest', 'canonical_query_digest']) {
       if (evidence[key] != query) reject(key);
+    }
+    final exactEmpty = evidence['exact_paint_exact_empty'];
+    final phaseARows = evidence['exact_paint_readable_phase_a_rows_painted'];
+    final richRows = evidence['exact_paint_rich_phase_b_rows_painted'];
+    if (exactEmpty is! bool) reject('exact_paint_exact_empty');
+    if (phaseARows is! int || phaseARows < 0) {
+      reject('exact_paint_readable_phase_a_rows_painted');
+    }
+    if (richRows is! int || richRows < 0) {
+      reject('exact_paint_rich_phase_b_rows_painted');
+    }
+    if (!hasExactNonemptyAvatarPaint(
+      exactEmpty: exactEmpty,
+      readablePhaseARowsPainted: phaseARows,
+      richPhaseBRowsPainted: richRows,
+    )) {
+      reject('final_target_exact_painted');
+    }
+    final visibleRevision = evidence['visible_core_revision'];
+    if (visibleRevision is! int || visibleRevision < 0) {
+      reject('visible_core_revision');
+    }
+    final paintRevision = evidence['exact_paint_core_revision'];
+    if (paintRevision is! int || paintRevision != visibleRevision) {
+      reject('exact_paint_core_revision');
     }
     for (final key in const [
       'unresolved_pending_candidate_count',

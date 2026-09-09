@@ -1,0 +1,15 @@
+   Woah! You appear to be trying to run flutter as root.
+   We strongly recommend running the flutter tool without superuser privileges.
+  /
+📎
+00:00 +0: loading /data/data/com.termux/files/home/ubuntu/flutteruser/flutterapps/fluvi-avatar-target-liveness-codex-20260909/test/performance/dashboard_profile_report_test.dart
+00:00 +0: Avatar exact renderer accepts a real rich-only nonempty paint
+00:00 +0 -1: Avatar exact renderer accepts a real rich-only nonempty paint [E]
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                           expect
+  package:flutter_test/src/widget_tester.dart 473:18        expect
+  test/performance/dashboard_profile_report_test.dart 10:5  main.<fn>
+  
+00:00 +0 -1: Some tests failed.
