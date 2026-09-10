@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "source_head": "81dcc28d33ff3dc46c88e716d7f89a79e7897a3d",
-  "base_head": "a68e6838911a74fd1c008f12db3be32d0d9abe70",
+  "source_head": "a658c08cee7207b1b1b22d0494f21e56b4e20a64",
+  "base_head": "81dcc28d33ff3dc46c88e716d7f89a79e7897a3d",
   "changed_files": [
     "docs/superpowers/plans/2026-09-10-direction-circle-anomaly-closure.md",
     "integration_test/dashboard_interaction_profile_test.dart",
