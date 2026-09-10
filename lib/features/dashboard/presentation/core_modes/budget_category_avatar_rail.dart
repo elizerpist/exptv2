@@ -1113,6 +1113,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
                 'targetHandle=${awaitingBudgetProgressRaster.targetHandle} '
                 'interactionGeneration='
                 '${awaitingBudgetProgressRaster.interactionGeneration} '
+                'limitPeriod=${DashboardBudgetPresentationController.financialLimitPeriodDiagnosticName(awaitingBudgetProgressRaster.visual.limitKey)} '
                 'visiblePresentationEpoch='
                 '${awaitingBudgetProgressRaster.visiblePresentationEpoch ?? '-'} '
                 'visibleFrameGeneration='
@@ -1458,6 +1459,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         scope:
             'targetHandle=${expectation.targetHandle} '
             'interactionGeneration=${expectation.interactionGeneration} '
+            'limitPeriod=${DashboardBudgetPresentationController.financialLimitPeriodDiagnosticName(expectation.visual.limitKey)} '
             'visiblePresentationEpoch='
             '${expectation.visiblePresentationEpoch ?? '-'} '
             'visibleFrameGeneration=${expectation.visibleFrameGeneration ?? '-'} '
@@ -1490,6 +1492,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         scope:
             'targetHandle=${painted.targetHandle} '
             'interactionGeneration=${painted.interactionGeneration} '
+            'limitPeriod=${DashboardBudgetPresentationController.financialLimitPeriodDiagnosticName(painted.visual.limitKey)} '
             'visiblePresentationEpoch=${painted.visiblePresentationEpoch ?? '-'} '
             'visibleFrameGeneration=${painted.visibleFrameGeneration ?? '-'} '
             'displayNumeratorScaled100='

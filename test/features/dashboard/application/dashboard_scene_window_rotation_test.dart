@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
@@ -49,6 +50,49 @@ void main() {
         window.payloads.map((payload) => payload.queryKey.value).toSet(),
         hasLength(index.frames.length + index.compactZeroFrames.length),
       );
+    },
+  );
+
+  test(
+    'RED direction change records the existing controller-to-visible boundary chain',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      core.selectDirection(TransactionDirection.expense);
+      displayFrames.flush();
+      await pumpEventQueue();
+
+      expect(
+        core.navigation.state.parentQueryScope.direction,
+        LedgerDirection.expense,
+      );
+      final events = FluviDiagnosticLogger.entries;
+      final stages = events.map((event) => event.stage).toSet();
+      expect(stages, contains('DIRECTION_SWITCH_REQUESTED'));
+      expect(stages, contains('DIRECTION_SWITCH_CONTROLLER_MUTATED'));
+      expect(stages, contains('DIRECTION_SWITCH_LIVE_ACCEPTED'));
+      expect(stages, contains('DIRECTION_SWITCH_BUDGET_FANOUT_COMPLETE'));
+      expect(stages, contains('DIRECTION_SWITCH_NAVIGATION_COMMITTED'));
+      expect(stages, contains('DIRECTION_SWITCH_VISIBLE_PUBLISHED'));
+
+      final request = events.firstWhere(
+        (event) => event.stage == 'DIRECTION_SWITCH_REQUESTED',
+      );
+      final visible = events.lastWhere(
+        (event) => event.stage == 'DIRECTION_SWITCH_VISIBLE_PUBLISHED',
+      );
+      expect(request.flowId, visible.flowId);
+      expect(visible.scope, contains('inputToVisibleMicros='));
     },
   );
 

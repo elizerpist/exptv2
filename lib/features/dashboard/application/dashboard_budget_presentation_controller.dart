@@ -1994,6 +1994,18 @@ final class DashboardBudgetPresentationController
         period: const FinancialLimitBaseMonthlyPeriod(),
       );
 
+  /// One diagnostic representation for the scalar financial-limit identity
+  /// carried by the selected progress visual. Renderer acknowledgements use
+  /// this existing presentation owner instead of reproducing period parsing
+  /// in their widgets.
+  static String financialLimitPeriodDiagnosticName(FinancialLimitKey? key) =>
+      switch (key?.period) {
+        FinancialLimitBaseMonthlyPeriod() => 'base-monthly',
+        FinancialLimitMonthOverridePeriod(:final year, :final month) =>
+          'month:$year-${month.toString().padLeft(2, '0')}',
+        null => 'unavailable',
+      };
+
   FinancialLimitDirection get _financialLimitDirection => switch (_direction) {
     LedgerDirection.income => FinancialLimitDirection.income,
     LedgerDirection.expense => FinancialLimitDirection.expense,
@@ -2213,6 +2225,7 @@ final class DashboardBudgetPresentationController
             'generation=${liveAnalysis.interactionGeneration} '
             'targetHandle=${visual.targetHandle} '
             'targetIdentity=${visual.limitKey?.target.runtimeType ?? '-'} '
+            'limitPeriod=${financialLimitPeriodDiagnosticName(visual.limitKey)} '
             'visiblePresentationEpoch=${visible?.presentationEpoch ?? '-'} '
             'visibleFrameGeneration=${visible?.frameGeneration ?? '-'} '
             'modelBindVsyncMicros=$modelBindVsyncMicros '

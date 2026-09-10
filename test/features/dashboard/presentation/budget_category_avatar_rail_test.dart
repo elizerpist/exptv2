@@ -20,6 +20,7 @@ import 'package:fluvi/core/categories/presentation/glossy_category_avatar.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_limit_edit_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_coordinator.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_limit_quick_edit_gesture.dart';
@@ -2600,6 +2601,76 @@ void main() {
   );
 
   testWidgets(
+    'RED month-only temporal change paints the retained selected target with the new limit period',
+    (tester) async {
+      final harness = _MonthCircleRailHarness();
+      addTearDown(harness.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+      var avatarPreviewRequests = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: harness.presentation,
+                onTargetPreview: (_) => avatarPreviewRequests += 1,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final january = harness.presentation.value.selectedLimitVisual;
+      expect(january.targetHandle, 0);
+      expect(
+        january.limitKey!.period,
+        const FinancialLimitMonthOverridePeriod(2026, 1),
+      );
+      expect(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+        findsOneWidget,
+      );
+
+      harness.acceptMonth(2);
+      await tester.pump();
+      await tester.pump();
+
+      final february = harness.presentation.value.selectedLimitVisual;
+      expect(february.targetHandle, january.targetHandle);
+      expect(
+        february.limitKey!.period,
+        const FinancialLimitMonthOverridePeriod(2026, 2),
+      );
+      expect(february.displayNumeratorScaled100, 75);
+      expect(february.displayDenominatorScaled100, 150);
+      expect(avatarPreviewRequests, 0);
+
+      for (final stage in <String>[
+        'BUDGET_PROGRESS_BOUND',
+        'BUDGET_PROGRESS_WIDGET_BUILT',
+        'BUDGET_PROGRESS_PAINTED',
+      ]) {
+        final event = FluviDiagnosticLogger.entries.lastWhere(
+          (entry) => entry.stage == stage,
+        );
+        expect(event.scope, contains('targetHandle=0'));
+        expect(
+          event.scope,
+          contains('limitPeriod=month:2026-02'),
+          reason:
+              '$stage must acknowledge the exact month-specific limit model; '
+              'a generic progress event is not selected-circle paint proof.',
+        );
+      }
+    },
+  );
+
+  testWidgets(
     'FPA: two successive production Avatar targets receive distinct current Budget progress paint acknowledgements',
     (tester) async {
       final harness = _InteractiveRailHarness(
@@ -2889,6 +2960,66 @@ final class _InteractiveRailHarness {
   }
 }
 
+final class _MonthCircleRailHarness {
+  _MonthCircleRailHarness()
+    : categoryCollection = ValueNotifier<List<FluviCategory>>(_categories(1)),
+      visibleFrame = ValueNotifier<DashboardVisibleFrame?>(_interactiveFrame()),
+      direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      ),
+      navigation = DashboardNavigationController(
+        initialDate: DateTime.utc(2026, 1, 10),
+        initialDirection: LedgerDirection.expense,
+      ),
+      snapshot = _monthCircleSnapshot() {
+    presentation = DashboardBudgetPresentationController(
+      categoryCollection: categoryCollection,
+      visibleFrame: visibleFrame,
+      liveInteractions: liveInteractions,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+    );
+  }
+
+  final ValueNotifier<List<FluviCategory>> categoryCollection;
+  final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
+  final TransactionDirectionController direction;
+  final DashboardNavigationController navigation;
+  final DashboardLiveInteractionCoordinator liveInteractions =
+      DashboardLiveInteractionCoordinator();
+  final PreparedBudgetLimitSnapshot snapshot;
+  late final DashboardBudgetPresentationController presentation;
+
+  void acceptMonth(int month) {
+    final candidate = navigation.temporalCandidate(
+      plane: TimePlane.month,
+      isRailOpen: false,
+      year: 2026,
+      month: month,
+      coreRevision: snapshot.coreRevision,
+    );
+    liveInteractions.accept(
+      source: DashboardLiveInteractionSource.temporalSelector,
+      coreRevision: snapshot.coreRevision,
+      direction: LedgerDirection.expense,
+      temporalCandidate: candidate,
+      category: null,
+      partner: null,
+      normalizedSearch: null,
+    );
+  }
+
+  void dispose() {
+    presentation.dispose();
+    categoryCollection.dispose();
+    visibleFrame.dispose();
+    direction.dispose();
+    navigation.dispose();
+    liveInteractions.dispose();
+  }
+}
+
 PreparedBudgetLimitSnapshot _snapshotForCategories(
   List<FluviCategory> categories,
 ) {
@@ -2948,6 +3079,34 @@ PreparedBudgetLimitSnapshot _twoTargetPositiveSnapshotForCategories() {
   cells[5] = const PreparedBudgetLimitCell(
     actualScaled100: 75000,
     limitScaled100: 100000,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['category-0'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
+PreparedBudgetLimitSnapshot _monthCircleSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // Prepared slices are SUM, YEAR, January, February, ...; aggregate is
+  // handle 0. Both months have a positive but distinct target model.
+  cells[4] = const PreparedBudgetLimitCell(
+    actualScaled100: 50,
+    limitScaled100: 100,
+  );
+  cells[6] = const PreparedBudgetLimitCell(
+    actualScaled100: 75,
+    limitScaled100: 150,
   );
   PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
     orderedCategoryIds: const <String>['category-0'],

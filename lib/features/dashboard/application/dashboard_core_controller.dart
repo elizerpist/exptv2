@@ -86,6 +86,25 @@ enum _DashboardForegroundDirectProducer { summaryTime, budgetAvatar }
 const _collectAvatarPacingCorrelationDiagnostics =
     bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS') || kDebugMode;
 
+/// Bounded diagnostic correlation for one direction switch. This is not a
+/// navigation, query, visible-frame, or Budget authority; it only lets the
+/// existing owners expose their first elapsed boundary in one trace.
+final class _DirectionSwitchDiagnosticTrace {
+  const _DirectionSwitchDiagnosticTrace({
+    required this.id,
+    required this.requestedAtMicros,
+    required this.direction,
+    required this.targetQueryKey,
+  });
+
+  final int id;
+  final int requestedAtMicros;
+  final LedgerDirection direction;
+  final LedgerQueryKey targetQueryKey;
+
+  String get flowId => 'direction-switch:$id';
+}
+
 /// The runtime and presentation owners can expose the same immutable index
 /// through distinct wrapper references during an initial attach. Live-resource
 /// safety is revision/query/generation identity, not Dart object identity.
@@ -1010,6 +1029,8 @@ final class DashboardCoreController {
   Completer<void>? _seedReadyCompleter;
   bool _bootstrapped = false;
   bool _disposed = false;
+  int _directionSwitchDiagnosticGeneration = 0;
+  _DirectionSwitchDiagnosticTrace? _pendingDirectionSwitchDiagnosticTrace;
   int _logBoxTextLayoutPreparedRows = 0;
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
@@ -7977,15 +7998,78 @@ final class DashboardCoreController {
       template: targetTemplate,
       availability: targetAvailability,
     );
+    final directionTrace = _collectAvatarPacingCorrelationDiagnostics
+        ? _DirectionSwitchDiagnosticTrace(
+            id: ++_directionSwitchDiagnosticGeneration,
+            requestedAtMicros: developer.Timeline.now,
+            direction: ledgerDirection,
+            targetQueryKey: candidate.parentQueryKey,
+          )
+        : null;
+    if (directionTrace != null) {
+      _pendingDirectionSwitchDiagnosticTrace = directionTrace;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'DIRECTION_SWITCH_REQUESTED',
+          flowId: directionTrace.flowId,
+          direction: ledgerDirection.name,
+          queryKey: candidate.parentQueryKey.value,
+          coreRevision: coreRevision,
+          scope: 'inputToRequestMicros=0',
+        ),
+      );
+    }
     // Direction is direct user intent for the Budget projection. Its owner
     // must change before accepting the live frame: structural LogBox scene
     // coverage below may be held, while Header/Progress/Partition/Rhythm bind
     // this exact accepted direction in the current turn.
     transactionDirection.select(direction);
-    _acceptLiveInteraction(
+    if (directionTrace != null) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'DIRECTION_SWITCH_CONTROLLER_MUTATED',
+          flowId: directionTrace.flowId,
+          direction: ledgerDirection.name,
+          queryKey: candidate.parentQueryKey.value,
+          coreRevision: coreRevision,
+          scope:
+              'inputToControllerMicros=${developer.Timeline.now - directionTrace.requestedAtMicros}',
+        ),
+      );
+    }
+    final liveInteraction = _acceptLiveInteraction(
       source: DashboardLiveInteractionSource.direction,
       temporalCandidate: candidate,
     );
+    if (directionTrace != null) {
+      final inputToLiveMicros =
+          developer.Timeline.now - directionTrace.requestedAtMicros;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'DIRECTION_SWITCH_LIVE_ACCEPTED',
+          flowId: directionTrace.flowId,
+          direction: ledgerDirection.name,
+          queryKey: candidate.parentQueryKey.value,
+          coreRevision: liveInteraction.coreRevision,
+          scope:
+              'interactionGeneration=${liveInteraction.generation} '
+              'inputToLiveMicros=$inputToLiveMicros',
+        ),
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'DIRECTION_SWITCH_BUDGET_FANOUT_COMPLETE',
+          flowId: directionTrace.flowId,
+          direction: ledgerDirection.name,
+          queryKey: candidate.parentQueryKey.value,
+          coreRevision: liveInteraction.coreRevision,
+          scope:
+              'interactionGeneration=${liveInteraction.generation} '
+              'inputToBudgetFanoutMicros='
+              '${developer.Timeline.now - directionTrace.requestedAtMicros}',
+        ),
+      );
+    }
     final activeIndex = presentation.index;
     if (activeIndex != null) {
       _requestTimePreviewLiveRowResources(activeIndex);
@@ -8019,6 +8103,21 @@ final class DashboardCoreController {
             candidate,
             availability: targetAvailability,
           );
+          if (directionTrace != null) {
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'DIRECTION_SWITCH_NAVIGATION_COMMITTED',
+                flowId: directionTrace.flowId,
+                direction: ledgerDirection.name,
+                queryKey: candidate.parentQueryKey.value,
+                coreRevision: coreRevision,
+                scope:
+                    'inputToNavigationCommitMicros='
+                    '${developer.Timeline.now - directionTrace.requestedAtMicros} '
+                    'cacheHit=$cacheHit',
+              ),
+            );
+          }
           // Direction selection reads the other half of the single applied
           // directional Query set. It never copies/mutates filters across
           // directions; the pair is already embedded in this one index.
@@ -12863,6 +12962,28 @@ final class DashboardCoreController {
       DashboardInteractionEvent.visibleFramePublished,
       context: _diagnosticContext(frame: frame),
       source: frame.mode.name,
+    );
+    final directionTrace = _pendingDirectionSwitchDiagnosticTrace;
+    if (directionTrace == null ||
+        frame.direction != directionTrace.direction ||
+        frame.queryKey != directionTrace.targetQueryKey) {
+      return;
+    }
+    _pendingDirectionSwitchDiagnosticTrace = null;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'DIRECTION_SWITCH_VISIBLE_PUBLISHED',
+        flowId: directionTrace.flowId,
+        direction: frame.direction.name,
+        queryKey: frame.queryKey.value,
+        coreRevision: frame.coreRevision,
+        scope:
+            'inputToVisibleMicros='
+            '${developer.Timeline.now - directionTrace.requestedAtMicros} '
+            'navigationEpoch=${frame.navigationEpoch} '
+            'presentationEpoch=${frame.presentationEpoch} '
+            'frameGeneration=${frame.frameGeneration}',
+      ),
     );
   }
 
