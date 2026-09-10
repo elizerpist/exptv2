@@ -1,5 +1,45 @@
 # Milestone commits
 
+## 2026-09-10 — Avatar render-pacing physical performance milestone
+
+- Behavioural milestone:
+  `6e962187e90e2a82431b1f91b224d2b52a6e0ba7` —
+  `test(profile): correlate Avatar fling render pacing`.
+- Parent: `33ee878b070345c336bb73df2b087d9a63c87c5a`.
+- Runtime APK marker: `fluvi_HUMAN_DIAGNOSTIC_6e96218.apk`.
+- Status: **PHYSICALLY ACCEPTED BY THE USER ON ANDROID AS THE CURRENT
+  PREFERRED OVERALL-PERFORMANCE AND AVATAR-MOTION FLOOR.** This supersedes
+  e8 as the preferred physical anchor while retaining e8 and earlier
+  milestones as historical evidence and regression guards.
+- Physically accepted behavior:
+  - overall application interaction performance is good;
+  - Avatar fling motion is good;
+  - Avatar target filtering and data publication are working;
+  - Avatar limit/progress behavior works during Avatar selection changes.
+- Known open defects, explicitly excluded from acceptance and requiring
+  focused repair:
+  1. income ↔ expense direction switching physically hitches/stutters;
+  2. changing month without changing the selected Avatar can leave that
+     selected target's limit-circle unpopulated until a later Avatar change.
+- Permanent regression policy:
+  - no repair may degrade Avatar, Time, or overall physical interaction;
+  - do not trade semantic/publication correctness for smoothness, or
+    smoothness for delayed correctness;
+  - preserve Avatar's controller, ScrollPosition, physics identity,
+    latest-wins final-target correctness, and zero unintended per-tick
+    repository/index/canonical work;
+  - do not reinterpret transient supersession/rejection diagnostics as an
+    Avatar bug without a surviving/current/final-target failure;
+  - preserve Time behavior unless a surviving final-target defect is proven;
+  - use `6e962187e90e2a82431b1f91b224d2b52a6e0ba7` as the before/after
+    performance comparison source until a user physically accepts a later
+    APK.
+- Rollback/performance anchor:
+  `6e962187e90e2a82431b1f91b224d2b52a6e0ba7`.
+- This registration is documentation of user physical evidence, not a claim
+  that the two listed defects are accepted behavior or that a later repair has
+  been physically validated.
+
 ## 2026-09-09 — Foreground Phase-A direct-manipulation performance milestone
 
 - Behavioural milestone:
