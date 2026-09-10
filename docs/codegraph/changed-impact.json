@@ -1,9 +1,11 @@
 {
   "schema_version": 1,
-  "source_head": "2bc25c91f4639e3e3484a9e379fed04a6e584ae4",
-  "base_head": "532c8cd75ff6c1fa00d25a99106ae7b7d5006dae",
+  "source_head": "a68e6838911a74fd1c008f12db3be32d0d9abe70",
+  "base_head": "2bc25c91f4639e3e3484a9e379fed04a6e584ae4",
   "changed_files": [
-    "integration_test/dashboard_interaction_profile_test.dart"
+    "docs/superpowers/plans/2026-09-10-direction-circle-anomaly-closure.md",
+    "integration_test/dashboard_interaction_profile_test.dart",
+    "test/boundary/dashboard_avatar_profile_boundary_test.dart"
   ],
   "candidate_changed_symbols": [
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
@@ -41,7 +43,8 @@
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/sum().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/surfaceMatches().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/targetHandlesFor().",
-    "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/visit()."
+    "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/visit().",
+    "scip-dart pub fluvi 0.1.0+1 test/boundary/`dashboard_avatar_profile_boundary_test.dart`/main()."
   ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
   "direct_reference_consumers": [
