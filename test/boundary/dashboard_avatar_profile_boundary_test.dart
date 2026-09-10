@@ -136,4 +136,30 @@ void main() {
       expect(report, isNot(contains(forbidden)));
     }
   });
+
+  test(
+    'G waits for its final direction visible publication before evidence',
+    () {
+      final source = File(
+        'integration_test/dashboard_interaction_profile_test.dart',
+      ).readAsStringSync();
+      final finalExpenseTap = source.indexOf(
+        "await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));",
+        source.indexOf(
+          'final directionOnlySequence = _lastDiagnosticSequence();',
+        ),
+      );
+      final evidence = source.indexOf(
+        'final evidence = _directionCircleEvidence(',
+        finalExpenseTap,
+      );
+
+      expect(finalExpenseTap, greaterThanOrEqualTo(0));
+      expect(evidence, greaterThan(finalExpenseTap));
+      expect(
+        source.substring(finalExpenseTap, evidence),
+        contains('await _waitForDirectionVisiblePublication('),
+      );
+    },
+  );
 }

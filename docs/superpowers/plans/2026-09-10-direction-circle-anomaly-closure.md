@@ -48,8 +48,9 @@ GitHub Actions Android human diagnostic APK, separate SCIP tooling branch.
 | TM-01 | User §13 | current Time/presentation/rail chain | A positive-limit non-aggregate category remains selected across a month-only change and the period/target-identical circle is actually painted. | observed baseline and final regression | DONE |
 | TD-01 | User §14 | existing Time diagnostic finalizer | One logical Time flight has one authoritative final summary, or intentionally typed non-final/final summaries; Time production behavior remains untouched. | observed RED/GREEN diagnostic test + source audit | DONE |
 | AL-01 | User §15 | source + retained evidence | Every retained anomaly family receives one explicit ledger status: harmful repaired, expected no change, diagnostic repaired, or bounded missing evidence. | full log/source inventory | DONE |
-| PF-01 | User §§18–19 | existing profile harness | Direction target/circle equality closes G false green without worsening existing direction/Avatar/Time measured boundaries. | strengthened profile + protected suites | PARTIAL — strengthened Android A–K job pending |
-| DL-01 | User §§20–21 | CI/release/tooling | Atomic commits, exact CI/APK source identity, and matching final SCIP graph or explicit unavailable status. | remote ref, Actions, APK hash, manifest | PARTIAL — final commit/build/graph pending |
+| PF-01 | User §§18–19 | existing profile harness | Direction target/circle equality closes G false green without worsening existing direction/Avatar/Time measured boundaries. | strengthened profile + protected suites | PARTIAL — Android A–K run 34516795061 proved target/circle identity but failed before the asynchronous `DIRECTION_SWITCH_VISIBLE_PUBLISHED` boundary was observed |
+| PF-02 | CI run 34516795061 evidence | `integration_test/dashboard_interaction_profile_test.dart` | Scenario G captures evidence only after the matching final Expense visible-frame publication; it must neither synthesize a publication nor issue an Avatar input while waiting. | focused regression plus Android A–K artifact has `G_direction_while_rail_open` | PARTIAL — local RED/GREEN boundary test, profile-report validation, Core publication test and analyzer are green; Android A–K artifact pending |
+| DL-01 | User §§20–21 | CI/release/tooling | Atomic commits, exact CI/APK source identity, and matching final SCIP graph or explicit unavailable status. | remote ref, Actions, APK hash, manifest | PARTIAL — human APK and exact-source manifest are present for `2bc25c91`; the A–K profile is red and the tooling branch root analyzer currently includes its nested Dart package without that package's dependencies |
 | PH-01 | User §21 | physical device | Exact final APK is physically accepted. | user-only validation | BLOCKED — USER ONLY |
 
 ## Architecture card
@@ -65,6 +66,15 @@ GitHub Actions Android human diagnostic APK, separate SCIP tooling branch.
 
 No new owner is permitted. The repair must use the existing direction replacement
 callback/seam after the selected authority has been independently confirmed.
+
+## PF-02 compact architecture gate
+
+| Gate | Decision |
+| --- | --- |
+| Existing owner | `integration_test/dashboard_interaction_profile_test.dart` owns profile-only polling and report assembly; `DashboardCoreController._onVisibleFramePublished` remains the only production visible-publication owner. |
+| Shared mechanism | Reuse `_diagnosticEventsAfter` and the existing bounded `WidgetTester` polling pattern from `_waitForAvatarExactPaint`; do not create an app-level waiter, state owner, or synthetic diagnostic event. |
+| State boundary | The helper observes the existing diagnostic ring and pumps the test binding only. It writes no application, presentation, carousel, or financial state. |
+| Focused verification | The profile boundary test must fail without the matching-event wait; `dashboard_profile_report_test.dart` retains the fail-closed count validation; Android A–K validates the actual artifact. |
 
 ## Execution tasks
 
@@ -114,7 +124,8 @@ callback/seam after the selected authority has been independently confirmed.
 3. Keep `mind_slider_no_live_list` separate unless a shared root cause is
    proven; never make a direction-circle patch carry unrelated Mind behavior.
 4. Strengthen profile scenario G to require distinct remembered direction
-   targets and actual circle-paint identity.
+   targets, actual circle-paint identity, and the matching final
+   `DIRECTION_SWITCH_VISIBLE_PUBLISHED` event before it snapshots evidence.
 
 ### Task 5 — Delivery
 

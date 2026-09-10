@@ -1336,11 +1336,16 @@ Future<void> _runMeasuredScenario(
         targetHandle: rememberedExpenseTargetHandle,
         requirePaintedChrome: true,
       );
+      final directionOnlyEvents = await _waitForDirectionVisiblePublication(
+        tester,
+        sequenceBefore: directionOnlySequence,
+        direction: LedgerDirection.expense,
+      );
       final evidence = _directionCircleEvidence(
         tester,
         controller,
         rememberedTargetHandle: rememberedExpenseTargetHandle,
-        directionOnlyEvents: _diagnosticEventsAfter(directionOnlySequence),
+        directionOnlyEvents: directionOnlyEvents,
       );
       DashboardProfileReport.validateDirectionCircleEvidence(evidence);
       onDirectionCircleEvidence(evidence);
@@ -1416,6 +1421,33 @@ Future<void> _waitForBudgetAvatarTarget(
     'Budget Avatar did not reach one physical/presentation/circle identity: '
     'expected=$targetHandle selected=${rail.presentation.value.selectedHandle} '
     'visual=${rail.presentation.value.selectedLimitVisual.targetHandle}.',
+  );
+}
+
+/// Waits for the Core-owned visible-frame acknowledgement after the final
+/// direction-only input. This observes the existing diagnostic ring only; it
+/// neither drives a carousel command nor publishes application state.
+Future<List<FluviDiagnosticEvent>> _waitForDirectionVisiblePublication(
+  WidgetTester tester, {
+  required int sequenceBefore,
+  required LedgerDirection direction,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  while (DateTime.now().isBefore(deadline)) {
+    final events = _diagnosticEventsAfter(sequenceBefore);
+    final visiblePublished = events.any(
+      (event) =>
+          event.stage == 'DIRECTION_SWITCH_VISIBLE_PUBLISHED' &&
+          event.direction == direction.name,
+    );
+    if (visiblePublished) return events;
+    await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  fail(
+    'Direction switch did not publish its final visible frame: '
+    'direction=${direction.name} '
+    'stages=${_diagnosticEventsAfter(sequenceBefore).map((event) => event.stage).toSet()}.',
   );
 }
 
