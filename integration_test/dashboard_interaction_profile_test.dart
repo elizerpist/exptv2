@@ -1297,9 +1297,13 @@ Future<void> _runMeasuredScenario(
       await _flingSummary(tester, const Offset(-180, 0));
     case _ProfileScenario.directionWhileRailOpen:
       // Direction-local Budget selections are part of the production target
-      // contract. Establish an Expense category through the existing command
-      // seam, return to Income's aggregate, then switch only direction back
-      // to Expense. The final leg intentionally has no Avatar input.
+      // contract. First enter Budget through the same production header
+      // gesture used by the Avatar scenario: this scenario starts on the
+      // Time rail, so no Budget Avatar owner exists until that gesture.
+      // Establish an Expense category through the existing command seam,
+      // return to Income's aggregate, then switch only direction back to
+      // Expense. The final leg intentionally has no Avatar input.
+      await _showBudgetAvatarRail(tester);
       await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
       await _settle(tester);
       const rememberedExpenseTargetHandle = 4;
