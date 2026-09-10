@@ -1264,7 +1264,6 @@ Future<void> _runMeasuredScenario(
           tester,
           controller,
           offset: Offset(flight.isEven ? -420 : 420, 0),
-          avatarMotionLaneObserved: avatarMotionLaneObserved,
         );
         final evidence = await _waitForAvatarExactPaint(
           tester,
@@ -1365,16 +1364,11 @@ Future<void> _flingBudgetAvatar(
   WidgetTester tester,
   DashboardCoreController controller, {
   required Offset offset,
-  required bool Function() avatarMotionLaneObserved,
 }) async {
   final carousel = find.byKey(const ValueKey('budget-target-avatar-carousel'));
   expect(carousel, findsOneWidget);
   await tester.fling(carousel, offset, 2200);
-  await _waitForBudgetAvatarMotionEnd(
-    tester,
-    controller,
-    motionLaneObserved: avatarMotionLaneObserved,
-  );
+  await _waitForBudgetAvatarMotionEnd(tester, controller);
 }
 
 /// Waits only for the existing production owners to agree. It never invokes
@@ -1507,27 +1501,22 @@ Map<String, Object?> _directionCircleEvidence(
 
 Future<void> _waitForBudgetAvatarMotionEnd(
   WidgetTester tester,
-  DashboardCoreController controller, {
-  required bool Function() motionLaneObserved,
-}) async {
+  DashboardCoreController controller,
+) async {
   final deadline = DateTime.now().add(const Duration(seconds: 8));
-  var consecutiveIdleSamples = 0;
+  var motionWasActive = false;
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump();
     final active = controller.isMotionLaneActive(
       DashboardMotionLane.budgetAvatar,
     );
-    if (motionLaneObserved() && !active) {
-      consecutiveIdleSamples += 1;
-      if (consecutiveIdleSamples >= 3) return;
-    } else {
-      consecutiveIdleSamples = 0;
-    }
+    motionWasActive = motionWasActive || active;
+    if (motionWasActive && !active) return;
     await Future<void>.delayed(const Duration(milliseconds: 16));
   }
   fail(
     'Budget Avatar motion did not complete: '
-    'motionLaneObserved=${motionLaneObserved()} '
+    'motionWasActive=$motionWasActive '
     'active=${controller.isMotionLaneActive(DashboardMotionLane.budgetAvatar)}.',
   );
 }

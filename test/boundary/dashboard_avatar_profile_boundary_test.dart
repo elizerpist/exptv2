@@ -162,4 +162,31 @@ void main() {
       );
     },
   );
+
+  test('K waits for each fling-local Avatar motion transition', () {
+    final source = File(
+      'integration_test/dashboard_interaction_profile_test.dart',
+    ).readAsStringSync();
+    final fling = source.substring(
+      source.indexOf('Future<void> _flingBudgetAvatar('),
+      source.indexOf('Future<void> _waitForBudgetAvatarTarget('),
+    );
+    final motionWait = source.substring(
+      source.indexOf('Future<void> _waitForBudgetAvatarMotionEnd('),
+      source.indexOf('Future<Map<String, Object?>> _waitForAvatarExactPaint('),
+    );
+
+    expect(fling, isNot(contains('avatarMotionLaneObserved')));
+    expect(motionWait, contains('var motionWasActive = false;'));
+    expect(
+      motionWait.indexOf('motionWasActive = motionWasActive || active;'),
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      motionWait.indexOf('if (motionWasActive && !active) return;'),
+      greaterThan(
+        motionWait.indexOf('motionWasActive = motionWasActive || active;'),
+      ),
+    );
+  });
 }

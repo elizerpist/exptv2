@@ -49,7 +49,8 @@ GitHub Actions Android human diagnostic APK, separate SCIP tooling branch.
 | TD-01 | User §14 | existing Time diagnostic finalizer | One logical Time flight has one authoritative final summary, or intentionally typed non-final/final summaries; Time production behavior remains untouched. | observed RED/GREEN diagnostic test + source audit | DONE |
 | AL-01 | User §15 | source + retained evidence | Every retained anomaly family receives one explicit ledger status: harmful repaired, expected no change, diagnostic repaired, or bounded missing evidence. | full log/source inventory | DONE |
 | PF-01 | User §§18–19 | existing profile harness | Direction target/circle equality closes G false green without worsening existing direction/Avatar/Time measured boundaries. | strengthened profile + protected suites | PARTIAL — Android A–K run 34516795061 proved target/circle identity but failed before the asynchronous `DIRECTION_SWITCH_VISIBLE_PUBLISHED` boundary was observed |
-| PF-02 | CI run 34516795061 evidence | `integration_test/dashboard_interaction_profile_test.dart` | Scenario G captures evidence only after the matching final Expense visible-frame publication; it must neither synthesize a publication nor issue an Avatar input while waiting. | focused regression plus Android A–K artifact has `G_direction_while_rail_open` | PARTIAL — local RED/GREEN boundary test, profile-report validation, Core publication test and analyzer are green; Android A–K artifact pending |
+| PF-02 | CI run 34516795061 evidence | `integration_test/dashboard_interaction_profile_test.dart` | Scenario G captures evidence only after the matching final Expense visible-frame publication; it must neither synthesize a publication nor issue an Avatar input while waiting. | focused regression plus Android A–K artifact has `G_direction_while_rail_open` | PARTIAL — local RED/GREEN boundary test, profile-report validation, Core publication test and analyzer are green; Android run 34526894486 stopped earlier at K before it reached G |
+| PF-03 | CI run 34526894486 evidence | `integration_test/dashboard_interaction_profile_test.dart` | Each K Avatar fling observes that fling's own Budget Avatar motion start and then one inactive sample; final target correctness remains owned by the existing exact-paint/identity evidence, rather than a timing-sensitive arbitrary idle-frame count. | observed RED boundary test, focused suite/analyzer, Android A–K artifact | PARTIAL — observed RED, 134 focused tests and analyzer green; Android A–K artifact pending |
 | DL-01 | User §§20–21 | CI/release/tooling | Atomic commits, exact CI/APK source identity, and matching final SCIP graph or explicit unavailable status. | remote ref, Actions, APK hash, manifest | PARTIAL — human APK and exact-source manifest are present for `2bc25c91`; the A–K profile is red and the tooling branch root analyzer currently includes its nested Dart package without that package's dependencies |
 | PH-01 | User §21 | physical device | Exact final APK is physically accepted. | user-only validation | BLOCKED — USER ONLY |
 
@@ -75,6 +76,15 @@ callback/seam after the selected authority has been independently confirmed.
 | Shared mechanism | Reuse `_diagnosticEventsAfter` and the existing bounded `WidgetTester` polling pattern from `_waitForAvatarExactPaint`; do not create an app-level waiter, state owner, or synthetic diagnostic event. |
 | State boundary | The helper observes the existing diagnostic ring and pumps the test binding only. It writes no application, presentation, carousel, or financial state. |
 | Focused verification | The profile boundary test must fail without the matching-event wait; `dashboard_profile_report_test.dart` retains the fail-closed count validation; Android A–K validates the actual artifact. |
+
+## PF-03 compact architecture gate
+
+| Gate | Decision |
+| --- | --- |
+| Existing owner | The integration profile harness owns the wait. `DashboardCoreController` remains the sole owner of the Budget Avatar motion-lane state. |
+| Shared mechanism | Reuse the existing bounded `WidgetTester` polling and `isMotionLaneActive` query. Do not add a timer, application listener, or production-state acknowledgement. |
+| State boundary | The helper observes one fling-local start/idle transition and writes no application, carousel, presentation, or financial state. The existing exact-paint evidence still proves the final rendered target. |
+| Focused verification | A source-boundary test must distinguish a fling-local observation from the prior suite-global latch; Android A–K is the acceptance evidence. |
 
 ## Execution tasks
 
