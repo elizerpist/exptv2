@@ -7722,6 +7722,41 @@ final class DashboardCoreController {
       navigation.state,
       candidate,
     );
+    final promoted = presentation.promotePreparedExperimentalTemporalCandidate(
+      candidate: candidate,
+      presentationEpoch: target.presentationEpoch,
+      frameGeneration: target.frameGeneration,
+    );
+    final canRestore =
+        !promoted &&
+        allowPreparedRestore &&
+        presentation.canRestorePaintedExperimentalTemporalCandidate(candidate);
+    final restored =
+        canRestore &&
+        _restoreLatestPaintedSegmentedScene(target) &&
+        presentation.restoreAndCommitPaintedExperimentalTemporalCandidate(
+          candidate,
+        );
+    if (!promoted && !restored) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SUMMARY_SETTLE_REJECTED_UNPAINTED_OR_SUPERSEDED',
+          queryKey: target.queryKey,
+          coreRevision: target.coreRevision,
+          scope:
+              'component=${component.name} '
+              'generation=${target.interactionGeneration} '
+              'presentationEpoch=${target.presentationEpoch} '
+              'frameGeneration=${target.frameGeneration}',
+        ),
+      );
+      return false;
+    }
+    // A flight summary is terminal diagnostic evidence, not a speculative
+    // pre-settle snapshot. In particular, a stale duplicate settle can reach
+    // this method after the first successful promotion; it must retain its
+    // rejection event without emitting a contradictory second summary for the
+    // same flight generation.
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'TM|FLIGHT_SUMMARY',
@@ -7755,36 +7790,6 @@ final class DashboardCoreController {
             'settleVisualDeltaCount=0',
       ),
     );
-    final promoted = presentation.promotePreparedExperimentalTemporalCandidate(
-      candidate: candidate,
-      presentationEpoch: target.presentationEpoch,
-      frameGeneration: target.frameGeneration,
-    );
-    final canRestore =
-        !promoted &&
-        allowPreparedRestore &&
-        presentation.canRestorePaintedExperimentalTemporalCandidate(candidate);
-    final restored =
-        canRestore &&
-        _restoreLatestPaintedSegmentedScene(target) &&
-        presentation.restoreAndCommitPaintedExperimentalTemporalCandidate(
-          candidate,
-        );
-    if (!promoted && !restored) {
-      FluviDiagnosticLogger.log(
-        FluviDiagnosticEvent(
-          stage: 'SUMMARY_SETTLE_REJECTED_UNPAINTED_OR_SUPERSEDED',
-          queryKey: target.queryKey,
-          coreRevision: target.coreRevision,
-          scope:
-              'component=${component.name} '
-              'generation=${target.interactionGeneration} '
-              'presentationEpoch=${target.presentationEpoch} '
-              'frameGeneration=${target.frameGeneration}',
-        ),
-      );
-      return false;
-    }
     if (restored) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(

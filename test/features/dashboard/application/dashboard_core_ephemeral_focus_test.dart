@@ -2010,6 +2010,81 @@ void main() {
   );
 
   testWidgets(
+    'RED TIME DIAGNOSTICS: one settled flight emits one authoritative final summary',
+    (tester) async {
+      final core = DashboardCoreController(
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+      );
+      addTearDown(core.dispose);
+      addTearDown(FluviDiagnosticLogger.clear);
+      await core.bootstrap();
+      final origin = core.navigation.state;
+      final candidate = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: candidate,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.value!),
+      );
+
+      FluviDiagnosticLogger.clear();
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+      expect(core.navigation.state.dayCursor, candidate.dayCursor);
+
+      // A stale duplicate release must retain its rejection diagnostic, but
+      // cannot manufacture a second, contradictory final flight summary.
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: candidate,
+        component: DashboardTemporalAnchorComponent.day,
+      );
+      await tester.pump();
+
+      final summaries = FluviDiagnosticLogger.entries
+          .where(
+            (event) =>
+                event.stage == 'TM|FLIGHT_SUMMARY' &&
+                event.flowId == 'flight:1',
+          )
+          .toList(growable: false);
+      expect(summaries, hasLength(1));
+      expect(summaries.single.scope, contains('canonicalSettleCommits=1'));
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) =>
+              event.stage == 'SUMMARY_SETTLE_REJECTED_UNPAINTED_OR_SUPERSEDED',
+        ),
+        hasLength(1),
+        reason:
+            'The stale guard remains observable; only premature summary '
+            'emission is repaired.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED TIME VISUAL OUTCOME: a target superseded before a display frame is explicitly classified as coalesced',
     (tester) async {
       final core = DashboardCoreController(
