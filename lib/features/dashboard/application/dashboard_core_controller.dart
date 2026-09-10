@@ -12971,7 +12971,7 @@ final class DashboardCoreController {
     final directionTrace = _pendingDirectionSwitchDiagnosticTrace;
     if (directionTrace == null ||
         frame.direction != directionTrace.direction ||
-        frame.queryKey != directionTrace.targetQueryKey) {
+        frame.parentQueryKey != directionTrace.targetQueryKey) {
       return;
     }
     _pendingDirectionSwitchDiagnosticTrace = null;

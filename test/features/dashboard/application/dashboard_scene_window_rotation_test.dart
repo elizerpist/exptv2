@@ -65,6 +65,9 @@ void main() {
       );
       addTearDown(core.dispose);
       await core.bootstrap();
+      core.toggleRail();
+      displayFrames.flush();
+      await pumpEventQueue();
       FluviDiagnosticLogger.clear();
       addTearDown(FluviDiagnosticLogger.clear);
 
