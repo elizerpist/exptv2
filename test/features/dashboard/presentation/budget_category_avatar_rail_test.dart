@@ -2601,6 +2601,123 @@ void main() {
   );
 
   testWidgets(
+    'RED direction-domain replacement atomically rebases the physical Avatar to the remembered direction target',
+    (tester) async {
+      final harness = _DirectionCircleRailHarness();
+      final navigation = BudgetTargetAvatarRailController();
+      addTearDown(harness.dispose);
+      addTearDown(navigation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+      var avatarPreviewAcceptances = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: harness.presentation,
+                navigationController: navigation,
+                onTargetPreviewAccepted: (targetHandle) async {
+                  avatarPreviewAcceptances += 1;
+                  harness.presentation.setTargetHandle(targetHandle);
+                  return true;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Income starts on its aggregate. Expense then remembers its own
+      // non-aggregate target through the real rail command/preview path.
+      expect(
+        harness.presentation.value.liveSelection.direction,
+        LedgerDirection.income,
+      );
+      expect(harness.presentation.value.selectedHandle, 0);
+      harness.direction.select(TransactionDirection.expense);
+      await tester.pump();
+      final selectExpenseCategory = navigation.animateToTargetHandle(
+        1,
+        source: BudgetTargetNavigationSource.categoryList,
+      );
+      await tester.pumpAndSettle();
+      await selectExpenseCategory;
+      await tester.pump();
+      expect(harness.presentation.value.selectedHandle, 1);
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarArtwork>(
+              find.byKey(const ValueKey('budget-target-avatar-center')),
+            )
+            .selectedTargetHandle,
+        1,
+      );
+
+      // Returning to income restores its separately remembered aggregate and
+      // physically centres that aggregate because the expense category is not
+      // in the income catalogue.
+      harness.direction.select(TransactionDirection.income);
+      await tester.pump();
+      expect(harness.presentation.value.selectedHandle, 0);
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarArtwork>(
+              find.byKey(const ValueKey('budget-target-avatar-center')),
+            )
+            .selectedTargetHandle,
+        0,
+      );
+
+      final previewsBeforeDirectionOnlySwitch = avatarPreviewAcceptances;
+      FluviDiagnosticLogger.clear();
+
+      // This final transition deliberately has no Avatar pointer, scroll,
+      // preview or nudge. The remembered Expense category must become the one
+      // physical, semantic and painted selected target in this visible frame.
+      harness.direction.select(TransactionDirection.expense);
+      await tester.pump();
+      await tester.pump();
+
+      final centred = tester.widget<BudgetCategoryAvatarArtwork>(
+        find.byKey(const ValueKey('budget-target-avatar-center')),
+      );
+      final chrome = tester.widget<BudgetCategoryAvatarSelectionChrome>(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+      );
+      final visual = harness.presentation.value.selectedLimitVisual;
+      expect(
+        harness.presentation.value.liveSelection.direction,
+        LedgerDirection.expense,
+      );
+      expect(harness.presentation.value.selectedHandle, 1);
+      expect(centred.selectedTargetHandle, 1);
+      expect(visual.targetHandle, 1);
+      expect(chrome.visualIdentity?.targetHandle, 1);
+      expect(chrome.visualIdentity?.paintsProgressChrome, isTrue);
+      expect(
+        avatarPreviewAcceptances,
+        previewsBeforeDirectionOnlySwitch,
+        reason: 'The direction-domain rebase must not simulate Avatar input.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'BUDGET_PROGRESS_IDENTITY_MISMATCH',
+        ),
+        isEmpty,
+      );
+      final painted = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_PROGRESS_PAINTED',
+      );
+      expect(painted.scope, contains('targetHandle=1'));
+    },
+  );
+
+  testWidgets(
     'RED month-only temporal change paints the retained selected target with the new limit period',
     (tester) async {
       final harness = _MonthCircleRailHarness();
@@ -2667,6 +2784,104 @@ void main() {
               'a generic progress event is not selected-circle paint proof.',
         );
       }
+    },
+  );
+
+  testWidgets(
+    'month-only change paints the retained non-aggregate Avatar with its new period model',
+    (tester) async {
+      final harness = _MonthCircleRailHarness(
+        initialSnapshot: _nonAggregateMonthCircleSnapshot(),
+      );
+      final navigation = BudgetTargetAvatarRailController();
+      addTearDown(harness.dispose);
+      addTearDown(navigation.dispose);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+      var avatarPreviewAcceptances = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 378,
+              height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+              child: BudgetTargetAvatarRail(
+                presentation: harness.presentation,
+                navigationController: navigation,
+                onTargetPreviewAccepted: (targetHandle) async {
+                  avatarPreviewAcceptances += 1;
+                  harness.presentation.setTargetHandle(targetHandle);
+                  return true;
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final selectCategory = navigation.animateToTargetHandle(
+        1,
+        source: BudgetTargetNavigationSource.categoryList,
+      );
+      await tester.pumpAndSettle();
+      await selectCategory;
+      await tester.pump();
+
+      final january = harness.presentation.value.selectedLimitVisual;
+      expect(january.targetHandle, 1);
+      expect(
+        january.limitKey!.period,
+        const FinancialLimitMonthOverridePeriod(2026, 1),
+      );
+      expect(january.displayNumeratorScaled100, 25);
+      expect(january.displayDenominatorScaled100, 100);
+      expect(
+        tester
+            .widget<BudgetCategoryAvatarSelectionChrome>(
+              find.byKey(
+                const ValueKey('budget-category-avatar-selection-chrome'),
+              ),
+            )
+            .visualIdentity
+            ?.targetHandle,
+        1,
+      );
+
+      final previewsBeforeMonthOnlyChange = avatarPreviewAcceptances;
+      FluviDiagnosticLogger.clear();
+      harness.acceptMonth(2);
+      await tester.pump();
+      await tester.pump();
+
+      final february = harness.presentation.value.selectedLimitVisual;
+      final chrome = tester.widget<BudgetCategoryAvatarSelectionChrome>(
+        find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+      );
+      expect(harness.presentation.value.selectedHandle, 1);
+      expect(february.targetHandle, 1);
+      expect(
+        february.limitKey!.period,
+        const FinancialLimitMonthOverridePeriod(2026, 2),
+      );
+      expect(february.displayNumeratorScaled100, 90);
+      expect(february.displayDenominatorScaled100, 200);
+      expect(chrome.visualIdentity?.targetHandle, 1);
+      expect(
+        chrome.visualIdentity?.limitKey?.period,
+        const FinancialLimitMonthOverridePeriod(2026, 2),
+      );
+      expect(
+        avatarPreviewAcceptances,
+        previewsBeforeMonthOnlyChange,
+        reason: 'A period refresh must not require an Avatar event.',
+      );
+      final painted = FluviDiagnosticLogger.entries.lastWhere(
+        (event) => event.stage == 'BUDGET_PROGRESS_PAINTED',
+      );
+      expect(painted.scope, contains('targetHandle=1'));
+      expect(painted.scope, contains('limitPeriod=month:2026-02'));
     },
   );
 
@@ -2886,6 +3101,16 @@ List<FluviCategory> _categories(int count) => List<FluviCategory>.generate(
   ),
 );
 
+FluviCategory _category(String id, String name) => FluviCategory(
+  id: id,
+  name: name,
+  colorId: 'color_01',
+  iconId: 'icon_01',
+  isSystemUncategorized: false,
+  createdAtUtcMs: 1,
+  updatedAtUtcMs: 1,
+);
+
 final class _Harness {
   _Harness(List<FluviCategory> categories)
     : categoryCollection = ValueNotifier<List<FluviCategory>>(categories),
@@ -2961,7 +3186,7 @@ final class _InteractiveRailHarness {
 }
 
 final class _MonthCircleRailHarness {
-  _MonthCircleRailHarness()
+  _MonthCircleRailHarness({PreparedBudgetLimitSnapshot? initialSnapshot})
     : categoryCollection = ValueNotifier<List<FluviCategory>>(_categories(1)),
       visibleFrame = ValueNotifier<DashboardVisibleFrame?>(_interactiveFrame()),
       direction = TransactionDirectionController(
@@ -2971,7 +3196,7 @@ final class _MonthCircleRailHarness {
         initialDate: DateTime.utc(2026, 1, 10),
         initialDirection: LedgerDirection.expense,
       ),
-      snapshot = _monthCircleSnapshot() {
+      snapshot = initialSnapshot ?? _monthCircleSnapshot() {
     presentation = DashboardBudgetPresentationController(
       categoryCollection: categoryCollection,
       visibleFrame: visibleFrame,
@@ -3017,6 +3242,43 @@ final class _MonthCircleRailHarness {
     direction.dispose();
     navigation.dispose();
     liveInteractions.dispose();
+  }
+}
+
+/// Real direction, Budget presentation and rail inputs for the direction
+/// rebase regression. The two direction banks intentionally expose distinct
+/// category identities while sharing the aggregate at handle zero.
+final class _DirectionCircleRailHarness {
+  _DirectionCircleRailHarness()
+    : categoryCollection = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('income-category', 'Income category'),
+        _category('expense-category', 'Expense category'),
+      ]),
+      visibleFrame = ValueNotifier<DashboardVisibleFrame?>(_interactiveFrame()),
+      direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.income,
+      ),
+      snapshot = _directionCircleSnapshot() {
+    presentation = DashboardBudgetPresentationController(
+      categoryCollection: categoryCollection,
+      visibleFrame: visibleFrame,
+      transactionDirection: direction,
+      snapshotForCurrentFrame: () => snapshot,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+    );
+  }
+
+  final ValueNotifier<List<FluviCategory>> categoryCollection;
+  final ValueNotifier<DashboardVisibleFrame?> visibleFrame;
+  final TransactionDirectionController direction;
+  final PreparedBudgetLimitSnapshot snapshot;
+  late final DashboardBudgetPresentationController presentation;
+
+  void dispose() {
+    presentation.dispose();
+    categoryCollection.dispose();
+    visibleFrame.dispose();
+    direction.dispose();
   }
 }
 
@@ -3093,6 +3355,35 @@ PreparedBudgetLimitSnapshot _twoTargetPositiveSnapshotForCategories() {
   );
 }
 
+PreparedBudgetLimitSnapshot _directionCircleSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // January is slice two. Both aggregate and the selected category paint a
+  // genuine circle, so a missing chrome cannot be mistaken for no-limit UI.
+  cells[4] = const PreparedBudgetLimitCell(
+    actualScaled100: 50000,
+    limitScaled100: 100000,
+  );
+  cells[5] = const PreparedBudgetLimitCell(
+    actualScaled100: 75000,
+    limitScaled100: 100000,
+  );
+  PreparedBudgetLimitDirectionBank bank(String categoryId) =>
+      PreparedBudgetLimitDirectionBank(
+        orderedCategoryIds: <String>[categoryId],
+        cells: cells,
+      );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank('income-category'),
+    expenseBank: bank('expense-category'),
+  );
+}
+
 PreparedBudgetLimitSnapshot _monthCircleSnapshot() {
   final cells = List<PreparedBudgetLimitCell>.filled(
     28,
@@ -3107,6 +3398,34 @@ PreparedBudgetLimitSnapshot _monthCircleSnapshot() {
   cells[6] = const PreparedBudgetLimitCell(
     actualScaled100: 75,
     limitScaled100: 150,
+  );
+  PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
+    orderedCategoryIds: const <String>['category-0'],
+    cells: cells,
+  );
+  return PreparedBudgetLimitSnapshot(
+    coreRevision: 1,
+    yearWindowStart: 2026,
+    yearWindowEndInclusive: 2026,
+    incomeBank: bank(),
+    expenseBank: bank(),
+  );
+}
+
+PreparedBudgetLimitSnapshot _nonAggregateMonthCircleSnapshot() {
+  final cells = List<PreparedBudgetLimitCell>.filled(
+    28,
+    const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
+  );
+  // Slice two is January and slice three is February. Handle one is the
+  // selected category, deliberately using distinct period-specific values.
+  cells[5] = const PreparedBudgetLimitCell(
+    actualScaled100: 25,
+    limitScaled100: 100,
+  );
+  cells[7] = const PreparedBudgetLimitCell(
+    actualScaled100: 90,
+    limitScaled100: 200,
   );
   PreparedBudgetLimitDirectionBank bank() => PreparedBudgetLimitDirectionBank(
     orderedCategoryIds: const <String>['category-0'],

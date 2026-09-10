@@ -58,6 +58,12 @@ abstract final class DashboardProfileReport {
         'post-renderer Avatar final target',
       ),
     );
+    validateDirectionCircleEvidence(
+      requireMap(
+        reports['G_direction_while_rail_open']!['direction_circle'],
+        'G direction circle',
+      ),
+    );
     validateMotionIsolationGate(reports);
   }
 
@@ -533,6 +539,44 @@ abstract final class DashboardProfileReport {
         final key = '${surface}_display_${value}_scaled100';
         if (evidence[key] != expected) reject(key);
       }
+    }
+  }
+
+  /// G intentionally gives Income and Expense different remembered Avatar
+  /// targets. A direction-only switch must rebase the physical carousel to
+  /// the new direction's authoritative presentation target before its circle
+  /// paints; a later Avatar input may not repair this assertion.
+  static void validateDirectionCircleEvidence(Map<String, Object?> evidence) {
+    Never reject(String key) => throw StateError(
+      'Direction-circle profile evidence $key is invalid: ${evidence[key]}.',
+    );
+    if (evidence['direction'] != 'expense' ||
+        evidence['visible_query_direction'] != 'expense') {
+      reject('direction');
+    }
+    final remembered = evidence['remembered_direction_target_handle'];
+    if (remembered is! int || remembered <= 0) {
+      reject('remembered_direction_target_handle');
+    }
+    for (final key in const <String>[
+      'physical_avatar_target_handle',
+      'presentation_selected_target_handle',
+      'selected_limit_visual_target_handle',
+      'selected_circle_widget_target_handle',
+      'selected_circle_painted_target_handle',
+    ]) {
+      if (evidence[key] != remembered) reject(key);
+    }
+    if (evidence['circle_visible'] != true) reject('circle_visible');
+    if (evidence['direction_visible_publication_count'] is! int ||
+        (evidence['direction_visible_publication_count'] as int) < 1) {
+      reject('direction_visible_publication_count');
+    }
+    if (evidence['avatar_preview_request_count_after_direction'] != 0) {
+      reject('avatar_preview_request_count_after_direction');
+    }
+    if (evidence['identity_mismatch_count_after_direction'] != 0) {
+      reject('identity_mismatch_count_after_direction');
     }
   }
 

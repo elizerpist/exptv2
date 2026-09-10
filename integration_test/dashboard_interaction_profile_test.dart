@@ -11,7 +11,9 @@ import 'package:fluvi/core/demo_data/demo_data_bridge.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_key_digest.dart';
+import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
@@ -352,6 +354,7 @@ Future<Map<String, dynamic>> _runScenario(
   final avatarFixture = isAvatarFirstTarget
       ? _verifyAvatarNonemptyFixture(tester, controller)
       : <String, Object?>{};
+  Map<String, Object?>? directionCircleEvidence;
   var timeInteractionCount = 0;
   var avatarMotionLaneObserved = false;
   void collectAvatarPaint() {
@@ -442,6 +445,9 @@ Future<Map<String, dynamic>> _runScenario(
               'completed_flights': List<Map<String, Object?>>.of(avatarFlights),
               'current_flight': evidence,
             };
+          },
+          onDirectionCircleEvidence: (evidence) {
+            directionCircleEvidence = evidence;
           },
         );
       } finally {
@@ -670,11 +676,21 @@ Future<Map<String, dynamic>> _runScenario(
     'visible_revision': visible.coreRevision,
     'verbose_flow_enabled': false,
     'avatar_first_target': ?avatarFirstTargetEvidence,
+    'direction_circle': ?directionCircleEvidence,
   });
   binding.reportData!
     ..remove(frameKey)
     ..remove(timelineKey);
   DashboardProfileReport.validateRequiredScenarioMetrics(report);
+  if (scenario == _ProfileScenario.directionWhileRailOpen) {
+    DashboardProfileReport.validateDirectionCircleEvidence(
+      directionCircleEvidence ??
+          (throw StateError(
+            'G must retain direction-circle evidence for distinct remembered '
+            'Avatar targets.',
+          )),
+    );
+  }
   binding.reportData![scenario.reportKey] = report;
 
   _expectFrameInvariant(controller);
@@ -1234,6 +1250,7 @@ Future<void> _runMeasuredScenario(
   required Map<String, Object?> avatarFixture,
   required int Function() timeInteractionCount,
   required ValueChanged<Map<String, Object?>> onAvatarEvidence,
+  required ValueChanged<Map<String, Object?>> onDirectionCircleEvidence,
 }) async {
   switch (scenario) {
     case _ProfileScenario.avatarFirstTarget:
@@ -1279,10 +1296,50 @@ Future<void> _runMeasuredScenario(
     case _ProfileScenario.parentWhileRailOpen:
       await _flingSummary(tester, const Offset(-180, 0));
     case _ProfileScenario.directionWhileRailOpen:
+      // Direction-local Budget selections are part of the production target
+      // contract. Establish an Expense category through the existing command
+      // seam, return to Income's aggregate, then switch only direction back
+      // to Expense. The final leg intentionally has no Avatar input.
       await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
       await _settle(tester);
+      const rememberedExpenseTargetHandle = 4;
+      final rail = tester.widget<BudgetTargetAvatarRail>(
+        find.byType(BudgetTargetAvatarRail),
+      );
+      final navigation = rail.navigationController;
+      expect(navigation, isNotNull);
+      await navigation!.animateToTargetHandle(
+        rememberedExpenseTargetHandle,
+        source: BudgetTargetNavigationSource.categoryList,
+      );
+      await _waitForBudgetAvatarTarget(
+        tester,
+        targetHandle: rememberedExpenseTargetHandle,
+        requirePaintedChrome: true,
+      );
       await tester.tap(find.byKey(const ValueKey('fluvi-income-button')));
       await _settle(tester);
+      await _waitForBudgetAvatarTarget(
+        tester,
+        targetHandle: 0,
+        requirePaintedChrome: true,
+      );
+
+      final directionOnlySequence = _lastDiagnosticSequence();
+      await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
+      await _waitForBudgetAvatarTarget(
+        tester,
+        targetHandle: rememberedExpenseTargetHandle,
+        requirePaintedChrome: true,
+      );
+      final evidence = _directionCircleEvidence(
+        tester,
+        controller,
+        rememberedTargetHandle: rememberedExpenseTargetHandle,
+        directionOnlyEvents: _diagnosticEventsAfter(directionOnlySequence),
+      );
+      DashboardProfileReport.validateDirectionCircleEvidence(evidence);
+      onDirectionCircleEvidence(evidence);
     case _ProfileScenario.pulseWithParentNavigation:
       await tester.tap(find.byKey(const ValueKey('fluvi-income-button')));
       await tester.pump(const Duration(milliseconds: 16));
@@ -1309,6 +1366,107 @@ Future<void> _flingBudgetAvatar(
     controller,
     motionLaneObserved: avatarMotionLaneObserved,
   );
+}
+
+/// Waits only for the existing production owners to agree. It never invokes
+/// a rail command or gesture, so the final direction-only assertion cannot be
+/// made green by an Avatar nudge during polling.
+Future<void> _waitForBudgetAvatarTarget(
+  WidgetTester tester, {
+  required int targetHandle,
+  required bool requirePaintedChrome,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  while (DateTime.now().isBefore(deadline)) {
+    final rail = tester.widget<BudgetTargetAvatarRail>(
+      find.byType(BudgetTargetAvatarRail),
+    );
+    final centreFinder = find.byKey(
+      const ValueKey('budget-target-avatar-center'),
+    );
+    final chromeFinder = find.byKey(
+      const ValueKey('budget-category-avatar-selection-chrome'),
+    );
+    final centred = centreFinder.evaluate().length == 1
+        ? tester.widget<BudgetCategoryAvatarArtwork>(centreFinder)
+        : null;
+    final chrome = chromeFinder.evaluate().length == 1
+        ? tester.widget<BudgetCategoryAvatarSelectionChrome>(chromeFinder)
+        : null;
+    final matches =
+        rail.presentation.value.selectedHandle == targetHandle &&
+        rail.presentation.value.selectedLimitVisual.targetHandle ==
+            targetHandle &&
+        centred?.selectedTargetHandle == targetHandle &&
+        (!requirePaintedChrome ||
+            (chrome?.visualIdentity?.targetHandle == targetHandle &&
+                chrome!.visualIdentity!.paintsProgressChrome));
+    if (matches) return;
+    await tester.pump();
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+  final rail = tester.widget<BudgetTargetAvatarRail>(
+    find.byType(BudgetTargetAvatarRail),
+  );
+  fail(
+    'Budget Avatar did not reach one physical/presentation/circle identity: '
+    'expected=$targetHandle selected=${rail.presentation.value.selectedHandle} '
+    'visual=${rail.presentation.value.selectedLimitVisual.targetHandle}.',
+  );
+}
+
+Map<String, Object?> _directionCircleEvidence(
+  WidgetTester tester,
+  DashboardCoreController controller, {
+  required int rememberedTargetHandle,
+  required List<FluviDiagnosticEvent> directionOnlyEvents,
+}) {
+  final rail = tester.widget<BudgetTargetAvatarRail>(
+    find.byType(BudgetTargetAvatarRail),
+  );
+  final centred = tester.widget<BudgetCategoryAvatarArtwork>(
+    find.byKey(const ValueKey('budget-target-avatar-center')),
+  );
+  final chrome = tester.widget<BudgetCategoryAvatarSelectionChrome>(
+    find.byKey(const ValueKey('budget-category-avatar-selection-chrome')),
+  );
+  FluviDiagnosticEvent? lastFor(String stage) {
+    for (final event in directionOnlyEvents.reversed) {
+      if (event.stage == stage) return event;
+    }
+    return null;
+  }
+
+  final painted = lastFor('BUDGET_PROGRESS_PAINTED');
+  final visiblePublished = directionOnlyEvents
+      .where((event) => event.stage == 'DIRECTION_SWITCH_VISIBLE_PUBLISHED')
+      .length;
+  final previewRequests = directionOnlyEvents
+      .where((event) => event.stage == 'AV|PREVIEW_REQUESTED')
+      .length;
+  final mismatches = directionOnlyEvents
+      .where((event) => event.stage == 'BUDGET_PROGRESS_IDENTITY_MISMATCH')
+      .length;
+  return <String, Object?>{
+    'direction': rail.presentation.value.liveSelection.direction.name,
+    'remembered_direction_target_handle': rememberedTargetHandle,
+    'physical_avatar_target_handle': centred.selectedTargetHandle,
+    'presentation_selected_target_handle':
+        rail.presentation.value.selectedHandle,
+    'selected_limit_visual_target_handle':
+        rail.presentation.value.selectedLimitVisual.targetHandle,
+    'selected_circle_widget_target_handle': chrome.visualIdentity?.targetHandle,
+    'selected_circle_painted_target_handle': _scopeInt(
+      painted?.scope,
+      'targetHandle',
+    ),
+    'circle_visible': chrome.visualIdentity?.paintsProgressChrome == true,
+    'direction_visible_publication_count': visiblePublished,
+    'avatar_preview_request_count_after_direction': previewRequests,
+    'identity_mismatch_count_after_direction': mismatches,
+    'visible_query_direction': controller.visibleFrames.value?.direction.name,
+    'paint_scope': painted?.scope,
+  };
 }
 
 Future<void> _waitForBudgetAvatarMotionEnd(

@@ -133,6 +133,32 @@ void main() {
     );
   });
 
+  test(
+    'G direction profile requires the remembered target to reach circle paint without Avatar input',
+    () {
+      expect(
+        () => DashboardProfileReport.validateDirectionCircleEvidence(
+          _directionCircleEvidence(),
+        ),
+        returnsNormally,
+      );
+
+      final split = _directionCircleEvidence()
+        ..['physical_avatar_target_handle'] = 0;
+      expect(
+        () => DashboardProfileReport.validateDirectionCircleEvidence(split),
+        throwsStateError,
+      );
+
+      final nudged = _directionCircleEvidence()
+        ..['avatar_preview_request_count_after_direction'] = 1;
+      expect(
+        () => DashboardProfileReport.validateDirectionCircleEvidence(nudged),
+        throwsStateError,
+      );
+    },
+  );
+
   test('Avatar exact renderer accepts a real rich-only nonempty paint', () {
     expect(
       DashboardProfileReport.hasExactNonemptyAvatarPaint(
@@ -761,6 +787,8 @@ Map<String, Object?> _completeSuiteResponse() => {
       'startup_index_metrics': _startupMetrics(),
       if (key == 'K_avatar_first_target')
         'avatar_first_target': _avatarFirstTargetEvidence(),
+      if (key == 'G_direction_while_rail_open')
+        'direction_circle': _directionCircleEvidence(),
     },
   'dashboard_avatar_final_target_evidence': _avatarFinalTargetEvidence(),
   DashboardProfileReport.suiteCompletionKey: {
@@ -768,6 +796,22 @@ Map<String, Object?> _completeSuiteResponse() => {
     'all_assertions_passed': true,
     'scenario_report_keys': DashboardProfileReport.requiredSuiteScenarioKeys,
   },
+};
+
+Map<String, Object?> _directionCircleEvidence() => <String, Object?>{
+  'direction': 'expense',
+  'visible_query_direction': 'expense',
+  'remembered_direction_target_handle': 4,
+  'physical_avatar_target_handle': 4,
+  'presentation_selected_target_handle': 4,
+  'selected_limit_visual_target_handle': 4,
+  'selected_circle_widget_target_handle': 4,
+  'selected_circle_painted_target_handle': 4,
+  'circle_visible': true,
+  'direction_visible_publication_count': 1,
+  'avatar_preview_request_count_after_direction': 0,
+  'identity_mismatch_count_after_direction': 0,
+  'paint_scope': 'targetHandle=4',
 };
 
 Map<String, Object?> _startupMetrics() => <String, Object?>{

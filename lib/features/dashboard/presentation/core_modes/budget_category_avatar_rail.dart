@@ -124,6 +124,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   late final CenteredCarouselSpec _spec;
   List<_PreparedBudgetTargetAvatar> _items =
       const <_PreparedBudgetTargetAvatar>[];
+  String? _installedCatalogDirection;
   int? _lastProgressIdentityMismatchSignature;
   BudgetLimitQuickEditGestureController? _quickEdit;
   late final BudgetTargetAvatarPreviewPublisher _previewPublisher;
@@ -292,16 +293,28 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     List<DashboardBudgetTargetPresentationItem> next, {
     bool initial = false,
   }) {
-    if (_sameItems(_items, next)) return false;
+    final presentation = widget.presentation.value;
+    final nextDirection = presentation.liveSelection.direction.name;
+    final directionDomainChanged =
+        !initial &&
+        _installedCatalogDirection != null &&
+        _installedCatalogDirection != nextDirection;
+    if (_sameItems(_items, next) && !directionDomainChanged) return false;
     final previousCenterId = _items.isEmpty
         ? null
         : _items[_modulo(_controller.selectedLogicalIndex, _items.length)]
               .stableId;
     final prepared = _prepareItems(next);
-    final nextCenter = previousCenterId == null
-        ? widget.presentation.value.selectedHandle
+    // The presentation controller owns a separate remembered selection for
+    // each Ledger direction. A direction-domain replacement must atomically
+    // rebase the physical carousel to that already-authoritative target;
+    // retaining an equally named old centre (notably `aggregate`) would leave
+    // the centre and selected limit visual with different identities.
+    final nextCenter = previousCenterId == null || directionDomainChanged
+        ? presentation.selectedHandle
         : prepared.indexWhere((item) => item.stableId == previousCenterId);
     _items = prepared;
+    _installedCatalogDirection = nextDirection;
     if (!initial && prepared.isNotEmpty) {
       _controller.installSemanticDomain(
         dataMode: CenteredCarouselDataMode.cyclic,
