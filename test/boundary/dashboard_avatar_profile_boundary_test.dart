@@ -160,6 +160,19 @@ void main() {
         source.substring(finalExpenseTap, evidence),
         contains('await _waitForDirectionVisiblePublication('),
       );
+      final directionWait = source.substring(
+        source.indexOf(
+          'Future<List<FluviDiagnosticEvent>> '
+          '_waitForDirectionVisiblePublication(',
+        ),
+        source.indexOf('Map<String, Object?> _directionCircleEvidence('),
+      );
+      expect(
+        directionWait,
+        contains(
+          'final deadline = DateTime.now().add(const Duration(seconds: 20));',
+        ),
+      );
     },
   );
 

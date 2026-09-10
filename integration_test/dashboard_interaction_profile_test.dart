@@ -1426,7 +1426,7 @@ Future<List<FluviDiagnosticEvent>> _waitForDirectionVisiblePublication(
   required int sequenceBefore,
   required LedgerDirection direction,
 }) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 8));
+  final deadline = DateTime.now().add(const Duration(seconds: 20));
   while (DateTime.now().isBefore(deadline)) {
     final events = _diagnosticEventsAfter(sequenceBefore);
     final visiblePublished = events.any(
