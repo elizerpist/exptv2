@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "a68e6838911a74fd1c008f12db3be32d0d9abe70",
-  "source_parent": "2bc25c91f4639e3e3484a9e379fed04a6e584ae4",
+  "source_head": "81dcc28d33ff3dc46c88e716d7f89a79e7897a3d",
+  "source_parent": "a68e6838911a74fd1c008f12db3be32d0d9abe70",
   "source_ref": "fix/direction-month-limit-circle-codex-20260910",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "d45aef7648fd468b868df54ace4442694ce5fe0f6552c49c4281afff60d07aef",
+  "index_sha256": "3e4eceed2a726c4ae57f0ce67dd73c5c31e4b098d315ca7acb337ee1096b2426",
   "document_count": 436,
-  "occurrence_count": 281086,
-  "defined_symbol_count": 39180,
+  "occurrence_count": 281113,
+  "defined_symbol_count": 39181,
   "repository_defined_symbol_count": 9997,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
