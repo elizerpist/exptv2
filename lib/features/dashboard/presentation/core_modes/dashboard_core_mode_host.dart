@@ -8,6 +8,7 @@ import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
+import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
@@ -48,6 +49,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetSectionOrder,
     this.budgetRhythm,
     this.budgetDrilldown,
+    this.performanceCounters,
     this.onBudgetAvatarDirectInputStarted,
     this.onBudgetAvatarMotionActiveChanged,
     this.headerVisualController,
@@ -83,6 +85,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<BudgetSectionOrder>? budgetSectionOrder;
   final ValueListenable<DashboardSpendingRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
+  final DashboardPerformanceCounters? performanceCounters;
   final VoidCallback? onBudgetAvatarDirectInputStarted;
   final ValueChanged<bool>? onBudgetAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
@@ -310,6 +313,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         sectionOrder: widget.budgetSectionOrder,
         rhythm: widget.budgetRhythm,
         drilldown: widget.budgetDrilldown,
+        performanceCounters: widget.performanceCounters,
         onAvatarDirectInputStarted: widget.onBudgetAvatarDirectInputStarted,
         onAvatarMotionActiveChanged: widget.onBudgetAvatarMotionActiveChanged,
         upperVerticalGestures: widget.upperVerticalGestures,

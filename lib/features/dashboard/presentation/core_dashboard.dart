@@ -743,6 +743,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _budgetSectionOrderController,
                                         budgetRhythm: _budgetRhythm,
                                         budgetDrilldown: _budgetDrilldown,
+                                        performanceCounters:
+                                            controller.performanceCounters,
                                         onBudgetAvatarDirectInputStarted:
                                             controller
                                                 .noteBudgetAvatarDirectPointerDown,

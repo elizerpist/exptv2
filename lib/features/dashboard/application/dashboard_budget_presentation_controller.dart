@@ -682,12 +682,14 @@ final class DashboardBudgetPresentationController
     );
   }
 
-  /// Actual foreground-painter acknowledgement for the Budget Header amount
-  /// text. The callback occurs after the text child paints and is rejected if
-  /// a newer immutable presentation state won during the same frame.
+  /// Actual paint acknowledgement for the Budget Header amount text. A
+  /// production Core supplies the exact wrapped-subtree duration; isolated
+  /// surface hosts preserve the existing acknowledgement with a zero duration.
+  /// A newer immutable presentation state is rejected in either case.
   void recordHeaderPainted(
     DashboardBudgetPresentationState renderedState, {
     required int paintVsyncMicros,
+    required int headerSubtreePaintMicros,
   }) {
     if (!_collectRendererPaintDiagnostics) return;
     final current = value;
@@ -716,7 +718,8 @@ final class DashboardBudgetPresentationController
             'visibleFrameGeneration=${visibleFrameGenerationForDiagnostics ?? '-'} '
             'displayNumeratorScaled100=${header.displayNumeratorScaled100 ?? '-'} '
             'displayDenominatorScaled100=${header.displayDenominatorScaled100 ?? '-'} '
-            'paintVsyncMicros=$paintVsyncMicros',
+            'paintVsyncMicros=$paintVsyncMicros '
+            'headerSubtreePaintMicros=$headerSubtreePaintMicros',
       ),
     );
   }

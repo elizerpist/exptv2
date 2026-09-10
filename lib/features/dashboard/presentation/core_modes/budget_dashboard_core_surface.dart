@@ -15,9 +15,11 @@ import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
+import '../../application/dashboard_performance_counters.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_render_diagnostic_probe.dart';
+import '../widgets/dashboard_render_phase_probe.dart';
 import '../budget_content_card_style.dart';
 import '../budget_section_order.dart';
 import '../dashboard_corner_roundness.dart';
@@ -36,6 +38,11 @@ import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
 
+// In the production diagnostic route, DashboardHeaderContrastText keeps its
+// existing identity-sensitive foreground painter so the outer phase probe can
+// observe the corresponding whole-subtree paint after it completes.
+void _acknowledgeHeaderPaintForDurationProbe() {}
+
 /// Budget owns its header and two future data-card presentation slots.
 class BudgetDashboardCoreSurface extends StatelessWidget {
   static const _collectBudgetPaintDiagnostics =
@@ -53,6 +60,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     this.sectionOrder,
     this.rhythm,
     this.drilldown,
+    this.performanceCounters,
     this.onAvatarDirectInputStarted,
     this.onAvatarMotionActiveChanged,
     this.headerVisualController,
@@ -71,6 +79,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   final ValueListenable<BudgetSectionOrder>? sectionOrder;
   final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
+  final DashboardPerformanceCounters? performanceCounters;
   final VoidCallback? onAvatarDirectInputStarted;
   final ValueChanged<bool>? onAvatarMotionActiveChanged;
   final DashboardHeaderVisualController? headerVisualController;
@@ -306,41 +315,54 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                                               .settings
                                               .textContrastStyle,
                                         ),
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: DashboardHeaderContrastText(
-                                            data: amount,
-                                            key: const ValueKey(
-                                              'budget-header-actual-limit',
+                                        _headerAmountPaintProbe(
+                                          state: state,
+                                          controller: controller,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: DashboardHeaderContrastText(
+                                              data: amount,
+                                              key: const ValueKey(
+                                                'budget-header-actual-limit',
+                                              ),
+                                              style: const TextStyle(
+                                                fontSize: 19,
+                                                height: .96,
+                                                letterSpacing: -.76,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                              foreground:
+                                                  headerProfile.foreground,
+                                              contrastStyle: headerProfile
+                                                  .settings
+                                                  .textContrastStyle,
+                                              // Unit-level surface hosts do not
+                                              // own the Core's shared counters.
+                                              // Retain their existing
+                                              // paint-acknowledgement contract;
+                                              // only a production Core host can
+                                              // report an exact subtree duration.
+                                              paintIdentity:
+                                                  _collectBudgetPaintDiagnostics
+                                                  ? state
+                                                  : null,
+                                              onPainted:
+                                                  !_collectBudgetPaintDiagnostics
+                                                  ? null
+                                                  : performanceCounters != null
+                                                  ? _acknowledgeHeaderPaintForDurationProbe
+                                                  : () => controller.recordHeaderPainted(
+                                                      state,
+                                                      paintVsyncMicros:
+                                                          SchedulerBinding
+                                                              .instance
+                                                              .currentSystemFrameTimeStamp
+                                                              .inMicroseconds,
+                                                      headerSubtreePaintMicros:
+                                                          0,
+                                                    ),
                                             ),
-                                            style: const TextStyle(
-                                              fontSize: 19,
-                                              height: .96,
-                                              letterSpacing: -.76,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                            foreground:
-                                                headerProfile.foreground,
-                                            contrastStyle: headerProfile
-                                                .settings
-                                                .textContrastStyle,
-                                            paintIdentity:
-                                                _collectBudgetPaintDiagnostics
-                                                ? state
-                                                : null,
-                                            onPainted:
-                                                !_collectBudgetPaintDiagnostics
-                                                ? null
-                                                : () => controller
-                                                      .recordHeaderPainted(
-                                                        state,
-                                                        paintVsyncMicros:
-                                                            SchedulerBinding
-                                                                .instance
-                                                                .currentSystemFrameTimeStamp
-                                                                .inMicroseconds,
-                                                      ),
                                           ),
                                         ),
                                       ],
@@ -375,6 +397,35 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  /// Reuses the dashboard's existing render-phase probe to time the actual
+  /// amount subtree paint. It is constructed only for the same bounded
+  /// debug/profile diagnostic mode as the existing Header acknowledgement.
+  Widget _headerAmountPaintProbe({
+    required DashboardBudgetPresentationState state,
+    required DashboardBudgetPresentationController controller,
+    required Widget child,
+  }) {
+    final counters = performanceCounters;
+    if (!_collectBudgetPaintDiagnostics || counters == null) return child;
+    return DashboardRenderPhaseProbe(
+      counters: counters,
+      layoutMetric: DashboardPerformanceMetric.budgetHeaderLayout,
+      paintMetric: DashboardPerformanceMetric.budgetHeaderPaint,
+      layoutDurationMetric: DashboardPerformanceMetric.budgetHeaderLayoutMicros,
+      paintDurationMetric: DashboardPerformanceMetric.budgetHeaderPaintMicros,
+      onPaintDuration: (headerSubtreePaintMicros) =>
+          controller.recordHeaderPainted(
+            state,
+            paintVsyncMicros: SchedulerBinding
+                .instance
+                .currentSystemFrameTimeStamp
+                .inMicroseconds,
+            headerSubtreePaintMicros: headerSubtreePaintMicros,
+          ),
+      child: child,
     );
   }
 

@@ -1469,6 +1469,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
 
   void _recordBudgetProgressPainted(
     BudgetCategoryAvatarSelectedLimitVisualState visual,
+    int progressChromePaintMicros,
   ) {
     if (!_collectFrameTimingDiagnostics || !mounted) return;
     final expectation = _currentBudgetProgressPaintExpectation(visual);
@@ -1496,7 +1497,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
             'displayDenominatorScaled100='
             '${painted.visual.displayDenominatorScaled100 ?? '-'} '
             'visualProgress=${painted.visual.visualProgress} '
-            'paintVsyncMicros=$paintVsyncMicros',
+            'paintVsyncMicros=$paintVsyncMicros '
+            'progressChromePaintMicros=$progressChromePaintMicros',
       ),
     );
   }
@@ -1793,8 +1795,7 @@ final class _PreparedBudgetTargetAvatar {
     VoidCallback? onSelectionVisualIdentityMismatch,
     ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
     onSelectionProgressBuilt,
-    ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-    onSelectionProgressPainted,
+    BudgetCategoryAvatarProgressPainted? onSelectionProgressPainted,
   }) => BudgetCategoryAvatarArtwork(
     key: selected ? const ValueKey('budget-target-avatar-center') : null,
     color: color,

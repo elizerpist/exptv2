@@ -2544,7 +2544,7 @@ void main() {
                   progressColor: const Color(0xff2374ab),
                   sourceProgress: visual.visualProgress,
                   visualIdentity: visual,
-                  onProgressPainted: painted.add,
+                  onProgressPainted: (visual, _) => painted.add(visual),
                 ),
               ),
             ),

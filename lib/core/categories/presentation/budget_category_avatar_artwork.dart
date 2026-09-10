@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,15 @@ import '../../design/dashboard_mode_palette.dart';
 import '../../financial_limits/domain/financial_limit.dart';
 import '../domain/budget_progress_health.dart';
 import 'category_icon_view.dart';
+
+/// Reports one selected progress chrome's immutable visual identity together
+/// with the elapsed time of its existing [CustomPainter.paint] call. The
+/// receiver is diagnostic-only and must not mutate widget state.
+typedef BudgetCategoryAvatarProgressPainted =
+    void Function(
+      BudgetCategoryAvatarSelectedLimitVisualState visual,
+      int progressChromePaintMicros,
+    );
 
 /// The sole visual-geometry contract for the Budget category avatar.
 ///
@@ -799,8 +809,7 @@ final class BudgetCategoryAvatarArtwork extends StatelessWidget {
   /// the immutable visual that its build or [CustomPaint] has reached.
   final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
   onSelectionProgressBuilt;
-  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-  onSelectionProgressPainted;
+  final BudgetCategoryAvatarProgressPainted? onSelectionProgressPainted;
 
   @override
   Widget build(BuildContext context) {
@@ -868,8 +877,7 @@ final class _BudgetCategoryAvatarSelectedComposition extends StatefulWidget {
   final VoidCallback? onSelectionVisualIdentityMismatch;
   final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
   onSelectionProgressBuilt;
-  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-  onSelectionProgressPainted;
+  final BudgetCategoryAvatarProgressPainted? onSelectionProgressPainted;
 
   @override
   State<_BudgetCategoryAvatarSelectedComposition> createState() =>
@@ -998,8 +1006,7 @@ final class _BudgetCategoryAvatarSelectionChromeLayer extends StatelessWidget {
   final VoidCallback? onSelectionVisualIdentityMismatch;
   final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
   onSelectionProgressBuilt;
-  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-  onSelectionProgressPainted;
+  final BudgetCategoryAvatarProgressPainted? onSelectionProgressPainted;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,8 +1128,7 @@ final class BudgetCategoryAvatarSelectionChrome extends StatelessWidget {
   final List<BudgetProgressRingAnnualSegment> annualSegments;
   final double? typicalMarkerPosition;
   final BudgetCategoryAvatarSelectedLimitVisualState? visualIdentity;
-  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-  onProgressPainted;
+  final BudgetCategoryAvatarProgressPainted? onProgressPainted;
   final Color faceColor;
 
   /// Exposed as a small visual contract so the shell and authored SVG floor
@@ -1252,11 +1258,13 @@ final class _SelectionChromePainter extends CustomPainter {
   final BudgetSumRingStyle sumRingStyle;
   final BudgetHealthyColorMode healthyColorMode;
   final BudgetCategoryAvatarSelectedLimitVisualState? progressVisual;
-  final ValueChanged<BudgetCategoryAvatarSelectedLimitVisualState>?
-  onProgressPainted;
+  final BudgetCategoryAvatarProgressPainted? onProgressPainted;
 
   @override
   void paint(Canvas canvas, Size size) {
+    final progressPaintStartedMicros = onProgressPainted == null
+        ? null
+        : developer.Timeline.now;
     final scale = math.min(
       size.width / ringGeometry.viewport.width,
       size.height / ringGeometry.viewport.height,
@@ -1351,7 +1359,12 @@ final class _SelectionChromePainter extends CustomPainter {
     }
     canvas.restore();
     final visual = progressVisual;
-    if (visual != null) onProgressPainted?.call(visual);
+    if (visual != null && progressPaintStartedMicros != null) {
+      onProgressPainted!.call(
+        visual,
+        developer.Timeline.now - progressPaintStartedMicros,
+      );
+    }
   }
 
   Color get _healthyColor => BudgetHealthyVisualColorResolver.resolve(

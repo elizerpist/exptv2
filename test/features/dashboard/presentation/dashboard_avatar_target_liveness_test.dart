@@ -527,6 +527,70 @@ void main() {
       await session.unmount();
     },
   );
+
+  testWidgets(
+    'AVL real CoreDashboard correlates accepted target 3 phase-A and Budget fan-out',
+    (tester) async {
+      final session = await _PhysicalAvatarSequence.mount(tester);
+      FluviDiagnosticLogger.clear();
+
+      await session.dragAvatarTo(3);
+      await session.expectFinalTarget(3);
+
+      final correlations = FluviDiagnosticLogger.entries.where(
+        (event) => event.stage == 'AV|VISIBLE_SEMANTIC_COMMIT_CORRELATED',
+      );
+      expect(correlations, isNotEmpty, reason: session.trace);
+      final correlation = correlations.last;
+      expect(_field(correlation.scope!, 'targetHandle'), 3);
+      expect(_field(correlation.scope!, 'focusGeneration'), greaterThan(0));
+      expect(
+        _field(correlation.scope!, 'phaseAPublishMicros'),
+        greaterThanOrEqualTo(0),
+      );
+      expect(
+        _field(correlation.scope!, 'phaseBActivationMicros'),
+        greaterThanOrEqualTo(0),
+      );
+      expect(
+        _field(correlation.scope!, 'budgetFanoutMicros'),
+        greaterThanOrEqualTo(0),
+      );
+      expect(
+        _field(correlation.scope!, 'corePublishToFanoutMicros'),
+        greaterThanOrEqualTo(0),
+      );
+      expect(
+        correlation.scope,
+        contains('repositoryRequestsAtTick=0 indexBuildsAtTick=0 '),
+      );
+      expect(correlation.scope, contains('scenePreparesAtTick=0 '));
+      expect(
+        correlation.scope,
+        contains('canonicalPersistenceCommitsAtTick=0'),
+      );
+      final headerPaint = FluviDiagnosticLogger.entries.lastWhere(
+        (event) =>
+            event.stage == 'BUDGET_HEADER_PAINTED' &&
+            _field(event.scope!, 'targetHandle') == 3,
+      );
+      expect(
+        _field(headerPaint.scope!, 'headerSubtreePaintMicros'),
+        greaterThanOrEqualTo(0),
+      );
+      final progressPaint = FluviDiagnosticLogger.entries.lastWhere(
+        (event) =>
+            event.stage == 'BUDGET_PROGRESS_PAINTED' &&
+            _field(event.scope!, 'targetHandle') == 3,
+      );
+      expect(
+        _field(progressPaint.scope!, 'progressChromePaintMicros'),
+        greaterThanOrEqualTo(0),
+      );
+
+      await session.unmount();
+    },
+  );
 }
 
 int _field(String scope, String name) =>

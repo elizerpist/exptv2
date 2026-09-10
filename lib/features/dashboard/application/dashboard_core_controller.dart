@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -78,6 +79,12 @@ enum DashboardMotionLane {
 /// outgoing carousel can complete its own lifecycle after a newer claim, but
 /// it can no longer publish or retain foreground resource priority.
 enum _DashboardForegroundDirectProducer { summaryTime, budgetAvatar }
+
+// This is intentionally the same opt-in as the rail's bounded physical
+// diagnostics. A normal release neither timestamps nor exports the Avatar
+// correlation records on its semantic-crossing path.
+const _collectAvatarPacingCorrelationDiagnostics =
+    bool.fromEnvironment('FLUVI_PHYSICAL_RAIL_DIAGNOSTICS') || kDebugMode;
 
 /// The runtime and presentation owners can expose the same immutable index
 /// through distinct wrapper references during an initial attach. Live-resource
@@ -6118,6 +6125,39 @@ final class DashboardCoreController {
     );
   }
 
+  /// Records only the synchronous, already-owned work between a successful
+  /// prepared Phase-A publish and Budget's matching visible semantic callback.
+  /// The record is diagnostic evidence, not a new publication owner or a
+  /// scheduling point. It makes the existing logger ring correlate Core's
+  /// prepared-frame work with the downstream ValueNotifier fan-out.
+  void _recordAvatarVisibleSemanticCommitCorrelation({
+    required int? targetHandle,
+    required int focusGeneration,
+    required int phaseAPublishMicros,
+    required int phaseBActivationMicros,
+    required int budgetFanoutMicros,
+    required int corePublishToFanoutMicros,
+  }) {
+    if (!_collectAvatarPacingCorrelationDiagnostics || targetHandle == null) {
+      return;
+    }
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'AV|VISIBLE_SEMANTIC_COMMIT_CORRELATED',
+        coreRevision: coreRevision,
+        scope:
+            'targetHandle=$targetHandle focusGeneration=$focusGeneration '
+            'phaseAPublishMicros=$phaseAPublishMicros '
+            'phaseBActivationMicros=$phaseBActivationMicros '
+            'budgetFanoutMicros=$budgetFanoutMicros '
+            'corePublishToFanoutMicros=$corePublishToFanoutMicros '
+            'repositoryRequestsAtTick=0 indexBuildsAtTick=0 '
+            'scenePreparesAtTick=0 canonicalPersistenceCommitsAtTick=0 '
+            'source=preparedAvatarPhaseA',
+      ),
+    );
+  }
+
   /// Canonical focus installation can reconcile the same already-accepted
   /// Avatar semantic frame onto a newer presentation/frame epoch before the
   /// renderer reports its first paint.  Keep the optional rich-paint
@@ -9648,6 +9688,10 @@ final class DashboardCoreController {
         currentQuery.scopeFor(direction) != baseScope) {
       return false;
     }
+    final phaseAPublishStartedMicros =
+        _collectAvatarPacingCorrelationDiagnostics
+        ? developer.Timeline.now
+        : null;
     final phaseAPublished = completeAvatarLivePublication
         ? presentation.publishPreparedInteractionPreview(
             index: derived,
@@ -9660,6 +9704,9 @@ final class DashboardCoreController {
             state: publicationState,
             previewGeneration: generation,
           );
+    final phaseAPublishMicros = phaseAPublishStartedMicros == null
+        ? 0
+        : developer.Timeline.now - phaseAPublishStartedMicros;
     final phaseAAccepted = completeAvatarLivePublication
         ? _avatarPhaseAPublicationAccepted(phaseAPublished, interactionOrder!)
         : phaseAPublished;
@@ -9678,6 +9725,10 @@ final class DashboardCoreController {
       );
       return false;
     }
+    final phaseBActivationStartedMicros =
+        _collectAvatarPacingCorrelationDiagnostics
+        ? developer.Timeline.now
+        : null;
     final richSceneStaged =
         completeAvatarLivePublication &&
         _activateLiveFacetPreviewSceneFromActiveResources(
@@ -9688,6 +9739,9 @@ final class DashboardCoreController {
               generation == _focusPublicationGeneration &&
               currentQuery.scopeFor(direction) == baseScope,
         );
+    final phaseBActivationMicros = phaseBActivationStartedMicros == null
+        ? 0
+        : developer.Timeline.now - phaseBActivationStartedMicros;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: phaseAAccepted
@@ -9736,7 +9790,24 @@ final class DashboardCoreController {
     if (completeAvatarLivePublication) {
       // Budget Header/highlight and exact LogBox rows share the accepted
       // Phase-A identity. Rich scene paint remains diagnostic enhancement.
+      final budgetFanoutStartedMicros =
+          _collectAvatarPacingCorrelationDiagnostics
+          ? developer.Timeline.now
+          : null;
       onVisibleSemanticCommit?.call();
+      final budgetFanoutMicros = budgetFanoutStartedMicros == null
+          ? 0
+          : developer.Timeline.now - budgetFanoutStartedMicros;
+      _recordAvatarVisibleSemanticCommitCorrelation(
+        targetHandle: budgetTargetHandle,
+        focusGeneration: generation,
+        phaseAPublishMicros: phaseAPublishMicros,
+        phaseBActivationMicros: phaseBActivationMicros,
+        budgetFanoutMicros: budgetFanoutMicros,
+        corePublishToFanoutMicros: phaseAPublishStartedMicros == null
+            ? 0
+            : budgetFanoutStartedMicros! - phaseAPublishStartedMicros,
+      );
       _recordAvatarLivePublicationAccepted(
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
@@ -10086,6 +10157,10 @@ final class DashboardCoreController {
     // focused scene to restore before removing the chip or accepting another
     // input. The retained base frame below follows immediately when possible.
     focus.clearAll();
+    final phaseAPublishStartedMicros =
+        _collectAvatarPacingCorrelationDiagnostics
+        ? developer.Timeline.now
+        : null;
     final phaseAPublished = completeAvatarLivePublication
         ? presentation.publishPreparedInteractionPreview(
             index: baseIndex,
@@ -10094,6 +10169,9 @@ final class DashboardCoreController {
             order: interactionOrder!,
           )
         : true;
+    final phaseAPublishMicros = phaseAPublishStartedMicros == null
+        ? 0
+        : developer.Timeline.now - phaseAPublishStartedMicros;
     // A cold category may be superseded by target 0 while the already-painted
     // aggregate frame is still on screen. The visible store correctly claims
     // the new order but reports no lane change for identical pixels. That is
@@ -10116,6 +10194,10 @@ final class DashboardCoreController {
       );
       return false;
     }
+    final phaseBActivationStartedMicros =
+        _collectAvatarPacingCorrelationDiagnostics
+        ? developer.Timeline.now
+        : null;
     final richSceneStaged =
         completeAvatarLivePublication &&
         _activateLiveFacetPreviewSceneFromActiveResources(
@@ -10126,6 +10208,9 @@ final class DashboardCoreController {
               generation == _focusPublicationGeneration &&
               currentQuery.scopeFor(direction) == baseScope,
         );
+    final phaseBActivationMicros = phaseBActivationStartedMicros == null
+        ? 0
+        : developer.Timeline.now - phaseBActivationStartedMicros;
     final interactionFrame = _acceptLiveInteraction(
       source: source,
       interactionOrder: interactionOrder,
@@ -10143,7 +10228,24 @@ final class DashboardCoreController {
         previewGeneration: generation,
       );
     } else {
+      final budgetFanoutStartedMicros =
+          _collectAvatarPacingCorrelationDiagnostics
+          ? developer.Timeline.now
+          : null;
       onVisibleSemanticCommit?.call();
+      final budgetFanoutMicros = budgetFanoutStartedMicros == null
+          ? 0
+          : developer.Timeline.now - budgetFanoutStartedMicros;
+      _recordAvatarVisibleSemanticCommitCorrelation(
+        targetHandle: budgetTargetHandle,
+        focusGeneration: generation,
+        phaseAPublishMicros: phaseAPublishMicros,
+        phaseBActivationMicros: phaseBActivationMicros,
+        budgetFanoutMicros: budgetFanoutMicros,
+        corePublishToFanoutMicros: phaseAPublishStartedMicros == null
+            ? 0
+            : budgetFanoutStartedMicros! - phaseAPublishStartedMicros,
+      );
       _recordAvatarLivePublicationAccepted(
         targetHandle: budgetTargetHandle,
         focusGeneration: generation,
