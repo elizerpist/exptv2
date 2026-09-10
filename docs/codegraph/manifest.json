@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "source_head": "532c8cd75ff6c1fa00d25a99106ae7b7d5006dae",
-  "source_parent": "e7c28bbc0450f8e7c64386f5ba7874250df1c89d",
+  "source_head": "2bc25c91f4639e3e3484a9e379fed04a6e584ae4",
+  "source_parent": "532c8cd75ff6c1fa00d25a99106ae7b7d5006dae",
   "source_ref": "fix/direction-month-limit-circle-codex-20260910",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "b8179385ad8f897e43e76c3a4b1ba11a8f109c125ee9fe6cf287e55da416a926",
+  "index_sha256": "a4267190d805021f982b3aa9128c117292a6b0cda28fe530ea02366072eeaf20",
   "document_count": 436,
-  "occurrence_count": 281000,
+  "occurrence_count": 281002,
   "defined_symbol_count": 39167,
   "repository_defined_symbol_count": 9997,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
@@ -94,11 +94,11 @@
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 29,
+      "record_count": 1,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 315643
+      "byte_count": 13824
     }
   ]
 }
