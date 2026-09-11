@@ -591,6 +591,70 @@ void main() {
       await session.unmount();
     },
   );
+
+  testWidgets(
+    'RED: real CoreDashboard joins an exact Avatar target resource preparation to row-discovery work',
+    (tester) async {
+      final session = await _PhysicalAvatarSequence.mount(tester);
+      FluviDiagnosticLogger.clear();
+
+      await session.dragAvatarTo(1);
+      await session.expectFinalTarget(1);
+
+      final scheduled = FluviDiagnosticLogger.entries.lastWhere(
+        (event) =>
+            event.stage == 'AV|TARGET_RESOURCE_PREPARATION_SCHEDULED' &&
+            _field(event.scope!, 'targetHandle') == 1,
+      );
+      final resourceKeyDigest = RegExp(
+        r'(?:^| )resourceKeyDigest=([^ ]+)',
+      ).firstMatch(scheduled.scope!)!.group(1)!;
+      final rowDiscovery = FluviDiagnosticLogger.entries.where(
+        (event) => event.stage == 'SCENE_WINDOW_ROW_DISCOVERY_WORK_UNIT',
+      );
+
+      expect(
+        rowDiscovery,
+        isNotEmpty,
+        reason:
+            'The real Avatar resource request must expose its bounded '
+            'row-discovery work unit before a pacing repair can be selected.\n'
+            '${session.trace}',
+      );
+      expect(
+        rowDiscovery.any(
+          (event) =>
+              event.scope?.contains('resourceKeyDigest=$resourceKeyDigest ') ==
+              true,
+        ),
+        isTrue,
+        reason:
+            'The cache record must be joined to the exact scheduled Avatar '
+            'target by the existing resource key, not by event order.',
+      );
+      expect(
+        rowDiscovery.any(
+          (event) =>
+              event.scope?.contains('owner=liveInteractionResource ') == true &&
+              event.scope?.contains('current=true ') == true,
+        ),
+        isTrue,
+      );
+      final paint = FluviDiagnosticLogger.entries.lastWhere(
+        (event) =>
+            event.stage == 'AV|LOGBOX_TARGET_PAINTED' &&
+            _field(event.scope!, 'targetHandle') == 1,
+      );
+      expect(paint.scope, contains('frameGeneration='));
+      expect(session.core.budgetAvatarTargetPainted.value?.targetHandle, 1);
+      expect(
+        session.core.budgetAvatarFocusHotsetDiagnostics['pendingCandidate'],
+        0,
+      );
+
+      await session.unmount();
+    },
+  );
 }
 
 int _field(String scope, String name) =>

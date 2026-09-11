@@ -888,6 +888,114 @@ Map<String, Object?> _avatarFirstTargetEvidence({
   final motionSummaries = eventsFor(
     'BUDGET_AVATAR_MOTION_SUMMARY',
   ).toList(growable: false);
+  final scheduledResourcesByDigest = <String, FluviDiagnosticEvent>{
+    for (final event in eventsFor('AV|TARGET_RESOURCE_PREPARATION_SCHEDULED'))
+      if (_scopeField(event.scope, 'resourceKeyDigest')
+          case final String digest)
+        digest: event,
+  };
+  final rowDiscoveryWorkUnits =
+      eventsFor('SCENE_WINDOW_ROW_DISCOVERY_WORK_UNIT')
+          .map((event) {
+            final resourceKeyDigest = _scopeField(
+              event.scope,
+              'resourceKeyDigest',
+            );
+            final scheduled = resourceKeyDigest == null
+                ? null
+                : scheduledResourcesByDigest[resourceKeyDigest];
+            final targetHandle = _scopeInt(event.scope, 'targetHandle');
+            final focusGeneration = _scopeInt(event.scope, 'focusGeneration');
+            final interactionEpoch = _scopeInt(event.scope, 'interactionEpoch');
+            return <String, Object?>{
+              'sequence': event.sequence,
+              'target_handle': targetHandle,
+              'focus_generation': focusGeneration,
+              'interaction_epoch': interactionEpoch,
+              'resource_key_digest': resourceKeyDigest,
+              'owner': _scopeField(event.scope, 'owner'),
+              'current': _scopeField(event.scope, 'current') == 'true',
+              'work_unit': _scopeField(event.scope, 'workUnit'),
+              'elapsed_micros': _scopeInt(event.scope, 'elapsedMicros'),
+              'flat_items_micros': _scopeInt(event.scope, 'flatItemsMicros'),
+              'row_key_micros': _scopeInt(event.scope, 'rowKeyMicros'),
+              'row_map_micros': _scopeInt(event.scope, 'rowMapMicros'),
+              'day_label_micros': _scopeInt(event.scope, 'dayLabelMicros'),
+              'resource_schedule_correlated':
+                  scheduled != null &&
+                  _scopeInt(scheduled.scope, 'targetHandle') == targetHandle &&
+                  _scopeInt(scheduled.scope, 'focusGeneration') ==
+                      focusGeneration &&
+                  _scopeInt(scheduled.scope, 'interactionEpoch') ==
+                      interactionEpoch,
+            };
+          })
+          .toList(growable: false);
+  Map<String, Object?> targetResourcePreparationEvidence(
+    FluviDiagnosticEvent event,
+  ) {
+    final resourceKeyDigest = _scopeField(event.scope, 'resourceKeyDigest');
+    final scheduled = resourceKeyDigest == null
+        ? null
+        : scheduledResourcesByDigest[resourceKeyDigest];
+    final targetHandle = _scopeInt(event.scope, 'targetHandle');
+    final focusGeneration = _scopeInt(event.scope, 'focusGeneration');
+    final interactionEpoch = _scopeInt(event.scope, 'interactionEpoch');
+    return <String, Object?>{
+      'sequence': event.sequence,
+      'target_handle': targetHandle,
+      'focus_generation': focusGeneration,
+      'interaction_epoch': interactionEpoch,
+      'resource_key_digest': resourceKeyDigest,
+      'owner': _scopeField(event.scope, 'owner'),
+      'current': _scopeField(event.scope, 'current') == 'true',
+      'resource_schedule_correlated':
+          scheduled != null &&
+          _scopeInt(scheduled.scope, 'targetHandle') == targetHandle &&
+          _scopeInt(scheduled.scope, 'focusGeneration') == focusGeneration &&
+          _scopeInt(scheduled.scope, 'interactionEpoch') == interactionEpoch,
+    };
+  }
+
+  final targetPrepareCompletions = eventsFor('SCENE_WINDOW_PREPARE_COMPLETED')
+      .where(
+        (event) =>
+            _scopeField(event.scope, 'owner') == 'liveInteractionResource' &&
+            _scopeField(event.scope, 'resourceKeyDigest') != null,
+      )
+      .map(
+        (event) => <String, Object?>{
+          ...targetResourcePreparationEvidence(event),
+          'duration_millis': event.durationMs,
+          'ui_isolate_micros': _scopeInt(event.message, 'uiIsolateMicros'),
+          'largest_contiguous_ui_slice_micros': _scopeInt(
+            event.message,
+            'largestContiguousUiSliceMicros',
+          ),
+          'yield_count': _scopeInt(event.message, 'yields'),
+          'new_row_layouts': _scopeInt(event.message, 'newRowLayouts'),
+          'reused_row_layouts': _scopeInt(event.message, 'reusedRowLayouts'),
+          'scene_new': _scopeInt(event.message, 'sceneNew'),
+          'scene_reuse': _scopeInt(event.message, 'sceneReuse'),
+          'allocation_count': _scopeInt(event.message, 'allocationCount'),
+        },
+      )
+      .toList(growable: false);
+  final targetOverBudgetSlices = eventsFor('SCENE_WINDOW_SLICE_OVER_BUDGET')
+      .where(
+        (event) =>
+            _scopeField(event.scope, 'owner') == 'liveInteractionResource' &&
+            _scopeField(event.scope, 'resourceKeyDigest') != null,
+      )
+      .map(
+        (event) => <String, Object?>{
+          ...targetResourcePreparationEvidence(event),
+          'boundary': _scopeField(event.scope, 'boundary'),
+          'elapsed_micros': _scopeInt(event.scope, 'elapsedMicros'),
+          'budget_micros': _scopeInt(event.scope, 'budgetMicros'),
+        },
+      )
+      .toList(growable: false);
   final terminalOutcomes = firstTargetPipelines
       .map((event) => _scopeField(event.scope, 'terminalOutcome'))
       .whereType<String>()
@@ -979,6 +1087,9 @@ Map<String, Object?> _avatarFirstTargetEvidence({
     'avatar_motion_summary_scopes': motionSummaries
         .map((event) => event.scope ?? '')
         .toList(growable: false),
+    'avatar_target_row_discovery_work_units': rowDiscoveryWorkUnits,
+    'avatar_target_prepare_completions': targetPrepareCompletions,
+    'avatar_target_over_budget_slices': targetOverBudgetSlices,
     'diagnostic_stage_counts': stageCounts,
   };
 }
@@ -1254,17 +1365,16 @@ Future<void> _runMeasuredScenario(
 }) async {
   switch (scenario) {
     case _ProfileScenario.avatarFirstTarget:
-      // One persistent production composition. Alternating real pointers
-      // exercise both directions; each flight must finish exactly before the
-      // next starts, so a later fling cannot rescue an unresolved predecessor.
-      for (var flight = 0; flight < 4; flight++) {
+      // One persistent production composition. Twenty forward/reverse pairs
+      // cover cold first-target work, warmed revisits and their transition.
+      // The two direct-drag releases below cross several targets while one
+      // pointer is active, then continue ballistically. Each transaction must
+      // settle exactly before the next starts, so a later flight cannot rescue
+      // an unresolved predecessor.
+      Future<void> captureAvatarFlight(Future<void> Function() drive) async {
         final sequenceBefore = _lastDiagnosticSequence();
         final paintCountBefore = avatarPaints.length;
-        await _flingBudgetAvatar(
-          tester,
-          controller,
-          offset: Offset(flight.isEven ? -420 : 420, 0),
-        );
+        await drive();
         final evidence = await _waitForAvatarExactPaint(
           tester,
           controller,
@@ -1279,6 +1389,44 @@ Future<void> _runMeasuredScenario(
         avatarFlights.add(evidence);
         avatarEvents.addAll(_diagnosticEventsAfter(sequenceBefore));
       }
+      const forwardOffsets = <Offset>[
+        Offset(-58, 0),
+        Offset(-116, 0),
+        Offset(-174, 0),
+        Offset(-232, 0),
+        Offset(-290, 0),
+        Offset(-348, 0),
+        Offset(-406, 0),
+        Offset(-464, 0),
+        Offset(-522, 0),
+      ];
+      for (var cycle = 0; cycle < 20; cycle += 1) {
+        final forwardOffset = forwardOffsets[cycle % forwardOffsets.length];
+        await captureAvatarFlight(
+          () => _flingBudgetAvatar(tester, controller, offset: forwardOffset),
+        );
+        await captureAvatarFlight(
+          () => _flingBudgetAvatar(
+            tester,
+            controller,
+            offset: Offset(-forwardOffset.dx, 0),
+          ),
+        );
+      }
+      await captureAvatarFlight(
+        () => _dragThenBallisticBudgetAvatar(
+          tester,
+          controller,
+          offset: const Offset(-420, 0),
+        ),
+      );
+      await captureAvatarFlight(
+        () => _dragThenBallisticBudgetAvatar(
+          tester,
+          controller,
+          offset: const Offset(420, 0),
+        ),
+      );
     case _ProfileScenario.summaryPlane:
       await _flingSummary(tester, const Offset(0, -180));
       await _flingSummary(tester, const Offset(0, -180));
@@ -1368,6 +1516,31 @@ Future<void> _flingBudgetAvatar(
   final carousel = find.byKey(const ValueKey('budget-target-avatar-carousel'));
   expect(carousel, findsOneWidget);
   await tester.fling(carousel, offset, 2200);
+  await _waitForBudgetAvatarMotionEnd(tester, controller);
+}
+
+/// Drives the real pointer recognizer through multiple direct crossings before
+/// release. The release velocity starts the existing carousel ballistic phase;
+/// it does not use a controller command or a synthetic target publication.
+Future<void> _dragThenBallisticBudgetAvatar(
+  WidgetTester tester,
+  DashboardCoreController controller, {
+  required Offset offset,
+}) async {
+  final carousel = find.byKey(const ValueKey('budget-target-avatar-carousel'));
+  expect(carousel, findsOneWidget);
+  final pointer = await tester.startGesture(tester.getCenter(carousel));
+  await pointer.moveBy(
+    offset * .35,
+    timeStamp: const Duration(milliseconds: 40),
+  );
+  await tester.pump(const Duration(milliseconds: 16));
+  await pointer.moveBy(
+    offset * .65,
+    timeStamp: const Duration(milliseconds: 100),
+  );
+  await tester.pump(const Duration(milliseconds: 16));
+  await pointer.up(timeStamp: const Duration(milliseconds: 116));
   await _waitForBudgetAvatarMotionEnd(tester, controller);
 }
 

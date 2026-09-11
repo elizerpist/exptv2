@@ -377,7 +377,7 @@ abstract final class DashboardProfileReport {
     final flingCount = evidence['real_fling_count'];
     final flights = evidence['flights'];
     if (flingCount is! int ||
-        flingCount < 2 ||
+        flingCount < 42 ||
         flights is! List ||
         flights.length != flingCount ||
         (evidence['pointer_accepted_count'] as num) < flingCount ||
@@ -392,6 +392,28 @@ abstract final class DashboardProfileReport {
       }
       validateAvatarFinalTargetEvidence(Map<String, Object?>.from(flight));
     }
+    final coveredTargetHandles = <int>{
+      for (final flight in flights.cast<Map>())
+        if (flight['physical_settle_target_handle'] case final int handle)
+          handle,
+    };
+    if (coveredTargetHandles.length != 9 ||
+        !coveredTargetHandles.containsAll(const <int>{
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+        })) {
+      throw StateError(
+        'Avatar K requires real pointer coverage of every target handle: '
+        '$coveredTargetHandles.',
+      );
+    }
     final categories = evidence['fixture_category_row_counts'];
     if (categories is! Map ||
         categories.length != 8 ||
@@ -403,6 +425,99 @@ abstract final class DashboardProfileReport {
         (evidence['fixture_aggregate_row_count'] as int) < 8) {
       throw StateError(
         'Avatar K requires eight nonempty disjoint categories and aggregate.',
+      );
+    }
+    final rowDiscovery = evidence['avatar_target_row_discovery_work_units'];
+    if (rowDiscovery is! List || rowDiscovery.isEmpty) {
+      throw StateError(
+        'Avatar K requires target-correlated row-discovery evidence.',
+      );
+    }
+    for (final unit in rowDiscovery) {
+      if (unit is! Map) {
+        throw StateError('Avatar row-discovery evidence must be a map.');
+      }
+      final target = unit['target_handle'];
+      final generation = unit['focus_generation'];
+      final epoch = unit['interaction_epoch'];
+      final digest = unit['resource_key_digest'];
+      final owner = unit['owner'];
+      final workUnit = unit['work_unit'];
+      final elapsed = unit['elapsed_micros'];
+      if (target is! int ||
+          target < 0 ||
+          target > 8 ||
+          generation is! int ||
+          generation < 1 ||
+          epoch is! int ||
+          epoch < 1 ||
+          digest is! String ||
+          digest.isEmpty ||
+          owner != 'liveInteractionResource' ||
+          unit['current'] != true ||
+          workUnit is! String ||
+          !const <String>{
+            'flatItems',
+            'rowKey',
+            'rowMap',
+            'dayLabel',
+          }.contains(workUnit) ||
+          elapsed is! int ||
+          elapsed < 0 ||
+          unit['resource_schedule_correlated'] != true) {
+        throw StateError(
+          'Avatar row-discovery evidence is not tied to one current exact '
+          'resource request: $unit.',
+        );
+      }
+    }
+    final preparations = evidence['avatar_target_prepare_completions'];
+    if (preparations is! List || preparations.isEmpty) {
+      throw StateError(
+        'Avatar K requires an exact active target preparation completion.',
+      );
+    }
+    var coldResourcePreparationObserved = false;
+    for (final preparation in preparations) {
+      if (preparation is! Map) {
+        throw StateError('Avatar target preparation evidence must be a map.');
+      }
+      for (final key in const <String>[
+        'target_handle',
+        'focus_generation',
+        'interaction_epoch',
+        'ui_isolate_micros',
+        'largest_contiguous_ui_slice_micros',
+        'yield_count',
+        'new_row_layouts',
+        'reused_row_layouts',
+        'scene_new',
+        'scene_reuse',
+        'allocation_count',
+      ]) {
+        final value = preparation[key];
+        if (value is! int || value < 0) {
+          throw StateError(
+            'Avatar target preparation has invalid $key: $preparation.',
+          );
+        }
+      }
+      if (preparation['owner'] != 'liveInteractionResource' ||
+          preparation['current'] != true ||
+          preparation['resource_schedule_correlated'] != true ||
+          preparation['resource_key_digest'] is! String ||
+          (preparation['resource_key_digest'] as String).isEmpty) {
+        throw StateError(
+          'Avatar target preparation is not exactly resource-correlated: '
+          '$preparation.',
+        );
+      }
+      coldResourcePreparationObserved |=
+          (preparation['new_row_layouts'] as int) > 0;
+    }
+    if (!coldResourcePreparationObserved) {
+      throw StateError(
+        'Avatar K requires a cold exact target preparation with new rows.',
       );
     }
   }

@@ -1505,6 +1505,78 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     DashboardLogRichProjectionMetrics? projectionAfter;
     var sliceStartedAt = _nowMicros();
 
+    // The physical Avatar tail is attributed to this existing cache owner,
+    // but the former rowDiscovery boundary covered several distinct map/key
+    // operations. Keep this trace bounded to an exact active Avatar resource
+    // request and retain only one maximum per inner unit. It is diagnostic
+    // correlation: no state, scheduling decision, cache key, or publication
+    // rule is changed here.
+    final avatarTargetResourceKey =
+        candidateKey != null &&
+        intent ==
+            DashboardLogBoxScenePreparationIntent.liveInteractionResource &&
+        candidateKey.startsWith('avatar-live-root:') &&
+        candidateKey.contains('|target:');
+    final avatarTargetMatch = avatarTargetResourceKey
+        ? RegExp(r'\|target:([^|]+)').firstMatch(candidateKey)
+        : null;
+    final avatarOrderMatch = avatarTargetResourceKey
+        ? RegExp(r'\|order:(\d+):(\d+)').firstMatch(candidateKey)
+        : null;
+    final rowDiscoveryWorkUnitMaxMicros = <String, int>{};
+    var rowDiscoveryWorkUnitCount = 0;
+
+    String avatarTargetTraceScope() => avatarTargetResourceKey
+        ? ' targetHandle=${avatarTargetMatch?.group(1) ?? '-'} '
+              'focusGeneration=${avatarOrderMatch?.group(2) ?? '-'} '
+              'interactionEpoch=${avatarOrderMatch?.group(1) ?? '-'} '
+              'resourceKeyDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
+              'owner=${intent.name} '
+              'current=${_preparationToken == preparationToken}'
+        : '';
+
+    void recordRowDiscoveryWorkUnit(String workUnit, int elapsedMicros) {
+      if (!avatarTargetResourceKey) return;
+      rowDiscoveryWorkUnitCount += 1;
+      final previous = rowDiscoveryWorkUnitMaxMicros[workUnit] ?? 0;
+      if (elapsedMicros > previous) {
+        rowDiscoveryWorkUnitMaxMicros[workUnit] = elapsedMicros;
+      }
+    }
+
+    void emitAvatarRowDiscoveryCorrelation() {
+      if (!avatarTargetResourceKey) return;
+      var slowestWorkUnit = 'none';
+      var slowestMicros = 0;
+      for (final entry in rowDiscoveryWorkUnitMaxMicros.entries) {
+        if (entry.value > slowestMicros) {
+          slowestWorkUnit = entry.key;
+          slowestMicros = entry.value;
+        }
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'SCENE_WINDOW_ROW_DISCOVERY_WORK_UNIT',
+          queryKey: FluviDiagnosticKeyDigest.of(window.identity),
+          entryCount: window.previewRowCount,
+          scope:
+              'targetHandle=${avatarTargetMatch?.group(1) ?? '-'} '
+              'focusGeneration=${avatarOrderMatch?.group(2) ?? '-'} '
+              'interactionEpoch=${avatarOrderMatch?.group(1) ?? '-'} '
+              'resourceKeyDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
+              'owner=${intent.name} '
+              'current=${_preparationToken == preparationToken} '
+              'workUnit=$slowestWorkUnit '
+              'elapsedMicros=$slowestMicros '
+              'workUnitCount=$rowDiscoveryWorkUnitCount '
+              'flatItemsMicros=${rowDiscoveryWorkUnitMaxMicros['flatItems'] ?? 0} '
+              'rowKeyMicros=${rowDiscoveryWorkUnitMaxMicros['rowKey'] ?? 0} '
+              'rowMapMicros=${rowDiscoveryWorkUnitMaxMicros['rowMap'] ?? 0} '
+              'dayLabelMicros=${rowDiscoveryWorkUnitMaxMicros['dayLabel'] ?? 0}',
+        ),
+      );
+    }
+
     final reportedOverBudgetSliceBoundaries = <String>{};
 
     void reportOverBudgetSlice({
@@ -1522,7 +1594,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
           entryCount: window.previewRowCount,
           scope:
               'boundary=$boundary elapsedMicros=$elapsedMicros '
-              'budgetMicros=$maxContiguousUiSliceMicros',
+              'budgetMicros=$maxContiguousUiSliceMicros'
+              '${avatarTargetTraceScope()}',
         ),
       );
     }
@@ -1675,8 +1748,24 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       final headerLabels = <String>{};
       var scannedSinceYield = 0;
       for (final payload in window.payloads) {
-        for (final item in payload.flatItems) {
+        final flatItemsStartedAt = avatarTargetResourceKey ? _nowMicros() : 0;
+        final flatItems = payload.flatItems;
+        if (avatarTargetResourceKey) {
+          recordRowDiscoveryWorkUnit(
+            'flatItems',
+            _nowMicros() - flatItemsStartedAt,
+          );
+        }
+        for (final item in flatItems) {
+          final rowKeyStartedAt = avatarTargetResourceKey ? _nowMicros() : 0;
           final key = _RowLayoutKey.fromRow(item.row);
+          if (avatarTargetResourceKey) {
+            recordRowDiscoveryWorkUnit(
+              'rowKey',
+              _nowMicros() - rowKeyStartedAt,
+            );
+          }
+          final rowMapStartedAt = avatarTargetResourceKey ? _nowMicros() : 0;
           final previous = rowsByKey[key];
           if (previous != null &&
               previous.textLayoutId != item.row.textLayoutId) {
@@ -1685,13 +1774,27 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
             );
           }
           rowsByKey[key] = item.row;
+          if (avatarTargetResourceKey) {
+            recordRowDiscoveryWorkUnit(
+              'rowMap',
+              _nowMicros() - rowMapStartedAt,
+            );
+          }
+          final dayLabelStartedAt = avatarTargetResourceKey ? _nowMicros() : 0;
           if (item.dayLabel case final String label) headerLabels.add(label);
+          if (avatarTargetResourceKey) {
+            recordRowDiscoveryWorkUnit(
+              'dayLabel',
+              _nowMicros() - dayLabelStartedAt,
+            );
+          }
           if (++scannedSinceYield >= yieldEveryRows || exceedsUiSliceBudget()) {
             scannedSinceYield = 0;
             await checkpoint(boundary: 'rowDiscovery');
           }
         }
       }
+      emitAvatarRowDiscoveryCorrelation();
       // Text layouts are immutable and width-keyed. The old active bank keeps
       // its own references until the single publish swap. The next bank keeps
       // only the rows required for its exact revision universe; carrying old
@@ -1977,7 +2080,9 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
               'sceneNew=$newSceneCount sceneReuse=$reusedSceneCount '
               'pauseCount=0 resumeCount=0 semanticsWork=0 rasterWork=0 '
               'allocationCount=${createdRows.length + createdHeaders.length + newSceneCount}',
-          scope: 'owner=${intent.name} priority=${intent.priority}',
+          scope:
+              'owner=${intent.name} priority=${intent.priority}'
+              '${avatarTargetTraceScope()}',
         ),
       );
       // Deliberately no notify here: staging is hermetic and must be

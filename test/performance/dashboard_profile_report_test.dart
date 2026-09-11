@@ -217,6 +217,64 @@ void main() {
     );
   });
 
+  test(
+    'Avatar K rejects a profile without target-correlated row-discovery evidence',
+    () {
+      final evidence = _avatarFirstTargetEvidence()
+        ..['avatar_target_row_discovery_work_units'] = <Object?>[];
+
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('row-discovery'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'Avatar K rejects a profile without a cold exact target preparation',
+    () {
+      final evidence = _avatarFirstTargetEvidence()
+        ..['avatar_target_prepare_completions'] = <Object?>[];
+
+      expect(
+        () =>
+            DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('preparation completion'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test('Avatar K rejects an all-warm exact target preparation', () {
+    final evidence = _avatarFirstTargetEvidence();
+    final completion =
+        (evidence['avatar_target_prepare_completions']! as List).single as Map;
+    completion['new_row_layouts'] = 0;
+
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('cold exact target'),
+        ),
+      ),
+    );
+  });
+
   for (final invalid in <String, Map<String, Object?>>{
     'empty despite claimed final paint': {'exact_paint_exact_empty': true},
     'zero rows in both renderer phases': {
@@ -478,6 +536,37 @@ void main() {
     expect(
       () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
       throwsStateError,
+    );
+  });
+
+  test('Avatar K rejects repeated flings that omit a target handle', () {
+    final evidence = _avatarFirstTargetEvidence();
+    for (final flight in evidence['flights']! as List) {
+      final mapped = flight as Map<String, Object?>;
+      for (final key in const <String>[
+        'physical_settle_target_handle',
+        'latest_desired_target_handle',
+        'latest_semantic_target_handle',
+        'latest_exact_painted_target_handle',
+        'selected_budget_target_handle',
+        'focus_target_handle',
+        'header_target_handle',
+        'progress_target_handle',
+        'logbox_target_handle',
+      ]) {
+        mapped[key] = 3;
+      }
+    }
+
+    expect(
+      () => DashboardProfileReport.validateAvatarFirstTargetEvidence(evidence),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('every target handle'),
+        ),
+      ),
     );
   });
 
@@ -847,14 +936,17 @@ Map<String, Object?> _railFlightMetrics() => <String, Object?>{
 Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
   'motion_lane_observed': true,
   ..._avatarFinalTargetEvidence(),
-  'real_fling_count': 2,
-  'flights': [_avatarFinalTargetEvidence(), _avatarFinalTargetEvidence()],
+  'real_fling_count': 42,
+  'flights': [
+    for (var index = 0; index < 42; index += 1)
+      _avatarFlightEvidenceForHandle(index % 9),
+  ],
   'fixture_category_row_counts': {
     for (var handle = 1; handle <= 8; handle++) '$handle': 1,
   },
   'fixture_aggregate_row_count': 8,
   'fixture_category_rows_disjoint': true,
-  'pointer_accepted_count': 2,
+  'pointer_accepted_count': 42,
   'avatar_semantic_crossings': 1,
   'preview_accepted_count': 1,
   'exact_phase_a_paint_count': 1,
@@ -869,7 +961,47 @@ Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
   'budget_progress_matches_exact_paint': true,
   'first_pipeline_summary_count': 1,
   'first_pipeline_terminal_outcomes': <String>['exactPhaseAPainted'],
-  'avatar_motion_summary_count': 2,
+  'avatar_motion_summary_count': 42,
+  'avatar_target_row_discovery_work_units': <Map<String, Object?>>[
+    <String, Object?>{
+      'sequence': 1,
+      'target_handle': 3,
+      'focus_generation': 2,
+      'interaction_epoch': 2,
+      'resource_key_digest': 'fixture-key',
+      'owner': 'liveInteractionResource',
+      'current': true,
+      'work_unit': 'flatItems',
+      'elapsed_micros': 0,
+      'flat_items_micros': 0,
+      'row_key_micros': 0,
+      'row_map_micros': 0,
+      'day_label_micros': 0,
+      'resource_schedule_correlated': true,
+    },
+  ],
+  'avatar_target_prepare_completions': <Map<String, Object?>>[
+    <String, Object?>{
+      'sequence': 2,
+      'target_handle': 3,
+      'focus_generation': 2,
+      'interaction_epoch': 2,
+      'resource_key_digest': 'fixture-key',
+      'owner': 'liveInteractionResource',
+      'current': true,
+      'resource_schedule_correlated': true,
+      'duration_millis': 1,
+      'ui_isolate_micros': 1,
+      'largest_contiguous_ui_slice_micros': 1,
+      'yield_count': 1,
+      'new_row_layouts': 1,
+      'reused_row_layouts': 0,
+      'scene_new': 1,
+      'scene_reuse': 0,
+      'allocation_count': 1,
+    },
+  ],
+  'avatar_target_over_budget_slices': <Map<String, Object?>>[],
 };
 
 Map<String, Object?> _motionGateReport({
@@ -925,6 +1057,24 @@ Map<String, Object?> _physicalFrameReport() => <String, Object?>{
   'worst_frame_build_time_millis': 47,
   'worst_frame_rasterizer_time_millis': 47,
 };
+
+Map<String, Object?> _avatarFlightEvidenceForHandle(int handle) {
+  final evidence = _avatarFinalTargetEvidence();
+  for (final key in const <String>[
+    'physical_settle_target_handle',
+    'latest_desired_target_handle',
+    'latest_semantic_target_handle',
+    'latest_exact_painted_target_handle',
+    'selected_budget_target_handle',
+    'focus_target_handle',
+    'header_target_handle',
+    'progress_target_handle',
+    'logbox_target_handle',
+  ]) {
+    evidence[key] = handle;
+  }
+  return evidence;
+}
 
 Map<String, Object?> _avatarFinalTargetEvidence() => <String, Object?>{
   for (final key in [
