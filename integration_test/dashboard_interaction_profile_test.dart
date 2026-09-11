@@ -456,7 +456,13 @@ Future<Map<String, dynamic>> _runScenario(
     }),
     frameKey: frameKey,
     timelineKey: timelineKey,
-    preCaptureDelay: scenario == _ProfileScenario.firstFling
+    // K must begin at the production composition's first pointer boundary.
+    // Its report is specifically the cold/warm Avatar resource-preparation
+    // reproducer, so the normal two-second quiescence would finish the exact
+    // live-root resource before tracing and falsely erase its first target.
+    preCaptureDelay:
+        scenario == _ProfileScenario.firstFling ||
+            scenario == _ProfileScenario.avatarFirstTarget
         ? Duration.zero
         : const Duration(seconds: 2),
   );
