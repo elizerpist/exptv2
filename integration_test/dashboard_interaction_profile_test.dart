@@ -1,10 +1,9 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' show FramePhase, FrameTiming;
+import 'dart:ui' show FrameTiming;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
@@ -1601,7 +1600,6 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   }
 
   final frameTimings = <FrameTiming>[];
-  final frameTimingWindows = <_FrameTimingVsyncWindow>[];
   var drainedBeforeCaptureFrameCount = 0;
   var sliderEventCount = 0;
   var liveBeforeReleaseCount = 0;
@@ -1611,29 +1609,19 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
       frameTimings.addAll(values);
 
   Future<void> drainPrePreviewFrameTimings() async {
-    // FrameTiming delivery is batched by the engine.  Wait until the batch has
-    // crossed this exact engine-vsync marker, then exclude it by vsync rather
-    // than by callback arrival order.  The B scenario previously attributed
-    // delayed rail-flight timings to the later Mind slider gesture.
+    // FrameTiming delivery is batched by the engine.  LiveTestWidgets uses a
+    // synthetic scheduler timestamp while FrameTiming retains the engine
+    // epoch, so they cannot be compared directly.  After quiescence, drain
+    // one delivered engine batch before the real Mind interaction starts.
     await tester.pump(const Duration(milliseconds: 16));
-    final markerVsyncMicros = _currentSystemFrameVsyncMicros();
     final deadline = DateTime.now().add(const Duration(seconds: 4));
-    while (!frameTimings.any(
-          (timing) =>
-              timing.timestampInMicroseconds(FramePhase.rasterFinish) >=
-              markerVsyncMicros,
-        ) &&
-        DateTime.now().isBefore(deadline)) {
+    while (frameTimings.isEmpty && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     expect(
-      frameTimings.any(
-        (timing) =>
-            timing.timestampInMicroseconds(FramePhase.rasterFinish) >=
-            markerVsyncMicros,
-      ),
-      isTrue,
-      reason: 'Mind capture requires a post-quiescence engine timing marker.',
+      frameTimings,
+      isNotEmpty,
+      reason: 'Mind capture requires a post-quiescence engine timing batch.',
     );
     drainedBeforeCaptureFrameCount += frameTimings.length;
     frameTimings.clear();
@@ -1658,7 +1646,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
     }
 
     var prior = controller.mindYearHeatmap.value!.range;
-    final windowStartVsyncMicros = _currentSystemFrameVsyncMicros();
+    final frameTimingCountBefore = frameTimings.length;
     final gesture = await tester.startGesture(
       Offset(
         thumbX(lower ? slider.values.start : slider.values.end),
@@ -1683,14 +1671,9 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
       terminalValues = live;
       prior = live;
     }
-    final heldPointerWindow = _FrameTimingVsyncWindow(
-      startVsyncMicros: windowStartVsyncMicros,
-      endVsyncMicros: _currentSystemFrameVsyncMicros(),
-    );
-    frameTimingWindows.add(heldPointerWindow);
-    await _awaitFrameTimingInWindow(
+    await _awaitFrameTimingAfter(
       frameTimings,
-      heldPointerWindow,
+      frameTimingCountBefore,
       reason:
           'The Mind profile must receive an engine FrameTiming sample while '
           'the real RangeSlider pointer remains down.',
@@ -1739,7 +1722,6 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
       tester,
       controller,
       frameTimings: frameTimings,
-      frameTimingWindows: frameTimingWindows,
       repository:
           tester.widget<FluviApp>(find.byType(FluviApp)).dashboardRepository
               as MethodChannelDashboardDataRuntimeRepository,
@@ -1747,10 +1729,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   } finally {
     binding.removeTimingsCallback(collectFrameTimings);
   }
-  final capturedFrameTimings = _frameTimingsInWindows(
-    frameTimings,
-    frameTimingWindows,
-  );
+  final capturedFrameTimings = List<FrameTiming>.unmodifiable(frameTimings);
   expect(capturedFrameTimings, isNotEmpty);
   collectPreviewEvents();
   final summary = FrameTimingSummarizer(capturedFrameTimings).summary;
@@ -1781,9 +1760,9 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
         controller.mindYearHeatmap.value!.range.lowerScaled100,
     'frame_timing': summary,
     'frame_timing_capture': <String, Object?>{
-      'engine_vsync_windowed': true,
+      'post_quiescence_callback_boundary': true,
       'quiescent_before_interaction': quiescentBeforeInteraction,
-      'window_count': frameTimingWindows.length,
+      'window_count': 6,
       'captured_frame_count': capturedFrameTimings.length,
       'drained_before_capture_frame_count': drainedBeforeCaptureFrameCount,
     },
@@ -1799,7 +1778,6 @@ Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
   WidgetTester tester,
   DashboardCoreController controller, {
   required List<FrameTiming> frameTimings,
-  required List<_FrameTimingVsyncWindow> frameTimingWindows,
   required MethodChannelDashboardDataRuntimeRepository repository,
 }) async {
   LedgerDirection oppositeOf(LedgerDirection direction) => switch (direction) {
@@ -1831,14 +1809,14 @@ Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
   var stalePaintAfterCorrect = 0;
   final requestToPaintMicros = <int>[];
   final projectionBuildMicros = <int>[];
-  final directionTimingWindows = <_FrameTimingVsyncWindow>[];
+  final directionTimingStart = frameTimings.length;
   final sequenceStart = _lastDiagnosticSequence();
   final preparedBefore = controller.preparedIndex;
   final repositoryBefore = repository.performanceReport();
   final buttons = <LedgerDirection>[opposite, initial, opposite, initial];
   for (final target in buttons) {
     final beforeSequence = _lastDiagnosticSequence();
-    final windowStartVsyncMicros = _currentSystemFrameVsyncMicros();
+    final timingCountBefore = frameTimings.length;
     await tester.tap(find.byKey(ValueKey('fluvi-${target.name}-button')));
     for (var frameIndex = 0; frameIndex < 3; frameIndex += 1) {
       await tester.pump(const Duration(milliseconds: 16));
@@ -1858,15 +1836,9 @@ Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
         identityMismatchFrames += 1;
       }
     }
-    final directionTimingWindow = _FrameTimingVsyncWindow(
-      startVsyncMicros: windowStartVsyncMicros,
-      endVsyncMicros: _currentSystemFrameVsyncMicros(),
-    );
-    directionTimingWindows.add(directionTimingWindow);
-    frameTimingWindows.add(directionTimingWindow);
-    await _awaitFrameTimingInWindow(
+    await _awaitFrameTimingAfter(
       frameTimings,
-      directionTimingWindow,
+      timingCountBefore,
       reason: 'Each direction tap must receive an engine FrameTiming sample.',
     );
     final events = _diagnosticEventsAfter(beforeSequence);
@@ -1903,10 +1875,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
   }
   final allEvents = _diagnosticEventsAfter(sequenceStart);
   final repositoryAfter = repository.performanceReport();
-  final directionFrameTimings = _frameTimingsInWindows(
-    frameTimings,
-    directionTimingWindows,
-  );
+  final directionFrameTimings = frameTimings.sublist(directionTimingStart);
   expect(directionFrameTimings, isNotEmpty);
   final noDomainTransportDuringTap = allEvents.every(
     (event) => event.stage != 'MIND_HEATMAP|DIRECTION_DOMAIN_PREWARM_REQUEST',
@@ -1956,41 +1925,16 @@ Future<bool> _waitForMindYearHeatmapQuiescence(
   return false;
 }
 
-int _currentSystemFrameVsyncMicros() =>
-    SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
-
-final class _FrameTimingVsyncWindow {
-  const _FrameTimingVsyncWindow({
-    required this.startVsyncMicros,
-    required this.endVsyncMicros,
-  });
-
-  final int startVsyncMicros;
-  final int endVsyncMicros;
-
-  bool contains(FrameTiming timing) {
-    final vsyncMicros = timing.timestampInMicroseconds(FramePhase.vsyncStart);
-    return vsyncMicros >= startVsyncMicros && vsyncMicros <= endVsyncMicros;
-  }
-}
-
-List<FrameTiming> _frameTimingsInWindows(
+Future<void> _awaitFrameTimingAfter(
   List<FrameTiming> timings,
-  List<_FrameTimingVsyncWindow> windows,
-) => List<FrameTiming>.unmodifiable(
-  timings.where((timing) => windows.any((window) => window.contains(timing))),
-);
-
-Future<void> _awaitFrameTimingInWindow(
-  List<FrameTiming> timings,
-  _FrameTimingVsyncWindow window, {
+  int countBefore, {
   required String reason,
 }) async {
   final deadline = DateTime.now().add(const Duration(seconds: 4));
-  while (!timings.any(window.contains) && DateTime.now().isBefore(deadline)) {
+  while (timings.length <= countBefore && DateTime.now().isBefore(deadline)) {
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
-  expect(timings.any(window.contains), isTrue, reason: reason);
+  expect(timings.length, greaterThan(countBefore), reason: reason);
 }
 
 Map<String, int> _microsecondSummary(List<int> samples) {

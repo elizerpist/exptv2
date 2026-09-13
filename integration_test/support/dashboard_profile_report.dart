@@ -209,7 +209,7 @@ abstract final class DashboardProfileReport {
     }
     final frameTimingCapture = evidence['frame_timing_capture'];
     if (frameTimingCapture is! Map ||
-        frameTimingCapture['engine_vsync_windowed'] != true ||
+        frameTimingCapture['post_quiescence_callback_boundary'] != true ||
         frameTimingCapture['quiescent_before_interaction'] != true ||
         frameTimingCapture['window_count'] is! int ||
         (frameTimingCapture['window_count'] as int) < 6 ||
