@@ -134,3 +134,53 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Still unproven: the first direction causal boundary, any need for a
   direction cache/prewarm, final request-to-paint timing, and device
   acceptance.  `PENDING — USER ONLY` remains the physical-validation state.
+
+## 2026-09-13 — Mind heatmap calendar/direction repair application evidence
+
+- Application commit: `9fb4a9e1` (`fix(mind): repair year heatmap calendar
+  and direction atomicity`).  This is application/test/profile source, not
+  physical acceptance.
+- First direction boundary proved by the RED mounted-parent reproducer:
+  `transactionDirection.select(...)` changed the visible Income/Expense
+  chrome while the old heatmap refresh still derived direction from the
+  navigation-owned scope, whose LogBox scene acknowledgement could be held.
+  Thus the already-present `base.partitionFor(direction).focusMembershipSeed`
+  was not omitted; it was supplied too late for visible atomicity.  The repair
+  installs the target immutable Mind frame from the same resident partition
+  before changing the chrome.  A bounded, one-operation inactive canonical
+  amount-domain prewarm was added because the actual loader otherwise owned
+  only the active direction's domain; it retains no second Query controller
+  and only the two canonical directional slots.
+- Calendar source repair: new immutable
+  `MindYearHeatmapCalendarGeometry` maps local Monday–Sunday slots, derives
+  leading/trailing empty space and row count from each month, and the viewport
+  groups three MonthCards per annual row using the maximum required calendar
+  height.  It removes the fixed global aspect ratio; real zero-data days stay
+  gray and nonexistent slots are not painted.
+- Diagnostic repair: the existing bounded DebugConsole gained a `Mind
+  Heatmap` filter.  The event family is correlated by safe flow/direction/
+  digest/revision/timing/count fields and covers request, identity, projection
+  build, schedule/publication/stale rejection, visible paint, coalesced slider
+  summary and calendar geometry.  No raw descriptions, partner/category names
+  or per-cell logging were introduced.
+- RED→GREEN automated evidence: `MYHR-05` local geometry fixtures cover
+  Monday/Wednesday/Sunday starts, January–June 2025 offsets, 28/29/30/31 day
+  months and four/five/six rows. `MYHR-06` asserts disjoint exact Income and
+  Expense local-day sets and range-as-secondary-intersection. `MYHR-07/08`
+  exercise real production direction controls frame-by-frame and rapid
+  toggles, rejecting blank, chrome/identity mismatch and stale paints. The
+  panel test verifies All plus the dedicated filter; loader tests prove the
+  bounded prewarm; report tests require direction timing/critical-path fields.
+- Validation actually run in Ubuntu proot: `flutter analyze` — PASS (`No
+  issues found`); focused calendar/viewport/loader/profile-report suite —
+  PASS (116 tests); full `dashboard_core_ephemeral_focus_test.dart` — PASS
+  (106 tests); query/rebuild/zero-I/O regression suite — PASS (57 tests).
+  Device integration profile, final Actions profile values, human APK hash and
+  physical visual acceptance remain unproven at this point.
+- Untracked preservation baseline before this commit: 80 pre-existing user
+  paths, content-manifest SHA-256
+  `d64543c3bde9e6599e01278b0944e4c045dce252f4595ac058cdba5de2d0350f`;
+  path/size/mtime-manifest SHA-256
+  `849c3088844bb383f46f701e35c789a17049ab40662fc664185e6ad20036fcd4`.
+  None was staged, modified, stashed, cleaned or deleted.
+- Physical validation: `PENDING — USER ONLY`.
