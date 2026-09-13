@@ -85,3 +85,52 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - MISSING EVIDENCE: canonical local-worktree preflight; screenshot build identity; fresh `Mind Heatmap` trace; production-parent exact-day-set RED→GREEN evidence; direction request→correct-paint latency/FrameTiming profile; matching SCIP for integrated and final source; final APK/hash; user physical revalidation.
 - Prompt-writer change for this feedback: journal only, `[skip ci]`; no application source, test, workflow, graph, milestone file, build configuration or runtime behavior is changed by the prompt writer.
 - Physical validation of the eventual repaired APK: `PENDING — USER ONLY`.
+
+## 2026-09-13 — Backfill: Mind heatmap implementation and profile evidence
+
+- Backfill author: repair agent on canonical Fluvi branch
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`.  This entry is
+  based on the actual Git diffs, checked-in tests and available GitHub Actions
+  summaries/logs; it adds no retrospective device-runtime claim.
+- `9898fcedc767f4682bfa95053dacdb56c8e5d3c8` changed only the original
+  feature plan/spec/checklist.  It did not change production code or provide
+  physical evidence.
+- `2ed662d209ecaa7b00f653be6d0ef42446be09e1` added the annual projection,
+  live projection lane, core-controller integration, Mind surface/host/range
+  bridge, profile harness/report support and associated tests.  The actual
+  projection builds from resident ledger entries, stores day-local sorted
+  contributions/prefix sums, and its preview iterates the fixed annual day
+  domain.  The tests cover valid 365/366 dates, normalization, held slider
+  recolor, stale identity and basic direction/focus/range cases; they did not
+  assert true Monday–Sunday slots, disjoint direction day sets through the
+  mounted production parent, or per-frame chrome/heatmap atomicity.
+- `bef289b6d2c6471409677d0c5fdf993a6c088f42` changed profile-summary
+  retention/race handling and explicitly did not alter Mind query or heatmap
+  authority.  It is context for profile evidence only.
+- `28440a5f07151d6fc508f3817c48d2b0498d4205` changed the profile harness and
+  checklist to retain Mind preview evidence across bounded diagnostic-tail
+  eviction.  It did not change production heatmap ownership.
+- `2355953cafb322d8f917ac1f756e4a7738d4b5d9` replaced each MonthCard's
+  per-day widget grid with one dynamic `CustomPainter` field and added
+  structural tests.  The painter still used sequential `index ~/ 7` /
+  `index % 7`; this is the verified source of the calendar-column defect.
+  GitHub Actions run `34761546881` reported core, Flutter and human-APK jobs
+  successful but the dashboard profile failed its Mind FrameTiming evidence
+  validation, so it is not a green physical-performance result.
+- `c4dc80dba00a09b08900f649cd8366edd9f93d9b` changed the integration profile
+  sampler to isolate held previews and updated its checklist.  It did not
+  change production heatmap direction/calendar code.  GitHub Actions run
+  `34763720161` likewise had core, Flutter and human-APK jobs successful while
+  `run-dashboard-profile` failed: the retained frame-timing report included
+  average build `14.898 ms`, p90 build `24.461 ms`, p99 build `62.496 ms`, six
+  missed build-budget frames, and average raster `752.771 ms` (p90 `1416.142
+  ms`, p99 `1505.187 ms`).  This is a failing automation artifact, not a
+  statement that the physical screenshot came from this SHA.
+- Current repair audit additionally verified: the screenshot SHA/build marker
+  is unknown; no fresh current Mind heatmap runtime trace exists; the old
+  graph at `bef289b6...` was stale; pre-repair SCIP has now been regenerated
+  for `d27950c...`; and the prior tests' “colors changed”/single-direction
+  assertions leave the new exact-set and atomic-frame false-green gaps open.
+- Still unproven: the first direction causal boundary, any need for a
+  direction cache/prewarm, final request-to-paint timing, and device
+  acceptance.  `PENDING — USER ONLY` remains the physical-validation state.
