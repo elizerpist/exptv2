@@ -207,6 +207,18 @@ abstract final class DashboardProfileReport {
         rasterMisses > mindYearHeatmapMaximumMissedFrames) {
       reject('frame_timing_headroom');
     }
+    final frameTimingCapture = evidence['frame_timing_capture'];
+    if (frameTimingCapture is! Map ||
+        frameTimingCapture['engine_vsync_windowed'] != true ||
+        frameTimingCapture['quiescent_before_interaction'] != true ||
+        frameTimingCapture['window_count'] is! int ||
+        (frameTimingCapture['window_count'] as int) < 6 ||
+        frameTimingCapture['captured_frame_count'] is! int ||
+        (frameTimingCapture['captured_frame_count'] as int) < 1 ||
+        frameTimingCapture['drained_before_capture_frame_count'] is! int ||
+        (frameTimingCapture['drained_before_capture_frame_count'] as int) < 0) {
+      reject('frame_timing_capture');
+    }
     final previewCompute = evidence['preview_compute'];
     if (previewCompute is! Map ||
         previewCompute['sampleCount'] is! int ||

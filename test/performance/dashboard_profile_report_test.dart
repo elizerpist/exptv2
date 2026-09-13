@@ -38,6 +38,13 @@ void main() {
           'missed_frame_build_budget_count': 0,
           'missed_frame_rasterizer_budget_count': 0,
         },
+        'frame_timing_capture': <String, Object?>{
+          'engine_vsync_windowed': true,
+          'quiescent_before_interaction': true,
+          'window_count': 6,
+          'captured_frame_count': 20,
+          'drained_before_capture_frame_count': 3,
+        },
         'preview_compute': <String, Object?>{
           'sampleCount': 20,
           'p50Micros': 200,
@@ -66,6 +73,19 @@ void main() {
       (evidence['frame_timing'] as Map<String, Object?>)
         ..['missed_frame_build_budget_count'] = 0
         ..['95th_percentile_frame_rasterizer_time_millis'] = 12.1;
+      expect(
+        () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
+        throwsStateError,
+      );
+      (evidence['frame_timing']
+              as Map<
+                String,
+                Object?
+              >)['95th_percentile_frame_rasterizer_time_millis'] =
+          5.0;
+      (evidence['frame_timing_capture']
+              as Map<String, Object?>)['engine_vsync_windowed'] =
+          false;
       expect(
         () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
         throwsStateError,
@@ -966,6 +986,13 @@ Map<String, Object?> _mindYearHeatmapEvidence() => <String, Object?>{
     '95th_percentile_frame_rasterizer_time_millis': 5.0,
     'missed_frame_build_budget_count': 0,
     'missed_frame_rasterizer_budget_count': 0,
+  },
+  'frame_timing_capture': <String, Object?>{
+    'engine_vsync_windowed': true,
+    'quiescent_before_interaction': true,
+    'window_count': 6,
+    'captured_frame_count': 20,
+    'drained_before_capture_frame_count': 3,
   },
   'preview_compute': <String, Object?>{
     'sampleCount': 20,
