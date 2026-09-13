@@ -1575,6 +1575,18 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   expect(sourceCounter, isNotNull);
   final sourceRowsAtStart = sourceCounter!.sourceRowTouches;
   final profileSequence = _lastDiagnosticSequence();
+  var lastCollectedDiagnosticSequence = profileSequence;
+  final previewEvents = <FluviDiagnosticEvent>[];
+  void collectPreviewEvents() {
+    final events = _diagnosticEventsAfter(lastCollectedDiagnosticSequence);
+    if (events.isEmpty) return;
+    lastCollectedDiagnosticSequence =
+        events.last.sequence ?? lastCollectedDiagnosticSequence;
+    previewEvents.addAll(
+      events.where((event) => event.stage == 'MIND|PREVIEW_FRAME'),
+    );
+  }
+
   final frameTimings = <FrameTiming>[];
   var sliderEventCount = 0;
   var liveBeforeReleaseCount = 0;
@@ -1612,6 +1624,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
       timeStamp: const Duration(milliseconds: 24),
     );
     await tester.pump(const Duration(milliseconds: 16));
+    collectPreviewEvents();
     final live = controller.mindYearHeatmap.value!.range;
     expect(
       live,
@@ -1623,6 +1636,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
     terminalValues = live;
     await gesture.up(timeStamp: const Duration(milliseconds: 32));
     await tester.pump(const Duration(milliseconds: 16));
+    collectPreviewEvents();
   }
 
   binding.addTimingsCallback(collectFrameTimings);
@@ -1640,23 +1654,22 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
     binding.removeTimingsCallback(collectFrameTimings);
   }
   expect(frameTimings, isNotEmpty);
-  final previews = _diagnosticEventsAfter(profileSequence)
-      .where((event) => event.stage == 'MIND|PREVIEW_FRAME')
-      .toList(growable: false);
+  collectPreviewEvents();
   final summary = FrameTimingSummarizer(frameTimings).summary;
   final previewTiming = sourceCounter.previewDurationSummary();
   return <String, Object?>{
     'slider_event_count': sliderEventCount,
     'live_before_release_count': liveBeforeReleaseCount,
     'heatmap_publication_count': controller.mindYearHeatmap.publicationCount,
-    'preview_event_count': previews.length,
-    'preview_events_report_zero_repository_index_canonical': previews.every(
-      (event) =>
-          event.scope?.contains(
-            'repositoryRequests=0 indexBuilds=0 canonicalCommits=0',
-          ) ==
-          true,
-    ),
+    'preview_event_count': previewEvents.length,
+    'preview_events_report_zero_repository_index_canonical': previewEvents
+        .every(
+          (event) =>
+              event.scope?.contains(
+                'repositoryRequests=0 indexBuilds=0 canonicalCommits=0',
+              ) ==
+              true,
+        ),
     'source_rows_at_projection_build': sourceRowsAtStart,
     'source_rows_after_slider': sourceCounter.sourceRowTouches,
     'source_rows_during_preview': sourceCounter.sourceRowTouchesDuringPreview,
