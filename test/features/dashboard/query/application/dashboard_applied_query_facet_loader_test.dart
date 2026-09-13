@@ -47,7 +47,68 @@ void main() {
             .maximumAmountScaled100,
         860000,
       );
+      expect(
+        repository.requestedScopes,
+        hasLength(2),
+        reason:
+            'The opposite canonical direction is warmed before a later tap.',
+      );
+      repository.completeAt(1, _data(maximum: 860000));
+      await Future<void>.microtask(() {});
+    },
+  );
+
+  test(
+    'RED MYHR-10: a ready active canonical domain prewarms exactly one opposite direction before a direction tap',
+    () async {
+      final direction = ValueNotifier<LedgerDirection>(LedgerDirection.income);
+      addTearDown(direction.dispose);
+      final queries = CurrentQueryController(
+        initialScope: CurrentLedgerQueryScope(
+          direction: LedgerDirection.income,
+          timeScope: AllTimeScope(),
+        ),
+      );
+      addTearDown(queries.dispose);
+      final repository = _DeferredRepository();
+      final loader = DashboardAppliedQueryFacetLoader(
+        currentQuery: queries,
+        directionChanges: direction,
+        activeDirection: () => direction.value,
+        repository: repository,
+      );
+      addTearDown(loader.dispose);
+
+      final active = loader.start();
       expect(repository.requestedScopes, hasLength(1));
+      expect(
+        repository.requestedScopes.single.direction,
+        LedgerDirection.income,
+      );
+      repository.completeAt(0, _data(maximum: 860000));
+      await active;
+      await Future<void>.microtask(() {});
+
+      expect(repository.requestedScopes, hasLength(2));
+      expect(repository.requestedScopes[1].direction, LedgerDirection.expense);
+      repository.completeAt(1, _data(maximum: 740000));
+      await Future<void>.microtask(() {});
+      expect(
+        queries
+            .amountDomainFor(LedgerDirection.expense)
+            ?.maximumAmountScaled100,
+        740000,
+      );
+
+      direction.value = LedgerDirection.expense;
+      await Future<void>.microtask(() {});
+      expect(
+        repository.requestedScopes,
+        hasLength(2),
+        reason:
+            'The user direction path activates the already-canonical domain; '
+            'it performs no repository request.',
+      );
     },
   );
 
@@ -268,6 +329,9 @@ void main() {
       repository.completeNext(_data(maximum: 26000000));
       await first;
       expect(loader.state, DashboardAppliedQueryFacetLoadState.ready);
+      expect(repository.requestedScopes, hasLength(2));
+      repository.completeAt(1, _data(maximum: 26000000));
+      await Future<void>.microtask(() {});
 
       queries.replaceDirection(
         LedgerDirection.expense,
@@ -280,7 +344,7 @@ void main() {
       );
       await Future<void>.microtask(() {});
 
-      expect(repository.requestedScopes, hasLength(1));
+      expect(repository.requestedScopes, hasLength(2));
       expect(loader.state, DashboardAppliedQueryFacetLoadState.ready);
       expect(queries.amountDomainFor(LedgerDirection.expense), isNotNull);
     },

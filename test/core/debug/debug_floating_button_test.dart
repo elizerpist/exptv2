@@ -70,6 +70,64 @@ void main() {
     expect(find.byType(SelectableText).evaluate().length, lessThan(1000));
   });
 
+  testWidgets(
+    'RED MYHR-09: Mind Heatmap is a separate bounded log filter while All preserves every family',
+    (tester) async {
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'MIND_HEATMAP|DIRECTION_REQUEST'),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'MIND_HEATMAP|PAINTED'),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'MIND|PREVIEW_FRAME'),
+      );
+      FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'AVATAR|X'));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('[FLOW][MIND_HEATMAP|DIRECTION_REQUEST]'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('[FLOW][AVATAR|X]'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('debug-console-log-filter')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-console-log-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mind Heatmap').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('[FLOW][MIND_HEATMAP|DIRECTION_REQUEST]'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('[FLOW][MIND_HEATMAP|PAINTED]'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('[FLOW][MIND|PREVIEW_FRAME]'), findsNothing);
+      expect(find.textContaining('[FLOW][AVATAR|X]'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('debug-console-log-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All').last);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('[FLOW][MIND|PREVIEW_FRAME]'), findsOneWidget);
+      expect(find.textContaining('[FLOW][AVATAR|X]'), findsOneWidget);
+    },
+  );
+
   testWidgets('manual review pauses follow and jump-to-live clears unseen', (
     tester,
   ) async {

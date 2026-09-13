@@ -44,6 +44,7 @@ void main() {
           'p95Micros': 300,
           'maxMicros': 400,
         },
+        'direction_switch': _mindDirectionSwitchEvidence(),
       };
       expect(
         () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
@@ -971,6 +972,36 @@ Map<String, Object?> _mindYearHeatmapEvidence() => <String, Object?>{
     'p50Micros': 200,
     'p95Micros': 300,
     'maxMicros': 400,
+  },
+  'direction_switch': _mindDirectionSwitchEvidence(),
+};
+
+Map<String, Object?> _mindDirectionSwitchEvidence() => <String, Object?>{
+  'request_count': 4,
+  'correct_publication_count': 4,
+  'blank_frame_count': 0,
+  'identity_mismatch_frame_count': 0,
+  'chrome_mismatch_frame_count': 0,
+  'stale_paint_after_correct_count': 0,
+  'request_to_paint': <String, Object?>{
+    'sampleCount': 4,
+    'p50Micros': 4000,
+    'p95Micros': 8000,
+    'maxMicros': 9000,
+  },
+  'projection_build': <String, Object?>{
+    'sampleCount': 4,
+    'p50Micros': 1200,
+    'p95Micros': 2400,
+    'maxMicros': 2800,
+  },
+  'prepared_index_identity_unchanged': true,
+  'repository_or_index_work_during_tap': false,
+  'frame_timing': <String, Object?>{
+    '95th_percentile_frame_build_time_millis': 4.0,
+    '95th_percentile_frame_rasterizer_time_millis': 5.0,
+    'missed_frame_build_budget_count': 0,
+    'missed_frame_rasterizer_budget_count': 0,
   },
 };
 

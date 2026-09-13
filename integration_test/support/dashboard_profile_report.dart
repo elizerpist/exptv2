@@ -141,6 +141,8 @@ abstract final class DashboardProfileReport {
   static const double mindYearHeatmapP95HeadroomMillis = 12;
   static const int mindYearHeatmapMaximumMissedFrames = 1;
   static const int mindYearHeatmapPreviewP95HeadroomMicros = 8000;
+  static const int mindYearHeatmapDirectionPaintP95Micros = 20000;
+  static const int mindYearHeatmapDirectionBuildP95Micros = 12000;
 
   /// B's Mind extension is intentionally stricter than a callback-count
   /// check: it requires actual engine FrameTiming samples, real pointer-time
@@ -217,6 +219,67 @@ abstract final class DashboardProfileReport {
     if ((previewCompute['p95Micros'] as int) >
         mindYearHeatmapPreviewP95HeadroomMicros) {
       reject('preview_compute_headroom');
+    }
+    final direction = evidence['direction_switch'];
+    if (direction is! Map) reject('direction_switch');
+    final requestCount = direction['request_count'];
+    final published = direction['correct_publication_count'];
+    if (requestCount is! int || requestCount < 4) reject('direction_request');
+    if (published is! int || published < requestCount) {
+      reject('direction_publication');
+    }
+    for (final key in const <String>[
+      'blank_frame_count',
+      'identity_mismatch_frame_count',
+      'chrome_mismatch_frame_count',
+      'stale_paint_after_correct_count',
+    ]) {
+      if (direction[key] != 0) reject('direction_$key');
+    }
+    if (direction['prepared_index_identity_unchanged'] != true ||
+        direction['repository_or_index_work_during_tap'] != false) {
+      reject('direction_critical_path_io');
+    }
+    Map<Object?, Object?> timingFor(String key) {
+      final timing = direction[key];
+      if (timing is! Map ||
+          timing['sampleCount'] is! int ||
+          timing['p50Micros'] is! int ||
+          timing['p95Micros'] is! int ||
+          timing['maxMicros'] is! int ||
+          (timing['sampleCount'] as int) < requestCount) {
+        reject('direction_$key');
+      }
+      return timing;
+    }
+
+    final requestToPaint = timingFor('request_to_paint');
+    if ((requestToPaint['p95Micros'] as int) >
+        mindYearHeatmapDirectionPaintP95Micros) {
+      reject('direction_request_to_paint_headroom');
+    }
+    final projectionBuild = timingFor('projection_build');
+    if ((projectionBuild['p95Micros'] as int) >
+        mindYearHeatmapDirectionBuildP95Micros) {
+      reject('direction_projection_build_headroom');
+    }
+    final directionFrames = direction['frame_timing'];
+    if (directionFrames is! Map ||
+        directionFrames['95th_percentile_frame_build_time_millis'] is! num ||
+        directionFrames['95th_percentile_frame_rasterizer_time_millis']
+            is! num ||
+        directionFrames['missed_frame_build_budget_count'] is! num ||
+        directionFrames['missed_frame_rasterizer_budget_count'] is! num ||
+        (directionFrames['95th_percentile_frame_build_time_millis'] as num) >
+            mindYearHeatmapP95HeadroomMillis ||
+        (directionFrames['95th_percentile_frame_rasterizer_time_millis']
+                as num) >
+            mindYearHeatmapP95HeadroomMillis ||
+        (directionFrames['missed_frame_build_budget_count'] as num) >
+            mindYearHeatmapMaximumMissedFrames ||
+        (directionFrames['missed_frame_rasterizer_budget_count'] as num) >
+            mindYearHeatmapMaximumMissedFrames) {
+      reject('direction_frame_timing');
     }
   }
 

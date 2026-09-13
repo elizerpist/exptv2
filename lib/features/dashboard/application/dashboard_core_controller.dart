@@ -107,6 +107,23 @@ final class _DirectionSwitchDiagnosticTrace {
   String get flowId => 'direction-switch:$id';
 }
 
+/// Bounded, Mind-only correlation marker for one direct direction intent.
+/// It carries no query text or ledger payload and does not participate in
+/// selection/publication authority.
+final class _MindHeatmapDirectionTrace {
+  const _MindHeatmapDirectionTrace({
+    required this.id,
+    required this.requestedAtMicros,
+    required this.direction,
+  });
+
+  final int id;
+  final int requestedAtMicros;
+  final LedgerDirection direction;
+
+  String get flowId => 'mind-heatmap-direction:$id';
+}
+
 /// The runtime and presentation owners can expose the same immutable index
 /// through distinct wrapper references during an initial attach. Live-resource
 /// safety is revision/query/generation identity, not Dart object identity.
@@ -1037,6 +1054,8 @@ final class DashboardCoreController {
   bool _disposed = false;
   int _directionSwitchDiagnosticGeneration = 0;
   _DirectionSwitchDiagnosticTrace? _pendingDirectionSwitchDiagnosticTrace;
+  int _mindHeatmapDirectionGeneration = 0;
+  _MindHeatmapDirectionTrace? _pendingMindHeatmapDirectionTrace;
   int _logBoxTextLayoutPreparedRows = 0;
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
@@ -3795,6 +3814,25 @@ final class DashboardCoreController {
     }
     final direction = state.parentQueryScope.direction;
     final appliedScope = currentQuery.scopeFor(direction);
+    return _installMindYearHeatmapProjection(
+      direction: direction,
+      appliedScope: appliedScope,
+      year: state.yearCursor,
+      isStillCurrent: () =>
+          _isMindYearHeatmapIdentityCurrent(direction: direction),
+    );
+  }
+
+  /// Installs one exact heatmap identity from the already-selected direction
+  /// partition.  Both canonical navigation and a direct direction intent use
+  /// this one path; the latter is allowed only while its prepared base and
+  /// amount domain are already resident.
+  bool _installMindYearHeatmapProjection({
+    required LedgerDirection direction,
+    required CurrentLedgerQueryScope appliedScope,
+    required int year,
+    required bool Function() isStillCurrent,
+  }) {
     final binding = QueryAmountRangeBinding.ready(
       scope: appliedScope,
       amountDomain: currentQuery.amountDomainFor(direction),
@@ -3804,21 +3842,64 @@ final class DashboardCoreController {
       // Never retain a previous year/filter's tiles while the new exact base
       // is still being prepared.
       mindYearHeatmap.clear();
+      _logMindHeatmap(
+        stage: 'FRAME_REJECTED_STALE',
+        direction: direction,
+        scope:
+            'reason=${binding == null ? 'amountDomainUnavailable' : 'preparedBaseUnavailable'}',
+      );
       return false;
     }
     final identity = _mindYearHeatmapIdentityFor(
       base: base,
       domainScope: QueryAmountRange.domainScope(appliedScope),
-      year: state.yearCursor,
+      year: year,
     );
     final seed = base.partitionFor(direction).focusMembershipSeed;
     if (seed == null) {
       mindYearHeatmap.clear();
+      _logMindHeatmap(
+        stage: 'FRAME_REJECTED_STALE',
+        direction: direction,
+        scope: 'reason=directionPartitionSeedUnavailable',
+      );
       return false;
     }
     if (mindYearHeatmap.identity == identity) {
-      return mindYearHeatmap.publishPreview(identity, binding.values);
+      final published = mindYearHeatmap.publishPreview(
+        identity,
+        binding.values,
+      );
+      final traced = _pendingMindHeatmapDirectionTrace?.direction == direction;
+      // Core may ask for the current identity repeatedly while ordinary
+      // chrome rebuilds. Retain only a direct direction hand-off or a
+      // rejection; amount-only repaint evidence is emitted once at drag end.
+      if (!published || traced) {
+        _logMindHeatmap(
+          stage: published ? 'FRAME_PUBLISHED' : 'FRAME_REJECTED_STALE',
+          direction: direction,
+          identity: identity,
+          base: base,
+          scope: 'cause=identityReuse rangePreview=true',
+        );
+      }
+      if (published) _completeMindHeatmapDirectionTrace(direction);
+      return published;
     }
+    _logMindHeatmap(
+      stage: 'IDENTITY_RESOLVED',
+      direction: direction,
+      identity: identity,
+      base: base,
+      scope: 'cause=nonAmountIdentity',
+    );
+    _logMindHeatmap(
+      stage: 'PROJECTION_BUILD_STARTED',
+      direction: direction,
+      identity: identity,
+      base: base,
+      scope: 'sourceRows=0',
+    );
     final stopwatch = Stopwatch()..start();
     final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
     final memberships = seed.select(
@@ -3834,18 +3915,49 @@ final class DashboardCoreController {
       ),
     );
     stopwatch.stop();
+    _logMindHeatmap(
+      stage: 'PROJECTION_BUILD_COMPLETED',
+      direction: direction,
+      identity: identity,
+      base: base,
+      scope:
+          'sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
+          'matchingRows=${memberships.entryIndices.length} '
+          'buildMicros=${stopwatch.elapsedMicroseconds}',
+    );
     // The identity is fully derived from current immutable state. Recheck it
     // before replacement so no reentrant query/navigation callback may cause
     // an old source projection to flash into the new year.
     if (_disposed ||
-        !_isMindYearHeatmapIdentityCurrent(
-          identity,
-          base: base,
-          direction: direction,
-        )) {
+        !isStillCurrent() ||
+        !_isMindYearHeatmapBaseCurrent(base: base, scope: appliedScope)) {
+      _logMindHeatmap(
+        stage: 'FRAME_REJECTED_STALE',
+        direction: direction,
+        identity: identity,
+        base: base,
+        scope: 'reason=identityNoLongerCurrent',
+      );
       return false;
     }
+    _logMindHeatmap(
+      stage: 'FRAME_SCHEDULED',
+      direction: direction,
+      identity: identity,
+      base: base,
+      scope: 'cause=projectionInstall',
+    );
     mindYearHeatmap.install(projection, binding.values);
+    _logMindHeatmap(
+      stage: 'FRAME_PUBLISHED',
+      direction: direction,
+      identity: identity,
+      base: base,
+      scope:
+          'cause=projectionInstall sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
+          'buildMicros=${stopwatch.elapsedMicroseconds}',
+    );
+    _completeMindHeatmapDirectionTrace(direction);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MIND|HEATMAP_PROJECTION_READY',
@@ -3861,6 +3973,40 @@ final class DashboardCoreController {
       ),
     );
     return true;
+  }
+
+  void _logMindHeatmap({
+    required String stage,
+    required LedgerDirection direction,
+    MindYearHeatmapIdentity? identity,
+    PreparedDashboardIndex? base,
+    required String scope,
+  }) {
+    final pending = _pendingMindHeatmapDirectionTrace;
+    final trace = pending != null && pending.direction == direction
+        ? pending
+        : null;
+    final elapsed = trace == null
+        ? null
+        : developer.Timeline.now - trace.requestedAtMicros;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_HEATMAP|$stage',
+        flowId: trace?.flowId,
+        direction: direction.name,
+        coreRevision: base?.coreRevision,
+        scope:
+            '${identity == null ? '' : 'year=${identity.year} identity=${FluviDiagnosticKeyDigest.of(identity.upstreamScopeKey)} indexGeneration=${identity.indexGeneration} '}'
+            '${elapsed == null ? '' : 'requestTo${stage}Micros=$elapsed '}'
+            '$scope',
+      ),
+    );
+  }
+
+  void _completeMindHeatmapDirectionTrace(LedgerDirection direction) {
+    if (_pendingMindHeatmapDirectionTrace?.direction == direction) {
+      _pendingMindHeatmapDirectionTrace = null;
+    }
   }
 
   void clearMindYearHeatmapProjection() => mindYearHeatmap.clear();
@@ -3902,26 +4048,46 @@ final class DashboardCoreController {
         ',search=${active?.normalizedSearch ?? '-'}';
   }
 
-  bool _isMindYearHeatmapIdentityCurrent(
-    MindYearHeatmapIdentity identity, {
-    required PreparedDashboardIndex base,
-    required LedgerDirection direction,
-  }) {
+  bool _isMindYearHeatmapIdentityCurrent({required LedgerDirection direction}) {
     if (_disposed ||
         navigation.state.parentQueryScope.direction != direction ||
         navigation.state.plane != TimePlane.year) {
       return false;
     }
     final scope = currentQuery.scopeFor(direction);
-    if (!identical(_compatibleMindAmountPreviewBase(scope), base)) {
-      return false;
+    final base = _compatibleMindAmountPreviewBase(scope);
+    return base != null &&
+        _isMindYearHeatmapBaseCurrent(base: base, scope: scope);
+  }
+
+  bool _isMindYearHeatmapBaseCurrent({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope scope,
+  }) =>
+      !_disposed &&
+      base.coreRevision == coreRevision &&
+      identical(_compatibleMindAmountPreviewBase(scope), base);
+
+  void _installMindYearHeatmapForDirectionIntent({
+    required LedgerDirection direction,
+    required DashboardNavigationState candidate,
+  }) {
+    final state = navigation.state;
+    if (_disposed ||
+        state.plane != TimePlane.year ||
+        mindYearHeatmap.value == null) {
+      return;
     }
-    return _mindYearHeatmapIdentityFor(
-          base: base,
-          domainScope: QueryAmountRange.domainScope(scope),
-          year: navigation.state.yearCursor,
-        ) ==
-        identity;
+    final appliedScope = currentQuery.scopeFor(direction);
+    _installMindYearHeatmapProjection(
+      direction: direction,
+      appliedScope: appliedScope,
+      year: candidate.yearCursor,
+      isStillCurrent: () =>
+          !_disposed &&
+          navigation.state.plane == TimePlane.year &&
+          currentQuery.scopeFor(direction) == appliedScope,
+    );
   }
 
   bool _publishMindYearHeatmapPreview({
@@ -4531,6 +4697,29 @@ final class DashboardCoreController {
             'repositoryRequestsDuringDrag=0 indexBuildsDuringDrag=0 '
             'domainInvalidationCount=0 sliderUnmountCount=0 '
             'loadingExposureCount=0',
+      ),
+    );
+    final counter = mindYearHeatmap.sourceWorkCounter;
+    final summary = counter?.previewDurationSummary();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_HEATMAP|SLIDER_PREVIEW_SUMMARY',
+        flowId: 'interaction:$_mindAmountInteractionGeneration',
+        direction: direction.name,
+        coreRevision: mindYearHeatmap.identity?.coreRevision,
+        scope:
+            'year=${mindYearHeatmap.identity?.year ?? '-'} '
+            'previewFrames=$_mindAmountInteractionPreviewCount '
+            'previewPublications=$_mindAmountInteractionPublishedCount '
+            'sourceRowsDuringPreview=${counter?.sourceRowTouchesDuringPreview ?? 0} '
+            'repositoryAccessesDuringPreview=${counter?.repositoryAccessesDuringPreview ?? 0} '
+            'indexBuildsDuringPreview=${counter?.indexBuildsDuringPreview ?? 0} '
+            'maxDayBuckets=${counter?.maxDayBucketsVisitedPerPreview ?? 0} '
+            'samples=${summary?['sampleCount'] ?? 0} '
+            'p50Micros=${summary?['p50Micros'] ?? 0} '
+            'p95Micros=${summary?['p95Micros'] ?? 0} '
+            'maxMicros=${summary?['maxMicros'] ?? 0} '
+            'canonicalCommitCount=${committed ? 1 : 0}',
       ),
     );
     _mindYearHeatmapInteractionIdentity = null;
@@ -8193,6 +8382,27 @@ final class DashboardCoreController {
       template: targetTemplate,
       availability: targetAvailability,
     );
+    final mindHeatmapTrace =
+        navigation.state.plane == TimePlane.year &&
+            mindYearHeatmap.value != null
+        ? _MindHeatmapDirectionTrace(
+            id: ++_mindHeatmapDirectionGeneration,
+            requestedAtMicros: developer.Timeline.now,
+            direction: ledgerDirection,
+          )
+        : null;
+    if (mindHeatmapTrace != null) {
+      _pendingMindHeatmapDirectionTrace = mindHeatmapTrace;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND_HEATMAP|DIRECTION_REQUEST',
+          flowId: mindHeatmapTrace.flowId,
+          direction: ledgerDirection.name,
+          coreRevision: coreRevision,
+          scope: 'inputToRequestMicros=0',
+        ),
+      );
+    }
     final directionTrace = _collectAvatarPacingCorrelationDiagnostics
         ? _DirectionSwitchDiagnosticTrace(
             id: ++_directionSwitchDiagnosticGeneration,
@@ -8214,6 +8424,14 @@ final class DashboardCoreController {
         ),
       );
     }
+    // The heatmap is a direct Mind surface for the same already-selected
+    // directional query.  If its target base/domain is resident, replace its
+    // immutable frame before the toggle chrome changes.  Structural LogBox
+    // scene coverage remains independently gated below.
+    _installMindYearHeatmapForDirectionIntent(
+      direction: ledgerDirection,
+      candidate: candidate,
+    );
     // Direction is direct user intent for the Budget projection. Its owner
     // must change before accepting the live frame: structural LogBox scene
     // coverage below may be held, while Header/Progress/Partition/Rhythm bind

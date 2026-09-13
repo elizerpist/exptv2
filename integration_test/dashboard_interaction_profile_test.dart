@@ -20,6 +20,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_controller.d
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
+import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
@@ -1591,6 +1592,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   var sliderEventCount = 0;
   var liveBeforeReleaseCount = 0;
   var terminalValues = controller.mindYearHeatmap.value!.range;
+  late Map<String, Object?> directionEvidence;
   void collectFrameTimings(List<FrameTiming> values) =>
       frameTimings.addAll(values);
 
@@ -1706,6 +1708,18 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
         .62,
       ],
     );
+    final directionTimingStart = frameTimings.length;
+    directionEvidence = await _profileMindYearHeatmapDirections(
+      tester,
+      controller,
+      frameTimings: frameTimings,
+      repository:
+          tester.widget<FluviApp>(find.byType(FluviApp)).dashboardRepository
+              as MethodChannelDashboardDataRuntimeRepository,
+    );
+    directionEvidence['frame_timing'] = FrameTimingSummarizer(
+      frameTimings.sublist(directionTimingStart),
+    ).summary;
   } finally {
     // Allow the engine's final batch to arrive before removing the callback.
     final deadline = DateTime.now().add(const Duration(seconds: 4));
@@ -1743,6 +1757,160 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
     'final_visible_range_lower':
         controller.mindYearHeatmap.value!.range.lowerScaled100,
     'frame_timing': summary,
+    'direction_switch': directionEvidence,
+  };
+}
+
+/// Exercises the real direction buttons while the production Mind-Year
+/// surface is mounted. Each sampled frame must agree on chrome, identity and
+/// non-null tiles; no controller command or synthetic heatmap publication is
+/// used here.
+Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
+  WidgetTester tester,
+  DashboardCoreController controller, {
+  required List<FrameTiming> frameTimings,
+  required MethodChannelDashboardDataRuntimeRepository repository,
+}) async {
+  LedgerDirection oppositeOf(LedgerDirection direction) => switch (direction) {
+    LedgerDirection.income => LedgerDirection.expense,
+    LedgerDirection.expense => LedgerDirection.income,
+  };
+
+  final initial =
+      controller.transactionDirection.direction == TransactionDirection.income
+      ? LedgerDirection.income
+      : LedgerDirection.expense;
+  final warmDeadline = DateTime.now().add(const Duration(seconds: 12));
+  final opposite = oppositeOf(initial);
+  while (DateTime.now().isBefore(warmDeadline) &&
+      controller.currentQuery.amountDomainFor(opposite) == null) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  expect(
+    controller.currentQuery.amountDomainFor(opposite),
+    isNotNull,
+    reason:
+        'The inactive canonical amount domain must be ready before the '
+        'interaction-critical direction tap.',
+  );
+
+  var blankFrames = 0;
+  var identityMismatchFrames = 0;
+  var chromeMismatchFrames = 0;
+  var stalePaintAfterCorrect = 0;
+  final requestToPaintMicros = <int>[];
+  final projectionBuildMicros = <int>[];
+  final sequenceStart = _lastDiagnosticSequence();
+  final preparedBefore = controller.preparedIndex;
+  final repositoryBefore = repository.performanceReport();
+  final buttons = <LedgerDirection>[opposite, initial, opposite, initial];
+  for (final target in buttons) {
+    final beforeSequence = _lastDiagnosticSequence();
+    final timingCountBefore = frameTimings.length;
+    await tester.tap(find.byKey(ValueKey('fluvi-${target.name}-button')));
+    for (var frameIndex = 0; frameIndex < 3; frameIndex += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      final expectedLabel = target == LedgerDirection.income
+          ? 'Bevétel'
+          : 'Kiadás';
+      final chrome = tester.widget<Semantics>(
+        find.byKey(const ValueKey('dashboard-action-row')),
+      );
+      if (chrome.properties.label != expectedLabel) chromeMismatchFrames += 1;
+      final frame = controller.mindYearHeatmap.value;
+      if (frame == null) {
+        blankFrames += 1;
+      } else if (!frame.identity.upstreamScopeKey.startsWith(
+        '${target.name}|',
+      )) {
+        identityMismatchFrames += 1;
+      }
+    }
+    final timingDeadline = DateTime.now().add(const Duration(seconds: 4));
+    while (frameTimings.length <= timingCountBefore &&
+        DateTime.now().isBefore(timingDeadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(
+      frameTimings.length,
+      greaterThan(timingCountBefore),
+      reason: 'Each direction tap must receive an engine FrameTiming batch.',
+    );
+    final events = _diagnosticEventsAfter(beforeSequence);
+    final request = events.firstWhere(
+      (event) =>
+          event.stage == 'MIND_HEATMAP|DIRECTION_REQUEST' &&
+          event.direction == target.name,
+      orElse: () => throw StateError('Missing Mind direction request.'),
+    );
+    final paintedIndex = events.indexWhere(
+      (event) =>
+          event.stage == 'MIND_HEATMAP|PAINTED' &&
+          event.direction == target.name,
+    );
+    if (paintedIndex < 0) {
+      throw StateError('Missing Mind painted event for ${target.name}.');
+    }
+    final painted = events[paintedIndex];
+    if (request.elapsedMicros != null && painted.elapsedMicros != null) {
+      requestToPaintMicros.add(painted.elapsedMicros! - request.elapsedMicros!);
+    }
+    for (final event in events.where(
+      (event) => event.stage == 'MIND_HEATMAP|PROJECTION_BUILD_COMPLETED',
+    )) {
+      final micros = _scopeInt(event.scope, 'buildMicros');
+      if (micros != null) projectionBuildMicros.add(micros);
+    }
+    for (final event in events.skip(paintedIndex + 1)) {
+      if (event.stage == 'MIND_HEATMAP|PAINTED' &&
+          event.direction != target.name) {
+        stalePaintAfterCorrect += 1;
+      }
+    }
+  }
+  final allEvents = _diagnosticEventsAfter(sequenceStart);
+  final repositoryAfter = repository.performanceReport();
+  final noDomainTransportDuringTap = allEvents.every(
+    (event) => event.stage != 'MIND_HEATMAP|DIRECTION_DOMAIN_PREWARM_REQUEST',
+  );
+  return <String, Object?>{
+    'request_count': buttons.length,
+    'correct_publication_count': allEvents
+        .where((event) => event.stage == 'MIND_HEATMAP|FRAME_PUBLISHED')
+        .length,
+    'blank_frame_count': blankFrames,
+    'identity_mismatch_frame_count': identityMismatchFrames,
+    'chrome_mismatch_frame_count': chromeMismatchFrames,
+    'stale_paint_after_correct_count': stalePaintAfterCorrect,
+    'request_to_paint': _microsecondSummary(requestToPaintMicros),
+    'projection_build': _microsecondSummary(projectionBuildMicros),
+    'prepared_index_identity_unchanged': identical(
+      preparedBefore,
+      controller.preparedIndex,
+    ),
+    'repository_or_index_work_during_tap':
+        noDomainTransportDuringTap &&
+        _scalarDelta(repositoryBefore, repositoryAfter, 'platform_calls') ==
+            0 &&
+        _scalarDelta(repositoryBefore, repositoryAfter, 'index_build_calls') ==
+            0,
+  };
+}
+
+Map<String, int> _microsecondSummary(List<int> samples) {
+  if (samples.isEmpty) {
+    throw StateError('Mind direction profile did not receive timing samples.');
+  }
+  final sorted = List<int>.of(samples)..sort();
+  int percentile(double fraction) =>
+      sorted[((sorted.length - 1) * fraction).ceil()]
+          .clamp(0, sorted.length - 1)
+          .toInt();
+  return <String, int>{
+    'sampleCount': sorted.length,
+    'p50Micros': percentile(.50),
+    'p95Micros': percentile(.95),
+    'maxMicros': sorted.last,
   };
 }
 

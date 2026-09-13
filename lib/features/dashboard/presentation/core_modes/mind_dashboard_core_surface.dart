@@ -139,6 +139,11 @@ class MindDashboardCoreSurface extends StatelessWidget {
 final class _MindYearHeatmapBody extends StatelessWidget {
   const _MindYearHeatmapBody({required this.heatmap, required this.range});
 
+  // The compact shared slider has a deliberately fixed footer lane.  It
+  // protects the annual scroll viewport from range-control intrinsic sizing
+  // and keeps the control reachable in the small Mind body card.
+  static const _footerHeight = 74.0;
+
   final ValueListenable<MindYearHeatmapFrame?> heatmap;
   final Widget range;
 
@@ -152,7 +157,7 @@ final class _MindYearHeatmapBody extends StatelessWidget {
       ),
       KeyedSubtree(
         key: const ValueKey('mind-year-heatmap-fixed-footer'),
-        child: range,
+        child: SizedBox(height: _footerHeight, child: range),
       ),
     ],
   );

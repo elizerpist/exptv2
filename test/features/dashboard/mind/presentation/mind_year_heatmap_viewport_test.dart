@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_viewport.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
@@ -8,6 +10,8 @@ import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_c
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
+  setUp(FluviDiagnosticLogger.clear);
+
   const range = QueryAmountRangeValues(
     minimumScaled100: 1,
     maximumScaled100: 1000,
@@ -15,47 +19,50 @@ void main() {
     upperScaled100: 1000,
   );
 
-  testWidgets('RED MYH-02/13: 12 compact MonthCards form a 3x4 year grid', (
-    tester,
-  ) async {
-    final frame = ValueNotifier(_projection().preview(range));
-    addTearDown(frame.dispose);
+  testWidgets(
+    'RED MYHR-04/05: 12 compact MonthCards form four calendar-driven annual rows',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 280,
-            height: 500,
-            child: MindYearHeatmapViewport(frameListenable: frame),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 280,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(
-      find.byKey(const ValueKey('mind-year-heatmap-scroll')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('mind-year-heatmap-grid')),
-      findsOneWidget,
-    );
-    final grid = tester.widget<GridView>(
-      find.byKey(const ValueKey('mind-year-heatmap-grid')),
-    );
-    expect(grid.childrenDelegate.estimatedChildCount, 12);
-    expect(find.text('szeptember'), findsOneWidget);
-    expect(
-      grid.gridDelegate,
-      isA<SliverGridDelegateWithFixedCrossAxisCount>().having(
-        (delegate) => delegate.crossAxisCount,
-        'crossAxisCount',
-        3,
-      ),
-    );
-    expect(tester.takeException(), isNull);
-  });
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-scroll')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-grid')),
+        findsOneWidget,
+      );
+      final grid = tester.widget<ListView>(
+        find.byKey(const ValueKey('mind-year-heatmap-grid')),
+      );
+      expect(grid.childrenDelegate.estimatedChildCount, isNotNull);
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-annual-row-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-annual-row-3')),
+        findsOneWidget,
+      );
+      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(find.text('szeptember'), findsOneWidget);
+      expect(find.byType(GridView), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'RED MYH-09: a held physical slider drag recolors tiles before release',
@@ -188,7 +195,7 @@ void main() {
           ),
         ),
       );
-      final gridBefore = tester.widget<GridView>(
+      final gridBefore = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
       );
       final januaryBefore = tester.widget<MindYearHeatmapMonthCard>(
@@ -205,7 +212,7 @@ void main() {
       await tester.pump();
 
       expect(
-        tester.widget<GridView>(
+        tester.widget<ListView>(
           find.byKey(const ValueKey('mind-year-heatmap-grid')),
         ),
         same(gridBefore),
@@ -249,6 +256,126 @@ void main() {
         findsNothing,
       );
       expect(find.byType(CustomPaint), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'RED MYHR-04/05: January 2025 starts at Wednesday and MonthCards have no expanded tail',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 480,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      final painter =
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(
+                      const ValueKey('mind-year-heatmap-month-cells-1'),
+                    ),
+                  )
+                  .painter!
+              as MindYearHeatmapMonthPainter;
+      expect(
+        painter.slotIndexForDate(const LocalDate(year: 2025, month: 1, day: 1)),
+        2,
+      );
+      expect(
+        painter.slotIndexForDate(
+          const LocalDate(year: 2025, month: 1, day: 31),
+        ),
+        32,
+      );
+      expect(painter.dayAtSlot(0), isNull);
+      expect(painter.dayAtSlot(1), isNull);
+      expect(painter.dayAtSlot(2), 1);
+      expect(
+        painter.colorForDate(const LocalDate(year: 2025, month: 1, day: 1)),
+        FluviVisualTokens.mindHeatmapEmpty,
+      );
+      expect(
+        painter.colorForDate(const LocalDate(year: 2025, month: 1, day: 2)),
+        isNot(FluviVisualTokens.mindHeatmapEmpty),
+      );
+
+      final monthCard = tester.getSize(
+        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+      );
+      final cells = tester.getSize(
+        find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
+      );
+      expect(monthCard.height - cells.height, lessThanOrEqualTo(32));
+    },
+  );
+
+  testWidgets(
+    'RED MYHR-09: viewport logs one bounded geometry and paint summary per identity',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 480,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      List<String> heatmapStages() => FluviDiagnosticLogger.entries
+          .map((event) => event.stage)
+          .where((stage) => stage.startsWith('MIND_HEATMAP|'))
+          .toList(growable: false);
+
+      expect(
+        heatmapStages(),
+        containsAll(<String>[
+          'MIND_HEATMAP|CALENDAR_GEOMETRY',
+          'MIND_HEATMAP|DIRECTION_VISIBLE',
+          'MIND_HEATMAP|PAINTED',
+        ]),
+      );
+      expect(
+        heatmapStages().length,
+        3,
+        reason: 'There is no day-cell or pixel diagnostic fan-out.',
+      );
+      final calendar = FluviDiagnosticLogger.entries.singleWhere(
+        (event) => event.stage == 'MIND_HEATMAP|CALENDAR_GEOMETRY',
+      );
+      expect(calendar.scope, contains('columns=7'));
+      expect(calendar.scope, contains('weekdayOrder=monday-sunday'));
+      expect(calendar.scope, isNot(contains('partner')));
+      expect(calendar.scope, isNot(contains('category')));
+
+      frame.value = _projection().preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 1,
+          maximumScaled100: 1000,
+          lowerScaled100: 500,
+          upperScaled100: 1000,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        heatmapStages().length,
+        3,
+        reason: 'Amount-only preview does not add a paint-log storm.',
+      );
     },
   );
 }

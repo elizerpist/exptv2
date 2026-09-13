@@ -58,6 +58,14 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
   Future<void>? _activeOperation;
   CurrentLedgerQueryScope? _activeScope;
   LedgerDirection? _activeRequestDirection;
+  // One inactive-direction request is enough: CurrentQuery already owns one
+  // canonical facet/domain slot per direction.  This is not a second Query
+  // controller or a history cache; it only removes repository work from the
+  // later direct direction-tap path when both templates are unchanged.
+  Future<void>? _oppositeDirectionPrewarmOperation;
+  CurrentLedgerQueryScope? _oppositeDirectionPrewarmScope;
+  LedgerDirection? _oppositeDirectionPrewarmDirection;
+  var _oppositeDirectionPrewarmGeneration = 0;
 
   bool get isLoading => _state == DashboardAppliedQueryFacetLoadState.loading;
   DashboardAppliedQueryFacetLoadState get state => _state;
@@ -131,6 +139,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         reason: 'canonicalAlreadyReady:$reason',
         amountDomain: existing,
       );
+      unawaited(_prewarmOppositeDirection(reason: 'activeAlreadyReady'));
       return Future<void>.value();
     }
     final active = _activeOperation;
@@ -278,6 +287,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
           reason: 'published',
           data: data,
         );
+        unawaited(_prewarmOppositeDirection(reason: 'activeReady'));
       } else {
         _setState(
           DashboardAppliedQueryFacetLoadState.failed,
@@ -311,6 +321,125 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
           error: error,
         );
       }
+    }
+  }
+
+  /// Prepares the other immutable directional Query presentation while the
+  /// current direction is already usable.  It is deliberately bounded to one
+  /// operation and publishes only through [CurrentQueryController].
+  Future<void> _prewarmOppositeDirection({required String reason}) {
+    if (_disposed) return Future<void>.value();
+    final direction = switch (_activeDirection()) {
+      LedgerDirection.income => LedgerDirection.expense,
+      LedgerDirection.expense => LedgerDirection.income,
+    };
+    final scope = QueryAmountRange.domainScope(
+      _currentQuery.scopeFor(direction),
+    );
+    if (_currentQuery.amountDomainFor(direction) != null) {
+      return Future<void>.value();
+    }
+    final existing = _oppositeDirectionPrewarmOperation;
+    if (existing != null &&
+        _oppositeDirectionPrewarmDirection == direction &&
+        _oppositeDirectionPrewarmScope == scope) {
+      return existing;
+    }
+    final generation = ++_oppositeDirectionPrewarmGeneration;
+    _oppositeDirectionPrewarmDirection = direction;
+    _oppositeDirectionPrewarmScope = scope;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_HEATMAP|DIRECTION_DOMAIN_PREWARM_REQUEST',
+        flowId: 'prewarm:$generation',
+        direction: direction.name,
+        scope: 'reason=$reason boundedSlots=2 canonicalDomain=absent',
+      ),
+    );
+    late final Future<void> operation;
+    operation =
+        _loadOppositeDirectionPrewarm(
+          generation: generation,
+          direction: direction,
+          scope: scope,
+        ).whenComplete(() {
+          if (identical(_oppositeDirectionPrewarmOperation, operation)) {
+            _oppositeDirectionPrewarmOperation = null;
+            _oppositeDirectionPrewarmScope = null;
+            _oppositeDirectionPrewarmDirection = null;
+          }
+        });
+    _oppositeDirectionPrewarmOperation = operation;
+    return operation;
+  }
+
+  Future<void> _loadOppositeDirectionPrewarm({
+    required int generation,
+    required LedgerDirection direction,
+    required CurrentLedgerQueryScope scope,
+  }) async {
+    final timer = Stopwatch()..start();
+    try {
+      final data = await _repository.readFacets(scope);
+      timer.stop();
+      final currentScope = QueryAmountRange.domainScope(
+        _currentQuery.scopeFor(direction),
+      );
+      final accepted =
+          !_disposed &&
+          generation == _oppositeDirectionPrewarmGeneration &&
+          currentScope == scope &&
+          _currentQuery.amountDomainFor(direction) == null;
+      if (!accepted) {
+        final reason = _disposed
+            ? 'disposed'
+            : generation != _oppositeDirectionPrewarmGeneration
+            ? 'superseded'
+            : currentScope != scope
+            ? 'domainScopeChanged'
+            : 'canonicalAlreadyReady';
+        FluviDiagnosticLogger.log(
+          FluviDiagnosticEvent(
+            stage: 'MIND_HEATMAP|DIRECTION_DOMAIN_PREWARM_REJECTED',
+            flowId: 'prewarm:$generation',
+            direction: direction.name,
+            durationMs: timer.elapsedMilliseconds,
+            scope: 'reason=$reason',
+          ),
+        );
+        return;
+      }
+      final published = _currentQuery.replaceDirection(
+        direction,
+        _currentQuery.scopeFor(direction),
+        facetPresentation: data,
+      );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND_HEATMAP|DIRECTION_DOMAIN_PREWARM_READY',
+          flowId: 'prewarm:$generation',
+          direction: direction.name,
+          durationMs: timer.elapsedMilliseconds,
+          scope:
+              'accepted=$published boundedSlots=2 '
+              'currentQueryGeneration=${_currentQuery.generationFor(direction)}',
+        ),
+      );
+    } on Object catch (error) {
+      timer.stop();
+      if (_disposed || generation != _oppositeDirectionPrewarmGeneration) {
+        return;
+      }
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND_HEATMAP|DIRECTION_DOMAIN_PREWARM_FAILED',
+          flowId: 'prewarm:$generation',
+          direction: direction.name,
+          durationMs: timer.elapsedMilliseconds,
+          scope: 'boundedSlots=2',
+          error: '$error',
+        ),
+      );
     }
   }
 
@@ -357,6 +486,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _generation += 1;
+    _oppositeDirectionPrewarmGeneration += 1;
     _currentQuery.removeListener(_onAppliedQueryChanged);
     _directionChanges.removeListener(_onActiveDirectionChanged);
     super.dispose();

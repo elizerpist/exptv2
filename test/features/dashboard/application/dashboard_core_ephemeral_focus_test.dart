@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -8,9 +8,13 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_dri
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_coordinator.dart';
+import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -27,6 +31,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_ren
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
+import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
@@ -38,8 +43,13 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
+import '../../../support/test_category_collection.dart';
+import '../../../support/dashboard_render_resources.dart';
+import '../../../support/test_pump.dart';
 
 void main() {
+  setUpAll(prepareDashboardTestRenderResources);
+
   test(
     'focus publication narrows a derived index and clearing restores the retained base without a repository read',
     () async {
@@ -730,6 +740,338 @@ void main() {
             .isEmpty,
         isTrue,
       );
+    },
+  );
+
+  test(
+    'RED MYHR-06: production Core preserves exact disjoint direction day sets and intersects range second',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-jan-1',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 100000,
+            date: const LocalDate(year: 2025, month: 1, day: 1),
+          ),
+          _mindYearEntry(
+            id: 'income-jan-8',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 600000,
+            date: const LocalDate(year: 2025, month: 1, day: 8),
+          ),
+          _mindYearEntry(
+            id: 'income-mar-3',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 900000,
+            date: const LocalDate(year: 2025, month: 3, day: 3),
+          ),
+          _mindYearEntry(
+            id: 'expense-jan-2',
+            direction: 'expense',
+            categoryId: 'expense-a',
+            partnerId: 'expense-partner',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 1, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'expense-feb-4',
+            direction: 'expense',
+            categoryId: 'expense-a',
+            partnerId: 'expense-partner',
+            amount: 700000,
+            date: const LocalDate(year: 2025, month: 2, day: 4),
+          ),
+          _mindYearEntry(
+            id: 'expense-mar-9',
+            direction: 'expense',
+            categoryId: 'expense-a',
+            partnerId: 'expense-partner',
+            amount: 850000,
+            date: const LocalDate(year: 2025, month: 3, day: 9),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      _installMindAmountDomain(core, LedgerDirection.expense);
+
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), <String>{
+        '2025-01-01',
+        '2025-01-08',
+        '2025-03-03',
+      });
+
+      core.selectDirection(TransactionDirection.expense);
+      await pumpEventQueue(times: 20);
+      expect(
+        core.presentation.navigation.state.parentQueryScope.direction,
+        LedgerDirection.expense,
+      );
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), <String>{
+        '2025-01-02',
+        '2025-02-04',
+        '2025-03-09',
+      });
+
+      const highExpenseOnly = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 800000,
+        upperScaled100: 900000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(highExpenseOnly), isTrue);
+      expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), <String>{
+        '2025-03-09',
+      });
+      core.endMindAmountRangeInteraction(committed: false);
+      final sliderSummaries = FluviDiagnosticLogger.entries
+          .where(
+            (event) => event.stage == 'MIND_HEATMAP|SLIDER_PREVIEW_SUMMARY',
+          )
+          .toList(growable: false);
+      expect(sliderSummaries, hasLength(1));
+      expect(
+        sliderSummaries.single.scope,
+        contains('sourceRowsDuringPreview=0'),
+      );
+      expect(
+        sliderSummaries.single.scope,
+        contains('repositoryAccessesDuringPreview=0'),
+      );
+      expect(sliderSummaries.single.scope, isNot(contains('income-partner')));
+      expect(sliderSummaries.single.scope, isNot(contains('expense-partner')));
+    },
+  );
+
+  test(
+    'RED MYHR-07: an immediate direction request never leaves an outgoing heatmap identity under new direction state',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'income-jan-1',
+              direction: 'income',
+              categoryId: 'income-a',
+              partnerId: 'income-partner',
+              amount: 100000,
+              date: const LocalDate(year: 2025, month: 1, day: 1),
+            ),
+            _mindYearEntry(
+              id: 'expense-jan-2',
+              direction: 'expense',
+              categoryId: 'expense-a',
+              partnerId: 'expense-partner',
+              amount: 200000,
+              date: const LocalDate(year: 2025, month: 1, day: 2),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+
+      expect(
+        core.mindYearHeatmap.value!.identity.upstreamScopeKey,
+        contains('income'),
+      );
+
+      final sceneGate = Completer<void>();
+      addTearDown(() {
+        if (!sceneGate.isCompleted) sceneGate.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) => sceneGate.future,
+        activate: (_) {},
+      );
+
+      FluviDiagnosticLogger.clear();
+      core.selectDirection(TransactionDirection.expense);
+      expect(core.transactionDirection.direction, TransactionDirection.expense);
+      expect(
+        core.mindYearHeatmap.value?.identity.upstreamScopeKey,
+        contains('expense'),
+        reason:
+            'The direct direction owner changes in this interaction turn. The '
+            'heatmap identity must change before an unrelated LogBox scene '
+            'gate is allowed to resolve.',
+      );
+      final events = FluviDiagnosticLogger.entries;
+      final request = events.singleWhere(
+        (event) => event.stage == 'MIND_HEATMAP|DIRECTION_REQUEST',
+      );
+      final traceStages = events
+          .where((event) => event.flowId == request.flowId)
+          .map((event) => event.stage)
+          .toList(growable: false);
+      expect(
+        traceStages,
+        containsAllInOrder(<String>[
+          'MIND_HEATMAP|DIRECTION_REQUEST',
+          'MIND_HEATMAP|IDENTITY_RESOLVED',
+          'MIND_HEATMAP|PROJECTION_BUILD_STARTED',
+          'MIND_HEATMAP|PROJECTION_BUILD_COMPLETED',
+          'MIND_HEATMAP|FRAME_SCHEDULED',
+          'MIND_HEATMAP|FRAME_PUBLISHED',
+        ]),
+      );
+    },
+  );
+
+  testWidgets(
+    'RED MYHR-08: the mounted production parent exposes no blank or stale direction heatmap frame',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'income-jan-1',
+              direction: 'income',
+              categoryId: 'income-a',
+              partnerId: 'income-partner',
+              amount: 100000,
+              date: const LocalDate(year: 2025, month: 1, day: 1),
+            ),
+            _mindYearEntry(
+              id: 'income-jan-8',
+              direction: 'income',
+              categoryId: 'income-a',
+              partnerId: 'income-partner',
+              amount: 600000,
+              date: const LocalDate(year: 2025, month: 1, day: 8),
+            ),
+            _mindYearEntry(
+              id: 'expense-jan-2',
+              direction: 'expense',
+              categoryId: 'expense-a',
+              partnerId: 'expense-partner',
+              amount: 200000,
+              date: const LocalDate(year: 2025, month: 1, day: 2),
+            ),
+            _mindYearEntry(
+              id: 'expense-feb-4',
+              direction: 'expense',
+              categoryId: 'expense-a',
+              partnerId: 'expense-partner',
+              amount: 700000,
+              date: const LocalDate(year: 2025, month: 2, day: 4),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      // CoreDashboard first binds its real LogBox surface/cache. The production
+      // Mind range ownership may then prime its resident data without asking a
+      // scene cache to prepare before that normal layout exists.
+      await tester.pump();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      await tester.pump();
+
+      void expectFrameFor(TransactionDirection direction) {
+        final expectedLabel = direction == TransactionDirection.income
+            ? 'Bevétel'
+            : 'Kiadás';
+        expect(core.transactionDirection.direction, direction);
+        expect(
+          tester
+              .widget<Semantics>(
+                find.byKey(const ValueKey('dashboard-action-row')),
+              )
+              .properties
+              .label,
+          expectedLabel,
+        );
+        final frame = core.mindYearHeatmap.value;
+        expect(
+          frame,
+          isNotNull,
+          reason: 'A visible direction may not flash null.',
+        );
+        expect(
+          frame!.identity.upstreamScopeKey,
+          contains(direction.name),
+          reason:
+              'Visible direction chrome and the mounted heatmap must share '
+              'the exact directional identity in every pumped frame.',
+        );
+      }
+
+      expectFrameFor(TransactionDirection.income);
+      await tester.tap(find.text('Kiadás').first);
+      for (var frame = 0; frame < 3; frame += 1) {
+        await tester.pump();
+        expectFrameFor(TransactionDirection.expense);
+      }
+      expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), <String>{
+        '2025-01-02',
+        '2025-02-04',
+      });
+
+      for (final direction in <TransactionDirection>[
+        TransactionDirection.income,
+        TransactionDirection.expense,
+        TransactionDirection.income,
+        TransactionDirection.expense,
+      ]) {
+        await tester.tap(
+          find
+              .text(
+                direction == TransactionDirection.income ? 'Bevétel' : 'Kiadás',
+              )
+              .first,
+        );
+        await tester.pump();
+        expectFrameFor(direction);
+      }
+      expectFrameFor(TransactionDirection.expense);
     },
   );
 
@@ -5557,6 +5899,16 @@ DashboardLedgerEntry _mindYearEntry({
   categoryIconId: 'fallback',
 );
 
+Set<String> _coloredHeatmapDates(MindYearHeatmapFrame frame) => frame.days
+    .where((day) => !day.isEmpty)
+    .map(
+      (day) =>
+          '${day.date.year.toString().padLeft(4, '0')}-'
+          '${day.date.month.toString().padLeft(2, '0')}-'
+          '${day.date.day.toString().padLeft(2, '0')}',
+    )
+    .toSet();
+
 final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   _FocusSeedRepository({
     List<DashboardLedgerEntry>? rows,
@@ -5633,9 +5985,7 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
           <LedgerDirection, DashboardFocusMembershipSeed>{
             for (final direction in LedgerDirection.values)
               direction: DashboardFocusMembershipSeed(
-                rows
-                    .where((entry) => entry.direction == direction.name)
-                    .toList(growable: false),
+                _rowsFor(direction, rows),
               ),
           },
       generation: base.generation,
@@ -5655,4 +6005,25 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
 
   @override
   Map<String, Object?> performanceReport() => _empty.performanceReport();
+
+  static List<DashboardLedgerEntry> _rowsFor(
+    LedgerDirection direction,
+    List<DashboardLedgerEntry> rows,
+  ) {
+    final ordered = rows
+        .where((entry) => entry.direction == direction.name)
+        .toList(growable: false);
+    ordered.sort((left, right) {
+      final date = right.bookedLocalEpochDay.compareTo(
+        left.bookedLocalEpochDay,
+      );
+      if (date != 0) return date;
+      final time = right.bookedLocalTimeMinutes.compareTo(
+        left.bookedLocalTimeMinutes,
+      );
+      if (time != 0) return time;
+      return right.id.compareTo(left.id);
+    });
+    return ordered;
+  }
 }

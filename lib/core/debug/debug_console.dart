@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../diagnostics/fluvi_diagnostic_event.dart';
 import '../diagnostics/fluvi_diagnostic_logger.dart';
 
 typedef DebugDiagnosticStatusProvider = Map<String, Object?> Function();
@@ -23,11 +24,16 @@ class DebugConsoleDialog extends StatefulWidget {
 
 enum _DebugConsoleSection { logs, report }
 
+/// A view-only projection over the one bounded diagnostic ring.  It owns no
+/// second history, export path, or diagnostic retention policy.
+enum _DebugConsoleLogFilter { all, mindHeatmap }
+
 class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   static const _followThreshold = 36.0;
   final ScrollController _logsScrollController = ScrollController();
   final TextEditingController _reportController = TextEditingController();
   _DebugConsoleSection _section = _DebugConsoleSection.logs;
+  _DebugConsoleLogFilter _logFilter = _DebugConsoleLogFilter.all;
   var _following = true;
   var _unseenCount = 0;
   var _lastSessionEventCount = 0;
@@ -346,17 +352,48 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '${_following ? 'LIVE' : 'REVIEWING'} · $count retained · '
-                  '${FluviDiagnosticLogger.sessionEventCount} session events',
-                  key: const ValueKey('debug-console-tail-status'),
-                  style: const TextStyle(
-                    color: Color(0xFF6C7086),
-                    fontSize: 9.5,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_following ? 'LIVE' : 'REVIEWING'} · $count retained · '
+                      '${FluviDiagnosticLogger.sessionEventCount} session events',
+                      key: const ValueKey('debug-console-tail-status'),
+                      style: const TextStyle(
+                        color: Color(0xFF6C7086),
+                        fontSize: 9.5,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<_DebugConsoleLogFilter>(
+                      key: const ValueKey('debug-console-log-filter'),
+                      value: _logFilter,
+                      isDense: true,
+                      dropdownColor: const Color(0xFF313244),
+                      style: const TextStyle(
+                        color: Color(0xFFCDD6F4),
+                        fontSize: 10.5,
+                      ),
+                      onChanged: (value) {
+                        if (value == null || value == _logFilter) return;
+                        setState(() => _logFilter = value);
+                        _scheduleJumpToLive();
+                      },
+                      items: const <DropdownMenuItem<_DebugConsoleLogFilter>>[
+                        DropdownMenuItem(
+                          value: _DebugConsoleLogFilter.all,
+                          child: Text('All'),
+                        ),
+                        DropdownMenuItem(
+                          value: _DebugConsoleLogFilter.mindHeatmap,
+                          child: Text('Mind Heatmap'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
             if (status.isNotEmpty)
@@ -495,11 +532,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
 
   Widget _sectionBody(int count) {
     if (_section == _DebugConsoleSection.logs) {
-      return count == 0
+      final entries = _filteredEntries();
+      return entries.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(24),
               child: Text(
-                'Még nincs log.',
+                'Még nincs log ebben a szűrőben.',
                 style: TextStyle(color: Color(0xFF94A3B8)),
               ),
             )
@@ -509,22 +547,23 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   key: const ValueKey('debug-console-logs'),
                   controller: _logsScrollController,
                   reverse: true,
-                  itemCount: count,
+                  itemCount: entries.length,
                   cacheExtent: 320,
                   findChildIndexCallback: (key) {
                     if (key is! ValueKey<int>) return null;
-                    for (var index = count - 1; index >= 0; index -= 1) {
-                      if (FluviDiagnosticLogger.entryAt(index).sequence ==
-                          key.value) {
-                        return count - 1 - index;
+                    for (
+                      var index = entries.length - 1;
+                      index >= 0;
+                      index -= 1
+                    ) {
+                      if (entries[index].sequence == key.value) {
+                        return entries.length - 1 - index;
                       }
                     }
                     return null;
                   },
                   itemBuilder: (context, reverseIndex) {
-                    final event = FluviDiagnosticLogger.entryAt(
-                      count - 1 - reverseIndex,
-                    );
+                    final event = entries[entries.length - 1 - reverseIndex];
                     return Padding(
                       key: ValueKey<int>(event.sequence ?? reverseIndex),
                       padding: const EdgeInsets.symmetric(
@@ -603,6 +642,14 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
           ),
         ),
       ],
+    );
+  }
+
+  List<FluviDiagnosticEvent> _filteredEntries() {
+    final entries = FluviDiagnosticLogger.entries;
+    if (_logFilter == _DebugConsoleLogFilter.all) return entries;
+    return List<FluviDiagnosticEvent>.unmodifiable(
+      entries.where((entry) => entry.stage.startsWith('MIND_HEATMAP|')),
     );
   }
 
