@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_live_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
@@ -194,6 +197,84 @@ void main() {
       expect(published, greaterThan(changed));
       expect(painted, greaterThan(published));
       expect(pointerUp, greaterThan(painted));
+    },
+  );
+
+  testWidgets(
+    'RED MYH-08: terminal slider value flushes the generation-safe heatmap before canonical commit',
+    (tester) async {
+      const initial = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 100000,
+        upperScaled100: 900000,
+      );
+      const terminal = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 400000,
+        upperScaled100: 500000,
+      );
+      final scheduler = _PreviewFrameScheduler();
+      final live = MindYearHeatmapLiveProjection();
+      addTearDown(live.dispose);
+      final projection = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'mind:year:2025',
+          indexGeneration: 1,
+          coreRevision: 1,
+          year: 2025,
+          navigationEpoch: 0,
+        ),
+        entries: const <DashboardLedgerEntry>[
+          DashboardLedgerEntry(
+            id: 'terminal-value',
+            partnerId: 'partner',
+            categoryId: 'category',
+            direction: 'expense',
+            amountMinor: 450000,
+            bookedLocalEpochDay: 20090,
+            bookedLocalTimeMinutes: 0,
+          ),
+        ],
+      );
+      live.install(projection, initial);
+      final canonical = <QueryAmountRangeValues>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: QueryAmountRangeControl(
+              values: initial,
+              previewScheduler: scheduler,
+              onRangePreviewChanged: (values) =>
+                  live.publishPreview(projection.identity, values),
+              onRangeCommitted: (values) {
+                live.flushTerminalPreview(projection.identity, values);
+                canonical.add(values);
+              },
+            ),
+          ),
+        ),
+      );
+
+      final slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      slider.onChangeStart!(slider.values);
+      slider.onChanged!(const RangeValues(400000, 500000));
+      expect(scheduler.pendingCallbackCount, 1);
+      expect(live.value!.range, initial);
+
+      // Release before the queued display callback runs. The control must
+      // flush the exact terminal value, then the canonical owner must see the
+      // same value. A late callback is harmless because its slot was cleared.
+      slider.onChangeEnd!(const RangeValues(400000, 500000));
+      expect(live.value!.range, terminal);
+      expect(canonical, <QueryAmountRangeValues>[terminal]);
+      scheduler.fireFrame();
+      expect(live.value!.range, terminal);
+      expect(live.stalePublicationRejectCount, 0);
     },
   );
 

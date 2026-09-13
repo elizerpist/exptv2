@@ -58,6 +58,7 @@ import 'dashboard_summary_auto_reset_controller.dart';
 import 'dashboard_upper_vertical_gesture_coordinator.dart';
 import '../time_navigation/application/dashboard_time_navigation_state.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/time_plane.dart';
 import '../time_navigation/domain/year_month.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import 'widgets/dashboard_collapse_handle.dart';
@@ -711,6 +712,15 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             : () => widget
                                                   .mindQueryFacetLoader!
                                                   .error,
+                                        mindYearHeatmap:
+                                            controller.mindYearHeatmap,
+                                        mindYearHeatmapVisible:
+                                            controller
+                                                .presentation
+                                                .navigation
+                                                .state
+                                                .plane ==
+                                            TimePlane.year,
                                         onMindQueryAmountRangeRetry:
                                             widget.mindQueryFacetLoader == null
                                             ? null
@@ -1265,6 +1275,9 @@ class _CoreDashboardState extends State<CoreDashboard>
       amountDomain: domain,
     );
     final values = binding?.values;
+    final shouldRenderYearHeatmap =
+        modeController.committedMode == DashboardModeSpec.mind &&
+        controller.presentation.navigation.state.plane == TimePlane.year;
     final lifecycle = widget.mindQueryFacetLoader;
     final lifecycleState = lifecycle?.state;
     final lifecycleError = lifecycle?.error;
@@ -1310,6 +1323,9 @@ class _CoreDashboardState extends State<CoreDashboard>
         ),
       );
     }
+    if (!shouldRenderYearHeatmap) {
+      controller.clearMindYearHeatmapProjection();
+    }
     if (values != null) {
       final primeSignature = Object.hash(
         direction,
@@ -1319,7 +1335,19 @@ class _CoreDashboardState extends State<CoreDashboard>
       );
       if (_mindAmountPreviewPrimeSignature != primeSignature) {
         _mindAmountPreviewPrimeSignature = primeSignature;
-        unawaited(controller.primeMindAmountPreviewDomain());
+        unawaited(
+          controller.primeMindAmountPreviewDomain().then((ready) {
+            if (ready &&
+                modeController.committedMode == DashboardModeSpec.mind &&
+                controller.presentation.navigation.state.plane ==
+                    TimePlane.year) {
+              controller.ensureMindYearHeatmapProjection();
+            }
+          }),
+        );
+      }
+      if (shouldRenderYearHeatmap) {
+        controller.ensureMindYearHeatmapProjection();
       }
     }
     // Unknown is not the 1,000 HUF floor. Query Menu hides its control until

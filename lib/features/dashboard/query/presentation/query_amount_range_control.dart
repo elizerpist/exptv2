@@ -44,6 +44,12 @@ final class QueryAmountRangeInteractionSummary {
   final QueryAmountRangeValues finalValues;
 }
 
+/// Placement-only presentation choice for the one shared range authority.
+///
+/// Query Menu retains [standard]. Mind uses [compactMind] inside its fixed
+/// footer; neither presentation owns separate range or commit semantics.
+enum QueryAmountRangePresentation { standard, compactMind }
+
 /// The shared Query-menu/Mind amount range renderer.
 ///
 /// Raw pointer feedback belongs to this narrow local state. A canonical Query
@@ -58,6 +64,7 @@ final class QueryAmountRangeControl extends StatefulWidget {
     this.onInteractionStarted,
     this.onInteractionEnded,
     this.onInteractionSummary,
+    this.presentation = QueryAmountRangePresentation.standard,
     this.enableInteractionDiagnostics = kFluviOnscreenDiagnosticsEnabled,
     this.previewScheduler,
   });
@@ -68,6 +75,7 @@ final class QueryAmountRangeControl extends StatefulWidget {
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
+  final QueryAmountRangePresentation presentation;
 
   /// The physical diagnostic APK opts in to the bounded pointer pipeline.
   /// A normal release keeps the established RangeSlider path free of its
@@ -280,67 +288,156 @@ final class _QueryAmountRangeControlState
         maximum,
       ),
     );
+    final sliderTheme = SliderTheme.of(context).copyWith(
+      activeTrackColor: QueryMenuTokens.selectionEnd,
+      inactiveTrackColor: QueryMenuTokens.controlSurface,
+      rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 10),
+      overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+    );
+    final slider = _buildRangeSlider(
+      values: values,
+      local: local,
+      maximum: maximum,
+    );
     return Material(
       type: MaterialType.transparency,
-      child: Container(
-        key: const ValueKey('query-amount-range-control'),
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.all(Radius.circular(19)),
+      child: switch (widget.presentation) {
+        QueryAmountRangePresentation.standard => _StandardAmountRangeSurface(
+          sliderTheme: sliderTheme,
+          slider: slider,
+          lower: local.start.round(),
+          upper: local.end.round(),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        QueryAmountRangePresentation.compactMind =>
+          _CompactMindAmountRangeSurface(
+            sliderTheme: sliderTheme,
+            slider: slider,
+            lower: local.start.round(),
+            upper: local.end.round(),
+          ),
+      },
+    );
+  }
+}
+
+final class _StandardAmountRangeSurface extends StatelessWidget {
+  const _StandardAmountRangeSurface({
+    required this.sliderTheme,
+    required this.slider,
+    required this.lower,
+    required this.upper,
+  });
+
+  final SliderThemeData sliderTheme;
+  final Widget slider;
+  final int lower;
+  final int upper;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('query-amount-range-control'),
+    margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.all(Radius.circular(19)),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Text(
+          'Összeg',
+          style: TextStyle(
+            color: QueryMenuTokens.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _AmountValue(
+                label: 'Minimum',
+                value: QueryMenuFormatters.money(lower),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _AmountValue(
+                label: 'Maximum',
+                value: QueryMenuFormatters.money(upper),
+                alignEnd: true,
+              ),
+            ),
+          ],
+        ),
+        SliderTheme(data: sliderTheme, child: slider),
+      ],
+    ),
+  );
+}
+
+final class _CompactMindAmountRangeSurface extends StatelessWidget {
+  const _CompactMindAmountRangeSurface({
+    required this.sliderTheme,
+    required this.slider,
+    required this.lower,
+    required this.upper,
+  });
+
+  final SliderThemeData sliderTheme;
+  final Widget slider;
+  final int lower;
+  final int upper;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const ValueKey('query-amount-range-control'),
+    margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+    padding: const EdgeInsets.fromLTRB(12, 3, 12, 1),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.all(Radius.circular(16)),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
           children: <Widget>[
             const Text(
               'Összeg',
               style: TextStyle(
                 color: QueryMenuTokens.textPrimary,
-                fontSize: 13,
+                fontSize: 11,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 6),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _AmountValue(
-                    label: 'Minimum',
-                    value: QueryMenuFormatters.money(local.start.round()),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _AmountValue(
-                    label: 'Maximum',
-                    value: QueryMenuFormatters.money(local.end.round()),
-                    alignEnd: true,
-                  ),
-                ),
-              ],
-            ),
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                activeTrackColor: QueryMenuTokens.selectionEnd,
-                inactiveTrackColor: QueryMenuTokens.controlSurface,
-                rangeThumbShape: const RoundRangeSliderThumbShape(
-                  enabledThumbRadius: 10,
-                ),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _CompactAmountValue(
+                label: 'Min.',
+                value: QueryMenuFormatters.money(lower),
               ),
-              child: _buildRangeSlider(
-                values: values,
-                local: local,
-                maximum: maximum,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _CompactAmountValue(
+                label: 'Max.',
+                value: QueryMenuFormatters.money(upper),
+                alignEnd: true,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
+        SizedBox(
+          height: 34,
+          child: SliderTheme(data: sliderTheme, child: slider),
+        ),
+      ],
+    ),
+  );
 }
 
 final class _AmountValue extends StatelessWidget {
@@ -377,6 +474,50 @@ final class _AmountValue extends StatelessWidget {
           color: QueryMenuTokens.textPrimary,
           fontSize: 13,
           fontWeight: FontWeight.w900,
+        ),
+      ),
+    ],
+  );
+}
+
+final class _CompactAmountValue extends StatelessWidget {
+  const _CompactAmountValue({
+    required this.label,
+    required this.value,
+    this.alignEnd = false,
+  });
+
+  final String label;
+  final String value;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    mainAxisAlignment: alignEnd
+        ? MainAxisAlignment.end
+        : MainAxisAlignment.start,
+    children: <Widget>[
+      Text(
+        label,
+        style: const TextStyle(
+          color: QueryMenuTokens.textSecondary,
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(width: 3),
+      Flexible(
+        child: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+          style: const TextStyle(
+            color: QueryMenuTokens.textPrimary,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
         ),
       ),
     ],

@@ -18,6 +18,8 @@ import '../logbox/application/dashboard_logbox_render_domain.dart';
 import '../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
+import '../mind/domain/mind_year_heatmap_live_projection.dart';
+import '../mind/domain/mind_year_heatmap_projection.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
 import '../motion/dashboard_motion_kernel.dart';
 import '../motion/dashboard_motion_state.dart';
@@ -1014,6 +1016,10 @@ final class DashboardCoreController {
   /// instead of treating its own carousel callback as paint proof.
   final ValueNotifier<DashboardSegmentedTargetPainted?> segmentedTargetPainted =
       ValueNotifier<DashboardSegmentedTargetPainted?>(null);
+
+  /// Derived Mind-only annual read model. It has no query mutation capability.
+  final MindYearHeatmapLiveProjection mindYearHeatmap =
+      MindYearHeatmapLiveProjection();
   late final CurrentQueryController currentQuery;
   late final QueryComposerController queryComposer;
   final DashboardEphemeralFocusController focus =
@@ -1159,6 +1165,7 @@ final class DashboardCoreController {
   int _mindAmountInteractionGeneration = 0;
   int _mindAmountInteractionPreviewCount = 0;
   int _mindAmountInteractionPublishedCount = 0;
+  MindYearHeatmapIdentity? _mindYearHeatmapInteractionIdentity;
   int _segmentedTimeFlightGeneration = 0;
   int _segmentedTimePreviewCrossings = 0;
   int _segmentedTimeLivePublications = 0;
@@ -3773,6 +3780,170 @@ final class DashboardCoreController {
     return true;
   }
 
+  /// Installs the one active Year heatmap projection from the same resident
+  /// non-amount prepared base that backs Mind's existing live range preview.
+  ///
+  /// This may visit source entries only while the non-amount identity changes.
+  /// A thumb update goes through [_publishMindYearHeatmapPreview] instead and
+  /// can inspect only the fixed annual day domain.
+  bool ensureMindYearHeatmapProjection() {
+    if (_disposed) return false;
+    final state = navigation.state;
+    if (state.plane != TimePlane.year) {
+      mindYearHeatmap.clear();
+      return false;
+    }
+    final direction = state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    final binding = QueryAmountRangeBinding.ready(
+      scope: appliedScope,
+      amountDomain: currentQuery.amountDomainFor(direction),
+    );
+    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    if (binding == null || base == null) {
+      // Never retain a previous year/filter's tiles while the new exact base
+      // is still being prepared.
+      mindYearHeatmap.clear();
+      return false;
+    }
+    final identity = _mindYearHeatmapIdentityFor(
+      base: base,
+      domainScope: QueryAmountRange.domainScope(appliedScope),
+      year: state.yearCursor,
+    );
+    final seed = base.partitionFor(direction).focusMembershipSeed;
+    if (seed == null) {
+      mindYearHeatmap.clear();
+      return false;
+    }
+    if (mindYearHeatmap.identity == identity) {
+      return mindYearHeatmap.publishPreview(identity, binding.values);
+    }
+    final stopwatch = Stopwatch()..start();
+    final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
+    final memberships = seed.select(
+      categoryId: activeFocus?.category?.id,
+      partnerId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
+    );
+    final projection = MindYearHeatmapProjection.build(
+      identity: identity,
+      entries: memberships.entryIndices.map(seed.entryAt),
+      sourceWorkCounter: MindYearHeatmapSourceWorkCounter(
+        measurePreviewDurations: _physicalRailDiagnosticsEnabled,
+      ),
+    );
+    stopwatch.stop();
+    // The identity is fully derived from current immutable state. Recheck it
+    // before replacement so no reentrant query/navigation callback may cause
+    // an old source projection to flash into the new year.
+    if (_disposed ||
+        !_isMindYearHeatmapIdentityCurrent(
+          identity,
+          base: base,
+          direction: direction,
+        )) {
+      return false;
+    }
+    mindYearHeatmap.install(projection, binding.values);
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND|HEATMAP_PROJECTION_READY',
+        queryKey: identity.upstreamScopeKey,
+        direction: direction.name,
+        coreRevision: base.coreRevision,
+        entryCount: projection.sourceWorkCounter.sourceRowTouches,
+        scope:
+            'year=${identity.year} indexGeneration=${identity.indexGeneration} '
+            'dayBuckets=${projection.dayCount} '
+            'buildMicros=${stopwatch.elapsedMicroseconds} '
+            'boundedActiveIdentity=true',
+      ),
+    );
+    return true;
+  }
+
+  void clearMindYearHeatmapProjection() => mindYearHeatmap.clear();
+
+  MindYearHeatmapIdentity _mindYearHeatmapIdentityFor({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope domainScope,
+    required int year,
+  }) => MindYearHeatmapIdentity(
+    upstreamScopeKey:
+        '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+    indexGeneration: base.generation,
+    coreRevision: base.coreRevision,
+    year: year,
+    // Navigation epochs that keep the same annual scope must not rebuild the
+    // projection. Base generation/scope/year are the membership identity.
+    navigationEpoch: 0,
+  );
+
+  DashboardEphemeralFocusState? _activeMindFocusFor({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope scope,
+  }) {
+    final active = focus.state;
+    if (active == null ||
+        !active.anchor.matches(baseScope: scope, revision: base.coreRevision)) {
+      return null;
+    }
+    return active;
+  }
+
+  String _mindFocusIdentityFor(
+    PreparedDashboardIndex base,
+    CurrentLedgerQueryScope scope,
+  ) {
+    final active = _activeMindFocusFor(base: base, scope: scope);
+    return 'focus:category=${active?.category?.id ?? '-'}'
+        ',partner=${active?.partner?.id ?? '-'}'
+        ',search=${active?.normalizedSearch ?? '-'}';
+  }
+
+  bool _isMindYearHeatmapIdentityCurrent(
+    MindYearHeatmapIdentity identity, {
+    required PreparedDashboardIndex base,
+    required LedgerDirection direction,
+  }) {
+    if (_disposed ||
+        navigation.state.parentQueryScope.direction != direction ||
+        navigation.state.plane != TimePlane.year) {
+      return false;
+    }
+    final scope = currentQuery.scopeFor(direction);
+    if (!identical(_compatibleMindAmountPreviewBase(scope), base)) {
+      return false;
+    }
+    return _mindYearHeatmapIdentityFor(
+          base: base,
+          domainScope: QueryAmountRange.domainScope(scope),
+          year: navigation.state.yearCursor,
+        ) ==
+        identity;
+  }
+
+  bool _publishMindYearHeatmapPreview({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope appliedScope,
+    required LedgerDirection direction,
+    required QueryAmountRangeValues values,
+  }) {
+    final activeIdentity = mindYearHeatmap.identity;
+    if (activeIdentity == null) return false;
+    final expectedIdentity = _mindYearHeatmapIdentityFor(
+      base: base,
+      domainScope: QueryAmountRange.domainScope(appliedScope),
+      year: navigation.state.yearCursor,
+    );
+    final heldIdentity = _mindYearHeatmapInteractionIdentity;
+    if (heldIdentity != null && heldIdentity != expectedIdentity) {
+      return mindYearHeatmap.rejectStalePublication();
+    }
+    return mindYearHeatmap.publishPreview(expectedIdentity, values);
+  }
+
   /// Prepares one bounded Phase-A resource input through the existing shared
   /// cache lane. Mind deliberately retains its source-row universe because a
   /// continuous amount range cannot enumerate its next Query key. Avatar and
@@ -4145,6 +4316,7 @@ final class DashboardCoreController {
     _mindAmountInteractionGeneration += 1;
     _mindAmountInteractionPreviewCount = 0;
     _mindAmountInteractionPublishedCount = 0;
+    _mindYearHeatmapInteractionIdentity = mindYearHeatmap.identity;
     final direction = navigation.state.parentQueryScope.direction;
     final scope = currentQuery.scopeFor(direction);
     FluviDiagnosticLogger.log(
@@ -4188,7 +4360,11 @@ final class DashboardCoreController {
       );
       return false;
     }
-    final previewScope = binding.apply(values);
+    final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
+    final previewScope = focus.effectiveScopeFor(
+      binding.apply(values),
+      coreRevision: base.coreRevision,
+    );
     final previewQueries = currentQuery.queries.replaceDirection(
       direction,
       previewScope,
@@ -4205,6 +4381,12 @@ final class DashboardCoreController {
         ? previewScope.copyWith(timeScope: candidate.retainedChildScope)
         : null;
     final previewGeneration = ++_mindAmountPreviewGeneration;
+    final heatmapPublished = _publishMindYearHeatmapPreview(
+      base: base,
+      appliedScope: appliedScope,
+      direction: direction,
+      values: values,
+    );
     final interactionOrder = visibleFrames.nextInteractionPreviewOrder(
       producer: DashboardInteractionPreviewProducer.mindAmount,
       localGeneration: previewGeneration,
@@ -4213,8 +4395,9 @@ final class DashboardCoreController {
       base: base,
       effectiveQueries: previewQueries,
       focusedDirection: direction,
-      categoryFocusId: null,
-      partnerFocusId: null,
+      categoryFocusId: activeFocus?.category?.id,
+      partnerFocusId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
       minimumAmountScaled100: values.lowerScaled100,
       maximumAmountScaled100: values.upperScaled100,
       initialYear: candidate.yearCursor,
@@ -4323,6 +4506,8 @@ final class DashboardCoreController {
             'membershipMicros=${derived.membershipLookupMicros} '
             'intersectionMicros=${derived.intersectionMicros} '
             'rootProjectionMicros=${derived.currentRootProjectionMicros} '
+            'heatmapPublished=$heatmapPublished '
+            'heatmapStaleRejects=${mindYearHeatmap.stalePublicationRejectCount} '
             'richSceneStaged=$richSceneStaged '
             'repositoryRequests=0 indexBuilds=0 canonicalCommits=0',
       ),
@@ -4348,6 +4533,7 @@ final class DashboardCoreController {
             'loadingExposureCount=0',
       ),
     );
+    _mindYearHeatmapInteractionIdentity = null;
   }
 
   /// Ends the physical Slider drag after its exact Phase-A frame has been
@@ -4355,6 +4541,10 @@ final class DashboardCoreController {
   /// decide whether a valid held-drag value may commit canonically.
   Future<bool> commitMindAmountRange(QueryAmountRangeValues values) async {
     if (_disposed) return false;
+    final heatmapInteractionIdentity = _mindYearHeatmapInteractionIdentity;
+    if (heatmapInteractionIdentity != null) {
+      mindYearHeatmap.flushTerminalPreview(heatmapInteractionIdentity, values);
+    }
     final direction = navigation.state.parentQueryScope.direction;
     final current = currentQuery.scopeFor(direction);
     final binding = QueryAmountRangeBinding.ready(
@@ -9882,6 +10072,10 @@ final class DashboardCoreController {
       partner: partner,
       normalizedSearch: normalizedSearch,
     );
+    // The heatmap observes this same single ephemeral-focus authority. It
+    // replaces its bounded annual projection before the next visible frame,
+    // never by applying a second query/filter state in the Mind surface.
+    ensureMindYearHeatmapProjection();
     final interactionFrame = _acceptLiveInteraction(
       source: source,
       interactionOrder: interactionOrder,
@@ -10261,6 +10455,7 @@ final class DashboardCoreController {
     // focused scene to restore before removing the chip or accepting another
     // input. The retained base frame below follows immediately when possible.
     focus.clearAll();
+    ensureMindYearHeatmapProjection();
     final phaseAPublishStartedMicros =
         _collectAvatarPacingCorrelationDiagnostics
         ? developer.Timeline.now
@@ -10493,6 +10688,7 @@ final class DashboardCoreController {
     _discardRetainedFocusBaseScene();
     _discardRetainedFocusBasePaging();
     focus.clearAll();
+    clearMindYearHeatmapProjection();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FOCUS_INVALIDATED',
@@ -13086,6 +13282,7 @@ final class DashboardCoreController {
     budgetAvatarLiveRootReady.dispose();
     budgetAvatarTargetPainted.dispose();
     segmentedTargetPainted.dispose();
+    mindYearHeatmap.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();
     railFlightRecorder?.dispose();

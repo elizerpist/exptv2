@@ -8,6 +8,8 @@ import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
+import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -23,6 +25,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.queryAmountRangeLifecycleChanges,
     this.queryAmountRangeState,
     this.queryAmountRangeError,
+    this.yearHeatmap,
+    this.showYearHeatmap = false,
     this.onQueryAmountRangeRetry,
     this.onQueryAmountRangeCommitted,
     this.onQueryAmountRangePreviewChanged,
@@ -39,6 +43,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final Listenable? queryAmountRangeLifecycleChanges;
   final DashboardAppliedQueryFacetLoadState Function()? queryAmountRangeState;
   final Object? Function()? queryAmountRangeError;
+  final ValueListenable<MindYearHeatmapFrame?>? yearHeatmap;
+  final bool showYearHeatmap;
   final VoidCallback? onQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangePreviewChanged;
@@ -68,34 +74,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
               fillParent: true,
               semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
               borderSurface: DashboardBorderSurface.mindContent,
-              child:
-                  queryAmountRange == null ||
-                      queryAmountRangeChanges == null ||
-                      onQueryAmountRangeCommitted == null
-                  ? null
-                  : Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-                        child: _MindQueryAmountRangeListener(
-                          valuesFor: queryAmountRange!,
-                          valuesChanges: queryAmountRangeChanges!,
-                          lifecycleChanges: queryAmountRangeLifecycleChanges,
-                          stateFor: queryAmountRangeState,
-                          errorFor: queryAmountRangeError,
-                          onRetry: onQueryAmountRangeRetry,
-                          onRangeCommitted: onQueryAmountRangeCommitted!,
-                          onRangePreviewChanged:
-                              onQueryAmountRangePreviewChanged,
-                          onInteractionStarted:
-                              onQueryAmountRangeInteractionStarted,
-                          onInteractionEnded:
-                              onQueryAmountRangeInteractionEnded,
-                          onInteractionSummary:
-                              onQueryAmountRangeInteractionSummary,
-                        ),
-                      ),
-                    ),
+              child: _bodyChild(),
             ),
           ),
           DashboardCoreModeOpacityPosition(
@@ -120,6 +99,63 @@ class MindDashboardCoreSurface extends StatelessWidget {
       ),
     );
   }
+
+  Widget? _bodyChild() {
+    if (queryAmountRange == null ||
+        queryAmountRangeChanges == null ||
+        onQueryAmountRangeCommitted == null) {
+      return null;
+    }
+    final range = _MindQueryAmountRangeListener(
+      valuesFor: queryAmountRange!,
+      valuesChanges: queryAmountRangeChanges!,
+      lifecycleChanges: queryAmountRangeLifecycleChanges,
+      stateFor: queryAmountRangeState,
+      errorFor: queryAmountRangeError,
+      onRetry: onQueryAmountRangeRetry,
+      onRangeCommitted: onQueryAmountRangeCommitted!,
+      onRangePreviewChanged: onQueryAmountRangePreviewChanged,
+      onInteractionStarted: onQueryAmountRangeInteractionStarted,
+      onInteractionEnded: onQueryAmountRangeInteractionEnded,
+      onInteractionSummary: onQueryAmountRangeInteractionSummary,
+      compactPresentation: showYearHeatmap,
+    );
+    final heatmap = yearHeatmap;
+    if (!showYearHeatmap || heatmap == null) {
+      return Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+          child: range,
+        ),
+      );
+    }
+    return _MindYearHeatmapBody(heatmap: heatmap, range: range);
+  }
+}
+
+/// Structural Mind topology: one clipped vertical viewport followed by an
+/// independent footer. The slider never overlays scroll content.
+final class _MindYearHeatmapBody extends StatelessWidget {
+  const _MindYearHeatmapBody({required this.heatmap, required this.range});
+
+  final ValueListenable<MindYearHeatmapFrame?> heatmap;
+  final Widget range;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: <Widget>[
+      Expanded(
+        child: ClipRect(
+          child: MindYearHeatmapViewport(frameListenable: heatmap),
+        ),
+      ),
+      KeyedSubtree(
+        key: const ValueKey('mind-year-heatmap-fixed-footer'),
+        child: range,
+      ),
+    ],
+  );
 }
 
 final class _MindQueryAmountRangeListener extends StatelessWidget {
@@ -135,6 +171,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
     required this.onInteractionStarted,
     required this.onInteractionEnded,
     required this.onInteractionSummary,
+    required this.compactPresentation,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -148,6 +185,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
+  final bool compactPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +199,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
       onInteractionStarted: onInteractionStarted,
       onInteractionEnded: onInteractionEnded,
       onInteractionSummary: onInteractionSummary,
+      compactPresentation: compactPresentation,
     );
     final lifecycle = lifecycleChanges;
     if (lifecycle == null) {
@@ -190,6 +229,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
     required this.onInteractionStarted,
     required this.onInteractionEnded,
     required this.onInteractionSummary,
+    required this.compactPresentation,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -201,6 +241,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
   final VoidCallback? onInteractionStarted;
   final VoidCallback? onInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
+  final bool compactPresentation;
 
   @override
   State<_MindQueryAmountRangeBinding> createState() =>
@@ -269,6 +310,9 @@ final class _MindQueryAmountRangeBindingState
         onInteractionStarted: widget.onInteractionStarted,
         onInteractionEnded: widget.onInteractionEnded,
         onInteractionSummary: widget.onInteractionSummary,
+        presentation: widget.compactPresentation
+            ? QueryAmountRangePresentation.compactMind
+            : QueryAmountRangePresentation.standard,
         onRangeCommitted: widget.onRangeCommitted,
       ),
     );

@@ -18,6 +18,20 @@ abstract final class FluviVisualTokens {
   static const logBoxIncomeAmount = Color(0xFF0F766E);
   static const logBoxExpenseAmount = Color(0xFFB42318);
 
+  /// Mind's annual heatmap uses the established application highlight family.
+  /// The named endpoints ensure empty days and a numeric 0% non-empty day
+  /// cannot collapse to the same visual state.
+  static const mindHeatmapEmpty = surfaceInactive;
+  static const mindHeatmapMinimum = Color(0xFFB484F3);
+  static const mindHeatmapEqualRange = Color(0xFF9B7BEA);
+  static const mindHeatmapMaximum = Color(0xFF715EFB);
+
+  static Color mindHeatmapInterpolated(double intensity) => Color.lerp(
+    mindHeatmapMinimum,
+    mindHeatmapMaximum,
+    intensity.clamp(0.0, 1.0),
+  )!;
+
   /// Budget-limit utilisation tones are semantic, not category-specific.
   /// The progress projection resolves them once from raw utilisation while the
   /// selected avatar keeps its category accent below the warning threshold.

@@ -15,6 +15,63 @@ void main() {
     );
   });
 
+  test(
+    'RED MYH-15: B rejects a heatmap slider profile without bounded live evidence',
+    () {
+      final evidence = <String, Object?>{
+        'slider_event_count': 20,
+        'live_before_release_count': 20,
+        'heatmap_publication_count': 20,
+        'preview_event_count': 20,
+        'preview_events_report_zero_repository_index_canonical': true,
+        'source_rows_at_projection_build': 12000,
+        'source_rows_after_slider': 12000,
+        'source_rows_during_preview': 0,
+        'repository_accesses_during_preview': 0,
+        'index_builds_during_preview': 0,
+        'max_day_buckets_per_preview': 365,
+        'final_preview_range_lower': 200000,
+        'final_visible_range_lower': 200000,
+        'frame_timing': <String, Object?>{
+          '95th_percentile_frame_build_time_millis': 4.0,
+          '95th_percentile_frame_rasterizer_time_millis': 5.0,
+          'missed_frame_build_budget_count': 0,
+          'missed_frame_rasterizer_budget_count': 0,
+        },
+        'preview_compute': <String, Object?>{
+          'sampleCount': 20,
+          'p50Micros': 200,
+          'p95Micros': 300,
+          'maxMicros': 400,
+        },
+      };
+      expect(
+        () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
+        returnsNormally,
+      );
+      evidence['source_rows_after_slider'] = 12001;
+      expect(
+        () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
+        throwsStateError,
+      );
+      evidence['source_rows_after_slider'] = 12000;
+      (evidence['frame_timing']
+              as Map<String, Object?>)['missed_frame_build_budget_count'] =
+          2;
+      expect(
+        () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
+        throwsStateError,
+      );
+      (evidence['frame_timing'] as Map<String, Object?>)
+        ..['missed_frame_build_budget_count'] = 0
+        ..['95th_percentile_frame_rasterizer_time_millis'] = 12.1;
+      expect(
+        () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
+        throwsStateError,
+      );
+    },
+  );
+
   test('observed a047 response without J and completion is rejected', () {
     final response = _completeSuiteResponse()
       ..remove('J_tenth_fling')
@@ -878,12 +935,42 @@ Map<String, Object?> _completeSuiteResponse() => {
         'avatar_first_target': _avatarFirstTargetEvidence(),
       if (key == 'G_direction_while_rail_open')
         'direction_circle': _directionCircleEvidence(),
+      if (key == 'B_year_month_rail_populated')
+        'mind_year_heatmap': _mindYearHeatmapEvidence(),
     },
   'dashboard_avatar_final_target_evidence': _avatarFinalTargetEvidence(),
   DashboardProfileReport.suiteCompletionKey: {
     'schema_version': 1,
     'all_assertions_passed': true,
     'scenario_report_keys': DashboardProfileReport.requiredSuiteScenarioKeys,
+  },
+};
+
+Map<String, Object?> _mindYearHeatmapEvidence() => <String, Object?>{
+  'slider_event_count': 20,
+  'live_before_release_count': 20,
+  'heatmap_publication_count': 20,
+  'preview_event_count': 20,
+  'preview_events_report_zero_repository_index_canonical': true,
+  'source_rows_at_projection_build': 12000,
+  'source_rows_after_slider': 12000,
+  'source_rows_during_preview': 0,
+  'repository_accesses_during_preview': 0,
+  'index_builds_during_preview': 0,
+  'max_day_buckets_per_preview': 365,
+  'final_preview_range_lower': 200000,
+  'final_visible_range_lower': 200000,
+  'frame_timing': <String, Object?>{
+    '95th_percentile_frame_build_time_millis': 4.0,
+    '95th_percentile_frame_rasterizer_time_millis': 5.0,
+    'missed_frame_build_budget_count': 0,
+    'missed_frame_rasterizer_budget_count': 0,
+  },
+  'preview_compute': <String, Object?>{
+    'sampleCount': 20,
+    'p50Micros': 200,
+    'p95Micros': 300,
+    'maxMicros': 400,
   },
 };
 

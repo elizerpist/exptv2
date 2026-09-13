@@ -28,6 +28,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_sce
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
@@ -517,6 +518,217 @@ void main() {
             .singleWhere((event) => event.stage == 'MIND|PREVIEW_FRAME')
             .scope,
         contains('repositoryRequests=0 indexBuilds=0 canonicalCommits=0'),
+      );
+    },
+  );
+
+  test(
+    'RED MYH-04/05/06/14: the production Mind Year projection shares direction, focus, year and range identity without drag reads',
+    () async {
+      final rows = <DashboardLedgerEntry>[
+        _mindYearEntry(
+          id: 'income-utility-jan',
+          direction: 'income',
+          categoryId: 'utilities',
+          partnerId: 'partner-a',
+          amount: 100000,
+          date: const LocalDate(year: 2025, month: 1, day: 2),
+        ),
+        _mindYearEntry(
+          id: 'income-food-sep',
+          direction: 'income',
+          categoryId: 'food',
+          partnerId: 'partner-b',
+          amount: 900000,
+          date: const LocalDate(year: 2025, month: 9, day: 2),
+        ),
+        _mindYearEntry(
+          id: 'income-future',
+          direction: 'income',
+          categoryId: 'utilities',
+          partnerId: 'partner-a',
+          amount: 500000,
+          date: const LocalDate(year: 2026, month: 1, day: 2),
+        ),
+        _mindYearEntry(
+          id: 'expense-utility-dec',
+          direction: 'expense',
+          categoryId: 'utilities',
+          partnerId: 'partner-a',
+          amount: 300000,
+          date: const LocalDate(year: 2025, month: 12, day: 2),
+        ),
+      ];
+      final repository = _FocusSeedRepository(rows: rows);
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+
+      final beforeFocus = core.mindYearHeatmap.value!;
+      expect(beforeFocus.identity.year, 2025);
+      expect(
+        beforeFocus.dayFor(const LocalDate(year: 2025, month: 1, day: 2)).total,
+        100000,
+      );
+      expect(
+        beforeFocus.dayFor(const LocalDate(year: 2025, month: 9, day: 2)).total,
+        900000,
+      );
+      expect(
+        beforeFocus
+            .dayFor(const LocalDate(year: 2025, month: 12, day: 2))
+            .isEmpty,
+        isTrue,
+      );
+      final sourceSeed = core.preparedIndex!
+          .partitionFor(LedgerDirection.income)
+          .focusMembershipSeed!;
+      expect(
+        sourceSeed
+            .select(normalizedSearch: 'partner-b')
+            .entryIndices
+            .map(sourceSeed.entryAt)
+            .map((entry) => entry.id),
+        contains('income-food-sep'),
+      );
+
+      final sourceCounter = core.mindYearHeatmap.sourceWorkCounter!;
+      final sourceTouchesAfterBuild = sourceCounter.sourceRowTouches;
+      const highOnly = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 800000,
+        upperScaled100: 900000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(highOnly), isTrue);
+      final highFrame = core.mindYearHeatmap.value!;
+      expect(
+        highFrame.dayFor(const LocalDate(year: 2025, month: 1, day: 2)).isEmpty,
+        isTrue,
+      );
+      expect(
+        highFrame.dayFor(const LocalDate(year: 2025, month: 9, day: 2)).total,
+        900000,
+      );
+      for (var tick = 0; tick < 20; tick += 1) {
+        core.previewMindAmountRange(highOnly);
+      }
+      expect(sourceCounter.sourceRowTouches, sourceTouchesAfterBuild);
+      expect(sourceCounter.sourceRowTouchesDuringPreview, 0);
+      expect(sourceCounter.repositoryAccessesDuringPreview, 0);
+      expect(sourceCounter.indexBuildsDuringPreview, 0);
+      expect(sourceCounter.maxDayBucketsVisitedPerPreview, 365);
+      expect(repository.prepareCalls, 1);
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'utilities', displayName: 'Utilities'),
+        ),
+        isTrue,
+      );
+      final categoryFrame = core.mindYearHeatmap.value!;
+      expect(
+        categoryFrame
+            .dayFor(const LocalDate(year: 2025, month: 1, day: 2))
+            .total,
+        100000,
+      );
+      expect(
+        categoryFrame
+            .dayFor(const LocalDate(year: 2025, month: 9, day: 2))
+            .isEmpty,
+        isTrue,
+      );
+      expect(
+        await core.requestPartnerFocus(
+          const DashboardFocusFacet(id: 'partner-a', displayName: 'Partner A'),
+        ),
+        isTrue,
+      );
+      expect(
+        core.mindYearHeatmap.value!
+            .dayFor(const LocalDate(year: 2025, month: 1, day: 2))
+            .total,
+        100000,
+      );
+      expect(await core.clearAllEphemeralFocus(), isTrue);
+      // Current prepared SearchPill semantics cover partner display and note
+      // text (not the category facet, which has its own authority).
+      expect(await core.updateLiveSearch('partner-b'), isTrue);
+      expect(core.focus.state?.normalizedSearch, 'partner-b');
+      expect(core.focus.state?.category, isNull);
+      expect(core.focus.state?.partner, isNull);
+      final searchFrame = core.mindYearHeatmap.value!;
+      expect(
+        searchFrame
+            .dayFor(const LocalDate(year: 2025, month: 1, day: 2))
+            .isEmpty,
+        isTrue,
+      );
+      expect(
+        searchFrame.dayFor(const LocalDate(year: 2025, month: 9, day: 2)).total,
+        900000,
+      );
+      expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'RED MYH-04: the annual projection selects the active expense direction',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income',
+            direction: 'income',
+            categoryId: 'utilities',
+            partnerId: 'partner-a',
+            amount: 100000,
+            date: const LocalDate(year: 2025, month: 1, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'expense',
+            direction: 'expense',
+            categoryId: 'utilities',
+            partnerId: 'partner-a',
+            amount: 300000,
+            date: const LocalDate(year: 2025, month: 12, day: 2),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(
+        core.mindYearHeatmap.value!
+            .dayFor(const LocalDate(year: 2025, month: 12, day: 2))
+            .total,
+        300000,
+      );
+      expect(
+        core.mindYearHeatmap.value!
+            .dayFor(const LocalDate(year: 2025, month: 1, day: 2))
+            .isEmpty,
+        isTrue,
       );
     },
   );
@@ -5304,6 +5516,47 @@ DashboardLogBoxRenderExtentSnapshot _committedPromotionPaintSnapshot(
   );
 }
 
+void _installMindAmountDomain(
+  DashboardCoreController core,
+  LedgerDirection direction,
+) {
+  final scope = core.currentQuery.scopeFor(direction);
+  core.currentQuery.apply(
+    scope,
+    facetPresentation: const QueryMenuData(
+      result: QueryMenuResultSummary(entryCount: 4, amountScaled100: 1800000),
+      amountDomain: QueryMenuAmountDomain(
+        minimumAmountScaled100: 100000,
+        maximumAmountScaled100: 900000,
+      ),
+      availableMonths: <QueryMenuAvailableMonth>[],
+      categories: <QueryMenuCategoryFacet>[],
+      partners: <QueryMenuPartnerFacet>[],
+    ),
+  );
+}
+
+DashboardLedgerEntry _mindYearEntry({
+  required String id,
+  required String direction,
+  required String categoryId,
+  required String partnerId,
+  required int amount,
+  required LocalDate date,
+}) => DashboardLedgerEntry(
+  id: id,
+  partnerId: partnerId,
+  categoryId: categoryId,
+  direction: direction,
+  amountMinor: amount,
+  bookedLocalEpochDay: date.epochDay,
+  bookedLocalTimeMinutes: 600,
+  partnerDisplayName: partnerId,
+  categoryDisplayName: categoryId,
+  categoryColorId: 'fallback',
+  categoryIconId: 'fallback',
+);
+
 final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   _FocusSeedRepository({
     List<DashboardLedgerEntry>? rows,
@@ -5378,7 +5631,12 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
           },
       focusMembershipSeedsByDirection:
           <LedgerDirection, DashboardFocusMembershipSeed>{
-            LedgerDirection.income: DashboardFocusMembershipSeed(rows),
+            for (final direction in LedgerDirection.values)
+              direction: DashboardFocusMembershipSeed(
+                rows
+                    .where((entry) => entry.direction == direction.name)
+                    .toList(growable: false),
+              ),
           },
       generation: base.generation,
       contentDigest: base.contentDigest,

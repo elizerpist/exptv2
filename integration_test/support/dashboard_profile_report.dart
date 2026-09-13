@@ -64,6 +64,12 @@ abstract final class DashboardProfileReport {
         'G direction circle',
       ),
     );
+    validateMindYearHeatmapEvidence(
+      requireMap(
+        reports['B_year_month_rail_populated']!['mind_year_heatmap'],
+        'B mind_year_heatmap',
+      ),
+    );
     validateMotionIsolationGate(reports);
   }
 
@@ -132,6 +138,87 @@ abstract final class DashboardProfileReport {
   static const double p95FrameTargetMillis = 16.7;
   static const double p99FrameTargetMillis = 24;
   static const double maximumFrameTargetMillis = 48;
+  static const double mindYearHeatmapP95HeadroomMillis = 12;
+  static const int mindYearHeatmapMaximumMissedFrames = 1;
+  static const int mindYearHeatmapPreviewP95HeadroomMicros = 8000;
+
+  /// B's Mind extension is intentionally stricter than a callback-count
+  /// check: it requires actual engine FrameTiming samples, real pointer-time
+  /// visible publication, and the bounded annual projection counters.
+  static void validateMindYearHeatmapEvidence(Map<String, Object?> evidence) {
+    Never reject(String key) => throw StateError(
+      'Mind Year heatmap profile evidence $key is invalid: ${evidence[key]}.',
+    );
+    final events = evidence['slider_event_count'];
+    final live = evidence['live_before_release_count'];
+    final publications = evidence['heatmap_publication_count'];
+    final previewEvents = evidence['preview_event_count'];
+    if (events is! int || events < 20) reject('slider_event_count');
+    if (live is! int || live != events) reject('live_before_release_count');
+    if (publications is! int || publications < live) {
+      reject('heatmap_publication_count');
+    }
+    if (previewEvents is! int || previewEvents < live) {
+      reject('preview_event_count');
+    }
+    if (evidence['preview_events_report_zero_repository_index_canonical'] !=
+        true) {
+      reject('preview_events_report_zero_repository_index_canonical');
+    }
+    for (final key in const <String>[
+      'source_rows_during_preview',
+      'repository_accesses_during_preview',
+      'index_builds_during_preview',
+    ]) {
+      if (evidence[key] != 0) reject(key);
+    }
+    if (evidence['source_rows_after_slider'] !=
+        evidence['source_rows_at_projection_build']) {
+      reject('source_rows_after_slider');
+    }
+    final buckets = evidence['max_day_buckets_per_preview'];
+    if (buckets is! int || buckets < 365 || buckets > 366) {
+      reject('max_day_buckets_per_preview');
+    }
+    if (evidence['final_preview_range_lower'] !=
+        evidence['final_visible_range_lower']) {
+      reject('final_visible_range_lower');
+    }
+    final frameTiming = evidence['frame_timing'];
+    if (frameTiming is! Map ||
+        frameTiming['95th_percentile_frame_build_time_millis'] is! num ||
+        frameTiming['95th_percentile_frame_rasterizer_time_millis'] is! num ||
+        frameTiming['missed_frame_build_budget_count'] is! num ||
+        frameTiming['missed_frame_rasterizer_budget_count'] is! num) {
+      reject('frame_timing');
+    }
+    final buildP95 =
+        frameTiming['95th_percentile_frame_build_time_millis'] as num;
+    final rasterP95 =
+        frameTiming['95th_percentile_frame_rasterizer_time_millis'] as num;
+    final buildMisses = frameTiming['missed_frame_build_budget_count'] as num;
+    final rasterMisses =
+        frameTiming['missed_frame_rasterizer_budget_count'] as num;
+    if (buildP95 > mindYearHeatmapP95HeadroomMillis ||
+        rasterP95 > mindYearHeatmapP95HeadroomMillis ||
+        buildMisses > mindYearHeatmapMaximumMissedFrames ||
+        rasterMisses > mindYearHeatmapMaximumMissedFrames) {
+      reject('frame_timing_headroom');
+    }
+    final previewCompute = evidence['preview_compute'];
+    if (previewCompute is! Map ||
+        previewCompute['sampleCount'] is! int ||
+        (previewCompute['sampleCount'] as int) < events ||
+        previewCompute['p50Micros'] is! int ||
+        previewCompute['p95Micros'] is! int ||
+        previewCompute['maxMicros'] is! int) {
+      reject('preview_compute');
+    }
+    if ((previewCompute['p95Micros'] as int) >
+        mindYearHeatmapPreviewP95HeadroomMicros) {
+      reject('preview_compute_headroom');
+    }
+  }
 
   static const List<String> motionIsolationCounterKeys = <String>[
     'sqlCallsDuringMotion',

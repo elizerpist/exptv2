@@ -17,6 +17,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_a
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_rail_flight_recorder.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
@@ -355,6 +356,7 @@ Future<Map<String, dynamic>> _runScenario(
       ? _verifyAvatarNonemptyFixture(tester, controller)
       : <String, Object?>{};
   Map<String, Object?>? directionCircleEvidence;
+  Map<String, Object?>? mindYearHeatmapEvidence;
   var timeInteractionCount = 0;
   var avatarMotionLaneObserved = false;
   void collectAvatarPaint() {
@@ -429,6 +431,7 @@ Future<Map<String, dynamic>> _runScenario(
       motionDuration.start();
       try {
         await _runMeasuredScenario(
+          binding,
           tester,
           controller,
           scenario,
@@ -448,6 +451,9 @@ Future<Map<String, dynamic>> _runScenario(
           },
           onDirectionCircleEvidence: (evidence) {
             directionCircleEvidence = evidence;
+          },
+          onMindYearHeatmapEvidence: (evidence) {
+            mindYearHeatmapEvidence = evidence;
           },
         );
       } finally {
@@ -683,6 +689,7 @@ Future<Map<String, dynamic>> _runScenario(
     'verbose_flow_enabled': false,
     'avatar_first_target': ?avatarFirstTargetEvidence,
     'direction_circle': ?directionCircleEvidence,
+    'mind_year_heatmap': ?mindYearHeatmapEvidence,
   });
   binding.reportData!
     ..remove(frameKey)
@@ -695,6 +702,12 @@ Future<Map<String, dynamic>> _runScenario(
             'G must retain direction-circle evidence for distinct remembered '
             'Avatar targets.',
           )),
+    );
+  }
+  if (scenario == _ProfileScenario.yearPopulated) {
+    DashboardProfileReport.validateMindYearHeatmapEvidence(
+      mindYearHeatmapEvidence ??
+          (throw StateError('B must retain Mind Year heatmap evidence.')),
     );
   }
   binding.reportData![scenario.reportKey] = report;
@@ -1357,6 +1370,7 @@ Future<void> _waitForVisibleReset(
 }
 
 Future<void> _runMeasuredScenario(
+  IntegrationTestWidgetsFlutterBinding binding,
   WidgetTester tester,
   DashboardCoreController controller,
   _ProfileScenario scenario, {
@@ -1368,6 +1382,7 @@ Future<void> _runMeasuredScenario(
   required int Function() timeInteractionCount,
   required ValueChanged<Map<String, Object?>> onAvatarEvidence,
   required ValueChanged<Map<String, Object?>> onDirectionCircleEvidence,
+  required ValueChanged<Map<String, Object?>> onMindYearHeatmapEvidence,
 }) async {
   switch (scenario) {
     case _ProfileScenario.avatarFirstTarget:
@@ -1437,6 +1452,13 @@ Future<void> _runMeasuredScenario(
       await _flingSummary(tester, const Offset(0, -180));
       await _flingSummary(tester, const Offset(0, -180));
     case _ProfileScenario.yearPopulated:
+      for (var index = 0; index < 10; index += 1) {
+        await _flingRail(tester, controller);
+      }
+      onMindYearHeatmapEvidence(
+        await _profileMindYearHeatmapSlider(binding, tester, controller),
+      );
+      return;
     case _ProfileScenario.yearEmpty:
     case _ProfileScenario.month94:
     case _ProfileScenario.monthEmpty:
@@ -1512,6 +1534,142 @@ Future<void> _runMeasuredScenario(
       );
       await _settle(tester);
   }
+}
+
+/// Extends profile B with the real production Mind card, its structural
+/// footer, and both RangeSlider thumbs. The source-row counters belong to the
+/// annual projection itself; FrameTiming comes from the engine callback while
+/// the actual pointers are still driving the visible widgets.
+Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
+  IntegrationTestWidgetsFlutterBinding binding,
+  WidgetTester tester,
+  DashboardCoreController controller,
+) async {
+  final dashboard = tester.widget<CoreDashboard>(find.byType(CoreDashboard));
+  dashboard.modeController.setProgrammaticMode(DashboardModeSpec.mind);
+  final readyDeadline = DateTime.now().add(const Duration(seconds: 12));
+  while (DateTime.now().isBefore(readyDeadline)) {
+    await tester.pump(const Duration(milliseconds: 50));
+    if (find
+            .byKey(const ValueKey('mind-year-heatmap-grid'))
+            .evaluate()
+            .isNotEmpty &&
+        find
+            .byKey(const ValueKey('query-amount-range-slider'))
+            .evaluate()
+            .isNotEmpty &&
+        controller.mindYearHeatmap.value != null) {
+      break;
+    }
+  }
+  expect(find.byKey(const ValueKey('mind-year-heatmap-grid')), findsOneWidget);
+  expect(
+    find.byKey(const ValueKey('mind-year-heatmap-fixed-footer')),
+    findsOneWidget,
+  );
+  expect(
+    find.byKey(const ValueKey('dashboard-core-mode-content-gesture-region')),
+    findsNothing,
+  );
+  final sourceCounter = controller.mindYearHeatmap.sourceWorkCounter;
+  expect(sourceCounter, isNotNull);
+  final sourceRowsAtStart = sourceCounter!.sourceRowTouches;
+  final profileSequence = _lastDiagnosticSequence();
+  final frameTimings = <FrameTiming>[];
+  var sliderEventCount = 0;
+  var liveBeforeReleaseCount = 0;
+  var terminalValues = controller.mindYearHeatmap.value!.range;
+  void collectFrameTimings(List<FrameTiming> values) =>
+      frameTimings.addAll(values);
+
+  Future<void> dragThumb({
+    required bool lower,
+    required double targetFraction,
+  }) async {
+    final sliderFinder = find.byKey(
+      const ValueKey('query-amount-range-slider'),
+    );
+    final slider = tester.widget<RangeSlider>(sliderFinder);
+    final rect = tester.getRect(sliderFinder);
+    final trackLeft = rect.left + 24;
+    final trackWidth = rect.width - 48;
+    double thumbX(double value) {
+      final fraction = ((value - slider.min) / (slider.max - slider.min))
+          .clamp(0.0, 1.0)
+          .toDouble();
+      return trackLeft + trackWidth * fraction;
+    }
+
+    final prior = controller.mindYearHeatmap.value!.range;
+    final gesture = await tester.startGesture(
+      Offset(
+        thumbX(lower ? slider.values.start : slider.values.end),
+        rect.center.dy,
+      ),
+    );
+    await gesture.moveTo(
+      Offset(trackLeft + trackWidth * targetFraction, rect.center.dy),
+      timeStamp: const Duration(milliseconds: 24),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+    final live = controller.mindYearHeatmap.value!.range;
+    expect(
+      live,
+      isNot(prior),
+      reason: 'Mind heatmap must publish while the pointer is still down.',
+    );
+    liveBeforeReleaseCount += 1;
+    sliderEventCount += 1;
+    terminalValues = live;
+    await gesture.up(timeStamp: const Duration(milliseconds: 32));
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  binding.addTimingsCallback(collectFrameTimings);
+  try {
+    for (var cycle = 0; cycle < 10; cycle += 1) {
+      await dragThumb(lower: true, targetFraction: cycle.isEven ? .20 : .42);
+      await dragThumb(lower: false, targetFraction: cycle.isEven ? .80 : .62);
+    }
+  } finally {
+    // Allow the engine's final batch to arrive before removing the callback.
+    final deadline = DateTime.now().add(const Duration(seconds: 4));
+    while (frameTimings.isEmpty && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    binding.removeTimingsCallback(collectFrameTimings);
+  }
+  expect(frameTimings, isNotEmpty);
+  final previews = _diagnosticEventsAfter(profileSequence)
+      .where((event) => event.stage == 'MIND|PREVIEW_FRAME')
+      .toList(growable: false);
+  final summary = FrameTimingSummarizer(frameTimings).summary;
+  final previewTiming = sourceCounter.previewDurationSummary();
+  return <String, Object?>{
+    'slider_event_count': sliderEventCount,
+    'live_before_release_count': liveBeforeReleaseCount,
+    'heatmap_publication_count': controller.mindYearHeatmap.publicationCount,
+    'preview_event_count': previews.length,
+    'preview_events_report_zero_repository_index_canonical': previews.every(
+      (event) =>
+          event.scope?.contains(
+            'repositoryRequests=0 indexBuilds=0 canonicalCommits=0',
+          ) ==
+          true,
+    ),
+    'source_rows_at_projection_build': sourceRowsAtStart,
+    'source_rows_after_slider': sourceCounter.sourceRowTouches,
+    'source_rows_during_preview': sourceCounter.sourceRowTouchesDuringPreview,
+    'repository_accesses_during_preview':
+        sourceCounter.repositoryAccessesDuringPreview,
+    'index_builds_during_preview': sourceCounter.indexBuildsDuringPreview,
+    'max_day_buckets_per_preview': sourceCounter.maxDayBucketsVisitedPerPreview,
+    'preview_compute': previewTiming,
+    'final_preview_range_lower': terminalValues.lowerScaled100,
+    'final_visible_range_lower':
+        controller.mindYearHeatmap.value!.range.lowerScaled100,
+    'frame_timing': summary,
+  };
 }
 
 Future<void> _flingBudgetAvatar(

@@ -10,6 +10,7 @@ import '../../application/dashboard_budget_limit_edit_controller.dart';
 import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_mode_spec.dart';
+import '../../mind/domain/mind_year_heatmap_projection.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
@@ -61,6 +62,8 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindQueryAmountRangeLifecycleChanges,
     this.mindQueryAmountRangeState,
     this.mindQueryAmountRangeError,
+    this.mindYearHeatmap,
+    this.mindYearHeatmapVisible = false,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
     this.onMindQueryAmountRangePreviewChanged,
@@ -98,6 +101,8 @@ class DashboardCoreModeHost extends StatefulWidget {
   final DashboardAppliedQueryFacetLoadState Function()?
   mindQueryAmountRangeState;
   final Object? Function()? mindQueryAmountRangeError;
+  final ValueListenable<MindYearHeatmapFrame?>? mindYearHeatmap;
+  final bool mindYearHeatmapVisible;
   final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>?
@@ -242,6 +247,8 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     final mode = widget.controller.committedMode;
     final presentation = widget.presentationFor(mode);
     final headerBounds = presentation.geometry.headerBounds;
+    final mindViewportOwnsVerticalDrag =
+        mode.mode == DashboardMode.mind && widget.mindYearHeatmapVisible;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -251,16 +258,20 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         // was the physical reason Card2 drags were insensitive.
         const SizedBox.expand(),
         Positioned.fill(
-          child: GestureDetector(
-            key: const ValueKey('dashboard-core-mode-content-gesture-region'),
-            behavior: HitTestBehavior.translucent,
-            dragStartBehavior: DragStartBehavior.down,
-            onVerticalDragStart: _onContentVerticalStart,
-            onVerticalDragUpdate: _onContentVerticalUpdate,
-            onVerticalDragEnd: _onContentVerticalEnd,
-            onVerticalDragCancel: _finishPointerSequence,
-            child: _buildModeSurface(mode, presentation),
-          ),
+          child: mindViewportOwnsVerticalDrag
+              ? _buildModeSurface(mode, presentation)
+              : GestureDetector(
+                  key: const ValueKey(
+                    'dashboard-core-mode-content-gesture-region',
+                  ),
+                  behavior: HitTestBehavior.translucent,
+                  dragStartBehavior: DragStartBehavior.down,
+                  onVerticalDragStart: _onContentVerticalStart,
+                  onVerticalDragUpdate: _onContentVerticalUpdate,
+                  onVerticalDragEnd: _onContentVerticalEnd,
+                  onVerticalDragCancel: _finishPointerSequence,
+                  child: _buildModeSurface(mode, presentation),
+                ),
         ),
         Positioned(
           left: headerBounds.left,
@@ -328,6 +339,8 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             widget.mindQueryAmountRangeLifecycleChanges,
         queryAmountRangeState: widget.mindQueryAmountRangeState,
         queryAmountRangeError: widget.mindQueryAmountRangeError,
+        yearHeatmap: widget.mindYearHeatmap,
+        showYearHeatmap: widget.mindYearHeatmapVisible,
         onQueryAmountRangeRetry: widget.onMindQueryAmountRangeRetry,
         onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,
         onQueryAmountRangePreviewChanged:
