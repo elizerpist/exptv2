@@ -1015,6 +1015,61 @@ void main() {
   );
 
   test(
+    'RED profile: a Summary-only retained-bank capacity race defers without an unhandled Future',
+    () async {
+      final displayFrames = _DisplayFrameScheduler();
+      final core = DashboardCoreController(
+        initialDate: DateTime(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        displayFrameScheduler: displayFrames,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final active = core.railInteractionSceneWindowFor(core.navigation.state);
+      core.recordInitialSceneWindowActivation(active);
+      FluviDiagnosticLogger.clear();
+      addTearDown(FluviDiagnosticLogger.clear);
+
+      var retainedPrepareCalls = 0;
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        prepareRetained:
+            (_, {required retainedKey, required retainViewportId}) async {
+              retainedPrepareCalls += 1;
+              throw DashboardLogBoxCandidateSceneRetentionRejected(
+                candidateDigest: 'capacity-race',
+              );
+            },
+        hasRetained: (_) => false,
+        activate: (_) {},
+        scheduleRebase: displayFrames.scheduleFrame,
+        planRetainedSceneWindow: ({required retainedKey, required window}) =>
+            const DashboardLogBoxRetainedSceneWindowAdmission(
+              isAdmitted: true,
+              capacityEpoch: 11,
+            ),
+      );
+
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, true);
+      core.setMotionLaneActive(DashboardMotionLane.visualHost, false);
+      displayFrames.flush();
+      await pumpEventQueue(times: 12);
+
+      expect(retainedPrepareCalls, greaterThanOrEqualTo(1));
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('SUMMARY_PARENT_HOTSET_DEFERRED'),
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        isNot(contains('SUMMARY_PARENT_HOTSET_PREPARE_READY')),
+      );
+    },
+  );
+
+  test(
     'RED LIVE-TIME: an experimental MONTH crossing activates its retained root before settle',
     () async {
       final displayFrames = _DisplayFrameScheduler();

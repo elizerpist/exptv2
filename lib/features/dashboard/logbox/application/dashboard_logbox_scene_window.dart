@@ -426,6 +426,21 @@ final class DashboardLogBoxScenePreparationCancelled implements Exception {
   const DashboardLogBoxScenePreparationCancelled();
 }
 
+/// A background candidate bank was prepared but could not survive the cache's
+/// hard retention bounds. This is distinct from successful readiness: callers
+/// that requested purely speculative work must defer rather than publishing or
+/// treating the bank as retained.
+final class DashboardLogBoxCandidateSceneRetentionRejected extends StateError {
+  DashboardLogBoxCandidateSceneRetentionRejected({
+    required this.candidateDigest,
+  }) : super(
+         'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
+         'candidateDigest=$candidateDigest could not remain retained.',
+       );
+
+  final String candidateDigest;
+}
+
 /// Schedules the next bounded UI-isolate preparation slice. Production uses a
 /// post-frame opportunity; component tests may use the deterministic default.
 typedef DashboardLogBoxScenePreparationYield = Future<void> Function();

@@ -2627,10 +2627,8 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
             'maxBytes=$maximumRetainedCandidateBytes',
       ),
     );
-    throw StateError(
-      'QUERY_CANDIDATE_SCENE_RETENTION_REJECTED: '
-      'candidateDigest=${FluviDiagnosticKeyDigest.of(candidateKey)} '
-      'could not remain retained.',
+    throw DashboardLogBoxCandidateSceneRetentionRejected(
+      candidateDigest: FluviDiagnosticKeyDigest.of(candidateKey),
     );
   }
 

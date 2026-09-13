@@ -11897,11 +11897,36 @@ final class DashboardCoreController {
               entryCount: window.previewRowCount,
             ),
           );
-          await prepare(
-            window,
-            retainedKey: retainedKey,
-            retainViewportId: visibleFrames.value?.logBox.viewportId,
-          );
+          try {
+            await prepare(
+              window,
+              retainedKey: retainedKey,
+              retainViewportId: visibleFrames.value?.logBox.viewportId,
+            );
+          } on DashboardLogBoxCandidateSceneRetentionRejected {
+            // Admission is necessarily advisory: another protected candidate
+            // can claim the bounded bank while this background preparation is
+            // yielding. The cache has correctly refused false readiness. This
+            // Summary-only maintenance request must defer, never surface an
+            // unhandled Future or publish an unavailable retained target.
+            final currentAdmission =
+                _retainedSceneWindowAdmissionPlanner?.call(
+                  window: window,
+                  retainedKey: retainedKey,
+                ) ??
+                DashboardLogBoxRetainedSceneWindowAdmission(
+                  isAdmitted: false,
+                  capacityEpoch: -1,
+                  reason: 'retentionRace',
+                );
+            _deferAdjacentSummaryParentHotset(
+              retainedKey: retainedKey,
+              admission: currentAdmission,
+              candidate: candidate,
+              index: index,
+            );
+            continue;
+          }
           if (_disposed ||
               generation != _summaryParentHotsetGeneration ||
               _querySheetDismissalTransitionActive ||
