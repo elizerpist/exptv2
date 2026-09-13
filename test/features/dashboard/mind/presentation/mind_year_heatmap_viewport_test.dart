@@ -88,12 +88,14 @@ void main() {
           ),
         ),
       );
-      final tileFinder = find.byWidgetPredicate(
-        (widget) =>
-            widget is MindYearHeatmapDayTile &&
-            widget.day.date == const LocalDate(year: 2025, month: 1, day: 2),
+      final painterFinder = find.byKey(
+        const ValueKey('mind-year-heatmap-month-cells-1'),
       );
-      final before = tester.widget<MindYearHeatmapDayTile>(tileFinder).color;
+      MindYearHeatmapMonthPainter monthPainter() =>
+          tester.widget<CustomPaint>(painterFinder).painter!
+              as MindYearHeatmapMonthPainter;
+      const secondJanuary = LocalDate(year: 2025, month: 1, day: 2);
+      final before = monthPainter().colorForDate(secondJanuary);
       final slider = find.byKey(const ValueKey('query-amount-range-slider'));
       final sliderRect = tester.getRect(slider);
       final gesture = await tester.startGesture(
@@ -102,7 +104,7 @@ void main() {
       await gesture.moveBy(const Offset(120, 0));
       await tester.pump();
 
-      final after = tester.widget<MindYearHeatmapDayTile>(tileFinder).color;
+      final after = monthPainter().colorForDate(secondJanuary);
       expect(after, isNot(before));
       expect(frame.value.range, isNot(range));
       await gesture.up();
@@ -214,6 +216,39 @@ void main() {
         ),
         same(januaryBefore),
       );
+    },
+  );
+
+  testWidgets(
+    'RED MYH-18: a month preview uses one paint field instead of day widgets',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 480,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+          matching: find.byType(GridView),
+        ),
+        findsNothing,
+      );
+      expect(find.byType(CustomPaint), findsWidgets);
     },
   );
 }

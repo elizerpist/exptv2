@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
+import '../../time_navigation/domain/local_date.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 
 /// The one scroll owner for the Mind annual MonthCard region.
@@ -127,28 +128,22 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
           const SizedBox(height: 4),
           Expanded(
             child: RepaintBoundary(
-              child: ValueListenableBuilder<MindYearHeatmapFrame?>(
-                valueListenable: frameListenable,
-                builder: (context, frame, _) {
-                  final days =
-                      frame?.month(month) ?? const <MindYearHeatmapDay>[];
-                  return GridView.builder(
-                    primary: false,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: EdgeInsets.zero,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 7,
-                          mainAxisSpacing: 2,
-                          crossAxisSpacing: 2,
-                          childAspectRatio: 1,
-                        ),
-                    itemCount: days.length,
-                    itemBuilder: (context, index) =>
-                        MindYearHeatmapDayTile(day: days[index]),
-                  );
-                },
+              child: Semantics(
+                label:
+                    'Mind heatmap ${DashboardTimeLabelFormatter.monthName(month)}',
+                readOnly: true,
+                child: ExcludeSemantics(
+                  child: CustomPaint(
+                    key: ValueKey('mind-year-heatmap-month-cells-$month'),
+                    painter: MindYearHeatmapMonthPainter(
+                      month: month,
+                      frameListenable: frameListenable,
+                    ),
+                    isComplex: false,
+                    willChange: true,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -158,14 +153,37 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   );
 }
 
-/// A square, paint-only local-day cell. It deliberately has no date header or
-/// interaction owner in this first annual overview.
-final class MindYearHeatmapDayTile extends StatelessWidget {
-  const MindYearHeatmapDayTile({super.key, required this.day});
+/// Paints one month's non-interactive local-day cells as a single dynamic
+/// field. The existing frame listenable is the repaint authority, so an amount
+/// preview does not rebuild per-day widgets, nested viewports, or semantics.
+final class MindYearHeatmapMonthPainter extends CustomPainter {
+  MindYearHeatmapMonthPainter({
+    required this.month,
+    required this.frameListenable,
+  }) : super(repaint: frameListenable);
 
-  final MindYearHeatmapDay day;
+  static const _columnCount = 7;
+  static const _gap = 2.0;
+  static const _cornerRadius = Radius.circular(2);
 
-  Color get color => switch (day.paletteIntensity) {
+  final int month;
+  final ValueListenable<MindYearHeatmapFrame?> frameListenable;
+
+  @visibleForTesting
+  Color colorForDate(LocalDate date) {
+    final frame = frameListenable.value;
+    if (frame == null) throw StateError('Missing heatmap frame.');
+    final day = frame
+        .month(month)
+        .firstWhere(
+          (candidate) => candidate.date == date,
+          orElse: () => throw StateError('Missing heatmap day $date.'),
+        );
+    return colorFor(day);
+  }
+
+  @visibleForTesting
+  Color colorFor(MindYearHeatmapDay day) => switch (day.paletteIntensity) {
     MindYearHeatmapPaletteIntensity.empty => FluviVisualTokens.mindHeatmapEmpty,
     MindYearHeatmapPaletteIntensity.minimum =>
       FluviVisualTokens.mindHeatmapMinimum,
@@ -178,14 +196,32 @@ final class MindYearHeatmapDayTile extends StatelessWidget {
   };
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'heatmap:${day.date.isoString}:${day.kind.name}:${day.total ?? 0}',
-    child: DecoratedBox(
-      key: ValueKey('mind-year-heatmap-day-${day.date.isoString}'),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: const BorderRadius.all(Radius.circular(2)),
-      ),
-    ),
-  );
+  void paint(Canvas canvas, Size size) {
+    final days = frameListenable.value?.month(month);
+    if (days == null || days.isEmpty || size.width <= 0) return;
+    final cellExtent = (size.width - (_columnCount - 1) * _gap) / _columnCount;
+    if (cellExtent <= 0) return;
+    final paint = Paint();
+    for (var index = 0; index < days.length; index += 1) {
+      final row = index ~/ _columnCount;
+      final column = index % _columnCount;
+      final offset = Offset(
+        column * (cellExtent + _gap),
+        row * (cellExtent + _gap),
+      );
+      paint.color = colorFor(days[index]);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(offset.dx, offset.dy, cellExtent, cellExtent),
+          _cornerRadius,
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant MindYearHeatmapMonthPainter oldDelegate) =>
+      month != oldDelegate.month ||
+      !identical(frameListenable, oldDelegate.frameListenable);
 }
