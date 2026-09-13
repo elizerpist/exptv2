@@ -1594,9 +1594,36 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   void collectFrameTimings(List<FrameTiming> values) =>
       frameTimings.addAll(values);
 
+  Future<void> waitForHeldPointerFrameTimings(int countBefore) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 4));
+    while (frameTimings.length <= countBefore &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(
+      frameTimings.length,
+      greaterThan(countBefore),
+      reason:
+          'The Mind profile must receive an engine FrameTiming batch while '
+          'the real RangeSlider pointer remains down.',
+    );
+  }
+
+  Future<void> drainPrePreviewFrameTimings() async {
+    // FrameTiming delivery is batched by the engine. Force one settled frame
+    // after Mind mounts, then discard that initial batch so the B gate cannot
+    // attribute mode entry or an earlier rail flight to a held slider preview.
+    await tester.pump(const Duration(milliseconds: 16));
+    final deadline = DateTime.now().add(const Duration(seconds: 4));
+    while (frameTimings.isEmpty && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    frameTimings.clear();
+  }
+
   Future<void> dragThumb({
     required bool lower,
-    required double targetFraction,
+    required List<double> targetFractions,
   }) async {
     final sliderFinder = find.byKey(
       const ValueKey('query-amount-range-slider'),
@@ -1612,39 +1639,73 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
       return trackLeft + trackWidth * fraction;
     }
 
-    final prior = controller.mindYearHeatmap.value!.range;
+    var prior = controller.mindYearHeatmap.value!.range;
     final gesture = await tester.startGesture(
       Offset(
         thumbX(lower ? slider.values.start : slider.values.end),
         rect.center.dy,
       ),
     );
-    await gesture.moveTo(
-      Offset(trackLeft + trackWidth * targetFraction, rect.center.dy),
-      timeStamp: const Duration(milliseconds: 24),
+    final frameTimingCountBefore = frameTimings.length;
+    for (var index = 0; index < targetFractions.length; index += 1) {
+      await gesture.moveTo(
+        Offset(trackLeft + trackWidth * targetFractions[index], rect.center.dy),
+        timeStamp: Duration(milliseconds: 24 * (index + 1)),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+      collectPreviewEvents();
+      final live = controller.mindYearHeatmap.value!.range;
+      expect(
+        live,
+        isNot(prior),
+        reason: 'Mind heatmap must publish while the pointer is still down.',
+      );
+      liveBeforeReleaseCount += 1;
+      sliderEventCount += 1;
+      terminalValues = live;
+      prior = live;
+    }
+    await waitForHeldPointerFrameTimings(frameTimingCountBefore);
+    await gesture.up(
+      timeStamp: Duration(milliseconds: 24 * (targetFractions.length + 1)),
     );
-    await tester.pump(const Duration(milliseconds: 16));
-    collectPreviewEvents();
-    final live = controller.mindYearHeatmap.value!.range;
-    expect(
-      live,
-      isNot(prior),
-      reason: 'Mind heatmap must publish while the pointer is still down.',
-    );
-    liveBeforeReleaseCount += 1;
-    sliderEventCount += 1;
-    terminalValues = live;
-    await gesture.up(timeStamp: const Duration(milliseconds: 32));
     await tester.pump(const Duration(milliseconds: 16));
     collectPreviewEvents();
   }
 
   binding.addTimingsCallback(collectFrameTimings);
   try {
-    for (var cycle = 0; cycle < 10; cycle += 1) {
-      await dragThumb(lower: true, targetFraction: cycle.isEven ? .20 : .42);
-      await dragThumb(lower: false, targetFraction: cycle.isEven ? .80 : .62);
-    }
+    await drainPrePreviewFrameTimings();
+    await dragThumb(
+      lower: true,
+      targetFractions: const <double>[
+        .20,
+        .42,
+        .20,
+        .42,
+        .20,
+        .42,
+        .20,
+        .42,
+        .20,
+        .42,
+      ],
+    );
+    await dragThumb(
+      lower: false,
+      targetFractions: const <double>[
+        .80,
+        .62,
+        .80,
+        .62,
+        .80,
+        .62,
+        .80,
+        .62,
+        .80,
+        .62,
+      ],
+    );
   } finally {
     // Allow the engine's final batch to arrive before removing the callback.
     final deadline = DateTime.now().add(const Duration(seconds: 4));
