@@ -195,6 +195,37 @@ void main() {
   });
 
   testWidgets(
+    'RED DRR-09: MARK BUG NOW has a dedicated Mind Heatmap issue without replacing the log filter',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('debug-console-log-filter')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-console-mark-bug')));
+      await tester.pumpAndSettle();
+      expect(find.text('Mind Heatmap'), findsOneWidget);
+      expect(find.text('Other'), findsOneWidget);
+      expect(find.text('Mind slider'), findsOneWidget);
+
+      await tester.tap(find.text('Mind Heatmap'));
+      await tester.pump();
+
+      final marker = FluviDiagnosticLogger.entries.last;
+      expect(marker.stage, 'USER_MARK');
+      expect(marker.scope, contains('issue=mind_heatmap'));
+    },
+  );
+
+  testWidgets(
     'bug marker menu uses a light surface with legible marker labels',
     (tester) async {
       await tester.pumpWidget(

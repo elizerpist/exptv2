@@ -811,6 +811,14 @@ void main() {
       _installMindAmountDomain(core, LedgerDirection.expense);
 
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await pumpEventQueue(times: 4);
+      expect(
+        core.mindAmountPreparedBaseCount,
+        2,
+        reason:
+            'Mind retains exactly the canonical Income and Expense immutable '
+            'bases, not an unbounded direction/query cache.',
+      );
       expect(core.ensureMindYearHeatmapProjection(), isTrue);
       expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), <String>{
         '2025-01-01',
@@ -860,6 +868,86 @@ void main() {
       );
       expect(sliderSummaries.single.scope, isNot(contains('income-partner')));
       expect(sliderSummaries.single.scope, isNot(contains('expense-partner')));
+    },
+  );
+
+  test(
+    'RED DRR-03c: two cold Mind direction bases serialize on the one native index lane',
+    () async {
+      final firstColdBuild = Completer<void>();
+      final repository = _FocusSeedRepository(
+        prepareAfterBootstrapGate: firstColdBuild,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      addTearDown(() {
+        if (!firstColdBuild.isCompleted) firstColdBuild.complete();
+      });
+      await core.bootstrap();
+
+      core.currentQuery.apply(
+        core.currentQuery
+            .scopeFor(LedgerDirection.income)
+            .copyWith(
+              categoryIds: const <String>{'income-cold'},
+              refinements: const <String, Object?>{
+                QueryAmountRange.minimumRefinementKey: 100000,
+              },
+            ),
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(entryCount: 1, amountScaled100: 100),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 0,
+            maximumAmountScaled100: 100,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      core.currentQuery.apply(
+        core.currentQuery
+            .scopeFor(LedgerDirection.expense)
+            .copyWith(
+              categoryIds: const <String>{'expense-cold'},
+              refinements: const <String, Object?>{
+                QueryAmountRange.minimumRefinementKey: 200000,
+              },
+            ),
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(entryCount: 1, amountScaled100: 100),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 0,
+            maximumAmountScaled100: 100,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+
+      final activePrime = core.primeMindAmountPreviewDomain();
+      await pumpEventQueue(times: 12);
+      expect(
+        repository.prepareCalls,
+        2,
+        reason:
+            'Only Income may occupy the shared native index lane while its '
+            'cold base is held. Starting Expense here cancels the active '
+            'builder request.',
+      );
+
+      firstColdBuild.complete();
+      expect(await activePrime, isTrue);
+      await pumpEventQueue(times: 40);
+      expect(repository.prepareCalls, 3);
+      expect(core.mindAmountPreparedBaseCount, 2);
     },
   );
 
@@ -943,6 +1031,60 @@ void main() {
           'MIND_HEATMAP|FRAME_PUBLISHED',
         ]),
       );
+    },
+  );
+
+  test(
+    'RED DRR-03: Mind may receive an exact prepared index before optional candidate scene staging completes',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      final optionalSceneGate = Completer<void>();
+      addTearDown(() {
+        if (!optionalSceneGate.isCompleted) optionalSceneGate.complete();
+      });
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) => Future<void>.value(),
+        activate: (_) {},
+        prepareCandidate:
+            (_, {required candidateKey, required retainViewportId}) =>
+                optionalSceneGate.future,
+      );
+      final target = core.currentQuery
+          .scopeFor(LedgerDirection.income)
+          .copyWith(categoryIds: const <String>{'cold-index-target'});
+      final indexReady = Completer<PreparedDashboardIndex?>();
+      var candidateCompleted = false;
+      final candidateFuture = core
+          .prepareQueryDraft(
+            target,
+            onIndexReady: (index) {
+              if (!indexReady.isCompleted) indexReady.complete(index);
+            },
+          )
+          .then((_) => candidateCompleted = true);
+
+      await pumpEventQueue(times: 12);
+      expect(indexReady.isCompleted, isTrue);
+      final index = await indexReady.future;
+      expect(index, isNotNull);
+      expect(index!.key.matchesScope(target), isTrue);
+      expect(
+        candidateCompleted,
+        isFalse,
+        reason:
+            'The optional LogBox scene is intentionally held. Its Phase-B '
+            'completion must not delay compatible immutable-index readiness.',
+      );
+
+      optionalSceneGate.complete();
+      await candidateFuture;
     },
   );
 

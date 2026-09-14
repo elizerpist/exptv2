@@ -2387,6 +2387,33 @@ void main() {
       expect(repository.queryRequestCountFor(target), 1);
       expect(candidateScenePreparations, 2);
 
+      // RED DRR-03b: promotion must expose the exact immutable index even
+      // while the optional candidate scene remains deliberately held.
+      final indexReady = Completer<PreparedDashboardIndex?>();
+      var candidateCompleted = false;
+      final foregroundCandidate = core
+          .prepareQueryDraft(
+            target,
+            onIndexReady: (index) {
+              if (!indexReady.isCompleted) indexReady.complete(index);
+            },
+          )
+          .then((_) => candidateCompleted = true);
+      await pumpEventQueue(times: 16);
+      expect(indexReady.isCompleted, isTrue);
+      expect((await indexReady.future)!.key.matchesScope(target), isTrue);
+      expect(
+        candidateCompleted,
+        isFalse,
+        reason:
+            'The hotset hand-off must use its indexFuture, not wait for '
+            'the optional candidate scene to complete.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.map((event) => event.stage),
+        contains('QUERY_CHIP_PREWARM_PROMOTED_TO_FOREGROUND'),
+      );
+
       FluviDiagnosticLogger.clear();
       core.removeAppliedQueryCategory('food');
       await pumpEventQueue(times: 16);
@@ -2406,6 +2433,7 @@ void main() {
       core.noteVerticalPointerIntentEnded(41, cancelled: true);
 
       releaseHotsetScene.complete();
+      await foregroundCandidate;
       await pumpEventQueue(times: 160);
 
       expect(core.currentQuery.scopeFor(LedgerDirection.expense), target);
@@ -2415,10 +2443,6 @@ void main() {
         reason:
             'Foreground should retain/adopt the in-flight exact scene rather '
             'than re-stage an already-owned candidate bank.',
-      );
-      expect(
-        FluviDiagnosticLogger.entries.map((event) => event.stage),
-        contains('QUERY_CHIP_PREWARM_PROMOTED_TO_FOREGROUND'),
       );
     },
   );

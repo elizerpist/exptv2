@@ -90,7 +90,7 @@ void main() {
         'dashboard_logbox_render_surface.dart',
       ).readAsStringSync();
       final committedItem = renderer.substring(
-        renderer.indexOf('  void _paintCommittedItem('),
+        renderer.indexOf('  bool _paintCommittedItem('),
         renderer.indexOf('  void _recordVerticalCacheMiss('),
       );
       final previewItem = renderer.substring(

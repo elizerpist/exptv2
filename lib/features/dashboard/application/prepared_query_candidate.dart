@@ -126,8 +126,18 @@ final class PreparedQueryCandidatePreparation {
   /// original speculative continuation can fail closed by its own generation.
   final int? queryChipPrewarmGeneration;
   final Completer<PreparedQueryCandidate?> completion;
+  final Completer<PreparedDashboardIndex?> indexCompletion =
+      Completer<PreparedDashboardIndex?>();
 
   Future<PreparedQueryCandidate?> get future => completion.future;
+  Future<PreparedDashboardIndex?> get indexFuture => indexCompletion.future;
+
+  /// The immutable index becomes useful before optional scene decoration.
+  /// Completing this does not publish a candidate, mutate a query, or grant
+  /// any scene ownership; consumers must still validate their own identity.
+  void completeIndex(PreparedDashboardIndex? index) {
+    if (!indexCompletion.isCompleted) indexCompletion.complete(index);
+  }
 
   bool get isQueryChipHotset =>
       owner == PreparedQueryCandidatePreparationOwner.queryChipHotset;

@@ -76,6 +76,7 @@ final class DashboardLogBoxViewport extends StatefulWidget {
     this.performanceCounters,
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
+    this.renderedIdentityContextProvider,
     this.onExtentPublished,
     this.onCommittedScopeReset,
     this.currentQuery,
@@ -121,6 +122,8 @@ final class DashboardLogBoxViewport extends StatefulWidget {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
   renderDiagnosticContextProvider;
+  final DashboardLogBoxRenderedIdentityContextProvider?
+  renderedIdentityContextProvider;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
   final VoidCallback? onCommittedScopeReset;
   final CurrentQueryController? currentQuery;
@@ -730,6 +733,8 @@ final class _DashboardLogBoxViewportState
                               renderDiagnostics: widget.renderDiagnostics,
                               renderDiagnosticContextProvider:
                                   widget.renderDiagnosticContextProvider,
+                              renderedIdentityContextProvider:
+                                  widget.renderedIdentityContextProvider,
                               onExtentPublished: widget.onExtentPublished,
                             ),
                           ),
@@ -1708,6 +1713,7 @@ final class _DashboardLogScrollArea extends StatelessWidget {
     required this.performanceCounters,
     required this.renderDiagnostics,
     required this.renderDiagnosticContextProvider,
+    required this.renderedIdentityContextProvider,
     required this.onExtentPublished,
   });
 
@@ -1746,6 +1752,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
   renderDiagnosticContextProvider;
+  final DashboardLogBoxRenderedIdentityContextProvider?
+  renderedIdentityContextProvider;
   final ValueChanged<DashboardLogBoxRenderExtentSnapshot>? onExtentPublished;
 
   @override
@@ -2213,6 +2221,8 @@ final class _DashboardLogScrollArea extends StatelessWidget {
                   renderDiagnostics: renderDiagnostics,
                   renderDiagnosticContextProvider:
                       renderDiagnosticContextProvider,
+                  renderedIdentityContextProvider:
+                      renderedIdentityContextProvider,
                   onExtentPublished: onExtentPublished,
                 ),
               ),

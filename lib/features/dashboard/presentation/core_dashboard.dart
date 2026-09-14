@@ -995,6 +995,43 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               renderDiagnosticContextProvider:
                                                   () => controller
                                                       .renderDiagnosticContext,
+                                              renderedIdentityContextProvider: () {
+                                                final selectedDirection =
+                                                    switch (controller
+                                                        .transactionDirection
+                                                        .direction) {
+                                                      TransactionDirection
+                                                          .income =>
+                                                        LedgerDirection.income,
+                                                      TransactionDirection
+                                                          .expense =>
+                                                        LedgerDirection.expense,
+                                                    };
+                                                final canonicalDirection =
+                                                    controller
+                                                        .presentation
+                                                        .navigation
+                                                        .state
+                                                        .parentQueryScope
+                                                        .direction;
+                                                return DashboardLogBoxRenderedIdentityContext(
+                                                  selectedDirection:
+                                                      selectedDirection,
+                                                  canonicalDirection:
+                                                      canonicalDirection,
+                                                  canonicalQueryKey: controller
+                                                      .currentQuery
+                                                      .scopeFor(
+                                                        canonicalDirection,
+                                                      )
+                                                      .key,
+                                                  canonicalDirectionGeneration:
+                                                      controller.currentQuery
+                                                          .generationFor(
+                                                            canonicalDirection,
+                                                          ),
+                                                );
+                                              },
                                               onExtentPublished: controller
                                                   .recordLogBoxRenderExtent,
                                               onCommittedScopeReset: controller

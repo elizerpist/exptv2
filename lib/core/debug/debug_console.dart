@@ -250,6 +250,13 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                         ),
                       ),
                       PopupMenuItem(
+                        value: 'mind_heatmap',
+                        child: Text(
+                          'Mind Heatmap',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      PopupMenuItem(
                         value: 'avatar_fling',
                         child: Text(
                           'Avatar fling',

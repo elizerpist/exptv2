@@ -14,6 +14,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_render_readiness_diagnostics.dart';
@@ -23,6 +24,8 @@ import '../../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../../logbox/application/dashboard_logbox_render_domain.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/application/dashboard_logbox_scene_window.dart';
+import '../../query/domain/current_ledger_query_scope.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../../visible/application/dashboard_visible_frame_store.dart';
 import '../../visible/domain/dashboard_logbox_presentation_binding.dart';
 import '../../visible/domain/dashboard_visible_frame.dart';
@@ -44,6 +47,28 @@ typedef DashboardLogBoxTextLayoutPreparedCallback =
       required int preparedDayHeaderCount,
       required int estimatedBytes,
     });
+
+/// Read-only provenance supplied by the existing Core composition to its
+/// actual LogBox renderer. It carries no query mutation capability: the
+/// renderer uses it only to compare the already-painted payload with the
+/// current chrome and canonical-query identities.
+@immutable
+final class DashboardLogBoxRenderedIdentityContext {
+  const DashboardLogBoxRenderedIdentityContext({
+    required this.selectedDirection,
+    required this.canonicalDirection,
+    required this.canonicalQueryKey,
+    required this.canonicalDirectionGeneration,
+  });
+
+  final LedgerDirection selectedDirection;
+  final LedgerDirection canonicalDirection;
+  final LedgerQueryKey canonicalQueryKey;
+  final int canonicalDirectionGeneration;
+}
+
+typedef DashboardLogBoxRenderedIdentityContextProvider =
+    DashboardLogBoxRenderedIdentityContext Function();
 
 // Stable identity: ValueKey('dashboard-logbox-stable-render-surface').
 const _stableLogBoxRenderSurfaceKey = ValueKey(
@@ -145,6 +170,7 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
     this.performanceCounters,
     this.renderDiagnostics,
     this.renderDiagnosticContextProvider,
+    this.renderedIdentityContextProvider,
   });
 
   final DashboardVisibleFrameStore visibleFrames;
@@ -171,6 +197,8 @@ final class DashboardLogBoxRenderSurface extends StatefulWidget {
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
   final DashboardRenderDiagnosticContextProvider?
   renderDiagnosticContextProvider;
+  final DashboardLogBoxRenderedIdentityContextProvider?
+  renderedIdentityContextProvider;
 
   @override
   State<DashboardLogBoxRenderSurface> createState() =>
@@ -194,6 +222,7 @@ final class _DashboardLogBoxRenderSurfaceState
   int? _lastMismatchSignature;
   int? _lastNonemptyPresentationWithoutPaintSignature;
   int? _lastReadablePhaseADiagnosticSignature;
+  int? _lastVisibleRowsBoundSignature;
   int? _lastInitialReadinessDeferredViewportId;
   int? _lastPresentedViewportId;
   bool _firstFrameReported = false;
@@ -442,10 +471,17 @@ final class _DashboardLogBoxRenderSurfaceState
                 committedViewport: _committedViewport,
                 layoutProfile: layoutProfile,
               );
+              // Capture provenance with this immutable composition. Reading
+              // Core after paint could pair a previous canvas with a newer
+              // direction/query publication and make the diagnostic lie.
+              final renderedIdentityContext = widget
+                  .renderedIdentityContextProvider
+                  ?.call();
               final binding = _DashboardLogBoxRenderBinding(
                 payloadFrame: frame,
                 presentation: presentation,
                 payload: payload,
+                renderedIdentityContext: renderedIdentityContext,
                 renderDomain: renderDomain,
                 previewSurfaceHeight: previewSurfaceHeight,
                 usesCommittedGeometry:
@@ -481,6 +517,10 @@ final class _DashboardLogBoxRenderSurfaceState
                 onEntryTap: widget.onEntryTap,
                 performanceCounters: widget.performanceCounters,
                 renderDiagnostics: widget.renderDiagnostics,
+                onRowsPainted: (snapshot) => _recordVisibleRowsBound(
+                  binding: binding,
+                  snapshot: snapshot,
+                ),
                 partnerSwipe: widget.partnerSwipe,
                 groupRadius: resolvedGroupRadius,
                 groupShadows: logBoxDepth.outerShadows,
@@ -769,6 +809,79 @@ final class _DashboardLogBoxRenderSurfaceState
         );
       }
     });
+  }
+
+  /// Records the immutable composition and the rows its matching canvas
+  /// paint just issued. This is diagnostic-only: Core remains the sole query
+  /// owner and every row identity is hashed before it enters the debug ring.
+  void _recordVisibleRowsBound({
+    required _DashboardLogBoxRenderBinding binding,
+    required _DashboardLogBoxPaintedRowsSnapshot snapshot,
+  }) {
+    if (!mounted) return;
+    final payload = binding.payload;
+    if (payload == null) return;
+    final context = binding.renderedIdentityContext;
+    final selectedDirection = context?.selectedDirection ?? payload.direction;
+    final canonicalDirection = context?.canonicalDirection ?? payload.direction;
+    final canonicalQueryKey = context?.canonicalQueryKey ?? payload.queryKey;
+    final canonicalGeneration =
+        context?.canonicalDirectionGeneration ?? payload.revision ?? -1;
+    final sourceQueryMatchesVisibleDirection =
+        payload.direction == selectedDirection &&
+        payload.direction == canonicalDirection &&
+        payload.queryKey == canonicalQueryKey;
+    final signature = Object.hash(
+      payload.queryKey,
+      payload.revision,
+      payload.viewportId,
+      binding.presentation?.presentationEpoch,
+      binding.presentation?.frameGeneration,
+      binding.renderDomain,
+      snapshot.sceneGeneration,
+      snapshot.committedGeneration,
+      selectedDirection,
+      canonicalDirection,
+      canonicalQueryKey,
+      canonicalGeneration,
+      snapshot.rowDigest,
+      snapshot.incomeCount,
+      snapshot.expenseCount,
+    );
+    if (_lastVisibleRowsBoundSignature == signature) return;
+    _lastVisibleRowsBoundSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'LOGBOX|VISIBLE_ROWS_BOUND',
+        direction: selectedDirection.name,
+        queryKey: FluviDiagnosticKeyDigest.of(payload.queryKey.value),
+        coreRevision: payload.revision,
+        entryCount: snapshot.rowCount,
+        scope:
+            'selectedDirection=${selectedDirection.name} '
+            'canonicalDirection=${canonicalDirection.name} '
+            'canonicalQueryDigest=${FluviDiagnosticKeyDigest.of(canonicalQueryKey.value)} '
+            'canonicalDirectionGeneration=$canonicalGeneration '
+            'payloadDirection=${payload.direction.name} '
+            'payloadQueryDigest=${FluviDiagnosticKeyDigest.of(payload.queryKey.value)} '
+            'payloadRevision=${payload.revision ?? -1} '
+            'payloadViewportId=${payload.viewportId} '
+            'presentationEpoch=${binding.presentation?.presentationEpoch ?? -1} '
+            'presentationFrameGeneration=${binding.presentation?.frameGeneration ?? -1} '
+            'renderDomain=${binding.renderDomain.name} '
+            'sceneGeneration=${snapshot.sceneGeneration} '
+            'committedGeneration=${snapshot.committedGeneration} '
+            'paintGeneration=${snapshot.paintGeneration} '
+            'payloadKind=${binding.payloadFrame?.mode.name ?? 'unbound'} '
+            'actualVisibleRowCount=${snapshot.rowCount} '
+            'visibleRowIdDigest=${snapshot.rowDigest} '
+            'firstVisibleRowIdDigest=${snapshot.firstRowDigest} '
+            'lastVisibleRowIdDigest=${snapshot.lastRowDigest} '
+            'rowDirectionIncomeCount=${snapshot.incomeCount} '
+            'rowDirectionExpenseCount=${snapshot.expenseCount} '
+            'sourceQueryMatchesVisibleDirection=$sourceQueryMatchesVisibleDirection',
+      ),
+    );
   }
 
   void _reportNonemptyPresentationWithoutPaint({
@@ -1170,6 +1283,7 @@ final class _DashboardLogBoxRenderBinding {
     required this.payloadFrame,
     required this.presentation,
     required this.payload,
+    required this.renderedIdentityContext,
     required this.renderDomain,
     required this.previewSurfaceHeight,
     required this.usesCommittedGeometry,
@@ -1180,6 +1294,7 @@ final class _DashboardLogBoxRenderBinding {
   final DashboardVisibleFrame? payloadFrame;
   final DashboardLogBoxPresentationBinding? presentation;
   final DashboardLogViewportState? payload;
+  final DashboardLogBoxRenderedIdentityContext? renderedIdentityContext;
   final DashboardLogBoxRenderDomain renderDomain;
   final double previewSurfaceHeight;
   final bool usesCommittedGeometry;
@@ -1377,6 +1492,31 @@ final class _DashboardLogBoxHitTarget {
   final DashboardLogBoxBlockSegmentRole blockSegmentRole;
 }
 
+@immutable
+final class _DashboardLogBoxPaintedRowsSnapshot {
+  const _DashboardLogBoxPaintedRowsSnapshot({
+    required this.paintGeneration,
+    required this.sceneGeneration,
+    required this.committedGeneration,
+    required this.rowCount,
+    required this.rowDigest,
+    required this.firstRowDigest,
+    required this.lastRowDigest,
+    required this.incomeCount,
+    required this.expenseCount,
+  });
+
+  final int paintGeneration;
+  final int sceneGeneration;
+  final int committedGeneration;
+  final int rowCount;
+  final String rowDigest;
+  final String firstRowDigest;
+  final String lastRowDigest;
+  final int incomeCount;
+  final int expenseCount;
+}
+
 final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   _DashboardLogBoxSurfacePainter({
     required this.payload,
@@ -1393,6 +1533,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     required this.onEntryTap,
     required this.performanceCounters,
     required this.renderDiagnostics,
+    this.onRowsPainted,
     required this.groupRadius,
     required this.groupShadows,
     required this.groupInnerShadows,
@@ -1425,6 +1566,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   final ValueChanged<String>? onEntryTap;
   final DashboardPerformanceCounters? performanceCounters;
   final DashboardRenderReadinessDiagnostics? renderDiagnostics;
+  final ValueChanged<_DashboardLogBoxPaintedRowsSnapshot>? onRowsPainted;
   final BorderRadius groupRadius;
   final List<BoxShadow> groupShadows;
   final List<BoxShadow> groupInnerShadows;
@@ -1440,6 +1582,13 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
   int _lastReadablePhaseARowCount = 0;
   int _lastReadablePhaseARowsPainted = 0;
   int _lastRichPhaseBRowsPainted = 0;
+  int _paintGeneration = 0;
+  int _paintedRowCount = 0;
+  int _paintedIncomeCount = 0;
+  int _paintedExpenseCount = 0;
+  String? _firstPaintedRowId;
+  String? _lastPaintedRowId;
+  StringBuffer _paintedRowIds = StringBuffer();
 
   int get lastDrawableRowCount => _lastDrawableRowCount;
   int get lastPaintedRowCount => _lastPaintedRowCount;
@@ -1540,90 +1689,121 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final measure = performanceCounters?.measuresDurations ?? false;
     final started = measure ? developer.Timeline.now : 0;
     partnerSwipe?.recordStaticSurfacePaint();
-    final state = payload;
-    if (state == null) {
-      _lastDrawableRowCount = 0;
-      _lastPaintedRowCount = 0;
-      _lastReadablePhaseARowCount = 0;
-      _lastReadablePhaseARowsPainted = 0;
-      _lastRichPhaseBRowsPainted = 0;
-      _recordPaintDuration(started, measure);
-      return;
-    }
-    if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
-      _paintCommittedViewport(canvas, size, state);
-      _recordPaintDuration(started, measure);
-      return;
-    }
-    final hasCompleteReadablePhaseA = sceneCache.hasCompleteReadablePhaseAFor(
-      state,
-    );
-    final scene = sceneCache.railCriticalSceneFor(
-      state,
-      hasCompleteReadablePhaseAFallback: hasCompleteReadablePhaseA,
-    );
-    if (scene == null) {
-      // Phase A owns the exact semantic list even when its optional rich
-      // scene is still preparing or was cancelled.  Painting these bounded
-      // source-identity slots deliberately avoids `flatItems`, TextPainter
-      // allocation and rich projection on the pointer path; Phase B replaces
-      // the same identity with full prepared row content when available.
-      _paintSemanticPreviewSlots(
+    _paintGeneration += 1;
+    _paintedRowCount = 0;
+    _paintedIncomeCount = 0;
+    _paintedExpenseCount = 0;
+    _firstPaintedRowId = null;
+    _lastPaintedRowId = null;
+    _paintedRowIds = StringBuffer();
+    try {
+      final state = payload;
+      if (state == null) {
+        _lastDrawableRowCount = 0;
+        _lastPaintedRowCount = 0;
+        _lastReadablePhaseARowCount = 0;
+        _lastReadablePhaseARowsPainted = 0;
+        _lastRichPhaseBRowsPainted = 0;
+        _recordPaintDuration(started, measure);
+        return;
+      }
+      if (renderDomain == DashboardLogBoxRenderDomain.committedVertical) {
+        _paintCommittedViewport(canvas, size, state);
+        _recordPaintDuration(started, measure);
+        return;
+      }
+      final hasCompleteReadablePhaseA = sceneCache.hasCompleteReadablePhaseAFor(
+        state,
+      );
+      final scene = sceneCache.railCriticalSceneFor(
+        state,
+        hasCompleteReadablePhaseAFallback: hasCompleteReadablePhaseA,
+      );
+      if (scene == null) {
+        // Phase A owns the exact semantic list even when its optional rich
+        // scene is still preparing or was cancelled.  Painting these bounded
+        // source-identity slots deliberately avoids `flatItems`, TextPainter
+        // allocation and rich projection on the pointer path; Phase B replaces
+        // the same identity with full prepared row content when available.
+        _paintSemanticPreviewSlots(
+          canvas,
+          size,
+          state,
+          hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
+        );
+        _recordPaintDuration(started, measure);
+        return;
+      }
+      if (state.previewRowCount == 0) {
+        _lastDrawableRowCount = 0;
+        _lastPaintedRowCount = 0;
+        _lastReadablePhaseARowCount = 0;
+        _lastReadablePhaseARowsPainted = 0;
+        _lastRichPhaseBRowsPainted = 0;
+        // The viewport-sized render host is structural only. The zero-count
+        // header is the visible empty state; a rich scene must not turn an
+        // exact empty result into a centred shell or fake row geometry.
+        _recordPaintDuration(started, measure);
+        return;
+      }
+
+      final visibleWindow = _visibleWindow(size);
+      _paintGroupBackgrounds(
         canvas,
         size,
         state,
-        hasCompleteReadablePhaseA: hasCompleteReadablePhaseA,
+        visibleTop: visibleWindow.top,
+        visibleBottom: visibleWindow.bottom,
+      );
+      final first = _firstPossiblyVisibleItem(
+        state.flatItems,
+        visibleWindow.top,
+      );
+      _lastDrawableRowCount = state.flatItems.length;
+      var resourceCursor = 0;
+      for (var index = first; index < state.flatItems.length; index += 1) {
+        final item = state.flatItems[index];
+        final rowTop = _rowTop(item);
+        if (rowTop > visibleWindow.bottom) break;
+        if (rowTop + rowHeight < visibleWindow.top) {
+          continue;
+        }
+        if (_paintItem(canvas, size.width, item, rowTop, scene)) {
+          _recordPaintedRow(item.row.entryId, item.row.amountStyle);
+          resourceCursor += 1;
+        }
+      }
+      _lastPaintedRowCount = resourceCursor;
+      _lastReadablePhaseARowCount = sceneCache.readablePhaseARowCountFor(state);
+      _lastReadablePhaseARowsPainted = 0;
+      _lastRichPhaseBRowsPainted = resourceCursor;
+      if (resourceCursor == 0) {
+        sceneCache.recordVisiblePayloadWithoutPaint();
+      }
+      performanceCounters?.increment(
+        DashboardPerformanceMetric.logVisibleSlotPaint,
+        by: resourceCursor,
       );
       _recordPaintDuration(started, measure);
-      return;
+    } finally {
+      onRowsPainted?.call(
+        _DashboardLogBoxPaintedRowsSnapshot(
+          paintGeneration: _paintGeneration,
+          sceneGeneration: sceneGeneration,
+          committedGeneration: committedGeneration,
+          rowCount: _paintedRowCount,
+          rowDigest: FluviDiagnosticKeyDigest.of(_paintedRowIds.toString()),
+          firstRowDigest: _firstPaintedRowId == null
+              ? 'none'
+              : FluviDiagnosticKeyDigest.of(_firstPaintedRowId!),
+          lastRowDigest: _lastPaintedRowId == null
+              ? 'none'
+              : FluviDiagnosticKeyDigest.of(_lastPaintedRowId!),
+          incomeCount: _paintedIncomeCount,
+          expenseCount: _paintedExpenseCount,
+        ),
+      );
     }
-    if (state.previewRowCount == 0) {
-      _lastDrawableRowCount = 0;
-      _lastPaintedRowCount = 0;
-      _lastReadablePhaseARowCount = 0;
-      _lastReadablePhaseARowsPainted = 0;
-      _lastRichPhaseBRowsPainted = 0;
-      // The viewport-sized render host is structural only. The zero-count
-      // header is the visible empty state; a rich scene must not turn an
-      // exact empty result into a centred shell or fake row geometry.
-      _recordPaintDuration(started, measure);
-      return;
-    }
-
-    final visibleWindow = _visibleWindow(size);
-    _paintGroupBackgrounds(
-      canvas,
-      size,
-      state,
-      visibleTop: visibleWindow.top,
-      visibleBottom: visibleWindow.bottom,
-    );
-    final first = _firstPossiblyVisibleItem(state.flatItems, visibleWindow.top);
-    _lastDrawableRowCount = state.flatItems.length;
-    var resourceCursor = 0;
-    for (var index = first; index < state.flatItems.length; index += 1) {
-      final item = state.flatItems[index];
-      final rowTop = _rowTop(item);
-      if (rowTop > visibleWindow.bottom) break;
-      if (rowTop + rowHeight < visibleWindow.top) {
-        continue;
-      }
-      if (_paintItem(canvas, size.width, item, rowTop, scene)) {
-        resourceCursor += 1;
-      }
-    }
-    _lastPaintedRowCount = resourceCursor;
-    _lastReadablePhaseARowCount = sceneCache.readablePhaseARowCountFor(state);
-    _lastReadablePhaseARowsPainted = 0;
-    _lastRichPhaseBRowsPainted = resourceCursor;
-    if (resourceCursor == 0) {
-      sceneCache.recordVisiblePayloadWithoutPaint();
-    }
-    performanceCounters?.increment(
-      DashboardPerformanceMetric.logVisibleSlotPaint,
-      by: resourceCursor,
-    );
-    _recordPaintDuration(started, measure);
   }
 
   void _paintSemanticPreviewSlots(
@@ -1703,6 +1883,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         readable: resource.row,
         showsSeparator: slot.showsSeparator,
       );
+      _recordPaintedRow(resource.row.entryId, resource.row.amountStyle);
       painted += 1;
       readablePainted += 1;
     }
@@ -1822,21 +2003,20 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
         final rowTop = pageTop + _rowTop(item);
         if (rowTop > visibleBottom) break;
         if (rowTop + rowHeight < visibleTop) continue;
-        if (prepared != null) {
-          _paintCommittedItem(
-            canvas,
-            size.width,
-            item,
-            rowTop,
-            pageTop,
-            prepared,
-          );
-        } else {
-          // Page zero is the immutable, already-complete rail preview. It is
-          // intentionally borrowed for the first committed vertical frame so
-          // scroll start never lays out a duplicate paragraph bank.
-          _paintItem(canvas, size.width, item, rowTop, initialRailScene!);
-        }
+        // Page zero may borrow its immutable rail preview for the first
+        // committed vertical frame; that remains the exact painted identity.
+        final didPaint = prepared != null
+            ? _paintCommittedItem(
+                canvas,
+                size.width,
+                item,
+                rowTop,
+                pageTop,
+                prepared,
+              )
+            : _paintItem(canvas, size.width, item, rowTop, initialRailScene!);
+        if (!didPaint) continue;
+        _recordPaintedRow(item.row.entryId, item.row.amountStyle);
         resourceCursor += 1;
       }
       ordinal += 1;
@@ -1891,7 +2071,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     }
   }
 
-  void _paintCommittedItem(
+  bool _paintCommittedItem(
     Canvas canvas,
     double width,
     DashboardLogViewportItemViewModel item,
@@ -1904,7 +2084,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     final header = dayLabel == null ? null : page.dayHeaderFor(dayLabel);
     if (preparedText == null || (dayLabel != null && header == null)) {
       _recordVerticalCacheMiss(payload ?? page.page.payload, page.page.ordinal);
-      return;
+      return false;
     }
     if (header != null) {
       header.paint(
@@ -1919,7 +2099,7 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
     }
     // The static surface owns every row except the one structurally leased to
     // the isolated canonical active-segment layer.
-    if (_isActiveSwipeItem(item)) return;
+    if (_isActiveSwipeItem(item)) return true;
     _paintRowSeparator(canvas, width: width, item: item, rowTop: rowTop);
     final row = item.row;
     final badgeTop =
@@ -1952,6 +2132,20 @@ final class _DashboardLogBoxSurfacePainter extends CustomPainter {
       amountForeground: _amountForegroundFor(row),
     );
     _paintEditPlaceholder(canvas, width: width, rowTop: rowTop);
+    return true;
+  }
+
+  void _recordPaintedRow(String entryId, LogAmountStyle amountStyle) {
+    if (_paintedRowIds.isNotEmpty) _paintedRowIds.write('\u001f');
+    _paintedRowIds.write(entryId);
+    _firstPaintedRowId ??= entryId;
+    _lastPaintedRowId = entryId;
+    _paintedRowCount += 1;
+    if (amountStyle == LogAmountStyle.income) {
+      _paintedIncomeCount += 1;
+    } else {
+      _paintedExpenseCount += 1;
+    }
   }
 
   void _recordVerticalCacheMiss(DashboardLogViewportState state, int ordinal) {

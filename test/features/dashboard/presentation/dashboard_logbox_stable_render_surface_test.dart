@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_key_digest.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
@@ -631,6 +633,62 @@ void main() {
       expect(tasks, <String>['surface', 'layout', 'text']);
     },
   );
+
+  testWidgets(
+    'RED DRR-05: actual painted LogBox rows publish bounded direction-safe identity evidence',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final store = DashboardVisibleFrameStore();
+      addTearDown(store.dispose);
+      store.publish(_visible(groups: _groups(2), epoch: 41));
+      final selectedScope = CurrentLedgerQueryScope(
+        direction: LedgerDirection.income,
+        timeScope: const YearScope(2026),
+      );
+
+      await _pumpViewport(
+        tester,
+        store: store,
+        counters: DashboardPerformanceCounters(),
+        renderedIdentityContextProvider: () =>
+            DashboardLogBoxRenderedIdentityContext(
+              selectedDirection: LedgerDirection.income,
+              canonicalDirection: LedgerDirection.income,
+              canonicalQueryKey: selectedScope.key,
+              canonicalDirectionGeneration: 99,
+            ),
+      );
+      for (var frame = 0; frame < 10; frame += 1) {
+        await tester.pump();
+      }
+
+      final event = FluviDiagnosticLogger.entries.lastWhere(
+        (candidate) => candidate.stage == 'LOGBOX|VISIBLE_ROWS_BOUND',
+      );
+      expect(event.direction, 'income');
+      expect(
+        event.queryKey,
+        FluviDiagnosticKeyDigest.of(
+          'expense|year:2026|categories:|partners:|refinements:',
+        ),
+      );
+      expect(event.scope, contains('payloadDirection=expense'));
+      expect(event.scope, contains('selectedDirection=income'));
+      expect(event.scope, contains('canonicalDirection=income'));
+      expect(event.scope, contains('canonicalDirectionGeneration=99'));
+      expect(event.scope, contains('sourceQueryMatchesVisibleDirection=false'));
+      expect(event.scope, contains('actualVisibleRowCount=2'));
+      expect(event.scope, contains('rowDirectionExpenseCount=2'));
+      expect(
+        event.scope,
+        contains(
+          'visibleRowIdDigest=${FluviDiagnosticKeyDigest.of('row-0\u001frow-1')}',
+        ),
+      );
+      expect(event.scope, isNot(contains('Partner row-0')));
+      expect(event.scope, isNot(contains('-1,00 Ft')));
+    },
+  );
 }
 
 final class _SurfaceTimingCounters extends DashboardPerformanceCounters {
@@ -662,6 +720,8 @@ Future<void> _pumpViewport(
   DashboardLogBoxWarmupTaskCallback? onWarmupTextLayoutsPrepared,
   ValueChanged<DashboardLogRowViewModel>? onAvatarTap,
   ValueChanged<String>? onEntryTap,
+  DashboardLogBoxRenderedIdentityContextProvider?
+  renderedIdentityContextProvider,
   GlobalKey? repaintBoundaryKey,
 }) => tester.pumpWidget(
   MaterialApp(
@@ -696,6 +756,7 @@ Future<void> _pumpViewport(
                 gestureId: 41,
                 displayFrameId: 73,
               ),
+          renderedIdentityContextProvider: renderedIdentityContextProvider,
         ),
       ),
     ),

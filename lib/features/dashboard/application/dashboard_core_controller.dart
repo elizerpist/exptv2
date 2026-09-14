@@ -1163,6 +1163,16 @@ final class DashboardCoreController {
   final Set<int> _activeVerticalPointerIntents = <int>{};
   PreparedDashboardIndex? _mindAmountPreviewBaseIndex;
   CurrentLedgerQueryScope? _mindAmountPreviewDomainScope;
+  final LinkedHashMap<CurrentLedgerQueryScope, PreparedDashboardIndex>
+  _mindAmountPreparedBases =
+      LinkedHashMap<CurrentLedgerQueryScope, PreparedDashboardIndex>();
+  // There can be at most one admitted Mind base request per direction.  The
+  // native prepared-index builder has one lane, so this intentionally tracks
+  // supersession by direction rather than retaining a generation for every
+  // transient query scope.
+  final Map<LedgerDirection, int> _mindAmountPreviewPrimeGenerations =
+      <LedgerDirection, int>{};
+  int _mindDirectionBaseGateGeneration = 0;
   DashboardLogBoxSceneWindow? _mindAmountPreviewResourceWindow;
   String? _mindAmountPreviewResourceKey;
   DashboardLogBoxSceneWindow? _timePreviewResourceWindow;
@@ -1179,7 +1189,6 @@ final class DashboardCoreController {
   CurrentLedgerQueryScope? _budgetAvatarLiveResourcePreparingScope;
   String? _budgetAvatarLiveResourcePreparingKey;
   bool _budgetAvatarLiveResourceRetryScheduled = false;
-  int _mindAmountPreviewPrimeGeneration = 0;
   int _mindAmountPreviewGeneration = 0;
   int _mindAmountInteractionGeneration = 0;
   int _mindAmountInteractionPreviewCount = 0;
@@ -1342,6 +1351,11 @@ final class DashboardCoreController {
 
   @visibleForTesting
   int get appliedQueryChipHotsetCount => _appliedQueryChipHotset.length;
+
+  /// The Mind direction prewarm has one immutable slot per ledger direction;
+  /// this exposes only the bounded count for production-parent tests.
+  @visibleForTesting
+  int get mindAmountPreparedBaseCount => _mindAmountPreparedBases.length;
 
   @visibleForTesting
   int get deferredQueryChipHotsetCount => _deferredQueryChipHotset.length;
@@ -1722,6 +1736,7 @@ final class DashboardCoreController {
         if (!preparing.completion.isCompleted) {
           preparing.completion.complete(null);
         }
+        preparing.completeIndex(null);
         dataRuntime.cancelPreparedQuery();
       }
     }
@@ -2234,9 +2249,12 @@ final class DashboardCoreController {
     CurrentLedgerQueryScope draft, {
     QueryComposerApplyIdentity? composerIdentity,
     QueryMenuData? facetPresentation,
+    ValueChanged<PreparedDashboardIndex?>? onIndexReady,
+    bool allowAppliedScopePreparation = false,
   }) {
     final template = draft.copyWith(timeScope: const AllTimeScope());
-    if (template == currentQuery.scopeFor(template.direction)) {
+    if (!allowAppliedScopePreparation &&
+        template == currentQuery.scopeFor(template.direction)) {
       if (_activeQueryCandidatePreparation != null ||
           _stagedQueryCandidate != null) {
         discardQueryDraftCandidate(reason: 'draftReturnedToApplied');
@@ -2244,6 +2262,7 @@ final class DashboardCoreController {
       // Opening an unchanged Query Menu is not a new dashboard candidate.
       // Apply will take the established no-op close path, with zero native
       // work and without needlessly cancelling a useful background warmup.
+      onIndexReady?.call(null);
       return Future<PreparedQueryCandidate?>.value(null);
     }
     final effectiveIdentity =
@@ -2252,6 +2271,7 @@ final class DashboardCoreController {
     if (effectiveIdentity != null &&
         (effectiveIdentity.direction != template.direction ||
             !queryComposer.isCurrentApplyIdentity(effectiveIdentity))) {
+      onIndexReady?.call(null);
       return Future<PreparedQueryCandidate?>.value(null);
     }
     final directionalQueries = currentQuery.queries.replaceDirection(
@@ -2260,6 +2280,7 @@ final class DashboardCoreController {
     );
     final physicalWindow = _activePreparedQueryYearWindow();
     if (physicalWindow == null) {
+      onIndexReady?.call(null);
       return Future<PreparedQueryCandidate?>.value(null);
     }
     final cacheKey = _preparedQueryCandidateCacheKey(
@@ -2276,7 +2297,13 @@ final class DashboardCoreController {
       composerIdentity: effectiveIdentity,
       facetPresentation: facetPresentation,
     );
-    if (promotedHotset != null) return promotedHotset.future;
+    if (promotedHotset != null) {
+      _notifyPreparedQueryDraftIndex(
+        future: promotedHotset.indexFuture,
+        onIndexReady: onIndexReady,
+      );
+      return promotedHotset.future;
+    }
 
     // A visible editor is foreground intent and wins over a *different*
     // speculative chip neighbour using the one shared native prepared-index
@@ -2288,6 +2315,10 @@ final class DashboardCoreController {
         inFlight.cacheKey == cacheKey &&
         inFlight.composerIdentity == effectiveIdentity) {
       inFlight.facetPresentation ??= facetPresentation;
+      _notifyPreparedQueryDraftIndex(
+        future: inFlight.indexFuture,
+        onIndexReady: onIndexReady,
+      );
       return inFlight.future;
     }
     final generation = ++_queryDraftPreparationGeneration;
@@ -2298,6 +2329,10 @@ final class DashboardCoreController {
       facetPresentation: facetPresentation,
     );
     _activeQueryCandidatePreparation = preparation;
+    _notifyPreparedQueryDraftIndex(
+      future: preparation.indexFuture,
+      onIndexReady: onIndexReady,
+    );
     _markStagedQueryCandidateUnavailable();
     unawaited(
       _prepareQueryCandidate(
@@ -2308,6 +2343,14 @@ final class DashboardCoreController {
       ),
     );
     return preparation.future;
+  }
+
+  void _notifyPreparedQueryDraftIndex({
+    required Future<PreparedDashboardIndex?> future,
+    required ValueChanged<PreparedDashboardIndex?>? onIndexReady,
+  }) {
+    if (onIndexReady == null) return;
+    unawaited(future.then(onIndexReady));
   }
 
   /// Cancels/discards a non-visible draft candidate.  This intentionally does
@@ -2323,6 +2366,7 @@ final class DashboardCoreController {
     if (preparation != null && !preparation.completion.isCompleted) {
       preparation.completion.complete(null);
     }
+    preparation?.completeIndex(null);
     final staged = _stagedQueryCandidate;
     _markStagedQueryCandidateUnavailable();
     _failedQueryCandidate = null;
@@ -2386,6 +2430,16 @@ final class DashboardCoreController {
               yearWindow: physicalWindow,
             ),
           );
+      if (!_isCurrentPreparedQueryCandidate(preparation) ||
+          index.coreRevision != coreRevision ||
+          !index.key.matchesScope(draft)) {
+        _completePreparedQueryCandidate(preparation, null);
+        return;
+      }
+      // The immutable index is exact and usable now. Optional scene staging
+      // later in this operation is Phase-B decoration, not a Mind-base
+      // readiness dependency.
+      preparation.completeIndex(index);
       final budgetLimitSnapshot =
           cached?.data.budgetLimitSnapshot ??
           await dataRuntime.prepareBudgetLimitSnapshotFor(index);
@@ -2624,6 +2678,7 @@ final class DashboardCoreController {
     PreparedQueryCandidatePreparation preparation,
     PreparedQueryCandidate? candidate,
   ) {
+    preparation.completeIndex(candidate?.index);
     if (!preparation.completion.isCompleted) {
       preparation.completion.complete(candidate);
     }
@@ -3411,6 +3466,7 @@ final class DashboardCoreController {
     if (!preparation!.completion.isCompleted) {
       preparation.completion.complete(null);
     }
+    preparation.completeIndex(null);
     dataRuntime.cancelPreparedQuery();
   }
 
@@ -3740,63 +3796,164 @@ final class DashboardCoreController {
   Future<bool> primeMindAmountPreviewDomain() async {
     if (_disposed) return false;
     final direction = navigation.state.parentQueryScope.direction;
+    final activeReady = await _primeMindAmountPreviewBaseFor(
+      direction: direction,
+      preparesLiveRows: true,
+    );
+    // DashboardDataRuntime has exactly one native prepared-index builder
+    // lane.  Starting the sibling while this request is still admitted would
+    // cancel the active base.  The active base is already installed before
+    // this Future resolves; only then may the bounded sibling prewarm enter
+    // that shared lane.
+    if (activeReady) _prewarmInactiveMindAmountPreviewBase(direction);
+    return activeReady;
+  }
+
+  void _prewarmInactiveMindAmountPreviewBase(LedgerDirection activeDirection) {
+    final inactiveDirection = switch (activeDirection) {
+      LedgerDirection.income => LedgerDirection.expense,
+      LedgerDirection.expense => LedgerDirection.income,
+    };
+    // The applied facet loader remains the only owner of canonical domains.
+    // Core only retains a bounded immutable prepared base once that canonical
+    // data is already available; it does not issue a second facet request.
+    if (currentQuery.amountDomainFor(inactiveDirection) == null) return;
+    unawaited(
+      _primeMindAmountPreviewBaseFor(
+        direction: inactiveDirection,
+        preparesLiveRows: false,
+      ),
+    );
+  }
+
+  Future<bool> _primeMindAmountPreviewBaseFor({
+    required LedgerDirection direction,
+    required bool preparesLiveRows,
+  }) async {
+    if (_disposed) return false;
     final appliedScope = currentQuery.scopeFor(direction);
     final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final resident = _mindAmountPreparedBaseFor(domainScope);
+    if (resident != null) {
+      if (preparesLiveRows) {
+        _setMindAmountPreviewBase(resident, domainScope, active: true);
+        return _primeMindAmountLiveRowResources(resident, domainScope);
+      }
+      return true;
+    }
     final installed = dataRuntime.currentIndex;
     if (installed != null &&
         installed.coreRevision == coreRevision &&
         installed.key.matchesScope(domainScope)) {
-      _mindAmountPreviewBaseIndex = installed;
-      _mindAmountPreviewDomainScope = domainScope;
+      _setMindAmountPreviewBase(
+        installed,
+        domainScope,
+        active: preparesLiveRows,
+      );
+      if (!preparesLiveRows) return true;
       return _primeMindAmountLiveRowResources(installed, domainScope);
     }
-    final retained = _mindAmountPreviewBaseIndex;
-    if (retained != null &&
-        retained.coreRevision == coreRevision &&
-        _mindAmountPreviewDomainScope == domainScope) {
-      return _primeMindAmountLiveRowResources(retained, domainScope);
-    }
 
-    final primeGeneration = ++_mindAmountPreviewPrimeGeneration;
+    final primeGeneration =
+        (_mindAmountPreviewPrimeGenerations[direction] ?? 0) + 1;
+    _mindAmountPreviewPrimeGenerations[direction] = primeGeneration;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'MIND|PREVIEW_BASE_REQUIRED',
+        stage: preparesLiveRows
+            ? 'MIND|PREVIEW_BASE_REQUIRED'
+            : 'MIND_HEATMAP|DIRECTION_BASE_PREWARM_REQUIRED',
         flowId: 'generation:$primeGeneration',
         queryKey: domainScope.key.value,
         direction: direction.name,
-        scope: 'source=nonAmountPreparedQuery',
+        scope:
+            'source=nonAmountPreparedQuery boundedSlots=2 '
+            'preparesLiveRows=$preparesLiveRows',
       ),
     );
-    final candidate = await prepareQueryDraft(domainScope);
+    final indexReady = Completer<PreparedDashboardIndex?>();
+    final candidateFuture = prepareQueryDraft(
+      domainScope,
+      allowAppliedScopePreparation: true,
+      onIndexReady: (index) {
+        if (!indexReady.isCompleted) indexReady.complete(index);
+      },
+    );
+    unawaited(
+      candidateFuture.then((candidate) {
+        if (!indexReady.isCompleted) indexReady.complete(candidate?.index);
+      }),
+    );
+    final index = await indexReady.future;
     if (_disposed ||
-        primeGeneration != _mindAmountPreviewPrimeGeneration ||
+        primeGeneration != _mindAmountPreviewPrimeGenerations[direction] ||
         !QueryAmountRange.hasSameDomainIdentity(
           currentQuery.scopeFor(direction),
           domainScope,
         ) ||
-        candidate == null) {
+        index == null ||
+        index.coreRevision != coreRevision ||
+        !index.key.matchesScope(domainScope)) {
       return false;
     }
-    _mindAmountPreviewBaseIndex = candidate.index;
-    _mindAmountPreviewDomainScope = domainScope;
-    final liveResourcesReady = await _primeMindAmountLiveRowResources(
-      candidate.index,
-      domainScope,
-    );
-    if (!liveResourcesReady) return false;
+    _setMindAmountPreviewBase(index, domainScope, active: preparesLiveRows);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
-        stage: 'MIND|PREVIEW_BASE_READY',
+        stage: preparesLiveRows
+            ? 'MIND|PREVIEW_BASE_READY'
+            : 'MIND_HEATMAP|DIRECTION_BASE_PREWARM_READY',
         flowId: 'generation:$primeGeneration',
         queryKey: domainScope.key.value,
         direction: direction.name,
-        coreRevision: candidate.index.coreRevision,
+        coreRevision: index.coreRevision,
         scope:
-            'preparedRows=${candidate.index.buildMetrics.uniquePreviewRowCount} '
-            'repositoryWorkDuringDrag=false',
+            'preparedRows=${index.buildMetrics.uniquePreviewRowCount} '
+            'repositoryWorkDuringDrag=false '
+            'optionalSceneCompletionAwaited=false '
+            'boundedSlots=${_mindAmountPreparedBases.length}',
       ),
     );
-    return true;
+    if (!preparesLiveRows) return true;
+    return _primeMindAmountLiveRowResources(index, domainScope);
+  }
+
+  PreparedDashboardIndex? _mindAmountPreparedBaseFor(
+    CurrentLedgerQueryScope domainScope,
+  ) {
+    final base = _mindAmountPreparedBases[domainScope];
+    if (base == null) return null;
+    if (base.coreRevision == coreRevision &&
+        base.key.matchesScope(domainScope)) {
+      return base;
+    }
+    _mindAmountPreparedBases.remove(domainScope);
+    return null;
+  }
+
+  void _setMindAmountPreviewBase(
+    PreparedDashboardIndex base,
+    CurrentLedgerQueryScope domainScope, {
+    required bool active,
+  }) {
+    for (final staleScope
+        in _mindAmountPreparedBases.keys
+            .where(
+              (scope) =>
+                  scope.direction == domainScope.direction &&
+                  scope != domainScope,
+            )
+            .toList(growable: false)) {
+      _mindAmountPreparedBases.remove(staleScope);
+    }
+    _mindAmountPreparedBases
+      ..remove(domainScope)
+      ..[domainScope] = base;
+    while (_mindAmountPreparedBases.length > LedgerDirection.values.length) {
+      final evictedScope = _mindAmountPreparedBases.keys.first;
+      _mindAmountPreparedBases.remove(evictedScope);
+    }
+    if (!active) return;
+    _mindAmountPreviewBaseIndex = base;
+    _mindAmountPreviewDomainScope = domainScope;
   }
 
   /// Installs the one active Year heatmap projection from the same resident
@@ -4902,20 +5059,20 @@ final class DashboardCoreController {
     CurrentLedgerQueryScope scope,
   ) {
     final domainScope = QueryAmountRange.domainScope(scope);
-    final retained = _mindAmountPreviewBaseIndex;
-    if (retained != null &&
-        retained.coreRevision == coreRevision &&
-        _mindAmountPreviewDomainScope == domainScope) {
-      return retained;
-    }
+    final retained = _mindAmountPreparedBaseFor(domainScope);
+    if (retained != null) return retained;
     final installed = dataRuntime.currentIndex;
     if (installed == null ||
         installed.coreRevision != coreRevision ||
         !installed.key.matchesScope(domainScope)) {
       return null;
     }
-    _mindAmountPreviewBaseIndex = installed;
-    _mindAmountPreviewDomainScope = domainScope;
+    _setMindAmountPreviewBase(
+      installed,
+      domainScope,
+      active:
+          navigation.state.parentQueryScope.direction == domainScope.direction,
+    );
     return installed;
   }
 
@@ -5606,6 +5763,7 @@ final class DashboardCoreController {
       if (!outgoingPreparation.completion.isCompleted) {
         outgoingPreparation.completion.complete(null);
       }
+      outgoingPreparation.completeIndex(null);
       dataRuntime.cancelPreparedQuery();
     }
     _queryApplyGeneration += 1;
@@ -8351,11 +8509,72 @@ final class DashboardCoreController {
     );
   }
 
+  /// Keeps the already-complete visible direction until the one bounded target
+  /// base exists. This is a readiness gate, not a timer/retry: a failed target
+  /// leaves the current complete frame intact instead of publishing mixed
+  /// chrome/heatmap generations.
+  bool _deferMindDirectionUntilPreparedBase({
+    required TransactionDirection direction,
+    required LedgerDirection ledgerDirection,
+    required CurrentLedgerQueryScope targetScope,
+  }) {
+    if (navigation.state.plane != TimePlane.year ||
+        mindYearHeatmap.value == null ||
+        _compatibleMindAmountPreviewBase(targetScope) != null) {
+      return false;
+    }
+    final gateGeneration = ++_mindDirectionBaseGateGeneration;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_HEATMAP|DIRECTION_DEFERRED_FOR_BASE',
+        flowId: 'generation:$gateGeneration',
+        queryKey: targetScope.key.value,
+        direction: ledgerDirection.name,
+        coreRevision: coreRevision,
+        scope:
+            'visibleDirection=${navigation.state.parentQueryScope.direction.name} '
+            'reason=preparedBaseUnavailable retry=false',
+      ),
+    );
+    unawaited(
+      _primeMindAmountPreviewBaseFor(
+        direction: ledgerDirection,
+        preparesLiveRows: false,
+      ).then((ready) {
+        if (_disposed ||
+            gateGeneration != _mindDirectionBaseGateGeneration ||
+            !ready ||
+            queryComposer.isOpen) {
+          if (!_disposed &&
+              gateGeneration == _mindDirectionBaseGateGeneration &&
+              !ready) {
+            FluviDiagnosticLogger.log(
+              FluviDiagnosticEvent(
+                stage: 'MIND_HEATMAP|DIRECTION_BASE_UNAVAILABLE',
+                flowId: 'generation:$gateGeneration',
+                queryKey: targetScope.key.value,
+                direction: ledgerDirection.name,
+                coreRevision: coreRevision,
+                scope: 'visibleDirectionRetained=true retry=false',
+              ),
+            );
+          }
+          return;
+        }
+        selectDirection(direction);
+      }),
+    );
+    return true;
+  }
+
   void selectDirection(TransactionDirection direction) {
     // The Query sheet is a modal edit session. Dashboard direction is not
     // allowed to change underneath its independent draft, because that would
     // create an ambiguous applied/draft ownership transition.
     if (queryComposer.isOpen) return;
+    // Every direct intent supersedes a pending target-base gate, including a
+    // tap back to the currently visible direction.
+    _mindDirectionBaseGateGeneration += 1;
     _supersedeAcceptedQueryApplyForDashboardNavigation();
     final ledgerDirection = direction == TransactionDirection.income
         ? LedgerDirection.income
@@ -8382,6 +8601,13 @@ final class DashboardCoreController {
       template: targetTemplate,
       availability: targetAvailability,
     );
+    if (_deferMindDirectionUntilPreparedBase(
+      direction: direction,
+      ledgerDirection: ledgerDirection,
+      targetScope: targetTemplate,
+    )) {
+      return;
+    }
     final mindHeatmapTrace =
         navigation.state.plane == TimePlane.year &&
             mindYearHeatmap.value != null
