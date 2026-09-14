@@ -185,6 +185,36 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   None was staged, modified, stashed, cleaned or deleted.
 - Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-14 — Prepared-base repair delivery and final graph provenance
+
+- Final application source remains
+  `288cc35584ec5cb6e41eb237523104922a2c7393`; journal commits do not alter
+  application source. Final SCIP was generated from a temporarily detached
+  canonical checkout at that exact SHA and then the worktree was returned to
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913` at
+  `67ee2a955b6f420a13868f49f515c1f203632ad6`.
+- Final SCIP provenance: `scip_dart=1.6.2`, raw index SHA-256
+  `075b9e35e8f132456cda35c63535e26a93ddba7f158a312855600a585232b86a`,
+  448 documents, 290,228 occurrences, 10,233 repository-defined symbols and
+  74,608 references. Tooling graph commit
+  `a031f804a692345e24759d3631ed134cbca02e0f` on
+  `tooling/scip-codegraph-v1` records that provenance; its tooling tests pass.
+- Exact source Actions delivery run: `34859925658`, workflow `Fluvi
+  Verification`, head SHA `288cc35584ec5cb6e41eb237523104922a2c7393`.
+  `test-core`, `test-flutter`, path gate and `build-human-diagnostic-apk`
+  succeeded. The human release target is that same full SHA.
+- Downloaded normal human diagnostic APK:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_288cc35.apk`;
+  byte size `82,482,481`; SHA-256
+  `8bc1d1fa915c8617258c7cdcc0e853c9a58e4619583bc53be03c892230947f97`.
+  The full `FLUVI_BUILD_COMMIT=288cc35584ec5cb6e41eb237523104922a2c7393`
+  string was verified in the APK `lib/arm64-v8a/libapp.so`; build purpose is
+  the workflow’s `human_diagnostic` profile target.
+- At this journal time, the separate Actions dashboard-profile job remains
+  running. It is not substituted for user physical acceptance and its result
+  must be reported factually when observed.
+- Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Physical Mind direction/LogBox regression on `2fc02e143197996eee2218fe3830a1349e0f1f5d`
 
 - Feedback time: 2026-09-14 08:31 Europe/Budapest.
