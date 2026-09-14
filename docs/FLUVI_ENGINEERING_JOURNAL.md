@@ -210,3 +210,64 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - MISSING EVIDENCE: exact `test-flutter` failure body for run `34782074754`; matching SCIP for exact tested/current/final source as required; actual rendered LogBox row/card direction trace; production-parent cold-target RED→GREEN evidence; final performance profile/APK/hash; user physical revalidation.
 - Prompt-writer source change for this feedback: this journal entry only, committed with `[skip ci]`; no application source, tests, workflow, graph, milestone file, build configuration or runtime behavior is changed by the prompt writer.
 - Physical validation of the next application repair: `PENDING — USER ONLY`.
+
+## 2026-09-14 — Prepared-base liveness and rendered-LogBox boundary application evidence
+
+- Application commit: `288cc35584ec5cb6e41eb237523104922a2c7393`
+  (`fix(mind): release prepared bases before optional scenes`). This is an
+  evidence-led repair commit, not a device-acceptance claim.
+- Source root cause for the verified heatmap delay: a Mind base was previously
+  obtained only from the complete `PreparedQueryCandidate` future. Its exact
+  immutable `PreparedDashboardIndex` is ready before optional budget/
+  partner/LogBox candidate scene work. The refreshed Drive snapshot records
+  exactly that gap: Income receives `preparedBaseUnavailable` early and only
+  reaches the later candidate completion about 0.86–0.95 s afterward.
+- Repair: `PreparedQueryCandidatePreparation.indexFuture` exposes the exact,
+  revision/scope-validated immutable index without applying a Query or leasing
+  a scene. `DashboardCoreController` remains the only orchestration owner; it
+  retains at most one non-amount Mind base per ledger direction, serializes
+  cold sibling admission through the one native index lane, and uses
+  direction-keyed supersession generations. A matching chip-hotset promotion
+  uses the same early readiness boundary. No retry, timer, remount, key change,
+  cache flush, renderer query mutation, second direction controller, or
+  unbounded cache was introduced.
+- Direction publication contract: if a Year heatmap target lacks its compatible
+  prepared base, Core retains the complete current direction rather than
+  publish new chrome with a blank/stale heatmap. Once the exact target base is
+  admitted, existing Core/presentation direction flow owns the target switch.
+- Actual LogBox forensic boundary: the stable painter now emits
+  `LOGBOX|VISIBLE_ROWS_BOUND` from the matching canvas paint. It carries only
+  safe selected/canonical/payload identities, generation/revision/viewport
+  fields, counts, direction totals and hashed row/query edge identities. The
+  Core provenance is captured with the immutable composition, not fetched from
+  a later post-frame controller read. It does not repair the user’s stale-row
+  symptom; it establishes the first trustworthy physical trace boundary.
+- Debug UX: the existing `All`/`Mind Heatmap` log filter is unchanged. The
+  separate `MARK BUG NOW` popup now has `Mind Heatmap` with
+  `USER_MARK issue=mind_heatmap`.
+- RED→GREEN evidence in Ubuntu proot: `DRR-03` proves an immutable index is
+  released before a held optional candidate scene; `DRR-03b` covers hotset
+  promotion; `DRR-03c` holds one cold native build and proves no sibling enters
+  before it settles; `DRR-05` verifies actual painted-row safe provenance and
+  an intentional selected/payload mismatch; `DRR-09` verifies the bug-marker
+  option. Full `dashboard_core_ephemeral_focus_test.dart` passed 71 tests;
+  full `dashboard_core_query_application_test.dart` passed 52 tests;
+  full debug and vector-asset suites passed; targeted production analysis
+  passed with `No issues found`.
+- Known unrelated test baseline: the full
+  `dashboard_logbox_stable_render_surface_test.dart` fails before/independent
+  of this repair at unchanged line 89 because `tester.state(find.byType(
+  Scrollable))` finds multiple elements. Its new focused DRR-05 test passes;
+  this failure is not represented as a green regression result.
+- CI baseline correction after direct GitHub job-log audit: run `34782074754`
+  had `test-core`, `test-flutter`, and human APK success; the overall failure
+  was `run-dashboard-profile` at integration profile line 1629, missing the
+  post-quiescence engine timing marker and later
+  `B_year_month_rail_populated`. This is profile-instrumentation evidence,
+  unrelated to the two physical direction symptoms; the earlier journal text
+  that called `test-flutter` failed is superseded by this factual audit.
+- Still unproven/not complete: a post-repair physical trace, first production
+  stale-LogBox owner and repair, exact no-preinstalled-domain cold parent pair,
+  actual-row cross-surface/re-entry/rapid-toggle matrix, final performance
+  profile, final matching SCIP, human APK hash, and device validation.
+- Physical validation: `PENDING — USER ONLY`.
