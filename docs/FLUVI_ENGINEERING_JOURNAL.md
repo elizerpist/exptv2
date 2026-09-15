@@ -241,6 +241,43 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Prompt-writer source change for this feedback: this journal entry only, committed with `[skip ci]`; no application source, tests, workflow, graph, milestone file, build configuration or runtime behavior is changed by the prompt writer.
 - Physical validation of the next application repair: `PENDING — USER ONLY`.
 
+## 2026-09-15 — Profile timing-boundary correction (`7ae82c56`)
+
+- Test-only commit: `7ae82c565de3c808237dea32a541bbb5fda36e9e`
+  (`test(profile): permit an idle Mind timing boundary`). No Flutter runtime,
+  Core, Time, Mind, query, LogBox, cache, controller, ScrollPosition, physics
+  or presentation source changed.
+- Exact online RED evidence: Actions run `34992842232`, profile job
+  `104463696499`, built from application SHA
+  `e62a817232121aa7023f4946aeacf6cc4111c82d`, failed at
+  `drainPrePreviewFrameTimings` before either RangeSlider gesture. The
+  quiescence gate had passed, then the engine delivered no new callback during
+  the four-second idle drain (`Expected: non-empty; Actual: []`). The job did
+  not reach a frame-time threshold; its subsequent missing scenario map is a
+  consequence, not a second cause.
+- Comparative source/log evidence: the earlier exact `7645789...` profile
+  run reached the same Mind interaction and failed later on actual
+  `FrameTiming` headroom, after a non-empty idle callback happened to arrive.
+  Thus an idle callback is not a semantic property of the pointer interaction
+  being measured. The existing per-held-pointer and per-direction-tap
+  `_awaitFrameTimingAfter(...)` assertions remain unchanged and continue to
+  require newly delivered engine samples during real user input.
+- Repair: retain the four-second delayed-batch drain and clear any batch it
+  receives, but permit zero callbacks in an otherwise quiescent engine. This
+  removes only the false precondition; it does not relax production behavior,
+  slider publication, FrameTiming requirements for actual gestures, direction
+  atomicity, or any performance threshold.
+- Local validation in Ubuntu proot: `flutter analyze
+  integration_test/dashboard_interaction_profile_test.dart
+  integration_test/support/dashboard_profile_report.dart` — PASS (`No issues
+  found`); `flutter test test/performance/dashboard_profile_report_test.dart`
+  — PASS (98 tests).
+- Pending: a reasoned exact online profile rerun must establish the actual
+  post-pointer frame metrics. The distinct `7645789...` metric failure and
+  `e62a8172` dual-lane resource cost remain unproven as a common cause and
+  must not be silently classified green.
+- Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-15 — Bounded dual Mind direction row-resource readiness (`e62a8172`)
 
 - Application commit: `e62a8172` (`fix(mind): prewarm both direction row
