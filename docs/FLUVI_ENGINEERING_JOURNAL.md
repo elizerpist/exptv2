@@ -298,6 +298,57 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   `288cc355...` introduced the Time recurrence.
 - Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-15 — Delivery and profile classification for `9945d6e9...`
+
+- Application repair commit: `9945d6e9d4cfc3b948f85e724d18c2925fd975e2`
+  (`fix(summary,mind): align pointer rebase and heatmap year`). Its separate
+  local-evidence journal commit is `6174cee7d7b6cc3c5af3ea1c4edf5296d77eb180`.
+  The CI-only follow-up `7645789ec9c01da627d6c41b0cabeb3d3b30c7df` supplies
+  `platform-tools` to `android-actions/setup-android@v3`: the original new
+  run `34985737430` stopped before tests because its removed default `tools`
+  SDK package could not be found. This changes no Flutter/Android runtime
+  source.
+- Final matching SCIP for the application repair was generated with
+  `scip_dart 1.6.2`: source head `9945d6e9d4cfc3b948f85e724d18c2925fd975e2`,
+  raw SHA-256 `556b3c5a214ddeb935dbb64e5f17daa8a52f78d92f97dc63a8b6fdf2fd2d102d`,
+  445 documents, 291,643 occurrences, 10,251 repository symbols and 74,980
+  references. Generated tooling commit: `b15f37bf0eb023cae82481a1ad39b1c6f589bb6c`
+  on `tooling/scip-codegraph-v1`.
+- Corrected Actions run `34986214585` reached the application checks:
+  `dashboard paths`, `test-core`, `test-flutter`, and `human diagnostic APK`
+  succeeded. The normal APK was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_7645789.apk`;
+  size `82,498,865` bytes, SHA-256
+  `98c6a5f7b99bb042f667fd389b7f222c8a01e1053854baaa038ff932385f492e`.
+  Its arm64 `libapp.so` contains the complete build SHA
+  `7645789ec9c01da627d6c41b0cabeb3d3b30c7df`.
+- `run-dashboard-profile` in that same run FAILED at
+  `DashboardProfileReport.validateMindYearHeatmapEvidence`, not because of
+  the annual projection compute: its rejected FrameTiming sample reports
+  average build `58.534 ms`, p90 build `152.947 ms`, p99/worst build
+  `341.451 ms`, 30 missed build frames, average raster `1023.047 ms`, p90
+  raster `1141.376 ms`, p99/worst raster `1326.925 ms`. The profile gate
+  requires p95 below `12 ms` and at most one miss, so this is an explicit
+  failed performance gate and is not called green.
+- Artifact comparison is factual but non-causal: baseline run `34859925658`
+  on `288cc355...` also failed the same gate (average build `40.341 ms`, p90
+  `102.517 ms`, p99/worst `301.913 ms`, 15 misses). Both B-scenario logs
+  contain pre-existing direction/live-resource LogBox scene preparation for
+  1,846 and 2,458 rows. In the new run such preparations include UI slices up
+  to `126.620 ms`; the repair's renderer-acknowledged transient-Year method
+  only installs the already-admitted Mind projection and has no scene-preparer
+  call. This excludes treating the profile failure as evidence that the
+  transient Year hand-off directly starts rich LogBox work, but does NOT prove
+  that the repair is performance-neutral: emulator variance and the worse
+  aggregate sample leave that question unproven.
+- Local repair evidence remains PASS: targeted analysis had no issues;
+  focused Summary/Core/Mind/debug tests passed 152 tests; full
+  `dashboard_core_ephemeral_focus_test.dart` passed 73 tests. The separate
+  profile performance gate remains FAILED and needs a source-proven,
+  scope-approved LogBox/resource performance repair or stronger reproducible
+  causality evidence before overall delivery can be called complete.
+- Physical validation remains: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base liveness and rendered-LogBox boundary application evidence
 
 - Application commit: `288cc35584ec5cb6e41eb237523104922a2c7393`
