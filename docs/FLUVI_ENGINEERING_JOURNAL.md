@@ -278,6 +278,38 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   must not be silently classified green.
 - Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-15 — Mind profile p95 schema correction (`5aff50ea`)
+
+- Test/profile evidence commit: `5aff50ea` (`test(profile): normalize Mind
+  FrameTiming p95`). No production Flutter, Core, Time, Mind, query, LogBox,
+  cache, controller, ScrollPosition, physics, or widget source changed.
+- Exact online evidence before this correction: Actions run `34997263756`,
+  profile job `104478420467`, on source head `e1a2c05...`, passed dashboard
+  paths, core tests, Flutter tests and human APK. The idle timing precondition
+  no longer failed: the run reached real held RangeSlider and direction-tap
+  interactions. It then failed at
+  `DashboardProfileReport.validateMindYearHeatmapEvidence` line 195 with
+  `frame_timing` invalid, before the p95 headroom comparison.
+- First proven owner: Flutter's `FrameTimingSummarizer.summary` provides p50,
+  p90 and p99 aggregates but no p95 fields, while Fluvi's Mind evidence
+  contract requires p95. The rejected SDK map reported, for context only,
+  average/p90/p99 build `15.869`/`24.297`/`35.264 ms`, 21 build misses, and
+  average/p90/p99 raster `2198.060`/`2946.552`/`4348.980 ms`; it did not
+  contain the required p95 values. Therefore these numbers are NOT a valid
+  completed p95 performance classification.
+- RED→GREEN: `PRF-02` initially failed to compile because the normalizing
+  boundary did not exist. The new shared profile adapter receives the exact
+  bounded captured build/raster duration lists for both the complete Mind
+  interaction and its direction-tap subset, computes p95 through the existing
+  percentile routine, and removes the raw duration lists before report
+  publication. Thus no threshold is relaxed and no unbounded frame trace is
+  retained. Local Ubuntu-proot validation: targeted profile report suite PASS
+  (99 tests); targeted analysis PASS (`No issues found`).
+- Required next evidence: rerun the exact profile with the p95 schema now
+  present; only then classify actual p95/headroom. Existing baseline
+  `288cc355...` profile failure remains inherited comparative evidence, not a
+  green result. Physical validation remains `PENDING — USER ONLY`.
+
 ## 2026-09-15 — Bounded dual Mind direction row-resource readiness (`e62a8172`)
 
 - Application commit: `e62a8172` (`fix(mind): prewarm both direction row
