@@ -1730,7 +1730,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   final capturedFrameTimings = List<FrameTiming>.unmodifiable(frameTimings);
   expect(capturedFrameTimings, isNotEmpty);
   collectPreviewEvents();
-  final summary = FrameTimingSummarizer(capturedFrameTimings).summary;
+  final summary = _summarizeFrameTimings(capturedFrameTimings);
   final previewTiming = sourceCounter.previewDurationSummary();
   return <String, Object?>{
     'slider_event_count': sliderEventCount,
@@ -1899,8 +1899,21 @@ Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
             0 &&
         _scalarDelta(repositoryBefore, repositoryAfter, 'index_build_calls') ==
             0,
-    'frame_timing': FrameTimingSummarizer(directionFrameTimings).summary,
+    'frame_timing': _summarizeFrameTimings(directionFrameTimings),
   };
+}
+
+Map<String, dynamic> _summarizeFrameTimings(List<FrameTiming> timings) {
+  final sdkSummary = FrameTimingSummarizer(timings).summary;
+  return DashboardProfileReport.normalizeFrameTimingSummary(
+    sdkSummary,
+    frameBuildMicros: <int>[
+      for (final timing in timings) timing.buildDuration.inMicroseconds,
+    ],
+    frameRasterizerMicros: <int>[
+      for (final timing in timings) timing.rasterDuration.inMicroseconds,
+    ],
+  );
 }
 
 /// Ensures the profile measures an idle Mind interaction, rather than delayed

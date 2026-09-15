@@ -1124,6 +1124,27 @@ abstract final class DashboardProfileReport {
     );
   }
 
+  /// Adds the p95 fields required by Fluvi's profile contract to an SDK
+  /// [FrameTimingSummarizer] map.
+  ///
+  /// Flutter's summary exposes p90 and p99 but not p95. Keep the raw frame
+  /// durations local to this normalization step: profile output must retain
+  /// the required aggregate evidence, not an unbounded per-frame trace.
+  static Map<String, dynamic> normalizeFrameTimingSummary(
+    Map<String, dynamic> sdkSummary, {
+    required List<int> frameBuildMicros,
+    required List<int> frameRasterizerMicros,
+  }) {
+    final normalized = Map<String, dynamic>.from(sdkSummary)
+      ..['frame_build_times'] = List<int>.of(frameBuildMicros)
+      ..['frame_rasterizer_times'] = List<int>.of(frameRasterizerMicros);
+    addRequiredPercentiles(normalized);
+    normalized
+      ..remove('frame_build_times')
+      ..remove('frame_rasterizer_times');
+    return normalized;
+  }
+
   static double? densityDeltaPercent(num baseline, num candidate) {
     if (baseline == 0) return null;
     return ((candidate - baseline) / baseline) * 100.0;

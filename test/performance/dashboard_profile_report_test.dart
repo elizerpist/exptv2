@@ -405,6 +405,29 @@ void main() {
     expect(summary['99th_percentile_frame_rasterizer_time_millis'], 10.0);
   });
 
+  test('RED PRF-02: normalizes SDK frame summaries with p95 evidence', () {
+    final rawSdkSummary = <String, dynamic>{
+      '90th_percentile_frame_build_time_millis': 5.0,
+      '99th_percentile_frame_build_time_millis': 7.0,
+      '90th_percentile_frame_rasterizer_time_millis': 8.0,
+      '99th_percentile_frame_rasterizer_time_millis': 10.0,
+    };
+
+    final normalized = DashboardProfileReport.normalizeFrameTimingSummary(
+      rawSdkSummary,
+      frameBuildMicros: const <int>[1000, 3000, 5000, 7000],
+      frameRasterizerMicros: const <int>[2000, 4000, 8000, 10000],
+    );
+
+    expect(normalized['95th_percentile_frame_build_time_millis'], 7.0);
+    expect(
+      normalized['95th_percentile_frame_rasterizer_time_millis'],
+      10.0,
+    );
+    expect(normalized, isNot(contains('frame_build_times')));
+    expect(normalized, isNot(contains('frame_rasterizer_times')));
+  });
+
   test('required scenario schema includes every requested duration lane', () {
     expect(
       DashboardProfileReport.requiredScenarioMetricKeys,
