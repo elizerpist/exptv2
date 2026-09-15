@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_summary_auto_res
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
@@ -856,6 +857,114 @@ void main() {
             'display frame instead of inheriting an old ballistic cooldown.',
       );
       await nextPointer.up();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'RED TIME-01: replacement Year pointer projects from the rebased semantic origin',
+    (tester) async {
+      final navigation = DashboardNavigationController(
+        initialDate: DateTime(2028, 4, 14),
+        initialPlane: TimePlane.year,
+        initialRailOpen: true,
+      );
+      final visibleFrames = DashboardVisibleFrameStore();
+      addTearDown(navigation.dispose);
+      addTearDown(visibleFrames.dispose);
+      final crossings = <DashboardNavigationState>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SummaryPillExperiment(
+              variant: SummaryPillVariant.segmented,
+              bounds: _bounds,
+              navigation: navigation,
+              visibleFrames: visibleFrames,
+              onLevelCrossed: (_, _) {},
+              onComponentCrossed: (candidate, component) {
+                if (component != DashboardTemporalAnchorComponent.year) return;
+                crossings.add(candidate);
+                // This is the semantic promotion Core performs before a
+                // replacement pointer begins. The selector's private
+                // physical carousel must be rebased to this same origin.
+                navigation.commitTemporalCandidate(candidate);
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final selector = find.byKey(
+        const ValueKey('summary-pill-segmented-year-selector'),
+      );
+      final carouselFinder = find.descendant(
+        of: selector,
+        matching: find.byType(CenteredCarousel<int>),
+      );
+      expect(carouselFinder, findsOneWidget);
+      final carousel = tester.widget<CenteredCarousel<int>>(carouselFinder);
+      final controller = carousel.controller;
+
+      final firstGesture = await tester.startGesture(
+        tester.getCenter(selector),
+      );
+      await firstGesture.moveBy(
+        const Offset(0, 20),
+        timeStamp: const Duration(milliseconds: 1),
+      );
+      await tester.pump(const Duration(milliseconds: 16));
+      for (var step = 1; step <= 4; step += 1) {
+        await firstGesture.moveBy(
+          const Offset(0, 60),
+          timeStamp: Duration(milliseconds: step * 100),
+        );
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(
+        navigation.state.yearCursor,
+        2024,
+        reason:
+            'The first flight must visibly reach the physical report origin.',
+      );
+      await firstGesture.up(timeStamp: const Duration(milliseconds: 401));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(controller.hasActiveScrollActivity, isTrue);
+      final staleRawLogicalIndex = controller.rawCenteredLogicalIndex;
+      final stalePixels = controller.scrollController.position.pixels;
+      final physicsCreationCount = controller.physicsCreationCount;
+      expect(staleRawLogicalIndex.abs(), greaterThan(1));
+
+      final crossingsBeforeReplacement = crossings.length;
+      final replacement = await tester.startGesture(tester.getCenter(selector));
+      await tester.pump();
+      expect(identical(controller, carousel.controller), isTrue);
+      expect(
+        controller.rawCenteredLogicalIndex,
+        0,
+        reason:
+            'A replacement pointer must structurally rebase the old physical '
+            'offset before the new semantic origin is sampled.',
+      );
+      expect(controller.scrollController.position.pixels, isNot(stalePixels));
+      expect(controller.physicsCreationCount, physicsCreationCount);
+
+      await replacement.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await replacement.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(crossings.length, greaterThan(crossingsBeforeReplacement));
+      final firstReplacement = crossings[crossingsBeforeReplacement];
+      expect(
+        firstReplacement.yearCursor,
+        2023,
+        reason:
+            'A local downward tick from semantic 2024 must be 2023. '
+            'staleRawLogicalIndex=$staleRawLogicalIndex stalePixels=$stalePixels',
+      );
+      await replacement.up();
       await tester.pumpAndSettle();
     },
   );

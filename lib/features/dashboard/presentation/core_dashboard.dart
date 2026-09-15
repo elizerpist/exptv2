@@ -1834,6 +1834,11 @@ class _DashboardSummaryRegion extends StatelessWidget {
                       candidate: candidate,
                       component: component,
                     ),
+                onComponentVisualTargetPainted: (candidate, component) =>
+                    controller.noteSegmentedSummaryComponentVisualTargetPainted(
+                      candidate: candidate,
+                      component: component,
+                    ),
                 componentPaintedTarget: controller.segmentedTargetPainted,
                 onComponentSettled: (candidate, component) =>
                     controller.settleExperimentalTemporalComponentCandidate(

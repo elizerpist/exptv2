@@ -32,6 +32,8 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_sce
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
@@ -447,6 +449,59 @@ void main() {
       expect(
         frame.temporalCandidate.effectiveScope,
         core.navigation.state.effectiveScope,
+      );
+    },
+  );
+
+  test(
+    'RED MYHP-15: an unprimed Mind slider fails closed instead of lazy-admitting a source membership',
+    () async {
+      final repository = _FocusSeedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(core.mindAmountPreparedBaseCount, 0);
+      FluviDiagnosticLogger.clear();
+
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 900000,
+            lowerScaled100: 100000,
+            upperScaled100: 900000,
+          ),
+        ),
+        isFalse,
+      );
+
+      expect(
+        core.mindAmountPreparedBaseCount,
+        0,
+        reason:
+            'A pointer/slider path must not register the installed index and '
+            'scan its raw entries merely to service the first thumb tick.',
+      );
+      expect(repository.prepareCalls, 1);
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere((event) => event.stage == 'MIND|DRAG_START')
+            .scope,
+        contains('baseReady=false'),
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere((event) => event.stage == 'MIND|PREVIEW_REJECTED')
+            .scope,
+        contains('reason=baseUnavailable'),
       );
     },
   );
@@ -1089,6 +1144,257 @@ void main() {
   );
 
   testWidgets(
+    'RED MYTP-01: a painted Summary Year must not retain the previous Mind heatmap year',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-2026',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 100000,
+            date: const LocalDate(year: 2026, month: 1, day: 1),
+          ),
+          _mindYearEntry(
+            id: 'income-2025',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 2, day: 2),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      await tester.pump();
+      expect(core.mindYearHeatmap.value!.identity.year, 2026);
+
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+      final selector = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-year-selector'),
+      );
+      expect(selector, findsOneWidget);
+      FluviDiagnosticLogger.clear();
+      final gesture = await tester.startGesture(tester.getCenter(selector));
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(
+        find.descendant(of: selector, matching: find.text('2025')),
+        findsOneWidget,
+        reason: 'The real segmented Summary Year has reached its next paint.',
+      );
+      expect(
+        core.mindYearHeatmap.value!.identity.year,
+        2025,
+        reason:
+            'The accepted, visibly painted Summary year and Mind heatmap '
+            'identity must share one visible generation.',
+      );
+      expect(
+        core.mindYearHeatmap.value!.identity.navigationEpoch,
+        1,
+        reason:
+            'The transient Mind frame must carry the accepted Summary flight '
+            'generation, not only a matching calendar year.',
+      );
+      expect(
+        repository.prepareCalls,
+        1,
+        reason: 'Transient Year publication must not query the repository.',
+      );
+      final transientPublication = FluviDiagnosticLogger.entries.singleWhere(
+        (event) =>
+            event.stage == 'MIND_HEATMAP|FRAME_PUBLISHED' &&
+            (event.scope?.contains('cause=summaryVisualTransientYear') ??
+                false),
+      );
+      expect(
+        transientPublication.scope,
+        contains('sourceRows=0'),
+        reason:
+            'The painted transient Year must consume the resident annual '
+            'membership, not revisit DashboardLedgerEntry rows.',
+      );
+      expect(transientPublication.scope, contains('preparedContributions=1'));
+      expect(transientPublication.scope, contains('temporalGeneration=1'));
+
+      // The existing amount slider may start while Summary's exact visible
+      // Year is still transient. Its held identity must remain that exact
+      // Y/G frame rather than silently reconstructing canonical 2026/0.
+      final transientIdentity = core.mindYearHeatmap.identity!;
+      final heatmapPublicationsBeforeSlider =
+          core.mindYearHeatmap.publicationCount;
+      FluviDiagnosticLogger.clear();
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 900000,
+            lowerScaled100: 600000,
+            upperScaled100: 900000,
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        core.mindYearHeatmap.identity,
+        transientIdentity,
+        reason:
+            'A held slider cannot replace the exact visible Summary Y/G with '
+            'the older canonical year.',
+      );
+      expect(
+        core.mindYearHeatmap.publicationCount,
+        heatmapPublicationsBeforeSlider + 1,
+        reason: 'The slider preview must publish against its held Y/G frame.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries
+            .singleWhere((event) => event.stage == 'MIND|PREVIEW_FRAME')
+            .scope,
+        allOf(
+          contains('heatmapPublished=true'),
+          contains('repositoryRequests=0 indexBuilds=0 canonicalCommits=0'),
+        ),
+      );
+      expect(repository.prepareCalls, 1);
+      expect(core.mindYearHeatmap.sourceWorkCounter!.sourceRowTouches, 0);
+      expect(
+        core.mindYearHeatmap.sourceWorkCounter!.preparedContributionTouches,
+        1,
+      );
+      core.endMindAmountRangeInteraction(committed: false);
+
+      // CoreDashboard invokes this exact method during an otherwise unrelated
+      // Mind parent rebuild. Canonical navigation remains 2026 at this point;
+      // it must not overwrite the visibly painted transient 2025/G frame.
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(
+        core.mindYearHeatmap.identity,
+        transientIdentity,
+        reason:
+            'A parent refresh cannot regress a Summary-painted heatmap back '
+            'to the older canonical Year before settle.',
+      );
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      await tester.pump();
+      expect(
+        core.mindYearHeatmap.identity,
+        transientIdentity,
+        reason:
+            'The real rebuilt CoreDashboard parent must retain the same '
+            'Summary-painted Y/G heatmap identity before canonical settle.',
+      );
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries
+            .where((event) => event.stage == 'MIND_HEATMAP|PAINTED')
+            .map((event) => event.scope)
+            .join('\n'),
+        contains('year=2025'),
+        reason:
+            'The mounted annual viewport must paint the matching identity on '
+            'the render frame immediately following Summary paint.',
+      );
+
+      // Coalesce two more unpainted ticks into the terminal Year. The
+      // selector-local frame epoch must invalidate the intermediate 2024
+      // acknowledgement, so only the actual visible 2023 target publishes.
+      FluviDiagnosticLogger.clear();
+      await gesture.moveBy(const Offset(0, 60));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        find.descendant(of: selector, matching: find.text('2023')),
+        findsOneWidget,
+        reason: 'The terminal rapid Summary Year is the only painted target.',
+      );
+      expect(core.mindYearHeatmap.value!.identity.year, 2023);
+      expect(repository.prepareCalls, 1);
+      await tester.pump();
+      final rapidPaints = FluviDiagnosticLogger.entries
+          .where((event) => event.stage == 'MIND_HEATMAP|PAINTED')
+          .map((event) => event.scope)
+          .join('\n');
+      expect(rapidPaints, contains('year=2023'));
+      expect(
+        rapidPaints,
+        isNot(contains('year=2024')),
+        reason:
+            'A coalesced target that never painted must not enqueue a stale '
+            'heatmap frame behind the terminal Summary Year.',
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final settledYear = core.navigation.state.yearCursor;
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(core.mindYearHeatmap.identity!.year, settledYear);
+      expect(
+        core.mindYearHeatmap.identity!.navigationEpoch,
+        0,
+        reason:
+            'After canonical Summary settlement, its transient G must not '
+            'remain a second temporal authority.',
+      );
+
+      await core.navigateParent(
+        DashboardTimeNavigationChangeDirection.backward,
+      );
+      final programmaticYear = core.navigation.state.yearCursor;
+      expect(programmaticYear, isNot(settledYear));
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(
+        core.mindYearHeatmap.identity!.year,
+        programmaticYear,
+        reason:
+            'A later non-segmented Year producer must replace the settled '
+            'Summary target rather than retaining its old Y/G heatmap.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED MYHR-08: the mounted production parent exposes no blank or stale direction heatmap frame',
     (tester) async {
       final core = DashboardCoreController(
@@ -1262,6 +1568,10 @@ void main() {
           partners: <QueryMenuPartnerFacet>[],
         ),
       );
+      // This test covers the Phase-A preview after its immutable base has
+      // been admitted.  A drag tick deliberately fails closed before this
+      // idle prewarm; see RED MYHP-15 for that cold-path contract.
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
       core.attachLogBoxSceneWindowCoordinator(
         prepare: (_, {required retainViewportId}) async {},
         activate: (_) {},

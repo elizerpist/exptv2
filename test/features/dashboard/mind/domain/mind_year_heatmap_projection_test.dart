@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
@@ -174,6 +175,61 @@ void main() {
     expect(timing['p95Micros'], greaterThanOrEqualTo(timing['p50Micros']!));
     expect(timing['maxMicros'], greaterThanOrEqualTo(timing['p95Micros']!));
   });
+
+  test(
+    'RED MYH-13: a transient year uses its prepared annual membership without ledger row work',
+    () {
+      final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+        _entry('food-2025', 250, const LocalDate(year: 2025, month: 3, day: 3)),
+        DashboardLedgerEntry(
+          id: 'travel-2025',
+          partnerId: 'partner',
+          categoryId: 'travel',
+          direction: 'expense',
+          amountMinor: 900,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2025,
+            month: 3,
+            day: 3,
+          ).epochDay,
+          bookedLocalTimeMinutes: 12 * 60,
+        ),
+        _entry(
+          'food-2024',
+          700,
+          const LocalDate(year: 2024, month: 2, day: 29),
+        ),
+      ]);
+      final prepared = MindYearHeatmapPreparedMembership.fromEntries(
+        seed.entries,
+      );
+      final counter = MindYearHeatmapSourceWorkCounter();
+
+      final projection =
+          MindYearHeatmapProjection.buildFromPreparedContributions(
+            identity: const MindYearHeatmapIdentity(
+              upstreamScopeKey: 'expense|year:2025|category:food|partner:-',
+              indexGeneration: 17,
+              coreRevision: 42,
+              year: 2025,
+              navigationEpoch: 9,
+            ),
+            contributions: prepared.contributionsForYear(
+              year: 2025,
+              membership: seed.select(categoryId: 'food').entryIndices,
+            ),
+            sourceWorkCounter: counter,
+          );
+
+      final frame = projection.preview(range(1, 1000));
+      expect(
+        frame.dayFor(const LocalDate(year: 2025, month: 3, day: 3)).total,
+        250,
+      );
+      expect(counter.sourceRowTouches, 0);
+      expect(counter.preparedContributionTouches, 1);
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(String id, int amount, LocalDate date) =>

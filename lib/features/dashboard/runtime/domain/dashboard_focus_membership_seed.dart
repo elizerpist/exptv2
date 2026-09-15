@@ -381,6 +381,24 @@ final class DashboardFocusOrdinalSet extends IterableBase<int> {
 
   int operator [](int index) => _ordinals[index];
 
+  /// Answers membership without allocating a [Set] or traversing an annual
+  /// prepared contribution list. Ordinals are constructed in sorted order by
+  /// every producer of this compact representation.
+  bool containsOrdinal(int ordinal) {
+    var low = 0;
+    var high = _ordinals.length;
+    while (low < high) {
+      final middle = low + ((high - low) >> 1);
+      final candidate = _ordinals[middle];
+      if (candidate < ordinal) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low < _ordinals.length && _ordinals[low] == ordinal;
+  }
+
   @override
   Iterator<int> get iterator => _ordinals.iterator;
 

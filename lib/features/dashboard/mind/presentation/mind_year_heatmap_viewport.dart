@@ -173,6 +173,7 @@ final class _MindYearHeatmapViewportState
       final scope =
           'year=${frame.identity.year} '
           'identity=${FluviDiagnosticKeyDigest.of(frame.identity.upstreamScopeKey)} '
+          'temporalGeneration=${frame.identity.navigationEpoch} '
           'nonEmptyRealDays=${frame.days.where((day) => !day.isEmpty).length} '
           'coloredDays=${frame.days.where((day) => !day.isEmpty).length}';
       FluviDiagnosticLogger.log(

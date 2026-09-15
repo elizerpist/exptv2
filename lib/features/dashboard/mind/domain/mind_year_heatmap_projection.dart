@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../query/data/dashboard_ledger_entry.dart';
 import '../../query/domain/query_amount_range.dart';
+import '../../runtime/domain/dashboard_focus_membership_seed.dart';
 import '../../time_navigation/domain/local_date.dart';
 
 /// Immutable upstream identity of the one active Mind annual read model.
@@ -73,6 +74,7 @@ final class MindYearHeatmapSourceWorkCounter {
   int _previewDurationCount = 0;
   int _previewDurationNext = 0;
   int sourceRowTouches = 0;
+  int preparedContributionTouches = 0;
   int sourceRowTouchesDuringPreview = 0;
   int repositoryAccessesDuringPreview = 0;
   int indexBuildsDuringPreview = 0;
@@ -80,6 +82,10 @@ final class MindYearHeatmapSourceWorkCounter {
 
   void recordSourceRowTouch() {
     sourceRowTouches += 1;
+  }
+
+  void recordPreparedContributionTouch() {
+    preparedContributionTouches += 1;
   }
 
   void recordPreviewDayBucket() {
@@ -129,6 +135,84 @@ final class MindYearHeatmapSourceWorkCounter {
       'maxMicros': values.last,
     };
   }
+}
+
+/// Immutable, base-lifetime annual contributions for Mind's transient Year
+/// publication. The Core owns its bounded retention alongside the prepared
+/// base; this domain value owns only the year/ordinal/amount lookup shape.
+///
+/// Building this value is allowed only while the underlying prepared base is
+/// registered. A Summary Time tick reads the selected year's compact
+/// contributions and never revisits a [DashboardLedgerEntry].
+@immutable
+final class MindYearHeatmapPreparedMembership {
+  const MindYearHeatmapPreparedMembership._(this._contributionsByYear);
+
+  factory MindYearHeatmapPreparedMembership.fromEntries(
+    List<DashboardLedgerEntry> entries,
+  ) {
+    final mutable = <int, List<MindYearHeatmapPreparedContribution>>{};
+    for (var ordinal = 0; ordinal < entries.length; ordinal += 1) {
+      final entry = entries[ordinal];
+      final date = DateTime.utc(
+        1970,
+      ).add(Duration(days: entry.bookedLocalEpochDay));
+      mutable
+          .putIfAbsent(date.year, () => <MindYearHeatmapPreparedContribution>[])
+          .add(
+            MindYearHeatmapPreparedContribution(
+              ordinal: ordinal,
+              bookedLocalEpochDay: entry.bookedLocalEpochDay,
+              amountMinor: entry.amountMinor,
+            ),
+          );
+    }
+    return MindYearHeatmapPreparedMembership._(
+      Map<int, List<MindYearHeatmapPreparedContribution>>.unmodifiable(
+        mutable.map(
+          (year, values) =>
+              MapEntry<int, List<MindYearHeatmapPreparedContribution>>(
+                year,
+                List<MindYearHeatmapPreparedContribution>.unmodifiable(values),
+              ),
+        ),
+      ),
+    );
+  }
+
+  final Map<int, List<MindYearHeatmapPreparedContribution>>
+  _contributionsByYear;
+
+  int get contributionCount => _contributionsByYear.values.fold<int>(
+    0,
+    (sum, values) => sum + values.length,
+  );
+
+  Iterable<MindYearHeatmapPreparedContribution> contributionsForYear({
+    required int year,
+    required DashboardFocusOrdinalSet membership,
+  }) sync* {
+    for (final contribution
+        in _contributionsByYear[year] ??
+            const <MindYearHeatmapPreparedContribution>[]) {
+      if (membership.containsOrdinal(contribution.ordinal)) {
+        yield contribution;
+      }
+    }
+  }
+}
+
+@immutable
+final class MindYearHeatmapPreparedContribution {
+  const MindYearHeatmapPreparedContribution({
+    required this.ordinal,
+    required this.bookedLocalEpochDay,
+    required this.amountMinor,
+  });
+
+  final int ordinal;
+  final int bookedLocalEpochDay;
+  final int amountMinor;
 }
 
 /// Rendering categories are named so a zero-normalized non-empty tile cannot
@@ -248,6 +332,41 @@ final class MindYearHeatmapProjection {
     MindYearHeatmapSourceWorkCounter? sourceWorkCounter,
   }) {
     final counter = sourceWorkCounter ?? MindYearHeatmapSourceWorkCounter();
+    return _buildFromContributions(
+      identity: identity,
+      sourceWorkCounter: counter,
+      contributions: entries.map((entry) {
+        counter.recordSourceRowTouch();
+        return MindYearHeatmapPreparedContribution(
+          ordinal: -1,
+          bookedLocalEpochDay: entry.bookedLocalEpochDay,
+          amountMinor: entry.amountMinor,
+        );
+      }),
+    );
+  }
+
+  factory MindYearHeatmapProjection.buildFromPreparedContributions({
+    required MindYearHeatmapIdentity identity,
+    required Iterable<MindYearHeatmapPreparedContribution> contributions,
+    MindYearHeatmapSourceWorkCounter? sourceWorkCounter,
+  }) {
+    final counter = sourceWorkCounter ?? MindYearHeatmapSourceWorkCounter();
+    return _buildFromContributions(
+      identity: identity,
+      sourceWorkCounter: counter,
+      contributions: contributions.map((contribution) {
+        counter.recordPreparedContributionTouch();
+        return contribution;
+      }),
+    );
+  }
+
+  static MindYearHeatmapProjection _buildFromContributions({
+    required MindYearHeatmapIdentity identity,
+    required Iterable<MindYearHeatmapPreparedContribution> contributions,
+    required MindYearHeatmapSourceWorkCounter sourceWorkCounter,
+  }) {
     final start = LocalDate(year: identity.year, month: 1, day: 1).epochDay;
     final end = LocalDate(year: identity.year + 1, month: 1, day: 1).epochDay;
     final perDay = List<List<int>>.generate(
@@ -255,13 +374,12 @@ final class MindYearHeatmapProjection {
       (_) => <int>[],
       growable: false,
     );
-    for (final entry in entries) {
-      counter.recordSourceRowTouch();
-      final offset = entry.bookedLocalEpochDay - start;
-      if (offset < 0 || entry.bookedLocalEpochDay >= end) continue;
+    for (final contribution in contributions) {
+      final offset = contribution.bookedLocalEpochDay - start;
+      if (offset < 0 || contribution.bookedLocalEpochDay >= end) continue;
       // QueryAmountRange and the resident membership index compare this exact
       // stored amount field. Keep the same signed/absolute semantics here.
-      perDay[offset].add(entry.amountMinor);
+      perDay[offset].add(contribution.amountMinor);
     }
     return MindYearHeatmapProjection._(
       identity,
@@ -269,7 +387,7 @@ final class MindYearHeatmapProjection {
         perDay.map(_MindYearHeatmapDayRange.fromUnsorted),
       ),
       start,
-      counter,
+      sourceWorkCounter,
     );
   }
 

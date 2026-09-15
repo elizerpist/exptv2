@@ -363,6 +363,7 @@ final class SummaryPillExperiment extends StatelessWidget {
     required this.onComponentCrossed,
     this.onComponentCrossingAccepted,
     this.componentPaintedTarget,
+    this.onComponentVisualTargetPainted,
     this.onComponentSettled,
     this.motionDiagnostics,
     this.componentCandidateProjector,
@@ -406,6 +407,16 @@ final class SummaryPillExperiment extends StatelessWidget {
   /// acceptance remains the semantic settlement authority.
   final ValueListenable<DashboardSegmentedTargetPainted?>?
   componentPaintedTarget;
+
+  /// Frame-local renderer acknowledgement for one exact component target.
+  /// It contains no state mutation: the renderer only reports that the
+  /// accepted label has crossed the Flutter render boundary. The application
+  /// coordinator owns every derived publication that follows.
+  final void Function(
+    DashboardNavigationState candidate,
+    DashboardTemporalAnchorComponent component,
+  )?
+  onComponentVisualTargetPainted;
   final void Function(
     DashboardNavigationState candidate,
     DashboardTemporalAnchorComponent component,
@@ -540,6 +551,7 @@ final class SummaryPillExperiment extends StatelessWidget {
                 onComponentCrossed: onComponentCrossed,
                 onComponentCrossingAccepted: onComponentCrossingAccepted,
                 componentPaintedTarget: componentPaintedTarget,
+                onComponentVisualTargetPainted: onComponentVisualTargetPainted,
                 onComponentSettled: onComponentSettled,
                 motionDiagnostics: motionDiagnostics,
                 componentCandidateProjector: componentCandidateProjector,
@@ -794,6 +806,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     required this.onComponentCrossed,
     this.onComponentCrossingAccepted,
     this.componentPaintedTarget,
+    this.onComponentVisualTargetPainted,
     this.onComponentSettled,
     this.motionDiagnostics,
     this.componentCandidateProjector,
@@ -814,6 +827,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
   final _ComponentCrossingAccepted? onComponentCrossingAccepted;
   final ValueListenable<DashboardSegmentedTargetPainted?>?
   componentPaintedTarget;
+  final _ComponentCrossed? onComponentVisualTargetPainted;
   final _ComponentCrossed? onComponentSettled;
   final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
@@ -852,6 +866,7 @@ final class _SegmentedNavigationSurface extends StatelessWidget {
     onComponentCrossed: onComponentCrossed,
     onComponentCrossingAccepted: onComponentCrossingAccepted,
     componentPaintedTarget: componentPaintedTarget,
+    onComponentVisualTargetPainted: onComponentVisualTargetPainted,
     onComponentSettled: onComponentSettled,
     motionDiagnostics: motionDiagnostics,
     componentCandidateProjector: componentCandidateProjector,
@@ -880,6 +895,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
     required this.onComponentCrossed,
     this.onComponentCrossingAccepted,
     this.componentPaintedTarget,
+    this.onComponentVisualTargetPainted,
     this.onComponentSettled,
     this.motionDiagnostics,
     this.componentCandidateProjector,
@@ -906,6 +922,7 @@ final class _FixedHierarchyTracks extends StatelessWidget {
   final _ComponentCrossingAccepted? onComponentCrossingAccepted;
   final ValueListenable<DashboardSegmentedTargetPainted?>?
   componentPaintedTarget;
+  final _ComponentCrossed? onComponentVisualTargetPainted;
   final _ComponentCrossed? onComponentSettled;
   final CenteredCarouselMotionDiagnosticSink? motionDiagnostics;
   final SummaryPillComponentCandidateProjector? componentCandidateProjector;
@@ -987,6 +1004,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                     DashboardSegmentedTargetAcceptance.acceptedExact;
               },
               paintedTargets: componentPaintedTarget,
+              onVisualTargetPainted: (candidate) =>
+                  onComponentVisualTargetPainted?.call(
+                    candidate,
+                    DashboardTemporalAnchorComponent.year,
+                  ),
               onSettled: (candidate) => onComponentSettled?.call(
                 candidate,
                 DashboardTemporalAnchorComponent.year,
@@ -1046,6 +1068,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                     DashboardSegmentedTargetAcceptance.acceptedExact;
               },
               paintedTargets: componentPaintedTarget,
+              onVisualTargetPainted: (candidate) =>
+                  onComponentVisualTargetPainted?.call(
+                    candidate,
+                    DashboardTemporalAnchorComponent.month,
+                  ),
               onSettled: (candidate) => onComponentSettled?.call(
                 candidate,
                 DashboardTemporalAnchorComponent.month,
@@ -1099,6 +1126,11 @@ final class _FixedHierarchyTracks extends StatelessWidget {
                     DashboardSegmentedTargetAcceptance.acceptedExact;
               },
               paintedTargets: componentPaintedTarget,
+              onVisualTargetPainted: (candidate) =>
+                  onComponentVisualTargetPainted?.call(
+                    candidate,
+                    DashboardTemporalAnchorComponent.day,
+                  ),
               onSettled: (candidate) => onComponentSettled?.call(
                 candidate,
                 DashboardTemporalAnchorComponent.day,
@@ -1363,6 +1395,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
     required this.labelForCandidate,
     required this.onCrossed,
     this.paintedTargets,
+    this.onVisualTargetPainted,
     this.onSettled,
     required this.presentation,
     required this.component,
@@ -1388,6 +1421,7 @@ final class _HierarchyValueSelector extends StatefulWidget {
   )
   onCrossed;
   final ValueListenable<DashboardSegmentedTargetPainted?>? paintedTargets;
+  final ValueChanged<DashboardNavigationState>? onVisualTargetPainted;
   final ValueChanged<DashboardNavigationState>? onSettled;
   final SummaryTemporalFlingPresentation presentation;
   final DashboardTemporalAnchorComponent component;
@@ -1417,6 +1451,8 @@ final class _HierarchyValueSelectorState
   DashboardNavigationState? _latestPaintSelectedTarget;
   DashboardNavigationState? _settleTarget;
   DashboardSummaryAutoResetMotionRegistry? _attachedRegistry;
+  var _rebaseAfterDirectPreemption = false;
+  var _visualTargetFrameEpoch = 0;
   var _motionIdle = false;
 
   DashboardSummaryAutoResetStepKind get _resetStepKind =>
@@ -1466,6 +1502,7 @@ final class _HierarchyValueSelectorState
   }
 
   void _clearMotionTargets() {
+    _visualTargetFrameEpoch += 1;
     _currentSemanticTarget = null;
     _lastEmittedTarget = null;
     _latestDesiredTarget = null;
@@ -1474,6 +1511,30 @@ final class _HierarchyValueSelectorState
     _settleTarget = null;
     _motionOrigin = null;
     _motionIdle = false;
+  }
+
+  void _scheduleVisualTargetPaint(DashboardNavigationState target) {
+    final scheduledEpoch = ++_visualTargetFrameEpoch;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          scheduledEpoch != _visualTargetFrameEpoch ||
+          !_sameOwnedSemanticTarget(_latestAcceptedTarget, target)) {
+        return;
+      }
+      widget.onVisualTargetPainted?.call(target);
+    });
+  }
+
+  /// Core synchronously promotes the last accepted semantic target when a
+  /// replacement pointer preempts a Time flight. The carousel's physical
+  /// logical offset still belongs to the old gesture at that exact boundary.
+  /// Keep the existing controller/position/physics, but structurally recenter
+  /// it after Core has promoted the semantic origin and before a new gesture
+  /// can snapshot that origin.
+  void _rebaseAfterCoreDirectPreemption() {
+    if (!_rebaseAfterDirectPreemption) return;
+    _rebaseAfterDirectPreemption = false;
+    _controller.interruptAndJumpToIndexSilently(0);
   }
 
   bool _trySettleAcceptedTarget() {
@@ -1593,7 +1654,10 @@ final class _HierarchyValueSelectorState
           height: widget.height,
           viewportKey: ValueKey<String>('${widget.key}-viewport'),
           motionDiagnostics: widget.motionDiagnostics,
-          onDirectPointerDown: widget.onDirectInputStarted,
+          onDirectPointerDown: () {
+            widget.onDirectInputStarted?.call();
+            _rebaseAfterCoreDirectPreemption();
+          },
           onPointerDownDecision: widget.onPointerDownDecision,
           onMotionStarted: (origin) {
             final semanticOrigin = widget.navigation.state;
@@ -1609,6 +1673,7 @@ final class _HierarchyValueSelectorState
           },
           onMotionInterrupted: () {
             _clearMotionTargets();
+            _rebaseAfterDirectPreemption = true;
             widget.onMotionActiveChanged?.call(false);
           },
           onSelectedChanged: (offset) {
@@ -1633,6 +1698,9 @@ final class _HierarchyValueSelectorState
             // An accepted exact Phase-A frame owns release settlement. Rich
             // paint remains diagnostic evidence owned by the coordinator.
             _settleTarget = candidate;
+            if (acceptance.isExactLivePublication) {
+              _scheduleVisualTargetPaint(candidate);
+            }
           },
           onMotionIdle: (_) {
             _motionIdle = true;

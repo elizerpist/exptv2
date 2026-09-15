@@ -20,6 +20,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -708,6 +709,89 @@ void main() {
             'The real Core controller receives both raw Day-pointer starts; '
             'there is no delayed re-enable or replacement controller.',
       );
+    },
+  );
+
+  testWidgets(
+    'RED production Summary Time: Core promotion and carousel rebase are one direct-pointer transaction',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialCoreRevision: 1,
+        initialDate: DateTime(2026, 4, 14),
+        initialPlane: TimePlane.year,
+        initialRailOpen: true,
+      );
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+
+      final selector = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-year-selector'),
+      );
+      final carouselFinder = find.descendant(
+        of: selector,
+        matching: find.byType(CenteredCarousel<int>),
+      );
+      final carousel = tester.widget<CenteredCarousel<int>>(carouselFinder);
+      final physicalController = carousel.controller;
+      final originalPosition = physicalController.scrollController.position;
+      final originalPhysicsCreationCount =
+          physicalController.physicsCreationCount;
+      final first = await tester.startGesture(tester.getCenter(selector));
+      await first.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      for (var step = 0; step < 2; step += 1) {
+        await first.moveBy(const Offset(0, 60));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await first.up();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        find.descendant(of: selector, matching: find.text('2024')),
+        findsOneWidget,
+      );
+      expect(physicalController.rawCenteredLogicalIndex.abs(), greaterThan(1));
+
+      final replacement = await tester.startGesture(tester.getCenter(selector));
+      await tester.pump();
+      expect(controller.navigation.state.yearCursor, 2024);
+      expect(identical(physicalController, carousel.controller), isTrue);
+      expect(
+        identical(
+          physicalController.scrollController.position,
+          originalPosition,
+        ),
+        isTrue,
+      );
+      expect(
+        physicalController.physicsCreationCount,
+        originalPhysicsCreationCount,
+      );
+      expect(physicalController.rawCenteredLogicalIndex, 0);
+      await replacement.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await replacement.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        find.descendant(of: selector, matching: find.text('2023')),
+        findsOneWidget,
+      );
+      await replacement.up();
+      await tester.pumpAndSettle();
     },
   );
 

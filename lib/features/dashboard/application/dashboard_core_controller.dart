@@ -137,6 +137,20 @@ bool _samePreparedInteractionIndex(
     left.generation == right.generation &&
     left.contentDigest == right.contentDigest;
 
+/// One bounded Mind prepared-base admission. Annual contribution metadata is
+/// derived at the same write boundary and cannot outlive or diverge from its
+/// immutable base.
+@immutable
+final class _MindAmountPreparedBaseSlot {
+  const _MindAmountPreparedBaseSlot({
+    required this.base,
+    required this.annualMembership,
+  });
+
+  final PreparedDashboardIndex base;
+  final MindYearHeatmapPreparedMembership? annualMembership;
+}
+
 /// A presentation-owned resource capability. Dashboard navigation owns the
 /// semantic commit, while this callback proves that its Card2 period is
 /// already drawable without giving this application controller any SVG or
@@ -1163,9 +1177,9 @@ final class DashboardCoreController {
   final Set<int> _activeVerticalPointerIntents = <int>{};
   PreparedDashboardIndex? _mindAmountPreviewBaseIndex;
   CurrentLedgerQueryScope? _mindAmountPreviewDomainScope;
-  final LinkedHashMap<CurrentLedgerQueryScope, PreparedDashboardIndex>
+  final LinkedHashMap<CurrentLedgerQueryScope, _MindAmountPreparedBaseSlot>
   _mindAmountPreparedBases =
-      LinkedHashMap<CurrentLedgerQueryScope, PreparedDashboardIndex>();
+      LinkedHashMap<CurrentLedgerQueryScope, _MindAmountPreparedBaseSlot>();
   // There can be at most one admitted Mind base request per direction.  The
   // native prepared-index builder has one lane, so this intentionally tracks
   // supersession by direction rather than retaining a generation for every
@@ -1194,6 +1208,11 @@ final class DashboardCoreController {
   int _mindAmountInteractionPreviewCount = 0;
   int _mindAmountInteractionPublishedCount = 0;
   MindYearHeatmapIdentity? _mindYearHeatmapInteractionIdentity;
+  // This is not a second Year authority. It is Core's bounded record of the
+  // exact Summary Year that the renderer has already acknowledged as visible.
+  // It remains authoritative over a canonical/presentation refresh until a
+  // newer visual acknowledgement replaces it.
+  _SegmentedTemporalPaintTarget? _mindYearHeatmapVisualTemporalTarget;
   int _segmentedTimeFlightGeneration = 0;
   int _segmentedTimePreviewCrossings = 0;
   int _segmentedTimeLivePublications = 0;
@@ -3919,8 +3938,9 @@ final class DashboardCoreController {
   PreparedDashboardIndex? _mindAmountPreparedBaseFor(
     CurrentLedgerQueryScope domainScope,
   ) {
-    final base = _mindAmountPreparedBases[domainScope];
-    if (base == null) return null;
+    final slot = _mindAmountPreparedBases[domainScope];
+    if (slot == null) return null;
+    final base = slot.base;
     if (base.coreRevision == coreRevision &&
         base.key.matchesScope(domainScope)) {
       return base;
@@ -3929,11 +3949,32 @@ final class DashboardCoreController {
     return null;
   }
 
+  /// Annual contribution membership is admitted and evicted with the exact
+  /// prepared base scope. Missing metadata is fail-closed: a transient Year
+  /// must not silently reintroduce a raw ledger-row scan.
+  MindYearHeatmapPreparedMembership? _mindYearHeatmapPreparedMembershipFor({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope domainScope,
+  }) {
+    final slot = _mindAmountPreparedBases[domainScope];
+    if (slot != null &&
+        slot.annualMembership != null &&
+        _samePreparedInteractionIndex(slot.base, base)) {
+      return slot.annualMembership;
+    }
+    return null;
+  }
+
   void _setMindAmountPreviewBase(
     PreparedDashboardIndex base,
     CurrentLedgerQueryScope domainScope, {
     required bool active,
   }) {
+    final previouslyRegistered = _mindAmountPreparedBases[domainScope];
+    final keepAnnualMembership =
+        previouslyRegistered != null &&
+        _samePreparedInteractionIndex(previouslyRegistered.base, base) &&
+        previouslyRegistered.annualMembership != null;
     for (final staleScope
         in _mindAmountPreparedBases.keys
             .where(
@@ -3944,9 +3985,22 @@ final class DashboardCoreController {
             .toList(growable: false)) {
       _mindAmountPreparedBases.remove(staleScope);
     }
+    final annualMembership = keepAnnualMembership
+        ? previouslyRegistered.annualMembership
+        : (() {
+            final seed = base
+                .partitionFor(domainScope.direction)
+                .focusMembershipSeed;
+            return seed == null
+                ? null
+                : MindYearHeatmapPreparedMembership.fromEntries(seed.entries);
+          })();
     _mindAmountPreparedBases
       ..remove(domainScope)
-      ..[domainScope] = base;
+      ..[domainScope] = _MindAmountPreparedBaseSlot(
+        base: base,
+        annualMembership: annualMembership,
+      );
     while (_mindAmountPreparedBases.length > LedgerDirection.values.length) {
       final evictedScope = _mindAmountPreparedBases.keys.first;
       _mindAmountPreparedBases.remove(evictedScope);
@@ -3959,24 +4013,55 @@ final class DashboardCoreController {
   /// Installs the one active Year heatmap projection from the same resident
   /// non-amount prepared base that backs Mind's existing live range preview.
   ///
-  /// This may visit source entries only while the non-amount identity changes.
-  /// A thumb update goes through [_publishMindYearHeatmapPreview] instead and
-  /// can inspect only the fixed annual day domain.
+  /// The Core builds annual contribution membership only when that prepared
+  /// base registers. Both a transient Summary Year and an amount thumb update
+  /// subsequently inspect immutable resident data only.
   bool ensureMindYearHeatmapProjection() {
     if (_disposed) return false;
     final state = navigation.state;
     if (state.plane != TimePlane.year) {
-      mindYearHeatmap.clear();
+      clearMindYearHeatmapProjection();
       return false;
     }
     final direction = state.parentQueryScope.direction;
     final appliedScope = currentQuery.scopeFor(direction);
+    final visualTarget = _currentMindYearHeatmapVisualTemporalTarget(
+      direction: direction,
+    );
+    final heldIdentity = visualTarget == null
+        ? _currentMindYearHeatmapHeldIdentity(state: state)
+        : null;
+    final requiresAdmittedBase = visualTarget != null || heldIdentity != null;
     return _installMindYearHeatmapProjection(
       direction: direction,
       appliedScope: appliedScope,
-      year: state.yearCursor,
+      year:
+          visualTarget?.candidate.yearCursor ??
+          heldIdentity?.year ??
+          state.yearCursor,
+      identityCause: switch ((visualTarget, heldIdentity)) {
+        (_SegmentedTemporalPaintTarget(), _) =>
+          'summaryVisualTransientYearRetained',
+        (null, MindYearHeatmapIdentity()) => 'mindHeldRangeTemporalIdentity',
+        (null, null) => 'nonAmountIdentity',
+      },
+      temporalGeneration:
+          visualTarget?.interactionGeneration ??
+          heldIdentity?.navigationEpoch ??
+          0,
+      // A renderer-acknowledged Year must consume only its already-admitted
+      // base. A refresh cannot lazily construct annual metadata on this
+      // physical Summary frame.
+      allowBaseAdmission: !requiresAdmittedBase,
       isStillCurrent: () =>
-          _isMindYearHeatmapIdentityCurrent(direction: direction),
+          _isMindYearHeatmapIdentityCurrent(
+            direction: direction,
+            allowBaseAdmission: !requiresAdmittedBase,
+          ) &&
+          (visualTarget == null ||
+              identical(_mindYearHeatmapVisualTemporalTarget, visualTarget)) &&
+          (heldIdentity == null ||
+              identical(_mindYearHeatmapInteractionIdentity, heldIdentity)),
     );
   }
 
@@ -3989,12 +4074,19 @@ final class DashboardCoreController {
     required CurrentLedgerQueryScope appliedScope,
     required int year,
     required bool Function() isStillCurrent,
+    String identityCause = 'nonAmountIdentity',
+    int temporalGeneration = 0,
+    bool allowBaseAdmission = true,
   }) {
     final binding = QueryAmountRangeBinding.ready(
       scope: appliedScope,
       amountDomain: currentQuery.amountDomainFor(direction),
     );
-    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    final base = allowBaseAdmission
+        ? _compatibleMindAmountPreviewBase(appliedScope)
+        : _mindAmountPreparedBaseFor(
+            QueryAmountRange.domainScope(appliedScope),
+          );
     if (binding == null || base == null) {
       // Never retain a previous year/filter's tiles while the new exact base
       // is still being prepared.
@@ -4011,7 +4103,9 @@ final class DashboardCoreController {
       base: base,
       domainScope: QueryAmountRange.domainScope(appliedScope),
       year: year,
+      navigationEpoch: temporalGeneration,
     );
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
     final seed = base.partitionFor(direction).focusMembershipSeed;
     if (seed == null) {
       mindYearHeatmap.clear();
@@ -4019,6 +4113,21 @@ final class DashboardCoreController {
         stage: 'FRAME_REJECTED_STALE',
         direction: direction,
         scope: 'reason=directionPartitionSeedUnavailable',
+      );
+      return false;
+    }
+    final annualMembership = _mindYearHeatmapPreparedMembershipFor(
+      base: base,
+      domainScope: domainScope,
+    );
+    if (annualMembership == null) {
+      mindYearHeatmap.clear();
+      _logMindHeatmap(
+        stage: 'FRAME_REJECTED_STALE',
+        direction: direction,
+        identity: identity,
+        base: base,
+        scope: 'reason=preparedAnnualMembershipUnavailable',
       );
       return false;
     }
@@ -4048,7 +4157,7 @@ final class DashboardCoreController {
       direction: direction,
       identity: identity,
       base: base,
-      scope: 'cause=nonAmountIdentity',
+      scope: 'cause=$identityCause',
     );
     _logMindHeatmap(
       stage: 'PROJECTION_BUILD_STARTED',
@@ -4064,9 +4173,12 @@ final class DashboardCoreController {
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
     );
-    final projection = MindYearHeatmapProjection.build(
+    final projection = MindYearHeatmapProjection.buildFromPreparedContributions(
       identity: identity,
-      entries: memberships.entryIndices.map(seed.entryAt),
+      contributions: annualMembership.contributionsForYear(
+        year: year,
+        membership: memberships.entryIndices,
+      ),
       sourceWorkCounter: MindYearHeatmapSourceWorkCounter(
         measurePreviewDurations: _physicalRailDiagnosticsEnabled,
       ),
@@ -4079,6 +4191,7 @@ final class DashboardCoreController {
       base: base,
       scope:
           'sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
+          'preparedContributions=${projection.sourceWorkCounter.preparedContributionTouches} '
           'matchingRows=${memberships.entryIndices.length} '
           'buildMicros=${stopwatch.elapsedMicroseconds}',
     );
@@ -4087,7 +4200,11 @@ final class DashboardCoreController {
     // an old source projection to flash into the new year.
     if (_disposed ||
         !isStillCurrent() ||
-        !_isMindYearHeatmapBaseCurrent(base: base, scope: appliedScope)) {
+        !_isMindYearHeatmapBaseCurrent(
+          base: base,
+          scope: appliedScope,
+          allowBaseAdmission: allowBaseAdmission,
+        )) {
       _logMindHeatmap(
         stage: 'FRAME_REJECTED_STALE',
         direction: direction,
@@ -4102,7 +4219,7 @@ final class DashboardCoreController {
       direction: direction,
       identity: identity,
       base: base,
-      scope: 'cause=projectionInstall',
+      scope: 'cause=$identityCause projectionInstall',
     );
     mindYearHeatmap.install(projection, binding.values);
     _logMindHeatmap(
@@ -4111,7 +4228,8 @@ final class DashboardCoreController {
       identity: identity,
       base: base,
       scope:
-          'cause=projectionInstall sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
+          'cause=$identityCause projectionInstall sourceRows=${projection.sourceWorkCounter.sourceRowTouches} '
+          'preparedContributions=${projection.sourceWorkCounter.preparedContributionTouches} '
           'buildMicros=${stopwatch.elapsedMicroseconds}',
     );
     _completeMindHeatmapDirectionTrace(direction);
@@ -4125,6 +4243,7 @@ final class DashboardCoreController {
         scope:
             'year=${identity.year} indexGeneration=${identity.indexGeneration} '
             'dayBuckets=${projection.dayCount} '
+            'preparedContributions=${projection.sourceWorkCounter.preparedContributionTouches} '
             'buildMicros=${stopwatch.elapsedMicroseconds} '
             'boundedActiveIdentity=true',
       ),
@@ -4154,6 +4273,7 @@ final class DashboardCoreController {
         coreRevision: base?.coreRevision,
         scope:
             '${identity == null ? '' : 'year=${identity.year} identity=${FluviDiagnosticKeyDigest.of(identity.upstreamScopeKey)} indexGeneration=${identity.indexGeneration} '}'
+            '${identity == null ? '' : 'temporalGeneration=${identity.navigationEpoch} '}'
             '${elapsed == null ? '' : 'requestTo${stage}Micros=$elapsed '}'
             '$scope',
       ),
@@ -4166,21 +4286,25 @@ final class DashboardCoreController {
     }
   }
 
-  void clearMindYearHeatmapProjection() => mindYearHeatmap.clear();
+  void clearMindYearHeatmapProjection() {
+    _mindYearHeatmapVisualTemporalTarget = null;
+    mindYearHeatmap.clear();
+  }
 
   MindYearHeatmapIdentity _mindYearHeatmapIdentityFor({
     required PreparedDashboardIndex base,
     required CurrentLedgerQueryScope domainScope,
     required int year,
+    int navigationEpoch = 0,
   }) => MindYearHeatmapIdentity(
     upstreamScopeKey:
         '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
     indexGeneration: base.generation,
     coreRevision: base.coreRevision,
     year: year,
-    // Navigation epochs that keep the same annual scope must not rebuild the
-    // projection. Base generation/scope/year are the membership identity.
-    navigationEpoch: 0,
+    // Canonical callers use zero, while an accepted painted Summary target
+    // carries its existing flight generation for frame-level provenance.
+    navigationEpoch: navigationEpoch,
   );
 
   DashboardEphemeralFocusState? _activeMindFocusFor({
@@ -4205,25 +4329,108 @@ final class DashboardCoreController {
         ',search=${active?.normalizedSearch ?? '-'}';
   }
 
-  bool _isMindYearHeatmapIdentityCurrent({required LedgerDirection direction}) {
+  bool _isMindYearHeatmapIdentityCurrent({
+    required LedgerDirection direction,
+    bool allowBaseAdmission = true,
+  }) {
     if (_disposed ||
         navigation.state.parentQueryScope.direction != direction ||
         navigation.state.plane != TimePlane.year) {
       return false;
     }
     final scope = currentQuery.scopeFor(direction);
-    final base = _compatibleMindAmountPreviewBase(scope);
+    final base = allowBaseAdmission
+        ? _compatibleMindAmountPreviewBase(scope)
+        : _mindAmountPreparedBaseFor(QueryAmountRange.domainScope(scope));
     return base != null &&
-        _isMindYearHeatmapBaseCurrent(base: base, scope: scope);
+        _isMindYearHeatmapBaseCurrent(
+          base: base,
+          scope: scope,
+          allowBaseAdmission: allowBaseAdmission,
+        );
   }
 
   bool _isMindYearHeatmapBaseCurrent({
     required PreparedDashboardIndex base,
     required CurrentLedgerQueryScope scope,
+    bool allowBaseAdmission = true,
   }) =>
       !_disposed &&
       base.coreRevision == coreRevision &&
-      identical(_compatibleMindAmountPreviewBase(scope), base);
+      identical(
+        allowBaseAdmission
+            ? _compatibleMindAmountPreviewBase(scope)
+            : _mindAmountPreparedBaseFor(QueryAmountRange.domainScope(scope)),
+        base,
+      );
+
+  _SegmentedTemporalPaintTarget? _currentMindYearHeatmapVisualTemporalTarget({
+    required LedgerDirection direction,
+  }) {
+    final target = _mindYearHeatmapVisualTemporalTarget;
+    if (target == null ||
+        target.component != DashboardTemporalAnchorComponent.year ||
+        target.candidate.plane != TimePlane.year ||
+        target.candidate.parentQueryScope.direction != direction) {
+      return null;
+    }
+    return target;
+  }
+
+  MindYearHeatmapIdentity? _currentMindYearHeatmapHeldIdentity({
+    required DashboardNavigationState state,
+  }) {
+    final held = _mindYearHeatmapInteractionIdentity;
+    if (held == null ||
+        mindYearHeatmap.identity != held ||
+        held.year != state.yearCursor) {
+      return null;
+    }
+    return held;
+  }
+
+  /// Accepts a renderer-only acknowledgement that a Segmented Summary target
+  /// has crossed the Flutter frame boundary. The widget owns neither temporal
+  /// state nor Mind state; it merely reports the bounded visual fact. Core
+  /// then derives the Mind frame from the same accepted Time target using the
+  /// resident prepared base, before any canonical-navigation catch-up.
+  void noteSegmentedSummaryComponentVisualTargetPainted({
+    required DashboardNavigationState candidate,
+    required DashboardTemporalAnchorComponent component,
+  }) {
+    if (_disposed ||
+        component != DashboardTemporalAnchorComponent.year ||
+        candidate.plane != TimePlane.year ||
+        navigation.state.plane != TimePlane.year ||
+        mindYearHeatmap.value == null) {
+      return;
+    }
+    final accepted = _segmentedLatestAcceptedPaintTarget;
+    if (accepted == null ||
+        accepted.interactionGeneration != _segmentedTimeFlightGeneration ||
+        accepted.component != component ||
+        !_sameTemporalTarget(accepted.candidate, candidate)) {
+      return;
+    }
+    final direction = candidate.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    final published = _installMindYearHeatmapProjection(
+      direction: direction,
+      appliedScope: appliedScope,
+      year: candidate.yearCursor,
+      identityCause: 'summaryVisualTransientYear',
+      temporalGeneration: accepted.interactionGeneration,
+      allowBaseAdmission: false,
+      isStillCurrent: () =>
+          !_disposed &&
+          navigation.state.plane == TimePlane.year &&
+          currentQuery.scopeFor(direction) == appliedScope &&
+          identical(_segmentedLatestAcceptedPaintTarget, accepted) &&
+          accepted.interactionGeneration == _segmentedTimeFlightGeneration &&
+          _sameTemporalTarget(accepted.candidate, candidate),
+    );
+    if (published) _mindYearHeatmapVisualTemporalTarget = accepted;
+  }
 
   void _installMindYearHeatmapForDirectionIntent({
     required LedgerDirection direction,
@@ -4255,13 +4462,15 @@ final class DashboardCoreController {
   }) {
     final activeIdentity = mindYearHeatmap.identity;
     if (activeIdentity == null) return false;
+    final heldIdentity = _mindYearHeatmapInteractionIdentity;
     final expectedIdentity = _mindYearHeatmapIdentityFor(
       base: base,
       domainScope: QueryAmountRange.domainScope(appliedScope),
-      year: navigation.state.yearCursor,
+      year: heldIdentity?.year ?? navigation.state.yearCursor,
+      navigationEpoch: heldIdentity?.navigationEpoch ?? 0,
     );
-    final heldIdentity = _mindYearHeatmapInteractionIdentity;
-    if (heldIdentity != null && heldIdentity != expectedIdentity) {
+    if (heldIdentity != null &&
+        (heldIdentity != expectedIdentity || activeIdentity != heldIdentity)) {
       return mindYearHeatmap.rejectStalePublication();
     }
     return mindYearHeatmap.publishPreview(expectedIdentity, values);
@@ -4642,6 +4851,9 @@ final class DashboardCoreController {
     _mindYearHeatmapInteractionIdentity = mindYearHeatmap.identity;
     final direction = navigation.state.parentQueryScope.direction;
     final scope = currentQuery.scopeFor(direction);
+    final admittedBase = _mindAmountPreparedBaseFor(
+      QueryAmountRange.domainScope(scope),
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MIND|DRAG_START',
@@ -4649,7 +4861,7 @@ final class DashboardCoreController {
         queryKey: scope.key.value,
         direction: direction.name,
         scope:
-            'baseReady=${_compatibleMindAmountPreviewBase(scope) != null} '
+            'baseReady=${admittedBase != null} '
             'repositoryRequestsDuringDrag=0 indexBuildsDuringDrag=0',
       ),
     );
@@ -4669,7 +4881,12 @@ final class DashboardCoreController {
       scope: appliedScope,
       amountDomain: domain,
     );
-    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    // A pointer tick may use only a pre-admitted immutable base. In
+    // particular, it must never fall through to dataRuntime.currentIndex and
+    // construct annual membership from raw rows on the UI interaction path.
+    final base = _mindAmountPreparedBaseFor(
+      QueryAmountRange.domainScope(appliedScope),
+    );
     if (binding == null || base == null) {
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -8342,6 +8559,13 @@ final class DashboardCoreController {
       );
     }
     _discardRetainedSegmentedPaintedScene();
+    // Canonical navigation now owns this Year. The renderer acknowledgement
+    // must not keep an old G alive through a later independent temporal
+    // producer. A currently held Mind range retains its own exact identity
+    // until drag end, so this demotion cannot break a live slider preview.
+    if (identical(_mindYearHeatmapVisualTemporalTarget, target)) {
+      _mindYearHeatmapVisualTemporalTarget = null;
+    }
     _recordNavigationSelection('summaryExperimentPaintedTargetSettled');
     return true;
   }
