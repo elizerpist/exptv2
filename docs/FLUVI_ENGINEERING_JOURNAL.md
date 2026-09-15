@@ -241,6 +241,63 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Prompt-writer source change for this feedback: this journal entry only, committed with `[skip ci]`; no application source, tests, workflow, graph, milestone file, build configuration or runtime behavior is changed by the prompt writer.
 - Physical validation of the next application repair: `PENDING — USER ONLY`.
 
+## 2026-09-15 — Summary Time rebase and Mind Year transient-publication repair
+
+- Application commit: `9945d6e9d4cfc3b948f85e724d18c2925fd975e2`
+  (`fix(summary,mind): align pointer rebase and heatmap year`). This entry is
+  evidence-led local repair evidence, not device acceptance.
+- Frozen evidence remains the same physical session
+  `fluvi-1789452354097594`, build `profile/288cc35584ec`: Drive Time document
+  `1XSzi1TO8CfVKDGxAMkUYhJihbqy7nEDUcmqs8mboxoE`, revision 51,
+  SHA-256 `08c630714ed985a7d646a368ac70b7b0b7f4e80a5e9593d62e6e12aeabd1b594`;
+  and Mind document `1R2plbzazBUuuWoi_unktR_Lu7QNYgM9RPIH5J6ioNIM`, revision 3,
+  SHA-256 `2c4ab4c366e0ba884dd8a48d0597f82eabf3f81e1408bb6d6289e362fadd1605`.
+- Structuring Apps gate: `structuring-apps` at
+  `/data/data/com.termux/files/home/.codex/skills/structuring-apps/SKILL.md`
+  (local skill; no version metadata) was read and applied. The repair keeps
+  one semantic Time/Query authority in Core/navigation, UI as renderer/intent
+  forwarder, and the existing carousel controller as sole physical motion
+  owner. It adds no duplicate Year/query authority, remount/key workaround,
+  controller/ScrollPosition/physics replacement, timer or cache flush.
+- Time RED→GREEN: mounted `TIME-01` reproduced semantic origin 2024 with raw
+  carousel logical offset `-4.0678` and first replacement candidate 2019.
+  The first proven owner is the missing physical/logical rebase after Core
+  accepts a direct-pointer preemption. The selector now invokes the existing
+  `interruptAndJumpToIndexSilently(0)` immediately after Core preemption;
+  this retains controller, ScrollPosition and physics identity and makes the
+  first replacement candidate the local 2023 target. The mounted
+  CoreDashboard identity test covers the same transaction.
+- Mind RED→GREEN: mounted `MYTP-01` previously painted Summary Year 2025
+  while the heatmap identity was 2026. A post-frame renderer acknowledgement
+  now reaches `DashboardCoreController`, which publishes only the latest
+  accepted painted Year with its existing interaction generation from the
+  existing bounded prepared base. Canonical callers retain epoch zero after
+  settle; held range previews preserve only their exact active identity. A
+  coalesced 2025→2023 sequence produces no stale 2024 heatmap paint.
+- Mind hot path: annual ordinal/day/amount contribution membership is created
+  and evicted with the existing two-direction prepared-base slots. Transient
+  Year publication uses that immutable membership; `MYTP-01` records
+  `sourceRows=0` and one prepared contribution. `MYHP-15` proves an unprimed
+  slider rejects fail-closed rather than lazily admitting a base or scanning
+  source entries. A previously failing Phase-A preview test was corrected to
+  explicitly prewarm the base it calls resident.
+- Local validation in Ubuntu proot: `flutter analyze` over all ten changed
+  source/test files — PASS, no issues; focused Summary/Core/Mind/debug suite
+  — PASS, 152 tests; complete
+  `test/features/dashboard/application/dashboard_core_ephemeral_focus_test.dart`
+  — PASS, 73 tests. A prior full-repository local run had unrelated Header
+  golden/ticker and scroll-milestone failures and is not represented as green.
+- Baseline classification remains factual: Actions run `34859925658` at
+  `288cc355...` has successful core/flutter/path/human-APK jobs but failed
+  dashboard profile due Mind FrameTiming rejection (average 40.341 ms,
+  p90 102.517 ms, p99/worst 301.913 ms, 15 missed frames). It is not called a
+  green baseline.
+- Still pending after this application commit: online CI/profile evidence,
+  final matching SCIP provenance, human diagnostic APK/hash and physical
+  device acceptance. A historical bisect has not established whether
+  `288cc355...` introduced the Time recurrence.
+- Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base liveness and rendered-LogBox boundary application evidence
 
 - Application commit: `288cc35584ec5cb6e41eb237523104922a2c7393`
