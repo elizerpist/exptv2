@@ -310,6 +310,38 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   `288cc355...` profile failure remains inherited comparative evidence, not a
   green result. Physical validation remains `PENDING — USER ONLY`.
 
+## 2026-09-15 — Actual Mind profile headroom result on `a0ccd9c` (FAILED)
+
+- Exact run: Actions `35002536665`, profile job `104496048857`, source head
+  `a0ccd9c9909e8613caaf702a64bc0842c122d87a`. Dashboard paths, `test-core`,
+  `test-flutter` and the human diagnostic APK job PASS. The profile job ran
+  its A–K gate from `17:44:03Z` through `18:05:00Z` and FAILED.
+- The p95 schema correction is proven effective: the failure is now
+  `Mind Year heatmap profile evidence frame_timing_headroom is invalid` at
+  `validateMindYearHeatmapEvidence` line 208. The prior missing-p95 failure
+  occurred at line 195. No FrameTiming threshold or interaction assertion was
+  relaxed.
+- The retained failed B response does not contain its report map because the
+  validator throws before the harness stores B; therefore exact B p50/p95/max
+  values remain MISSING EVIDENCE rather than invented. The available log and
+  artifact do prove that at least one actual B p95 or missed-frame threshold
+  failed. The same run's emulator reports repeated `EGL_emulation`
+  app-time samples around `1.2–1.6 s`; host diagnostics show `-gpu swangle`.
+  This is strong host/renderer correlation, not proof that all application
+  contribution is zero.
+- No further runtime change was made from this result: the trace also contains
+  unrelated LogBox scene preparation outside the bounded Mind preview
+  counters, so a production performance patch would be speculative without a
+  source-correlated B frame report. Profile status remains FAILED, and final
+  physical performance acceptance is not claimed.
+- Delivery artifact from the successful human job:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_a0ccd9c.apk`,
+  `82,498,865` bytes, SHA-256
+  `79752a1a983cf3c595a60780577fe0f93c07dc459727f792cc04e5b9efb675d4`.
+  APK integrity passed and arm64 `libapp.so` contains the full
+  `a0ccd9c9909e8613caaf702a64bc0842c122d87a` marker. Physical validation:
+  `PENDING — USER ONLY`.
+
 ## 2026-09-15 — Bounded dual Mind direction row-resource readiness (`e62a8172`)
 
 - Application commit: `e62a8172` (`fix(mind): prewarm both direction row
