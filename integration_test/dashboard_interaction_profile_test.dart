@@ -1611,18 +1611,16 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   Future<void> drainPrePreviewFrameTimings() async {
     // FrameTiming delivery is batched by the engine.  LiveTestWidgets uses a
     // synthetic scheduler timestamp while FrameTiming retains the engine
-    // epoch, so they cannot be compared directly.  After quiescence, drain
-    // one delivered engine batch before the real Mind interaction starts.
+    // epoch, so they cannot be compared directly.  After quiescence, give a
+    // delayed batch an opportunity to arrive, then discard it before the real
+    // Mind interaction starts.  A genuinely idle engine is allowed to emit no
+    // batch at all here; each real held pointer and direction tap below still
+    // independently requires a newly delivered FrameTiming sample.
     await tester.pump(const Duration(milliseconds: 16));
     final deadline = DateTime.now().add(const Duration(seconds: 4));
     while (frameTimings.isEmpty && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
-    expect(
-      frameTimings,
-      isNotEmpty,
-      reason: 'Mind capture requires a post-quiescence engine timing batch.',
-    );
     drainedBeforeCaptureFrameCount += frameTimings.length;
     frameTimings.clear();
   }
