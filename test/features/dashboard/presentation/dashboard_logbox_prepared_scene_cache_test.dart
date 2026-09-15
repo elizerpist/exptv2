@@ -1574,7 +1574,7 @@ void main() {
       await cache.prepareWindow(window: active, surfaceWidth: 378);
       cache.activateWindow(active);
       await cache.prepareLiveInteractionResourceWindow(
-        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
         resourceKey: 'mind-live-resource',
         window: resources,
         surfaceWidth: 378,
@@ -1640,7 +1640,7 @@ void main() {
       cache.activateWindow(active);
 
       await cache.prepareLiveInteractionResourceWindow(
-        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
         resourceKey: 'mind-first',
         window: mindFirst,
         surfaceWidth: 378,
@@ -1655,7 +1655,7 @@ void main() {
       expect(
         cache.hasLiveInteractionResourceWindow(
           mindFirst,
-          lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+          lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
           resourceKey: 'mind-first',
         ),
         isTrue,
@@ -1670,7 +1670,7 @@ void main() {
       );
 
       await cache.prepareLiveInteractionResourceWindow(
-        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
         resourceKey: 'mind-second',
         window: mindSecond,
         surfaceWidth: 378,
@@ -1679,7 +1679,7 @@ void main() {
       expect(
         cache.hasLiveInteractionResourceWindow(
           mindSecond,
-          lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+          lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
           resourceKey: 'mind-second',
         ),
         isTrue,
@@ -1698,6 +1698,76 @@ void main() {
       );
       expect(cache.report()['liveInteractionResourceLanes'], 2);
       expect(cache.report()['liveInteractionResourcePreparingLanes'], 0);
+    },
+  );
+
+  test(
+    'MIND-LIVE-RESOURCE-01: two bounded direction lanes retain both ready Mind roots',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache(
+        maximumRetainedCandidateBanks: 4,
+        maximumRetainedCandidateRows: 2,
+      );
+      addTearDown(cache.dispose);
+      final active = DashboardLogBoxSceneWindow(
+        identity: 'mind-direction-lane-active',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 6, rowCount: 1),
+        ],
+      );
+      final income = DashboardLogBoxSceneWindow(
+        identity: 'mind-income-ready-root',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 7, rowCount: 3),
+        ],
+      );
+      final expense = DashboardLogBoxSceneWindow(
+        identity: 'mind-expense-ready-root',
+        payloads: <DashboardLogViewportState>[
+          _deferredPayload(month: 8, rowCount: 4),
+        ],
+      );
+
+      await cache.prepareWindow(window: active, surfaceWidth: 378);
+      cache.activateWindow(active);
+
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
+        resourceKey: 'mind-income-resource',
+        window: income,
+        surfaceWidth: 378,
+      );
+      await cache.prepareLiveInteractionResourceWindow(
+        lane: DashboardLiveInteractionResourceLane.mindExpenseAmountPreview,
+        resourceKey: 'mind-expense-resource',
+        window: expense,
+        surfaceWidth: 378,
+      );
+
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          income,
+          lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
+          resourceKey: 'mind-income-resource',
+        ),
+        isTrue,
+      );
+      expect(
+        cache.hasLiveInteractionResourceWindow(
+          expense,
+          lane: DashboardLiveInteractionResourceLane.mindExpenseAmountPreview,
+          resourceKey: 'mind-expense-resource',
+        ),
+        isTrue,
+      );
+      expect(cache.report()['liveInteractionResourceLanes'], 2);
+      expect(
+        cache.retainedCandidatePreparedRowCount,
+        7,
+        reason:
+            'The existing bounded cache owns one complete immutable paragraph '
+            'bank per Mind direction; a direction tap must not replace either.',
+      );
     },
   );
 
@@ -1740,7 +1810,7 @@ void main() {
       await cache.prepareWindow(window: active, surfaceWidth: 378);
       cache.activateWindow(active);
       await cache.prepareLiveInteractionResourceWindow(
-        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
         resourceKey: 'mind-resource',
         window: mind,
         surfaceWidth: 378,
@@ -1778,7 +1848,7 @@ void main() {
       expect(
         cache.hasLiveInteractionResourceWindow(
           mind,
-          lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+          lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
           resourceKey: 'mind-resource',
         ),
         isTrue,
@@ -2001,7 +2071,7 @@ void main() {
       );
 
       await cache.prepareLiveInteractionResourceWindow(
-        lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+        lane: DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
         resourceKey: 'bounded-live-resource',
         window: resources,
         surfaceWidth: 378,

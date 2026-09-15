@@ -12,7 +12,8 @@ import 'dashboard_log_viewport_state.dart';
 enum DashboardLiveInteractionResourceLane {
   timePreview,
   budgetAvatarPreview,
-  mindAmountPreview,
+  mindIncomeAmountPreview,
+  mindExpenseAmountPreview,
 }
 
 /// Immutable identity of the exact structural payload coverage a prepared

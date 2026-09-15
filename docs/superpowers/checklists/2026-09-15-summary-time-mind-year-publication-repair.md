@@ -14,6 +14,7 @@
 | STMY-10 | §19 | protected systems | Avatar, canonical Query, LogBox, prepared-base direction repair, slider, calendar and debug UX do not regress. | focused/full matrix and source audit | PARTIAL — current focused Summary/Core/Mind/debug/Avatar suite is GREEN (152 tests); the complete Core ephemeral-focus matrix is GREEN (73 tests). An earlier full suite had 22 unrelated Header golden/ticker and scroll-milestone failures; online CI classification and device test remain pending. |
 | STMY-11 | §§20--23 | performance/delivery | Report Time mismatch/latency and Summary-painted->heatmap-painted timing; commit, journal, APK and final graph follow discipline. | profile/Actions/APK/hash/provenance | NOT DONE |
 | STMY-12 | §§24--25 | physical device | User validates final Android build. | user test | PENDING — USER ONLY |
+| STMY-13 | §§19--20, delivery profile | Mind Phase-A direction readiness | Both already-admitted Income/Expense Mind bases retain distinct bounded LogBox Phase-A resources before a measured direction tap; tap performs no paragraph preparation, repository work or index build. | `MIND-LIVE-RESOURCE-01`, cache lane-retention test, profile B evidence | PARTIAL — RED proved only Income received a resource despite two prepared bases. GREEN proves distinct Income/Expense lanes and simultaneous bounded cache retention; online profile B remains pending. |
 
 ## Current local validation
 
@@ -21,6 +22,8 @@
   issues.
 - Focused Summary/Core/Mind/debug suite: **PASS** — 152 tests.
 - `dashboard_core_ephemeral_focus_test.dart`: **PASS** — 73 tests.
+- Delivery-profile resource-boundary matrix (Core, cache, Mind, LogBox and
+  Summary widgets): **PASS** — 212 tests.
 - Online CI, final matching SCIP, human diagnostic APK, performance profile
   and device validation remain delivery gates; they are not implied by these
   local results.

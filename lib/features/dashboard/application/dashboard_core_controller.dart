@@ -1175,8 +1175,6 @@ final class DashboardCoreController {
   int _committedReadyAheadPriorityEpoch = 0;
   int? _committedReadyAheadPriorityKickEpoch;
   final Set<int> _activeVerticalPointerIntents = <int>{};
-  PreparedDashboardIndex? _mindAmountPreviewBaseIndex;
-  CurrentLedgerQueryScope? _mindAmountPreviewDomainScope;
   final LinkedHashMap<CurrentLedgerQueryScope, _MindAmountPreparedBaseSlot>
   _mindAmountPreparedBases =
       LinkedHashMap<CurrentLedgerQueryScope, _MindAmountPreparedBaseSlot>();
@@ -1187,8 +1185,9 @@ final class DashboardCoreController {
   final Map<LedgerDirection, int> _mindAmountPreviewPrimeGenerations =
       <LedgerDirection, int>{};
   int _mindDirectionBaseGateGeneration = 0;
-  DashboardLogBoxSceneWindow? _mindAmountPreviewResourceWindow;
-  String? _mindAmountPreviewResourceKey;
+  final Map<LedgerDirection, _LiveInteractionRowResource>
+  _mindAmountPreviewResources =
+      <LedgerDirection, _LiveInteractionRowResource>{};
   DashboardLogBoxSceneWindow? _timePreviewResourceWindow;
   String? _timePreviewResourceKey;
   PreparedDashboardIndex? _timePreviewResourceBase;
@@ -3840,7 +3839,7 @@ final class DashboardCoreController {
     unawaited(
       _primeMindAmountPreviewBaseFor(
         direction: inactiveDirection,
-        preparesLiveRows: false,
+        preparesLiveRows: true,
       ),
     );
   }
@@ -3855,7 +3854,7 @@ final class DashboardCoreController {
     final resident = _mindAmountPreparedBaseFor(domainScope);
     if (resident != null) {
       if (preparesLiveRows) {
-        _setMindAmountPreviewBase(resident, domainScope, active: true);
+        _setMindAmountPreviewBase(resident, domainScope);
         return _primeMindAmountLiveRowResources(resident, domainScope);
       }
       return true;
@@ -3864,11 +3863,7 @@ final class DashboardCoreController {
     if (installed != null &&
         installed.coreRevision == coreRevision &&
         installed.key.matchesScope(domainScope)) {
-      _setMindAmountPreviewBase(
-        installed,
-        domainScope,
-        active: preparesLiveRows,
-      );
+      _setMindAmountPreviewBase(installed, domainScope);
       if (!preparesLiveRows) return true;
       return _primeMindAmountLiveRowResources(installed, domainScope);
     }
@@ -3914,7 +3909,7 @@ final class DashboardCoreController {
         !index.key.matchesScope(domainScope)) {
       return false;
     }
-    _setMindAmountPreviewBase(index, domainScope, active: preparesLiveRows);
+    _setMindAmountPreviewBase(index, domainScope);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: preparesLiveRows
@@ -3967,9 +3962,8 @@ final class DashboardCoreController {
 
   void _setMindAmountPreviewBase(
     PreparedDashboardIndex base,
-    CurrentLedgerQueryScope domainScope, {
-    required bool active,
-  }) {
+    CurrentLedgerQueryScope domainScope,
+  ) {
     final previouslyRegistered = _mindAmountPreparedBases[domainScope];
     final keepAnnualMembership =
         previouslyRegistered != null &&
@@ -4005,9 +3999,6 @@ final class DashboardCoreController {
       final evictedScope = _mindAmountPreparedBases.keys.first;
       _mindAmountPreparedBases.remove(evictedScope);
     }
-    if (!active) return;
-    _mindAmountPreviewBaseIndex = base;
-    _mindAmountPreviewDomainScope = domainScope;
   }
 
   /// Installs the one active Year heatmap projection from the same resident
@@ -4616,16 +4607,18 @@ final class DashboardCoreController {
     final resource = await _prepareLiveInteractionRowResource(
       base: base,
       baseScope: domainScope,
-      lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+      lane: _mindAmountPreviewResourceLaneFor(domainScope.direction),
       resourceKey: resourceKey,
       diagnosticPrefix: 'MIND',
       isStillCurrent: () =>
-          identical(_mindAmountPreviewBaseIndex, base) &&
-          _mindAmountPreviewDomainScope == domainScope,
+          identical(_mindAmountPreparedBaseFor(domainScope), base) &&
+          QueryAmountRange.hasSameDomainIdentity(
+            currentQuery.scopeFor(domainScope.direction),
+            domainScope,
+          ),
     );
     if (resource == null) return false;
-    _mindAmountPreviewResourceWindow = resource.window;
-    _mindAmountPreviewResourceKey = resource.resourceKey;
+    _mindAmountPreviewResources[domainScope.direction] = resource;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MIND|LIVE_ROOT_RESOURCES_READY',
@@ -4633,11 +4626,22 @@ final class DashboardCoreController {
         direction: domainScope.direction.name,
         coreRevision: base.coreRevision,
         entryCount: resource.entryCount,
-        scope: 'maxRows=8192 bounded=true textPaintersReady=true',
+        scope:
+            'lane=${_mindAmountPreviewResourceLaneFor(domainScope.direction).name} '
+            'maxRows=8192 bounded=true textPaintersReady=true',
       ),
     );
     return true;
   }
+
+  DashboardLiveInteractionResourceLane _mindAmountPreviewResourceLaneFor(
+    LedgerDirection direction,
+  ) => switch (direction) {
+    LedgerDirection.income =>
+      DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
+    LedgerDirection.expense =>
+      DashboardLiveInteractionResourceLane.mindExpenseAmountPreview,
+  };
 
   /// Starts the Time/Summary Phase-A resource warmup while the dashboard is
   /// idle. It deliberately does not run from a semantic crossing: the
@@ -4946,8 +4950,9 @@ final class DashboardCoreController {
       initialSelectedChildScope: selectedChildScope,
     );
     _mindAmountInteractionPreviewCount += 1;
-    final resourceWindow = _mindAmountPreviewResourceWindow;
-    final resourceKey = _mindAmountPreviewResourceKey;
+    final resource = _mindAmountPreviewResources[direction];
+    final resourceWindow = resource?.window;
+    final resourceKey = resource?.resourceKey;
     final liveStager = _liveInteractionResourceSceneStager;
     final activate = _sceneWindowActivator;
     var richSceneStaged = false;
@@ -4957,7 +4962,7 @@ final class DashboardCoreController {
           resourceKey != null &&
           (_liveInteractionResourceWindowLookup?.call(
                 resourceWindow,
-                lane: DashboardLiveInteractionResourceLane.mindAmountPreview,
+                lane: _mindAmountPreviewResourceLaneFor(direction),
                 candidateKey: resourceKey,
               ) ??
               false);
@@ -5284,12 +5289,7 @@ final class DashboardCoreController {
         !installed.key.matchesScope(domainScope)) {
       return null;
     }
-    _setMindAmountPreviewBase(
-      installed,
-      domainScope,
-      active:
-          navigation.state.parentQueryScope.direction == domainScope.direction,
-    );
+    _setMindAmountPreviewBase(installed, domainScope);
     return installed;
   }
 
@@ -8763,7 +8763,7 @@ final class DashboardCoreController {
     unawaited(
       _primeMindAmountPreviewBaseFor(
         direction: ledgerDirection,
-        preparesLiveRows: false,
+        preparesLiveRows: true,
       ).then((ready) {
         if (_disposed ||
             gateGeneration != _mindDirectionBaseGateGeneration ||

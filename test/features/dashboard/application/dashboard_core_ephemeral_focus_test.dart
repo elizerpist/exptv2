@@ -1007,6 +1007,81 @@ void main() {
   );
 
   test(
+    'RED MIND-LIVE-RESOURCE-01: inactive Mind base is not enough for a direction tap',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'income-ready-row',
+              direction: 'income',
+              categoryId: 'income-a',
+              partnerId: 'income-partner',
+              amount: 100000,
+              date: const LocalDate(year: 2025, month: 1, day: 1),
+            ),
+            _mindYearEntry(
+              id: 'expense-ready-row',
+              direction: 'expense',
+              categoryId: 'expense-a',
+              partnerId: 'expense-partner',
+              amount: 200000,
+              date: const LocalDate(year: 2025, month: 1, day: 2),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2025, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      _installMindAmountDomain(core, LedgerDirection.expense);
+
+      final preparedDirectionResources =
+          <LedgerDirection, DashboardLiveInteractionResourceLane>{};
+      final retainedKeys = <String>{};
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              window, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              preparedDirectionResources[window.payloads.single.direction] =
+                  lane;
+              retainedKeys.add(retainedKey);
+            },
+        hasLiveInteractionResources:
+            (_, {required lane, required candidateKey}) =>
+                retainedKeys.contains(candidateKey),
+      );
+
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await pumpEventQueue(times: 40);
+
+      expect(core.mindAmountPreparedBaseCount, 2);
+      expect(
+        preparedDirectionResources,
+        <LedgerDirection, DashboardLiveInteractionResourceLane>{
+          LedgerDirection.income:
+              DashboardLiveInteractionResourceLane.mindIncomeAmountPreview,
+          LedgerDirection.expense:
+              DashboardLiveInteractionResourceLane.mindExpenseAmountPreview,
+        },
+        reason:
+            'A prepared inactive base without its Phase-A paragraph universe '
+            'forces the first real direction tap to prepare every row.',
+      );
+    },
+  );
+
+  test(
     'RED MYHR-07: an immediate direction request never leaves an outgoing heatmap identity under new direction state',
     () async {
       final core = DashboardCoreController(

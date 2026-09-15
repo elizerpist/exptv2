@@ -36,6 +36,7 @@ and fail-closed boundary tests.
 | Selector-local gesture view state | `_HierarchyValueSelectorState` | May request an existing controller rebase at the exact direct-pointer/preemption boundary, never own canonical navigation. |
 | Canonical query/navigation commit | existing `DashboardCoreController` / `CurrentQueryController` paths | Never commit canonical Query per transient Year tick. |
 | Mind projection and bounded immutable data | `DashboardCoreController` + `MindYearHeatmapProjection` | Consume the accepted transient Year identity from the existing Time publication; no repository/index/scene/text preparation or new authority. One `_MindAmountPreparedBaseSlot` retains the compatible base and its annual contribution membership together, bounded to the existing two direction slots. |
+| Mind amount Phase-A row resources | `DashboardCoreController` requests; `DashboardLogBoxPreparedSceneCache` retains | Each already-admitted Income/Expense prepared base has one direction-specific, bounded lane in the existing shared cache. Neither the heatmap nor the renderer owns a direction or Query; the cache merely owns complete paragraph resources. |
 | Heatmap paint | existing `MindYearHeatmapLiveProjection` / viewport | Renders the immutable frame only; cannot choose Year or mutate navigation. |
 
 For Time, a new direct pointer may begin only from an atomically aligned pair:
@@ -67,6 +68,27 @@ clamps, debounce/cooldown, delayed pointer acceptance, mode toggling, cache
 flush, duplicate Time/Year or Query authority, or heatmap-owned transaction
 state.
 
+## Delivery-profile ownership finding
+
+The first post-repair human-APK profile still failed while its real Mind
+direction buttons were exercised. This is separate from transient Summary Year
+publication: the profile waits for quiescence, then drags the slider and taps
+Income/Expense four times. Source inspection shows two bounded
+`_mindAmountPreparedBases` but only one `mindAmountPreview` row-resource lane.
+The active direction warms its whole source-membership paragraph universe;
+the inactive prewarm admits only annual/base data. A first return to the other
+direction can therefore start a 1,846/2,458-row rich TextPainter preparation
+during the measured direction interaction. The profile's 126.620 ms completion
+slice is evidence of the symptom, not yet proof of one lease-loop instruction.
+
+The narrow repair boundary is consequently the existing controller-to-cache
+Phase-A warmup contract: after the single native index lane has admitted a
+direction base, Core may idle-warm that base's distinct bounded direction lane.
+The cache retains both complete banks under its existing hard bank/row/byte
+bounds, atomically, and keeps all canonical Query, direction, viewport and
+renderer ownership unchanged. A live amount drag selects only the current
+direction's lane.
+
 ## Required boundary tests before production mutation
 
 1. A mounted real segmented Year selector must capture the old raw logical
@@ -78,6 +100,11 @@ state.
    Year leaves the old heatmap for more than one render frame.
 3. A fail-closed structural/boundary test must reject a second temporal
    authority or repository/index work on transient heatmap publication.
+4. A Mind resource-boundary RED must show that, after both canonical amount
+   domains are ready, the inactive direction has a prepared base but no
+   direction-specific Phase-A row-resource bank. GREEN must retain both
+   banks simultaneously before any direction tap, without a repository or
+   index build during that tap.
 
 ## Implemented boundary
 
