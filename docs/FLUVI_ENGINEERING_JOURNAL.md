@@ -16,7 +16,7 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 
 - Exact physically tested diagnostic APK: `fluvi_HUMAN_DIAGNOSTIC_0b108b7.apk`, SHA-256 `ffdaca3aeba8deee546baf55f7066cd9334e5a03117667e0e8849b0331103a28`.
 - Physical result: direction-switch hitch no longer perceived; remaining reproducible failure was missing Avatar selection/progress circle immediately after direction switch until Avatar movement. Time fling did not show the analogous failure in that run.
-- Fresh Avatar and Time snapshots sampled healthy semantic/final-target correctness around this direction-specific failure. Same-session retained windows contain a hard missing sequence range `10121–11662`; never infer continuity across it.
+- Fresh evidence snapshots: Avatar log SHA-256 `de24763fd6570f7353bf148b9fe8868e83f3459c598bc663723384df2c00cc77`; Time `3e4f07bf8a8ef9c6fb0f419f30a9fc4cc9d5f2ce94e071b876afac80674876a2`; Budget `f73c15b94a0f0ac90001cff97e9287fbfc2b79e55b04a75319fc40aea35e538b`. Same-session retained windows contain a hard missing sequence range `10121–11662`; never infer continuity across it.
 - Proven failure chain: new direction presentation published selected target 4, then `BUDGET_PROGRESS_IDENTITY_MISMATCH` showed physical Avatar target 0 vs visual target 4.
 - Proven source cause class: `DIRECTION-DOMAIN SELECTED-TARGET REBASE ATOMICITY FAILURE`. `DashboardBudgetPresentationController` restores per-direction selected identity, while `BudgetTargetAvatarRail._replaceItems(...)` could preserve the previous physical center by stable ID instead of rebasing to the new direction presentation. Preserve controller/ScrollPosition/physics identity while converging one target authority.
 - CI/profile for `0b108b73...` was green but false-green for this physical symptom because the automated direction case did not assert physical center == semantic target == presentation target == selected-circle paint target.
@@ -204,7 +204,7 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   `test-core`, `test-flutter`, path gate and `build-human-diagnostic-apk`
   succeeded. The human release target is that same full SHA.
 - Downloaded normal human diagnostic APK:
-  `/storage/emulated.com/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_288cc35.apk`;
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_288cc35.apk`;
   byte size `82,482,481`; SHA-256
   `8bc1d1fa915c8617258c7cdcc0e853c9a58e4619583bc53be03c892230947f97`.
   The full `FLUVI_BUILD_COMMIT=288cc35584ec5cb6e41eb237523104922a2c7393`
