@@ -241,6 +241,40 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Prompt-writer source change for this feedback: this journal entry only, committed with `[skip ci]`; no application source, tests, workflow, graph, milestone file, build configuration or runtime behavior is changed by the prompt writer.
 - Physical validation of the next application repair: `PENDING — USER ONLY`.
 
+## 2026-09-15 — Bounded dual Mind direction row-resource readiness (`e62a8172`)
+
+- Application commit: `e62a8172` (`fix(mind): prewarm both direction row
+  resources`). This follows the Summary Time / transient Mind Year repair and
+  addresses the still-failing delivery profile boundary; it is not a physical
+  device-acceptance claim.
+- RED `MIND-LIVE-RESOURCE-01` proved the first owner mismatch: Core had two
+  bounded direction-specific Mind prepared bases, but its one
+  `mindAmountPreview` live-resource slot/lane warmed only Income. Expense
+  therefore had an admitted base but no Phase-A paragraph bank, allowing the
+  first measured direction tap to begin the source-membership rich LogBox
+  preparation. This agrees with the failed profile's 1,846/2,458-row resource
+  preparation evidence; it does not attribute the observed 126.620 ms slice
+  to an unmeasured individual lease instruction.
+- Repair: `DashboardCoreController` now asks the existing bounded
+  `DashboardLogBoxPreparedSceneCache` for one distinct Mind resource lane per
+  ledger direction (`mindIncomeAmountPreview` /
+  `mindExpenseAmountPreview`) after each compatible base is admitted. Core
+  remains the only request coordinator; the cache remains the only paragraph
+  owner. Canonical Query, direction authority, viewport/renderer ownership,
+  Time motion, controller/ScrollPosition/physics identity and heatmap
+  ownership are unchanged. The cache's existing hard bank/row/byte admission
+  limits remain in force; no unbounded cache, remount, key, cache flush,
+  retry, delay, repository access or index build is added to a direction tap.
+- GREEN evidence in Ubuntu proot: the Core RED now sees both direction lanes;
+  cache test `MIND-LIVE-RESOURCE-01` retains both complete immutable banks
+  simultaneously. Targeted `flutter analyze` returned `No issues found`; the
+  Core/cache/Mind/LogBox/Summary regression matrix passed 212 tests.
+- Still pending: online `run-dashboard-profile` on this exact application
+  SHA, its FrameTiming/resource counters, final matching SCIP, human APK and
+  physical validation. The previous profile failure is not reclassified as
+  green by this commit.
+- Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-15 — Summary Time rebase and Mind Year transient-publication repair
 
 - Application commit: `9945d6e9d4cfc3b948f85e724d18c2925fd975e2`
