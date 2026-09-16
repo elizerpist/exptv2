@@ -687,3 +687,30 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   evidence, and user physical Android acceptance. The fresh physical log still
   cannot identify its previous APK SHA because startup markers were evicted.
 - Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-16 — Final Mind Year realtime SCIP provenance
+
+- Final graph generation used the clean canonical application/validation source
+  head `2645114242ceda04326a88073e27dc5bcd4b7a8c`; later branch commits in this
+  cycle are documentation-only and do not change application runtime source.
+  The graph's source parent is `c2e35c8fb42452b60386316f15cc3571ef473dae` and
+  source ref is `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`.
+- A separate temporary index was generated with `scip_dart 1.6.2` using
+  `--output` outside the repository, so the pre-existing untracked
+  application `index.scip` remained untouched. Final index SHA-256:
+  `1b46fee4310f996bd9d88efb6567c718e00c3c8c9eab5b23de137414f6fc34f6`.
+- Generated manifest: 448 documents, 292,834 occurrences, 40,591 defined
+  symbols, 10,258 repository-defined symbols and 75,293 references. The
+  tooling artifact commit is `74ba06ee5b0e04b415c8ca11f213a0e1faa0b48a` on
+  `tooling/scip-codegraph-v1`, pushed separately from application history.
+- Tooling `dart test` passes 15 tests. Source-verified graph queries resolve
+  `ensureMindYearHeatmapProjection` (19 references: 4 production, 15 tests),
+  `noteSegmentedSummaryComponentVisualTargetPainted` (2: 1 production, 1
+  test), and `endSegmentedSummaryMotion` (3: 1 production, 2 tests). The
+  result remains graph navigation/impact evidence, not runtime causality.
+- The final application-side checklist delivery entries are recorded in
+  docs-only `0e31072f`, followed by this journal-only `[skip ci]` entry. The
+  null `frame_timing_headroom` profile failure remains an honest automated
+  performance blocker; no runtime source, timing threshold or profile gate is
+  changed here.
+- Physical validation: `PENDING — USER ONLY`.
