@@ -179,7 +179,7 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   physical visual acceptance remain unproven at this point.
 - Untracked preservation baseline before this commit: 80 pre-existing user
   paths, content-manifest SHA-256
-  `d64543c3bde96599e01278b0944e4c045dce252f4595ac058cdba5de2d0350f`;
+  `d64543c3bde9e6599e01278b0944e4c045dce252f4595ac058cdba5de2d0350f`;
   path/size/mtime-manifest SHA-256
   `849c3088844bb383f46f701e35c789a17049ab40662fc664185e6ad20036fcd4`.
   None was staged, modified, stashed, cleaned or deleted.
