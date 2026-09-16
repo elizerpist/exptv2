@@ -20,6 +20,8 @@ import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../mind/domain/mind_year_heatmap_live_projection.dart';
 import '../mind/domain/mind_year_heatmap_projection.dart';
+import '../mind/domain/mind_behavioral_score_live_projection.dart';
+import '../mind/domain/mind_behavioral_score_projection.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
 import '../motion/dashboard_motion_kernel.dart';
 import '../motion/dashboard_motion_state.dart';
@@ -1051,6 +1053,11 @@ final class DashboardCoreController {
   /// Derived Mind-only annual read model. It has no query mutation capability.
   final MindYearHeatmapLiveProjection mindYearHeatmap =
       MindYearHeatmapLiveProjection();
+
+  /// The semantic daily Mind score is independent from the annual heatmap
+  /// renderer and remains available for every Summary Time plane.
+  final MindBehavioralScoreLiveProjection mindBehavioralScore =
+      MindBehavioralScoreLiveProjection();
   late final CurrentQueryController currentQuery;
   late final QueryComposerController queryComposer;
   final DashboardEphemeralFocusController focus =
@@ -1207,6 +1214,7 @@ final class DashboardCoreController {
   int _mindAmountInteractionPreviewCount = 0;
   int _mindAmountInteractionPublishedCount = 0;
   MindYearHeatmapIdentity? _mindYearHeatmapInteractionIdentity;
+  MindBehavioralScorePublicationIdentity? _mindScoreInteractionIdentity;
   // This is not a second Year authority. It is Core's bounded record of the
   // exact Summary Year that the renderer has already acknowledged as visible.
   // It remains authoritative over a canonical/presentation refresh until a
@@ -3960,6 +3968,206 @@ final class DashboardCoreController {
     return null;
   }
 
+  /// Installs or retargets Mind's one semantic score publication lane from
+  /// the same resident prepared membership that backs the heatmap/range
+  /// preview. This path never owns Query state or asks the repository for
+  /// rows. A Time target can retarget an existing projection without a source
+  /// contribution rebuild.
+  bool ensureMindBehavioralScoreProjection({
+    LedgerDirection? direction,
+    DashboardNavigationState? navigationState,
+  }) {
+    if (_disposed) return false;
+    final state = navigationState ?? navigation.state;
+    final resolvedDirection = direction ?? state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(resolvedDirection);
+    final binding = QueryAmountRangeBinding.ready(
+      scope: appliedScope,
+      amountDomain: currentQuery.amountDomainFor(resolvedDirection),
+    );
+    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    if (binding == null || base == null) {
+      mindBehavioralScore.clear();
+      return false;
+    }
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final seed = base.partitionFor(resolvedDirection).focusMembershipSeed;
+    final membership = _mindYearHeatmapPreparedMembershipFor(
+      base: base,
+      domainScope: domainScope,
+    );
+    if (seed == null || membership == null) {
+      mindBehavioralScore.clear();
+      return false;
+    }
+    final projectionIdentity = MindBehavioralScoreIdentity(
+      upstreamScopeKey:
+          '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      direction: resolvedDirection,
+    );
+    final activeProjection = mindBehavioralScore.projection;
+    if (activeProjection?.identity == projectionIdentity) {
+      final target = _mindScoreTargetEpochDay(
+        projection: activeProjection!,
+        range: binding.values,
+        state: state,
+      );
+      return mindBehavioralScore.publishTarget(
+        expectedProjectionIdentity: projectionIdentity,
+        targetEpochDay: target,
+        navigationEpoch: state.navigationEpoch,
+        range: binding.values,
+      );
+    }
+    final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
+    final selected = seed.select(
+      categoryId: activeFocus?.category?.id,
+      partnerId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
+    );
+    final stopwatch = Stopwatch()..start();
+    final projection = MindBehavioralScoreProjection.build(
+      identity: projectionIdentity,
+      contributions: membership
+          .contributionsForMembership(membership: selected.entryIndices)
+          .map(
+            (contribution) => MindBehavioralScoreContribution(
+              bookedLocalEpochDay: contribution.bookedLocalEpochDay,
+              amountMinor: contribution.amountMinor,
+            ),
+          ),
+      sourceWorkCounter: MindBehavioralScoreSourceWorkCounter(
+        measurePreviewDurations: _physicalRailDiagnosticsEnabled,
+      ),
+    );
+    final target = _mindScoreTargetEpochDay(
+      projection: projection,
+      range: binding.values,
+      state: state,
+    );
+    stopwatch.stop();
+    mindBehavioralScore.install(
+      projection: projection,
+      identity: MindBehavioralScorePublicationIdentity(
+        projection: projectionIdentity,
+        targetEpochDay: target,
+        navigationEpoch: state.navigationEpoch,
+      ),
+      range: binding.values,
+    );
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_SCORE|PROJECTION_PUBLISHED',
+        queryKey: projectionIdentity.upstreamScopeKey,
+        direction: resolvedDirection.name,
+        coreRevision: base.coreRevision,
+        entryCount: projection.sourceWorkCounter.preparedContributionTouches,
+        scope:
+            'targetEpochDay=$target '
+            'navigationEpoch=${state.navigationEpoch} '
+            'preparedContributions=${projection.sourceWorkCounter.preparedContributionTouches} '
+            'sourceRows=0 buildMicros=${stopwatch.elapsedMicroseconds}',
+      ),
+    );
+    return true;
+  }
+
+  int _mindScoreTargetEpochDay({
+    required MindBehavioralScoreProjection projection,
+    required QueryAmountRangeValues range,
+    required DashboardNavigationState state,
+  }) => _mindScoreTargetEpochDayForScope(
+    projection: projection,
+    range: range,
+    timeScope: state.effectiveScope,
+  );
+
+  int _mindScoreTargetEpochDayForScope({
+    required MindBehavioralScoreProjection projection,
+    required QueryAmountRangeValues range,
+    required LedgerTimeScope timeScope,
+  }) {
+    final scope = switch (timeScope) {
+      AllTimeScope() => (
+        start: -10000000,
+        end: 10000000,
+        fallback: logicalAsOfDate.epochDay,
+      ),
+      LedgerTimeScope selected => _mindScoreBoundsFor(selected),
+    };
+    return projection.latestEligibleEpochDay(
+      range: range,
+      startInclusiveEpochDay: scope.start,
+      endInclusiveEpochDay: scope.end,
+      fallbackEpochDay: scope.fallback,
+    );
+  }
+
+  ({int start, int end, int fallback}) _mindScoreBoundsFor(
+    LedgerTimeScope scope,
+  ) {
+    final boundaries = scope.boundaries!;
+    final end = boundaries.endExclusive.epochDay - 1;
+    return (start: boundaries.startInclusive.epochDay, end: end, fallback: end);
+  }
+
+  bool _publishMindBehavioralScorePreview({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope appliedScope,
+    required LedgerDirection direction,
+    required QueryAmountRangeValues values,
+  }) {
+    final projection = mindBehavioralScore.projection;
+    final expectedProjection = MindBehavioralScoreIdentity(
+      upstreamScopeKey:
+          '${QueryAmountRange.domainScope(appliedScope).key.value}|${_mindFocusIdentityFor(base, QueryAmountRange.domainScope(appliedScope))}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      direction: direction,
+    );
+    final held = _mindScoreInteractionIdentity;
+    if (projection == null ||
+        projection.identity != expectedProjection ||
+        (held != null &&
+            (held.projection != expectedProjection ||
+                held.navigationEpoch != navigation.state.navigationEpoch))) {
+      return mindBehavioralScore.rejectStalePublication();
+    }
+    final target = _mindScoreTargetEpochDay(
+      projection: projection,
+      range: values,
+      state: navigation.state,
+    );
+    final published = mindBehavioralScore.publishTarget(
+      expectedProjectionIdentity: expectedProjection,
+      targetEpochDay: target,
+      navigationEpoch: navigation.state.navigationEpoch,
+      range: values,
+    );
+    if (published) {
+      _mindScoreInteractionIdentity = mindBehavioralScore.identity;
+      final frame = mindBehavioralScore.value!;
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND_SCORE|PREVIEW_PUBLISHED',
+          flowId: 'interaction:$_mindAmountInteractionGeneration',
+          queryKey: expectedProjection.upstreamScopeKey,
+          direction: direction.name,
+          coreRevision: base.coreRevision,
+          scope:
+              'targetEpochDay=$target '
+              'score=${frame.point.score.toStringAsFixed(3)} '
+              'noSignal=${frame.point.noSignal} '
+              'lower=${values.lowerScaled100} upper=${values.upperScaled100} '
+              'sourceRows=0 repositoryRequests=0 indexBuilds=0',
+        ),
+      );
+    }
+    return published;
+  }
+
   void _setMindAmountPreviewBase(
     PreparedDashboardIndex base,
     CurrentLedgerQueryScope domainScope,
@@ -4885,6 +5093,7 @@ final class DashboardCoreController {
     _mindAmountInteractionPreviewCount = 0;
     _mindAmountInteractionPublishedCount = 0;
     _mindYearHeatmapInteractionIdentity = mindYearHeatmap.identity;
+    _mindScoreInteractionIdentity = mindBehavioralScore.identity;
     final direction = navigation.state.parentQueryScope.direction;
     final scope = currentQuery.scopeFor(direction);
     final admittedBase = _mindAmountPreparedBaseFor(
@@ -4958,6 +5167,12 @@ final class DashboardCoreController {
         : null;
     final previewGeneration = ++_mindAmountPreviewGeneration;
     final heatmapPublished = _publishMindYearHeatmapPreview(
+      base: base,
+      appliedScope: appliedScope,
+      direction: direction,
+      values: values,
+    );
+    final scorePublished = _publishMindBehavioralScorePreview(
       base: base,
       appliedScope: appliedScope,
       direction: direction,
@@ -5085,6 +5300,8 @@ final class DashboardCoreController {
             'rootProjectionMicros=${derived.currentRootProjectionMicros} '
             'heatmapPublished=$heatmapPublished '
             'heatmapStaleRejects=${mindYearHeatmap.stalePublicationRejectCount} '
+            'scorePublished=$scorePublished '
+            'scoreStaleRejects=${mindBehavioralScore.stalePublicationRejectCount} '
             'richSceneStaged=$richSceneStaged '
             'repositoryRequests=0 indexBuilds=0 canonicalCommits=0',
       ),
@@ -5133,7 +5350,30 @@ final class DashboardCoreController {
             'canonicalCommitCount=${committed ? 1 : 0}',
       ),
     );
+    final scoreCounter = mindBehavioralScore.sourceWorkCounter;
+    final scoreSummary = scoreCounter?.previewDurationSummary();
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_SCORE|SLIDER_PREVIEW_SUMMARY',
+        flowId: 'interaction:$_mindAmountInteractionGeneration',
+        direction: direction.name,
+        coreRevision: mindBehavioralScore.identity?.projection.coreRevision,
+        scope:
+            'scorePublications=${mindBehavioralScore.publicationCount} '
+            'staleRejections=${mindBehavioralScore.stalePublicationRejectCount} '
+            'sourceRowsDuringPreview=${scoreCounter?.sourceRowTouchesDuringPreview ?? 0} '
+            'repositoryAccessesDuringPreview=${scoreCounter?.repositoryAccessesDuringPreview ?? 0} '
+            'indexBuildsDuringPreview=${scoreCounter?.indexBuildsDuringPreview ?? 0} '
+            'maxDayBuckets=${scoreCounter?.maxDayBucketsVisitedPerPreview ?? 0} '
+            'samples=${scoreSummary?['sampleCount'] ?? 0} '
+            'p50Micros=${scoreSummary?['p50Micros'] ?? 0} '
+            'p95Micros=${scoreSummary?['p95Micros'] ?? 0} '
+            'maxMicros=${scoreSummary?['maxMicros'] ?? 0} '
+            'canonicalCommitCount=${committed ? 1 : 0}',
+      ),
+    );
     _mindYearHeatmapInteractionIdentity = null;
+    _mindScoreInteractionIdentity = null;
   }
 
   /// Ends the physical Slider drag after its exact Phase-A frame has been
@@ -5151,6 +5391,17 @@ final class DashboardCoreController {
       scope: current,
       amountDomain: currentQuery.amountDomainFor(direction),
     );
+    final base = _mindAmountPreparedBaseFor(
+      QueryAmountRange.domainScope(current),
+    );
+    if (base != null) {
+      _publishMindBehavioralScorePreview(
+        base: base,
+        appliedScope: current,
+        direction: direction,
+        values: values,
+      );
+    }
     if (binding == null) {
       endMindAmountRangeInteraction(committed: false);
       clearMindAmountRangePreview();
@@ -8917,6 +9168,10 @@ final class DashboardCoreController {
       direction: ledgerDirection,
       candidate: candidate,
     );
+    ensureMindBehavioralScoreProjection(
+      direction: ledgerDirection,
+      navigationState: candidate,
+    );
     // Direction is direct user intent for the Budget projection. Its owner
     // must change before accepting the live frame: structural LogBox scene
     // coverage below may be held, while Header/Progress/Partition/Rhythm bind
@@ -10779,6 +11034,7 @@ final class DashboardCoreController {
     // replaces its bounded annual projection before the next visible frame,
     // never by applying a second query/filter state in the Mind surface.
     ensureMindYearHeatmapProjection();
+    ensureMindBehavioralScoreProjection();
     final interactionFrame = _acceptLiveInteraction(
       source: source,
       interactionOrder: interactionOrder,
@@ -11159,6 +11415,7 @@ final class DashboardCoreController {
     // input. The retained base frame below follows immediately when possible.
     focus.clearAll();
     ensureMindYearHeatmapProjection();
+    ensureMindBehavioralScoreProjection();
     final phaseAPublishStartedMicros =
         _collectAvatarPacingCorrelationDiagnostics
         ? developer.Timeline.now
@@ -11392,6 +11649,7 @@ final class DashboardCoreController {
     _discardRetainedFocusBasePaging();
     focus.clearAll();
     clearMindYearHeatmapProjection();
+    mindBehavioralScore.clear();
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'FOCUS_INVALIDATED',
@@ -13878,6 +14136,10 @@ final class DashboardCoreController {
   }
 
   void _recordNavigationSelection(String source) {
+    // Time/rail commits have already selected their canonical target when
+    // this common boundary runs. Retarget the same daily score projection in
+    // this semantic turn; renderer acknowledgements never own score math.
+    ensureMindBehavioralScoreProjection();
     diagnostics.record(
       DashboardInteractionEvent.navPresentationSelected,
       context: _diagnosticContext(
@@ -13898,6 +14160,11 @@ final class DashboardCoreController {
   void _onVisibleFramePublished() {
     final frame = visibleFrames.value;
     if (frame == null) return;
+    // A rail semantic crossing can coalesce before paint, while this callback
+    // observes only the frame that the visible-frame store actually accepted.
+    // Bind its exact child time scope here so Header score/text/palette cannot
+    // trail an already-visible Day/Month/Year child until rail settlement.
+    _publishMindBehavioralScoreForVisibleFrame(frame);
     diagnostics.record(
       DashboardInteractionEvent.visibleFramePublished,
       context: _diagnosticContext(frame: frame),
@@ -13924,6 +14191,54 @@ final class DashboardCoreController {
             'presentationEpoch=${frame.presentationEpoch} '
             'frameGeneration=${frame.frameGeneration}',
       ),
+    );
+  }
+
+  void _publishMindBehavioralScoreForVisibleFrame(DashboardVisibleFrame frame) {
+    if (_disposed) return;
+    final direction = frame.direction;
+    // Score membership deliberately comes from the retained non-temporal
+    // canonical query. The visible frame supplies only the temporal target
+    // and (for an uncommitted Mind drag) its already-rendered range preview.
+    final canonicalScope = currentQuery.scopeFor(direction);
+    final binding = QueryAmountRangeBinding.ready(
+      scope: frame.scope,
+      amountDomain: currentQuery.amountDomainFor(direction),
+    );
+    final domainScope = QueryAmountRange.domainScope(canonicalScope);
+    final base = _mindAmountPreparedBaseFor(domainScope);
+    if (binding == null || base == null) return;
+    final expectedProjection = MindBehavioralScoreIdentity(
+      upstreamScopeKey:
+          '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      direction: direction,
+    );
+    if (mindBehavioralScore.projection?.identity != expectedProjection) {
+      ensureMindBehavioralScoreProjection(direction: direction);
+    }
+    final projection = mindBehavioralScore.projection;
+    if (projection?.identity != expectedProjection) return;
+    final target = _mindScoreTargetEpochDayForScope(
+      projection: projection!,
+      range: binding.values,
+      timeScope: frame.scope.timeScope,
+    );
+    final identity = MindBehavioralScorePublicationIdentity(
+      projection: expectedProjection,
+      targetEpochDay: target,
+      navigationEpoch: frame.navigationEpoch,
+    );
+    if (mindBehavioralScore.identity == identity &&
+        mindBehavioralScore.value?.range == binding.values) {
+      return;
+    }
+    mindBehavioralScore.publishTarget(
+      expectedProjectionIdentity: expectedProjection,
+      targetEpochDay: target,
+      navigationEpoch: frame.navigationEpoch,
+      range: binding.values,
     );
   }
 
@@ -14022,6 +14337,7 @@ final class DashboardCoreController {
     budgetAvatarTargetPainted.dispose();
     segmentedTargetPainted.dispose();
     mindYearHeatmap.dispose();
+    mindBehavioralScore.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();
     railFlightRecorder?.dispose();

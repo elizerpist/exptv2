@@ -200,6 +200,21 @@ final class MindYearHeatmapPreparedMembership {
       }
     }
   }
+
+  /// Reuses the exact admitted prepared membership for another Mind consumer.
+  /// The caller still owns its own projection/score semantics; this method
+  /// does not create a second filter authority or revisit ledger rows.
+  Iterable<MindYearHeatmapPreparedContribution> contributionsForMembership({
+    required DashboardFocusOrdinalSet membership,
+  }) sync* {
+    for (final contributions in _contributionsByYear.values) {
+      for (final contribution in contributions) {
+        if (membership.containsOrdinal(contribution.ordinal)) {
+          yield contribution;
+        }
+      }
+    }
+  }
 }
 
 @immutable

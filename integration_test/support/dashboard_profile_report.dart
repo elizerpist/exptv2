@@ -232,6 +232,57 @@ abstract final class DashboardProfileReport {
         mindYearHeatmapPreviewP95HeadroomMicros) {
       reject('preview_compute_headroom');
     }
+    final scoreLive = evidence['score_live_before_release_count'];
+    final scorePublications = evidence['score_publication_count'];
+    final scorePreviewEvents = evidence['score_preview_event_count'];
+    if (scoreLive is! int || scoreLive != events) {
+      reject('score_live_before_release_count');
+    }
+    if (scorePublications is! int || scorePublications < scoreLive) {
+      reject('score_publication_count');
+    }
+    if (scorePreviewEvents is! int || scorePreviewEvents < scoreLive) {
+      reject('score_preview_event_count');
+    }
+    if (evidence['score_preview_events_report_zero_repository_index'] != true ||
+        evidence['score_header_text_matches'] != true) {
+      reject('score_preview_semantic_coherence');
+    }
+    final scorePalettePublications =
+        evidence['score_palette_publication_count'];
+    if (scorePalettePublications is! int || scorePalettePublications < 1) {
+      reject('score_palette_publication_count');
+    }
+    for (final key in const <String>[
+      'score_source_rows_during_preview',
+      'score_repository_accesses_during_preview',
+      'score_index_builds_during_preview',
+    ]) {
+      if (evidence[key] != 0) reject(key);
+    }
+    if (evidence['score_source_rows_after_slider'] !=
+        evidence['score_source_rows_at_projection_build']) {
+      reject('score_source_rows_after_slider');
+    }
+    final scoreBuckets = evidence['score_max_day_buckets_per_preview'];
+    if (scoreBuckets is! int || scoreBuckets < 1) {
+      reject('score_max_day_buckets_per_preview');
+    }
+    final scorePreviewCompute = evidence['score_preview_compute'];
+    if (scorePreviewCompute is! Map ||
+        scorePreviewCompute['sampleCount'] is! int ||
+        (scorePreviewCompute['sampleCount'] as int) < scoreLive ||
+        scorePreviewCompute['p50Micros'] is! int ||
+        scorePreviewCompute['p95Micros'] is! int ||
+        scorePreviewCompute['maxMicros'] is! int ||
+        (scorePreviewCompute['p95Micros'] as int) >
+            mindYearHeatmapPreviewP95HeadroomMicros) {
+      reject('score_preview_compute');
+    }
+    final scoreStaleRejections = evidence['score_stale_rejection_count'];
+    if (scoreStaleRejections is! int || scoreStaleRejections < 0) {
+      reject('score_stale_rejection_count');
+    }
     final direction = evidence['direction_switch'];
     if (direction is! Map) reject('direction_switch');
     final requestCount = direction['request_count'];

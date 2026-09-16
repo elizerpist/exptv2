@@ -717,4 +717,34 @@ void main() {
     );
     controller.dispose();
   });
+
+  testWidgets('MBS-06 Mind score window width is live and independent', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(controller: controller),
+        ),
+      ),
+    );
+    final sliderKey = const ValueKey<String>(
+      'dashboard-header-mind-score-window-width-slider',
+    );
+    await tester.ensureVisible(find.byKey(sliderKey));
+    final slider = tester.widget<Slider>(
+      find.descendant(of: find.byKey(sliderKey), matching: find.byType(Slider)),
+    );
+    expect(controller.tuning.value.mindScore.windowWidthPercent, 28);
+    slider.onChanged!(42);
+    await tester.pump();
+    expect(controller.tuning.value.mindScore.windowWidthPercent, 42);
+    expect(controller.tuning.value.budgetCool.windowWidthPercent, 28);
+    expect(controller.tuning.value.budgetCategory.windowWidthPercent, 28);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
 }

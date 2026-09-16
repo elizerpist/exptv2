@@ -1559,7 +1559,8 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
             .byKey(const ValueKey('query-amount-range-slider'))
             .evaluate()
             .isNotEmpty &&
-        controller.mindYearHeatmap.value != null) {
+        controller.mindYearHeatmap.value != null &&
+        controller.mindBehavioralScore.value != null) {
       break;
     }
   }
@@ -1586,9 +1587,14 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   final sourceCounter = controller.mindYearHeatmap.sourceWorkCounter;
   expect(sourceCounter, isNotNull);
   final sourceRowsAtStart = sourceCounter!.sourceRowTouches;
+  final scoreCounter = controller.mindBehavioralScore.sourceWorkCounter;
+  expect(scoreCounter, isNotNull);
+  final scoreSourceRowsAtStart = scoreCounter!.sourceRowTouches;
   final profileSequence = _lastDiagnosticSequence();
   var lastCollectedDiagnosticSequence = profileSequence;
   final previewEvents = <FluviDiagnosticEvent>[];
+  final scorePreviewEvents = <FluviDiagnosticEvent>[];
+  final scorePaletteEvents = <FluviDiagnosticEvent>[];
   void collectPreviewEvents() {
     final events = _diagnosticEventsAfter(lastCollectedDiagnosticSequence);
     if (events.isEmpty) return;
@@ -1597,12 +1603,20 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
     previewEvents.addAll(
       events.where((event) => event.stage == 'MIND|PREVIEW_FRAME'),
     );
+    scorePreviewEvents.addAll(
+      events.where((event) => event.stage == 'MIND_SCORE|PREVIEW_PUBLISHED'),
+    );
+    scorePaletteEvents.addAll(
+      events.where((event) => event.stage == 'MIND_HEADER_SCORE_PALETTE_BOUND'),
+    );
   }
 
   final frameTimings = <FrameTiming>[];
   var drainedBeforeCaptureFrameCount = 0;
   var sliderEventCount = 0;
   var liveBeforeReleaseCount = 0;
+  var scoreLiveBeforeReleaseCount = 0;
+  var scoreHeaderTextMatches = true;
   var terminalValues = controller.mindYearHeatmap.value!.range;
   late Map<String, Object?> directionEvidence;
   void collectFrameTimings(List<FrameTiming> values) =>
@@ -1665,6 +1679,22 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
         reason: 'Mind heatmap must publish while the pointer is still down.',
       );
       liveBeforeReleaseCount += 1;
+      final score = controller.mindBehavioralScore.value;
+      expect(score, isNotNull);
+      expect(
+        score!.range,
+        live,
+        reason:
+            'Mind score must use the same live canonical range as the '
+            'heatmap before pointer release.',
+      );
+      scoreLiveBeforeReleaseCount += 1;
+      final headerText = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-header-score-text')),
+      );
+      final expectedText = '${score.point.roundedScore}/100';
+      if (headerText.data != expectedText) scoreHeaderTextMatches = false;
+      expect(headerText.data, expectedText);
       sliderEventCount += 1;
       terminalValues = live;
       prior = live;
@@ -1732,6 +1762,7 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
   collectPreviewEvents();
   final summary = _summarizeFrameTimings(capturedFrameTimings);
   final previewTiming = sourceCounter.previewDurationSummary();
+  final scorePreviewTiming = scoreCounter.previewDurationSummary();
   return <String, Object?>{
     'slider_event_count': sliderEventCount,
     'live_before_release_count': liveBeforeReleaseCount,
@@ -1753,6 +1784,31 @@ Future<Map<String, Object?>> _profileMindYearHeatmapSlider(
     'index_builds_during_preview': sourceCounter.indexBuildsDuringPreview,
     'max_day_buckets_per_preview': sourceCounter.maxDayBucketsVisitedPerPreview,
     'preview_compute': previewTiming,
+    'score_live_before_release_count': scoreLiveBeforeReleaseCount,
+    'score_publication_count': controller.mindBehavioralScore.publicationCount,
+    'score_preview_event_count': scorePreviewEvents.length,
+    'score_preview_events_report_zero_repository_index': scorePreviewEvents
+        .every(
+          (event) =>
+              event.scope?.contains(
+                'sourceRows=0 repositoryRequests=0 indexBuilds=0',
+              ) ==
+              true,
+        ),
+    'score_palette_publication_count': scorePaletteEvents.length,
+    'score_header_text_matches': scoreHeaderTextMatches,
+    'score_source_rows_at_projection_build': scoreSourceRowsAtStart,
+    'score_source_rows_after_slider': scoreCounter.sourceRowTouches,
+    'score_source_rows_during_preview':
+        scoreCounter.sourceRowTouchesDuringPreview,
+    'score_repository_accesses_during_preview':
+        scoreCounter.repositoryAccessesDuringPreview,
+    'score_index_builds_during_preview': scoreCounter.indexBuildsDuringPreview,
+    'score_max_day_buckets_per_preview':
+        scoreCounter.maxDayBucketsVisitedPerPreview,
+    'score_preview_compute': scorePreviewTiming,
+    'score_stale_rejection_count':
+        controller.mindBehavioralScore.stalePublicationRejectCount,
     'final_preview_range_lower': terminalValues.lowerScaled100,
     'final_visible_range_lower':
         controller.mindYearHeatmap.value!.range.lowerScaled100,

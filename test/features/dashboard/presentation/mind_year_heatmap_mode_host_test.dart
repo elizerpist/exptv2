@@ -6,9 +6,11 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
@@ -126,6 +128,42 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'MBS-07 semantic Mind Header score updates independently from its paint lane',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final score = ValueNotifier<MindBehavioralScoreFrame?>(_score(63));
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(score.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          showYearHeatmap: false,
+          score: score,
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey('mind-header-score-text')),
+        findsOneWidget,
+      );
+      expect(find.text('63/100'), findsOneWidget);
+
+      score.value = _score(27);
+      await tester.pump();
+      expect(find.text('27/100'), findsOneWidget);
+    },
+  );
 }
 
 final class _HostHarness extends StatelessWidget {
@@ -135,6 +173,7 @@ final class _HostHarness extends StatelessWidget {
     required this.rangeChanges,
     required this.expansion,
     required this.showYearHeatmap,
+    this.score,
   });
 
   final DashboardCoreModeController mode;
@@ -142,6 +181,7 @@ final class _HostHarness extends StatelessWidget {
   final ValueNotifier<int> rangeChanges;
   final _ExpansionRecorder expansion;
   final bool showYearHeatmap;
+  final ValueNotifier<MindBehavioralScoreFrame?>? score;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -163,6 +203,7 @@ final class _HostHarness extends StatelessWidget {
               palette: DashboardModePaletteResolver.resolve(mode),
             ),
             mindYearHeatmap: frame,
+            mindBehavioralScore: score,
             mindYearHeatmapVisible: showYearHeatmap,
             mindQueryAmountRange: () => const QueryAmountRangeValues(
               minimumScaled100: 1,
@@ -226,3 +267,23 @@ MindYearHeatmapFrame _frame() =>
         upperScaled100: 1000,
       ),
     );
+
+MindBehavioralScoreFrame _score(double value) => MindBehavioralScoreFrame(
+  identity: const MindBehavioralScoreIdentity(
+    upstreamScopeKey: 'expense|all',
+    indexGeneration: 1,
+    coreRevision: 1,
+    direction: LedgerDirection.expense,
+  ),
+  range: const QueryAmountRangeValues(
+    minimumScaled100: 1,
+    maximumScaled100: 1000,
+    lowerScaled100: 1,
+    upperScaled100: 1000,
+  ),
+  point: MindBehavioralScorePoint(
+    epochDay: const LocalDate(year: 2025, month: 1, day: 1).epochDay,
+    score: value,
+    noSignal: false,
+  ),
+);

@@ -11,6 +11,7 @@ import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
@@ -57,6 +58,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.balanceHeaderVisualFrame,
     this.budgetHeaderVisualFrame,
     this.mindHeaderVisualFrame,
+    this.mindBehavioralScore,
     this.mindQueryAmountRange,
     this.mindQueryAmountRangeChanges,
     this.mindQueryAmountRangeLifecycleChanges,
@@ -95,6 +97,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? budgetHeaderVisualFrame;
   final ValueListenable<DashboardHeaderVisualFrame>? mindHeaderVisualFrame;
+  final ValueListenable<MindBehavioralScoreFrame?>? mindBehavioralScore;
   final QueryAmountRangeValues? Function()? mindQueryAmountRange;
   final Listenable? mindQueryAmountRangeChanges;
   final Listenable? mindQueryAmountRangeLifecycleChanges;
@@ -353,6 +356,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             widget.onMindQueryAmountRangeInteractionSummary,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,
+        behavioralScore: widget.mindBehavioralScore,
       ),
     };
   }

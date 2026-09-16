@@ -7,10 +7,12 @@ import 'package:flutter/scheduler.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../mind/domain/mind_behavioral_score_projection.dart';
 import 'dashboard_header_budget_cool_source.dart';
 import 'dashboard_header_category_scale.dart';
 import 'dashboard_header_deep_drift.dart';
 import 'dashboard_header_fragment_backend.dart';
+import 'dashboard_header_mind_score_color.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_static_color_renderer.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -2163,6 +2165,7 @@ final class DashboardHeaderVisualTuning {
     required this.paletteOrientation,
     required this.budgetCool,
     required this.budgetCategory,
+    required this.mindScore,
     required this.opacityScalePosition,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
     required this.generation,
@@ -2180,6 +2183,7 @@ final class DashboardHeaderVisualTuning {
     paletteOrientation: DashboardHeaderPaletteOrientationTuning.defaults,
     budgetCool: const BudgetHeaderGlobalCoolState.defaults(),
     budgetCategory: const DashboardBudgetHeaderCategoryState.defaults(),
+    mindScore: const MindHeaderScoreWindowState.defaults(),
     opacityScalePosition: 50,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
       for (final spec in DashboardHeaderEffectCatalog.effects)
@@ -2193,6 +2197,7 @@ final class DashboardHeaderVisualTuning {
   final DashboardHeaderPaletteOrientationTuning paletteOrientation;
   final BudgetHeaderGlobalCoolState budgetCool;
   final DashboardBudgetHeaderCategoryState budgetCategory;
+  final MindHeaderScoreWindowState mindScore;
   final double opacityScalePosition;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
   final int generation;
@@ -2206,6 +2211,7 @@ final class DashboardHeaderVisualTuning {
     DashboardHeaderPaletteOrientationTuning? paletteOrientation,
     BudgetHeaderGlobalCoolState? budgetCool,
     DashboardBudgetHeaderCategoryState? budgetCategory,
+    MindHeaderScoreWindowState? mindScore,
     double? opacityScalePosition,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
@@ -2214,6 +2220,7 @@ final class DashboardHeaderVisualTuning {
     paletteOrientation: paletteOrientation ?? this.paletteOrientation,
     budgetCool: budgetCool ?? this.budgetCool,
     budgetCategory: budgetCategory ?? this.budgetCategory,
+    mindScore: mindScore ?? this.mindScore,
     opacityScalePosition: opacityScalePosition ?? this.opacityScalePosition,
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
     generation: generation + 1,
@@ -2442,6 +2449,20 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     tuning.value = tuning.value.copyWith(budgetCategory: next);
     _record(
       'BUDGET_HEADER_CATEGORY_WINDOW_CHANGED',
+      'windowWidthPct=${next.windowWidthPercent.toStringAsFixed(0)} '
+          'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
+  /// Mind's center is a behavioural-score domain result. The only
+  /// user-editable state is the visual sample-window width.
+  void setMindHeaderScoreWindowWidthPercent(double value) {
+    final next = tuning.value.mindScore.copyWith(windowWidthPercent: value);
+    if (next == tuning.value.mindScore) return;
+    tuning.value = tuning.value.copyWith(mindScore: next);
+    _record(
+      'MIND_HEADER_SCORE_WINDOW_CHANGED',
       'windowWidthPct=${next.windowWidthPercent.toStringAsFixed(0)} '
           'settingsGeneration=${tuning.value.generation}',
     );
@@ -2839,6 +2860,7 @@ final class DashboardHeaderVisualFrame {
     this.staticInterpolation,
     this.budgetCoolWindow,
     this.budgetCategoryWindow,
+    this.mindScoreWindow,
     this.staticSettingsGeneration,
   });
 
@@ -2856,6 +2878,7 @@ final class DashboardHeaderVisualFrame {
   final DashboardHeaderStaticColorInterpolation? staticInterpolation;
   final BudgetHeaderCoolWindow? budgetCoolWindow;
   final DashboardHeaderCategoryWindow? budgetCategoryWindow;
+  final MindHeaderScoreWindow? mindScoreWindow;
   final int? staticSettingsGeneration;
 
   /// Compact deterministic diagnostic fingerprint of the whole field. It is
@@ -2896,6 +2919,7 @@ final class DashboardHeaderVisualFrame {
       staticInterpolation == other.staticInterpolation &&
       budgetCoolWindow == other.budgetCoolWindow &&
       budgetCategoryWindow == other.budgetCategoryWindow &&
+      mindScoreWindow == other.mindScoreWindow &&
       staticSettingsGeneration == other.staticSettingsGeneration;
 
   @override
@@ -2915,6 +2939,7 @@ final class DashboardHeaderVisualFrame {
     staticInterpolation,
     budgetCoolWindow,
     budgetCategoryWindow,
+    mindScoreWindow,
     staticSettingsGeneration,
   );
 }
@@ -2926,6 +2951,138 @@ final class DashboardHeaderStaticColorPolicy
     extends ValueNotifier<DashboardHeaderVisualFrame> {
   DashboardHeaderStaticColorPolicy(Color tone)
     : super(DashboardHeaderVisualFrame.staticTone(tone));
+}
+
+/// Mind score material uses the existing Header-frame transport. The traffic
+/// scale/window are semantic input only; animation phase remains entirely in
+/// [DashboardHeaderVisualController].
+abstract final class MindHeaderScoreColorScale {
+  static DashboardHeaderVisualFrame fromWindow({
+    required MindHeaderScoreWindow window,
+    required double opacityScalePosition,
+    required int staticSettingsGeneration,
+  }) => DashboardHeaderVisualFrame(
+    colors: window.colors,
+    stops: window.stops,
+    opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
+    colorA: window.colorA,
+    colorB: window.colorB,
+    paletteSplitPercent: window.centerPercent,
+    windowLeftPercent: window.leftSamplePercent,
+    windowRightPercent: window.rightSamplePercent,
+    staticInterpolation: DashboardHeaderStaticColorInterpolation.nativeLinear,
+    mindScoreWindow: window,
+    staticSettingsGeneration: staticSettingsGeneration,
+  );
+}
+
+/// Independent Mind policy analogous to the Budget policy. It shares only
+/// the Header material transport and tuning owner; it has no Budget state or
+/// accounting dependency.
+final class DashboardMindHeaderColorPolicy
+    extends ValueNotifier<DashboardHeaderVisualFrame> {
+  factory DashboardMindHeaderColorPolicy({
+    required ValueListenable<DashboardHeaderVisualTuning> tuning,
+    required ValueListenable<MindBehavioralScoreFrame?> score,
+  }) {
+    final window = _windowFor(tuning.value, score.value);
+    return DashboardMindHeaderColorPolicy._(
+      tuning: tuning,
+      score: score,
+      window: window,
+    );
+  }
+
+  DashboardMindHeaderColorPolicy._({
+    required ValueListenable<DashboardHeaderVisualTuning> tuning,
+    required ValueListenable<MindBehavioralScoreFrame?> score,
+    required MindHeaderScoreWindow window,
+  }) : _tuning = tuning,
+       _score = score,
+       _window = window,
+       super(_projectionFor(tuning.value, window)) {
+    _tuning.addListener(_refresh);
+    _score.addListener(_refresh);
+    _publishBinding(value);
+  }
+
+  final ValueListenable<DashboardHeaderVisualTuning> _tuning;
+  final ValueListenable<MindBehavioralScoreFrame?> _score;
+  MindHeaderScoreWindow _window;
+  Object? _lastBindingSignature;
+
+  /// Semantic palette publications, deliberately separate from the shared
+  /// visual ticker's paint cadence. This is profile evidence only; it never
+  /// participates in Header rendering.
+  int palettePublicationCount = 0;
+
+  void _refresh() {
+    final tuning = _tuning.value;
+    final nextWindow = _windowFor(tuning, _score.value);
+    if (nextWindow != _window) _window = nextWindow;
+    final frame = _projectionFor(tuning, _window);
+    if (!value.sameAs(frame)) {
+      value = frame;
+      palettePublicationCount += 1;
+    }
+    _publishBinding(frame);
+  }
+
+  static MindHeaderScoreWindow _windowFor(
+    DashboardHeaderVisualTuning tuning,
+    MindBehavioralScoreFrame? score,
+  ) => MindHeaderScoreWindowSampler.sample(
+    score: score?.point.score ?? 50,
+    windowWidthPercent: tuning.mindScore.windowWidthPercent,
+  );
+
+  static DashboardHeaderVisualFrame _projectionFor(
+    DashboardHeaderVisualTuning tuning,
+    MindHeaderScoreWindow window,
+  ) => MindHeaderScoreColorScale.fromWindow(
+    window: window,
+    opacityScalePosition: tuning.opacityScalePosition,
+    staticSettingsGeneration: tuning.generation,
+  );
+
+  void _publishBinding(DashboardHeaderVisualFrame frame) {
+    final window = frame.mindScoreWindow;
+    if (window == null) return;
+    final point = _score.value?.point;
+    final signature = Object.hash(
+      _score.value?.identity,
+      point?.epochDay,
+      point?.score,
+      point?.noSignal,
+      window,
+    );
+    if (_lastBindingSignature == signature) return;
+    _lastBindingSignature = signature;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_HEADER_SCORE_PALETTE_BOUND',
+        queryKey: _score.value?.identity.upstreamScopeKey,
+        direction: _score.value?.identity.direction.name,
+        coreRevision: _score.value?.identity.coreRevision,
+        scope:
+            'score=${window.centerPercent.toStringAsFixed(3)} '
+            'noSignal=${point?.noSignal ?? true} '
+            'windowWidthPct=${window.windowWidthPercent.toStringAsFixed(0)} '
+            'leftPct=${window.leftSamplePercent.toStringAsFixed(1)} '
+            'rightPct=${window.rightSamplePercent.toStringAsFixed(1)} '
+            'colorAArgb=${window.colorA.toARGB32()} '
+            'colorMidArgb=${window.colorMid.toARGB32()} '
+            'colorBArgb=${window.colorB.toARGB32()}',
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _tuning.removeListener(_refresh);
+    _score.removeListener(_refresh);
+    super.dispose();
+  }
 }
 
 abstract final class DashboardHeaderOpacityScale {

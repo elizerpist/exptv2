@@ -139,7 +139,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardHeaderVisualController _headerVisualController;
   late final DashboardHeaderStaticColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
-  late final DashboardHeaderStaticColorPolicy _mindHeaderColorPolicy;
+  late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
   late final DashboardSummaryAutoResetController _summaryAutoResetController;
   late final DashboardSummaryAutoResetMotionRegistry _summaryAutoResetMotions;
   late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
@@ -216,17 +216,16 @@ class _CoreDashboardState extends State<CoreDashboard>
       tuning: _headerVisualController.tuning,
       budgetPresentation: _budgetPresentation,
     );
-    _mindHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
-      DashboardModePaletteResolver.resolve(
-        DashboardModeSpec.mind,
-      ).upcomingHeaderTone,
+    _mindHeaderColorPolicy = DashboardMindHeaderColorPolicy(
+      tuning: _headerVisualController.tuning,
+      score: controller.mindBehavioralScore,
     );
     FluviDiagnosticLogger.log(
       const FluviDiagnosticEvent(
         stage: 'HEADER_VISUAL_POLICY_BOUND',
         message:
             'sharedController=DashboardHeaderVisualController '
-            'modePolicies=balance:static,budget:live,mind:static '
+            'modePolicies=balance:static,budget:live,mind:liveScore '
             'tickerOwners=1',
       ),
     );
@@ -694,6 +693,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _budgetHeaderColorPolicy,
                                         mindHeaderVisualFrame:
                                             _mindHeaderColorPolicy,
+                                        mindBehavioralScore:
+                                            controller.mindBehavioralScore,
                                         mindQueryAmountRange:
                                             _mindQueryAmountRange,
                                         mindQueryAmountRangeChanges:
@@ -1374,15 +1375,18 @@ class _CoreDashboardState extends State<CoreDashboard>
         _mindAmountPreviewPrimeSignature = primeSignature;
         unawaited(
           controller.primeMindAmountPreviewDomain().then((ready) {
-            if (ready &&
-                modeController.committedMode == DashboardModeSpec.mind &&
-                controller.presentation.navigation.state.plane ==
-                    TimePlane.year) {
-              controller.ensureMindYearHeatmapProjection();
+            if (ready) {
+              controller.ensureMindBehavioralScoreProjection();
+              if (modeController.committedMode == DashboardModeSpec.mind &&
+                  controller.presentation.navigation.state.plane ==
+                      TimePlane.year) {
+                controller.ensureMindYearHeatmapProjection();
+              }
             }
           }),
         );
       }
+      controller.ensureMindBehavioralScoreProjection();
       if (shouldRenderYearHeatmap) {
         controller.ensureMindYearHeatmapProjection();
       }

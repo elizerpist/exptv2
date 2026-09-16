@@ -9,6 +9,7 @@ import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'dashboard_core_mode_presentation.dart';
@@ -35,6 +36,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.onQueryAmountRangeInteractionSummary,
     this.headerVisualController,
     this.headerVisualFrame,
+    this.behavioralScore,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -54,6 +56,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   onQueryAmountRangeInteractionSummary;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
+  final ValueListenable<MindBehavioralScoreFrame?>? behavioralScore;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +97,9 @@ class MindDashboardCoreSurface extends StatelessWidget {
             label: 'mind',
             visualController: headerVisualController,
             visualFrameListenable: headerVisualFrame,
+            detail: behavioralScore == null
+                ? null
+                : _MindHeaderScoreDetail(score: behavioralScore!),
           ),
         ],
       ),
@@ -132,6 +138,28 @@ class MindDashboardCoreSurface extends StatelessWidget {
     }
     return _MindYearHeatmapBody(heatmap: heatmap, range: range);
   }
+}
+
+/// Semantic Header content only. It listens to score publications, never the
+/// Header phase ticker, so a visual effect cannot rebuild financial text.
+final class _MindHeaderScoreDetail extends StatelessWidget {
+  const _MindHeaderScoreDetail({required this.score});
+
+  final ValueListenable<MindBehavioralScoreFrame?> score;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<MindBehavioralScoreFrame?>(
+        valueListenable: score,
+        builder: (context, frame, _) => Text(
+          '${frame?.point.roundedScore ?? 50}/100',
+          key: const ValueKey<String>('mind-header-score-text'),
+          style: DefaultTextStyle.of(context).style.copyWith(
+            color: const Color(0xff1f2937),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
 }
 
 /// Structural Mind topology: one clipped vertical viewport followed by an

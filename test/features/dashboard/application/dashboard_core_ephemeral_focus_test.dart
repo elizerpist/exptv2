@@ -44,6 +44,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_frame_store.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel_controller.dart';
 
 import '../runtime/dashboard_runtime_test_fixtures.dart';
 import '../../../support/test_category_collection.dart';
@@ -584,6 +585,206 @@ void main() {
             .singleWhere((event) => event.stage == 'MIND|PREVIEW_FRAME')
             .scope,
         contains('repositoryRequests=0 indexBuilds=0 canonicalCommits=0'),
+      );
+    },
+  );
+
+  test(
+    'MBS-01/04: production Core publishes the matching daily score on range preview, commit, direction and focus changes',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-100',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 100000,
+            date: const LocalDate(year: 2025, month: 5, day: 1),
+          ),
+          _mindYearEntry(
+            id: 'income-200',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 5, day: 10),
+          ),
+          _mindYearEntry(
+            id: 'income-300',
+            direction: 'income',
+            categoryId: 'bonus',
+            partnerId: 'employer',
+            amount: 300000,
+            date: const LocalDate(year: 2025, month: 5, day: 15),
+          ),
+          _mindYearEntry(
+            id: 'expense-200',
+            direction: 'expense',
+            categoryId: 'food',
+            partnerId: 'shop',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 5, day: 14),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 5, 15),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await pumpEventQueue(times: 12);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+
+      final initial = core.mindBehavioralScore.value!;
+      expect(initial.identity.direction, LedgerDirection.income);
+      expect(
+        initial.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 15).epochDay,
+      );
+      expect(initial.point.noSignal, isFalse);
+      expect(initial.point.score, closeTo(76.25, .000001));
+
+      const middleOnly = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 200000,
+        upperScaled100: 200000,
+      );
+      final sourceCounter = core.mindBehavioralScore.sourceWorkCounter!;
+      final preparesBeforePreview = repository.prepareCalls;
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(middleOnly), isTrue);
+      final preview = core.mindBehavioralScore.value!;
+      expect(preview.range, middleOnly);
+      expect(
+        preview.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 10).epochDay,
+      );
+      expect(preview.point.score, 50);
+      expect(preview.point.noSignal, isTrue);
+      expect(repository.prepareCalls, preparesBeforePreview);
+      expect(sourceCounter.sourceRowTouchesDuringPreview, 0);
+      expect(sourceCounter.repositoryAccessesDuringPreview, 0);
+      expect(sourceCounter.indexBuildsDuringPreview, 0);
+
+      expect(await core.commitMindAmountRange(middleOnly), isTrue);
+      await pumpEventQueue(times: 12);
+      expect(
+        core.currentQuery.scopeFor(LedgerDirection.income).refinements,
+        <String, Object?>{
+          QueryAmountRange.minimumRefinementKey: 200000,
+          QueryAmountRange.maximumRefinementKey: 200000,
+        },
+      );
+      expect(core.mindBehavioralScore.value?.range, middleOnly);
+
+      core.selectDirection(TransactionDirection.expense);
+      await pumpEventQueue(times: 12);
+      expect(
+        core.mindBehavioralScore.value?.identity.direction,
+        LedgerDirection.expense,
+      );
+      expect(core.mindBehavioralScore.value?.point.score, 0);
+
+      core.selectDirection(TransactionDirection.income);
+      await pumpEventQueue(times: 12);
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'salary', displayName: 'Salary'),
+        ),
+        isTrue,
+      );
+      expect(
+        core.mindBehavioralScore.value?.identity.upstreamScopeKey,
+        contains('focus:category=salary'),
+      );
+      expect(core.mindBehavioralScore.value?.range, middleOnly);
+    },
+  );
+
+  testWidgets(
+    'MBS-01: an actually visible rail child retargets its score before settle without resurrecting coalesced children',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'income-14',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 200000,
+              date: const LocalDate(year: 2025, month: 5, day: 14),
+            ),
+            _mindYearEntry(
+              id: 'income-15',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 300000,
+              date: const LocalDate(year: 2025, month: 5, day: 15),
+            ),
+            _mindYearEntry(
+              id: 'income-16',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 400000,
+              date: const LocalDate(year: 2025, month: 5, day: 16),
+            ),
+          ],
+          withPreparedYearRows: true,
+        ),
+        initialDate: DateTime.utc(2025, 5, 15),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+      expect(
+        core.mindBehavioralScore.value?.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 15).epochDay,
+      );
+
+      final catalog = core.presentation.motion.catalog;
+      final day14 = catalog.logicalIndexForValue(14);
+      final day16 = catalog.logicalIndexForValue(16);
+      core.beginRailMotion(CenteredCarouselMotionOrigin.userDrag);
+      core.semanticCrossed(day14);
+      core.semanticCrossed(day16);
+      await tester.pump();
+
+      expect(
+        core.visibleFrames.value?.scope.timeScope,
+        const DayScope(LocalDate(year: 2025, month: 5, day: 16)),
+      );
+      expect(
+        core.mindBehavioralScore.value?.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 16).epochDay,
+      );
+      expect(
+        core.mindBehavioralScore.identity?.targetEpochDay,
+        const LocalDate(year: 2025, month: 5, day: 16).epochDay,
+      );
+      expect(
+        core.mindBehavioralScore.publicationCount,
+        greaterThanOrEqualTo(2),
+        reason:
+            'The final visible child receives a new score; coalesced day 14 '
+            'never becomes a visible score authority.',
       );
     },
   );

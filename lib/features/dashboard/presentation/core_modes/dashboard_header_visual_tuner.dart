@@ -670,6 +670,26 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                         _TunerSection(
+                          title: 'Mind Header szín',
+                          children: <Widget>[
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-mind-score-window-width-slider',
+                              ),
+                              label: 'Ablakszélesség',
+                              valueLabel:
+                                  '${tuning.mindScore.windowWidthPercent.toStringAsFixed(0)}%',
+                              min: 10,
+                              max: 100,
+                              divisions: 90,
+                              value: tuning.mindScore.windowWidthPercent,
+                              onChanged: controller
+                                  .setMindHeaderScoreWindowWidthPercent,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _TunerSection(
                           title: 'Animációs család',
                           children: <Widget>[
                             InputDecorator(

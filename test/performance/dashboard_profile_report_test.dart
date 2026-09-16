@@ -51,6 +51,7 @@ void main() {
           'p95Micros': 300,
           'maxMicros': 400,
         },
+        ..._mindBehavioralScoreEvidence(),
         'direction_switch': _mindDirectionSwitchEvidence(),
       };
       expect(
@@ -63,6 +64,12 @@ void main() {
         throwsStateError,
       );
       evidence['source_rows_after_slider'] = 12000;
+      evidence['score_source_rows_during_preview'] = 1;
+      expect(
+        () => DashboardProfileReport.validateMindYearHeatmapEvidence(evidence),
+        throwsStateError,
+      );
+      evidence['score_source_rows_during_preview'] = 0;
       (evidence['frame_timing']
               as Map<String, Object?>)['missed_frame_build_budget_count'] =
           2;
@@ -420,10 +427,7 @@ void main() {
     );
 
     expect(normalized['95th_percentile_frame_build_time_millis'], 7.0);
-    expect(
-      normalized['95th_percentile_frame_rasterizer_time_millis'],
-      10.0,
-    );
+    expect(normalized['95th_percentile_frame_rasterizer_time_millis'], 10.0);
     expect(normalized, isNot(contains('frame_build_times')));
     expect(normalized, isNot(contains('frame_rasterizer_times')));
   });
@@ -1023,7 +1027,30 @@ Map<String, Object?> _mindYearHeatmapEvidence() => <String, Object?>{
     'p95Micros': 300,
     'maxMicros': 400,
   },
+  ..._mindBehavioralScoreEvidence(),
   'direction_switch': _mindDirectionSwitchEvidence(),
+};
+
+Map<String, Object?> _mindBehavioralScoreEvidence() => <String, Object?>{
+  'score_live_before_release_count': 20,
+  'score_publication_count': 20,
+  'score_preview_event_count': 20,
+  'score_preview_events_report_zero_repository_index': true,
+  'score_palette_publication_count': 20,
+  'score_header_text_matches': true,
+  'score_source_rows_at_projection_build': 0,
+  'score_source_rows_after_slider': 0,
+  'score_source_rows_during_preview': 0,
+  'score_repository_accesses_during_preview': 0,
+  'score_index_builds_during_preview': 0,
+  'score_max_day_buckets_per_preview': 61,
+  'score_preview_compute': <String, Object?>{
+    'sampleCount': 20,
+    'p50Micros': 200,
+    'p95Micros': 300,
+    'maxMicros': 400,
+  },
+  'score_stale_rejection_count': 0,
 };
 
 Map<String, Object?> _mindDirectionSwitchEvidence() => <String, Object?>{
