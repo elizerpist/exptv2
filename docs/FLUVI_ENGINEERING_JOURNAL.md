@@ -714,3 +714,70 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   performance blocker; no runtime source, timing threshold or profile gate is
   changed here.
 - Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-16 — Populated Mind Year prepared-payload admission (`f5e483c2`)
+
+- Application commit: `f5e483c2` (`fix(mind): publish populated Year heatmap
+  with list paint`), parent `fa6b1640322a4a6131e3531a3aa2f2824987f297`.
+  This is the first repair for the physical **populated payload** liveness
+  gap; it does not change Time carousel/controller/ScrollPosition/physics,
+  canonical Query ownership, rich LogBox rendering, slider, calendar or Mind
+  direction-base architecture.
+- Fresh physical evidence was frozen from Google Doc `Fluvi mind heatmap`, ID
+  `1R2plbzazBUuuWoi_unktR_Lu7QNYgM9RPIH5J6ioNIM`, modified
+  `2026-09-16T13:46:32.002Z`: 323,737 bytes, SHA-256
+  `58b10f7256864db39055dfd3eeca2669e40f6423de6adc14eed437d47ba663ee`,
+  session `fluvi-1789566368119437`, retained sequences `1200–2199`, 1,000
+  unique contiguous events with no gap. The startup build marker had already
+  been evicted, so the exact prior physical APK source SHA remains unknown.
+- The trace and screenshot prove Income 2026 Summary/list payload is ready
+  while MonthCards are gray: Summary/list paint around `42,165,415` /
+  `42,165,432` microseconds, while the first 42-contribution heatmap frame
+  publishes at `43,497,426` and paints at `43,509,978`; a second sample has
+  the same roughly 1.3-second gap. Projection work itself is only 93–180 µs.
+- New mounted current-parent RED `MYPL-01` seeds a real prepared Income 2026
+  list package (visible count 42) with exact colored dates Jan 4, Feb 18 and
+  Dec 29, plus empty 2027. Before this repair, the populated target reached
+  `LIVE_INTERACTION_ACCEPTED`, `SUMMARY_TARGET_PAINTED` and nonzero
+  `LOGBOX|VISIBLE_ROWS_BOUND`, but the previous empty heatmap remained after
+  its only allowed next frame. No
+  `MIND_HEATMAP|SUMMARY_VISUAL_TARGET_ADMISSION` was emitted for that target.
+- First proven owner: a populated Year can start
+  `TIME_PHASE_A_CANDIDATE_PENDING` and only later be promoted exact by
+  `_promotePendingSegmentedTimePhaseACandidate`. That late Phase-A acceptance
+  does not re-enter the selector's renderer callback, even though the same
+  accepted Year/G has already painted Summary and the lightweight list. The
+  renderer callback alone therefore created an empty-vs-populated false green.
+- Repair: `DashboardCoreController._recordSegmentedTargetPaint` now admits
+  the compact annual frame through the same existing Core helper only when
+  the normal renderer acknowledgement has not already admitted the identical
+  accepted target. The helper uses the existing bounded prepared base/annual
+  membership, Year/G and stale guards; it reads no LogBox rich scene, text
+  layout, repository, Room, index build or raw ledger row. It does not create
+  a second Year/data authority. A bounded safe admission diagnostic records
+  only Year/generation/result.
+- GREEN evidence in Ubuntu proot: current-parent RED-to-GREEN MYPL-01 PASS;
+  full `dashboard_core_ephemeral_focus_test.dart` PASS (78 tests); the Mind
+  projection/live/viewport, Mind host, Summary and LogBox focused suite PASS
+  (75 tests); profile-report/seed-contract suite PASS (102 tests); changed
+  Dart file analysis PASS (`No issues found`). MYPL-01 repeats populated →
+  empty → populated three times before release assertions and requires actual
+  `MIND_HEATMAP|PAINTED year=2026 coloredDays=3`. Existing ballistic MYRT-02
+  now asserts each painted Year’s exact populated/empty colored-day payload,
+  not merely its identity. One attempted two-name `--plain-name` command
+  selected no tests (exit 79); it was a CLI selection error and was replaced
+  by individual and full actual runs.
+- Work bounds: the mounted direct/repeated path retains one repository
+  prepare and zero Mind source-row touches. It exercises only resident
+  immutable prepared membership; no settle-only wait, target dropping,
+  debounce, remount/key or cache-flush workaround exists.
+- Structuring Apps skill read: `/data/data/com.termux/files/home/.codex/skills/structuring-apps/SKILL.md`
+  (no version metadata). The repair preserves one Core write path, UI
+  render/intent-only boundaries, shared prepared-data reuse and fail-closed
+  cross-surface tests. Architecture/checklist/plan evidence is included in
+  the application commit.
+- Still pending: final matching SCIP for `f5e483c2`, exact Actions status and
+  human APK/hash, and physical Android validation. The historical
+  software-rendered `frame_timing_headroom` profile evidence failure remains
+  separate and is not called green or weakened here.
+- Physical validation: `PENDING — USER ONLY`.
