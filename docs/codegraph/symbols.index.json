@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "record_count": 10256,
+  "record_count": 10258,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 artifacts/github-run-31158262114/profile/test_driver/`dashboard_profile_driver.dart`/main().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#endSegmentedSummaryMotion().",
-      "sha256": "7cb372fba7f5d1fb249096332c0d0b90fb85872058cf849ab211f976a2790a3c"
+      "sha256": "0b59fb0e5e189b974b29d22ca8103bb47eabf7b776e48c5e928f46ef872acb52"
     },
     {
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#ensureMindYearHeatmapProjection().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`dashboard_shadow_style.dart`/DashboardShadowStyleScope#profileOf().",
-      "sha256": "552bc2c35e5ea6ec3e3fdb2488931700e51f0e8a07441b59bfc94b76111022a3"
+      "sha256": "29cf230900d20596260a8169093e84b4871c7a384597cfc1df0cb6bf782aa401"
     },
     {
       "path": "symbols/part-002.jsonl",
@@ -34,15 +34,15 @@
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`prepared_budget_limit_snapshot.dart`/BudgetLimitMonthPeriod#",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`mind_year_heatmap_mode_host_test.dart`/_HostHarness#mode.",
-      "sha256": "707ce167dce7a2be997398a71dbb024055f69c1416b794a51f47d4657b21dbf5"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`mind_year_heatmap_mode_host_test.dart`/_HostHarness#expansion.",
+      "sha256": "d57b5edd2ec17a768d27245441c6bb711406f9efb55f7fcf3eb9ec3ff523ac00"
     },
     {
       "path": "symbols/part-005.jsonl",
-      "record_count": 256,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`mind_year_heatmap_mode_host_test.dart`/_HostHarness#rangeChanges.",
+      "record_count": 258,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`mind_year_heatmap_mode_host_test.dart`/_HostHarness#frame.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "333c445d2851db4eb5210147ccff98f0abe59a7f4d5b8163a45e8e1731553dda"
+      "sha256": "ee74e9a52190b6de925dbb7cad15ab700971536d57dae94bbc8f4ecce475c87e"
     }
   ]
 }
