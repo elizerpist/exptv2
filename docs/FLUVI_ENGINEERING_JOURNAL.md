@@ -781,3 +781,46 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   software-rendered `frame_timing_headroom` profile evidence failure remains
   separate and is not called green or weakened here.
 - Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-16 — Populated Mind Year repair delivery evidence
+
+- Canonical branch application repair `f5e483c2c97e55fb4675c27191ff5d337cd78975`
+  and its prior journal-only evidence commit `ae9678941ff044b693f7aa6fc39acd80bae05ce0`
+  are pushed to `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`.
+- Explicit GitHub Actions dispatch was required because no automatic push run
+  appeared during the observed wait. `Fluvi Verification` run `35114517631`
+  ran the branch tip `ae967894...` (which contains the `f5e483c2` runtime
+  repair plus journal only). `dashboard-paths`, `test-core`, `test-flutter`
+  and `build-human-diagnostic-apk` are PASS; nightly/baseline lanes are
+  skipped as configured.
+- The normal human diagnostic APK is released and downloaded locally at
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_ae96789.apk`.
+  It is 82,498,865 bytes with SHA-256
+  `08d91fcb9d34678297f12c9c947e1960f762203827bcd269b8440923d2242229`.
+  The APK's `lib/arm64-v8a/libapp.so` contains full source marker
+  `ae9678941ff044b693f7aa6fc39acd80bae05ce0`; the immediately preceding
+  application-code commit is `f5e483c2...`.
+- Final matching SCIP was generated from the clean canonical source head
+  `ae967894...` with `scip_dart 1.6.2`, without changing the pre-existing
+  untracked application `index.scip`. Raw final index SHA-256 is
+  `f565ef23fb7b23c45eca156e434ac70736dfe4b9e6c834ba7ee648ff8b00d821`;
+  manifest counts are 448 documents, 293,393 occurrences, 40,625 defined
+  symbols, 10,260 repository symbols and 75,441 refs. Tooling graph commit
+  `4e6c5f4e29363e200601cf913e80c7dcde73d07c` is pushed separately on
+  `tooling/scip-codegraph-v1`; its 15 tooling tests pass. Source-verified
+  queries resolve `ensureMindYearHeatmapProjection` (20 refs: 4 production,
+  16 tests) and `noteSegmentedSummaryComponentVisualTargetPainted` (2 refs:
+  1 production, 1 test). Graph is navigation evidence, not runtime causality.
+- The automated profile job is NOT green: job `104858666696` in run
+  `35114517631` fails at `DashboardProfileReport.validateMindYearHeatmapEvidence`
+  (`integration_test/support/dashboard_profile_report.dart:151`) because
+  `frame_timing_headroom` is `null`; downstream complete-suite validation then
+  reports `B_year_month_rail_populated` missing. This is the same established
+  failure class recorded for the pre-repair `31f2f146` run, and this repair
+  changed neither profile instrumentation nor Time/renderer pacing policy.
+  It remains an honest automated performance blocker, not a passing result
+  and not grounds for a speculative unrelated performance patch.
+- Final checklist is therefore delivery PARTIAL: source, focused regressions,
+  human APK and final graph are delivered; profile FrameTiming evidence and
+  physical Android acceptance remain unresolved.
+- Physical validation: `PENDING — USER ONLY`.
