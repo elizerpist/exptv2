@@ -591,3 +591,42 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - MISSING EVIDENCE: mounted production-parent stale-retention RED with visual target/canonical generation/object identity; final matching SCIP/APK/hash; user physical revalidation.
 - Prompt-writer change for this feedback: this journal entry only, committed with `[skip ci]`; no application source, test, workflow, graph, milestone file, build configuration or runtime behavior is changed by the prompt writer.
 - Physical validation of the next application repair: `PENDING — USER ONLY`.
+
+## 2026-09-16 — Retained Mind Year lifecycle repair (`31f2f146`)
+
+- Application commit: `31f2f146249cf247284697bb3c193010eaccd00a`
+  (`fix(mind): retire stale retained Year on settle`). It changes only the
+  terminal Mind-Year target-authority lifecycle, its mounted regression test,
+  and the required architecture/checklist evidence; it does not alter Time
+  carousel motion, controller/ScrollPosition/physics, canonical Query,
+  prepared bases, projection computation, LogBox, slider or renderer owners.
+- RED `MYRL-01` mounts the real CoreDashboard and segmented Year selector,
+  publishes/renderer-acknowledges transient 2027, settles a distinct canonical
+  2025 target through the production settle path, then calls the shared Core
+  heatmap refresh entry point. On the unmodified parent it failed with
+  expected `2025`, actual `2027`.
+- First proven owner: `_settleAcceptedExperimentalTemporalComponentCandidate`
+  cleared `_mindYearHeatmapVisualTemporalTarget` only under `identical(...)`.
+  A distinct final 2025 target consequently could not demote the retained 2027
+  object, which remained eligible for
+  `summaryVisualTransientYearRetained` selection on a later refresh.
+- Repair: a terminal Year/Year-plane settle now demotes that retained visual
+  target regardless of object identity. A currently held amount-range identity
+  remains separately owned; current painted transient following remains before
+  settlement. No cache/remount/delay/repository/index workaround was added.
+- GREEN evidence in Ubuntu proot: `MYRL-01` plus `MYTP-01` PASS; complete
+  `dashboard_core_ephemeral_focus_test.dart` PASS (75 tests); direct Mind
+  projection/live and CoreDashboard matrix PASS (41 tests); changed Dart
+  analysis PASS (`No issues found`).
+- Matching pre-repair SCIP source audit used tooling
+  `baadaa49ac1b835e95f6b27f699c91bbd9c56a3f`; its manifest source head is
+  `a0ccd9c9909e8613caaf702a64bc0842c122d87a`, which still matches the
+  application source prior to this commit. The manifest's actual recorded raw
+  index SHA-256 is `9b375a9f012f5d51a984935b5b163ebcb061e02f4a058fbcb662d359ce789b8f`;
+  this differs from the handoff's quoted hash and is reported rather than
+  silently treated as identical. Final matching SCIP is still required.
+- Known limits: startup marker eviction still leaves the exact physical APK
+  SHA unknown. Online CI/profile/human APK/final graph and user device
+  validation remain pending; the prior profile headroom failure is not called
+  green.
+- Physical validation: `PENDING — USER ONLY`.
