@@ -61,7 +61,7 @@ state, cache policy, or renderer-side correction.
   retained painted 2027 -> final 2025 -> real later refresh -> no 2027
   resurrection.
 
-## RED-to-GREEN result
+## Retained-lifecycle RED-to-GREEN result
 
 Mounted `MYRL-01` initializes the real CoreDashboard, mounts the segmented
 Year selector, publishes and renderer-acknowledges transient 2027, then
@@ -73,3 +73,24 @@ is not identical to the retained 2027 object, so that pointer remained
 eligible.  The repair demotes the retained visual target on every terminal
 Year/Year-plane settle.  It does not affect active transient following before
 settle or the independent held-range identity.
+
+## Product-level realtime completion gate
+
+This card's retained-lifecycle correction is not the product completion
+claim. The wider Mind Year contract is satisfied only when the existing
+renderer acknowledgement path proves, with the mounted real Summary selector
+and annual viewport, that every Summary Year which actually paints has the
+same Mind identity in that transition and an annual heatmap paint no later
+than the following render frame. Coalesced targets which do not paint are not
+obligations. A terminal settle must retire obsolete targets without changing
+that active transient following path.
+
+The Core remains the sole authority chain: the selector reports a paint fact;
+Core validates, derives and publishes the immutable resident-membership
+frame; the viewport only paints it. No timer, settle-only fallback, secondary
+Year store, query commit, repository/index admission, source-row scan,
+scene/text preparation, controller replacement or physics change is an
+acceptable implementation. The Time carousel, its controller, ScrollPosition
+and physics are protected no-touch surfaces. The frame contract therefore
+requires mounted multi-target, final-settle-refresh, held-slider and hot-path
+work-bound evidence before this repair series can be reported as complete.
