@@ -39,6 +39,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_logbox_presentation_binding.dart';
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
@@ -1725,7 +1726,8 @@ void main() {
                 (event.queryKey?.contains('year:$year') ?? false),
           ),
           isTrue,
-          reason: 'The contract applies only after Summary has actually painted $year.',
+          reason:
+              'The contract applies only after Summary has actually painted $year.',
         );
         final identity = core.mindYearHeatmap.identity;
         expect(identity?.year, year);
@@ -1772,7 +1774,8 @@ void main() {
         expect(
           hasMatchingHeatmapPaint(),
           isTrue,
-          reason: 'Mind must paint Summary Year $year in the same or next frame.',
+          reason:
+              'Mind must paint Summary Year $year in the same or next frame.',
         );
         observedPaintedYears.add(year);
         expect(repository.prepareCalls, 1);
@@ -1825,13 +1828,15 @@ void main() {
               (event.scope?.contains('temporalGeneration=0') ?? false),
         ),
         isTrue,
-        reason: 'Terminal canonical 2023 must itself reach an actual annual paint.',
+        reason:
+            'Terminal canonical 2023 must itself reach an actual annual paint.',
       );
 
       expect(
         observedPaintedYears,
         const <int>[2025, 2024, 2023],
-        reason: 'Every visible target must paint through the existing transient path.',
+        reason:
+            'Every visible target must paint through the existing transient path.',
       );
       expect(repository.prepareCalls, 1);
 
@@ -1937,7 +1942,8 @@ void main() {
         final currentFrameSummaryYears = <int>[];
         for (final event in newlyPaintedSummary) {
           final year = int.tryParse(
-            RegExp(r'year:(\d+)').firstMatch(event.queryKey ?? '')?.group(1) ?? '',
+            RegExp(r'year:(\d+)').firstMatch(event.queryKey ?? '')?.group(1) ??
+                '',
           );
           expect(
             year,
@@ -1962,6 +1968,14 @@ void main() {
           );
           if (year != null &&
               (event.scope?.contains('temporalGeneration=1') ?? false)) {
+            final expectedColoredDays = year >= 2020 && year <= 2026 ? 1 : 0;
+            expect(
+              event.scope,
+              contains('coloredDays=$expectedColoredDays'),
+              reason:
+                  'A ballistic Summary Year must paint the exact populated '
+                  'or empty annual payload, not merely a matching identity.',
+            );
             expect(
               summaryPaintedYearSet,
               contains(year),
@@ -1995,8 +2009,260 @@ void main() {
       expect(
         pendingSummaryPaints,
         isEmpty,
-        reason: 'The final ballistic Summary paint must not outlive Mind paint.',
+        reason:
+            'The final ballistic Summary paint must not outlive Mind paint.',
       );
+      expect(repository.prepareCalls, 1);
+      expect(core.mindYearHeatmap.sourceWorkCounter!.sourceRowTouches, 0);
+    },
+  );
+
+  testWidgets(
+    'RED MYPL-01: a populated Year cannot leave actual list rows ahead of gray Mind MonthCards',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        withPreparedYearRows: true,
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-2026-jan',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 101000,
+            date: const LocalDate(year: 2026, month: 1, day: 4),
+          ),
+          _mindYearEntry(
+            id: 'income-2026-feb',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 202000,
+            date: const LocalDate(year: 2026, month: 2, day: 18),
+          ),
+          _mindYearEntry(
+            id: 'income-2026-dec',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 303000,
+            date: const LocalDate(year: 2026, month: 12, day: 29),
+          ),
+          _mindYearEntry(
+            id: 'income-2025-jan',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 404000,
+            date: const LocalDate(year: 2025, month: 1, day: 8),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      await tester.pump();
+
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+      final selector = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-year-selector'),
+      );
+      expect(selector, findsOneWidget);
+
+      // Establish the working empty path through the actual selector first.
+      // It is setup only; the assertion below never waits for the populated
+      // target to settle or for an asynchronous source to become ready.
+      final toEmpty = await tester.startGesture(tester.getCenter(selector));
+      await toEmpty.moveBy(const Offset(0, -20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await toEmpty.moveBy(const Offset(0, -60));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        core.mindYearHeatmap.identity?.year,
+        2027,
+        reason:
+            'The empty 2027 control target is already admitted by the same '
+            'real selector path; the populated 2026 leg below is the '
+            'liveness differential under test.',
+      );
+      expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), isEmpty);
+      await tester.pump();
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_HEATMAP|PAINTED' &&
+              (event.scope?.contains('year=2027 ') ?? false) &&
+              (event.scope?.contains('coloredDays=0') ?? false),
+        ),
+        isTrue,
+      );
+      await toEmpty.up();
+      await tester.pumpAndSettle();
+      expect(core.navigation.state.yearCursor, 2027);
+      expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), isEmpty);
+
+      FluviDiagnosticLogger.clear();
+      final toPopulated = await tester.startGesture(tester.getCenter(selector));
+      await toPopulated.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await toPopulated.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      bool summaryAndListPainted2026() {
+        final summaryPainted = FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'SUMMARY_TARGET_PAINTED' &&
+              (event.queryKey?.contains('year:2026') ?? false) &&
+              (event.scope?.contains('exactEmpty=false') ?? false),
+        );
+        final listRowsBound = FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'LOGBOX|VISIBLE_ROWS_BOUND' &&
+              (event.scope?.contains('payloadDirection=income') ?? false) &&
+              (event.scope?.contains('actualVisibleRowCount=') ?? false) &&
+              !(event.scope?.contains('actualVisibleRowCount=0') ?? true),
+        );
+        return summaryPainted && listRowsBound;
+      }
+
+      // A Summary/list Year is a paint fact.  A single extra frame is the
+      // complete allowed heatmap budget; pumping until idle would hide the
+      // physical liveness defect.
+      expect(
+        summaryAndListPainted2026(),
+        isTrue,
+        reason: FluviDiagnosticLogger.entries
+            .map((event) => '${event.stage} ${event.queryKey} ${event.scope}')
+            .join('\n'),
+      );
+      expect(
+        core.visibleFrames.countLane.value!.count.entryCount,
+        42,
+        reason:
+            'The compact heatmap must follow the same accepted 2026 Phase-A '
+            'package as the visible 42-row transaction surface, not an '
+            'independent late data acquisition path.',
+      );
+      const expected2026 = <String>{'2026-01-04', '2026-02-18', '2026-12-29'};
+      final heatmapYearAtSummaryPaint = core.mindYearHeatmap.identity?.year;
+      final heatmapDaysAtSummaryPaint = _coloredHeatmapDates(
+        core.mindYearHeatmap.value!,
+      );
+      await tester.pump();
+      expect(
+        core.mindYearHeatmap.identity?.year,
+        2026,
+        reason: FluviDiagnosticLogger.entries
+            .map((event) => '${event.stage} ${event.queryKey} ${event.scope}')
+            .join('\n'),
+      );
+      expect(
+        _coloredHeatmapDates(core.mindYearHeatmap.value!),
+        expected2026,
+        reason:
+            'A populated Summary/list target may consume at most the next '
+            'render frame before its actual Mind MonthCards are data-bearing; '
+            'it was $heatmapYearAtSummaryPaint with '
+            '$heatmapDaysAtSummaryPaint at Summary/list paint.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_HEATMAP|PAINTED' &&
+              (event.scope?.contains('year=2026 ') ?? false) &&
+              (event.scope?.contains('coloredDays=3') ?? false),
+        ),
+        isTrue,
+      );
+      expect(repository.prepareCalls, 1);
+      expect(core.mindYearHeatmap.sourceWorkCounter!.sourceRowTouches, 0);
+      await toPopulated.up();
+      await tester.pumpAndSettle();
+
+      // Exercise the physical recurrence shape without using settlement as a
+      // correctness oracle: each empty and populated target is asserted
+      // before its release.  Settlement below merely returns the real
+      // selector to a deterministic origin for the next direct interaction.
+      for (var cycle = 0; cycle < 3; cycle += 1) {
+        FluviDiagnosticLogger.clear();
+        final emptyAgain = await tester.startGesture(
+          tester.getCenter(selector),
+        );
+        await emptyAgain.moveBy(const Offset(0, -20));
+        await tester.pump(const Duration(milliseconds: 16));
+        await emptyAgain.moveBy(const Offset(0, -60));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          core.mindYearHeatmap.identity?.year,
+          2027,
+          reason: 'cycle=$cycle: an empty direct target must be exact.',
+        );
+        expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), isEmpty);
+        await emptyAgain.up();
+        await tester.pumpAndSettle();
+
+        FluviDiagnosticLogger.clear();
+        final populatedAgain = await tester.startGesture(
+          tester.getCenter(selector),
+        );
+        await populatedAgain.moveBy(const Offset(0, 20));
+        await tester.pump(const Duration(milliseconds: 16));
+        await populatedAgain.moveBy(const Offset(0, 60));
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          summaryAndListPainted2026(),
+          isTrue,
+          reason:
+              'cycle=$cycle: the exact 2026 list target must not outlive a '
+              'gray or prior-Year heatmap frame.',
+        );
+        await tester.pump();
+        expect(core.mindYearHeatmap.identity?.year, 2026);
+        expect(
+          _coloredHeatmapDates(core.mindYearHeatmap.value!),
+          expected2026,
+          reason:
+              'cycle=$cycle: a populated Year must retain its exact colored '
+              'days after repeated direct Year changes.',
+        );
+        expect(
+          FluviDiagnosticLogger.entries.any(
+            (event) =>
+                event.stage == 'MIND_HEATMAP|PAINTED' &&
+                (event.scope?.contains('year=2026 ') ?? false) &&
+                (event.scope?.contains('coloredDays=3') ?? false),
+          ),
+          isTrue,
+        );
+        await populatedAgain.up();
+        await tester.pumpAndSettle();
+      }
       expect(repository.prepareCalls, 1);
       expect(core.mindYearHeatmap.sourceWorkCounter!.sourceRowTouches, 0);
     },
@@ -6973,6 +7239,7 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   _FocusSeedRepository({
     List<DashboardLedgerEntry>? rows,
     Completer<void>? prepareAfterBootstrapGate,
+    this.withPreparedYearRows = false,
   }) : _rows = rows,
        _prepareAfterBootstrapGate = prepareAfterBootstrapGate;
 
@@ -6980,6 +7247,7 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
       const EmptyDashboardDataRuntimeRepository();
   final List<DashboardLedgerEntry>? _rows;
   final Completer<void>? _prepareAfterBootstrapGate;
+  final bool withPreparedYearRows;
   var prepareCalls = 0;
   var committedPageReads = 0;
 
@@ -6995,7 +7263,19 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
     if (prepareCalls > 1 && _prepareAfterBootstrapGate != null) {
       await _prepareAfterBootstrapGate.future;
     }
-    final base = await _empty.prepareIndex(request, token);
+    final base = withPreparedYearRows
+        ? buildRuntimeTestIndex(
+            revision: request.key.coreRevision,
+            generation: token.generation,
+            directionalQueries: request.directionalQueries,
+            initialYear: request.initialYear,
+            yearWindowRadius:
+                request.key.yearWindowEndInclusive - request.initialYear,
+            entryCountForScope: _preparedYearEntryCount,
+            previewRowCountForScope: _preparedYearPreviewRowCount,
+            deferredLogBoxes: true,
+          )
+        : await _empty.prepareIndex(request, token);
     final rows =
         _rows ??
         <DashboardLedgerEntry>[
@@ -7086,4 +7366,16 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
     });
     return ordered;
   }
+
+  static int _preparedYearEntryCount(CurrentLedgerQueryScope scope) {
+    if (scope.direction != LedgerDirection.income) return 0;
+    return switch (scope.timeScope) {
+      YearScope(year: 2026) => 42,
+      YearScope(year: 2025) => 1,
+      _ => 0,
+    };
+  }
+
+  static int _preparedYearPreviewRowCount(CurrentLedgerQueryScope scope) =>
+      _preparedYearEntryCount(scope).clamp(0, 24).toInt();
 }

@@ -1,0 +1,13 @@
+# Mind Year populated-payload readiness acceptance checklist
+
+| ID | Source | Intended area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| MYPL-01 | Latest physical screenshot + Drive session 1789566368119437 | Core accepted Year → annual projection | On a populated 2026 target, Summary/list `Y/G` and the exact non-empty annual colored-day set are present in the same transition or next frame. | Mounted real selector, CoreDashboard and MonthCard `PAINTED`; current-parent RED followed by GREEN. | DONE |
+| MYPL-02 | User empty-vs-populated observation | Prepared-data readiness | A populated → empty → populated sequence shows whether populated data has an additional late owner; no populated target becomes permanently gray. | `MYPL-01` asserts empty 2027 then populated 2026 before each release. | DONE |
+| MYPL-03 | User list/heatmap common-authority requirement | Core Phase-A / Mind bounded slot | Once the list's lightweight prepared payload for `Y/G` is paintable, the heatmap cannot wait on an unrelated acquisition path. | 42-row mounted list/count + exact 2026 membership/MonthCard test and source admission audit. | DONE |
+| MYPL-04 | User repeated-switch report | Generation/liveness | Direct, reverse, populated/empty and ballistic stress leaves every terminal populated target with its exact colored days; no old payload resurrects. | `MYPL-01` three direct empty/populated cycles plus payload-strengthened ballistic `MYRT-02`. | DONE |
+| MYPL-05 | Structuring Apps | Ownership boundary | One Core Year/data authority; UI and rich LogBox renderer own no heatmap lifecycle/data write. | Architecture card, matching graph/source audit, shared Core helper and fail-closed boundary tests. | DONE |
+| MYPL-06 | User hot-path contract | Prepared annual data | A visible Year crossing introduces zero repository/Room/index/full-row/query/rich-scene/TextPainter work for heatmap. | `MYPL-01`/`MYRT-02` assert one prepare and zero source-row touches; Phase-A diagnostic asserts zero repository/index/scene preparation. | DONE |
+| MYPL-07 | User no-regression lock | Time/list/slider/direction/calendar/Avatar | Existing fast Time motion, immediate list path, slider, direction bases, geometry and Avatar identity remain unchanged and green. | Diff audit + Core 78/78 and Mind/viewport/Summary/LogBox 75/75 suites. | DONE |
+| MYPL-08 | Delivery rule | CI/APK/SCIP | One atomic application repair, separate journal evidence, exact GitHub human APK downloaded+hashed, final graph matches final source. | CI/job logs, local APK hash, manifest. | NOT DONE |
+| MYPL-09 | User physical acceptance | Android device | User confirms no perceived populated-Year heatmap lag. | User-only validation. | PENDING — USER ONLY |

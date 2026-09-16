@@ -4403,8 +4403,33 @@ final class DashboardCoreController {
         !_sameTemporalTarget(accepted.candidate, candidate)) {
       return;
     }
+    _admitMindYearHeatmapForSegmentedTarget(
+      accepted: accepted,
+      candidate: candidate,
+      source: 'summaryRendererAcknowledgement',
+    );
+  }
+
+  /// Admits the compact annual frame from the accepted segmented Year target.
+  ///
+  /// Both the Summary renderer acknowledgement and the exact Phase-A list
+  /// paint use this one Core-owned path.  The list report is only an identity
+  /// acknowledgement; this method reads neither its rich scene nor its text
+  /// layout and derives the annual projection from the already-resident
+  /// immutable prepared base.
+  bool _admitMindYearHeatmapForSegmentedTarget({
+    required _SegmentedTemporalPaintTarget accepted,
+    required DashboardNavigationState candidate,
+    required String source,
+  }) {
     final direction = candidate.parentQueryScope.direction;
     final appliedScope = currentQuery.scopeFor(direction);
+    _logMindHeatmap(
+      stage: 'SUMMARY_VISUAL_TARGET_ADMISSION',
+      direction: direction,
+      scope:
+          'candidateYear=${candidate.yearCursor} source=$source result=install acceptedGeneration=${accepted.interactionGeneration}',
+    );
     final published = _installMindYearHeatmapProjection(
       direction: direction,
       appliedScope: appliedScope,
@@ -4420,7 +4445,14 @@ final class DashboardCoreController {
           accepted.interactionGeneration == _segmentedTimeFlightGeneration &&
           _sameTemporalTarget(accepted.candidate, candidate),
     );
+    _logMindHeatmap(
+      stage: 'SUMMARY_VISUAL_TARGET_ADMISSION',
+      direction: direction,
+      scope:
+          'candidateYear=${candidate.yearCursor} source=$source result=${published ? 'published' : 'rejected'} acceptedGeneration=${accepted.interactionGeneration}',
+    );
     if (published) _mindYearHeatmapVisualTemporalTarget = accepted;
+    return published;
   }
 
   void _installMindYearHeatmapForDirectionIntent({
@@ -12002,6 +12034,17 @@ final class DashboardCoreController {
             'paintedRows=${snapshot.paintedRowCount}',
       ),
     );
+    if (accepted.component == DashboardTemporalAnchorComponent.year &&
+        accepted.candidate.plane == TimePlane.year &&
+        navigation.state.plane == TimePlane.year &&
+        mindYearHeatmap.value != null &&
+        !identical(_mindYearHeatmapVisualTemporalTarget, accepted)) {
+      _admitMindYearHeatmapForSegmentedTarget(
+        accepted: accepted,
+        candidate: accepted.candidate,
+        source: 'segmentedExactListPaint',
+      );
+    }
     _trySettleLatestAcceptedSegmentedTarget();
   }
 
