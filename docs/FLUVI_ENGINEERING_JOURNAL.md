@@ -824,3 +824,59 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   human APK and final graph are delivered; profile FrameTiming evidence and
   physical Android acceptance remain unresolved.
 - Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-17 — Mind behavioral score and live Header palette delivery (`06fe576a`)
+
+- Application commit: `06fe576ae6e916116f94fdbb3fe27a75b3c1a005`
+  (`feat(mind): add behavioral score header palette`) on
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`; its application
+  parent is the approved HTML-prototype commit
+  `91777be7de7f3138e9aef2146747007a4f75b9aa`. The feature adds a prepared,
+  immutable daily score projection and generation-checked live publication;
+  it retains the canonical inclusive two-ended `QueryAmountRange` as the
+  membership authority.
+- Expense is causal: sparse `<=12` active days use the approved amount-only
+  score; dense activity uses trailing 31-day occurrence/amount signals,
+  dynamic EMA and a causal running-maximum normalization. Income uses the
+  approved daily trend comparison with the last one-to-three meaningful prior
+  samples, median baseline, capped adjustment and explicit `noSignal` state.
+  The architecture exposes one daily series for Day/Month/Year/Sum; no hourly
+  Day path and no second query/filter state were introduced.
+- Header delivery: `x/100` is semantic header content, while an independent
+  Mind policy feeds the pre-existing shared Header visual controller with a
+  score-centred seven-anchor traffic-light window. The existing controller is
+  still the only Header ticker. The existing tuner has a separate 10–100%
+  Mind `Ablakszélesség` state (default 28%); it does not alias Budget state or
+  alter score mathematics.
+- Local Ubuntu-proot evidence: score domain/live/header/profile tests pass
+  (125 tests); production Core range/direction/focus and visible-rail score
+  tests pass; Mind tuner/host tests pass; protected Mind heatmap and canonical
+  amount-range tests pass (21 tests). Two changed-file `flutter analyze`
+  groups report `No issues found`; `dart format --output=none
+  --set-exit-if-changed` changed zero files; `git diff --check` passed.
+- Exact GitHub Actions evidence: run `35155897610` for `06fe576a` has
+  `dashboard-paths`, `test-core`, `test-flutter` and
+  `build-human-diagnostic-apk` PASS. The normal human diagnostic APK release
+  targets exactly `06fe576a` and is downloaded at
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_06fe576.apk`;
+  size 82,777,393 bytes, SHA-256
+  `488341f7afd687f33f8a2730d7bae7c338208db5e99282a834a441909e4f0f7f`.
+- The same run's `run-dashboard-profile` job `104996781694` is FAIL, before
+  score-specific evidence is evaluated: `Mind Year heatmap profile evidence
+  frame_timing_headroom is invalid: null`, followed by the expected missing
+  `B_year_month_rail_populated` report. This is the established inherited
+  null-FrameTiming failure recorded for the preceding source lineage. No
+  threshold/profile weakening or speculative unrelated performance change was
+  made; it remains an automated performance blocker.
+- Final matching SCIP was generated in an isolated clean worktree from
+  `06fe576a` using `scip_dart 1.6.2`; the pre-existing untracked application
+  `index.scip` was preserved. Raw index SHA-256 is
+  `7b1ef7b6b494b3613822178edd58f0b44e541046c5d300237269db70b970b3d8`.
+  The manifest records source parent `91777be7...`, 451 documents, 297,994
+  occurrences, 10,407 repository symbols and 76,771 references. Tooling
+  commit `6c113674` on `tooling/scip-codegraph-v1` is pushed separately;
+  tooling `dart test` passes 15 tests and the source-verified
+  `MindBehavioralScoreProjection` query resolves 11 production and 16 test
+  references. The graph is navigation evidence, not runtime causality.
+- Delivery status is PARTIAL solely for the inherited Android profile gate and
+  physical acceptance. Physical validation: `PENDING — USER ONLY`.
