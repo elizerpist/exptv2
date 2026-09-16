@@ -1,0 +1,1988 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stats Common Mode Interactive Mockup</title>
+  <style>
+    :root {
+      --w: 412px;
+      --bg: #f1f5f9;
+      --card: #fff;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-500: #64748b;
+      --gray-600: #475569;
+      --gray-700: #334155;
+      --gray-800: #1e293b;
+      --income: #22c55e;
+      --income-dark: #059669;
+      --expense: #ef4444;
+      --expense-dark: #dc2626;
+      --primary: #06b6d4;
+      --heatmap: #06b6d4;
+      --amber: #fbbf24;
+      --magnet-score-color: #22c55e;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #dbe3ec;
+      color: var(--gray-800);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body { display: flex; justify-content: center; }
+    button, input { font: inherit; }
+
+    .phone {
+      width: var(--w);
+      min-height: 100vh;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .chart-area {
+      height: 328px;
+      padding: 0;
+      background: var(--bg);
+    }
+    .fastinfo-svg {
+      display: block;
+      width: 100%;
+      height: 328px;
+    }
+    .error-panel {
+      display: none;
+      margin: 10px 14px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fee2e2;
+      color: #991b1b;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.35;
+      white-space: pre-wrap;
+    }
+    body.has-error .error-panel { display: block; }
+
+    .header {
+      position: relative;
+      height: 188px;
+      background: #fff;
+      border-radius: 0 0 24px 24px;
+      box-shadow: 0 4px 8px rgb(0 0 0 / 15%);
+      overflow: hidden;
+    }
+    .app-title {
+      position: absolute;
+      left: 30px;
+      top: 35px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+    }
+    .magnet {
+      position: absolute;
+      left: 0;
+      top: 41px;
+      width: 100%;
+      height: 157.5px;
+      pointer-events: none;
+    }
+    .magnet-rail {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 65.25px;
+      height: 27px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #ef4444 0%, #fee2e2 25%, #fff 50%, #dcfce7 75%, #22c55e 100%);
+    }
+    .magnet-marker {
+      position: absolute;
+      top: 60.25px;
+      width: 3px;
+      height: 37px;
+      border-radius: 1.5px;
+      background: #fff;
+      border: 1px solid rgb(100 116 139 / 55%);
+      box-shadow: 0 1px 4px rgb(0 0 0 / 16%);
+      transform: translateX(-50%);
+    }
+    .magnet.expense-score .magnet-rail,
+    .magnet.income-score .magnet-rail {
+      border-radius: 8px;
+      background: linear-gradient(90deg,
+        rgba(220,38,38,.76) 0%,
+        rgba(239,68,68,.74) 18%,
+        rgba(248,113,113,.72) 40%,
+        rgba(251,191,36,.74) 51%,
+        rgba(251,191,36,.74) 57%,
+        rgba(74,222,128,.72) 66%,
+        rgba(34,197,94,.74) 84%,
+        rgba(22,163,74,.76) 100%
+      );
+    }
+    .magnet.expense-score .magnet-marker,
+    .magnet.income-score .magnet-marker {
+      top: 62.25px;
+      width: 6px;
+      height: 33px;
+      border: 0;
+      border-radius: 3px;
+      background: var(--magnet-score-color);
+      box-shadow: 0 1px 5px rgb(15 23 42 / 22%);
+    }
+    .magnet.expense-score .magnet-marker::after,
+    .magnet.income-score .magnet-marker::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: -3px;
+      width: 2.5px;
+      height: 39px;
+      border-radius: 1.25px;
+      background: #fff;
+      transform: translateX(-50%);
+    }
+    .chip {
+      position: absolute;
+      left: 30px;
+      top: 62px;
+      min-width: 36px;
+      height: 28px;
+      padding: 0 7px;
+      display: grid;
+      place-items: center;
+      border: 2px solid #fff;
+      border-radius: 7px;
+      background: var(--amber);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .header-label {
+      position: absolute;
+      left: 30px;
+      top: 112px;
+      max-width: 250px;
+      color: var(--gray-600);
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      line-height: 1;
+    }
+    .header-value {
+      position: absolute;
+      left: 30px;
+      right: 90px;
+      top: 134px;
+      color: var(--gray-800);
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.12;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .menu-button {
+      position: absolute;
+      right: 25px;
+      top: 112px;
+      width: 48px;
+      height: 48px;
+      border: 0;
+      border-radius: 24px;
+      background: var(--primary);
+      box-shadow: 0 10px 20px rgb(0 0 0 / 30%);
+      display: grid;
+      place-items: center;
+    }
+    .menu-button span {
+      display: block;
+      width: 16px;
+      height: 3px;
+      margin: 3px 0;
+      border-radius: 2px;
+      background: #fff;
+    }
+
+    .type-row {
+      display: flex;
+      gap: 10px;
+      padding: 16px 20px 10px;
+    }
+    .type-row button {
+      flex: 1;
+      height: 50px;
+      border: 1px solid var(--gray-200);
+      border-radius: 25px;
+      background: #fff;
+      color: var(--gray-500);
+      font-size: 16px;
+      font-weight: 700;
+      box-shadow: 0 2px 4px rgb(0 0 0 / 8%);
+      cursor: pointer;
+    }
+    .type-row button.active {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .scope-selector {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      padding: 0 20px 2px;
+    }
+    .scope-option {
+      height: 34px;
+      border: 1px solid var(--gray-200);
+      border-radius: 17px;
+      background: #fff;
+      color: var(--gray-500);
+      font-size: 11px;
+      font-weight: 850;
+      line-height: 1;
+      box-shadow: 0 1px 3px rgb(0 0 0 / 7%);
+      cursor: pointer;
+    }
+    .scope-option.active {
+      border-color: var(--scope-color, var(--heatmap));
+      color: var(--scope-color, var(--heatmap));
+      background: color-mix(in srgb, var(--scope-color, var(--heatmap)) 10%, #fff);
+    }
+
+    .month-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px 14.88px;
+      padding: 16px 20px 0;
+    }
+    .month-card {
+      position: relative;
+      height: 200px;
+      border: 1px solid var(--gray-200);
+      border-radius: 15px;
+      background: var(--gray-50);
+      box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+      overflow: hidden;
+    }
+    .month-name {
+      position: relative;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      color: var(--gray-800);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .month-balance {
+      position: relative;
+      height: 30px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+    }
+    .balance-caption {
+      color: var(--gray-500);
+      font-size: 6.8px;
+      font-weight: 850;
+      letter-spacing: 0.8px;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .balance-value {
+      font-size: 10.5px;
+      font-weight: 850;
+      line-height: 1;
+    }
+    .month-secondary {
+      position: relative;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: var(--gray-600);
+      font-size: 8.5px;
+      font-weight: 850;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .secondary-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--active-color);
+    }
+    .weekdays, .days {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+    }
+    .weekdays {
+      height: 10px;
+      margin-top: 0;
+      color: var(--gray-500);
+      font-size: 8px;
+      font-weight: 700;
+      text-align: center;
+      align-items: center;
+    }
+    .days {
+      height: 116px;
+      padding-bottom: 8px;
+    }
+    .day {
+      position: relative;
+      display: grid;
+      place-items: center;
+      color: var(--gray-500);
+      font-size: 10px;
+      font-weight: 650;
+    }
+    .day.heat {
+      color: var(--gray-800);
+      font-weight: 800;
+    }
+    .day.heat::before {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: 4px;
+      background: var(--day-heat-color);
+      opacity: var(--day-heat-opacity);
+    }
+    .day span {
+      position: relative;
+      z-index: 1;
+    }
+
+    .controls {
+      padding: 22px 20px 34px;
+    }
+    .control-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .control-head div:first-child {
+      color: var(--gray-800);
+      font-size: 15px;
+      font-weight: 850;
+    }
+    #thresholdValue {
+      color: var(--gray-800);
+      font-size: 16px;
+      font-weight: 900;
+    }
+    #slider {
+      width: 100%;
+      height: 34px;
+      accent-color: var(--primary);
+    }
+    .input-pill {
+      height: 50px;
+      margin-top: 10px;
+      border: 1px solid var(--gray-200);
+      border-radius: 25px;
+      background: #fff;
+      box-shadow: 0 2px 4px rgb(0 0 0 / 8%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    #manual {
+      width: 120px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--gray-800);
+      text-align: center;
+      font-size: 17px;
+      font-weight: 850;
+    }
+    .suffix {
+      color: var(--gray-500);
+      font-size: 14px;
+      font-weight: 750;
+    }
+  </style>
+</head>
+<body>
+  <main class="phone">
+    <div class="error-panel" id="errorPanel"></div>
+    <section class="chart-area">
+      <svg class="fastinfo-svg" id="fastInfoSvg" viewBox="0 0 412 328" preserveAspectRatio="none"></svg>
+    </section>
+
+    <header class="header">
+      <div class="app-title">ExpenseTracker</div>
+      <div class="magnet" id="magnet">
+        <div class="magnet-rail"></div>
+        <div class="magnet-marker" id="magnetMarker"></div>
+      </div>
+      <button class="chip" id="scopeChip" type="button" aria-label="aktív scope">ALL</button>
+      <div class="header-label">SCOPE SCORE</div>
+      <div class="header-value" id="headerValue">0/100</div>
+      <button class="menu-button" id="scopeMenuBtn" type="button" aria-label="scope menu">
+        <div><span></span><span></span><span></span></div>
+      </button>
+    </header>
+
+    <section class="type-row">
+      <button id="incomeBtn" type="button">Bevétel</button>
+      <button id="expenseBtn" type="button">Kiadás</button>
+    </section>
+
+    <section class="scope-selector" id="scopeSelector" aria-label="scope kategóriák"></section>
+
+    <section class="month-grid" id="monthGrid"></section>
+
+    <section class="controls">
+      <div class="control-head">
+        <div>Küszöb</div>
+        <div id="thresholdValue">0 Ft</div>
+      </div>
+      <input id="slider" type="range" min="0" max="220000" step="5000" value="0">
+      <label class="input-pill">
+        <input id="manual" inputmode="numeric" value="0">
+        <span class="suffix">Ft</span>
+      </label>
+    </section>
+  </main>
+
+  <script>
+    const colors = {
+      grid: '#e2e8f0',
+      text: '#64748b',
+      gray700: '#334155',
+      income: '#22c55e',
+      incomeDark: '#059669',
+      incomePale: '#86efac',
+      expense: '#ef4444',
+      expenseDark: '#dc2626',
+      expensePale: '#fca5a5',
+      heatmap: '#06B6D4',
+      orange: '#fbbf24',
+    };
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const monthAxisLabels = ['Jan','Feb','Már','Ápr','Máj','Jún','Júl','Aug','Szep','Okt','Nov','Dec'];
+    const weekdays = ['M','T','W','T','F','S','S'];
+    const chart = {
+      panel: {left: 14, top: 42, width: 384, height: 268},
+      primary: {left: 47, top: 104, width: 337, height: 126},
+      helper: {left: 47, top: 264, width: 337, height: 26},
+    };
+    const chartSpec = {
+      primary: {
+        title: 'Küszöb feletti havi volumen',
+        yAxisLabel: '',
+        xAxisLabel: 'hónapok',
+        legend: [
+          {label: 'scope + slider összeg', color: '#ef4444'},
+        ],
+      },
+      helper: {
+        title: 'Havi maradék',
+        yAxisLabel: '',
+        xAxisLabel: 'hónapok',
+        legend: [],
+      },
+    };
+
+    const monthly = {
+      expense: [420000, 260000, 315000, 390000, 520000, 455000, 610000, 350000, 245000, 405000, 720000, 480000],
+    };
+    const categoryScopes = {
+      expense: [
+        {id: 'food', label: 'Étel', chip: 'ÉTEL', share: 0.36, color: '#F97316'},
+        {id: 'home', label: 'Lakás', chip: 'LAKÁS', share: 0.49, color: '#8B5CF6'},
+        {id: 'mobility', label: 'Mozgás', chip: 'MOZG', share: 0.15, color: '#0EA5E9'},
+      ],
+      income: [
+        {id: 'salary', label: 'Fizetés', chip: 'FIZU', share: 0.78, color: '#22C55E'},
+        {id: 'side', label: 'Mellékes', chip: 'SIDE', share: 0.22, color: '#F59E0B'},
+      ],
+    };
+    const incomeMonthPlans = [
+      {monthIndex: 0, kind: 'normal_salary', entries: [
+        {day: 5, categoryId: 'salary', amount: 520000},
+        {day: 18, categoryId: 'side', amount: 46000},
+      ]},
+      {monthIndex: 1, kind: 'weak', entries: [
+        {day: 14, categoryId: 'side', amount: 28000},
+        {day: 27, categoryId: 'side', amount: 17000},
+      ]},
+      {monthIndex: 2, kind: 'micro', entries: microIncomeEntries(2, 18, 8000, 17000)},
+      {monthIndex: 3, kind: 'low_salary', entries: [
+        {day: 5, categoryId: 'salary', amount: 330000},
+        {day: 22, categoryId: 'side', amount: 36000},
+      ]},
+      {monthIndex: 4, kind: 'multi_salary', entries: [
+        {day: 4, categoryId: 'salary', amount: 360000},
+        {day: 16, categoryId: 'salary', amount: 220000},
+        {day: 25, categoryId: 'side', amount: 78000},
+      ]},
+      {monthIndex: 5, kind: 'normal_salary', entries: [
+        {day: 5, categoryId: 'salary', amount: 540000},
+        {day: 20, categoryId: 'side', amount: 52000},
+      ]},
+      {monthIndex: 6, kind: 'single_large', entries: [
+        {day: 12, categoryId: 'side', amount: 980000},
+      ]},
+      {monthIndex: 7, kind: 'micro', entries: microIncomeEntries(7, 24, 7000, 22000)},
+      {monthIndex: 8, kind: 'weak', entries: [
+        {day: 11, categoryId: 'side', amount: 22000},
+      ]},
+      {monthIndex: 9, kind: 'low_salary', entries: [
+        {day: 7, categoryId: 'salary', amount: 295000},
+        {day: 24, categoryId: 'side', amount: 31000},
+      ]},
+      {monthIndex: 10, kind: 'multi_salary', entries: [
+        {day: 5, categoryId: 'salary', amount: 390000},
+        {day: 18, categoryId: 'salary', amount: 260000},
+        {day: 28, categoryId: 'side', amount: 92000},
+      ]},
+      {monthIndex: 11, kind: 'normal_salary', entries: [
+        {day: 5, categoryId: 'salary', amount: 570000},
+        {day: 19, categoryId: 'side', amount: 68000},
+      ]},
+    ];
+
+    let activeType = 'expense';
+    let threshold = 0;
+    let activeScopeIds = new Set(categoryScopes[activeType].map(category => category.id));
+    const transactions = buildTransactions();
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function avg(values) { return values.length ? values.reduce((a,b)=>a+b,0) / values.length : 0; }
+    function median(values) {
+      const sorted = values
+        .filter(value => Number.isFinite(value))
+        .slice()
+        .sort((a, b) => a - b);
+      if (!sorted.length) return 0;
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+    function showRuntimeError(error) {
+      const panel = document.getElementById('errorPanel');
+      if (!panel) return;
+      panel.textContent = String(error && error.stack ? error.stack : error);
+      document.body.classList.add('has-error');
+    }
+    function formatHuf(value) {
+      return `${String(Math.round(Math.abs(value))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} Ft`;
+    }
+    function formatSignedHuf(value) {
+      if (value === 0) return '0 Ft';
+      return `${value > 0 ? '+' : '-'}${formatHuf(value)}`;
+    }
+    function activeColorHex() {
+      return activeType === 'expense' ? colors.expense : colors.income;
+    }
+    function closeTone(value) {
+      if (value > 0) {
+        return {color: colors.incomeDark};
+      }
+      if (value < 0) {
+        return {color: colors.expenseDark};
+      }
+      return {color: colors.gray700};
+    }
+    function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+    function leadingBlank(year, month) { return (new Date(year, month - 1, 1).getDay() + 6) % 7; }
+    function ema(values, windowSize) {
+      if (!values.length) return [];
+      const multiplier = 2 / (Math.max(1, windowSize) + 1);
+      const output = [values[0]];
+      for (let i = 1; i < values.length; i += 1) {
+        output.push((values[i] - output[output.length - 1]) * multiplier + output[output.length - 1]);
+      }
+      return output;
+    }
+    function scoreColor(value) {
+      if (value < 45) return colors.expense;
+      if (value < 60) return colors.orange;
+      return colors.income;
+    }
+    function pulseWindows(activeMonthCount) {
+      if (activeMonthCount < 5) return {shortWindow: 1, longWindow: 3};
+      if (activeMonthCount <= 8) return {shortWindow: 2, longWindow: 4};
+      return {shortWindow: 3, longWindow: 6};
+    }
+    function dynamicFastfoodEmaPeriod(focusScopeDays) {
+      return clamp(Math.round(22 - 0.45 * focusScopeDays), 7, 18);
+    }
+
+    function categoryFor(type, categoryId) {
+      return categoryScopes[type].find(category => category.id === categoryId) || null;
+    }
+    function activeCategories() {
+      return categoryScopes[activeType];
+    }
+    function activeCategoryIds() {
+      return activeCategories().map(category => category.id);
+    }
+    function normalizeActiveScope() {
+      const validIds = activeCategoryIds();
+      activeScopeIds = new Set([...activeScopeIds].filter(id => validIds.includes(id)));
+      if (!activeScopeIds.size) {
+        activeScopeIds = new Set(validIds);
+      }
+    }
+    function selectedScopeCategories() {
+      normalizeActiveScope();
+      return activeCategories().filter(category => activeScopeIds.has(category.id));
+    }
+    function isAllScopeSelected() {
+      normalizeActiveScope();
+      return activeScopeIds.size === activeCategories().length;
+    }
+    function scopeSelectionColor() {
+      const selected = selectedScopeCategories();
+      return selected.length === 1 ? selected[0].color : colors.heatmap;
+    }
+    function scopeChipText() {
+      const selected = selectedScopeCategories();
+      if (isAllScopeSelected()) return 'ALL';
+      if (selected.length === 1) return selected[0].chip;
+      return `${selected.length} KAT`;
+    }
+    function scopeTitleText() {
+      const selected = selectedScopeCategories();
+      return isAllScopeSelected()
+        ? 'Minden kategória'
+        : selected.map(category => category.label).join(', ');
+    }
+    function scopeIncludes(record) {
+      normalizeActiveScope();
+      return activeScopeIds.has(record.categoryId);
+    }
+    function rawDayAmounts(type, monthIndex, total) {
+      const dim = daysInMonth(2025, monthIndex + 1);
+      const days = Array.from({length: dim}, (_, i) => ({day: i + 1, amount: 0}));
+      if (total <= 0) return days;
+      const pattern = type === 'expense'
+        ? Array.from({length: dim}, (_, i) => i + 1)
+        : [5,12,18,25];
+      const activeDays = pattern.filter(day => day <= dim);
+      const weights = activeDays.map((day, i) => {
+        if (type === 'income') {
+          return i === 0 ? 2.1 : i === 1 ? 0.38 : i === 2 ? 0.85 : 0.24;
+        }
+        const wave = ((day * 7 + monthIndex * 5) % 17) / 16;
+        const weeklySpike = day % 7 === 5 ? 1.15 : 0;
+        const billDaySpike = [1, 10, 20].includes(day) ? 0.95 : 0;
+        return 0.18 + wave * 1.25 + weeklySpike + billDaySpike;
+      });
+      const weightSum = weights.reduce((sum, value) => sum + value, 0);
+      let used = 0;
+      activeDays.forEach((day, i) => {
+        const amount = i === activeDays.length - 1
+          ? total - used
+          : Math.round(total * weights[i] / weightSum / 1000) * 1000;
+        used += amount;
+        days[day - 1].amount = amount;
+      });
+      return days;
+    }
+    function microIncomeEntries(monthIndex, count, baseAmount, spread) {
+      const dim = daysInMonth(2025, monthIndex + 1);
+      return Array.from({length: count}, (_, index) => {
+        const day = 1 + Math.floor(index * dim / count);
+        const wave = ((index * 7 + monthIndex * 5) % 11) / 10;
+        const amount = Math.round((baseAmount + spread * wave) / 1000) * 1000;
+        return {day, categoryId: 'side', amount};
+      });
+    }
+    function splitByCategory(type, amount, monthIndex, day) {
+      const scopes = categoryScopes[type];
+      let used = 0;
+      return scopes.map((category, index) => {
+        const mod = ((monthIndex + 1) * (index + 3) + day * (index + 1)) % 9;
+        const adjustedShare = category.share * (0.86 + mod / 28);
+        const remaining = amount - used;
+        const value = index === scopes.length - 1
+          ? remaining
+          : Math.min(remaining, Math.round(amount * adjustedShare / 1000) * 1000);
+        used += value;
+        return {categoryId: category.id, amount: value};
+      }).filter(part => part.amount > 0);
+    }
+    function buildTransactions() {
+      const output = [];
+      monthly.expense.forEach((total, monthIndex) => {
+        rawDayAmounts('expense', monthIndex, total)
+          .filter(day => day.amount > 0)
+          .forEach(day => {
+            splitByCategory('expense', day.amount, monthIndex, day.day).forEach(part => {
+              output.push({
+                type: 'expense',
+                monthIndex,
+                day: day.day,
+                categoryId: part.categoryId,
+                amount: part.amount,
+              });
+            });
+          });
+      });
+      buildIncomeTransactions(output);
+      return output;
+    }
+    function buildIncomeTransactions(output) {
+      incomeMonthPlans.forEach(plan => {
+        plan.entries.forEach(entry => {
+          output.push({
+            type: 'income',
+            monthIndex: plan.monthIndex,
+            day: entry.day,
+            categoryId: entry.categoryId,
+            amount: entry.amount,
+          });
+        });
+      });
+    }
+    function recordsFor({type, monthIndex, scoped = false}) {
+      return transactions.filter(record =>
+        record.type === type &&
+        record.monthIndex === monthIndex &&
+        (!scoped || scopeIncludes(record))
+      );
+    }
+    function sumRecords(records) {
+      return records.reduce((sum, record) => sum + record.amount, 0);
+    }
+    function monthTypeTotal(type, monthIndex, scoped = false) {
+      return sumRecords(recordsFor({type, monthIndex, scoped}));
+    }
+    function scopedCloseFor(monthIndex) {
+      const scopedActive = monthTypeTotal(activeType, monthIndex, true);
+      const passiveType = activeType === 'expense' ? 'income' : 'expense';
+      const passiveTotal = monthTypeTotal(passiveType, monthIndex, false);
+      return activeType === 'expense'
+        ? passiveTotal - scopedActive
+        : scopedActive - passiveTotal;
+    }
+    function dayAmounts(type, monthIndex) {
+      const dim = daysInMonth(2025, monthIndex + 1);
+      const days = Array.from({length: dim}, (_, i) => ({day: i + 1, amount: 0}));
+      recordsFor({type, monthIndex, scoped: true}).forEach(record => {
+        days[record.day - 1].amount += record.amount;
+      });
+      return days.map(day => ({
+        ...day,
+        hit: day.amount > 0 && day.amount >= threshold,
+      }));
+    }
+
+    function buildMonths() {
+      normalizeActiveScope();
+      const months = monthNames.map((name, index) => {
+        const incomeTotal = monthTypeTotal('income', index, false);
+        const expenseTotal = monthTypeTotal('expense', index, false);
+        const activeTotal = monthTypeTotal(activeType, index, true);
+        const close = incomeTotal - expenseTotal;
+        const analysisClose = isAllScopeSelected() ? close : scopedCloseFor(index);
+        const days = dayAmounts(activeType, index);
+        const thresholdedActiveTotal = days
+          .filter(day => day.hit)
+          .reduce((sum, day) => sum + day.amount, 0);
+        const hasTransactions = incomeTotal > 0 || expenseTotal > 0;
+        const scopeHasActivity = activeTotal > 0;
+        return {
+          index,
+          month: index + 1,
+          name,
+          incomeTotal,
+          expenseTotal,
+          activeTotal,
+          thresholdedActiveTotal,
+          close,
+          analysisClose,
+          leading: leadingBlank(2025, index + 1),
+          days,
+          hasTransactions,
+          scopeHasActivity,
+          thresholdHitDays: days.filter(day => day.hit).length,
+        };
+      });
+      const hotAmounts = months.flatMap(month => month.days
+        .filter(day => day.hit)
+        .map(day => day.amount));
+      const maxHotAmount = Math.max(1, ...hotAmounts);
+      months.forEach(month => {
+        month.days = month.days.map(day => ({
+          ...day,
+          heatOpacity: day.hit ? clamp(0.1 + 0.9 * (day.amount / maxHotAmount), 0.1, 1) : 0,
+        }));
+      });
+      return months;
+    }
+
+    function closeGraphMonthsFor(months) {
+      const active = months.filter(month => month.scopeHasActivity);
+      return active.length ? active : months;
+    }
+
+    function h1MonthsFor(months) {
+      return months.filter(month => month.thresholdedActiveTotal > 0);
+    }
+
+    function remainderMonthsFor(months) {
+      return months.filter(month => month.hasTransactions);
+    }
+
+    function worseningMonthCount(months) {
+      let count = 0;
+      let previous = null;
+      months.forEach(month => {
+        if (isAllScopeSelected() ? !month.hasTransactions : !month.scopeHasActivity) return;
+        const current = month.analysisClose;
+        if (previous !== null) {
+          const worse = current < previous;
+          if (worse) count += 1;
+        }
+        previous = current;
+      });
+      return count;
+    }
+
+    function normalizedPosition(index, length) {
+      return length <= 1 ? 0.5 : index / (length - 1);
+    }
+    function positionInGraph(day, graphDays) {
+      const index = graphDays.indexOf(day);
+      return normalizedPosition(index < 0 ? 0 : index, graphDays.length);
+    }
+    function pointValue(point) {
+      return typeof point === 'number' ? point : point.value;
+    }
+    function pointPosition(point, index, length) {
+      if (point && typeof point === 'object' && Number.isFinite(point.position)) return clamp(point.position, 0, 1);
+      return normalizedPosition(index, length);
+    }
+    function monthTicksForGraphDays(graphDays) {
+      if (!graphDays.length) return [];
+      const ticks = [];
+      const seen = new Set();
+      graphDays.forEach((day, index) => {
+        if (seen.has(day.month)) return;
+        seen.add(day.month);
+        ticks.push({
+          label: monthAxisLabels[day.month - 1],
+          position: normalizedPosition(index, graphDays.length),
+        });
+      });
+      return ticks;
+    }
+    function helperAmountPoints(graphDays) {
+      return graphDays
+        .filter(day => day.qualifyingAmount > 0)
+        .map((day, index) => ({
+          index,
+          value: day.qualifyingAmount,
+          position: positionInGraph(day, graphDays),
+        }));
+    }
+    function expenseScopeScoreSeries(months) {
+      const allDays = months.flatMap(month => month.days.map(day => ({
+        month: month.month,
+        day: day.day,
+        qualifyingAmount: day.hit ? day.amount : 0,
+      })));
+      const firstScopeIndex = allDays.findIndex(day => day.qualifyingAmount > 0);
+      let lastScopeIndex = -1;
+      for (let i = allDays.length - 1; i >= 0; i -= 1) {
+        if (allDays[i].qualifyingAmount > 0) {
+          lastScopeIndex = i;
+          break;
+        }
+      }
+      if (firstScopeIndex < 0 || lastScopeIndex < firstScopeIndex) {
+        return {
+          scoreLine: [{index: 0, value: 100, position: 0.5}],
+          helperAmountLine: [],
+          monthTicks: [],
+          kontrollScore: 100,
+        };
+      }
+
+      const graphDays = allDays.slice(firstScopeIndex, lastScopeIndex + 1);
+      const helperAmountLine = helperAmountPoints(graphDays);
+      const hitDays = graphDays.filter(day => day.qualifyingAmount > 0);
+      if (hitDays.length <= 12) {
+        const amountMax = Math.max(1, ...hitDays.map(day => day.qualifyingAmount));
+        const scoreLine = hitDays.map((day, index) => ({
+          index,
+          value: clamp(100 - (day.qualifyingAmount / amountMax * 100), 0, 100),
+          position: positionInGraph(day, graphDays),
+        }));
+        return {
+          scoreLine,
+          helperAmountLine,
+          monthTicks: monthTicksForGraphDays(graphDays),
+          kontrollScore: scoreLine.length ? scoreLine[scoreLine.length - 1].value : 100,
+        };
+      }
+
+      const emaPeriod = dynamicFastfoodEmaPeriod(hitDays.length);
+      const behaviorWindow = 31;
+      const halfWindow = Math.floor(behaviorWindow / 2);
+      const rollingOccurrences = [];
+      const rollingAmounts = [];
+      for (let i = 0; i < graphDays.length; i += 1) {
+        const start = Math.max(0, i - halfWindow);
+        const end = Math.min(graphDays.length - 1, i + halfWindow);
+        let occurrence = 0;
+        let total = 0;
+        for (let windowIndex = start; windowIndex <= end; windowIndex += 1) {
+          const amount = graphDays[windowIndex].qualifyingAmount;
+          if (amount <= 0) continue;
+          occurrence += 1;
+          total += amount;
+        }
+        rollingOccurrences.push(occurrence);
+        rollingAmounts.push(total);
+      }
+      const smoothedOccurrences = ema(rollingOccurrences, emaPeriod);
+      const smoothedAmounts = ema(rollingAmounts, emaPeriod);
+      const occurrenceMax = Math.max(1, ...smoothedOccurrences);
+      const amountMax = Math.max(1, ...smoothedAmounts);
+      const scoreLine = smoothedOccurrences.map((occurrence, index) => {
+        const occurrenceValue = clamp(occurrence / occurrenceMax * 100, 0, 100);
+        const amountValue = clamp(smoothedAmounts[index] / amountMax * 100, 0, 100);
+        const pressure = occurrenceValue * 0.5 + amountValue * 0.5;
+        return {
+          index,
+          value: clamp(100 - pressure, 0, 100),
+          position: normalizedPosition(index, smoothedOccurrences.length),
+        };
+      });
+      return {
+        scoreLine,
+        helperAmountLine,
+        monthTicks: monthTicksForGraphDays(graphDays),
+        kontrollScore: scoreLine.length ? scoreLine[scoreLine.length - 1].value : 100,
+      };
+    }
+
+    function expenseMagnetScore(months) {
+      return expenseScopeScoreSeries(months).kontrollScore;
+    }
+
+    function incomePatternMetrics(months) {
+      return months
+        .filter(month => month.scopeHasActivity)
+        .map(month => ({
+          sourceMonthIndex: month.index,
+          totalValue: month.activeTotal,
+          visibleValue: month.thresholdedActiveTotal > 0
+            ? month.thresholdedActiveTotal
+            : null,
+        }));
+    }
+
+    function incomePatternTrendScore(patterns) {
+      const neutral = {
+        score: 50,
+        noSignal: true,
+        baseline: 0,
+        previousPatternAvg: 0,
+        recentPatternAvg: 0,
+        trendDelta: 0,
+        trendAdjustment: 0,
+      };
+      if (!patterns.length) return neutral;
+      const latest = patterns[patterns.length - 1];
+      if (!Number.isFinite(latest.visibleValue) || latest.visibleValue <= 0) {
+        return neutral;
+      }
+      const previousVisibleValues = patterns
+        .slice(0, -1)
+        .map(pattern => pattern.visibleValue)
+        .filter(value => Number.isFinite(value) && value > 0);
+      if (!previousVisibleValues.length) return neutral;
+      const previousWindowSize = Math.min(3, previousVisibleValues.length);
+      const previousPatternAvg = avg(previousVisibleValues.slice(-previousWindowSize));
+      const recentPatternAvg = latest.visibleValue;
+      const baseline = Math.max(
+        1,
+        previousPatternAvg,
+        median([...previousVisibleValues, recentPatternAvg])
+      );
+      const trendDelta = (recentPatternAvg - previousPatternAvg) / baseline;
+      const trendAdjustment = clamp(trendDelta * 35, -30, 30);
+      return {
+        score: clamp(50 + trendAdjustment, 0, 100),
+        noSignal: false,
+        baseline,
+        previousPatternAvg,
+        recentPatternAvg,
+        trendDelta,
+        trendAdjustment,
+      };
+    }
+
+    function incomeMagnetScore(months) {
+      return incomePatternTrendScore(incomePatternMetrics(months)).score;
+    }
+
+    function incomeEventAmounts(month) {
+      const dayAmounts = (month.days || [])
+        .map(day => Number(day.amount ?? day.scopeAmount ?? 0))
+        .filter(value => Number.isFinite(value) && value > 0);
+      if (dayAmounts.length) return dayAmounts;
+      const fallback = Number(month.activeTotal || month.incomeTotal || 0);
+      return fallback > 0 ? [fallback] : [];
+    }
+
+    function visibleIncomeForThreshold(month, thresholdValue) {
+      return incomeEventAmounts(month)
+        .filter(amount => thresholdValue <= 0 || amount >= thresholdValue)
+        .reduce((sum, amount) => sum + amount, 0);
+    }
+
+    function incomeObservedPatternMonths(months) {
+      return months.filter(month => incomeEventAmounts(month).length > 0 || month.incomeTotal > 0);
+    }
+
+    function incomeFilteredPatternMonths(months) {
+      return months.filter(month => visibleIncomeForThreshold(month, threshold) > 0);
+    }
+
+    function incomeThresholdExcessSeries(months) {
+      const filteredMonths = incomeFilteredPatternMonths(months);
+      const allDays = filteredMonths.flatMap(month => (month.days || []).map(day => {
+        const amount = Number(day.amount ?? day.scopeAmount ?? 0);
+        return {
+          month: month.month || month.index + 1,
+          day: day.day,
+          qualifyingAmount: amount > 0 && (threshold <= 0 || amount >= threshold) ? amount : 0,
+        };
+      }));
+      const firstScopeIndex = allDays.findIndex(day => day.qualifyingAmount > 0);
+      let lastScopeIndex = -1;
+      for (let i = allDays.length - 1; i >= 0; i -= 1) {
+        if (allDays[i].qualifyingAmount > 0) {
+          lastScopeIndex = i;
+          break;
+        }
+      }
+      if (firstScopeIndex < 0 || lastScopeIndex < firstScopeIndex) {
+        return {
+          helperAmountLine: [],
+          monthTicks: [],
+        };
+      }
+      const graphDays = allDays.slice(firstScopeIndex, lastScopeIndex + 1);
+      return {
+        helperAmountLine: helperAmountPoints(graphDays),
+        monthTicks: monthTicksForGraphDays(graphDays),
+      };
+    }
+
+    const incomeCenterlineConfigs = {
+      netGap: {
+        variant: 'net_gap',
+        title: 'Income vs spend',
+        helperTitle: 'Coverage ratio',
+        goodLabel: 'Covers spend',
+        badLabel: 'Income short',
+        zeroLabel: 'Break-even',
+      },
+    };
+
+    function coverageRatioFor(incomeAmount, expenseAmount) {
+      if (expenseAmount <= 0) return incomeAmount > 0 ? 2 : 0;
+      return incomeAmount / expenseAmount;
+    }
+
+    function incomeCenterlineBars(months, variant) {
+      const observed = incomeFilteredPatternMonths(months);
+      return observed.map((month, index) => {
+        const totalIncome = incomeEventAmounts(month).reduce((sum, amount) => sum + amount, 0);
+        const visibleIncome = visibleIncomeForThreshold(month, threshold);
+        const expenseAmount = Math.max(0, month.expenseTotal || 0);
+        const signedValue = visibleIncome - expenseAmount;
+        const coverageRatio = coverageRatioFor(visibleIncome, expenseAmount);
+        const fullCoverageRatio = coverageRatioFor(totalIncome, expenseAmount);
+        return {
+          index,
+          variant,
+          sourceMonthIndex: month.index,
+          monthLabel: monthAxisLabels[month.index],
+          incomeAmount: visibleIncome,
+          totalIncome,
+          expenseAmount,
+          coverageRatio,
+          fullCoverageRatio,
+          retainedShare: totalIncome <= 0 ? 0 : clamp(visibleIncome / totalIncome, 0, 1),
+          position: normalizedPosition(index, observed.length),
+          signedValue,
+          netAmount: signedValue,
+          colorHex: signedValue >= 0 ? '#22C55E' : '#EF4444',
+        };
+      });
+    }
+
+    function sumSeries(months) {
+      const graphMonths = closeGraphMonthsFor(months);
+      const filteredIncomeMonths = activeType === 'income' ? incomeFilteredPatternMonths(months) : null;
+      const h1Months = activeType === 'income' ? filteredIncomeMonths : h1MonthsFor(months);
+      const remainderMonths = activeType === 'income' ? filteredIncomeMonths : remainderMonthsFor(months);
+      const closes = graphMonths.map(month => month.analysisClose);
+      const hitCounts = graphMonths.map(month => month.thresholdHitDays);
+      const deltas = closes.slice(1).map((value, index) => value - closes[index]);
+      const maxAbsDelta = Math.max(0, ...deltas.map(delta => Math.abs(delta)));
+      const maxPossibleHitDays = Math.max(1, ...graphMonths.map(month => daysInMonth(2025, month.month)));
+      const pressureDeltas = deltas.map((delta, index) => {
+        const closePressure = maxAbsDelta === 0 ? 0 : -delta / maxAbsDelta;
+        const hitPressure = (activeType === 'expense' ? 1 : -1) *
+          (hitCounts[index + 1] || 0) / maxPossibleHitDays;
+        return 100 * (0.7 * closePressure + 0.3 * hitPressure);
+      });
+      const windows = pulseWindows(closes.length);
+      const short = ema(pressureDeltas, windows.shortWindow);
+      const long = ema(pressureDeltas, windows.longWindow);
+      const closePulseBars = pressureDeltas.map((_, i) => {
+        const value = short[i] - long[i];
+        return {
+          index: i + 1,
+          value,
+          colorHex: value >= 0 ? '#EF4444' : '#22C55E',
+        };
+      });
+      const closeTrend = maxAbsDelta === 0
+        ? 0
+        : avg(deltas.map(delta => delta / maxAbsDelta));
+      const hitLevelTrend = (activeType === 'expense' ? -1 : 1) *
+        (avg(hitCounts) / maxPossibleHitDays);
+      const driftMarker = clamp(0.5 + 0.5 * (0.7 * closeTrend + 0.3 * hitLevelTrend), 0, 1);
+      const expenseFastInfoSeries = activeType === 'expense' ? expenseScopeScoreSeries(months) : null;
+      const monthlyVolumeBars = h1Months.map((month, i) => {
+        return {
+          monthIndex: i,
+          sourceMonthIndex: month.index,
+          monthLabel: monthAxisLabels[month.index],
+          amount: month.thresholdedActiveTotal,
+          barColorHex: activeType === 'expense' ? '#EF4444' : '#22C55E',
+          secondaryBarColorHex: activeType === 'expense' ? '#FCA5A5' : '#86EFAC',
+        };
+      });
+      const netRemainderBars = remainderMonths.map((month, i) => {
+        return {
+          monthIndex: i,
+          sourceMonthIndex: month.index,
+          monthLabel: monthAxisLabels[month.index],
+          amount: month.close,
+          barColorHex: month.close >= 0 ? '#22C55E' : '#EF4444',
+        };
+      });
+      return {
+        graphMonths,
+        closePulseBars,
+        monthlyVolumeBars,
+        netRemainderBars,
+        driftMarker,
+        expenseFastInfoSeries,
+        expenseMagnetScore: activeType === 'expense' ? expenseFastInfoSeries.kontrollScore : null,
+        incomeMagnetScore: activeType === 'income' ? incomeMagnetScore(months) : null,
+        worsening: worseningMonthCount(months),
+      };
+    }
+
+    function svgEl(name, attrs = {}) {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+      Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value));
+      return el;
+    }
+    function addText(svg, text, x, y, attrs = {}) {
+      const el = svgEl('text', {
+        x,
+        y,
+        fill: attrs.fill || colors.text,
+        'font-size': attrs.size || 7,
+        'font-weight': attrs.weight || 600,
+        'text-anchor': attrs.anchor || 'start',
+        'dominant-baseline': 'hanging',
+      });
+      const lines = String(text).split('\n');
+      lines.forEach((line, i) => {
+        const span = svgEl('tspan', {
+          x,
+          dy: i === 0 ? 0 : (attrs.lineHeight || 8),
+        });
+        span.textContent = line;
+        el.appendChild(span);
+      });
+      svg.appendChild(el);
+      return el;
+    }
+    function textWidth(label, fontSize) {
+      return String(label).length * fontSize * 0.58;
+    }
+    function drawLegend(svg, items, rect, y) {
+      let x = rect.left;
+      const maxX = rect.left + rect.width;
+      items.forEach(item => {
+        const itemWidth = 10.5 + 4 + textWidth(item.label, 12.4) + 8;
+        if (x + itemWidth > maxX) return;
+        svg.appendChild(svgEl('rect', {
+          x,
+          y: y + 5,
+          width: 10.5,
+          height: 5.2,
+          rx: 1.5,
+          fill: item.color,
+        }));
+        addText(svg, item.label, x + 14.5, y, {
+          fill: colors.text,
+          size: 12.4,
+          weight: 600,
+        });
+        x += itemWidth;
+      });
+    }
+    function drawChartHeader(svg, metadata, rect, options = {}) {
+      addText(svg, metadata.title, rect.left, rect.top - 24, {
+        fill: colors.gray700,
+        size: 9.5,
+        weight: 700,
+      });
+      if (options.drawLegend === false) return;
+      drawLegend(svg, metadata.legend, rect, rect.top - 10);
+    }
+    function drawAxisLabels(svg, metadata, rect, options = {}) {
+      if (options.drawYAxisLabel !== false) {
+        addText(svg, metadata.yAxisLabel, rect.left - 30, rect.top + 1, {
+          fill: colors.text,
+          size: 7,
+          weight: 600,
+          lineHeight: 8,
+        });
+      }
+      if (options.drawXAxisLabel === false) return;
+      addText(svg, metadata.xAxisLabel, rect.left + rect.width, rect.top + rect.height + 3, {
+        fill: colors.text,
+        size: 7,
+        weight: 600,
+        anchor: 'end',
+      });
+    }
+    function drawGrid(svg, rect, horizontal = 3) {
+      for (let i = 0; i <= horizontal; i += 1) {
+        const y = rect.top + rect.height * i / horizontal;
+        svg.appendChild(svgEl('line', {
+          x1: rect.left,
+          y1: y,
+          x2: rect.left + rect.width,
+          y2: y,
+          stroke: colors.grid,
+          'stroke-width': 1,
+          opacity: 0.7,
+        }));
+      }
+    }
+    function drawPanel(svg) {
+      const defs = svgEl('defs');
+      const filter = svgEl('filter', {
+        id: 'fastinfo-panel-shadow',
+        x: '-5%',
+        y: '-5%',
+        width: '110%',
+        height: '110%',
+      });
+      filter.appendChild(svgEl('feDropShadow', {
+        dx: 0,
+        dy: 2,
+        stdDeviation: 2,
+        'flood-color': '#000000',
+        'flood-opacity': 0.08,
+      }));
+      defs.appendChild(filter);
+      svg.appendChild(defs);
+      svg.appendChild(svgEl('rect', {
+        x: chart.panel.left,
+        y: chart.panel.top,
+        width: chart.panel.width,
+        height: chart.panel.height,
+        rx: 14,
+        fill: '#ffffff',
+        filter: 'url(#fastinfo-panel-shadow)',
+      }));
+    }
+    function xForBarIndex(rect, index, count) {
+      if (count <= 1) return rect.left + rect.width / 2;
+      return rect.left + rect.width * (index + 0.5) / count;
+    }
+    function drawMonthAxisLabels(svg, rect, bars) {
+      if (!bars.length) return;
+      bars.forEach((bar, index) => {
+        const centerX = xForBarIndex(rect, index, bars.length);
+        addText(svg, bar.monthLabel, centerX, rect.top + rect.height + 6, {
+          fill: colors.text,
+          size: 7,
+          weight: 750,
+          anchor: 'middle',
+        });
+      });
+    }
+    function drawSignedBars(svg, rect, bars) {
+      drawGrid(svg, rect, 2);
+      if (!bars.length) return;
+      const values = bars.map(bar => bar.value);
+      const maxAbs = Math.max(1, ...values.map(value => Math.abs(value)));
+      const zeroY = rect.top + rect.height / 2;
+      svg.appendChild(svgEl('line', {
+        x1: rect.left,
+        y1: zeroY,
+        x2: rect.left + rect.width,
+        y2: zeroY,
+        stroke: colors.text,
+        'stroke-width': 1,
+        opacity: 0.5,
+      }));
+      const barWidth = clamp(rect.width / (bars.length * 1.8), 3, 14);
+      bars.forEach((bar, index) => {
+        const height = rect.height * 0.45 * (Math.abs(bar.value) / maxAbs);
+        if (height <= 0.01) return;
+        const centerX = xForBarIndex(rect, index, bars.length);
+        const top = bar.value >= 0 ? zeroY - height : zeroY;
+        svg.appendChild(svgEl('rect', {
+          x: centerX - barWidth / 2,
+          y: top,
+          width: barWidth,
+          height,
+          rx: 2,
+          fill: bar.colorHex,
+        }));
+      });
+    }
+    function drawMonthlyVolumeBars(svg, rect, bars) {
+      drawGrid(svg, rect, 2);
+      if (!bars.length) return;
+      const defs = svgEl('defs');
+      svg.appendChild(defs);
+      const maxValue = Math.max(1, ...bars.map(bar => bar.amount));
+      const baseY = rect.top + rect.height;
+      svg.appendChild(svgEl('line', {
+        x1: rect.left,
+        y1: baseY,
+        x2: rect.left + rect.width,
+        y2: baseY,
+        stroke: colors.text,
+        'stroke-width': 1,
+        opacity: 0.45,
+      }));
+      const barWidth = clamp(rect.width / (bars.length * 1.8), 5, 18);
+      bars.forEach((bar, index) => {
+        const centerX = xForBarIndex(rect, index, bars.length);
+        const height = rect.height * 0.88 * bar.amount / maxValue;
+        const x = centerX - barWidth / 2;
+        const y = baseY - height;
+        const gradientId = `volume-gradient-${activeType}-${index}`;
+        const gradient = svgEl('linearGradient', {id: gradientId, x1: 0, y1: 1, x2: 0, y2: 0});
+        gradient.appendChild(svgEl('stop', {
+          offset: '0%',
+          'stop-color': bar.secondaryBarColorHex,
+        }));
+        gradient.appendChild(svgEl('stop', {
+          offset: '100%',
+          'stop-color': bar.barColorHex,
+        }));
+        defs.appendChild(gradient);
+        if (height > 0) {
+          svg.appendChild(svgEl('rect', {
+            x,
+            y,
+            width: barWidth,
+            height,
+            rx: 3,
+            fill: `url(#${gradientId})`,
+          }));
+        }
+      });
+      drawMonthAxisLabels(svg, rect, bars);
+    }
+    function drawSignedRemainderBars(svg, rect, bars) {
+      drawGrid(svg, rect, 2);
+      if (!bars.length) return;
+      const maxAbs = Math.max(1, ...bars.map(bar => Math.abs(bar.amount)));
+      const zeroY = rect.top + rect.height / 2;
+      svg.appendChild(svgEl('line', {
+        x1: rect.left,
+        y1: zeroY,
+        x2: rect.left + rect.width,
+        y2: zeroY,
+        stroke: colors.text,
+        'stroke-width': 1,
+        opacity: 0.5,
+      }));
+      const barWidth = clamp(rect.width / (bars.length * 1.8), 4, 14);
+      bars.forEach((bar, index) => {
+        const centerX = xForBarIndex(rect, index, bars.length);
+        const height = Math.max(1, rect.height * 0.46 * Math.abs(bar.amount) / maxAbs);
+        const y = bar.amount >= 0 ? zeroY - height : zeroY;
+        svg.appendChild(svgEl('rect', {
+          x: centerX - barWidth / 2,
+          y,
+          width: barWidth,
+          height,
+          rx: 2,
+          fill: bar.barColorHex,
+        }));
+      });
+      drawMonthAxisLabels(svg, rect, bars);
+    }
+    function pointX(rect, point, index, length) {
+      return rect.left + rect.width * pointPosition(point, index, length);
+    }
+    function scoreY(rect, value) {
+      return rect.top + rect.height - rect.height * clamp(value / 100, 0, 1);
+    }
+    function scorePathD(rect, points) {
+      if (!points.length) return '';
+      const commands = points.map((point, index) => {
+        const x = pointX(rect, point, index, points.length);
+        const y = scoreY(rect, pointValue(point));
+        return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+      });
+      return commands.join(' ');
+    }
+    function drawSoftScoreZones(svg, rect) {
+      const defs = svgEl('defs');
+      const gradient = svgEl('linearGradient', {
+        id: 'scope-score-soft-zones',
+        x1: 0,
+        y1: rect.top,
+        x2: 0,
+        y2: rect.top + rect.height,
+        gradientUnits: 'userSpaceOnUse',
+      });
+      [
+        ['0%', 'rgba(34,197,94,.13)'],
+        ['40%', 'rgba(34,197,94,.04)'],
+        ['50%', 'rgba(251,191,36,.08)'],
+        ['62%', 'rgba(239,68,68,.04)'],
+        ['100%', 'rgba(239,68,68,.13)'],
+      ].forEach(([offset, color]) => {
+        gradient.appendChild(svgEl('stop', {'offset': offset, 'stop-color': color}));
+      });
+      defs.appendChild(gradient);
+      svg.appendChild(defs);
+      svg.appendChild(svgEl('rect', {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+        rx: 8,
+        fill: 'url(#scope-score-soft-zones)',
+      }));
+    }
+    function drawScoreGrid(svg, rect) {
+      const neutralY = rect.top + rect.height * 0.5;
+      svg.appendChild(svgEl('line', {
+        x1: rect.left,
+        y1: neutralY,
+        x2: rect.left + rect.width,
+        y2: neutralY,
+        stroke: colors.orange,
+        'stroke-width': 1,
+        opacity: 0.5,
+      }));
+    }
+    function drawSegmentedScorePath(svg, rect, points, width = 3.1, alpha = 0.96) {
+      if (!points.length) return;
+      const d = scorePathD(rect, points);
+      const defs = svgEl('defs');
+      [
+        {id: 'scope-score-low', from: 0, to: 45, color: colors.expense},
+        {id: 'scope-score-mid', from: 45, to: 60, color: colors.orange},
+        {id: 'scope-score-high', from: 60, to: 100, color: colors.income},
+      ].forEach(zone => {
+        const top = scoreY(rect, zone.to);
+        const bottom = scoreY(rect, zone.from);
+        const clip = svgEl('clipPath', {id: zone.id});
+        clip.appendChild(svgEl('rect', {
+          x: rect.left - width,
+          y: top,
+          width: rect.width + width * 2,
+          height: Math.max(1, bottom - top),
+        }));
+        defs.appendChild(clip);
+      });
+      svg.appendChild(defs);
+      [
+        {id: 'scope-score-low', color: colors.expense},
+        {id: 'scope-score-mid', color: colors.orange},
+        {id: 'scope-score-high', color: colors.income},
+      ].forEach(zone => {
+        svg.appendChild(svgEl('path', {
+          d,
+          fill: 'none',
+          stroke: zone.color,
+          'stroke-width': width,
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          opacity: alpha,
+          'clip-path': `url(#${zone.id})`,
+        }));
+      });
+    }
+    function drawEndpointDot(svg, rect, points, radius = 4.3) {
+      if (!points.length) return;
+      const last = points[points.length - 1];
+      const x = pointX(rect, last, points.length - 1, points.length);
+      const y = scoreY(rect, pointValue(last));
+      svg.appendChild(svgEl('circle', {
+        cx: x,
+        cy: y,
+        r: radius + 2.5,
+        fill: '#ffffff',
+      }));
+      svg.appendChild(svgEl('circle', {
+        cx: x,
+        cy: y,
+        r: radius,
+        fill: scoreColor(pointValue(last)),
+      }));
+    }
+    function drawEndpointBadge(svg, rect, points, label, color, offsetY = 0) {
+      if (!points.length) return;
+      const last = points[points.length - 1];
+      const x = pointX(rect, last, points.length - 1, points.length) - 2;
+      const y = scoreY(rect, pointValue(last)) + offsetY;
+      const width = textWidth(label, 7) + 10;
+      const badgeX = clamp(x - width, rect.left, rect.left + rect.width - width);
+      const badgeY = clamp(y - 8, rect.top + 2, rect.top + rect.height - 14);
+      svg.appendChild(svgEl('rect', {
+        x: badgeX,
+        y: badgeY,
+        width,
+        height: 14,
+        rx: 7,
+        fill: '#ffffff',
+        stroke: color,
+        'stroke-width': 1,
+      }));
+      addText(svg, label, badgeX + width / 2, badgeY + 3.7, {
+        fill: color,
+        size: 7,
+        weight: 800,
+        anchor: 'middle',
+      });
+    }
+    function drawScoreAxisLabels(svg, rect) {
+      [
+        ['100', 1],
+        ['50', 0.5],
+        ['0', 0],
+      ].forEach(([label, norm]) => {
+        const y = clamp(rect.top + rect.height - rect.height * norm - 4, rect.top + 2, rect.top + rect.height - 8);
+        addText(svg, label, rect.left - 9, y, {
+          fill: colors.text,
+          size: 6.8,
+          weight: 700,
+          anchor: 'end',
+        });
+      });
+    }
+    function drawMonthLabels(svg, rect, labels) {
+      labels.forEach((item, index) => {
+        const label = typeof item === 'string' ? item : item.label;
+        const position = typeof item === 'string' ? normalizedPosition(index, labels.length) : item.position;
+        const x = rect.left + rect.width * clamp(position, 0, 1);
+        addText(svg, label, x, rect.top + rect.height + 11, {
+          fill: colors.text,
+          size: 7.4,
+          weight: 700,
+          anchor: 'middle',
+        });
+      });
+    }
+    function amountMinDeltas(values) {
+      const min = values.length ? Math.min(...values) : 0;
+      const maxSpread = Math.max(1, ...values.map(value => value - min));
+      return values.map(value => (value - min) / maxSpread * 100);
+    }
+    function thresholdExcessDeltas(values, threshold) {
+      if (threshold <= 0) return amountMinDeltas(values);
+      const excessValues = values.map(value => Math.max(0, value - threshold));
+      const maxExcess = Math.max(1, ...excessValues);
+      return excessValues.map(value => value / maxExcess * 100);
+    }
+    function drawDeltaHistogram(svg, rect, points, deltas, options) {
+      svg.appendChild(svgEl('rect', {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+        rx: 6,
+        fill: 'rgba(248,250,252,.72)',
+      }));
+      const baselineY = options.baselineMode === 'bottom'
+        ? rect.top + rect.height - 1
+        : rect.top + rect.height * 0.5;
+      svg.appendChild(svgEl('line', {
+        x1: rect.left,
+        y1: baselineY,
+        x2: rect.left + rect.width,
+        y2: baselineY,
+        stroke: colors.text,
+        'stroke-width': 1,
+        opacity: 0.4,
+      }));
+      if (!points.length) return;
+      const barWidth = points.length <= 12
+        ? clamp(rect.width / Math.max(points.length * 7, 18), 5, 10)
+        : clamp(rect.width / (points.length * 1.35), 1.1, 7);
+      points.forEach((point, index) => {
+        const delta = clamp(deltas[index] || 0, -50, 100);
+        const x = pointX(rect, point, index, points.length);
+        const scale = options.baselineMode === 'bottom' ? 100 : 50;
+        const available = options.baselineMode === 'bottom' ? rect.height * 0.82 : rect.height * 0.43;
+        const height = Math.max(1, Math.abs(delta) / scale * available);
+        const y = delta >= 0 ? baselineY - height : baselineY;
+        svg.appendChild(svgEl('rect', {
+          x: x - barWidth / 2,
+          y,
+          width: barWidth,
+          height,
+          rx: Math.min(2.4, barWidth / 2),
+          fill: delta >= 0 ? options.positiveColor : options.negativeColor,
+          opacity: clamp(0.34 + Math.abs(delta) / scale * 0.5, 0.34, 0.84),
+        }));
+      });
+    }
+    function drawAmountMinHistogram(svg, rect, points, color = colors.expense) {
+      const values = points.map(point => pointValue(point));
+      drawDeltaHistogram(svg, rect, points, amountMinDeltas(values), {
+        positiveColor: color,
+        negativeColor: color,
+        baselineMode: 'bottom',
+      });
+    }
+    function drawThresholdExcessHistogram(svg, rect, points, threshold, color = colors.expense) {
+      if (threshold <= 0) {
+        drawAmountMinHistogram(svg, rect, points, color);
+        return;
+      }
+      const values = points.map(point => pointValue(point));
+      const deltas = thresholdExcessDeltas(values, threshold);
+      drawDeltaHistogram(svg, rect, points, deltas, {
+        positiveColor: color,
+        negativeColor: color,
+        baselineMode: 'bottom',
+      });
+    }
+    function drawExpenseScopeScoreFastInfo(svg, fastInfo) {
+      drawPanel(svg);
+      addText(svg, '1. Scope score · Soft band', chart.primary.left, chart.panel.top + 22, {
+        fill: colors.gray700,
+        size: 10.2,
+        weight: 750,
+      });
+      drawLegend(svg, [
+        {label: 'rossz', color: colors.expense},
+        {label: 'semleges 50', color: colors.orange},
+        {label: 'jó', color: colors.income},
+      ], chart.primary, chart.panel.top + 39);
+      drawSoftScoreZones(svg, chart.primary);
+      drawScoreGrid(svg, chart.primary);
+      drawSegmentedScorePath(svg, chart.primary, fastInfo.scoreLine, 3.1, 0.96);
+      drawEndpointDot(svg, chart.primary, fastInfo.scoreLine, 4.3);
+      drawEndpointBadge(svg, chart.primary, fastInfo.scoreLine, `${Math.round(fastInfo.kontrollScore)}/100`, scoreColor(fastInfo.kontrollScore), 0);
+      drawScoreAxisLabels(svg, chart.primary);
+      drawMonthLabels(svg, chart.primary, fastInfo.monthTicks);
+
+      addText(svg, '2. Threshold excess', chart.helper.left, chart.helper.top - 8, {
+        fill: colors.gray700,
+        size: 8.5,
+        weight: 700,
+      });
+      drawThresholdExcessHistogram(svg, chart.helper, fastInfo.helperAmountLine, threshold);
+      drawMonthLabels(svg, chart.helper, fastInfo.monthTicks);
+    }
+    function drawReferenceFastInfo(svg, series) {
+      if (activeType === 'expense' && series.expenseFastInfoSeries) {
+        drawExpenseScopeScoreFastInfo(svg, series.expenseFastInfoSeries);
+        return;
+      }
+      drawPanel(svg);
+      drawChartHeader(svg, chartSpec.primary, chart.primary);
+      drawMonthlyVolumeBars(svg, chart.primary, series.monthlyVolumeBars);
+      drawAxisLabels(svg, chartSpec.primary, chart.primary, {
+        drawXAxisLabel: false,
+        drawYAxisLabel: false,
+      });
+      addText(svg, chartSpec.helper.title, chart.helper.left, chart.helper.top - 8, {
+        fill: colors.gray700,
+        size: 8.5,
+        weight: 700,
+      });
+      drawSignedRemainderBars(svg, chart.helper, series.netRemainderBars);
+      drawAxisLabels(svg, chartSpec.helper, chart.helper, {
+        drawXAxisLabel: false,
+        drawYAxisLabel: false,
+      });
+    }
+    function drawExpenseWeightedBars(svg, rect, bars) {
+      drawGrid(svg, rect, 2);
+      if (!bars.length) return;
+      const maxAbs = Math.max(1, ...bars.map(bar => Math.abs(bar.signedValue ?? bar.netAmount)));
+      const zeroY = rect.top + rect.height / 2;
+      svg.appendChild(svgEl('line', {
+        x1: rect.left,
+        y1: zeroY,
+        x2: rect.left + rect.width,
+        y2: zeroY,
+        stroke: colors.text,
+        'stroke-width': 1,
+        opacity: 0.5,
+      }));
+      const barWidth = clamp(rect.width / (bars.length * 1.8), 5, 18);
+      bars.forEach((bar, index) => {
+        const signedValue = bar.signedValue ?? bar.netAmount;
+        const centerX = xForBarIndex(rect, index, bars.length);
+        const height = Math.max(1, rect.height * 0.44 * Math.abs(signedValue) / maxAbs);
+        const y = signedValue >= 0 ? zeroY - height : zeroY;
+        svg.appendChild(svgEl('rect', {
+          x: centerX - barWidth / 2,
+          y,
+          width: barWidth,
+          height,
+          rx: 3,
+          fill: bar.colorHex || (signedValue >= 0 ? colors.income : colors.expense),
+          opacity: clamp(0.45 + Math.abs(signedValue) / maxAbs * 0.42, 0.45, 0.92),
+        }));
+      });
+      drawMonthLabels(svg, rect, bars.map(bar => ({
+        label: bar.monthLabel,
+        position: bar.position,
+      })));
+    }
+    function drawIncomeCenterlineFastInfo(svg, months, config) {
+      drawPanel(svg);
+      const bars = incomeCenterlineBars(months, config.variant);
+      addText(svg, config.title, chart.primary.left, chart.panel.top + 22, {
+        fill: colors.gray700,
+        size: 10.2,
+        weight: 750,
+      });
+      drawLegend(svg, [
+        {label: config.goodLabel, color: colors.income},
+        {label: config.badLabel, color: colors.expense},
+        {label: config.zeroLabel || '0', color: colors.text},
+      ], chart.primary, chart.panel.top + 39);
+      drawExpenseWeightedBars(svg, chart.primary, bars);
+      const incomeHelper = incomeThresholdExcessSeries(incomeFilteredPatternMonths(months));
+      addText(svg, '2. Threshold excess', chart.helper.left, chart.helper.top - 8, {
+        fill: colors.gray700,
+        size: 8.5,
+        weight: 700,
+      });
+      drawThresholdExcessHistogram(svg, chart.helper, incomeHelper.helperAmountLine, threshold, colors.income);
+      drawMonthLabels(svg, chart.helper, incomeHelper.monthTicks);
+    }
+    function drawExpenseWeightedFastInfo(svg, months) {
+      drawIncomeCenterlineFastInfo(svg, months, incomeCenterlineConfigs.netGap);
+    }
+    function drawFastInfo(series, months) {
+      const svg = document.getElementById('fastInfoSvg');
+      svg.innerHTML = '';
+      if (activeType === 'expense') {
+        drawReferenceFastInfo(svg, series);
+        return;
+      }
+      drawExpenseWeightedFastInfo(svg, months);
+    }
+
+    function drawHeader(series) {
+      const magnet = document.getElementById('magnet');
+      const marker = document.getElementById('magnetMarker');
+      const isExpenseMagnet = activeType === 'expense' && Number.isFinite(series.expenseMagnetScore);
+      const isIncomeMagnet = activeType === 'income' && Number.isFinite(series.incomeMagnetScore);
+      magnet.classList.toggle('expense-score', isExpenseMagnet);
+      magnet.classList.toggle('income-score', isIncomeMagnet);
+      const markerPosition = isExpenseMagnet ? series.expenseMagnetScore / 100 : isIncomeMagnet ? series.incomeMagnetScore / 100 : series.driftMarker;
+      const headerScore = isExpenseMagnet ? series.expenseMagnetScore : isIncomeMagnet ? series.incomeMagnetScore : clamp(series.driftMarker * 100, 0, 100);
+      marker.style.left = `${clamp(markerPosition, 0, 1) * 100}%`;
+      document.getElementById('headerValue').textContent = `${Math.round(headerScore)}/100`;
+      if (isExpenseMagnet) {
+        marker.style.setProperty('--magnet-score-color', scoreColor(series.expenseMagnetScore));
+        marker.title = `Scope score ${Math.round(series.expenseMagnetScore)}/100`;
+      } else if (isIncomeMagnet) {
+        marker.style.setProperty('--magnet-score-color', scoreColor(series.incomeMagnetScore));
+        marker.title = `Scope score ${Math.round(series.incomeMagnetScore)}/100`;
+      } else {
+        marker.style.removeProperty('--magnet-score-color');
+        marker.removeAttribute('title');
+      }
+    }
+
+    function drawMonthCards(months) {
+      const grid = document.getElementById('monthGrid');
+      const activeColor = scopeSelectionColor();
+      const activeLabel = activeType === 'expense' ? 'kiadás' : 'bevétel';
+      const selected = selectedScopeCategories();
+      const activeScopeLabel = isAllScopeSelected()
+        ? activeLabel
+        : selected.length === 1
+          ? `${activeLabel} ${selected[0].label}`
+          : `${activeLabel} ${selected.length} kategória`;
+      grid.style.setProperty('--active-color', activeColor);
+      grid.innerHTML = months.map(month => {
+        const tone = closeTone(month.close);
+        const blanks = Array.from({length: month.leading}, () => '<div class="day"></div>').join('');
+        const days = month.days.map(day => {
+          if (!day.hit) return `<div class="day"><span>${day.day}</span></div>`;
+          return `<div class="day heat" style="--day-heat-color:${activeColor};--day-heat-opacity:${day.heatOpacity.toFixed(3)}"><span>${day.day}</span></div>`;
+        }).join('');
+        return `
+          <article class="month-card${month.hasTransactions ? '' : ' no-activity'}">
+            <div class="month-name">${month.name}</div>
+            <div class="month-balance">
+              <div class="balance-caption">zárás</div>
+              <div class="balance-value" style="color:${tone.color}">${formatSignedHuf(month.close)}</div>
+            </div>
+            <div class="month-secondary">
+              <span class="secondary-dot"></span>
+              <span>${activeScopeLabel} ${formatHuf(month.thresholdedActiveTotal)}</span>
+            </div>
+            <div class="weekdays">${weekdays.map(d => `<div>${d}</div>`).join('')}</div>
+            <div class="days">${blanks}${days}</div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function drawScopeSelector() {
+      const selector = document.getElementById('scopeSelector');
+      const allButton = `
+        <button class="scope-option${isAllScopeSelected() ? ' active' : ''}" type="button" data-scope-id="all" style="--scope-color:${colors.heatmap}">
+          ALL
+        </button>
+      `;
+      const categoryButtons = activeCategories().map(category => `
+        <button class="scope-option${activeScopeIds.has(category.id) ? ' active' : ''}" type="button" data-scope-id="${category.id}" style="--scope-color:${category.color}">
+          ${category.chip}
+        </button>
+      `);
+      selector.innerHTML = [allButton, ...categoryButtons].join('');
+      selector.querySelectorAll('.scope-option').forEach(button => {
+        button.addEventListener('click', () => toggleScopeCategory(button.dataset.scopeId));
+      });
+    }
+
+    function toggleScopeCategory(scopeId) {
+      normalizeActiveScope();
+      if (scopeId === 'all') {
+        activeScopeIds = new Set(activeCategoryIds());
+        render();
+        return;
+      }
+      if (activeScopeIds.has(scopeId)) {
+        if (activeScopeIds.size > 1) {
+          activeScopeIds.delete(scopeId);
+        } else {
+          activeScopeIds = new Set(activeCategoryIds());
+        }
+      } else {
+        activeScopeIds.add(scopeId);
+      }
+      render();
+    }
+
+    function observedMaxAmount() {
+      const byMonthDay = new Map();
+      transactions
+        .filter(record => record.type === activeType && scopeIncludes(record))
+        .forEach(record => {
+          const key = `${record.monthIndex}-${record.day}`;
+          byMonthDay.set(key, (byMonthDay.get(key) || 0) + record.amount);
+        });
+      return Math.max(50000, ...byMonthDay.values());
+    }
+    function sliderMaxForScope() {
+      return Math.ceil(observedMaxAmount() / 5000) * 5000;
+    }
+    function clampThresholdToScope() {
+      threshold = clamp(threshold, 0, sliderMaxForScope());
+    }
+    function updateControls(months) {
+      const slider = document.getElementById('slider');
+      const sliderMax = sliderMaxForScope();
+      slider.max = String(sliderMax);
+      document.getElementById('incomeBtn').classList.toggle('active', activeType === 'income');
+      document.getElementById('expenseBtn').classList.toggle('active', activeType === 'expense');
+      const scopeChip = document.getElementById('scopeChip');
+      scopeChip.textContent = scopeChipText();
+      scopeChip.title = scopeTitleText();
+      scopeChip.style.background = scopeSelectionColor();
+      document.getElementById('thresholdValue').textContent = formatHuf(threshold);
+      slider.value = threshold;
+      document.getElementById('manual').value = String(threshold);
+    }
+
+    function render() {
+      normalizeActiveScope();
+      clampThresholdToScope();
+      const months = buildMonths();
+      const series = sumSeries(months);
+      drawFastInfo(series, months);
+      drawHeader(series);
+      drawScopeSelector();
+      drawMonthCards(months);
+      updateControls(months);
+    }
+
+    function setThreshold(raw) {
+      const parsed = Number.parseInt(String(raw).replace(/\D/g, ''), 10);
+      if (Number.isFinite(parsed)) {
+        const max = Number.parseInt(document.getElementById('slider').max, 10) || 220000;
+        threshold = clamp(Math.round(parsed / 5000) * 5000, 0, max);
+      }
+      render();
+    }
+    function resetScopeSelection() {
+      activeScopeIds = new Set(activeCategoryIds());
+      render();
+    }
+    document.getElementById('incomeBtn').addEventListener('click', () => {
+      activeType = 'income';
+      activeScopeIds = new Set(activeCategoryIds());
+      threshold = 0;
+      render();
+    });
+    document.getElementById('expenseBtn').addEventListener('click', () => {
+      activeType = 'expense';
+      activeScopeIds = new Set(activeCategoryIds());
+      threshold = 0;
+      render();
+    });
+    document.getElementById('scopeMenuBtn').addEventListener('click', resetScopeSelection);
+    document.getElementById('scopeChip').addEventListener('click', resetScopeSelection);
+    document.getElementById('slider').addEventListener('input', event => setThreshold(event.target.value));
+    document.getElementById('manual').addEventListener('change', event => setThreshold(event.target.value));
+    window.addEventListener('error', event => showRuntimeError(event.error || event.message));
+    window.addEventListener('unhandledrejection', event => showRuntimeError(event.reason));
+    render();
+  </script>
+</body>
+</html>
