@@ -8560,10 +8560,13 @@ final class DashboardCoreController {
     }
     _discardRetainedSegmentedPaintedScene();
     // Canonical navigation now owns this Year. The renderer acknowledgement
-    // must not keep an old G alive through a later independent temporal
-    // producer. A currently held Mind range retains its own exact identity
-    // until drag end, so this demotion cannot break a live slider preview.
-    if (identical(_mindYearHeatmapVisualTemporalTarget, target)) {
+    // may originate from an earlier, distinct target object (for example a
+    // painted 2027 that a later 2025 terminal settle supersedes), so object
+    // identity is not an authority check here. A currently held Mind range
+    // retains its own exact identity until drag end, so this demotion cannot
+    // break a live slider preview.
+    if (component == DashboardTemporalAnchorComponent.year &&
+        candidate.plane == TimePlane.year) {
       _mindYearHeatmapVisualTemporalTarget = null;
     }
     _recordNavigationSelection('summaryExperimentPaintedTargetSettled');

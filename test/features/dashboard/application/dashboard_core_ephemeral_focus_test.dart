@@ -1470,6 +1470,171 @@ void main() {
   );
 
   testWidgets(
+    'RED MYRL-01: a final canonical Year settle cannot resurrect a retained older transient heatmap Year',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-2025',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 100000,
+            date: const LocalDate(year: 2025, month: 1, day: 1),
+          ),
+          _mindYearEntry(
+            id: 'income-2026',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 200000,
+            date: const LocalDate(year: 2026, month: 1, day: 1),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      await tester.pump();
+      expect(core.mindYearHeatmap.identity!.year, 2026);
+
+      // Mount the actual segmented Summary owner. The following calls are the
+      // exact Core callbacks that this mounted production parent invokes for
+      // accepted components, painted LogBox frames, renderer acknowledgement
+      // and terminal settle; no parallel temporal/heatmap implementation is
+      // introduced by the test.
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('summary-pill-segmented-year-selector'),
+        ),
+        findsOneWidget,
+      );
+
+      final origin = core.navigation.state;
+      core.beginSegmentedSummaryMotion();
+      final retained2027 = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.year,
+        isRailOpen: origin.isRailOpen,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: 1,
+        base: origin,
+      )!;
+      expect(retained2027.yearCursor, 2027);
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: retained2027,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.logBoxLane.value!),
+      );
+      core.noteSegmentedSummaryComponentVisualTargetPainted(
+        candidate: retained2027,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+      expect(core.mindYearHeatmap.identity!.year, 2027);
+      expect(core.mindYearHeatmap.identity!.navigationEpoch, 1);
+
+      // A new Summary interaction settles a distinct 2025 target. Its
+      // canonical commit must revoke the old renderer-acknowledged 2027
+      // authority even though the two target objects cannot be identical.
+      core.beginSegmentedSummaryMotion();
+      final final2025 = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.year,
+        isRailOpen: origin.isRailOpen,
+        component: DashboardTemporalAnchorComponent.year,
+        offset: -1,
+        base: origin,
+      )!;
+      expect(final2025.yearCursor, 2025);
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: final2025,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.logBoxLane.value!),
+      );
+      core.settleExperimentalTemporalComponentCandidate(
+        candidate: final2025,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+      expect(core.navigation.state.yearCursor, 2025);
+
+      // This is the Core refresh entry point used by the graph-verified
+      // focus, direction and presentation callers. On the unmodified parent
+      // it wrongly reselects retained 2027 under
+      // summaryVisualTransientYearRetained after the final 2025 settle.
+      FluviDiagnosticLogger.clear();
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      final actual = core.mindYearHeatmap.identity!;
+      expect(
+        actual.year,
+        2025,
+        reason:
+            'A later refresh must retain final canonical/presented 2025, not '
+            'resurrect the obsolete renderer-acknowledged 2027. Diagnostics: '
+            '${FluviDiagnosticLogger.entries.map((event) => '${event.stage}:${event.scope}').join(' | ')}',
+      );
+      expect(actual.navigationEpoch, 0);
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) =>
+                  event.stage == 'MIND_HEATMAP|FRAME_PUBLISHED' &&
+                  (event.scope?.contains(
+                        'cause=summaryVisualTransientYearRetained',
+                      ) ??
+                      false),
+            )
+            .map((event) => event.scope)
+            .join('\n'),
+        isEmpty,
+        reason: 'A settled canonical Year may not retain a prior transient.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED MYHR-08: the mounted production parent exposes no blank or stale direction heatmap frame',
     (tester) async {
       final core = DashboardCoreController(
