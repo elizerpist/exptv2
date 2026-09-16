@@ -630,3 +630,60 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   validation remain pending; the prior profile headroom failure is not called
   green.
 - Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-16 — Mind Year realtime correctness and liveness contract (`c2e35c8f`)
+
+- Validation-only commit: `c2e35c8f` (`test(mind): enforce realtime Year
+  heatmap contract`) changes tests and acceptance/architecture/plan evidence;
+  it makes **no production runtime change**. The application repair remains
+  `31f2f146`.
+- Product boundary clarified: stale retained `2027 -> 2025` lifecycle GREEN is
+  not completion by itself. Every Year that Summary actually paints must have
+  the same Mind identity in that transition and an actual annual heatmap paint
+  in the same or immediately following render frame. A coalesced never-painted
+  target is not owed a heatmap publication, but it may never later paint.
+- New mounted `MYRT-01` uses the actual CoreDashboard, segmented Year selector
+  and annual viewport with distinct 2026→2025→2024→2023 Income data. It checks
+  actual Summary paint, exact Mind identity/G1, and actual
+  `MIND_HEATMAP|PAINTED` with at most one additional frame; it also proves the
+  held slider retains exact 2023/G1, the terminal canonical 2023/G0 paints,
+  and a later Core refresh cannot restore retained transient authority.
+- New mounted `MYRT-02` drives a real 1,500 px/s ballistic Year fling with the
+  input sequence deliberately frame-free. On subsequent visible ballistic
+  frames it requires each Summary-painted Year to obtain actual Mind paint in
+  the same or next frame, rejects a transient Mind paint for any unpainted or
+  coalesced Summary Year, and retains zero source-row/repository work bounds.
+  This is a frame contract, not a pump-until-idle eventual-consistency test.
+- Hot-path proof: for every direct transient target,
+  `SUMMARY_COMPONENT_PREPARED_PUBLICATION` reports `repositoryCalls=0`,
+  `indexBuilds=0`, `scenePrepares=0`; the Mind frame reports `sourceRows=0` and
+  prepared contribution use. The mounted direct and ballistic paths retain one
+  repository prepare and zero raw source-row touches. The direct test also
+  proves canonical year/query authority stays at 2026 until terminal settle.
+- Ubuntu-proot GREEN evidence: full
+  `dashboard_core_ephemeral_focus_test.dart` passes 77 tests; changed-file
+  `flutter analyze` reports `No issues found`; Mind domain/viewport suite
+  passes 19 tests; centered-carousel identity suite passes 15 tests; Summary
+  direct-pointer-preemption suite passes 12 tests; Mind mode host passes 2
+  tests. The protected Time carousel/controller/ScrollPosition/physics source
+  remains untouched.
+- Exact application CI audit: Actions run `35059233562` for `31f2f146` has
+  `test-flutter`, `test-core`, dashboard-paths and human diagnostic APK jobs
+  successful. `run-dashboard-profile` fails at
+  `Mind Year heatmap profile evidence frame_timing_headroom is invalid: null`,
+  then cannot complete the A–K report because
+  `B_year_month_rail_populated` is absent. This existing profile evidence
+  failure is **not green** and no threshold/gate was weakened. Final automated
+  FrameTiming acceptance remains blocked pending a causal profile/instrument
+  repair outside this proven runtime lifecycle boundary.
+- The existing successful human APK for `31f2f146` is present at
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_31f2f14.apk`,
+  size 82,498,865 bytes, SHA-256
+  `40b0517da28f48f6faf185ced264d12ccd7b3537ee5a624b03bcb0b44fc5edff`.
+  Its `libapp.so` contains the full `31f2f146249cf247284697bb3c193010eaccd00a`
+  source marker.
+- Still pending: final matching SCIP provenance after the final validation
+  commit, honest resolution/classification of the null profile FrameTiming
+  evidence, and user physical Android acceptance. The fresh physical log still
+  cannot identify its previous APK SHA because startup markers were evicted.
+- Physical validation: `PENDING — USER ONLY`.
