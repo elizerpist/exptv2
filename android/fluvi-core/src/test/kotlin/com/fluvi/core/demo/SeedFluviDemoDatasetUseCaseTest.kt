@@ -273,6 +273,7 @@ class SeedFluviDemoDatasetUseCaseTest {
             "Szórakozás",
             "Vásárlás",
             "Előfizetések",
+            "Gyorsétterem",
         )
         // The Budget bank must retain the authoritative category-repository
         // order, not the demo generator declaration order.
@@ -285,7 +286,7 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(incomeIds, income.orderedCategoryIds)
         assertEquals(expenseIds, expense.orderedCategoryIds)
         assertEquals(3, income.targetCount)
-        assertEquals(9, expense.targetCount)
+        assertEquals(10, expense.targetCount)
         assertEquals(
             incomeNames,
             income.orderedCategoryIds.map { categoryById.getValue(it).name }.toSet(),
