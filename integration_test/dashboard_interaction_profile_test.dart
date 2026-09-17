@@ -2299,7 +2299,7 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
     expect(
       ids,
       isNotEmpty,
-      reason: 'K category $handle must be nonempty in July.',
+      reason: 'K category ${target.handle} must be nonempty in July.',
     );
     expect(
       seen.intersection(ids),
