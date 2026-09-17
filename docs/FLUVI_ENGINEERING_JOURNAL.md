@@ -880,3 +880,70 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   references. The graph is navigation evidence, not runtime causality.
 - Delivery status is PARTIAL solely for the inherited Android profile gate and
   physical acceptance. Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-17 — Expanded Mind Header score-history chart delivery (`505e6873`)
+
+- Application commit: `505e6873b5c10e0bdfa64c1a00a4d75fdeb584da`
+  (`feat(mind): add expanded score history header chart`) on
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`. The strict
+  visual authority was inspected directly at
+  `/storage/emulated/0/spendee/mind score Reference .png` (941×1663). The
+  implementation retains its 378×126 logical header composition: the semantic
+  score is at `(16,16)`, and the chart plot is `(16,48,346×60)`.
+- The chart is a Mind-only expanded-header layer. It is clipped directly by
+  the existing expansion progress, receives no independent entrance motion,
+  ticker, animation controller, query authority, or financial calculation,
+  and is `IgnorePointer`/repaint-boundary isolated. Its painter supplies the
+  reference's thin white smoothed line, outlined endpoint, subtle dashed guide
+  and transparent white area fade. The score value remains semantic content;
+  the existing shared Header visual controller remains the sole ticker owner.
+- A resident immutable score chart series is published atomically with the
+  selected score frame. Expense points reuse the causal daily score path.
+  Income series construction has one chronological resident index pass with a
+  running median and prior-three-sample state, avoiding repeated historical
+  scans. Sum begins at the first eligible day; Day/Month/Year use their
+  canonical scoped start, so the graph preserves the same daily point
+  semantics without creating a graph-specific score model.
+- A build-side notification was source-isolated during validation:
+  `_MindQueryAmountRangeBinding.build` previously synchronously called score
+  projection publication through `_mindQueryAmountRange`, which could mark
+  the Header dirty while its ancestor was building. That build-side call was
+  removed; the already-existing semantic scope routes and post-build initial
+  prime remain the sole publishers. No timer, debounce or deferred score
+  semantics were introduced.
+- Visual evidence: the focused golden test renders the 378×126 chart card,
+  and the generated image was inspected against the device reference for
+  top-left score placement, plot bounds, thin line/endpoint, guide, soft
+  white under-line fade and continuous expansion clipping. Human device
+  visual acceptance remains separate below.
+- PASS — Ubuntu/proot focused Core regression suite:
+  `flutter test --no-pub test/features/dashboard/application/dashboard_core_ephemeral_focus_test.dart`
+  (80 passing). PASS — focused domain/presentation/protected suite covering
+  score series, chart component/boundary/golden, host, Header visual engine,
+  tuner, heatmap and canonical range:
+  `flutter test --no-pub <listed focused test files>` (109 passing). PASS —
+  targeted changed-file analysis:
+  `flutter analyze --no-pub <11 changed production/test targets>` — `No
+  issues found!` (41.0s). PASS — `git diff --check` before commit.
+- GitHub Actions run `35178660924` for exactly `505e6873` has `test-core`,
+  `test-flutter`, `dashboard-paths`, and `build-human-diagnostic-apk` PASS.
+  The normal human diagnostic APK was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_505e687.apk`;
+  SHA-256 is
+  `eeecca600e636de2583b3f4e15684510e69e69e092c6acc2622ca1a0a4dc1292`.
+- FAIL — the same run's `run-dashboard-profile` job fails at the established
+  inherited FrameTiming gate: `Mind Year heatmap profile evidence
+  frame_timing_headroom is invalid: null` in
+  `DashboardProfileReport.validateMindYearHeatmapEvidence`. The chart work did
+  not modify that profile instrumentation or weaken its threshold; this is an
+  honest automated-profile blocker, not a green performance result.
+- Final matching SCIP was generated from the exact application SHA with
+  `scip_dart 1.6.2`; raw index SHA-256 is
+  `5b68ad2eae74206b3cbee795313b0cc47b2f0367f14f30f706b70e00f19db375`.
+  Tooling graph commit
+  `34b4a8578e1457d42a0c723936dc2238de4494b2`
+  (`tooling/scip-codegraph-v1`) is pushed separately and its `dart test`
+  passes all 15 tests. The graph is source-verified navigation evidence, not
+  runtime causality.
+- Delivery status: PARTIAL solely for the inherited automated profile gate
+  and physical Android acceptance. Physical validation: `PENDING — USER ONLY`.
