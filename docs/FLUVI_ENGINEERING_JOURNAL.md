@@ -1127,4 +1127,8 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   (83,088,689 bytes; SHA-256
   `e40ecb26705c8a8a3a064ef65e1bd5fc5c69288e2b9fc1a02b84df81e8247da8`).
   `c67e7139` is test/checklist-only and does not change that runtime source.
+- PASS — the exact `c67e7139` human diagnostic release was also downloaded
+  to `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_c67e713.apk`.
+  It is 83,088,689 bytes and SHA-256
+  `fbd1105599a013e3d2fc6061c513552cab70bc224374ce5c272151e2ac3c36c0`.
   Physical validation: `PENDING — USER ONLY`.
