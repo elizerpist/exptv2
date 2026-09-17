@@ -117,4 +117,56 @@ void main() {
       expect(live.publicationCount, 1);
     },
   );
+
+  test(
+    'MHC-06 live publication atomically replaces score and current-scope chart history',
+    () {
+      final live = MindBehavioralScoreLiveProjection();
+      addTearDown(live.dispose);
+      final projection = MindBehavioralScoreProjection.build(
+        identity: projectionIdentity,
+        contributions: <MindBehavioralScoreContribution>[
+          for (var day = 100; day <= 140; day += 1)
+            MindBehavioralScoreContribution(
+              bookedLocalEpochDay: day,
+              amountMinor: 200 + day,
+            ),
+        ],
+      );
+      const initialIdentity = MindBehavioralScorePublicationIdentity(
+        projection: projectionIdentity,
+        targetEpochDay: 120,
+        navigationEpoch: 3,
+      );
+
+      live.install(
+        projection: projection,
+        identity: initialIdentity,
+        range: range,
+        chartStartEpochDay: 100,
+      );
+
+      final initial = live.value!;
+      expect(initial.chartSeries, isNotNull);
+      expect(initial.chartSeries!.startInclusiveEpochDay, 100);
+      expect(initial.chartSeries!.endInclusiveEpochDay, 120);
+      expect(initial.chartSeries!.points.last, initial.point);
+
+      expect(
+        live.publishTarget(
+          expectedProjectionIdentity: projectionIdentity,
+          targetEpochDay: 130,
+          navigationEpoch: 4,
+          range: range,
+          chartStartEpochDay: 110,
+        ),
+        isTrue,
+      );
+
+      final retargeted = live.value!;
+      expect(retargeted.chartSeries!.startInclusiveEpochDay, 110);
+      expect(retargeted.chartSeries!.endInclusiveEpochDay, 130);
+      expect(retargeted.chartSeries!.points.last, retargeted.point);
+    },
+  );
 }

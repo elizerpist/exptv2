@@ -38,6 +38,7 @@ final class MindBehavioralScoreLiveProjection
 
   MindBehavioralScoreProjection? _projection;
   MindBehavioralScorePublicationIdentity? _identity;
+  int? _chartStartEpochDay;
   int stalePublicationRejectCount = 0;
   int publicationCount = 0;
 
@@ -50,13 +51,12 @@ final class MindBehavioralScoreLiveProjection
     required MindBehavioralScoreProjection projection,
     required MindBehavioralScorePublicationIdentity identity,
     required QueryAmountRangeValues range,
+    int? chartStartEpochDay,
   }) {
     _projection = projection;
     _identity = identity;
-    value = projection.preview(
-      range: range,
-      targetEpochDay: identity.targetEpochDay,
-    );
+    _chartStartEpochDay = chartStartEpochDay ?? identity.targetEpochDay;
+    value = _frameFor(projection: projection, identity: identity, range: range);
     publicationCount += 1;
   }
 
@@ -70,9 +70,10 @@ final class MindBehavioralScoreLiveProjection
       return false;
     }
     if (value?.range == range) return true;
-    value = projection.preview(
+    value = _frameFor(
+      projection: projection,
+      identity: expectedIdentity,
       range: range,
-      targetEpochDay: expectedIdentity.targetEpochDay,
     );
     publicationCount += 1;
     return true;
@@ -86,6 +87,7 @@ final class MindBehavioralScoreLiveProjection
     required int targetEpochDay,
     required int navigationEpoch,
     required QueryAmountRangeValues range,
+    int? chartStartEpochDay,
   }) {
     final projection = _projection;
     if (projection == null ||
@@ -98,9 +100,16 @@ final class MindBehavioralScoreLiveProjection
       targetEpochDay: targetEpochDay,
       navigationEpoch: navigationEpoch,
     );
-    if (_identity == next && value?.range == range) return true;
+    final resolvedChartStartEpochDay =
+        chartStartEpochDay ?? _chartStartEpochDay ?? targetEpochDay;
+    if (_identity == next &&
+        value?.range == range &&
+        _chartStartEpochDay == resolvedChartStartEpochDay) {
+      return true;
+    }
     _identity = next;
-    value = projection.preview(range: range, targetEpochDay: targetEpochDay);
+    _chartStartEpochDay = resolvedChartStartEpochDay;
+    value = _frameFor(projection: projection, identity: next, range: range);
     publicationCount += 1;
     return true;
   }
@@ -113,6 +122,31 @@ final class MindBehavioralScoreLiveProjection
   void clear() {
     _projection = null;
     _identity = null;
+    _chartStartEpochDay = null;
     value = null;
+  }
+
+  MindBehavioralScoreFrame _frameFor({
+    required MindBehavioralScoreProjection projection,
+    required MindBehavioralScorePublicationIdentity identity,
+    required QueryAmountRangeValues range,
+  }) {
+    final pointFrame = projection.preview(
+      range: range,
+      targetEpochDay: identity.targetEpochDay,
+    );
+    final chartSeries = projection.chartSeries(
+      range: range,
+      startInclusiveEpochDay: _chartStartEpochDay ?? identity.targetEpochDay,
+      endInclusiveEpochDay: identity.targetEpochDay,
+    );
+    assert(chartSeries.points.isNotEmpty);
+    assert(chartSeries.points.last == pointFrame.point);
+    return MindBehavioralScoreFrame(
+      identity: pointFrame.identity,
+      range: pointFrame.range,
+      point: pointFrame.point,
+      chartSeries: chartSeries,
+    );
   }
 }

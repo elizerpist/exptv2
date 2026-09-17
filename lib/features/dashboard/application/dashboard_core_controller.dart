@@ -4014,11 +4014,18 @@ final class DashboardCoreController {
         range: binding.values,
         state: state,
       );
+      final chartStart = _mindScoreChartStartEpochDay(
+        projection: activeProjection,
+        range: binding.values,
+        timeScope: state.effectiveScope,
+        targetEpochDay: target,
+      );
       return mindBehavioralScore.publishTarget(
         expectedProjectionIdentity: projectionIdentity,
         targetEpochDay: target,
         navigationEpoch: state.navigationEpoch,
         range: binding.values,
+        chartStartEpochDay: chartStart,
       );
     }
     final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
@@ -4047,6 +4054,12 @@ final class DashboardCoreController {
       range: binding.values,
       state: state,
     );
+    final chartStart = _mindScoreChartStartEpochDay(
+      projection: projection,
+      range: binding.values,
+      timeScope: state.effectiveScope,
+      targetEpochDay: target,
+    );
     stopwatch.stop();
     mindBehavioralScore.install(
       projection: projection,
@@ -4056,6 +4069,7 @@ final class DashboardCoreController {
         navigationEpoch: state.navigationEpoch,
       ),
       range: binding.values,
+      chartStartEpochDay: chartStart,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -4113,6 +4127,31 @@ final class DashboardCoreController {
     return (start: boundaries.startInclusive.epochDay, end: end, fallback: end);
   }
 
+  int _mindScoreChartStartEpochDay({
+    required MindBehavioralScoreProjection projection,
+    required QueryAmountRangeValues range,
+    required LedgerTimeScope timeScope,
+    required int targetEpochDay,
+  }) {
+    final scope = switch (timeScope) {
+      AllTimeScope() => (
+        start: -10000000,
+        end: targetEpochDay,
+        fallback: targetEpochDay,
+      ),
+      LedgerTimeScope selected => _mindScoreBoundsFor(selected),
+    };
+    return switch (timeScope) {
+      AllTimeScope() => projection.firstEligibleEpochDay(
+        range: range,
+        startInclusiveEpochDay: scope.start,
+        endInclusiveEpochDay: scope.end,
+        fallbackEpochDay: scope.fallback,
+      ),
+      LedgerTimeScope() => scope.start,
+    };
+  }
+
   bool _publishMindBehavioralScorePreview({
     required PreparedDashboardIndex base,
     required CurrentLedgerQueryScope appliedScope,
@@ -4140,11 +4179,18 @@ final class DashboardCoreController {
       range: values,
       state: navigation.state,
     );
+    final chartStart = _mindScoreChartStartEpochDay(
+      projection: projection,
+      range: values,
+      timeScope: navigation.state.effectiveScope,
+      targetEpochDay: target,
+    );
     final published = mindBehavioralScore.publishTarget(
       expectedProjectionIdentity: expectedProjection,
       targetEpochDay: target,
       navigationEpoch: navigation.state.navigationEpoch,
       range: values,
+      chartStartEpochDay: chartStart,
     );
     if (published) {
       _mindScoreInteractionIdentity = mindBehavioralScore.identity;
@@ -14225,6 +14271,12 @@ final class DashboardCoreController {
       range: binding.values,
       timeScope: frame.scope.timeScope,
     );
+    final chartStart = _mindScoreChartStartEpochDay(
+      projection: projection,
+      range: binding.values,
+      timeScope: frame.scope.timeScope,
+      targetEpochDay: target,
+    );
     final identity = MindBehavioralScorePublicationIdentity(
       projection: expectedProjection,
       targetEpochDay: target,
@@ -14239,6 +14291,7 @@ final class DashboardCoreController {
       targetEpochDay: target,
       navigationEpoch: frame.navigationEpoch,
       range: binding.values,
+      chartStartEpochDay: chartStart,
     );
   }
 

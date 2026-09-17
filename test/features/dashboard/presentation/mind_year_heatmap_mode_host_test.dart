@@ -158,10 +158,59 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('63/100'), findsOneWidget);
+      final headerRect = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind-header')),
+      );
+      final scoreRect = tester.getRect(
+        find.byKey(const ValueKey('mind-header-score-text')),
+      );
+      expect(scoreRect.left - headerRect.left, closeTo(16, .01));
+      expect(scoreRect.top - headerRect.top, closeTo(16, .01));
+      expect(
+        find.byKey(const ValueKey('mind-header-score-chart')),
+        findsOneWidget,
+      );
 
       score.value = _score(27);
       await tester.pump();
       expect(find.text('27/100'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'MHC-01 production Mind Header clips score history completely when collapsed',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final score = ValueNotifier<MindBehavioralScoreFrame?>(_score(63));
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(score.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          showYearHeatmap: false,
+          score: score,
+          collapseProgress: DashboardLayoutMetrics.reference.collapseTravel,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-header-score-text')),
+        findsOneWidget,
+      );
     },
   );
 }
@@ -174,6 +223,7 @@ final class _HostHarness extends StatelessWidget {
     required this.expansion,
     required this.showYearHeatmap,
     this.score,
+    this.collapseProgress = 0,
   });
 
   final DashboardCoreModeController mode;
@@ -182,6 +232,7 @@ final class _HostHarness extends StatelessWidget {
   final _ExpansionRecorder expansion;
   final bool showYearHeatmap;
   final ValueNotifier<MindBehavioralScoreFrame?>? score;
+  final double collapseProgress;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -197,7 +248,7 @@ final class _HostHarness extends StatelessWidget {
               geometry: DashboardGeometryResolver.resolve(
                 metrics: DashboardLayoutMetrics.reference,
                 mode: mode,
-                collapseProgress: 0,
+                collapseProgress: collapseProgress,
                 isRailExpanded: false,
               ),
               palette: DashboardModePaletteResolver.resolve(mode),
@@ -268,22 +319,30 @@ MindYearHeatmapFrame _frame() =>
       ),
     );
 
-MindBehavioralScoreFrame _score(double value) => MindBehavioralScoreFrame(
-  identity: const MindBehavioralScoreIdentity(
-    upstreamScopeKey: 'expense|all',
-    indexGeneration: 1,
-    coreRevision: 1,
-    direction: LedgerDirection.expense,
-  ),
-  range: const QueryAmountRangeValues(
-    minimumScaled100: 1,
-    maximumScaled100: 1000,
-    lowerScaled100: 1,
-    upperScaled100: 1000,
-  ),
-  point: MindBehavioralScorePoint(
+MindBehavioralScoreFrame _score(double value) {
+  final point = MindBehavioralScorePoint(
     epochDay: const LocalDate(year: 2025, month: 1, day: 1).epochDay,
     score: value,
     noSignal: false,
-  ),
-);
+  );
+  return MindBehavioralScoreFrame(
+    identity: const MindBehavioralScoreIdentity(
+      upstreamScopeKey: 'expense|all',
+      indexGeneration: 1,
+      coreRevision: 1,
+      direction: LedgerDirection.expense,
+    ),
+    range: const QueryAmountRangeValues(
+      minimumScaled100: 1,
+      maximumScaled100: 1000,
+      lowerScaled100: 1,
+      upperScaled100: 1000,
+    ),
+    point: point,
+    chartSeries: MindBehavioralScoreChartSeries(
+      startInclusiveEpochDay: point.epochDay,
+      endInclusiveEpochDay: point.epochDay,
+      points: <MindBehavioralScorePoint>[point],
+    ),
+  );
+}

@@ -1386,7 +1386,11 @@ class _CoreDashboardState extends State<CoreDashboard>
           }),
         );
       }
-      controller.ensureMindBehavioralScoreProjection();
+      // Score publication is a semantic Core operation. This callback is
+      // evaluated from the range-control build, so it must only admit the
+      // prepared base here; the asynchronous prime completion and the Core's
+      // direction/time/focus publication paths publish the score outside the
+      // widget build transaction.
       if (shouldRenderYearHeatmap) {
         controller.ensureMindYearHeatmapProjection();
       }

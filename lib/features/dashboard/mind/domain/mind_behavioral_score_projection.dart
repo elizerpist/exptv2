@@ -81,6 +81,9 @@ final class MindBehavioralScoreSourceWorkCounter {
   int repositoryAccessesDuringPreview = 0;
   int indexBuildsDuringPreview = 0;
   int maxDayBucketsVisitedPerPreview = 0;
+  int chartSeriesBuildCount = 0;
+  int maxChartSeriesPointCount = 0;
+  int maxDayBucketsVisitedPerChartSeries = 0;
 
   void recordPreparedContributionTouch() => preparedContributionTouches += 1;
 
@@ -93,6 +96,21 @@ final class MindBehavioralScoreSourceWorkCounter {
     _previewMicros[_previewNext] = micros;
     _previewNext = (_previewNext + 1) % previewDurationCapacity;
     if (_previewCount < previewDurationCapacity) _previewCount += 1;
+  }
+
+  /// Records chart-only prepared-index work separately from the immediate
+  /// Header score preview metric. A chart is a semantic publication product,
+  /// not a pointer-tick score calculation and must not weaken that bound.
+  void finishChartSeries({
+    required int pointCount,
+    required int dayBucketsVisited,
+  }) {
+    chartSeriesBuildCount += 1;
+    maxChartSeriesPointCount = math.max(maxChartSeriesPointCount, pointCount);
+    maxDayBucketsVisitedPerChartSeries = math.max(
+      maxDayBucketsVisitedPerChartSeries,
+      dayBucketsVisited,
+    );
   }
 
   Map<String, int> previewDurationSummary() {
@@ -129,11 +147,59 @@ final class MindBehavioralScoreFrame {
     required this.identity,
     required this.range,
     required this.point,
+    this.chartSeries,
   });
 
   final MindBehavioralScoreIdentity identity;
   final QueryAmountRangeValues range;
   final MindBehavioralScorePoint point;
+
+  /// Header-only visual history prepared with the same immutable score frame.
+  /// It remains nullable for lightweight isolated consumers that intentionally
+  /// provide just one already-computed point.
+  final MindBehavioralScoreChartSeries? chartSeries;
+}
+
+/// A compact, chronological visual sample of canonical daily Mind score
+/// points. It deliberately contains points calculated by
+/// [MindBehavioralScoreProjection.preview] semantics; the Header chart may
+/// down-sample for pixels, but it never introduces chart-only finance math.
+@immutable
+final class MindBehavioralScoreChartSeries {
+  MindBehavioralScoreChartSeries({
+    required this.startInclusiveEpochDay,
+    required this.endInclusiveEpochDay,
+    required List<MindBehavioralScorePoint> points,
+  }) : assert(startInclusiveEpochDay <= endInclusiveEpochDay),
+       assert(
+         points.isEmpty ||
+             (points.first.epochDay >= startInclusiveEpochDay &&
+                 points.last.epochDay <= endInclusiveEpochDay),
+       ),
+       points = List<MindBehavioralScorePoint>.unmodifiable(points);
+
+  /// The fixed visual-point budget mirrors the reference's dense-but-minimal
+  /// line. Header paint consumes this immutable value and never queries score
+  /// history itself.
+  static const int maximumVisualPoints = 56;
+
+  final int startInclusiveEpochDay;
+  final int endInclusiveEpochDay;
+  final List<MindBehavioralScorePoint> points;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MindBehavioralScoreChartSeries &&
+      other.startInclusiveEpochDay == startInclusiveEpochDay &&
+      other.endInclusiveEpochDay == endInclusiveEpochDay &&
+      listEquals(other.points, points);
+
+  @override
+  int get hashCode => Object.hash(
+    startInclusiveEpochDay,
+    endInclusiveEpochDay,
+    Object.hashAll(points),
+  );
 }
 
 /// One canonical daily point. A future graph consumes these exact values
@@ -335,26 +401,11 @@ final class MindBehavioralScoreProjection {
         ? (Stopwatch()..start())
         : null;
     var visited = 0;
-    int amountAt(int epochDay) {
-      visited += 1;
-      return _dayRanges[epochDay]?.sumWithin(
-            minimum: range.lowerScaled100,
-            maximum: range.upperScaled100,
-          ) ??
-          0;
-    }
-
-    final point = switch (identity.direction) {
-      LedgerDirection.expense => _expensePoint(
-        targetEpochDay: targetEpochDay,
-        amountAt: amountAt,
-      ),
-      LedgerDirection.income => _incomePoint(
-        targetEpochDay: targetEpochDay,
-        amountAt: amountAt,
-        onDayKeyVisited: () => visited += 1,
-      ),
-    };
+    final point = _pointFor(
+      range: range,
+      targetEpochDay: targetEpochDay,
+      onDayBucketVisited: () => visited += 1,
+    );
     watch?.stop();
     _sourceWorkCounter.finishPreview(
       dayBucketsVisited: visited,
@@ -364,6 +415,179 @@ final class MindBehavioralScoreProjection {
       identity: identity,
       range: range,
       point: point,
+    );
+  }
+
+  /// Returns a visually bounded chronological history over the requested
+  /// already-selected scope. Every emitted sample is an exact canonical daily
+  /// score point, including the inclusive amount range; only pixel sampling
+  /// is bounded. Header paint never calls this method.
+  MindBehavioralScoreChartSeries chartSeries({
+    required QueryAmountRangeValues range,
+    required int startInclusiveEpochDay,
+    required int endInclusiveEpochDay,
+    int maximumPoints = MindBehavioralScoreChartSeries.maximumVisualPoints,
+  }) {
+    if (startInclusiveEpochDay > endInclusiveEpochDay) {
+      throw ArgumentError.value(
+        endInclusiveEpochDay,
+        'endInclusiveEpochDay',
+        'must not precede startInclusiveEpochDay',
+      );
+    }
+    if (maximumPoints <= 0) {
+      throw ArgumentError.value(
+        maximumPoints,
+        'maximumPoints',
+        'must be positive',
+      );
+    }
+    final sampleDays = _sampleEpochDays(
+      startInclusiveEpochDay: startInclusiveEpochDay,
+      endInclusiveEpochDay: endInclusiveEpochDay,
+      maximumPoints: maximumPoints,
+    );
+    var visited = 0;
+    final points = switch (identity.direction) {
+      LedgerDirection.expense => <MindBehavioralScorePoint>[
+        for (final epochDay in sampleDays)
+          _pointFor(
+            range: range,
+            targetEpochDay: epochDay,
+            onDayBucketVisited: () => visited += 1,
+          ),
+      ],
+      LedgerDirection.income => _incomeChartPoints(
+        range: range,
+        sampleDays: sampleDays,
+        onDayBucketVisited: () => visited += 1,
+      ),
+    };
+    _sourceWorkCounter.finishChartSeries(
+      pointCount: points.length,
+      dayBucketsVisited: visited,
+    );
+    return MindBehavioralScoreChartSeries(
+      startInclusiveEpochDay: startInclusiveEpochDay,
+      endInclusiveEpochDay: endInclusiveEpochDay,
+      points: points,
+    );
+  }
+
+  MindBehavioralScorePoint _pointFor({
+    required QueryAmountRangeValues range,
+    required int targetEpochDay,
+    required VoidCallback onDayBucketVisited,
+  }) {
+    int amountAt(int epochDay) {
+      onDayBucketVisited();
+      return _dayRanges[epochDay]?.sumWithin(
+            minimum: range.lowerScaled100,
+            maximum: range.upperScaled100,
+          ) ??
+          0;
+    }
+
+    return switch (identity.direction) {
+      LedgerDirection.expense => _expensePoint(
+        targetEpochDay: targetEpochDay,
+        amountAt: amountAt,
+      ),
+      LedgerDirection.income => _incomePoint(
+        targetEpochDay: targetEpochDay,
+        amountAt: amountAt,
+        onDayKeyVisited: onDayBucketVisited,
+      ),
+    };
+  }
+
+  /// Resolves all sampled Income points in chronological order. The generic
+  /// point resolver intentionally calculates a single point and therefore
+  /// walks its prior meaningful days. A chart must not repeat that history
+  /// walk for every pixel sample: this one resident-index pass carries the
+  /// last-three and running-median context forward while preserving the
+  /// precise single-point formula.
+  List<MindBehavioralScorePoint> _incomeChartPoints({
+    required QueryAmountRangeValues range,
+    required List<int> sampleDays,
+    required VoidCallback onDayBucketVisited,
+  }) {
+    final points = <MindBehavioralScorePoint>[];
+    final median = _MindScoreRunningMedian();
+    final recentPrevious = <int>[];
+    var recentPreviousSum = 0;
+    var dayKeyIndex = 0;
+
+    int eligibleAmountAtKey(int epochDay) {
+      onDayBucketVisited();
+      return _dayRanges[epochDay]?.sumWithin(
+            minimum: range.lowerScaled100,
+            maximum: range.upperScaled100,
+          ) ??
+          0;
+    }
+
+    void appendRecentPrevious(int amount) {
+      recentPrevious.add(amount);
+      recentPreviousSum += amount;
+      if (recentPrevious.length > 3) {
+        recentPreviousSum -= recentPrevious.removeAt(0);
+      }
+    }
+
+    void appendMeaningfulPrevious(int amount) {
+      median.add(amount);
+      appendRecentPrevious(amount);
+    }
+
+    for (final targetEpochDay in sampleDays) {
+      while (dayKeyIndex < _dayKeys.length &&
+          _dayKeys[dayKeyIndex] < targetEpochDay) {
+        final amount = eligibleAmountAtKey(_dayKeys[dayKeyIndex]);
+        if (amount > 0) appendMeaningfulPrevious(amount);
+        dayKeyIndex += 1;
+      }
+
+      var current = 0;
+      if (dayKeyIndex < _dayKeys.length &&
+          _dayKeys[dayKeyIndex] == targetEpochDay) {
+        current = eligibleAmountAtKey(_dayKeys[dayKeyIndex]);
+        dayKeyIndex += 1;
+      }
+
+      final priorCount = median.count;
+      final priorAverage = recentPrevious.isEmpty
+          ? 0.0
+          : recentPreviousSum / recentPrevious.length;
+      if (current > 0) median.add(current);
+      final medianWithCurrent = current > 0 ? median.median : 0.0;
+      points.add(
+        _incomePointFromHistory(
+          targetEpochDay: targetEpochDay,
+          current: current,
+          priorCount: priorCount,
+          previousAverage: priorAverage,
+          medianWithCurrent: medianWithCurrent,
+        ),
+      );
+      if (current > 0) appendRecentPrevious(current);
+    }
+    return points;
+  }
+
+  static List<int> _sampleEpochDays({
+    required int startInclusiveEpochDay,
+    required int endInclusiveEpochDay,
+    required int maximumPoints,
+  }) {
+    final span = endInclusiveEpochDay - startInclusiveEpochDay;
+    final availableDayCount = span + 1;
+    final pointCount = math.min(availableDayCount, maximumPoints);
+    if (pointCount == 1) return <int>[endInclusiveEpochDay];
+    return List<int>.generate(
+      pointCount,
+      (index) => startInclusiveEpochDay + (span * index ~/ (pointCount - 1)),
+      growable: false,
     );
   }
 
@@ -383,6 +607,31 @@ final class MindBehavioralScoreProjection {
     ) {
       final day = _dayKeys[index];
       if (day < startInclusiveEpochDay) break;
+      if ((_dayRanges[day]?.sumWithin(
+                minimum: range.lowerScaled100,
+                maximum: range.upperScaled100,
+              ) ??
+              0) >
+          0) {
+        return day;
+      }
+    }
+    return fallbackEpochDay;
+  }
+
+  /// The earliest range-eligible daily contribution in an already-resolved
+  /// visual scope. All-Time chart bounds use this resident lookup rather than
+  /// inventing an arbitrary calendar origin.
+  int firstEligibleEpochDay({
+    required QueryAmountRangeValues range,
+    required int startInclusiveEpochDay,
+    required int endInclusiveEpochDay,
+    required int fallbackEpochDay,
+  }) {
+    final startIndex = _lowerBound(_dayKeys, startInclusiveEpochDay);
+    final endIndex = _upperBound(_dayKeys, endInclusiveEpochDay);
+    for (var index = startIndex; index < endIndex; index += 1) {
+      final day = _dayKeys[index];
       if ((_dayRanges[day]?.sumWithin(
                 minimum: range.lowerScaled100,
                 maximum: range.upperScaled100,
@@ -530,17 +779,12 @@ final class MindBehavioralScoreProjection {
       if (amount > 0) previous.add(amount);
     }
     if (current <= 0 || previous.isEmpty) {
-      return MindBehavioralScorePoint(
-        epochDay: targetEpochDay,
-        score: 50,
-        noSignal: true,
-        income: MindIncomeScoreComponents(
-          currentAmount: current,
-          previousAverage: 0,
-          baseline: 0,
-          trendDelta: 0,
-          trendAdjustment: 0,
-        ),
+      return _incomePointFromHistory(
+        targetEpochDay: targetEpochDay,
+        current: current,
+        priorCount: previous.length,
+        previousAverage: 0,
+        medianWithCurrent: 0,
       );
     }
     final start = math.max(0, previous.length - 3);
@@ -554,8 +798,40 @@ final class MindBehavioralScoreProjection {
         : (medianSource[medianSource.length ~/ 2 - 1] +
                   medianSource[medianSource.length ~/ 2]) /
               2;
-    final baseline = math.max(1, math.max(average, median)).toDouble();
-    final trendDelta = (current - average) / baseline;
+    return _incomePointFromHistory(
+      targetEpochDay: targetEpochDay,
+      current: current,
+      priorCount: previous.length,
+      previousAverage: average,
+      medianWithCurrent: median,
+    );
+  }
+
+  MindBehavioralScorePoint _incomePointFromHistory({
+    required int targetEpochDay,
+    required int current,
+    required int priorCount,
+    required double previousAverage,
+    required double medianWithCurrent,
+  }) {
+    if (current <= 0 || priorCount == 0) {
+      return MindBehavioralScorePoint(
+        epochDay: targetEpochDay,
+        score: 50,
+        noSignal: true,
+        income: MindIncomeScoreComponents(
+          currentAmount: current,
+          previousAverage: 0,
+          baseline: 0,
+          trendDelta: 0,
+          trendAdjustment: 0,
+        ),
+      );
+    }
+    final baseline = math
+        .max(1, math.max(previousAverage, medianWithCurrent))
+        .toDouble();
+    final trendDelta = (current - previousAverage) / baseline;
     final adjustment = (trendDelta * 35).clamp(-30.0, 30.0).toDouble();
     return MindBehavioralScorePoint(
       epochDay: targetEpochDay,
@@ -563,7 +839,7 @@ final class MindBehavioralScoreProjection {
       noSignal: false,
       income: MindIncomeScoreComponents(
         currentAmount: current,
-        previousAverage: average,
+        previousAverage: previousAverage,
         baseline: baseline,
         trendDelta: trendDelta,
         trendAdjustment: adjustment,
@@ -613,6 +889,130 @@ final class MindBehavioralScoreProjection {
       }
     }
     return low;
+  }
+}
+
+/// Incremental exact median for the already range-filtered Income daily
+/// amounts. It is intentionally tiny and local to the resident score index:
+/// no collection package, source-row access, or chart rendering state leaks
+/// into the score model.
+final class _MindScoreRunningMedian {
+  final List<int> _lowerMaxHeap = <int>[];
+  final List<int> _upperMinHeap = <int>[];
+
+  int get count => _lowerMaxHeap.length + _upperMinHeap.length;
+
+  void add(int value) {
+    if (_lowerMaxHeap.isEmpty || value <= _lowerMaxHeap.first) {
+      _pushMax(value);
+    } else {
+      _pushMin(value);
+    }
+    if (_lowerMaxHeap.length > _upperMinHeap.length + 1) {
+      _pushMin(_popMax());
+    } else if (_upperMinHeap.length > _lowerMaxHeap.length) {
+      _pushMax(_popMin());
+    }
+  }
+
+  double get median {
+    assert(count > 0);
+    if (_lowerMaxHeap.length == _upperMinHeap.length) {
+      return (_lowerMaxHeap.first + _upperMinHeap.first) / 2;
+    }
+    return _lowerMaxHeap.first.toDouble();
+  }
+
+  void _pushMax(int value) {
+    _lowerMaxHeap.add(value);
+    var index = _lowerMaxHeap.length - 1;
+    while (index > 0) {
+      final parent = (index - 1) >> 1;
+      if (_lowerMaxHeap[parent] >= _lowerMaxHeap[index]) break;
+      _swap(_lowerMaxHeap, parent, index);
+      index = parent;
+    }
+  }
+
+  int _popMax() {
+    final value = _lowerMaxHeap.first;
+    _removeMaxAt(0);
+    return value;
+  }
+
+  void _removeMaxAt(int index) {
+    final last = _lowerMaxHeap.removeLast();
+    if (index == _lowerMaxHeap.length) return;
+    _lowerMaxHeap[index] = last;
+    _siftMax(index);
+  }
+
+  void _siftMax(int index) {
+    while (true) {
+      final left = index * 2 + 1;
+      final right = left + 1;
+      var candidate = index;
+      if (left < _lowerMaxHeap.length &&
+          _lowerMaxHeap[left] > _lowerMaxHeap[candidate]) {
+        candidate = left;
+      }
+      if (right < _lowerMaxHeap.length &&
+          _lowerMaxHeap[right] > _lowerMaxHeap[candidate]) {
+        candidate = right;
+      }
+      if (candidate == index) return;
+      _swap(_lowerMaxHeap, candidate, index);
+      index = candidate;
+    }
+  }
+
+  void _pushMin(int value) {
+    _upperMinHeap.add(value);
+    var index = _upperMinHeap.length - 1;
+    while (index > 0) {
+      final parent = (index - 1) >> 1;
+      if (_upperMinHeap[parent] <= _upperMinHeap[index]) break;
+      _swap(_upperMinHeap, parent, index);
+      index = parent;
+    }
+  }
+
+  int _popMin() {
+    final value = _upperMinHeap.first;
+    _removeMinAt(0);
+    return value;
+  }
+
+  void _removeMinAt(int index) {
+    final last = _upperMinHeap.removeLast();
+    if (index == _upperMinHeap.length) return;
+    _upperMinHeap[index] = last;
+    _siftMin(index);
+  }
+
+  void _siftMin(int index) {
+    while (true) {
+      final left = index * 2 + 1;
+      final right = left + 1;
+      var candidate = index;
+      if (left < _upperMinHeap.length &&
+          _upperMinHeap[left] < _upperMinHeap[candidate]) {
+        candidate = left;
+      }
+      if (right < _upperMinHeap.length &&
+          _upperMinHeap[right] < _upperMinHeap[candidate]) {
+        candidate = right;
+      }
+      if (candidate == index) return;
+      _swap(_upperMinHeap, candidate, index);
+      index = candidate;
+    }
+  }
+
+  static void _swap(List<int> values, int left, int right) {
+    final value = values[left];
+    values[left] = values[right];
+    values[right] = value;
   }
 }
 

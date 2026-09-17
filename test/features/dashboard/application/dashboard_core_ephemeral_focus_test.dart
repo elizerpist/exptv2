@@ -651,6 +651,15 @@ void main() {
       );
       expect(initial.point.noSignal, isFalse);
       expect(initial.point.score, closeTo(76.25, .000001));
+      expect(
+        initial.chartSeries?.startInclusiveEpochDay,
+        const LocalDate(year: 2025, month: 5, day: 1).epochDay,
+        reason:
+            'The expanded Header history starts at the actual current Month '
+            'scope, while its endpoint remains the same canonical daily '
+            'score point as the text.',
+      );
+      expect(initial.chartSeries?.points.last, initial.point);
 
       const middleOnly = QueryAmountRangeValues(
         minimumScaled100: 100000,
@@ -670,6 +679,11 @@ void main() {
       );
       expect(preview.point.score, 50);
       expect(preview.point.noSignal, isTrue);
+      expect(
+        preview.chartSeries?.startInclusiveEpochDay,
+        const LocalDate(year: 2025, month: 5, day: 1).epochDay,
+      );
+      expect(preview.chartSeries?.points.last, preview.point);
       expect(repository.prepareCalls, preparesBeforePreview);
       expect(sourceCounter.sourceRowTouchesDuringPreview, 0);
       expect(sourceCounter.repositoryAccessesDuringPreview, 0);
@@ -1103,6 +1117,10 @@ void main() {
         lowerScaled100: 800000,
         upperScaled100: 900000,
       );
+      // This assertion belongs to this physical slider interaction only. A
+      // preceding Core test may have retained a diagnostic summary in the
+      // process-wide ring; clear it instead of accidentally counting it.
+      FluviDiagnosticLogger.clear();
       core.beginMindAmountRangeInteraction();
       expect(core.previewMindAmountRange(highExpenseOnly), isTrue);
       expect(_coloredHeatmapDates(core.mindYearHeatmap.value!), <String>{
