@@ -947,3 +947,74 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   runtime causality.
 - Delivery status: PARTIAL solely for the inherited automated profile gate
   and physical Android acceptance. Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-17 — Mind adaptive range, exact 2027 Fastfood mirror and perceptual palette delivery (`9c8ac0c1`)
+
+- Application feature commit: `9c8ac0c1adb37ac1fec3aac062b9f790159b350d`
+  (`feat(mind): refine score scale and adaptive amount domain`) on
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`. Follow-up
+  profile-fixture-only commits end at application/test source
+  `e31f10edefe154139db78951642628f71ec6c1cf`; they do not change production
+  Dashboard, Query, Budget, carousel, renderer, ticker, chart, score, or
+  database runtime code.
+- Adaptive range ownership remains canonical: `QueryAmountRange.domainScope`
+  removes only its amount endpoints, and the native authoritative facet/domain
+  aggregate publishes the non-amount-filtered maximum through the existing
+  `CurrentQueryController` cache. A drag reuses that maximum; it cannot
+  recursively contract its own physical domain or issue Room/repository/index
+  work. The shared deterministic 1/2/5 monetary snap helper yields 2,000 Ft
+  at 260,000 Ft, 1,000 Ft at 100,000 Ft, 200 Ft at 20,000 Ft and 50 Ft at
+  5,000 Ft. The compact shared range control now puts the slider above its
+  single `Összeg`/Min./Max. caption row while retaining preview/final parity.
+- `FastfoodPrototype2025Rows` stores the exact executed f332b712 prototype
+  output: 100 normalized 2025 rows, total 645,560 Ft, SHA-256
+  `cd8ec0a6bb2e5558a11e3dddd7aa6a087d9edde897b13fceea1da4eb82e5a65e`.
+  The deterministic real demo seed maps them to `Gyorsétterem` and its six
+  real partners, changes only the year to 2027, increments the versioned seed
+  manifest, and preserves idempotent normal Room/query behavior. The original
+  2025 list is not regenerated or modified.
+- Mind Header color is now the approved continuous eight-anchor scale:
+  `#991B1B`/0, `#DC2626`/18, `#F04A24`/35, `#F97316`/48,
+  `#FBBF24`/58, `#86D957`/70, `#4ADE80`/82 and `#15803D`/100. The prior
+  encoded-sRGB interpolation was replaced by shared OKLab perceptual sampling;
+  alpha remains owned by the Header. The existing independent Mind 10–100%
+  window/tuner and Budget policy remain unchanged.
+- The user-accepted expanded Mind Header chart source and reference geometry
+  were not changed: it retains the upper-left semantic score, expanded-only
+  clipping/reveal, thin white line, endpoint and white under-line fade, with
+  the one shared Header controller/ticker.
+- PASS — local Ubuntu/proot:
+  `flutter test test/performance/dashboard_profile_report_test.dart` (99
+  tests); focused range, palette, chart, score, heatmap, Core and demo suites
+  passed during the feature increments; changed-target `flutter analyze`
+  passed; `git diff --check` passed before commits. The local broad Flutter
+  run still has its inherited 30-second scene-window timeout and is not
+  represented as green.
+- PASS — GitHub Actions run `35196364731` for exact `e31f10ed`:
+  `test-flutter` (analysis + curated Flutter suite), `test-core` (clean Room
+  core plus native dashboard bridge), `dashboard-paths` and
+  `build-human-diagnostic-apk` all pass. The normal human diagnostic APK is
+  downloaded at
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_e31f10e.apk`;
+  size 82,859,313 bytes, SHA-256
+  `e2f72729e46b5ab3482b73a4377555ce5dbd24c951780068dd71375b52181871`,
+  with embedded source marker `e31f10edefe154139db78951642628f71ec6c1cf`.
+- FAIL — the same run's 20:58 `run-dashboard-profile` reaches the established
+  `DashboardProfileReport.validateMindYearHeatmapEvidence` rejection:
+  `frame_timing_headroom is invalid: null`, then lacks the B report as a
+  consequence. The Fastfood Avatar fixture recovery passed its prior failure
+  point; this source does not change Mind heatmap FrameTiming instrumentation,
+  thresholds, Time/Avatar physics, or renderer pacing. This inherited profile
+  limitation remains an honest automated performance blocker.
+- Final matching SCIP was generated from the clean exact application/test
+  source `e31f10ed` using `scip_dart 1.6.2`. Raw index SHA-256 is
+  `ab524e61ab8f6a215cffaeae6ffffa17f3ab47073c79708db129fd67f6c5688c`;
+  the manifest records 457 documents, 300,334 occurrences, 41,525 defined
+  symbols, 10,474 repository symbols and 77,226 refs. Tooling graph commit
+  `e09fd00e036f485aeb0e9388f867fe65d3bd374b` is pushed separately on
+  `tooling/scip-codegraph-v1`; its 15 tooling tests pass. The raw index stays
+  ignored/uncommitted and graph output is source-navigation evidence only.
+- Pre-existing unrelated untracked files, including the local `index.scip`,
+  were preserved. Delivery is PARTIAL only for the inherited automated profile
+  FrameTiming gate and physical device acceptance. Physical validation:
+  `PENDING — USER ONLY`.
