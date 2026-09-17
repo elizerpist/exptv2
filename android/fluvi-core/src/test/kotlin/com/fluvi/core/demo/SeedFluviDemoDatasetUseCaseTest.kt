@@ -12,6 +12,7 @@ import com.fluvi.core.model.FluviFinancialLimitPeriod
 import com.fluvi.core.query.FluviPreparedYearWindow
 import com.fluvi.core.query.FluviPeriodGroup
 import com.fluvi.core.query.FluviPeriodSelection
+import com.fluvi.core.query.FluviQueryRefinements
 import com.fluvi.core.query.FluviQueryScope
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -46,10 +47,10 @@ class SeedFluviDemoDatasetUseCaseTest {
         val report = core.demoSeed.seed()
 
         assertFalse(report.alreadySeeded)
-        assertEquals(10, report.createdCategoryCount)
-        assertEquals(27, report.createdPartnerCount)
-        assertEquals(4_304, report.createdEntryCount)
-        assertEquals(11, core.categories.list().size)
+        assertEquals(11, report.createdCategoryCount)
+        assertEquals(33, report.createdPartnerCount)
+        assertEquals(4_404, report.createdEntryCount)
+        assertEquals(12, core.categories.list().size)
 
         val income = core.query.total(yearScope(LedgerDirection.income))
         val expense = core.query.total(yearScope(LedgerDirection.expense))
@@ -86,10 +87,46 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(0, second.createdPartnerCount)
         assertEquals(0, second.createdEntryCount)
         assertEquals(
-            4_304L,
+            4_404L,
             core.query.total(FluviQueryScope(direction = LedgerDirection.income)).entryCount +
                 core.query.total(FluviQueryScope(direction = LedgerDirection.expense)).entryCount,
         )
+    }
+
+    @Test
+    fun seedExposesTheExact2027FastfoodMirrorThroughNormalCategoryPartnerAndRangeQueries() = runBlocking {
+        core.demoSeed.seed()
+
+        val category = core.categories.list().single { it.name == "Gyorsétterem" }
+        val categoryScope = FluviQueryScope(
+            direction = LedgerDirection.expense,
+            categoryIds = setOf(category.id),
+            periodGroups = listOf(
+                FluviPeriodGroup(
+                    key = "time",
+                    selections = setOf(FluviPeriodSelection.year("2027")),
+                ),
+            ),
+        )
+        val categoryTotal = core.query.total(categoryScope)
+        assertEquals(100L, categoryTotal.entryCount)
+        assertEquals(645_560L * 100L, categoryTotal.amountScaled100)
+
+        val subway = core.partners.list().single { it.name == "Subway" }
+        val partnerTotal = core.query.total(categoryScope.copy(partnerIds = setOf(subway.id)))
+        assertEquals(23L, partnerTotal.entryCount)
+        assertEquals(136_970L * 100L, partnerTotal.amountScaled100)
+
+        val highAmountTotal = core.query.total(
+            categoryScope.copy(
+                refinements = FluviQueryRefinements(
+                    minimumAmountScaled100 = 10_000L * 100L,
+                    maximumAmountScaled100 = 13_500L * 100L,
+                ),
+            ),
+        )
+        assertEquals(18L, highAmountTotal.entryCount)
+        assertEquals(213_150L * 100L, highAmountTotal.amountScaled100)
     }
 
     @Test

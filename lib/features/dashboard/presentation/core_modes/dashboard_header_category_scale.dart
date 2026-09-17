@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_color_catalog.dart';
+import 'dashboard_header_perceptual_color.dart';
 
 /// The user chooses only the source and the window width. In Category mode
 /// the center is never a second stored control: Budget utilization supplies it
@@ -81,31 +82,41 @@ final class DashboardHeaderCategoryCompressedV1Scale {
     final position = bounded / 100 * (slots.length - 1);
     final left = position.floor().clamp(0, slots.length - 1);
     final right = math.min(slots.length - 1, left + 1);
-    return _CategoryV1ColorMath.mix(slots[left], slots[right], position - left);
+    return DashboardHeaderPerceptualColorMath.mix(
+      slots[left],
+      slots[right],
+      position - left,
+    );
   }
 
   static DashboardHeaderCategoryCompressedV1Scale _generate(
     CategoryGradientToken token,
   ) {
-    final canonical = _CategoryV1ColorMath.toOklch(token.middleColor);
+    final canonical = DashboardHeaderPerceptualColorMath.toOklch(
+      token.middleColor,
+    );
     final familyRule = _familyRuleForHue(canonical.hue);
     final lightness = _spectralLightnesses(canonical.lightness, familyRule);
     final chroma = _spectralChroma(canonical.chroma);
     const leadDegrees = 24.0;
     const tailDegrees = 16.0;
     final lead =
-        familyRule.direction * leadDegrees * _CategoryV1ColorMath.degree;
+        familyRule.direction *
+        leadDegrees *
+        DashboardHeaderPerceptualColorMath.degree;
     final tail =
-        -familyRule.direction * tailDegrees * _CategoryV1ColorMath.degree;
+        -familyRule.direction *
+        tailDegrees *
+        DashboardHeaderPerceptualColorMath.degree;
     final full = <Color>[const Color(0xffffffff)];
     const leadProgress = <double>[0, .18, .42, .66, .86];
     for (var index = 0; index < 5; index += 1) {
       full.add(
-        _CategoryV1ColorMath.gamutMap(
-          _CategoryV1Oklch(
+        DashboardHeaderPerceptualColorMath.gamutMap(
+          DashboardHeaderOklch(
             lightness: lightness.$1[index],
             chroma: chroma.$1[index],
-            hue: _CategoryV1ColorMath.normalizeHue(
+            hue: DashboardHeaderPerceptualColorMath.normalizeHue(
               canonical.hue + lead * (1 - leadProgress[index]),
             ),
           ),
@@ -116,11 +127,11 @@ final class DashboardHeaderCategoryCompressedV1Scale {
     const tailProgress = <double>[.38, .72, 1];
     for (var index = 0; index < 3; index += 1) {
       full.add(
-        _CategoryV1ColorMath.gamutMap(
-          _CategoryV1Oklch(
+        DashboardHeaderPerceptualColorMath.gamutMap(
+          DashboardHeaderOklch(
             lightness: lightness.$2[index],
             chroma: chroma.$2[index] * (index == 2 ? familyRule.tailChroma : 1),
-            hue: _CategoryV1ColorMath.normalizeHue(
+            hue: DashboardHeaderPerceptualColorMath.normalizeHue(
               canonical.hue + tail * tailProgress[index],
             ),
           ),
@@ -131,7 +142,7 @@ final class DashboardHeaderCategoryCompressedV1Scale {
     // intentionally omitted, exactly as the approved card describes.
     final compressed = List<Color>.unmodifiable(<Color>[
       ...full.take(8),
-      _CategoryV1ColorMath.mix(full[7], full[8], .5),
+      DashboardHeaderPerceptualColorMath.mix(full[7], full[8], .5),
       full[8],
     ]);
     return DashboardHeaderCategoryCompressedV1Scale._(
@@ -143,7 +154,8 @@ final class DashboardHeaderCategoryCompressedV1Scale {
 
   static _CategoryV1FamilyRule _familyRuleForHue(double hue) {
     final degrees =
-        _CategoryV1ColorMath.normalizeHue(hue) / _CategoryV1ColorMath.degree;
+        DashboardHeaderPerceptualColorMath.normalizeHue(hue) /
+        DashboardHeaderPerceptualColorMath.degree;
     if (degrees < 25) {
       return const _CategoryV1FamilyRule(
         direction: 1,
@@ -407,157 +419,4 @@ final class _CategoryV1FamilyRule {
   final double terminalFloor;
   final double tailDrop;
   final double tailChroma;
-}
-
-@immutable
-final class _CategoryV1Oklch {
-  const _CategoryV1Oklch({
-    required this.lightness,
-    required this.chroma,
-    required this.hue,
-  });
-  final double lightness;
-  final double chroma;
-  final double hue;
-}
-
-@immutable
-final class _CategoryV1Oklab {
-  const _CategoryV1Oklab({
-    required this.lightness,
-    required this.a,
-    required this.b,
-  });
-  final double lightness;
-  final double a;
-  final double b;
-}
-
-abstract final class _CategoryV1ColorMath {
-  static const double degree = math.pi / 180;
-  static const double _tau = math.pi * 2;
-
-  static double normalizeHue(double hue) => ((hue % _tau) + _tau) % _tau;
-
-  static _CategoryV1Oklch toOklch(Color color) {
-    final argb = color.toARGB32();
-    double channel(int shift) => ((argb >> shift) & 0xff) / 255;
-    final red = _toLinear(channel(16));
-    final green = _toLinear(channel(8));
-    final blue = _toLinear(channel(0));
-    final l = .4122214708 * red + .5363325363 * green + .0514459929 * blue;
-    final m = .2119034982 * red + .6806995451 * green + .1073969566 * blue;
-    final s = .0883024619 * red + .2817188376 * green + .6299787005 * blue;
-    final lr = math.pow(l, 1 / 3).toDouble();
-    final mr = math.pow(m, 1 / 3).toDouble();
-    final sr = math.pow(s, 1 / 3).toDouble();
-    final lab = _CategoryV1Oklab(
-      lightness: .2104542553 * lr + .7936177850 * mr - .0040720468 * sr,
-      a: 1.9779984951 * lr - 2.4285922050 * mr + .4505937099 * sr,
-      b: .0259040371 * lr + .7827717662 * mr - .8086757660 * sr,
-    );
-    return _CategoryV1Oklch(
-      lightness: lab.lightness,
-      chroma: math.sqrt(lab.a * lab.a + lab.b * lab.b),
-      hue: normalizeHue(math.atan2(lab.b, lab.a)),
-    );
-  }
-
-  static Color mix(Color left, Color right, double amount) {
-    final a = toOklch(left);
-    final b = toOklch(right);
-    final aLab = _toOklab(a);
-    final bLab = _toOklab(b);
-    final t = amount.clamp(0.0, 1.0).toDouble();
-    return gamutMap(
-      _CategoryV1Oklch(
-        lightness: aLab.lightness + (bLab.lightness - aLab.lightness) * t,
-        chroma: math.sqrt(
-          math.pow(aLab.a + (bLab.a - aLab.a) * t, 2) +
-              math.pow(aLab.b + (bLab.b - aLab.b) * t, 2),
-        ),
-        hue: normalizeHue(
-          math.atan2(
-            aLab.b + (bLab.b - aLab.b) * t,
-            aLab.a + (bLab.a - aLab.a) * t,
-          ),
-        ),
-      ),
-    );
-  }
-
-  static Color gamutMap(_CategoryV1Oklch target) {
-    if (_isInGamut(target)) return _colorFor(target);
-    var low = 0.0;
-    var high = target.chroma;
-    var chosen = _CategoryV1Oklch(
-      lightness: target.lightness,
-      chroma: 0,
-      hue: target.hue,
-    );
-    for (var iteration = 0; iteration < 20; iteration += 1) {
-      final candidate = _CategoryV1Oklch(
-        lightness: target.lightness,
-        chroma: (low + high) / 2,
-        hue: target.hue,
-      );
-      if (_isInGamut(candidate)) {
-        chosen = candidate;
-        low = candidate.chroma;
-      } else {
-        high = candidate.chroma;
-      }
-    }
-    return _colorFor(chosen);
-  }
-
-  static bool _isInGamut(_CategoryV1Oklch color) {
-    final rgb = _toLinearRgb(_toOklab(color));
-    const tolerance = .000001;
-    return rgb.$1 >= -tolerance &&
-        rgb.$1 <= 1 + tolerance &&
-        rgb.$2 >= -tolerance &&
-        rgb.$2 <= 1 + tolerance &&
-        rgb.$3 >= -tolerance &&
-        rgb.$3 <= 1 + tolerance;
-  }
-
-  static Color _colorFor(_CategoryV1Oklch color) {
-    final rgb = _toLinearRgb(_toOklab(color));
-    int channel(double value) => (_toSrgb(value).clamp(0.0, 1.0) * 255).round();
-    return Color.fromARGB(
-      255,
-      channel(rgb.$1),
-      channel(rgb.$2),
-      channel(rgb.$3),
-    );
-  }
-
-  static _CategoryV1Oklab _toOklab(_CategoryV1Oklch color) => _CategoryV1Oklab(
-    lightness: color.lightness,
-    a: color.chroma * math.cos(color.hue),
-    b: color.chroma * math.sin(color.hue),
-  );
-
-  static (double, double, double) _toLinearRgb(_CategoryV1Oklab lab) {
-    final lr = lab.lightness + .3963377774 * lab.a + .2158037573 * lab.b;
-    final mr = lab.lightness - .1055613458 * lab.a - .0638541728 * lab.b;
-    final sr = lab.lightness - .0894841775 * lab.a - 1.2914855480 * lab.b;
-    final l = lr * lr * lr;
-    final m = mr * mr * mr;
-    final s = sr * sr * sr;
-    return (
-      4.0767416621 * l - 3.3077115913 * m + .2309699292 * s,
-      -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s,
-      -.0041960863 * l - .7034186147 * m + 1.7076147010 * s,
-    );
-  }
-
-  static double _toLinear(double channel) => channel <= .04045
-      ? channel / 12.92
-      : math.pow((channel + .055) / 1.055, 2.4).toDouble();
-
-  static double _toSrgb(double channel) => channel <= .0031308
-      ? channel * 12.92
-      : 1.055 * math.pow(math.max(0, channel), 1 / 2.4).toDouble() - .055;
 }

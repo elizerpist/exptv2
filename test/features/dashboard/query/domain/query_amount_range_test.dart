@@ -149,4 +149,89 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'MRA-01: a degenerate non-amount domain preserves its actual maximum',
+    () {
+      final values = QueryAmountRange.resolve(
+        refinements: const <String, Object?>{
+          QueryAmountRange.maximumRefinementKey: 50_000,
+        },
+        amountDomain: const QueryMenuAmountDomain(
+          minimumAmountScaled100: 50_000,
+          maximumAmountScaled100: 50_000,
+        ),
+      );
+
+      expect(values.minimumScaled100, 50_000);
+      expect(values.maximumScaled100, 50_000);
+      expect(values.lowerScaled100, 50_000);
+      expect(values.upperScaled100, 50_000);
+      expect(values.isActionable, isFalse);
+    },
+  );
+
+  test(
+    'MRA-01: domain maximum is never capped by an implementation ceiling',
+    () {
+      final values = QueryAmountRange.resolve(
+        refinements: const <String, Object?>{},
+        amountDomain: const QueryMenuAmountDomain(
+          minimumAmountScaled100: 0,
+          maximumAmountScaled100: 98_765_432_100,
+        ),
+      );
+
+      expect(values.maximumScaled100, 98_765_432_100);
+      expect(values.upperScaled100, 98_765_432_100);
+    },
+  );
+
+  test('MRA-02: nice monetary steps refine monotonically with upper thumb', () {
+    expect(
+      QueryAmountRange.niceMonetaryStepScaled100ForUpper(26_000_000),
+      200_000,
+      reason: '260,000 HUF uses a several-thousand-HUF interaction step.',
+    );
+    expect(
+      QueryAmountRange.niceMonetaryStepScaled100ForUpper(10_000_000),
+      100_000,
+      reason: '100,000 HUF uses a one-thousand-HUF interaction step.',
+    );
+    expect(
+      QueryAmountRange.niceMonetaryStepScaled100ForUpper(2_000_000),
+      20_000,
+      reason: '20,000 HUF uses a few-hundred-HUF interaction step.',
+    );
+    expect(
+      QueryAmountRange.niceMonetaryStepScaled100ForUpper(500_000),
+      5_000,
+      reason: '5,000 HUF uses a 50-HUF interaction step.',
+    );
+  });
+
+  test(
+    'MRA-02: snapping follows the selected upper thumb without redefining its domain',
+    () {
+      const values = QueryAmountRangeValues(
+        minimumScaled100: 100_000,
+        maximumScaled100: 26_000_000,
+        lowerScaled100: 100_000,
+        upperScaled100: 26_000_000,
+      );
+
+      final at100k = values.fromRawRange(lower: 123_456, upper: 10_012_345);
+      expect(at100k.maximumScaled100, 26_000_000);
+      expect(at100k.upperScaled100, 10_000_000);
+      expect(at100k.lowerScaled100, 100_000);
+
+      final at20k = values.fromRawRange(lower: 123_456, upper: 2_012_345);
+      expect(at20k.maximumScaled100, 26_000_000);
+      expect(at20k.upperScaled100, 2_020_000);
+
+      final at5k = values.fromRawRange(lower: 123_456, upper: 503_001);
+      expect(at5k.maximumScaled100, 26_000_000);
+      expect(at5k.upperScaled100, 505_000);
+    },
+  );
 }

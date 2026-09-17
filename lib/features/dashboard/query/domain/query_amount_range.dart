@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import 'current_ledger_query_scope.dart';
@@ -12,6 +14,7 @@ abstract final class QueryAmountRange {
   static const String minimumRefinementKey = 'minimumAmountScaled100';
   static const String maximumRefinementKey = 'maximumAmountScaled100';
   static const int minimumScaled100 = 100000; // 1000 HUF
+  static const int _minimumInteractionStepScaled100 = 1000; // 10 HUF
 
   /// Canonical data identity for the range controlled by this refinement.
   /// The control's own bounds cannot recursively redefine its source domain;
@@ -36,23 +39,50 @@ abstract final class QueryAmountRange {
     required Map<String, Object?> refinements,
     required QueryMenuAmountDomain? amountDomain,
   }) {
-    final domainMaximum =
-        amountDomain?.maximumAmountScaled100 ?? minimumScaled100;
-    final maximum = domainMaximum < minimumScaled100
+    // `amountDomain` is calculated by the native Query boundary from
+    // `domainScope(scope)`: it retains every current filter except this
+    // control's own two endpoints. Its maximum is therefore the one physical
+    // slider ceiling. Do not manufacture the old 1,000-HUF ceiling when an
+    // exact one-value/small-value domain is supplied.
+    final domainMaximum = amountDomain?.maximumAmountScaled100;
+    final maximum = domainMaximum == null
         ? minimumScaled100
-        : domainMaximum;
+        : math.max(0, domainMaximum);
+    final minimum = minimumScaled100.clamp(0, maximum).toInt();
     final requestedLower =
-        _refinement(refinements, minimumRefinementKey) ?? minimumScaled100;
-    final lower = requestedLower.clamp(minimumScaled100, maximum).toInt();
+        _refinement(refinements, minimumRefinementKey) ?? minimum;
+    final lower = requestedLower.clamp(minimum, maximum).toInt();
     final requestedUpper =
         _refinement(refinements, maximumRefinementKey) ?? maximum;
     final upper = requestedUpper.clamp(lower, maximum).toInt();
     return QueryAmountRangeValues(
-      minimumScaled100: minimumScaled100,
+      minimumScaled100: minimum,
       maximumScaled100: maximum,
       lowerScaled100: lower,
       upperScaled100: upper,
     );
+  }
+
+  /// Returns a stable 1/2/5 × 10^n money step for the current right-thumb
+  /// amount. The input/output use Fluvi's scaled-HUF representation; the
+  /// calculation itself is deliberately in whole HUF so a large slider never
+  /// exposes cent-like raw resolution.
+  static int niceMonetaryStepScaled100ForUpper(int upperScaled100) {
+    final effectiveUpperHuf = (upperScaled100 / 100).clamp(0, double.infinity);
+    final rawTargetHuf = math.max(1, (effectiveUpperHuf / 100).round());
+    var magnitude = 1;
+    while (rawTargetHuf >= magnitude * 10) {
+      magnitude *= 10;
+    }
+    final normalized = rawTargetHuf / magnitude;
+    final multiplier = switch (normalized) {
+      < 1.5 => 1,
+      < 3.5 => 2,
+      < 7.5 => 5,
+      _ => 10,
+    };
+    final stepHuf = math.max(10, multiplier * magnitude);
+    return math.max(_minimumInteractionStepScaled100, stepHuf * 100);
   }
 
   static CurrentLedgerQueryScope apply(
@@ -143,10 +173,25 @@ final class QueryAmountRangeValues {
     required int lower,
     required int upper,
   }) {
-    final resolvedLower = lower
-        .clamp(minimumScaled100, maximumScaled100)
-        .toInt();
-    final resolvedUpper = upper.clamp(resolvedLower, maximumScaled100).toInt();
+    final rawUpper = upper.clamp(minimumScaled100, maximumScaled100).toInt();
+    final step = QueryAmountRange.niceMonetaryStepScaled100ForUpper(rawUpper);
+    int snap(int value) {
+      final bounded = value.clamp(minimumScaled100, maximumScaled100).toInt();
+      // Exact source-domain endpoints stay reachable even when their distance
+      // from the floor is not a multiple of the current nice step.
+      if (bounded == minimumScaled100 || bounded == maximumScaled100) {
+        return bounded;
+      }
+      return (minimumScaled100 +
+              ((bounded - minimumScaled100) / step).round() * step)
+          .clamp(minimumScaled100, maximumScaled100)
+          .toInt();
+    }
+
+    final resolvedUpper = snap(rawUpper);
+    final resolvedLower = snap(
+      lower,
+    ).clamp(minimumScaled100, resolvedUpper).toInt();
     return QueryAmountRangeValues(
       minimumScaled100: minimumScaled100,
       maximumScaled100: maximumScaled100,

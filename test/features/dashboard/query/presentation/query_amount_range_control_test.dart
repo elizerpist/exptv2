@@ -458,7 +458,7 @@ void main() {
     },
   );
 
-  test('G3: canonical amount range retains the 1000 HUF floor', () {
+  test('G3: a small canonical domain never fabricates a larger ceiling', () {
     final values = QueryAmountRange.resolve(
       refinements: const <String, Object?>{},
       amountDomain: const QueryMenuAmountDomain(
@@ -467,10 +467,10 @@ void main() {
       ),
     );
 
-    expect(values.minimumScaled100, 100000);
-    expect(values.maximumScaled100, 100000);
-    expect(values.lowerScaled100, 100000);
-    expect(values.upperScaled100, 100000);
+    expect(values.minimumScaled100, 50000);
+    expect(values.maximumScaled100, 50000);
+    expect(values.lowerScaled100, 50000);
+    expect(values.upperScaled100, 50000);
   });
 
   testWidgets(
@@ -497,6 +497,42 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'MRA-03: compact Mind places its one amount caption row below the slider',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 74,
+              child: QueryAmountRangeControl(
+                values: QueryAmountRangeValues(
+                  minimumScaled100: 100000,
+                  maximumScaled100: 26000000,
+                  lowerScaled100: 100000,
+                  upperScaled100: 26000000,
+                ),
+                presentation: QueryAmountRangePresentation.compactMind,
+                onRangeCommitted: _discardRange,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final slider = find.byKey(const ValueKey('query-amount-range-slider'));
+      final caption = find.text('Összeg');
+      expect(slider, findsOneWidget);
+      expect(caption, findsOneWidget);
+      expect(
+        tester.getTopLeft(slider).dy,
+        lessThan(tester.getTopLeft(caption).dy),
+        reason: 'The compact slider must precede, not duplicate, its caption.',
+      );
     },
   );
 }

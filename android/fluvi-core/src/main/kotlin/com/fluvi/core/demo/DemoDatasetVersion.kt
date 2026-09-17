@@ -6,19 +6,17 @@ import java.time.ZoneOffset
 import java.util.Random
 
 object DemoDatasetVersion {
-    // Version 5 derives deterministic financial-limit fixtures only for the
-    // all-time ledger-represented target domain of each direction.
+    // Version 6 adds an exact, static 2025-prototype Fastfood mirror in 2027.
     // The manifest version deliberately forces a complete deterministic reset
-    // instead of mixing the old seven-month fixture with new entries.
-    const val current = 5
+    // instead of mixing a prior fixture with new category, partner and rows.
+    const val current = 6
     const val prngSeed = 2_026_010_7L
     const val localZoneId = "Europe/Budapest"
     val startInclusive: LocalDate = LocalDate.of(2025, 1, 1)
-    val endExclusive: LocalDate = LocalDate.of(2026, 8, 1)
+    val endExclusive: LocalDate = LocalDate.of(2028, 1, 1)
     /** Fallback for native-only core tests. The Flutter debug bridge supplies
      * the exact active prepared dashboard window for normal human builds. */
-    val defaultFinancialLimitYearWindow: IntRange =
-        startInclusive.year..endExclusive.minusDays(1).year
+    val defaultFinancialLimitYearWindow: IntRange = 2025..2026
     // Preserve all pre-existing 2026 deterministic IDs while the data window
     // grows backwards for the high-density physical diagnostic fixture.
     val idTimestampEpoch: LocalDate = LocalDate.of(2026, 1, 1)

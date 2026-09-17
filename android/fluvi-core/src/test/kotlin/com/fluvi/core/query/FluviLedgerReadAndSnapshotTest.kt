@@ -438,6 +438,56 @@ class FluviLedgerReadAndSnapshotTest {
     }
 
     @Test
+    fun amountDomainKeepsEveryFacetButExcludesItsOwnTwoEndpoints() = runBlocking {
+        insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 8, 1).toEpochDay(),
+            amount = 1_000L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 8, 2).toEpochDay(),
+            amount = 20_000L,
+        )
+        insertEntry(
+            categoryId = foodId,
+            partnerId = tescoId,
+            bookedDay = LocalDate.of(2026, 8, 3).toEpochDay(),
+            amount = 260_000L,
+        )
+        insertEntry(
+            categoryId = clothesId,
+            bookedDay = LocalDate.of(2026, 8, 4).toEpochDay(),
+            amount = 500_000L,
+        )
+
+        val facets = readService.queryMenuFacets(
+            FluviQueryScope(
+                direction = LedgerDirection.expense,
+                categoryIds = setOf(foodId),
+                partnerIds = setOf(tescoId),
+                periodGroups = listOf(
+                    FluviPeriodGroup(
+                        key = "time",
+                        selections = setOf(FluviPeriodSelection.month("2026-08")),
+                    ),
+                ),
+                refinements = FluviQueryRefinements(
+                    minimumAmountScaled100 = 5_000L,
+                    maximumAmountScaled100 = 20_000L,
+                ),
+            ),
+        )
+
+        assertEquals(1L, facets.result.entryCount)
+        assertEquals(20_000L, facets.result.amountScaled100)
+        assertEquals(1_000L, facets.amountDomain.minimumAmountScaled100)
+        assertEquals(260_000L, facets.amountDomain.maximumAmountScaled100)
+    }
+
+    @Test
     fun queryMenuFacetsRemainDirectionAffineForTheSameTemporalScope() = runBlocking {
         val salaryId = categories.create("Salary", "color_10", "icon_10")
         val employerId = partners.findOrCreate("Employer", salaryId)

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard_header_perceptual_color.dart';
+
 /// Dashboard-lifetime, user-owned visualization width for Mind's score
 /// palette. The score itself remains a domain result and is never stored here.
 @immutable
@@ -36,21 +38,21 @@ final class MindHeaderScoreWindowState {
   int get hashCode => windowWidthPercent.hashCode;
 }
 
-/// The approved Stats Common traffic-light scale. Sampling is deterministic
-/// encoded-RGB interpolation; alpha stays with the existing Header opacity
-/// owner and never becomes score semantics.
+/// The approved Mind traffic-light scale. Anchors are product colors; interval
+/// sampling uses the shared OKLab path so the red-to-green route stays clean.
+/// Alpha remains with the existing Header opacity owner and never becomes
+/// score semantics.
 abstract final class MindHeaderTrafficLightScale {
   static const List<({double percent, Color color})> _anchors =
       <({double percent, Color color})>[
-        (percent: 0, color: Color(0xffdc2626)),
-        (percent: 18, color: Color(0xffef4444)),
-        (percent: 40, color: Color(0xfff87171)),
-        // The approved amber interval spans approximately 51–57%. Its
-        // central anchor is exactly 54% so there is one stable sample.
-        (percent: 54, color: Color(0xfffbbf24)),
-        (percent: 66, color: Color(0xff4ade80)),
-        (percent: 84, color: Color(0xff22c55e)),
-        (percent: 100, color: Color(0xff16a34a)),
+        (percent: 0, color: Color(0xff991b1b)),
+        (percent: 18, color: Color(0xffdc2626)),
+        (percent: 35, color: Color(0xfff04a24)),
+        (percent: 48, color: Color(0xfff97316)),
+        (percent: 58, color: Color(0xfffbbf24)),
+        (percent: 70, color: Color(0xff86d957)),
+        (percent: 82, color: Color(0xff4ade80)),
+        (percent: 100, color: Color(0xff15803d)),
       ];
 
   static Color sample(double score) {
@@ -59,8 +61,10 @@ abstract final class MindHeaderTrafficLightScale {
       final right = _anchors[index];
       if (bounded > right.percent) continue;
       final left = _anchors[index - 1];
+      if (bounded == left.percent) return left.color;
+      if (bounded == right.percent) return right.color;
       final span = right.percent - left.percent;
-      return _mix(
+      return DashboardHeaderPerceptualColorMath.mix(
         left.color,
         right.color,
         span == 0 ? 0 : (bounded - left.percent) / span,
@@ -68,19 +72,6 @@ abstract final class MindHeaderTrafficLightScale {
     }
     return _anchors.last.color;
   }
-
-  static Color _mix(Color left, Color right, double amount) => Color.fromARGB(
-    _mixChannel(_channel(left, 24), _channel(right, 24), amount),
-    _mixChannel(_channel(left, 16), _channel(right, 16), amount),
-    _mixChannel(_channel(left, 8), _channel(right, 8), amount),
-    _mixChannel(_channel(left, 0), _channel(right, 0), amount),
-  );
-
-  static int _channel(Color color, int shift) =>
-      (color.toARGB32() >> shift) & 0xff;
-
-  static int _mixChannel(int left, int right, double amount) =>
-      (left + (right - left) * amount).round().clamp(0, 255);
 }
 
 /// Immutable semantic palette probes passed to the pre-existing Header frame

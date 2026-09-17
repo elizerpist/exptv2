@@ -41,6 +41,16 @@ class DemoDatasetGenerator(
                 ordinal += monthly.entries.size
                 addAll(monthly.entries)
             }
+            // The reference prototype owns the 2025 random sequence. Its
+            // extracted semantic output is mirrored exactly into 2027, so the
+            // app never reruns a partial RNG stream and accidentally creates
+            // a statistically similar but different Fastfood comparison set.
+            val fastfood2027 = generateFastfood2027Mirror(
+                categories = categories,
+                partners = partners,
+                ordinalStart = ordinal,
+            )
+            addAll(fastfood2027.entries)
         }
         val monthlyReports = entries.monthlyReports()
         validatePlan(categories, partners, entries, monthlyReports)
@@ -69,6 +79,7 @@ class DemoDatasetGenerator(
             "Szórakozás",
             "Vásárlás",
             "Előfizetések",
+            "Gyorsétterem",
         )
         return names.mapIndexed { index, name ->
             DemoCategoryDraft(
@@ -112,6 +123,12 @@ class DemoDatasetGenerator(
             "Magánrendelő" to "Egészség",
             "Elektronikai üzlet" to "Vásárlás",
             "Ruházati üzlet" to "Vásárlás",
+            "McDonald's" to "Gyorsétterem",
+            "Burger King" to "Gyorsétterem",
+            "KFC" to "Gyorsétterem",
+            "Subway" to "Gyorsétterem",
+            "Bamba Marha" to "Gyorsétterem",
+            "Pizza Forte" to "Gyorsétterem",
         )
         return definitions.mapIndexed { index, (name, categoryName) ->
             val category = requireNotNull(byName[categoryName])
@@ -394,6 +411,30 @@ class DemoDatasetGenerator(
         return MonthlyEntries(entries)
     }
 
+    private fun generateFastfood2027Mirror(
+        categories: List<DemoCategoryDraft>,
+        partners: List<DemoPartnerDraft>,
+        ordinalStart: Int,
+    ): MonthlyEntries {
+        val fastfoodCategory = categories.single { it.name == "Gyorsétterem" }
+        val partnersByName = partners.associateBy { it.name }
+        val entries = FastfoodPrototype2025Rows.rows.mapIndexed { index, row ->
+            entry(
+                ordinal = ordinalStart + index,
+                partner = partnersByName.getValue(row.merchant),
+                category = fastfoodCategory,
+                direction = LedgerDirection.expense,
+                amountScaled100 = row.amountHuf * 100L,
+                date = LocalDate.of(2027, row.month, row.day),
+                minutes = row.minuteOfDay,
+                note = "Gyorsétterem",
+                assignmentMode = CategoryAssignmentMode.partnerDefault,
+            )
+        }
+        check(entries.size == FastfoodPrototype2025Rows.rows.size)
+        return MonthlyEntries(entries)
+    }
+
     private fun allocateWholeHufAmounts(
         targetHuf: Long,
         count: Int,
@@ -508,12 +549,14 @@ class DemoDatasetGenerator(
     private fun incomeTargetHuf(year: Int, month: Int): Long = when (year) {
         2025 -> highDensityIncomeTargetsHuf[month - 1]
         2026 -> incomeTargetsHuf[month - 1]
+        2027 -> 0L
         else -> error("No demo income target for $year-$month")
     }
 
     private fun expenseTargetHuf(year: Int, month: Int): Long = when (year) {
         2025 -> highDensityExpenseTargetsHuf[month - 1]
         2026 -> expenseTargetsHuf[month - 1]
+        2027 -> fastfoodExpenseTargetsHufByMonth.getValue(month)
         else -> error("No demo expense target for $year-$month")
     }
 
@@ -523,9 +566,9 @@ class DemoDatasetGenerator(
         entries: List<DemoEntryDraft>,
         reports: List<DemoMonthReport>,
     ) {
-        require(categories.size == 10)
-        require(partners.size in 20..30)
-        require(entries.size == 700 + highDensityEntryCounts.sum())
+        require(categories.size == 11)
+        require(partners.size == 33)
+        require(entries.size == 700 + highDensityEntryCounts.sum() + FastfoodPrototype2025Rows.rows.size)
         require(reports.filter { it.year == 2026 }.all { it.entryCount == 100 })
         require(reports.filter { it.year == 2025 }.size == 12)
         require(reports.filter { it.year == 2025 }.all { it.entryCount in 280..320 })
@@ -533,6 +576,13 @@ class DemoDatasetGenerator(
             it.incomeTotalScaled100 in 600_000L * 100..700_000L * 100 &&
                 it.expenseTotalScaled100 in 600_000L * 100..700_000L * 100 &&
                 kotlin.math.abs(it.incomeTotalScaled100 - it.expenseTotalScaled100) <= 50_000L * 100
+        })
+        require(reports.filter { it.year == 2027 }.size == 12)
+        require(reports.filter { it.year == 2027 }.all {
+            it.incomeCount == 0 &&
+                it.incomeTotalScaled100 == 0L &&
+                it.expenseTotalScaled100 ==
+                    fastfoodExpenseTargetsHufByMonth.getValue(it.month) * 100L
         })
         require(categories.all { it.colorId in FluviCategoryCatalog.colorIds })
         require(categories.all { it.iconId in FluviCategoryCatalog.iconIds })
@@ -565,6 +615,10 @@ class DemoDatasetGenerator(
         val highDensityEntryCounts = listOf(288, 296, 304, 312, 291, 299, 307, 315, 286, 294, 302, 310)
         val highDensityIncomeTargetsHuf = listOf(642_000L, 654_000L, 631_000L, 668_000L, 647_000L, 661_000L, 639_000L, 676_000L, 652_000L, 643_000L, 665_000L, 655_000L)
         val highDensityExpenseTargetsHuf = listOf(628_000L, 670_000L, 646_000L, 650_000L, 660_000L, 641_000L, 655_000L, 663_000L, 638_000L, 664_000L, 646_000L, 671_000L)
+        val fastfoodExpenseTargetsHufByMonth =
+            FastfoodPrototype2025Rows.rows
+                .groupBy(FastfoodPrototype2025Row::month)
+                .mapValues { (_, rows) -> rows.sumOf(FastfoodPrototype2025Row::amountHuf) }
         val exceptionalExpenses = listOf(
             FixedExpense("Elektronikai üzlet", "Vásárlás", 120_000L, 12, 18 * 60, "Háztartási gép"),
             FixedExpense("Magánrendelő", "Egészség", 85_000L, 17, 15 * 60, "Fogászati kezelés"),

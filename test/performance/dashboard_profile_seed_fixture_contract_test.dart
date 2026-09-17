@@ -4,16 +4,16 @@ import 'package:fluvi/core/demo_data/demo_seed_report.dart';
 import '../../integration_test/support/dashboard_profile_seed_fixture_contract.dart';
 
 void main() {
-  test('defines the authoritative 2025 plus 2026 profile seed contract', () {
+  test('defines the authoritative 2025–2027 profile seed contract', () {
     expect(
       DashboardProfileSeedFixtureContract.expectedSeededTransactionCount,
-      4304,
+      4404,
     );
     expect(
       DashboardProfileSeedFixtureContract.expectedMonthsByYear,
-      const <int, int>{2025: 12, 2026: 7},
+      const <int, int>{2025: 12, 2026: 7, 2027: 12},
     );
-    expect(DashboardProfileSeedFixtureContract.expectedTotalMonthCount, 19);
+    expect(DashboardProfileSeedFixtureContract.expectedTotalMonthCount, 31);
 
     expect(
       () => DashboardProfileSeedFixtureContract.verify(_currentSeedReport()),
@@ -42,7 +42,8 @@ void main() {
     expect(fixture.incomeEntryCount(), 19);
     expect(fixture.incomeEntryCount(year: 2025), 12);
     expect(fixture.incomeEntryCount(year: 2026, month: 7), 1);
-    expect(fixture.expenseEntryCount(), 0);
+    expect(fixture.expenseEntryCount(), 100);
+    expect(fixture.expenseEntryCount(year: 2027), 100);
   });
 }
 
@@ -59,6 +60,7 @@ DemoSeedReport _currentSeedReport({List<DemoMonthReport>? months}) =>
           <DemoMonthReport>[
             ..._monthsFor(year: 2025, count: 12),
             ..._monthsFor(year: 2026, count: 7),
+            ..._fastfoodMonthsFor2027(),
           ],
       earliestEntryAtUtcMs: 1735686000000,
       latestEntryAtUtcMs: 1782777600000,
@@ -78,6 +80,35 @@ List<DemoMonthReport> _monthsFor({required int year, required int count}) =>
         incomeTargetMinor: 1,
         expenseTargetMinor: 0,
         incomeTotalMinor: 1,
+        expenseTotalMinor: 0,
+      ),
+    );
+
+List<DemoMonthReport> _fastfoodMonthsFor2027() =>
+    List<DemoMonthReport>.generate(
+      12,
+      (index) => DemoMonthReport(
+        year: 2027,
+        month: index + 1,
+        entryCount: const <int>[16, 15, 14, 12, 8, 7, 8, 6, 3, 4, 3, 4][index],
+        incomeCount: 0,
+        expenseCount: const <int>[
+          16,
+          15,
+          14,
+          12,
+          8,
+          7,
+          8,
+          6,
+          3,
+          4,
+          3,
+          4,
+        ][index],
+        incomeTargetMinor: 0,
+        expenseTargetMinor: 0,
+        incomeTotalMinor: 0,
         expenseTotalMinor: 0,
       ),
     );

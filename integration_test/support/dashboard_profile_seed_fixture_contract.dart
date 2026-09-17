@@ -1,13 +1,15 @@
 import 'package:fluvi/core/demo_data/demo_seed_report.dart';
 
 /// Authoritative profile-fixture contract shared by the automated harness and
-/// its focused unit test. Keep the native generator's 2025 dense year and the
-/// original 2026 rail fixture explicit here instead of scattering counts.
+/// its focused unit test. Keep the native generator's 2025 dense year, 2026
+/// rail fixture, and exact 2027 Fastfood mirror explicit here instead of
+/// scattering counts.
 abstract final class DashboardProfileSeedFixtureContract {
-  static const int expectedSeededTransactionCount = 4304;
+  static const int expectedSeededTransactionCount = 4404;
   static const Map<int, int> expectedMonthsByYear = <int, int>{
     2025: 12,
     2026: 7,
+    2027: 12,
   };
 
   static int get expectedTotalMonthCount =>

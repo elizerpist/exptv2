@@ -3,6 +3,7 @@ package com.fluvi.core.demo
 import com.fluvi.core.model.CategoryAssignmentMode
 import com.fluvi.core.model.LedgerDirection
 import java.time.LocalDate
+import java.security.MessageDigest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -10,12 +11,12 @@ import org.junit.Test
 
 class DemoDatasetGeneratorTest {
     @Test
-    fun preservesSeven2026RegressionMonthsAndAddsTwelveHighDensity2025Months() {
+    fun preservesRegressionYearsAndAddsTheExact2027FastfoodMirror() {
         val plan = DemoDatasetGenerator().generate()
 
         assertEquals(DemoDatasetVersion.current, plan.version)
-        assertEquals(10, plan.categories.size)
-        assertEquals(4_304, plan.entries.size)
+        assertEquals(11, plan.categories.size)
+        assertEquals(4_404, plan.entries.size)
 
         val countsByMonth = plan.entries.groupingBy { entry ->
             LocalDate.ofEpochDay(entry.bookedLocalEpochDay).withDayOfMonth(1)
@@ -31,6 +32,12 @@ class DemoDatasetGeneratorTest {
             listOf(288, 296, 304, 312, 291, 299, 307, 315, 286, 294, 302, 310),
             (1..12).map { month ->
                 countsByMonth.getValue(LocalDate.of(2025, month, 1))
+            },
+        )
+        assertEquals(
+            listOf(16, 15, 14, 12, 8, 7, 8, 6, 3, 4, 3, 4),
+            (1..12).map { month ->
+                countsByMonth.getValue(LocalDate.of(2027, month, 1))
             },
         )
     }
@@ -62,12 +69,13 @@ class DemoDatasetGeneratorTest {
         assertEquals(658, counts.getValue(2026 to LedgerDirection.expense))
         assertEquals(1_804, counts.getValue(2025 to LedgerDirection.income))
         assertEquals(1_800, counts.getValue(2025 to LedgerDirection.expense))
+        assertEquals(100, counts.getValue(2027 to LedgerDirection.expense))
         assertEquals(
             1_846,
             plan.entries.count { it.direction == LedgerDirection.income },
         )
         assertEquals(
-            2_458,
+            2_558,
             plan.entries.count { it.direction == LedgerDirection.expense },
         )
         assertEquals(
@@ -156,11 +164,82 @@ class DemoDatasetGeneratorTest {
     fun everyEntryFallsInsideTheClosedDemoWindowAndHasARealisticTime() {
         val plan = DemoDatasetGenerator().generate()
         val start = LocalDate.of(2025, 1, 1).toEpochDay()
-        val end = LocalDate.of(2026, 8, 1).toEpochDay()
+        val end = LocalDate.of(2028, 1, 1).toEpochDay()
 
         assertTrue(plan.entries.all { it.bookedLocalEpochDay in start until end })
         assertTrue(plan.entries.all { it.bookedLocalTimeMinutes in 0..1_439 })
         assertTrue(plan.entries.any { it.bookedLocalTimeMinutes != 0 })
         assertTrue(plan.entries.all { it.amountScaled100 > 0L })
     }
+
+    @Test
+    fun mirrorsTheExactCommitted2025FastfoodPrototypeRowsInto2027() {
+        val source = FastfoodPrototype2025Rows.rows
+        assertEquals(100, source.size)
+        assertEquals(
+            "cd8ec0a6bb2e5558a11e3dddd7aa6a087d9edde897b13fceea1da4eb82e5a65e",
+            source.normalizedSha256(),
+        )
+
+        val plan = DemoDatasetGenerator().generate()
+        val category = plan.categories.single { it.name == "Gyorsétterem" }
+        val partnerById = plan.partners.associateBy { it.id }
+        val actual = plan.entries
+            .filter { entry ->
+                entry.categoryId == category.id &&
+                    LocalDate.ofEpochDay(entry.bookedLocalEpochDay).year == 2027
+            }
+            .map { entry ->
+                val date = LocalDate.ofEpochDay(entry.bookedLocalEpochDay)
+                listOf(
+                    date.monthValue.toString(),
+                    date.dayOfMonth.toString(),
+                    "%02d:%02d".format(
+                        entry.bookedLocalTimeMinutes / 60,
+                        entry.bookedLocalTimeMinutes % 60,
+                    ),
+                    partnerById.getValue(entry.partnerId).name,
+                    (entry.amountScaled100 / 100L).toString(),
+                    category.name,
+                    entry.direction.name,
+                ).joinToString("|")
+            }
+        val expected = source.map { row ->
+            listOf(
+                row.month.toString(),
+                row.day.toString(),
+                row.time,
+                row.merchant,
+                row.amountHuf.toString(),
+                category.name,
+                LedgerDirection.expense.name,
+            ).joinToString("|")
+        }
+
+        assertEquals(expected, actual)
+        assertTrue(
+            plan.entries.none { entry ->
+                entry.categoryId == category.id &&
+                    LocalDate.ofEpochDay(entry.bookedLocalEpochDay).year == 2025
+            },
+            "The source 2025 list remains a source fixture; only its 2027 mirror enters this demo plan.",
+        )
+    }
+}
+
+private fun List<FastfoodPrototype2025Row>.normalizedSha256(): String {
+    val normalized = joinToString("\n") { row ->
+        listOf(
+            row.month,
+            row.day,
+            row.time,
+            row.merchant,
+            row.amountHuf,
+            22,
+            "expense",
+        ).joinToString("|")
+    }
+    return MessageDigest.getInstance("SHA-256")
+        .digest(normalized.toByteArray(Charsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte) }
 }

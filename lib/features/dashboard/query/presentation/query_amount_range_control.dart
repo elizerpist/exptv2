@@ -242,7 +242,15 @@ final class _QueryAmountRangeControlState
                   _firstValueChangeMicros ??= _elapsedMicros;
                 }
               }
-              setState(() => _localValues = next);
+              // Both visible thumbs use the exact value emitted to the live
+              // preview/terminal commit lanes. This keeps the adaptive nice
+              // monetary snap physically honest while the pointer is down.
+              setState(
+                () => _localValues = RangeValues(
+                  normalized.lowerScaled100.toDouble(),
+                  normalized.upperScaled100.toDouble(),
+                ),
+              );
               _schedulePreview(normalized);
             }
           : null,
@@ -404,6 +412,10 @@ final class _CompactMindAmountRangeSurface extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        SizedBox(
+          height: 34,
+          child: SliderTheme(data: sliderTheme, child: slider),
+        ),
         Row(
           children: <Widget>[
             const Text(
@@ -430,10 +442,6 @@ final class _CompactMindAmountRangeSurface extends StatelessWidget {
               ),
             ),
           ],
-        ),
-        SizedBox(
-          height: 34,
-          child: SliderTheme(data: sliderTheme, child: slider),
         ),
       ],
     ),
