@@ -1132,3 +1132,50 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   It is 83,088,689 bytes and SHA-256
   `fbd1105599a013e3d2fc6061c513552cab70bc224374ce5c272151e2ac3c36c0`.
   Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-18 — Mind temporal heatmaps and atomic score publication (`463222fa`)
+
+- Application feature commit: `463222fa` (`feat(mind): unify temporal
+  heatmaps and score publication`) on
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`.
+- Mind now has one Core-owned temporal heatmap coordinator over the existing
+  immutable prepared membership: Sum publishes real filtered monthly buckets
+  across all represented years; Year retains the mature daily calendar; Month
+  publishes real daily buckets. Every range preview uses bounded bucket-local
+  amount-prefix lookup rather than repository, Room, raw ledger rows or
+  rendered LogBox data.
+- Sum/Year/Month share one fixed Mind body footer: five resolver-owned palette
+  swatches, then the one existing compact `Összeg` / Min. / Max. range control.
+  The footer remains outside the temporal scroll owner. Year MonthCards now
+  reserve six visual calendar rows; 4×3 gets the selected 50px Mind-body
+  extension required to fit its three six-row groups and both optional footer
+  rows without annual scrolling.
+- The source-proven transient Summary Year score lag is fixed at the Core
+  renderer-acknowledged admission boundary: heatmap and score/chart publish
+  together. A mounted held-slider regression then exposed a separate
+  Month→Sum→Year issue: the heatmap accepted the new range while the score
+  preview rejected an obsolete drag identity. The repaired guard rebases only
+  to an already-published current score target, preserving stale safety.
+- PASS — Ubuntu/proot:
+  `flutter test test/features/dashboard/application/dashboard_core_ephemeral_focus_test.dart`
+  reports 91 tests green; focused Mind projection/viewport/palette/host/live
+  tests report 44 green; Header chart/tuner/color/boundary tests report 26
+  green; and `mind_header_score_chart_golden_test.dart` is green. A bounded
+  diagnostic-profile run of the mounted held-slider test measured six score
+  previews at p50=270µs, p95=max=4710µs, while source-row, repository and
+  index-build preview counters remained zero.
+- PASS — Ubuntu/proot: `flutter analyze` has no issues (135.2s) and
+  `git diff --check` is clean before the application commit.
+- NOT RUN locally —
+  `./gradlew :fluvi-core:testDebugUnitTest --tests
+  com.fluvi.core.query.FluviPreparedDashboardIndexTest.boundedYearWindowKeepsAllTimeTotalsButOmitsOutsidePeriodFrames --offline`
+  reaches `:fluvi-core:processDebugUnitTestResources` but AAPT2 daemon startup
+  fails before the test executes. The native all-time focus-membership
+  regression must run on the clean online runner; it is not represented as
+  locally green.
+- The previously accepted Header line, fade, endpoint, plot bounds,
+  expansion clip and single visual ticker are unchanged; the chart golden is
+  green. No Time/Avatar physics, canonical Query owner, Budget state, LogBox
+  paging/render owner, score mathematics or Fastfood fixture changed.
+- Final online CI/APK/SCIP evidence remains pending after this journal-only
+  commit. Physical validation: `PENDING — USER ONLY`.
