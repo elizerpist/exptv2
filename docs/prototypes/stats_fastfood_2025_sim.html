@@ -603,8 +603,8 @@
       const split = Math.max(1, Math.floor(values.length / 2));
       const prior = average(values.slice(0, split));
       const recent = average(values.slice(split));
-      const worseningPenalty = Math.max(0, recent - prior) * 0.5;
-      return clamp(100 - recent - worseningPenalty, 0, 100);
+      const worseningDeduction = Math.max(0, recent - prior) * 0.5;
+      return clamp(100 - recent - worseningDeduction, 0, 100);
     }
 
     function leadingBlankDays(year, month) {
