@@ -56,12 +56,12 @@ never read repositories, build indexes, or calculate finance data.
 | CLB-02 | user §§17–19, 25 | `MindHeaderScoreChart` semantic overlay | When visible, exactly five labels correspond to start/.25/.5/.75/end of actual series epoch-day domain; no duplicate time model | pure projection + widget tests | DONE |
 | CLB-03 | user §§18–19, 21, 25 | chart overlay/clipping | Labels are quiet, IgnorePointer, clipped with expansion, absent collapsed, no axis/ticks/grid and preserve fixed plot geometry/ticker count | widget/boundary/golden regression tests | DONE |
 | NRG-01 | user §29 / milestones | protected Core/UI owners | No Time/Avatar physics, Query ownership, LogBox architecture, score math, fixture, snapping, Header engine/ticker, or accepted chart paint regression | protected suites + diff review | DONE |
-| PRF-01 | GitHub profile failure `35243573729` | `dashboard_interaction_profile_test.dart` | Direction-tap prewarm asserts the exact visible structural amount domain, never the stored all-time template domain | analyzer + clean GitHub profile lane | IN PROGRESS |
+| PRF-01 | GitHub profile failure `35243573729` | `dashboard_interaction_profile_test.dart` | Direction-tap prewarm asserts the exact visible structural amount domain, never the stored all-time template domain | analyzer + GitHub profile execution reaches the independent inherited FrameTiming gate | PARTIAL — the assertion is corrected and exercised; the lane remains non-green solely at inherited `frame_timing_headroom: null` |
 | VAL-01 | user §33 | test suites | Focused amount/range, Sum forensic, Core temporal, LogBox paging, heatmap geometry, chart, tuner and score suites pass | Ubuntu-proot commands + clean GitHub core lane | DONE |
 | VAL-02 | user §§28, 33 | diagnostics/profile source review | No pointer repository/Room/index/raw-row work; 4×3 O(12); labels only semantic series/settings work; Sum paging unchanged if no defect | counters/tests/source review | DONE |
 | VAL-03 | user §33 | Dart/Git | Changed-target `flutter analyze` and `git diff --check` pass | exact commands | DONE |
 | DEL-01 | user §§30, 32, 35 | checklist | Every functional row above is `DONE` before build gate opens | explicit pre-push table | DONE — user-authorized online forensic validation completed the remaining Sum rows |
-| DEL-02 | user §§30, 34–35 | Git/CI/tooling | Atomic app commits, push after gate, online human APK, matching SCIP and separate journal/tooling commits | GitHub/APK/tooling evidence | PARTIAL — profile assertion correction needs a clean rerun |
+| DEL-02 | user §§30, 34–35 | Git/CI/tooling | Atomic app commits, push after gate, online human APK, matching SCIP and separate journal/tooling commits | GitHub/APK/tooling evidence | PARTIAL — delivery artifacts exist, but the inherited automated FrameTiming gate remains non-green |
 
 ## Build-gate snapshot
 
@@ -78,14 +78,15 @@ never read repositories, build indexes, or calculate finance data.
 | Chart labels setting | DONE |
 | Exactly five dynamic labels | DONE |
 | Chart no-regression | DONE |
-| Profile exact-visible-domain assertion | IN PROGRESS |
+| Profile exact-visible-domain assertion | PARTIAL — corrected and reached the later inherited FrameTiming gate in GitHub Actions |
 | Protected regressions | DONE |
 | Analyzer | DONE |
 | Diff check | DONE |
 | Performance bounds | DONE |
 
-**BUILD GATE = CLOSED — the clean online profile lane found an authority
-assertion that must be rerun after correction.**
+**BUILD GATE = CLOSED — the corrected online profile reaches the established
+inherited `frame_timing_headroom: null` gate. It is not weakened or reported
+as green.**
 
 ## Validation update — 2026-09-17
 
@@ -119,6 +120,29 @@ assertion that must be rerun after correction.**
   SHA-256 `e40ecb26705c8a8a3a064ef65e1bd5fc5c69288e2b9fc1a02b84df81e8247da8`.
   The artifact source marker is `d3b32d388623aac09ea2125e2d35b8dec627cc66`;
   its immediately preceding application source is `9a8a7575`.
+- PASS — `c67e7139` corrects only the integration profile assertion and this
+  checklist. It waits for
+  `amountDomainForScope(controller.mindAmountDomainScopeFor(opposite))`, the
+  exact domain used by the physical Mind slider, rather than
+  `amountDomainFor(opposite)`, which is the stored all-time canonical template.
+  Ubuntu/proot `flutter analyze integration_test/dashboard_interaction_profile_test.dart`
+  reported no issues; `git diff --check` passed.
+- PARTIAL — GitHub Actions run `35246447435`, job
+  `run-dashboard-profile` (27m31s), reaches the later Mind Year profile
+  validator and fails only with the established inherited error:
+  `Mind Year heatmap profile evidence frame_timing_headroom is invalid: null`.
+  Thus the prior inactive-domain assertion is no longer the stopping failure.
+  `dashboard-paths`, `test-flutter` (2m32s), `test-core` (5m47s), and the
+  human diagnostic APK job (6m46s) pass. The test/checklist-only `c67e7139`
+  commit does not alter runtime application source, so the previously
+  downloaded `d3b32d3` human APK remains the matching runtime artifact for
+  `9a8a7575`.
+- PASS — final graph regeneration from exact `c67e7139` uses `scip_dart
+  1.6.2`; raw index SHA-256 is
+  `128070323a4a86bb72cd86148df7d7b8ff9b83d8c35cfc69dfb9de3051bd8434`.
+  Tooling commit `1d9f1178` on `tooling/scip-codegraph-v1` is pushed, its
+  manifest pins `source_head=c67e7139`, and `dart test` passes all 15 tooling
+  tests. Raw SCIP remains ignored.
 
 ## Preflight record
 

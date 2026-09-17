@@ -1091,3 +1091,40 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   at this journal point; its established `frame_timing_headroom is invalid:
   null` lineage must remain an honest separate status. Physical validation:
   `PENDING — USER ONLY`.
+
+## 2026-09-17 — Profile exact-visible-domain assertion evidence (`c67e7139`)
+
+- `c67e713925150a058d1c9a3c85ce55a97af65693` changes only the dashboard
+  integration profile assertion and its acceptance checklist; it makes no
+  production runtime, Query, Mind, Heatmap, Header, seed, renderer or Android
+  build-input change. The test now waits for
+  `amountDomainForScope(mindAmountDomainScopeFor(opposite))`: the exact
+  visible structural domain that `mindAmountRangeBindingFor` uses. The prior
+  assertion waited for `amountDomainFor(opposite)`, an all-time canonical
+  template that need not be admitted for the inactive visible scope.
+- PASS — Ubuntu/proot
+  `flutter analyze integration_test/dashboard_interaction_profile_test.dart`
+  reports no issues, and `git diff --check` is clean.
+- PASS — GitHub Actions run `35246447435`: `dashboard-paths` (11s),
+  `test-flutter` (2m32s), `test-core` (5m47s), and the human diagnostic APK
+  job (6m46s) succeed. The clean Core lane preserves the Sum **NO DEFECT**
+  proof. The new exact-visible-domain assertion no longer stops the profile.
+- FAIL — the same run's `run-dashboard-profile` job fails after 27m31s at the
+  pre-existing `DashboardProfileReport.validateMindYearHeatmapEvidence` gate:
+  `Mind Year heatmap profile evidence frame_timing_headroom is invalid: null`.
+  The subsequent absent B report is a consequence of that validator failure.
+  No threshold, profile instrumentation, Time/Avatar physics, or Mind
+  production code was changed to mask it; this remains an honest inherited
+  automated-performance blocker.
+- PASS — SCIP was regenerated from exact `c67e7139` with `scip_dart 1.6.2`.
+  Raw index SHA-256:
+  `128070323a4a86bb72cd86148df7d7b8ff9b83d8c35cfc69dfb9de3051bd8434`.
+  Tooling commit `1d9f1178` on `tooling/scip-codegraph-v1` is pushed; its
+  manifest pins this source head and all 15 tooling tests pass. The raw index
+  is ignored and the graph is navigation evidence, not runtime causality.
+- The normal human artifact for the actual runtime application feature remains
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_d3b32d3.apk`
+  (83,088,689 bytes; SHA-256
+  `e40ecb26705c8a8a3a064ef65e1bd5fc5c69288e2b9fc1a02b84df81e8247da8`).
+  `c67e7139` is test/checklist-only and does not change that runtime source.
+  Physical validation: `PENDING — USER ONLY`.
