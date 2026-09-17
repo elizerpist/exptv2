@@ -7,7 +7,7 @@
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#ensureMindYearHeatmapProjection().",
-      "sha256": "5c9890194bd8419ed124d6978ff6b022cb75df173b33dcfcef355989604e9588"
+      "sha256": "cfed3747a15baebd9abcc2fa19b6fa165b4e43a9ca9c224d1392df45da904dc5"
     },
     {
       "path": "symbols/part-001.jsonl",
