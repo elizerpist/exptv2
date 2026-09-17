@@ -155,6 +155,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   SummaryPillVariant _lastSummaryPillVariant = SummaryPillVariant.legacy;
   int _lastSummaryVariantTransitionLayoutEpoch = 0;
   int? _lastRejectedSummaryVariantCallbackEpoch;
+  double _mindModeContentExtraHeight = 0;
 
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
@@ -162,6 +163,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   @override
   void initState() {
     super.initState();
+    _mindModeContentExtraHeight = _resolveMindModeContentExtraHeight();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
     _summaryPillVariantController = SummaryPillVariantController();
@@ -189,6 +191,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryPillVariantController.addListener(_onSummaryPillVariantChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.addListener(_onLayoutPresentationChanged);
+    controller.navigation.addListener(_syncMindModeContentGeometry);
+    controller.mindYearHeatmapPresentation.addListener(
+      _syncMindModeContentGeometry,
+    );
     final financialLimitRepository = widget.financialLimitRepository;
     if (financialLimitRepository != null) {
       _budgetLimitEdit = DashboardBudgetLimitEditController(
@@ -435,9 +441,45 @@ class _CoreDashboardState extends State<CoreDashboard>
   }
 
   void _onCoreModeChanged() {
+    _syncMindModeContentGeometry();
     if (modeController.committedMode == DashboardModeSpec.mind) return;
     _mindAmountInteractionActive = false;
     controller.clearMindAmountRangePreview();
+  }
+
+  /// Only the selected four-column annual presentation grows Mind's physical
+  /// envelope. The other Mind planes keep the established LogBox room.
+  /// Presentation controls remain the sole input; neither Query nor widgets
+  /// own this structural decision.
+  double _resolveMindModeContentExtraHeight() {
+    if (modeController.committedMode != DashboardModeSpec.mind ||
+        controller.navigation.state.plane != TimePlane.year) {
+      return 0;
+    }
+    return controller
+        .mindYearHeatmapPresentation
+        .value
+        .monthCardLayout
+        .requiredMindModeContentExtraHeight;
+  }
+
+  void _syncMindModeContentGeometry() {
+    final next = _resolveMindModeContentExtraHeight();
+    if (next == _mindModeContentExtraHeight) return;
+    _mindModeContentExtraHeight = next;
+    if (mounted) setState(() {});
+  }
+
+  double _modeContentExtraHeightFor(DashboardModeSpec mode) {
+    if (mode != modeController.committedMode) return 0;
+    return switch (mode.mode) {
+      DashboardMode.budget
+          when _budgetSectionOrderController.value ==
+              BudgetSectionOrder.chartThenAvatars =>
+        BudgetSectionOrder.chartThenAvatarsExtraModeContentHeight,
+      DashboardMode.mind => _mindModeContentExtraHeight,
+      _ => 0,
+    };
   }
 
   void _recordSceneCacheMetrics() {
@@ -549,6 +591,10 @@ class _CoreDashboardState extends State<CoreDashboard>
       _syncBudgetDistributionTimePublicationPreparer,
     );
     modeController.removeListener(_onCoreModeChanged);
+    controller.navigation.removeListener(_syncMindModeContentGeometry);
+    controller.mindYearHeatmapPresentation.removeListener(
+      _syncMindModeContentGeometry,
+    );
     controller.detachBudgetDistributionTimePublicationPreparer();
     controller.detachLogBoxSceneWindowCoordinator();
     _summaryMotionController.removeListener(_onSummaryTextMotionChanged);
@@ -607,12 +653,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       bodyOrder: _bodyOrderController.value,
       hasPhysicalRail:
           _summaryPillVariantController.value == SummaryPillVariant.legacy,
-      modeContentExtraHeight:
-          modeController.committedMode == DashboardModeSpec.budget &&
-              _budgetSectionOrderController.value ==
-                  BudgetSectionOrder.chartThenAvatars
-          ? BudgetSectionOrder.chartThenAvatarsExtraModeContentHeight
-          : 0,
+      modeContentExtraHeightResolver: _modeContentExtraHeightFor,
       builder: (context, frame) {
         final geometry = frame.geometry;
         final collapseTravel = controller.metrics.collapseTravel;
@@ -721,6 +762,13 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                   .error,
                                         mindYearHeatmap:
                                             controller.mindYearHeatmap,
+                                        mindTemporalHeatmap:
+                                            controller.mindTemporalHeatmap,
+                                        mindTemporalHeatmapPlane: controller
+                                            .presentation
+                                            .navigation
+                                            .state
+                                            .plane,
                                         mindYearHeatmapPresentation: controller
                                             .mindYearHeatmapPresentation,
                                         mindYearHeatmapVisible:
@@ -730,6 +778,18 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                 .state
                                                 .plane ==
                                             TimePlane.year,
+                                        mindTemporalHeatmapVisible:
+                                            controller
+                                                    .presentation
+                                                    .navigation
+                                                    .state
+                                                    .plane !=
+                                                TimePlane.month ||
+                                            !controller
+                                                .presentation
+                                                .navigation
+                                                .state
+                                                .isRailOpen,
                                         onMindQueryAmountRangeRetry:
                                             widget.mindQueryFacetLoader == null
                                             ? null
@@ -1328,9 +1388,6 @@ class _CoreDashboardState extends State<CoreDashboard>
       controller.mindAmountDomainScopeFor(direction),
     );
     final values = binding?.values;
-    final shouldRenderYearHeatmap =
-        modeController.committedMode == DashboardModeSpec.mind &&
-        controller.presentation.navigation.state.plane == TimePlane.year;
     final lifecycle = widget.mindQueryFacetLoader;
     final lifecycleState = lifecycle?.state;
     final lifecycleError = lifecycle?.error;
@@ -1376,9 +1433,6 @@ class _CoreDashboardState extends State<CoreDashboard>
         ),
       );
     }
-    if (!shouldRenderYearHeatmap) {
-      controller.clearMindYearHeatmapProjection();
-    }
     if (values != null) {
       final primeSignature = Object.hash(
         direction,
@@ -1388,26 +1442,11 @@ class _CoreDashboardState extends State<CoreDashboard>
       );
       if (_mindAmountPreviewPrimeSignature != primeSignature) {
         _mindAmountPreviewPrimeSignature = primeSignature;
-        unawaited(
-          controller.primeMindAmountPreviewDomain().then((ready) {
-            if (ready) {
-              controller.ensureMindBehavioralScoreProjection();
-              if (modeController.committedMode == DashboardModeSpec.mind &&
-                  controller.presentation.navigation.state.plane ==
-                      TimePlane.year) {
-                controller.ensureMindYearHeatmapProjection();
-              }
-            }
-          }),
-        );
-      }
-      // Score publication is a semantic Core operation. This callback is
-      // evaluated from the range-control build, so it must only admit the
-      // prepared base here; the asynchronous prime completion and the Core's
-      // direction/time/focus publication paths publish the score outside the
-      // widget build transaction.
-      if (shouldRenderYearHeatmap) {
-        controller.ensureMindYearHeatmapProjection();
+        // The Core asynchronous prepared-data admission publishes the full
+        // Mind semantic frame on completion. A render callback may request
+        // that admission, but it may never directly publish a heatmap or
+        // score ValueNotifier while the widget tree is building.
+        unawaited(controller.primeMindAmountPreviewDomain());
       }
     }
     // Unknown is not the 1,000 HUF floor. Query Menu hides its control until

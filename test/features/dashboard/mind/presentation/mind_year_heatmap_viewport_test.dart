@@ -66,6 +66,40 @@ void main() {
   );
 
   testWidgets(
+    'RED YEAR-6R-01: every Year MonthCard reserves the same six-row envelope',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      final january = tester.getSize(
+        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+      );
+      final march = tester.getSize(
+        find.byKey(const ValueKey('mind-year-heatmap-month-3')),
+      );
+      expect(
+        january.height,
+        closeTo(march.height, .001),
+        reason:
+            'A five-real-row month reserves the same sixth display row as a '
+            'six-real-row month; only real dates are painted.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED MYH-09: a held physical slider drag recolors tiles before release',
     (tester) async {
       final projection = _projection();
@@ -266,7 +300,7 @@ void main() {
   );
 
   testWidgets(
-    'RED MYHR-04/05: January 2025 starts at Wednesday and MonthCards have no expanded tail',
+    'RED YEAR-6R-02/03/04: January 2025 preserves real slots while its reserved sixth row stays unpainted',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
       addTearDown(frame.dispose);
@@ -304,6 +338,12 @@ void main() {
       expect(painter.dayAtSlot(0), isNull);
       expect(painter.dayAtSlot(1), isNull);
       expect(painter.dayAtSlot(2), 1);
+      // January 2025 uses five real calendar rows. The sixth display row is
+      // owned by the card envelope, not the calendar painter: its geometry
+      // has no slots there at all, so it cannot render fake no-data cells.
+      expect(painter.geometry.rowCount, 5);
+      expect(painter.geometry.slotCount, 35);
+      expect(MindYearHeatmapMonthCard.displayCalendarRowCount, 6);
       expect(
         painter.colorForDate(const LocalDate(year: 2025, month: 1, day: 1)),
         FluviVisualTokens.mindHeatmapEmpty,
@@ -424,9 +464,11 @@ void main() {
       );
       // ListView.separated contributes one separator between each annual row.
       expect(grid.childrenDelegate.estimatedChildCount, 11);
-      // The one ListView builds only its visible/cache rows; its six two-card
-      // rows are the structural proof of all twelve unique months.
-      expect(find.byType(MindYearHeatmapMonthCard), findsAtLeastNWidgets(8));
+      // The fixed six-row envelope deliberately makes each two-card row
+      // taller than the former variable-height card. The one ListView still
+      // structurally owns all six rows (estimatedChildCount == 11 above),
+      // while this constrained viewport only has to build its first three.
+      expect(find.byType(MindYearHeatmapMonthCard), findsAtLeastNWidgets(6));
       final twoColumnWidth = tester
           .getSize(find.byKey(const ValueKey('mind-year-heatmap-month-1')))
           .width;

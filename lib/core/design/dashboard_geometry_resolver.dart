@@ -39,7 +39,21 @@ abstract final class DashboardGeometryResolver {
     final reclaimedRailFootprint = hasPhysicalRail
         ? 0.0
         : metrics.railHeight + metrics.railToCollapseHandleGap;
-    final modeLowerHeight = metrics.zone2CardHeight + reclaimedRailFootprint;
+    final baseModeLowerHeight =
+        metrics.zone2CardHeight + reclaimedRailFootprint;
+    // A unified mode owns one physical card envelope. Its structural minimum
+    // must grow that card itself so its dots and rail remain downstream of the
+    // enlarged body. Split modes retain the existing post-content extension
+    // behavior used by Budget's optional chart tail.
+    final unifiedBodyExtra =
+        mode.subheaderComposition == DashboardSubheaderComposition.unified
+        ? modeContentExtraHeight
+        : 0.0;
+    final postContentExtra =
+        mode.subheaderComposition == DashboardSubheaderComposition.unified
+        ? 0.0
+        : modeContentExtraHeight;
+    final modeLowerHeight = baseModeLowerHeight + unifiedBodyExtra;
     // The cursor keeps the accepted Zone2 → dot → next/rail relation, while
     // the named envelope includes the complete painted dot. Those differ by
     // the existing half-padding around the indicator, not a new spacing token.
@@ -49,14 +63,14 @@ abstract final class DashboardGeometryResolver {
         modeLowerHeight +
         metrics.dotGap +
         metrics.dotHeight +
-        modeContentExtraHeight;
+        postContentExtra;
     final modeContentEnvelopeHeight =
         metrics.subheaderOneHeight +
         metrics.standardGap +
         modeLowerHeight +
         metrics.zone2IndicatorVerticalPadding +
         metrics.dotHeight +
-        modeContentExtraHeight;
+        postContentExtra;
     final expandedBodies = _expandedBodyLayout(
       metrics: metrics,
       order: order,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../time_navigation/domain/local_date.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 
@@ -35,36 +36,98 @@ abstract final class MindYearHeatmapPaletteResolver {
   static MindYearHeatmapPaletteSample resolve({
     required MindYearHeatmapPaletteStyle style,
     required MindYearHeatmapDay day,
+  }) => resolveTile(
+    style: style,
+    isEmpty: day.isEmpty,
+    intensity: day.intensity,
+    paletteIntensity: day.paletteIntensity,
+  );
+
+  /// Shared token resolution for Year day cells, Month day cells and Sum
+  /// month cells. The caller supplies already-normalized financial semantics;
+  /// this resolver has no membership or aggregation authority.
+  static MindYearHeatmapPaletteSample resolveTile({
+    required MindYearHeatmapPaletteStyle style,
+    required bool isEmpty,
+    required double intensity,
+    required MindYearHeatmapPaletteIntensity paletteIntensity,
   }) => switch (style) {
-    MindYearHeatmapPaletteStyle.fluvi => _fluvi(day),
-    MindYearHeatmapPaletteStyle.b3mMy3 => _b3m(day),
+    MindYearHeatmapPaletteStyle.fluvi => _fluvi(
+      isEmpty: isEmpty,
+      intensity: intensity,
+      paletteIntensity: paletteIntensity,
+    ),
+    MindYearHeatmapPaletteStyle.b3mMy3 => _b3m(
+      isEmpty: isEmpty,
+      intensity: intensity,
+    ),
   };
 
-  static MindYearHeatmapPaletteSample _fluvi(MindYearHeatmapDay day) =>
-      MindYearHeatmapPaletteSample(
-        background: switch (day.paletteIntensity) {
-          MindYearHeatmapPaletteIntensity.empty =>
-            FluviVisualTokens.mindHeatmapEmpty,
-          MindYearHeatmapPaletteIntensity.minimum =>
-            FluviVisualTokens.mindHeatmapMinimum,
-          MindYearHeatmapPaletteIntensity.interpolated =>
-            FluviVisualTokens.mindHeatmapInterpolated(day.intensity),
-          MindYearHeatmapPaletteIntensity.maximum =>
-            FluviVisualTokens.mindHeatmapMaximum,
-          MindYearHeatmapPaletteIntensity.equalRange =>
-            FluviVisualTokens.mindHeatmapEqualRange,
-        },
-        foreground: FluviVisualTokens.textSecondary,
-      );
+  /// Five ordered, non-empty scale positions for every Mind heatmap surface.
+  /// The legend intentionally delegates to this resolver rather than owning
+  /// another palette; empty and equal-range are tile states, not scale stops.
+  static List<MindYearHeatmapPaletteSample> legendSamples(
+    MindYearHeatmapPaletteStyle style,
+  ) => List<MindYearHeatmapPaletteSample>.unmodifiable(
+    List<MindYearHeatmapPaletteSample>.generate(
+      5,
+      (index) => resolve(style: style, day: _legendDay(index / 4)),
+      growable: false,
+    ),
+  );
 
-  static MindYearHeatmapPaletteSample _b3m(MindYearHeatmapDay day) {
-    if (day.isEmpty) {
+  static MindYearHeatmapDay _legendDay(double intensity) {
+    final paletteIntensity = intensity <= 0
+        ? MindYearHeatmapPaletteIntensity.minimum
+        : intensity >= 1
+        ? MindYearHeatmapPaletteIntensity.maximum
+        : MindYearHeatmapPaletteIntensity.interpolated;
+    return MindYearHeatmapDay(
+      date: const LocalDate(year: 2000, month: 1, day: 1),
+      total: 1,
+      kind: switch (paletteIntensity) {
+        MindYearHeatmapPaletteIntensity.minimum =>
+          MindYearHeatmapTileKind.minimum,
+        MindYearHeatmapPaletteIntensity.maximum =>
+          MindYearHeatmapTileKind.maximum,
+        _ => MindYearHeatmapTileKind.interpolated,
+      },
+      intensity: intensity,
+      paletteIntensity: paletteIntensity,
+    );
+  }
+
+  static MindYearHeatmapPaletteSample _fluvi({
+    required bool isEmpty,
+    required double intensity,
+    required MindYearHeatmapPaletteIntensity paletteIntensity,
+  }) => MindYearHeatmapPaletteSample(
+    background: switch (paletteIntensity) {
+      MindYearHeatmapPaletteIntensity.empty =>
+        FluviVisualTokens.mindHeatmapEmpty,
+      MindYearHeatmapPaletteIntensity.minimum =>
+        FluviVisualTokens.mindHeatmapMinimum,
+      MindYearHeatmapPaletteIntensity.interpolated =>
+        FluviVisualTokens.mindHeatmapInterpolated(intensity),
+      MindYearHeatmapPaletteIntensity.maximum =>
+        FluviVisualTokens.mindHeatmapMaximum,
+      MindYearHeatmapPaletteIntensity.equalRange =>
+        FluviVisualTokens.mindHeatmapEqualRange,
+    },
+    foreground: FluviVisualTokens.textSecondary,
+  );
+
+  static MindYearHeatmapPaletteSample _b3m({
+    required bool isEmpty,
+    required double intensity,
+  }) {
+    if (isEmpty) {
       return const MindYearHeatmapPaletteSample(
         background: FluviVisualTokens.mindHeatmapEmpty,
         foreground: FluviVisualTokens.textSecondary,
       );
     }
-    final level = (day.intensity.clamp(0.0, 1.0) * 4).round();
+    final level = (intensity.clamp(0.0, 1.0) * 4).round();
     final background = switch (level) {
       0 => _b3mLevel0,
       1 => _b3mLevel1,

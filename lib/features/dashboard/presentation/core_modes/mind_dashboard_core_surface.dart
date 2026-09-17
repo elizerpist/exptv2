@@ -10,11 +10,15 @@ import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_temporal_heatmap_frame.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/presentation/mind_header_score_chart.dart';
+import '../../mind/presentation/mind_year_heatmap_palette_resolver.dart';
 import '../../mind/presentation/mind_year_heatmap_viewport.dart';
+import '../../mind/presentation/mind_temporal_heatmap_viewports.dart';
+import '../../time_navigation/domain/time_plane.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -31,8 +35,11 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.queryAmountRangeState,
     this.queryAmountRangeError,
     this.yearHeatmap,
+    this.temporalHeatmap,
+    this.temporalPlane,
     this.yearHeatmapPresentation,
     this.showYearHeatmap = false,
+    this.showTemporalHeatmap = false,
     this.onQueryAmountRangeRetry,
     this.onQueryAmountRangeCommitted,
     this.onQueryAmountRangePreviewChanged,
@@ -52,9 +59,12 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final DashboardAppliedQueryFacetLoadState Function()? queryAmountRangeState;
   final Object? Function()? queryAmountRangeError;
   final ValueListenable<MindYearHeatmapFrame?>? yearHeatmap;
+  final ValueListenable<MindTemporalHeatmapFrame?>? temporalHeatmap;
+  final TimePlane? temporalPlane;
   final ValueListenable<MindYearHeatmapPresentationSettings>?
   yearHeatmapPresentation;
   final bool showYearHeatmap;
+  final bool showTemporalHeatmap;
   final VoidCallback? onQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangePreviewChanged;
@@ -142,20 +152,39 @@ class MindDashboardCoreSurface extends StatelessWidget {
       onInteractionStarted: onQueryAmountRangeInteractionStarted,
       onInteractionEnded: onQueryAmountRangeInteractionEnded,
       onInteractionSummary: onQueryAmountRangeInteractionSummary,
-      compactPresentation: showYearHeatmap,
+      // Mind has one physical range owner across Sum/Year/Month/Day. The
+      // temporal content may vary, but its range must never fall back to the
+      // standard Query-menu geometry on another TimePlane.
+      compactPresentation: true,
     );
     final heatmap = yearHeatmap;
-    if (!showYearHeatmap || heatmap == null) {
-      return Align(
-        alignment: Alignment.bottomCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-          child: range,
+    // Existing isolated Mind surface callers only supplied the Year flag.
+    // Preserve that source-compatible Year default while CoreDashboard now
+    // supplies the explicit temporal plane for Sum/Month.
+    final resolvedPlane =
+        temporalPlane ?? (showYearHeatmap ? TimePlane.year : null);
+    final temporalContent = switch (resolvedPlane) {
+      TimePlane.year when showYearHeatmap && heatmap != null =>
+        MindYearHeatmapViewport(
+          frameListenable: heatmap,
+          presentationSettings: yearHeatmapPresentation,
         ),
-      );
-    }
-    return _MindYearHeatmapBody(
-      heatmap: heatmap,
+      TimePlane.sum when showTemporalHeatmap && temporalHeatmap != null =>
+        MindSumHeatmapViewport(
+          frameListenable: temporalHeatmap!,
+          presentationSettings: yearHeatmapPresentation,
+        ),
+      TimePlane.month when showTemporalHeatmap && temporalHeatmap != null =>
+        MindMonthHeatmapViewport(
+          frameListenable: temporalHeatmap!,
+          presentationSettings: yearHeatmapPresentation,
+        ),
+      _ => const SizedBox.expand(
+        key: ValueKey<String>('mind-temporal-content-unavailable'),
+      ),
+    };
+    return _MindTemporalBody(
+      temporalContent: temporalContent,
       range: range,
       presentationSettings: yearHeatmapPresentation,
     );
@@ -220,9 +249,9 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
 
 /// Structural Mind topology: one clipped vertical viewport followed by an
 /// independent footer. The slider never overlays scroll content.
-final class _MindYearHeatmapBody extends StatelessWidget {
-  const _MindYearHeatmapBody({
-    required this.heatmap,
+final class _MindTemporalBody extends StatelessWidget {
+  const _MindTemporalBody({
+    required this.temporalContent,
     required this.range,
     this.presentationSettings,
   });
@@ -231,8 +260,9 @@ final class _MindYearHeatmapBody extends StatelessWidget {
   // protects the annual scroll viewport from range-control intrinsic sizing
   // and keeps the control reachable in the small Mind body card.
   static const _footerHeight = 74.0;
+  static const _legendHeight = 28.0;
 
-  final ValueListenable<MindYearHeatmapFrame?> heatmap;
+  final Widget temporalContent;
   final Widget range;
   final ValueListenable<MindYearHeatmapPresentationSettings>?
   presentationSettings;
@@ -240,12 +270,11 @@ final class _MindYearHeatmapBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: <Widget>[
-      Expanded(
-        child: ClipRect(
-          child: MindYearHeatmapViewport(
-            frameListenable: heatmap,
-            presentationSettings: presentationSettings,
-          ),
+      Expanded(child: ClipRect(child: temporalContent)),
+      SizedBox(
+        height: _legendHeight,
+        child: _MindHeatmapPaletteLegend(
+          presentationSettings: presentationSettings,
         ),
       ),
       KeyedSubtree(
@@ -254,6 +283,67 @@ final class _MindYearHeatmapBody extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// Fixed, quiet presentation of the five non-empty palette scale positions.
+/// It sits outside the temporal viewport and delegates every color choice to
+/// the same resolver that paints heatmap cells.
+final class _MindHeatmapPaletteLegend extends StatelessWidget {
+  const _MindHeatmapPaletteLegend({this.presentationSettings});
+
+  final ValueListenable<MindYearHeatmapPresentationSettings>?
+  presentationSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget contentFor(MindYearHeatmapPaletteStyle style) {
+      final samples = MindYearHeatmapPaletteResolver.legendSamples(style);
+      return Semantics(
+        label: 'Heatmap intenzitás, alacsonytól magasig',
+        readOnly: true,
+        child: ExcludeSemantics(
+          child: Align(
+            alignment: Alignment.center,
+            child: SizedBox(
+              key: const ValueKey<String>('mind-heatmap-palette-legend'),
+              height: 10,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List<Widget>.generate(
+                  samples.length,
+                  (index) => Padding(
+                    padding: EdgeInsets.only(
+                      right: index == samples.length - 1 ? 0 : 2,
+                    ),
+                    child: DecoratedBox(
+                      key: ValueKey<String>(
+                        'mind-heatmap-palette-swatch-$index',
+                      ),
+                      decoration: BoxDecoration(
+                        color: samples[index].background,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: const SizedBox(width: 12, height: 10),
+                    ),
+                  ),
+                  growable: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final settings = presentationSettings;
+    if (settings == null) {
+      return contentFor(MindYearHeatmapPaletteStyle.fluvi);
+    }
+    return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => contentFor(value.paletteStyle),
+    );
+  }
 }
 
 final class _MindQueryAmountRangeListener extends StatelessWidget {

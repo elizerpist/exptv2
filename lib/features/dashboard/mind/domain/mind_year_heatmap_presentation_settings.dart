@@ -29,6 +29,16 @@ enum MindYearMonthCardLayout {
   };
 
   bool get fitsAnnualViewport => this == fourColumns;
+
+  /// The four-column annual grid needs an additional physical Mind-body
+  /// envelope once it is actually selected. Keeping this on the presentation
+  /// choice prevents ordinary Sum/Month/Day and 2 × 6/3 × 4 Mind surfaces
+  /// from needlessly taking vertical room away from the LogBox.
+  double get requiredMindModeContentExtraHeight => switch (this) {
+    MindYearMonthCardLayout.fourColumns => 50,
+    MindYearMonthCardLayout.threeColumns ||
+    MindYearMonthCardLayout.twoColumns => 0,
+  };
 }
 
 /// Immutable user preferences for visualizing an admitted annual heatmap.

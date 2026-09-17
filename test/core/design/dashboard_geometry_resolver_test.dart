@@ -7,6 +7,7 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 
 void main() {
   group('DashboardGeometryResolver', () {
@@ -238,6 +239,9 @@ void main() {
           mode: DashboardModeSpec.mind,
           collapseProgress: 0,
           isRailExpanded: true,
+          modeContentExtraHeight: MindYearMonthCardLayout
+              .fourColumns
+              .requiredMindModeContentExtraHeight,
         );
 
         // 5 px comes from the dedicated open-rail handle gap and 4 px from
@@ -299,7 +303,24 @@ void main() {
         expect(openRail.zone2Bounds.height, metrics.zone2CardHeight);
         expect(
           mind.unifiedSubheaderBounds!.bottom,
-          openRail.zone2Bounds.bottom,
+          openRail.zone2Bounds.bottom +
+              MindYearMonthCardLayout
+                  .fourColumns
+                  .requiredMindModeContentExtraHeight,
+        );
+        expect(
+          mind.zone2IndicatorBounds.top,
+          openRail.zone2IndicatorBounds.top +
+              MindYearMonthCardLayout
+                  .fourColumns
+                  .requiredMindModeContentExtraHeight,
+        );
+        expect(
+          mind.railBounds.top,
+          openRail.railBounds.top +
+              MindYearMonthCardLayout
+                  .fourColumns
+                  .requiredMindModeContentExtraHeight,
         );
         expect(
           openRail.railBounds.bottom,
@@ -346,61 +367,85 @@ void main() {
       expect(metrics.logBoxHeaderHeight, 87.75);
     });
 
-    test('uses one subheader envelope for split and unified modes', () {
-      final balance = DashboardGeometryResolver.resolve(
-        metrics: DashboardLayoutMetrics.reference,
-        mode: DashboardModeSpec.balance,
-        collapseProgress: 0,
-        isRailExpanded: false,
-      );
-      final budget = DashboardGeometryResolver.resolve(
-        metrics: DashboardLayoutMetrics.reference,
-        mode: DashboardModeSpec.budget,
-        collapseProgress: 0,
-        isRailExpanded: false,
-      );
-      final mind = DashboardGeometryResolver.resolve(
-        metrics: DashboardLayoutMetrics.reference,
-        mode: DashboardModeSpec.mind,
-        collapseProgress: 0,
-        isRailExpanded: false,
-      );
-
-      expect(
-        DashboardModeSpec.balance.subheaderComposition,
-        DashboardSubheaderComposition.split,
-      );
-      expect(
-        DashboardModeSpec.budget.subheaderComposition,
-        DashboardSubheaderComposition.split,
-      );
-      expect(
-        DashboardModeSpec.mind.subheaderComposition,
-        DashboardSubheaderComposition.unified,
-      );
-      expect(mind.subheaderEnvelopeBounds, balance.subheaderEnvelopeBounds);
-      expect(mind.subheaderEnvelopeBounds, budget.subheaderEnvelopeBounds);
-      expect(mind.unifiedSubheaderBounds, mind.subheaderEnvelopeBounds);
-      expect(balance.actionBounds, budget.actionBounds);
-      expect(balance.actionBounds, mind.actionBounds);
-      expect(balance.summaryBounds, budget.summaryBounds);
-      expect(balance.summaryBounds, mind.summaryBounds);
-      expect(balance.railBounds, budget.railBounds);
-      expect(balance.railBounds, mind.railBounds);
-
-      for (final mode in DashboardModeSpec.values) {
-        final collapsed = DashboardGeometryResolver.resolve(
+    test(
+      'keeps split envelopes stable while selected four-column Mind reserves its unified body extension',
+      () {
+        final balance = DashboardGeometryResolver.resolve(
           metrics: DashboardLayoutMetrics.reference,
-          mode: mode,
-          collapseProgress: DashboardLayoutMetrics.reference.collapseTravel,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
           isRailExpanded: false,
         );
-        expect(collapsed.headerBounds.height, 104);
-        expect(collapsed.actionBounds.top, 219);
-        expect(collapsed.summaryBounds.top, 282);
-        expect(collapsed.railBounds.top, 352);
-      }
-    });
+        final budget = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        );
+        final mind = DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.mind,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          modeContentExtraHeight: MindYearMonthCardLayout
+              .fourColumns
+              .requiredMindModeContentExtraHeight,
+        );
+
+        expect(
+          DashboardModeSpec.balance.subheaderComposition,
+          DashboardSubheaderComposition.split,
+        );
+        expect(
+          DashboardModeSpec.budget.subheaderComposition,
+          DashboardSubheaderComposition.split,
+        );
+        expect(
+          DashboardModeSpec.mind.subheaderComposition,
+          DashboardSubheaderComposition.unified,
+        );
+        expect(
+          mind.subheaderEnvelopeBounds.height,
+          balance.subheaderEnvelopeBounds.height +
+              MindYearMonthCardLayout
+                  .fourColumns
+                  .requiredMindModeContentExtraHeight,
+        );
+        expect(
+          mind.subheaderEnvelopeBounds.height,
+          budget.subheaderEnvelopeBounds.height +
+              MindYearMonthCardLayout
+                  .fourColumns
+                  .requiredMindModeContentExtraHeight,
+        );
+        expect(mind.unifiedSubheaderBounds, mind.subheaderEnvelopeBounds);
+        expect(balance.actionBounds, budget.actionBounds);
+        expect(balance.actionBounds, mind.actionBounds);
+        expect(balance.summaryBounds, budget.summaryBounds);
+        expect(balance.summaryBounds, mind.summaryBounds);
+        expect(balance.railBounds, budget.railBounds);
+        expect(
+          mind.railBounds.top,
+          balance.railBounds.top +
+              MindYearMonthCardLayout
+                  .fourColumns
+                  .requiredMindModeContentExtraHeight,
+        );
+
+        for (final mode in DashboardModeSpec.values) {
+          final collapsed = DashboardGeometryResolver.resolve(
+            metrics: DashboardLayoutMetrics.reference,
+            mode: mode,
+            collapseProgress: DashboardLayoutMetrics.reference.collapseTravel,
+            isRailExpanded: false,
+          );
+          expect(collapsed.headerBounds.height, 104);
+          expect(collapsed.actionBounds.top, 219);
+          expect(collapsed.summaryBounds.top, 282);
+          expect(collapsed.railBounds.top, 352);
+        }
+      },
+    );
 
     for (final mode in DashboardModeSpec.values) {
       test('${mode.mode.name} keeps action and summary upstream of Zone2', () {

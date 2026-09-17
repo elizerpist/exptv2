@@ -15,6 +15,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
@@ -638,7 +640,534 @@ void main() {
       expect(binding.values.maximumScaled100, 1350000);
       expect(binding.values.minimumScaled100, 100000);
       expect(binding.values.upperScaled100, 1350000);
+    },
+  );
 
+  test(
+    'RED SUM/MONTH-HM-13: one Core temporal coordinator publishes range-preview frames without source work',
+    () async {
+      final rows = <DashboardLedgerEntry>[
+        _mindYearEntry(
+          id: 'income-2024-jan',
+          direction: 'income',
+          categoryId: 'salary',
+          partnerId: 'employer',
+          amount: 100000,
+          date: const LocalDate(year: 2024, month: 1, day: 2),
+        ),
+        _mindYearEntry(
+          id: 'income-2025-may-low',
+          direction: 'income',
+          categoryId: 'salary',
+          partnerId: 'employer',
+          amount: 200000,
+          date: const LocalDate(year: 2025, month: 5, day: 2),
+        ),
+        _mindYearEntry(
+          id: 'income-2025-may-high',
+          direction: 'income',
+          categoryId: 'salary',
+          partnerId: 'employer',
+          amount: 500000,
+          date: const LocalDate(year: 2025, month: 5, day: 3),
+        ),
+      ];
+      final monthRepository = _FocusSeedRepository(rows: rows);
+      final month = DashboardCoreController(
+        dataRepository: monthRepository,
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(month.dispose);
+      await month.bootstrap();
+      _installMindAmountDomain(month, LedgerDirection.income);
+      expect(await month.primeMindAmountPreviewDomain(), isTrue);
+      expect(month.ensureMindTemporalVisualProjection(), isTrue);
+      expect(month.mindTemporalHeatmap.value, isA<MindMonthHeatmapFrame>());
+      final initialMonth =
+          month.mindTemporalHeatmap.value! as MindMonthHeatmapFrame;
+      expect(initialMonth.total, 700000);
+      final initialMonthScore = month.mindBehavioralScore.value!;
+      expect(
+        initialMonthScore.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 3).epochDay,
+        reason:
+            'One ordinary Core admission publishes the selected Month body '
+            'and Header score target together, before any later frame.',
+      );
+      expect(
+        initialMonthScore.chartSeries!.startInclusiveEpochDay,
+        const LocalDate(year: 2025, month: 5, day: 1).epochDay,
+        reason:
+            'The chart carries the complete selected Month calendar domain; '
+            'its endpoint remains the latest meaningful daily score point.',
+      );
+      expect(
+        initialMonthScore.chartSeries!.points.last,
+        initialMonthScore.point,
+      );
+      final repositoryReadsBeforePreview = monthRepository.committedPageReads;
+      final indexBuildsBeforePreview = monthRepository.prepareCalls;
+
+      month.beginMindAmountRangeInteraction();
+      expect(
+        month.previewMindAmountRange(
+          QueryAmountRangeValues(
+            minimumScaled100: initialMonth.range.minimumScaled100,
+            maximumScaled100: initialMonth.range.maximumScaled100,
+            lowerScaled100: 500000,
+            upperScaled100: initialMonth.range.upperScaled100,
+          ),
+        ),
+        isTrue,
+      );
+      final previewMonth =
+          month.mindTemporalHeatmap.value! as MindMonthHeatmapFrame;
+      expect(previewMonth.total, 500000);
+      expect(previewMonth.range.lowerScaled100, 500000);
+      final previewMonthScore = month.mindBehavioralScore.value!;
+      expect(previewMonthScore.range, previewMonth.range);
+      expect(
+        previewMonthScore.chartSeries!.points.last,
+        previewMonthScore.point,
+      );
+      expect(monthRepository.committedPageReads, repositoryReadsBeforePreview);
+      expect(monthRepository.prepareCalls, indexBuildsBeforePreview);
+      month.endMindAmountRangeInteraction(committed: false);
+
+      final sumRepository = _FocusSeedRepository(rows: rows);
+      final sum = DashboardCoreController(
+        dataRepository: sumRepository,
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(sum.dispose);
+      await sum.bootstrap();
+      _installMindAmountDomain(sum, LedgerDirection.income);
+      expect(await sum.primeMindAmountPreviewDomain(), isTrue);
+      expect(sum.ensureMindTemporalVisualProjection(), isTrue);
+      final sumFrame = sum.mindTemporalHeatmap.value! as MindSumHeatmapFrame;
+      expect(sumFrame.years, containsAllInOrder(<int>[2024, 2025]));
+      expect(sumFrame.month(year: 2025, month: 5).total, 700000);
+      final sumScore = sum.mindBehavioralScore.value!;
+      expect(
+        sumScore.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 3).epochDay,
+        reason:
+            'Sum uses the same accepted semantic target as its temporal '
+            'heatmap rather than retaining a previous Year/Month score.',
+      );
+      expect(
+        sumScore.chartSeries!.startInclusiveEpochDay,
+        const LocalDate(year: 2024, month: 1, day: 2).epochDay,
+      );
+      expect(sumScore.chartSeries!.points.last, sumScore.point);
+      final sumReadsBeforePreview = sumRepository.committedPageReads;
+      final sumPreparesBeforePreview = sumRepository.prepareCalls;
+      sum.beginMindAmountRangeInteraction();
+      const sumPreviewRange = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 500000,
+        lowerScaled100: 500000,
+        upperScaled100: 500000,
+      );
+      expect(sum.previewMindAmountRange(sumPreviewRange), isTrue);
+      final previewSum = sum.mindTemporalHeatmap.value! as MindSumHeatmapFrame;
+      expect(previewSum.range, sumPreviewRange);
+      expect(previewSum.month(year: 2025, month: 5).total, 500000);
+      final previewSumScore = sum.mindBehavioralScore.value!;
+      expect(previewSumScore.range, sumPreviewRange);
+      expect(previewSumScore.chartSeries!.points.last, previewSumScore.point);
+      expect(sumRepository.committedPageReads, sumReadsBeforePreview);
+      expect(sumRepository.prepareCalls, sumPreparesBeforePreview);
+      sum.endMindAmountRangeInteraction(committed: false);
+    },
+  );
+
+  test(
+    'SUM/MON-03/04: the resident temporal coordinator keeps Sum and Month heatmap, Header score and range preview on one focus/direction target',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-salary-2024',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 100000,
+            date: const LocalDate(year: 2024, month: 1, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'income-food-2025',
+            direction: 'income',
+            categoryId: 'food',
+            partnerId: 'shop',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 5, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'expense-food-low-2025',
+            direction: 'expense',
+            categoryId: 'food',
+            partnerId: 'shop',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 5, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'expense-food-high-2025',
+            direction: 'expense',
+            categoryId: 'food',
+            partnerId: 'shop',
+            amount: 500000,
+            date: const LocalDate(year: 2025, month: 5, day: 3),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.income);
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+
+      MindSumHeatmapFrame sumFrame() =>
+          core.mindTemporalHeatmap.value! as MindSumHeatmapFrame;
+      MindBehavioralScoreFrame scoreFrame() => core.mindBehavioralScore.value!;
+
+      expect(sumFrame().month(year: 2025, month: 5).total, 200000);
+      expect(scoreFrame().identity.direction, LedgerDirection.income);
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'food', displayName: 'Food'),
+        ),
+        isTrue,
+      );
+      expect(sumFrame().month(year: 2025, month: 5).total, 200000);
+      expect(
+        scoreFrame().identity.upstreamScopeKey,
+        contains('focus:category=food'),
+      );
+      expect(
+        scoreFrame().range,
+        sumFrame().range,
+        reason:
+            'A focus admission may not leave the Sum body and Header score '
+            'on different amount identities.',
+      );
+
+      core.selectDirection(TransactionDirection.expense);
+      await pumpEventQueue(times: 12);
+      expect(sumFrame().month(year: 2025, month: 5).total, 700000);
+      expect(scoreFrame().identity.direction, LedgerDirection.expense);
+      expect(scoreFrame().range, sumFrame().range);
+
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.month,
+        isRailOpen: false,
+      );
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      final month = core.mindTemporalHeatmap.value! as MindMonthHeatmapFrame;
+      expect(month.year, 2025);
+      expect(month.month, 5);
+      expect(month.total, 700000);
+      expect(scoreFrame().identity.direction, LedgerDirection.expense);
+      expect(scoreFrame().range, month.range);
+
+      final readsBeforePreview = repository.committedPageReads;
+      final preparesBeforePreview = repository.prepareCalls;
+      const onlyLowerExpense = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 200000,
+        upperScaled100: 200000,
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(core.previewMindAmountRange(onlyLowerExpense), isTrue);
+      final preview = core.mindTemporalHeatmap.value! as MindMonthHeatmapFrame;
+      expect(preview.total, 200000);
+      expect(preview.range, onlyLowerExpense);
+      expect(scoreFrame().range, preview.range);
+      expect(scoreFrame().chartSeries!.points.last, scoreFrame().point);
+      expect(repository.committedPageReads, readsBeforePreview);
+      expect(repository.prepareCalls, preparesBeforePreview);
+      final scoreCounter = core.mindBehavioralScore.sourceWorkCounter!;
+      expect(scoreCounter.sourceRowTouchesDuringPreview, 0);
+      expect(scoreCounter.repositoryAccessesDuringPreview, 0);
+      expect(scoreCounter.indexBuildsDuringPreview, 0);
+      core.endMindAmountRangeInteraction(committed: false);
+    },
+  );
+
+  testWidgets(
+    'ATOM-03/04: mounted Sum and Month selector targets publish one matching heatmap and score frame before settle',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'income-2024',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 100000,
+              date: const LocalDate(year: 2024, month: 1, day: 2),
+            ),
+            _mindYearEntry(
+              id: 'income-2025-low',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 200000,
+              date: const LocalDate(year: 2025, month: 5, day: 2),
+            ),
+            _mindYearEntry(
+              id: 'income-2025-high',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 500000,
+              date: const LocalDate(year: 2025, month: 5, day: 3),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.sum,
+        isRailOpen: false,
+      );
+      // Intentionally no pumpAndSettle: this is the first mounted selector
+      // frame which has accepted the new semantic target.
+      await tester.pump();
+      final sum = core.mindTemporalHeatmap.value;
+      final sumScore = core.mindBehavioralScore.value;
+      expect(core.navigation.state.plane, TimePlane.sum);
+      expect(sum, isA<MindSumHeatmapFrame>());
+      expect(sumScore, isNotNull);
+      expect(
+        sumScore!.chartSeries!.startInclusiveEpochDay,
+        const LocalDate(year: 2024, month: 1, day: 2).epochDay,
+      );
+      expect(
+        sumScore.chartSeries!.points.last,
+        sumScore.point,
+        reason:
+            'The Header score and its chart endpoint are one Sum semantic '
+            'publication, not a stale Month result.',
+      );
+
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.month,
+        isRailOpen: false,
+      );
+      await tester.pump();
+      final month = core.mindTemporalHeatmap.value;
+      final monthScore = core.mindBehavioralScore.value;
+      expect(core.navigation.state.plane, TimePlane.month);
+      expect(month, isA<MindMonthHeatmapFrame>());
+      expect(monthScore, isNotNull);
+      expect(
+        monthScore!.chartSeries!.startInclusiveEpochDay,
+        const LocalDate(year: 2025, month: 5, day: 1).epochDay,
+      );
+      expect(monthScore.chartSeries!.points.last, monthScore.point);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'LIV-04: the mounted shared compact slider publishes Month, Sum and Year heatmap plus Header score in its first preview frame',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-2024',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 100000,
+            date: const LocalDate(year: 2024, month: 1, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'income-2025-low',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 5, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'income-2025-high',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 500000,
+            date: const LocalDate(year: 2025, month: 5, day: 3),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      RangeSlider slider() => tester.widget<RangeSlider>(
+        find.byKey(const ValueKey<String>('query-amount-range-slider')),
+      );
+      void expectFirstPreviewFrame(QueryAmountRangeValues expected) {
+        final heatmap = core.mindTemporalHeatmap.value;
+        final score = core.mindBehavioralScore.value;
+        String rangeDigest(QueryAmountRangeValues values) =>
+            '${values.minimumScaled100}/${values.maximumScaled100} '
+            '${values.lowerScaled100}/${values.upperScaled100}';
+        expect(heatmap, isNotNull);
+        expect(score, isNotNull);
+        expect(
+          heatmap!.range,
+          expected,
+          reason:
+              'heatmap=${rangeDigest(heatmap.range)} expected=${rangeDigest(expected)}',
+        );
+        expect(
+          score!.range,
+          expected,
+          reason:
+              'score=${rangeDigest(score.range)} expected=${rangeDigest(expected)}',
+        );
+        expect(score.chartSeries!.points.last, score.point);
+      }
+
+      final readsBefore = repository.committedPageReads;
+      final preparesBefore = repository.prepareCalls;
+      slider().onChangeStart!(const RangeValues(100000, 500000));
+      slider().onChanged!(const RangeValues(500000, 500000));
+      // No settle: the shared display-frame coalescer's first accepted
+      // preview frame is the liveness deadline.
+      await tester.pump();
+      const onlyHigh = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 900000,
+        lowerScaled100: 500000,
+        upperScaled100: 500000,
+      );
+      expect(core.mindTemporalHeatmap.value, isA<MindMonthHeatmapFrame>());
+      expectFirstPreviewFrame(onlyHigh);
+
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.sum,
+        isRailOpen: false,
+      );
+      await tester.pump();
+      expect(core.mindTemporalHeatmap.value, isA<MindSumHeatmapFrame>());
+      slider().onChanged!(const RangeValues(200000, 500000));
+      await tester.pump();
+      const middleAndHigh = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 500000,
+        lowerScaled100: 200000,
+        upperScaled100: 500000,
+      );
+      expectFirstPreviewFrame(middleAndHigh);
+
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.year,
+        isRailOpen: false,
+      );
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+      expect(core.mindTemporalHeatmap.value, isA<MindYearHeatmapFrame>());
+      slider().onChanged!(const RangeValues(200000, 200000));
+      await tester.pump();
+      const onlyLow = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 500000,
+        lowerScaled100: 200000,
+        upperScaled100: 200000,
+      );
+      expectFirstPreviewFrame(onlyLow);
+      expect(repository.committedPageReads, readsBefore);
+      expect(repository.prepareCalls, preparesBefore);
+      final counter = core.mindBehavioralScore.sourceWorkCounter!;
+      expect(counter.sourceRowTouchesDuringPreview, 0);
+      expect(counter.repositoryAccessesDuringPreview, 0);
+      expect(counter.indexBuildsDuringPreview, 0);
+      expect(counter.maxDayBucketsVisitedPerPreview, lessThanOrEqualTo(366));
+      const measuresPreviewMicros = bool.fromEnvironment(
+        'FLUVI_PHYSICAL_RAIL_DIAGNOSTICS',
+      );
+      final previewTiming = counter.previewDurationSummary();
+      if (measuresPreviewMicros) {
+        expect(previewTiming['sampleCount'], greaterThanOrEqualTo(3));
+        expect(
+          previewTiming['p95Micros'],
+          greaterThanOrEqualTo(previewTiming['p50Micros']!),
+        );
+        expect(
+          previewTiming['maxMicros'],
+          greaterThanOrEqualTo(previewTiming['p95Micros']!),
+        );
+        // This is intentionally a bounded test-profile evidence line, not a
+        // device-frame claim. The final report records its exact values.
+        // ignore: avoid_print
+        print('LIV-04 score preview micros: $previewTiming');
+      }
+      slider().onChangeEnd!(const RangeValues(200000, 200000));
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -757,6 +1286,142 @@ void main() {
       expect(find.text('Max.'), findsOneWidget);
       expect(find.text('13 500 Ft'), findsOneWidget);
 
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'FOOT-04/DAY-01: the real Mind Day rail retains the one compact fixed range and legend without an hourly heatmap',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'day-income',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 250000,
+              date: const LocalDate(year: 2025, month: 5, day: 3),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      // The mounted production host owns the normal LogBox surface layout.
+      // Prime the compact Mind range only after that owner has admitted it;
+      // otherwise this integration test asks the scene cache to prepare
+      // before its required layout exists.
+      await tester.pump();
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await tester.pump();
+
+      expect(core.navigation.state.isRailOpen, isTrue);
+      expect(core.navigation.state.plane, TimePlane.month);
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+        findsNothing,
+        reason: 'Day remains daily-score content, never an hourly heatmap.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-heatmap-palette-legend')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('query-amount-range-slider')),
+        findsOneWidget,
+      );
+      expect(find.text('Összeg'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'YEAR-6R-09: only the selected four-column Year layout expands the real Mind body',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'four-column-year',
+              direction: 'expense',
+              categoryId: 'food',
+              partnerId: 'merchant',
+              amount: 12000,
+              date: const LocalDate(year: 2025, month: 5, day: 3),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2025, 5, 3),
+        initialPlane: TimePlane.year,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      await tester.pump();
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      await tester.pump();
+
+      final body = find.byKey(
+        const ValueKey<String>('dashboard-core-mode-mind-body'),
+      );
+      final baselineBounds = tester.getRect(body);
+      core.mindYearHeatmapPresentation.setMonthCardLayout(
+        MindYearMonthCardLayout.fourColumns,
+      );
+      await tester.pump();
+
+      expect(
+        tester.getRect(body).height,
+        baselineBounds.height +
+            MindYearMonthCardLayout
+                .fourColumns
+                .requiredMindModeContentExtraHeight,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-fit-scroll')),
+        findsOneWidget,
+      );
+
+      core.mindYearHeatmapPresentation.setMonthCardLayout(
+        MindYearMonthCardLayout.threeColumns,
+      );
+      await tester.pump();
+      expect(tester.getRect(body).height, baselineBounds.height);
       expect(tester.takeException(), isNull);
     },
   );
@@ -2306,7 +2971,101 @@ void main() {
   );
 
   testWidgets(
-    'MYRT-01: each actually painted Summary Year reaches the matching Mind heatmap by the next frame',
+    'RED SCA-01: a Summary-painted transient Year publishes the matching Mind score in the same semantic admission',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-2026',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 100000,
+            date: const LocalDate(year: 2026, month: 1, day: 1),
+          ),
+          _mindYearEntry(
+            id: 'income-2025',
+            direction: 'income',
+            categoryId: 'income-a',
+            partnerId: 'income-partner',
+            amount: 200000,
+            date: const LocalDate(year: 2025, month: 2, day: 2),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(core.ensureMindYearHeatmapProjection(), isTrue);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+      await tester.pump();
+      expect(
+        core.mindBehavioralScore.identity?.targetEpochDay,
+        const LocalDate(year: 2026, month: 1, day: 1).epochDay,
+      );
+
+      tester
+          .widget<DashboardHeaderVisualTuner>(
+            find.byType(DashboardHeaderVisualTuner),
+          )
+          .summaryPillVariants!
+          .select(SummaryPillVariant.segmented);
+      await tester.pump();
+      final selector = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-year-selector'),
+      );
+      expect(selector, findsOneWidget);
+
+      final gesture = await tester.startGesture(tester.getCenter(selector));
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await gesture.moveBy(const Offset(0, 60));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(
+        find.descendant(of: selector, matching: find.text('2025')),
+        findsOneWidget,
+        reason: 'The Summary target is a real painted transient Year.',
+      );
+      expect(core.mindYearHeatmap.identity?.year, 2025);
+      expect(
+        core.mindBehavioralScore.identity?.targetEpochDay,
+        const LocalDate(year: 2025, month: 2, day: 2).epochDay,
+        reason:
+            'The same accepted transient target must publish score text/chart '
+            'provenance before canonical Year settlement. Diagnostics: '
+            '${FluviDiagnosticLogger.entries.map((event) => '${event.stage}:${event.scope}').join(' | ')}',
+      );
+      expect(
+        core.mindBehavioralScore.identity?.navigationEpoch,
+        core.mindYearHeatmap.identity?.navigationEpoch,
+        reason: 'Heatmap and score must carry one accepted Summary generation.',
+      );
+      await gesture.up();
+    },
+  );
+
+  testWidgets(
+    'MYRT-01/LIV-03: each painted Summary Year reaches matching Mind heatmap and Header score by the next frame',
     (tester) async {
       final repository = _FocusSeedRepository(
         rows: <DashboardLedgerEntry>[
@@ -2402,6 +3161,27 @@ void main() {
         final identity = core.mindYearHeatmap.identity;
         expect(identity?.year, year);
         expect(identity?.navigationEpoch, 1);
+        expect(
+          core.mindBehavioralScore.identity?.targetEpochDay,
+          LocalDate(year: year, month: 1, day: 1).epochDay,
+          reason:
+              'The renderer-accepted transient Year must not paint its '
+              'heatmap while the Header still names an older score point.',
+        );
+        expect(
+          core.mindBehavioralScore.identity?.navigationEpoch,
+          identity?.navigationEpoch,
+          reason:
+              'The transient heatmap and Header score must retain the same '
+              'accepted Summary generation.',
+        );
+        expect(
+          core.mindBehavioralScore.value?.chartSeries?.points.last,
+          core.mindBehavioralScore.value?.point,
+          reason:
+              'The visible Header text and chart endpoint share one score '
+              'frame for every transient Year target.',
+        );
         expect(
           core.navigation.state.yearCursor,
           2026,
@@ -2533,7 +3313,7 @@ void main() {
   );
 
   testWidgets(
-    'MYRT-02: a real ballistic Year fling keeps every actually painted Mind Year current',
+    'MYRT-02/LIV-03: a real ballistic Year fling keeps every painted Mind Year and Header score current',
     (tester) async {
       final repository = _FocusSeedRepository(
         rows: <DashboardLedgerEntry>[
@@ -2601,6 +3381,26 @@ void main() {
       final summaryPaintedYears = <int>[];
       final summaryPaintedYearSet = <int>{};
       final pendingSummaryPaints = <int>[];
+      final pendingSummaryScorePublications = <int>[];
+      bool hasMatchingScorePublication(int year) {
+        // The fixture contains Jan 1 contributions only for 2020..2026.
+        // An actually painted empty Summary Year still owes one score frame;
+        // the score contract resolves that no-activity target to the selected
+        // Year end rather than fabricating a Jan 1 transaction point.
+        final targetEpochDay = LocalDate(
+          year: year,
+          month: year >= 2020 && year <= 2026 ? 1 : 12,
+          day: year >= 2020 && year <= 2026 ? 1 : 31,
+        ).epochDay;
+        return FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_SCORE|ACCEPTED_TEMPORAL_TARGET_PUBLISHED' &&
+              (event.scope?.contains('targetEpochDay=$targetEpochDay ') ??
+                  false) &&
+              (event.scope?.contains('temporalGeneration=1') ?? false),
+        );
+      }
+
       for (var frame = 0; frame < 80; frame += 1) {
         await tester.pump(const Duration(milliseconds: 16));
         final newlyPaintedSummary = FluviDiagnosticLogger.entries.where(
@@ -2667,11 +3467,27 @@ void main() {
                 'by the immediately following frame.',
           );
         }
+        for (final year in pendingSummaryScorePublications) {
+          expect(
+            hasMatchingScorePublication(year),
+            isTrue,
+            reason:
+                'Ballistic Summary Year $year must publish its matching '
+                'Header score by the immediately following frame.',
+          );
+        }
         pendingSummaryPaints
           ..clear()
           ..addAll(
             currentFrameSummaryYears.where(
               (year) => !currentFrameHeatmapYears.contains(year),
+            ),
+          );
+        pendingSummaryScorePublications
+          ..clear()
+          ..addAll(
+            currentFrameSummaryYears.where(
+              (year) => !hasMatchingScorePublication(year),
             ),
           );
       }
@@ -2681,6 +3497,13 @@ void main() {
         isEmpty,
         reason:
             'The final ballistic Summary paint must not outlive Mind paint.',
+      );
+      expect(
+        pendingSummaryScorePublications,
+        isEmpty,
+        reason:
+            'The final ballistic Summary paint must not outlive its Header '
+            'score publication.',
       );
       expect(repository.prepareCalls, 1);
       expect(core.mindYearHeatmap.sourceWorkCounter!.sourceRowTouches, 0);

@@ -20,6 +20,8 @@ import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../mind/domain/mind_year_heatmap_live_projection.dart';
 import '../mind/domain/mind_year_heatmap_projection.dart';
+import '../mind/domain/mind_temporal_heatmap_frame.dart';
+import '../mind/domain/mind_temporal_heatmap_projection.dart';
 import '../mind/domain/mind_behavioral_score_live_projection.dart';
 import '../mind/domain/mind_behavioral_score_projection.dart';
 import '../mind/domain/mind_behavioral_score_settings.dart';
@@ -1027,6 +1029,7 @@ final class DashboardCoreController {
       ..bindPerformanceCounters(this.performanceCounters)
       ..bindRenderReadinessDiagnostics(this.renderReadinessDiagnostics);
     presentation.visibleFrames.addListener(_onVisibleFramePublished);
+    mindYearHeatmap.addListener(_onMindYearHeatmapPublished);
     mindBehavioralScoreSettings.addListener(
       _onMindBehavioralScoreSettingsChanged,
     );
@@ -1062,6 +1065,16 @@ final class DashboardCoreController {
   /// Derived Mind-only annual read model. It has no query mutation capability.
   final MindYearHeatmapLiveProjection mindYearHeatmap =
       MindYearHeatmapLiveProjection();
+
+  /// One current Mind temporal heatmap publication. Year keeps its established
+  /// typed live projection for compatibility; Sum and Month publish through
+  /// this same Core-owned semantic lane rather than creating Query-local UI
+  /// state.
+  final ValueNotifier<MindTemporalHeatmapFrame?> mindTemporalHeatmap =
+      ValueNotifier<MindTemporalHeatmapFrame?>(null);
+
+  MindSumHeatmapProjection? _mindSumHeatmapProjection;
+  MindMonthHeatmapProjection? _mindMonthHeatmapProjection;
 
   /// The semantic daily Mind score is independent from the annual heatmap
   /// renderer and remains available for every Summary Time plane.
@@ -3855,6 +3868,12 @@ final class DashboardCoreController {
         mindAmountDomainScopeFor(direction),
       );
       _prewarmInactiveMindAmountPreviewBase(direction);
+      // Admission completed on Core's asynchronous prepared-data boundary.
+      // Publish every semantic Mind product here rather than asking a range
+      // widget build to mutate a ValueNotifier. That keeps the compact range,
+      // temporal heatmap, Header score and chart coherent without a
+      // markNeedsBuild-during-build path.
+      ensureMindTemporalVisualProjection();
     }
     return activeReady;
   }
@@ -4129,10 +4148,27 @@ final class DashboardCoreController {
   bool ensureMindBehavioralScoreProjection({
     LedgerDirection? direction,
     DashboardNavigationState? navigationState,
+    bool respectAcceptedMindTemporalTarget = true,
   }) {
     if (_disposed) return false;
     final state = navigationState ?? navigation.state;
     final resolvedDirection = direction ?? state.parentQueryScope.direction;
+    // While a segmented Summary target has crossed the renderer boundary,
+    // canonical navigation intentionally still names the preceding year.
+    // Ordinary refreshes (including the Mind prepared-base completion) must
+    // preserve the accepted target instead of restoring that older score.
+    final acceptedVisualTarget = respectAcceptedMindTemporalTarget
+        ? _currentMindYearHeatmapVisualTemporalTarget(
+            direction: resolvedDirection,
+          )
+        : null;
+    if (acceptedVisualTarget != null) {
+      return _publishMindBehavioralScoreForAcceptedTemporalTarget(
+        direction: resolvedDirection,
+        timeScope: YearScope(acceptedVisualTarget.candidate.yearCursor),
+        temporalGeneration: acceptedVisualTarget.interactionGeneration,
+      );
+    }
     final appliedScope = currentQuery.scopeFor(resolvedDirection);
     _publishPreparedMindAmountDomainForScope(
       mindAmountDomainScopeFor(resolvedDirection, navigationState: state),
@@ -4356,13 +4392,25 @@ final class DashboardCoreController {
       direction: direction,
       settings: mindBehavioralScoreSettings.value,
     );
-    final held = _mindScoreInteractionIdentity;
-    if (projection == null ||
-        projection.identity != expectedProjection ||
-        (held != null &&
-            (held.projection != expectedProjection ||
-                held.navigationEpoch != navigation.state.navigationEpoch))) {
+    var held = _mindScoreInteractionIdentity;
+    if (projection == null || projection.identity != expectedProjection) {
       return mindBehavioralScore.rejectStalePublication();
+    }
+    if (held != null &&
+        (held.projection != expectedProjection ||
+            held.navigationEpoch != navigation.state.navigationEpoch)) {
+      // The one physical range control deliberately survives a Sum/Year/Month
+      // switch while its thumb remains held. That accepted temporal target
+      // synchronously publishes a new score identity before the next preview
+      // frame. Rebase this interaction guard only to that already-published,
+      // exact current target; accepting the old held identity here would let
+      // the heatmap preview advance while the Header score was rejected.
+      final current = mindBehavioralScore.identity;
+      if (current?.projection != expectedProjection ||
+          current?.navigationEpoch != navigation.state.navigationEpoch) {
+        return mindBehavioralScore.rejectStalePublication();
+      }
+      _mindScoreInteractionIdentity = current;
     }
     final target = _mindScoreTargetEpochDay(
       projection: projection,
@@ -4736,6 +4784,232 @@ final class DashboardCoreController {
     mindYearHeatmap.clear();
   }
 
+  /// Coordinates the one currently visible Mind temporal heatmap. The mature
+  /// Year live projection remains the Year implementation; Sum and Month are
+  /// compact bucket projections over that exact same prepared membership.
+  /// Query remains an all-time template and is never mutated here.
+  bool ensureMindTemporalHeatmapProjection() {
+    if (_disposed) return false;
+    final state = navigation.state;
+    return switch (state.plane) {
+      TimePlane.year => () {
+        _mindSumHeatmapProjection = null;
+        _mindMonthHeatmapProjection = null;
+        if (mindTemporalHeatmap.value is! MindYearHeatmapFrame) {
+          mindTemporalHeatmap.value = null;
+        }
+        return ensureMindYearHeatmapProjection();
+      }(),
+      TimePlane.sum => _installMindSumHeatmapProjection(state),
+      TimePlane.month => _installMindMonthHeatmapProjection(state),
+    };
+  }
+
+  /// One semantic admission for ordinary (non renderer-transient) Mind
+  /// targets. Keeping these writes adjacent means a normal Sum/Year/Month
+  /// publication cannot leave the body heatmap on a newer target than the
+  /// Header score, chart and palette.
+  bool ensureMindTemporalVisualProjection() {
+    final heatmapPublished = ensureMindTemporalHeatmapProjection();
+    final scorePublished = ensureMindBehavioralScoreProjection();
+    if (heatmapPublished || navigation.state.plane == TimePlane.month) {
+      if (!scorePublished) _clearCurrentMindTemporalHeatmap();
+    }
+    return heatmapPublished && scorePublished;
+  }
+
+  bool _installMindSumHeatmapProjection(DashboardNavigationState state) {
+    clearMindYearHeatmapProjection();
+    _mindMonthHeatmapProjection = null;
+    if (mindTemporalHeatmap.value is! MindSumHeatmapFrame) {
+      mindTemporalHeatmap.value = null;
+    }
+    final direction = state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    _publishPreparedMindAmountDomainForScope(
+      mindAmountDomainScopeFor(direction, navigationState: state),
+    );
+    final binding = mindAmountRangeBindingFor(
+      direction,
+      navigationState: state,
+    );
+    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    if (binding == null || base == null) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final seed = base.partitionFor(direction).focusMembershipSeed;
+    final membership = _mindYearHeatmapPreparedMembershipFor(
+      base: base,
+      domainScope: domainScope,
+    );
+    if (seed == null || membership == null) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final identity = MindTemporalHeatmapIdentity(
+      upstreamScopeKey:
+          '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      timeScopeKey: const AllTimeScope().canonicalKey,
+    );
+    final existing = _mindSumHeatmapProjection;
+    if (existing?.identity == identity) {
+      mindTemporalHeatmap.value = existing!.preview(binding.values);
+      return true;
+    }
+    final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
+    final selected = seed.select(
+      categoryId: activeFocus?.category?.id,
+      partnerId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
+    );
+    final stopwatch = Stopwatch()..start();
+    final projection = MindSumHeatmapProjection.build(
+      identity: identity,
+      contributions: membership.contributionsForMembership(
+        membership: selected.entryIndices,
+      ),
+    );
+    stopwatch.stop();
+    if (_disposed || navigation.state.plane != TimePlane.sum) return false;
+    _mindSumHeatmapProjection = projection;
+    mindTemporalHeatmap.value = projection.preview(binding.values);
+    _logMindTemporalHeatmapPublished(
+      direction: direction,
+      identity: identity,
+      kind: 'sum',
+      buildMicros: stopwatch.elapsedMicroseconds,
+      preparedContributions: selected.entryIndices.length,
+    );
+    return true;
+  }
+
+  bool _installMindMonthHeatmapProjection(DashboardNavigationState state) {
+    clearMindYearHeatmapProjection();
+    _mindSumHeatmapProjection = null;
+    if (mindTemporalHeatmap.value is! MindMonthHeatmapFrame) {
+      mindTemporalHeatmap.value = null;
+    }
+    final direction = state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    _publishPreparedMindAmountDomainForScope(
+      mindAmountDomainScopeFor(direction, navigationState: state),
+    );
+    final binding = mindAmountRangeBindingFor(
+      direction,
+      navigationState: state,
+    );
+    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    if (binding == null || base == null) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final seed = base.partitionFor(direction).focusMembershipSeed;
+    final membership = _mindYearHeatmapPreparedMembershipFor(
+      base: base,
+      domainScope: domainScope,
+    );
+    if (seed == null || membership == null) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final selectedMonth = state.monthCursor;
+    final identity = MindTemporalHeatmapIdentity(
+      upstreamScopeKey:
+          '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      timeScopeKey: MonthScope(selectedMonth).canonicalKey,
+    );
+    final existing = _mindMonthHeatmapProjection;
+    if (existing?.identity == identity) {
+      mindTemporalHeatmap.value = existing!.preview(binding.values);
+      return true;
+    }
+    final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
+    final selected = seed.select(
+      categoryId: activeFocus?.category?.id,
+      partnerId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
+    );
+    final stopwatch = Stopwatch()..start();
+    final projection = MindMonthHeatmapProjection.build(
+      identity: identity,
+      year: selectedMonth.year,
+      month: selectedMonth.month,
+      contributions: membership.contributionsForMembership(
+        membership: selected.entryIndices,
+      ),
+    );
+    stopwatch.stop();
+    if (_disposed || navigation.state.plane != TimePlane.month) return false;
+    _mindMonthHeatmapProjection = projection;
+    mindTemporalHeatmap.value = projection.preview(binding.values);
+    _logMindTemporalHeatmapPublished(
+      direction: direction,
+      identity: identity,
+      kind: 'month',
+      buildMicros: stopwatch.elapsedMicroseconds,
+      preparedContributions: selected.entryIndices.length,
+    );
+    return true;
+  }
+
+  bool _publishMindTemporalHeatmapPreview({
+    required QueryAmountRangeValues values,
+  }) => switch (navigation.state.plane) {
+    TimePlane.year => false,
+    TimePlane.sum => () {
+      final projection = _mindSumHeatmapProjection;
+      if (projection == null) return false;
+      mindTemporalHeatmap.value = projection.preview(values);
+      return true;
+    }(),
+    TimePlane.month => () {
+      final projection = _mindMonthHeatmapProjection;
+      if (projection == null) return false;
+      mindTemporalHeatmap.value = projection.preview(values);
+      return true;
+    }(),
+  };
+
+  void _clearCurrentMindTemporalHeatmap() {
+    _mindSumHeatmapProjection = null;
+    _mindMonthHeatmapProjection = null;
+    mindTemporalHeatmap.value = null;
+  }
+
+  void _onMindYearHeatmapPublished() {
+    if (_disposed || navigation.state.plane != TimePlane.year) return;
+    mindTemporalHeatmap.value = mindYearHeatmap.value;
+  }
+
+  void _logMindTemporalHeatmapPublished({
+    required LedgerDirection direction,
+    required MindTemporalHeatmapIdentity identity,
+    required String kind,
+    required int buildMicros,
+    required int preparedContributions,
+  }) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_TEMPORAL_HEATMAP|FRAME_PUBLISHED',
+        queryKey: identity.upstreamScopeKey,
+        direction: direction.name,
+        coreRevision: identity.coreRevision,
+        entryCount: preparedContributions,
+        scope:
+            'kind=$kind timeScope=${identity.timeScopeKey} '
+            'preparedContributions=$preparedContributions sourceRows=0 '
+            'repositoryRequests=0 indexBuilds=0 buildMicros=$buildMicros',
+      ),
+    );
+  }
+
   MindYearHeatmapIdentity _mindYearHeatmapIdentityFor({
     required PreparedDashboardIndex base,
     required CurrentLedgerQueryScope domainScope,
@@ -4884,7 +5158,7 @@ final class DashboardCoreController {
       scope:
           'candidateYear=${candidate.yearCursor} source=$source result=install acceptedGeneration=${accepted.interactionGeneration}',
     );
-    final published = _installMindYearHeatmapProjection(
+    final heatmapPublished = _installMindYearHeatmapProjection(
       direction: direction,
       appliedScope: appliedScope,
       year: candidate.yearCursor,
@@ -4899,13 +5173,108 @@ final class DashboardCoreController {
           accepted.interactionGeneration == _segmentedTimeFlightGeneration &&
           _sameTemporalTarget(accepted.candidate, candidate),
     );
+    // A renderer acknowledgement is the first moment the transient Summary
+    // target is allowed to become visible.  Publishing only the annual frame
+    // here previously let the Header retain its canonical/older score until
+    // a later navigation or visible-frame boundary.  Keep both semantic
+    // products in this Core-owned admission transaction; neither operation
+    // reads a repository or rendered LogBox state.
+    final scorePublished =
+        heatmapPublished &&
+        _publishMindBehavioralScoreForAcceptedTemporalTarget(
+          direction: direction,
+          timeScope: YearScope(candidate.yearCursor),
+          temporalGeneration: accepted.interactionGeneration,
+        );
+    if (heatmapPublished && !scorePublished) {
+      // Do not let a new visible heatmap target survive without its matching
+      // Header score provenance. Both writes above are synchronous, so this
+      // fail-closed clear occurs before another Flutter frame can paint the
+      // otherwise split semantic state.
+      mindYearHeatmap.clear();
+    }
+    final published = heatmapPublished && scorePublished;
     _logMindHeatmap(
       stage: 'SUMMARY_VISUAL_TARGET_ADMISSION',
       direction: direction,
       scope:
-          'candidateYear=${candidate.yearCursor} source=$source result=${published ? 'published' : 'rejected'} acceptedGeneration=${accepted.interactionGeneration}',
+          'candidateYear=${candidate.yearCursor} source=$source result=${published ? 'published' : 'rejected'} heatmapPublished=$heatmapPublished scorePublished=$scorePublished acceptedGeneration=${accepted.interactionGeneration}',
     );
     if (published) _mindYearHeatmapVisualTemporalTarget = accepted;
+    return published;
+  }
+
+  /// Publishes the existing resident score projection for a renderer-accepted
+  /// temporal target.  A segmented target's [DashboardNavigationState] is an
+  /// intentionally transient presentation value, so its [effectiveScope] may
+  /// still describe an older canonical parent.  The accepted target's
+  /// explicit [timeScope] is therefore the sole temporal authority here.
+  ///
+  /// The live range binding continues to come from the current visible frame;
+  /// it already carries the exact non-amount domain that the compact control
+  /// and heatmap admission used.  This method neither mutates Query state nor
+  /// rebuilds source membership.
+  bool _publishMindBehavioralScoreForAcceptedTemporalTarget({
+    required LedgerDirection direction,
+    required LedgerTimeScope timeScope,
+    required int temporalGeneration,
+  }) {
+    final binding = mindAmountRangeBindingFor(direction);
+    final canonicalScope = currentQuery.scopeFor(direction);
+    final domainScope = QueryAmountRange.domainScope(canonicalScope);
+    final base = _mindAmountPreparedBaseFor(domainScope);
+    if (binding == null || base == null) return false;
+    final expectedProjection = MindBehavioralScoreIdentity(
+      upstreamScopeKey:
+          '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      direction: direction,
+      settings: mindBehavioralScoreSettings.value,
+    );
+    if (mindBehavioralScore.projection?.identity != expectedProjection) {
+      // Projection membership is non-temporal. The ordinary owner can build
+      // it from the same resident prepared base, after which this accepted
+      // target method still supplies the exact transient temporal scope.
+      ensureMindBehavioralScoreProjection(
+        direction: direction,
+        respectAcceptedMindTemporalTarget: false,
+      );
+    }
+    final projection = mindBehavioralScore.projection;
+    if (projection?.identity != expectedProjection) return false;
+    final target = _mindScoreTargetEpochDayForScope(
+      projection: projection!,
+      range: binding.values,
+      timeScope: timeScope,
+    );
+    final request = _mindScoreSeriesRequest(
+      projection: projection,
+      range: binding.values,
+      timeScope: timeScope,
+      targetEpochDay: target,
+    );
+    final published = mindBehavioralScore.publishTarget(
+      expectedProjectionIdentity: expectedProjection,
+      targetEpochDay: target,
+      navigationEpoch: temporalGeneration,
+      range: binding.values,
+      seriesRequest: request,
+    );
+    if (published) {
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND_SCORE|ACCEPTED_TEMPORAL_TARGET_PUBLISHED',
+          queryKey: expectedProjection.upstreamScopeKey,
+          direction: direction.name,
+          coreRevision: base.coreRevision,
+          scope:
+              'timeScope=$timeScope targetEpochDay=$target '
+              'temporalGeneration=$temporalGeneration '
+              'sourceRows=0 repositoryRequests=0 indexBuilds=0',
+        ),
+      );
+    }
     return published;
   }
 
@@ -5414,6 +5783,9 @@ final class DashboardCoreController {
       direction: direction,
       values: values,
     );
+    final temporalHeatmapPublished = navigation.state.plane == TimePlane.year
+        ? heatmapPublished
+        : _publishMindTemporalHeatmapPreview(values: values);
     final scorePublished = _publishMindBehavioralScorePreview(
       base: base,
       appliedScope: appliedScope,
@@ -5540,7 +5912,7 @@ final class DashboardCoreController {
             'membershipMicros=${derived.membershipLookupMicros} '
             'intersectionMicros=${derived.intersectionMicros} '
             'rootProjectionMicros=${derived.currentRootProjectionMicros} '
-            'heatmapPublished=$heatmapPublished '
+            'heatmapPublished=$temporalHeatmapPublished '
             'heatmapStaleRejects=${mindYearHeatmap.stalePublicationRejectCount} '
             'scorePublished=$scorePublished '
             'scoreStaleRejects=${mindBehavioralScore.stalePublicationRejectCount} '
@@ -11269,11 +11641,10 @@ final class DashboardCoreController {
       partner: partner,
       normalizedSearch: normalizedSearch,
     );
-    // The heatmap observes this same single ephemeral-focus authority. It
-    // replaces its bounded annual projection before the next visible frame,
-    // never by applying a second query/filter state in the Mind surface.
-    ensureMindYearHeatmapProjection();
-    ensureMindBehavioralScoreProjection();
+    // The temporal heatmap observes this same single ephemeral-focus
+    // authority. It replaces the current typed bucket projection and Header
+    // score together, never by applying a second query/filter state.
+    ensureMindTemporalVisualProjection();
     final interactionFrame = _acceptLiveInteraction(
       source: source,
       interactionOrder: interactionOrder,
@@ -11653,8 +12024,7 @@ final class DashboardCoreController {
     // focused scene to restore before removing the chip or accepting another
     // input. The retained base frame below follows immediately when possible.
     focus.clearAll();
-    ensureMindYearHeatmapProjection();
-    ensureMindBehavioralScoreProjection();
+    ensureMindTemporalVisualProjection();
     final phaseAPublishStartedMicros =
         _collectAvatarPacingCorrelationDiagnostics
         ? developer.Timeline.now
@@ -14376,9 +14746,10 @@ final class DashboardCoreController {
 
   void _recordNavigationSelection(String source) {
     // Time/rail commits have already selected their canonical target when
-    // this common boundary runs. Retarget the same daily score projection in
-    // this semantic turn; renderer acknowledgements never own score math.
-    ensureMindBehavioralScoreProjection();
+    // this common boundary runs. Publish the visible temporal heatmap and
+    // Header score as one Core semantic operation; renderer acknowledgements
+    // remain a separate fast path only for transient Year crossings.
+    ensureMindTemporalVisualProjection();
     diagnostics.record(
       DashboardInteractionEvent.navPresentationSelected,
       context: _diagnosticContext(
@@ -14582,7 +14953,9 @@ final class DashboardCoreController {
     budgetAvatarLiveRootReady.dispose();
     budgetAvatarTargetPainted.dispose();
     segmentedTargetPainted.dispose();
+    mindYearHeatmap.removeListener(_onMindYearHeatmapPublished);
     mindYearHeatmap.dispose();
+    mindTemporalHeatmap.dispose();
     mindBehavioralScore.dispose();
     mindBehavioralScoreSettings.removeListener(
       _onMindBehavioralScoreSettingsChanged,

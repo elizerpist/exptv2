@@ -266,6 +266,10 @@ final class _MindYearHeatmapViewportState
           child: ListView.separated(
             key: const ValueKey('mind-year-heatmap-grid'),
             controller: widget.scrollController,
+            // Six-row MonthCard envelopes are intentionally taller than the
+            // former variable geometry. Keep the same bounded 12-card annual
+            // field warm so a layout switch never exposes a sparse edge.
+            cacheExtent: 500,
             clipBehavior: Clip.hardEdge,
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
             itemCount: (12 + columns - 1) ~/ columns,
@@ -274,14 +278,10 @@ final class _MindYearHeatmapViewportState
               final offset = annualRow * columns;
               final rowEnd = math.min(offset + columns, geometries.length);
               final rowGeometries = geometries.sublist(offset, rowEnd);
-              final maximumCalendarRows = rowGeometries.fold<int>(
-                0,
-                (maximum, geometry) =>
-                    geometry.rowCount > maximum ? geometry.rowCount : maximum,
-              );
               final rowHeight = MindYearHeatmapMonthCard.heightFor(
                 width: monthCardWidth,
-                calendarRowCount: maximumCalendarRows,
+                calendarRowCount:
+                    MindYearHeatmapMonthCard.displayCalendarRowCount,
                 footerRowCount: footerRowCount,
               );
               return SizedBox(
@@ -409,16 +409,14 @@ final class _MindYearHeatmapFourColumnFit {
     required double rowGap,
   }) {
     const annualRows = 3;
-    const columns = 4;
-    final calendarRows = List<int>.generate(annualRows, (annualRow) {
-      final start = annualRow * columns;
-      return geometries
-          .sublist(start, start + columns)
-          .fold<int>(
-            0,
-            (maximum, geometry) => math.max(maximum, geometry.rowCount),
-          );
-    }, growable: false);
+    // The physical MonthCard envelope is deliberately independent of a
+    // month's real calendar extent. The painter still receives each exact
+    // geometry and leaves unused sixth-row slots empty.
+    final calendarRows = List<int>.filled(
+      annualRows,
+      MindYearHeatmapMonthCard.displayCalendarRowCount,
+      growable: false,
+    );
     final staticCardChrome = MindYearHeatmapMonthCard.fixedChromeHeightFor(
       footerRowCount: footerRowCount,
     );
@@ -484,6 +482,10 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   static const _footerTopGap = 5.0;
   static const _footerRowHeight = 13.0;
 
+  /// Presentation envelope only. Real calendar geometry remains in
+  /// [geometry], so unused slots are never painted as fake days.
+  static const displayCalendarRowCount = 6;
+
   final int month;
   final double width;
   final double? cellExtent;
@@ -544,14 +546,14 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final gridHeight = gridHeightFor(
       width: width,
-      calendarRowCount: geometry.rowCount,
+      calendarRowCount: displayCalendarRowCount,
       cellExtent: cellExtent,
     );
     return SizedBox(
       width: width,
       height: heightFor(
         width: width,
-        calendarRowCount: geometry.rowCount,
+        calendarRowCount: displayCalendarRowCount,
         footerRowCount: _footerRowCount,
         cellExtent: cellExtent,
       ),

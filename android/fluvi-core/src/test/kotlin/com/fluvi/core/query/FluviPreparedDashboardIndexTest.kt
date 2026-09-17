@@ -302,6 +302,16 @@ class FluviPreparedDashboardIndexTest {
         assertEquals(300L, index.frame(LedgerDirection.income, "all").totalMinor)
         assertTrue(index.frames.none { it.timeScopeKey.contains("2025") })
         assertTrue(index.frames.any { it.timeScopeKey == "year:2026" })
+        // Mind Sum intentionally consumes the already-filtered focus
+        // membership, not the bounded Year/Month/Day frame table. A physical
+        // 2026 prepared window must therefore retain the real 2025 row so an
+        // All-Time heatmap cannot silently become a one-year projection.
+        assertEquals(5, index.focusRows.size)
+        assertTrue(
+            index.focusRows.any { row ->
+                LocalDate.ofEpochDay(row.bookedLocalEpochDay).year == 2025
+            },
+        )
         assertEquals(5, index.buildMetrics.sqlCallCount)
     }
 

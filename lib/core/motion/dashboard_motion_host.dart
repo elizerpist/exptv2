@@ -47,6 +47,12 @@ class DashboardVisualFrame {
 typedef DashboardVisualFrameBuilder =
     Widget Function(BuildContext context, DashboardVisualFrame frame);
 
+/// Resolves a structural extension only for the mode that owns it.  This lets
+/// a presentation alternative grow its own physical envelope without leaking
+/// that space into sibling dashboard modes.
+typedef DashboardModeContentExtraHeightResolver =
+    double Function(DashboardModeSpec mode);
+
 /// The dashboard's only Flutter ticker owner.
 ///
 /// It observes only structural expansion, rail and direction signals, derives
@@ -63,6 +69,7 @@ class DashboardMotionHost extends StatefulWidget {
     this.bodyOrder,
     this.hasPhysicalRail = true,
     this.modeContentExtraHeight = 0,
+    this.modeContentExtraHeightResolver,
     DashboardModePaletteLookup? paletteResolver,
   }) : paletteResolver =
            paletteResolver ?? DashboardModePaletteResolver.resolve;
@@ -74,6 +81,7 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardBodyOrder? bodyOrder;
   final bool hasPhysicalRail;
   final double modeContentExtraHeight;
+  final DashboardModeContentExtraHeightResolver? modeContentExtraHeightResolver;
   final DashboardModePaletteLookup paletteResolver;
 
   @override
@@ -347,23 +355,30 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
         );
         DashboardCoreModePresentation resolveModePresentation(
           DashboardModeSpec mode,
-        ) => DashboardCoreModePresentation(
-          geometry: DashboardGeometryResolver.resolve(
-            metrics: viewportMetrics,
-            mode: mode,
-            collapseProgress:
-                _collapseController.value /
-                widget.controller.metrics.collapseTravel *
-                viewportMetrics.collapseTravel,
-            isRailExpanded: widget.controller.navigation.isRailOpen,
-            bodyOrder: widget.bodyOrder,
-            hasPhysicalRail: widget.hasPhysicalRail,
-            modeContentExtraHeight: widget.modeContentExtraHeight,
-          ),
-          palette: mode.mode == _committedMode.mode
-              ? _palette
-              : _resolvePalette(mode),
-        );
+        ) {
+          final modeContentExtraHeight =
+              widget.modeContentExtraHeightResolver?.call(mode) ??
+              widget.modeContentExtraHeight;
+          assert(modeContentExtraHeight >= 0);
+          return DashboardCoreModePresentation(
+            geometry: DashboardGeometryResolver.resolve(
+              metrics: viewportMetrics,
+              mode: mode,
+              collapseProgress:
+                  _collapseController.value /
+                  widget.controller.metrics.collapseTravel *
+                  viewportMetrics.collapseTravel,
+              isRailExpanded: widget.controller.navigation.isRailOpen,
+              bodyOrder: widget.bodyOrder,
+              hasPhysicalRail: widget.hasPhysicalRail,
+              modeContentExtraHeight: modeContentExtraHeight,
+            ),
+            palette: mode.mode == _committedMode.mode
+                ? _palette
+                : _resolvePalette(mode),
+          );
+        }
+
         final currentPresentation = resolveModePresentation(_committedMode);
         return widget.builder(
           context,

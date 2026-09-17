@@ -6,6 +6,8 @@ import '../../query/domain/query_amount_range.dart';
 import '../../runtime/domain/dashboard_focus_membership_seed.dart';
 import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../time_navigation/domain/local_date.dart';
+import 'mind_heatmap_amount_range_bucket.dart';
+import 'mind_temporal_heatmap_frame.dart';
 
 /// Immutable upstream identity of the one active Mind annual read model.
 ///
@@ -394,7 +396,7 @@ final class MindYearHeatmapMonthlyAggregateBank {
 }
 
 @immutable
-final class MindYearHeatmapFrame {
+final class MindYearHeatmapFrame implements MindTemporalHeatmapFrame {
   factory MindYearHeatmapFrame({
     required MindYearHeatmapIdentity identity,
     required QueryAmountRangeValues range,
@@ -427,7 +429,9 @@ final class MindYearHeatmapFrame {
     required this.monthlyAggregates,
   }) : _months = months;
 
+  @override
   final MindYearHeatmapIdentity identity;
+  @override
   final QueryAmountRangeValues range;
   final List<MindYearHeatmapDay> days;
   final List<List<MindYearHeatmapDay>> _months;
@@ -532,8 +536,8 @@ final class MindYearHeatmapProjection {
     }
     return MindYearHeatmapProjection._(
       identity,
-      List<_MindYearHeatmapDayRange>.unmodifiable(
-        perDay.map(_MindYearHeatmapDayRange.fromUnsorted),
+      List<MindHeatmapAmountRangeBucket>.unmodifiable(
+        perDay.map(MindHeatmapAmountRangeBucket.fromUnsorted),
       ),
       start,
       sourceWorkCounter,
@@ -543,7 +547,7 @@ final class MindYearHeatmapProjection {
   }
 
   final MindYearHeatmapIdentity identity;
-  final List<_MindYearHeatmapDayRange> _days;
+  final List<MindHeatmapAmountRangeBucket> _days;
   final int _startEpochDay;
   final MindYearHeatmapSourceWorkCounter _workCounter;
   final MindYearHeatmapMonthlyAggregates _monthlyAggregates;
@@ -650,67 +654,5 @@ final class MindYearHeatmapProjection {
       1970,
     ).add(Duration(days: _startEpochDay + offset));
     return LocalDate(year: value.year, month: value.month, day: value.day);
-  }
-}
-
-@immutable
-final class _MindYearHeatmapDayRange {
-  const _MindYearHeatmapDayRange._(this._values, this._prefixSums);
-
-  factory _MindYearHeatmapDayRange.fromUnsorted(List<int> values) {
-    if (values.isEmpty) return _MindYearHeatmapDayRange._empty;
-    final sorted = List<int>.of(values)..sort();
-    final prefix = List<int>.filled(sorted.length + 1, 0, growable: false);
-    for (var index = 0; index < sorted.length; index += 1) {
-      prefix[index + 1] = prefix[index] + sorted[index];
-    }
-    return _MindYearHeatmapDayRange._(
-      List<int>.unmodifiable(sorted),
-      List<int>.unmodifiable(prefix),
-    );
-  }
-
-  static final _MindYearHeatmapDayRange _empty = _MindYearHeatmapDayRange._(
-    const <int>[],
-    const <int>[0],
-  );
-
-  final List<int> _values;
-  final List<int> _prefixSums;
-
-  int? sumWithin({required int minimum, required int maximum}) {
-    if (_values.isEmpty || minimum > maximum) return null;
-    final start = _lowerBound(minimum);
-    final end = _upperBound(maximum);
-    if (start == end) return null;
-    return _prefixSums[end] - _prefixSums[start];
-  }
-
-  int _lowerBound(int value) {
-    var low = 0;
-    var high = _values.length;
-    while (low < high) {
-      final middle = low + ((high - low) >> 1);
-      if (_values[middle] < value) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    return low;
-  }
-
-  int _upperBound(int value) {
-    var low = 0;
-    var high = _values.length;
-    while (low < high) {
-      final middle = low + ((high - low) >> 1);
-      if (_values[middle] <= value) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    return low;
   }
 }

@@ -11,12 +11,14 @@ import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_temporal_heatmap_frame.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
+import '../../time_navigation/domain/time_plane.dart';
 import 'balance_dashboard_core_surface.dart';
 import 'budget_dashboard_core_surface.dart';
 import 'budget_category_distribution_visual_bank.dart';
@@ -68,8 +70,11 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindQueryAmountRangeState,
     this.mindQueryAmountRangeError,
     this.mindYearHeatmap,
+    this.mindTemporalHeatmap,
+    this.mindTemporalHeatmapPlane,
     this.mindYearHeatmapPresentation,
     this.mindYearHeatmapVisible = false,
+    this.mindTemporalHeatmapVisible = false,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
     this.onMindQueryAmountRangePreviewChanged,
@@ -111,9 +116,12 @@ class DashboardCoreModeHost extends StatefulWidget {
   mindQueryAmountRangeState;
   final Object? Function()? mindQueryAmountRangeError;
   final ValueListenable<MindYearHeatmapFrame?>? mindYearHeatmap;
+  final ValueListenable<MindTemporalHeatmapFrame?>? mindTemporalHeatmap;
+  final TimePlane? mindTemporalHeatmapPlane;
   final ValueListenable<MindYearHeatmapPresentationSettings>?
   mindYearHeatmapPresentation;
   final bool mindYearHeatmapVisible;
+  final bool mindTemporalHeatmapVisible;
   final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>?
@@ -259,7 +267,8 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     final presentation = widget.presentationFor(mode);
     final headerBounds = presentation.geometry.headerBounds;
     final mindViewportOwnsVerticalDrag =
-        mode.mode == DashboardMode.mind && widget.mindYearHeatmapVisible;
+        mode.mode == DashboardMode.mind &&
+        (widget.mindTemporalHeatmapVisible || widget.mindYearHeatmapVisible);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -269,20 +278,31 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         // was the physical reason Card2 drags were insensitive.
         const SizedBox.expand(),
         Positioned.fill(
-          child: mindViewportOwnsVerticalDrag
-              ? _buildModeSurface(mode, presentation)
-              : GestureDetector(
-                  key: const ValueKey(
-                    'dashboard-core-mode-content-gesture-region',
-                  ),
-                  behavior: HitTestBehavior.translucent,
-                  dragStartBehavior: DragStartBehavior.down,
-                  onVerticalDragStart: _onContentVerticalStart,
-                  onVerticalDragUpdate: _onContentVerticalUpdate,
-                  onVerticalDragEnd: _onContentVerticalEnd,
-                  onVerticalDragCancel: _finishPointerSequence,
-                  child: _buildModeSurface(mode, presentation),
-                ),
+          // Keep one stable element ancestry for Mind's shared fixed footer.
+          // Previously the vertical recognizer wrapper existed only outside a
+          // Year/Sum/Month heatmap; moving into Day inserted it and unmounted
+          // an active RangeSlider subtree. A passive GestureDetector has no
+          // vertical callbacks, therefore does not enter the scroll gesture
+          // arena while the temporal viewport owns scrolling, but preserves
+          // the physical range element across every TimePlane.
+          child: GestureDetector(
+            key: const ValueKey('dashboard-core-mode-content-gesture-region'),
+            behavior: HitTestBehavior.translucent,
+            dragStartBehavior: DragStartBehavior.down,
+            onVerticalDragStart: mindViewportOwnsVerticalDrag
+                ? null
+                : _onContentVerticalStart,
+            onVerticalDragUpdate: mindViewportOwnsVerticalDrag
+                ? null
+                : _onContentVerticalUpdate,
+            onVerticalDragEnd: mindViewportOwnsVerticalDrag
+                ? null
+                : _onContentVerticalEnd,
+            onVerticalDragCancel: mindViewportOwnsVerticalDrag
+                ? null
+                : _finishPointerSequence,
+            child: _buildModeSurface(mode, presentation),
+          ),
         ),
         Positioned(
           left: headerBounds.left,
@@ -351,8 +371,11 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         queryAmountRangeState: widget.mindQueryAmountRangeState,
         queryAmountRangeError: widget.mindQueryAmountRangeError,
         yearHeatmap: widget.mindYearHeatmap,
+        temporalHeatmap: widget.mindTemporalHeatmap,
+        temporalPlane: widget.mindTemporalHeatmapPlane,
         yearHeatmapPresentation: widget.mindYearHeatmapPresentation,
         showYearHeatmap: widget.mindYearHeatmapVisible,
+        showTemporalHeatmap: widget.mindTemporalHeatmapVisible,
         onQueryAmountRangeRetry: widget.onMindQueryAmountRangeRetry,
         onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,
         onQueryAmountRangePreviewChanged:
