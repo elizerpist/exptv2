@@ -1018,3 +1018,44 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   were preserved. Delivery is PARTIAL only for the inherited automated profile
   FrameTiming gate and physical device acceptance. Physical validation:
   `PENDING — USER ONLY`.
+
+## 2026-09-17 — Mind visible-domain, four-column heatmap and chart-label delivery (`9a8a7575`)
+
+- Application feature commit: `9a8a7575` (`feat(mind): fit annual heatmap and
+  label score chart`) on
+  `fix/mind-year-heatmap-calendar-direction-fluvi-20260913`. It keeps the
+  compact Mind range binding exact: a missing visible-scope domain no longer
+  falls back to the broader canonical direction domain. Inactive-direction
+  prewarming may still use resident canonical availability only to schedule
+  work; it cannot supply a rendered slider maximum. This prevents an old
+  all-time 260,000 Ft domain from being displayed for a narrower visible
+  2027 scope.
+- The mounted AMD regression covers an intentionally withheld exact domain,
+  slider preview/commit, repeated Year and Sum transitions, and stale-domain
+  rejection. Its expected 2027 Fastfood maximum is derived from the fixture
+  (13,500 Ft), not hard-coded into production code.
+- Mind Year presentation now includes a footer-aware 4 x 3 fit-to-viewport
+  layout. It solves one shared square day-cell extent from available width and
+  height, real calendar row counts, chrome and enabled footers; its annual
+  layout is non-scrolling without nested/card scroll owners. Existing 2 x 6
+  and 3 x 4 retain their original scroll path and controller.
+- The accepted Header plot geometry (`16,48,346,60`), line, fade, endpoint,
+  guide, expansion clipping and shared ticker remain unchanged. A separate
+  chart-presentation owner defaults to hidden and can show exactly five quiet
+  labels at the actual immutable series dates 0/25/50/75/100%; it makes no
+  query or score calculation.
+- Sum observation status is deliberately forensic, not a speculative renderer
+  change. A new native test pages the real deterministic demo seed through
+  the committed all-time query: its first 100 date-descending rows are
+  expected 2027 Fastfood, then it must enter older years under the same
+  all-time query identity. Local ARM64/proot could compile/start this lane
+  only until the unavailable `conscrypt_openjdk_jni-linux-aarch_64` library;
+  the clean GitHub `test-core` run is the pending evidence boundary.
+- PASS — local Ubuntu/proot: focused range/heatmap/chart/tuner suites, the
+  protected 149-test Flutter selection, all 84
+  `dashboard_core_ephemeral_focus_test.dart` cases, changed-target
+  `flutter analyze`, and `git diff --check`. NOT RUN locally: final native
+  Sum execution (Termux/proot AAPT2/Conscrypt host limitation). Online
+  verification was explicitly authorized before push. The inherited
+  `frame_timing_headroom is invalid: null` profile evidence remains separate
+  and is not declared green. Physical validation: `PENDING — USER ONLY`.
