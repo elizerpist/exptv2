@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "9f9c725c34b0d70291d11dd3f3e92f8d18287a59",
-  "source_parent": "0fee2b172aa70efb698df89d6bd4f2513b683fcb",
-  "source_ref": "9f9c725c34b0d70291d11dd3f3e92f8d18287a59",
+  "source_head": "59e6a7781c6d9d5f6efe24b73bb3e2e937433d99",
+  "source_parent": "9f9c725c34b0d70291d11dd3f3e92f8d18287a59",
+  "source_ref": "fix/mind-year-heatmap-calendar-direction-fluvi-20260913",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "1e507b1e77cc1d757efacdbc147f92051c31269190845a6eca7674538f9d2d5c",
+  "index_sha256": "a012723953691a62d9efb98f4d25d312f0d1e55f11543588f08e40d94f9c083b",
   "document_count": 457,
-  "occurrence_count": 300229,
-  "defined_symbol_count": 41505,
+  "occurrence_count": 300278,
+  "defined_symbol_count": 41517,
   "repository_defined_symbol_count": 10473,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
@@ -29,7 +29,7 @@
     {
       "name": "refs",
       "storage": "jsonl_shards",
-      "record_count": 77210,
+      "record_count": 77214,
       "paths": [
         "refs.index.json",
         "refs/part-000.jsonl",
@@ -72,12 +72,12 @@
         "refs/part-037.jsonl",
         "refs/part-038.jsonl"
       ],
-      "byte_count": 24942234
+      "byte_count": 24943347
     },
     {
       "name": "edges",
       "storage": "jsonl_shards",
-      "record_count": 22536,
+      "record_count": 22537,
       "paths": [
         "edges.index.json",
         "edges/part-000.jsonl",
@@ -93,16 +93,16 @@
         "edges/part-010.jsonl",
         "edges/part-011.jsonl"
       ],
-      "byte_count": 7926481
+      "byte_count": 7926780
     },
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 1,
+      "record_count": 4,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 16310
+      "byte_count": 42719
     }
   ]
 }
