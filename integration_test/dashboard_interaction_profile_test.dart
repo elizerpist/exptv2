@@ -2030,18 +2030,17 @@ Future<void> _flingBudgetAvatar(
   WidgetTester tester,
   DashboardCoreController controller, {
   required Offset offset,
-  double velocity = 2200,
 }) async {
   final carousel = find.byKey(const ValueKey('budget-target-avatar-carousel'));
   expect(carousel, findsOneWidget);
-  await tester.fling(carousel, offset, velocity);
+  await tester.fling(carousel, offset, 2200);
   await _waitForBudgetAvatarMotionEnd(tester, controller);
 }
 
 /// The 2027-only Fastfood category is deliberately absent from July 2026,
 /// which is the fixed native profile fixture month. K's row-paint assertions
 /// remain about the eight nonempty fixture categories, so a broad real fling
-/// that lands on that one empty category gets one bounded, real one-slot
+/// that lands on that one empty category gets one bounded, real
 /// pointer recovery before its final nonempty evidence is captured. This does
 /// not command the carousel or change production selection ownership.
 Future<void> _recoverAvatarToNonemptyFixtureTarget(
@@ -2060,9 +2059,10 @@ Future<void> _recoverAvatarToNonemptyFixtureTarget(
 
   if (selectedTargetHasFixtureRows()) return;
   for (final offset in const <Offset>[Offset(-58, 0), Offset(58, 0)]) {
-    // 300 px/s is the existing one-item physical velocity band for the
-    // 58 px Avatar slots; it cannot skip over the immediate nonempty peer.
-    await _flingBudgetAvatar(tester, controller, offset: offset, velocity: 300);
+    // The production profile fling starts the established motion lane. With
+    // one future-only empty target, any non-zero bounded step reaches a
+    // nonempty peer without a controller command.
+    await _flingBudgetAvatar(tester, controller, offset: offset);
     if (selectedTargetHasFixtureRows()) return;
   }
   fail(
