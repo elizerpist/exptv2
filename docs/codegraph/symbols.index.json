@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 10787,
+  "record_count": 10791,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -27,22 +27,22 @@
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_visual_engine.dart`/_DashboardHeaderVisualPainter#frame.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_data_runtime.dart`/DashboardSpeculativeWorkSlot#cancel().",
-      "sha256": "9fe969b2c76cc3827709262f69da5de3412cdeaef38eadd28ae99a6cb1b7daf3"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_data_runtime.dart`/DashboardRevisionChanged#",
+      "sha256": "749b17f1acd6d896da8e844de54959813eed054727e52a7afc63d6320a675d6d"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_data_runtime.dart`/DashboardStableFrameScheduler#",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_scene_window_rotation_test.dart`/_DisplayFrameScheduler#`<get>hasPendingCallbacks`.",
-      "sha256": "26d30b37ecda6c008747d35782796320a9c0aa9c28b3164424a35b16022efee9"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_data_runtime.dart`/DashboardSpeculativeWorkScheduler#",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_rail_flight_recorder_test.dart`/main().",
+      "sha256": "b029d80a9bdf93c459b14a83c655c37cac1b32f70ff6173390fdbdbbeee0509a"
     },
     {
       "path": "symbols/part-005.jsonl",
-      "record_count": 787,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_scene_window_rotation_test.dart`/_DisplayFrameScheduler#flush().",
+      "record_count": 791,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_render_readiness_diagnostics_test.dart`/_Clock#call().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "567b8d02e1380535d30a360144a12c0783b1f2b48c8808aec06a37c257904f31"
+      "sha256": "f8916fc04b9eb7031441a898c614fa021a11cdae60741152b59bfc1d2ed106c5"
     }
   ]
 }
