@@ -46,8 +46,8 @@ never read repositories, build indexes, or calculate finance data.
 | RNG-01 | user §§8–11, 22 | `DashboardCoreController.mindAmountRangeBindingFor` and scoped-domain publication | A visible Mind scope receives only its exact `QueryAmountRange.domainScope` maximum; no broader fallback can render | mounted production-parent RED→GREEN | DONE |
 | RNG-02 | user §10 | Core diagnostics/test seam | First failing boundary is identified with scope/domain/generation/rendered maximum evidence before repair | regression test and documented source trace | DONE |
 | RNG-03 | user §§11, 22, 28 | current preview/commit path | Year/Sum/category/partner/search transitions and preview/final range retain identity/latest-wins behavior and zero pointer I/O | Core/range/live tests | DONE |
-| SUM-01 | user §§1, 12, 23 | existing Core/visible-frame/LogBox pipeline | Deterministically classify the Sum observation using count, query key, payload identity and pagination through all 2027 rows | production-faithful forensic test | BLOCKED |
-| SUM-02 | user §§12, 27 | smallest proven LogBox owner, only if needed | A production repair exists only if paging/provenance proves a real divergence; otherwise no list runtime source changes | test result + diff audit | BLOCKED |
+| SUM-01 | user §§1, 12, 23 | existing Core/visible-frame/LogBox pipeline | Deterministically classify the Sum observation using count, query key, payload identity and pagination through all 2027 rows | production-faithful forensic test | DONE |
+| SUM-02 | user §§12, 27 | smallest proven LogBox owner, only if needed | A production repair exists only if paging/provenance proves a real divergence; otherwise no list runtime source changes | test result + diff audit | DONE — NO DEFECT |
 | H43-01 | user §§13–15, 24 | `MindYearMonthCardLayout`, presentation controller/tuner | Tuner exposes exactly the existing layouts plus selectable `4 × 3` | controller/tuner widget tests | DONE |
 | H43-02 | user §§13–15 | `MindYearHeatmapViewport` pure geometry | Four columns × three rows use actual constraints, square cells, actual month row counts, no magic device height | pure geometry + widget tests | DONE |
 | H43-03 | user §§13–15, 24 | 4×3 viewport renderer | Reference-phone available annual region has `maxScrollExtent == 0`; no nested or card scroll, all 12 cards fit | constrained widget tests, all footer combinations | DONE |
@@ -56,11 +56,11 @@ never read repositories, build indexes, or calculate finance data.
 | CLB-02 | user §§17–19, 25 | `MindHeaderScoreChart` semantic overlay | When visible, exactly five labels correspond to start/.25/.5/.75/end of actual series epoch-day domain; no duplicate time model | pure projection + widget tests | DONE |
 | CLB-03 | user §§18–19, 21, 25 | chart overlay/clipping | Labels are quiet, IgnorePointer, clipped with expansion, absent collapsed, no axis/ticks/grid and preserve fixed plot geometry/ticker count | widget/boundary/golden regression tests | DONE |
 | NRG-01 | user §29 / milestones | protected Core/UI owners | No Time/Avatar physics, Query ownership, LogBox architecture, score math, fixture, snapping, Header engine/ticker, or accepted chart paint regression | protected suites + diff review | DONE |
-| VAL-01 | user §33 | test suites | Focused amount/range, Sum forensic, Core temporal, LogBox paging, heatmap geometry, chart, tuner and score suites pass | Ubuntu-proot commands | PARTIAL |
+| VAL-01 | user §33 | test suites | Focused amount/range, Sum forensic, Core temporal, LogBox paging, heatmap geometry, chart, tuner and score suites pass | Ubuntu-proot commands + clean GitHub core lane | DONE |
 | VAL-02 | user §§28, 33 | diagnostics/profile source review | No pointer repository/Room/index/raw-row work; 4×3 O(12); labels only semantic series/settings work; Sum paging unchanged if no defect | counters/tests/source review | DONE |
 | VAL-03 | user §33 | Dart/Git | Changed-target `flutter analyze` and `git diff --check` pass | exact commands | DONE |
-| DEL-01 | user §§30, 32, 35 | checklist | Every functional row above is `DONE` before build gate opens | explicit pre-push table | BLOCKED |
-| DEL-02 | user §§30, 34–35 | Git/CI/tooling | Atomic app commits, push after gate, online human APK, matching SCIP and separate journal/tooling commits | GitHub/APK/tooling evidence | NOT DONE |
+| DEL-01 | user §§30, 32, 35 | checklist | Every functional row above is `DONE` before build gate opens | explicit pre-push table | DONE — user-authorized online forensic validation completed the remaining Sum rows |
+| DEL-02 | user §§30, 34–35 | Git/CI/tooling | Atomic app commits, push after gate, online human APK, matching SCIP and separate journal/tooling commits | GitHub/APK/tooling evidence | DONE |
 
 ## Build-gate snapshot
 
@@ -69,8 +69,8 @@ never read repositories, build indexes, or calculate finance data.
 | Amount max RED/root cause | DONE |
 | Amount max repair | DONE |
 | Amount max regression matrix | DONE |
-| Sum forensic classification | BLOCKED — Robolectric lacks Conscrypt ARM64 JNI locally |
-| Sum repair or no-defect proof | BLOCKED — no deterministic native assertion ran |
+| Sum forensic classification | DONE — GitHub `test-core` passed the production-faithful native paging assertion |
+| Sum repair or no-defect proof | DONE — NO DEFECT; runtime LogBox source intentionally unchanged |
 | 4×3 mode | DONE |
 | 4×3 zero-scroll fit | DONE |
 | 4×3 footer combinations | DONE |
@@ -82,7 +82,8 @@ never read repositories, build indexes, or calculate finance data.
 | Diff check | DONE |
 | Performance bounds | DONE |
 
-**BUILD GATE = CLOSED.**
+**BUILD GATE = OPEN — the user explicitly authorized clean online forensic
+validation; its remaining native Sum assertion passed.**
 
 ## Validation update — 2026-09-17
 
@@ -103,6 +104,19 @@ never read repositories, build indexes, or calculate finance data.
   149 Query/LogBox/Mind projection and presentation tests; 8 chart
   widget/golden/boundary tests; targeted tuner and 4×3 viewport tests; changed
   target analysis and diff check.
+- PASS — GitHub Actions run `35243573729` (manual normal verification for
+  the pushed branch): `test-flutter` passed analysis and the curated Flutter
+  suite in 2m35s; `test-core` passed clean Room core tests and native dashboard
+  bridge tests in 5m26s. The native Sum forensic proves the all-time query
+  keeps one identity while its newest 100 rows are the expected 2027 Fastfood
+  mirror and later pages enter older years. Therefore the screenshot does not
+  prove a list bug and no LogBox production source was changed.
+- PASS — human diagnostic APK job from that run produced and published
+  `fluvi_HUMAN_DIAGNOSTIC_d3b32d3.apk`; it was downloaded to
+  `/storage/emulated/0/Download/fluvi/`, is 83,088,689 bytes, and has
+  SHA-256 `e40ecb26705c8a8a3a064ef65e1bd5fc5c69288e2b9fc1a02b84df81e8247da8`.
+  The artifact source marker is `d3b32d388623aac09ea2125e2d35b8dec627cc66`;
+  its immediately preceding application source is `9a8a7575`.
 
 ## Preflight record
 

@@ -1059,3 +1059,35 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   verification was explicitly authorized before push. The inherited
   `frame_timing_headroom is invalid: null` profile evidence remains separate
   and is not declared green. Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-17 — Mind online forensic / APK / graph evidence (`9a8a7575`)
+
+- PASS — GitHub Actions run `35243573729` for the pushed branch head
+  `d3b32d388623aac09ea2125e2d35b8dec627cc66`: `test-flutter` passed analysis
+  plus the curated Flutter suite (2m35s), and `test-core` passed clean Room
+  core plus native dashboard bridge tests (5m26s). This clean runner executes
+  the Sum forensic that ARM64/proot could not host.
+- The production-faithful deterministic Sum test proves **NO DEFECT**: an
+  All-time expense query has one query identity; its first 100 newest
+  date-descending rows are correctly the 2027 Fastfood mirror, and pagination
+  then reaches earlier years. No LogBox list/query/paging production code was
+  changed for the screenshot observation.
+- PASS — human diagnostic release
+  `fluvi_HUMAN_DIAGNOSTIC_d3b32d3.apk` was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_d3b32d3.apk`.
+  It is 83,088,689 bytes and SHA-256
+  `e40ecb26705c8a8a3a064ef65e1bd5fc5c69288e2b9fc1a02b84df81e8247da8`.
+  Its source marker is the journal head `d3b32d38`; its application runtime
+  source is the preceding `9a8a7575` commit.
+- PASS — matching SCIP was generated from the clean exact application source
+  `9a8a7575902288eebf8b95ae60c698be035531c4` with `scip_dart 1.6.2`. Raw
+  index SHA-256 is
+  `3159a7ce7bf41403360f8e2ff1a8f59e9553bbdf2f08ffa62370f484e85c008a`.
+  The manifest records 467 documents and 307,195 occurrences. Tooling graph
+  commit `0a67cb2e` is pushed separately on `tooling/scip-codegraph-v1`, and
+  its 15 tooling tests pass. The graph is navigation evidence, not runtime
+  causality.
+- The workflow's unrelated `run-dashboard-profile` job is still in progress
+  at this journal point; its established `frame_timing_headroom is invalid:
+  null` lineage must remain an honest separate status. Physical validation:
+  `PENDING — USER ONLY`.
