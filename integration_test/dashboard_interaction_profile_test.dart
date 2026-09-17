@@ -1850,15 +1850,25 @@ Future<Map<String, Object?>> _profileMindYearHeatmapDirections(
       : LedgerDirection.expense;
   final warmDeadline = DateTime.now().add(const Duration(seconds: 12));
   final opposite = oppositeOf(initial);
+  // Mind's physical slider domain belongs to the currently visible structural
+  // scope. The stored directional Query template is intentionally all-time,
+  // so awaiting its generic domain here would test a different authority and
+  // could reject a correctly prewarmed visible Month/Year domain.
+  final oppositeVisibleDomainScope = controller.mindAmountDomainScopeFor(
+    opposite,
+  );
   while (DateTime.now().isBefore(warmDeadline) &&
-      controller.currentQuery.amountDomainFor(opposite) == null) {
+      controller.currentQuery.amountDomainForScope(
+            oppositeVisibleDomainScope,
+          ) ==
+          null) {
     await tester.pump(const Duration(milliseconds: 16));
   }
   expect(
-    controller.currentQuery.amountDomainFor(opposite),
+    controller.currentQuery.amountDomainForScope(oppositeVisibleDomainScope),
     isNotNull,
     reason:
-        'The inactive canonical amount domain must be ready before the '
+        'The inactive visible amount domain must be ready before the '
         'interaction-critical direction tap.',
   );
 

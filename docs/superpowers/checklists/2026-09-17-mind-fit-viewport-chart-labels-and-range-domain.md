@@ -56,11 +56,12 @@ never read repositories, build indexes, or calculate finance data.
 | CLB-02 | user §§17–19, 25 | `MindHeaderScoreChart` semantic overlay | When visible, exactly five labels correspond to start/.25/.5/.75/end of actual series epoch-day domain; no duplicate time model | pure projection + widget tests | DONE |
 | CLB-03 | user §§18–19, 21, 25 | chart overlay/clipping | Labels are quiet, IgnorePointer, clipped with expansion, absent collapsed, no axis/ticks/grid and preserve fixed plot geometry/ticker count | widget/boundary/golden regression tests | DONE |
 | NRG-01 | user §29 / milestones | protected Core/UI owners | No Time/Avatar physics, Query ownership, LogBox architecture, score math, fixture, snapping, Header engine/ticker, or accepted chart paint regression | protected suites + diff review | DONE |
+| PRF-01 | GitHub profile failure `35243573729` | `dashboard_interaction_profile_test.dart` | Direction-tap prewarm asserts the exact visible structural amount domain, never the stored all-time template domain | analyzer + clean GitHub profile lane | IN PROGRESS |
 | VAL-01 | user §33 | test suites | Focused amount/range, Sum forensic, Core temporal, LogBox paging, heatmap geometry, chart, tuner and score suites pass | Ubuntu-proot commands + clean GitHub core lane | DONE |
 | VAL-02 | user §§28, 33 | diagnostics/profile source review | No pointer repository/Room/index/raw-row work; 4×3 O(12); labels only semantic series/settings work; Sum paging unchanged if no defect | counters/tests/source review | DONE |
 | VAL-03 | user §33 | Dart/Git | Changed-target `flutter analyze` and `git diff --check` pass | exact commands | DONE |
 | DEL-01 | user §§30, 32, 35 | checklist | Every functional row above is `DONE` before build gate opens | explicit pre-push table | DONE — user-authorized online forensic validation completed the remaining Sum rows |
-| DEL-02 | user §§30, 34–35 | Git/CI/tooling | Atomic app commits, push after gate, online human APK, matching SCIP and separate journal/tooling commits | GitHub/APK/tooling evidence | DONE |
+| DEL-02 | user §§30, 34–35 | Git/CI/tooling | Atomic app commits, push after gate, online human APK, matching SCIP and separate journal/tooling commits | GitHub/APK/tooling evidence | PARTIAL — profile assertion correction needs a clean rerun |
 
 ## Build-gate snapshot
 
@@ -77,13 +78,14 @@ never read repositories, build indexes, or calculate finance data.
 | Chart labels setting | DONE |
 | Exactly five dynamic labels | DONE |
 | Chart no-regression | DONE |
+| Profile exact-visible-domain assertion | IN PROGRESS |
 | Protected regressions | DONE |
 | Analyzer | DONE |
 | Diff check | DONE |
 | Performance bounds | DONE |
 
-**BUILD GATE = OPEN — the user explicitly authorized clean online forensic
-validation; its remaining native Sum assertion passed.**
+**BUILD GATE = CLOSED — the clean online profile lane found an authority
+assertion that must be rerun after correction.**
 
 ## Validation update — 2026-09-17
 
