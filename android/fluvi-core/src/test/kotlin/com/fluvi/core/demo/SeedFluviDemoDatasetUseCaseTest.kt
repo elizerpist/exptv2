@@ -112,7 +112,8 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(100L, categoryTotal.entryCount)
         assertEquals(645_560L * 100L, categoryTotal.amountScaled100)
 
-        val subway = core.partners.list().single { it.name == "Subway" }
+        val subway = core.query.queryMenuFacets(categoryScope).partners
+            .single { it.displayName == "Subway" }
         val partnerTotal = core.query.total(categoryScope.copy(partnerIds = setOf(subway.id)))
         assertEquals(23L, partnerTotal.entryCount)
         assertEquals(136_970L * 100L, partnerTotal.amountScaled100)

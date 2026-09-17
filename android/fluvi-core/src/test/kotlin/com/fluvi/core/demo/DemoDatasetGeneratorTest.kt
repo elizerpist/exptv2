@@ -218,11 +218,11 @@ class DemoDatasetGeneratorTest {
 
         assertEquals(expected, actual)
         assertTrue(
+            "The source 2025 list remains a source fixture; only its 2027 mirror enters this demo plan.",
             plan.entries.none { entry ->
                 entry.categoryId == category.id &&
                     LocalDate.ofEpochDay(entry.bookedLocalEpochDay).year == 2025
             },
-            "The source 2025 list remains a source fixture; only its 2027 mirror enters this demo plan.",
         )
     }
 }
