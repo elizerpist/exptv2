@@ -1420,7 +1420,6 @@ Future<void> _runMeasuredScenario(
         Offset(-348, 0),
         Offset(-406, 0),
         Offset(-464, 0),
-        Offset(-522, 0),
       ];
       for (var cycle = 0; cycle < 20; cycle += 1) {
         final forwardOffset = forwardOffsets[cycle % forwardOffsets.length];
@@ -2290,7 +2289,17 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
     seen.addAll(ids);
     counts['$handle'] = ids.length;
   }
-  expect(rail.presentation.targetForHandle(9), isNull);
+  // The 2027 Fastfood mirror is intentionally outside this July 2026
+  // performance fixture. It remains a real category target, but K measures
+  // only the legacy nonempty target set so an empty future-only category is
+  // not misrepresented as an exact nonempty Avatar paint.
+  final futureOnlyTarget = rail.presentation.targetForHandle(9);
+  expect(futureOnlyTarget?.category?.displayName, 'Gyorsétterem');
+  final futureOnlyIds = rows
+      .where((row) => row.categoryId == futureOnlyTarget!.category!.id)
+      .map((row) => row.id)
+      .toSet();
+  expect(futureOnlyIds, isEmpty);
   expect(rows.length, greaterThanOrEqualTo(8));
   expect(
     rows.length,
