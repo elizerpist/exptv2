@@ -10,6 +10,7 @@ import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/presentation/mind_header_score_chart.dart';
 import '../../mind/presentation/mind_year_heatmap_viewport.dart';
@@ -29,6 +30,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.queryAmountRangeState,
     this.queryAmountRangeError,
     this.yearHeatmap,
+    this.yearHeatmapPresentation,
     this.showYearHeatmap = false,
     this.onQueryAmountRangeRetry,
     this.onQueryAmountRangeCommitted,
@@ -48,6 +50,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final DashboardAppliedQueryFacetLoadState Function()? queryAmountRangeState;
   final Object? Function()? queryAmountRangeError;
   final ValueListenable<MindYearHeatmapFrame?>? yearHeatmap;
+  final ValueListenable<MindYearHeatmapPresentationSettings>?
+  yearHeatmapPresentation;
   final bool showYearHeatmap;
   final VoidCallback? onQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
@@ -145,7 +149,11 @@ class MindDashboardCoreSurface extends StatelessWidget {
         ),
       );
     }
-    return _MindYearHeatmapBody(heatmap: heatmap, range: range);
+    return _MindYearHeatmapBody(
+      heatmap: heatmap,
+      range: range,
+      presentationSettings: yearHeatmapPresentation,
+    );
   }
 }
 
@@ -195,7 +203,11 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
 /// Structural Mind topology: one clipped vertical viewport followed by an
 /// independent footer. The slider never overlays scroll content.
 final class _MindYearHeatmapBody extends StatelessWidget {
-  const _MindYearHeatmapBody({required this.heatmap, required this.range});
+  const _MindYearHeatmapBody({
+    required this.heatmap,
+    required this.range,
+    this.presentationSettings,
+  });
 
   // The compact shared slider has a deliberately fixed footer lane.  It
   // protects the annual scroll viewport from range-control intrinsic sizing
@@ -204,13 +216,18 @@ final class _MindYearHeatmapBody extends StatelessWidget {
 
   final ValueListenable<MindYearHeatmapFrame?> heatmap;
   final Widget range;
+  final ValueListenable<MindYearHeatmapPresentationSettings>?
+  presentationSettings;
 
   @override
   Widget build(BuildContext context) => Column(
     children: <Widget>[
       Expanded(
         child: ClipRect(
-          child: MindYearHeatmapViewport(frameListenable: heatmap),
+          child: MindYearHeatmapViewport(
+            frameListenable: heatmap,
+            presentationSettings: presentationSettings,
+          ),
         ),
       ),
       KeyedSubtree(

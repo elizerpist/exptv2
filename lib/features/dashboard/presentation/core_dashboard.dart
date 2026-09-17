@@ -31,6 +31,8 @@ import '../query/domain/ledger_direction.dart';
 import '../query/domain/query_amount_range.dart';
 import '../query/application/dashboard_applied_query_facet_loader.dart';
 import '../query/presentation/query_amount_range_control.dart';
+import '../mind/domain/mind_behavioral_score_settings.dart';
+import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -715,6 +717,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                   .error,
                                         mindYearHeatmap:
                                             controller.mindYearHeatmap,
+                                        mindYearHeatmapPresentation: controller
+                                            .mindYearHeatmapPresentation,
                                         mindYearHeatmapVisible:
                                             controller
                                                 .presentation
@@ -1193,6 +1197,10 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _budgetRingPresentationController,
                                         shellPresentation:
                                             widget.shellPresentation,
+                                        mindBehavioralScoreSettings: controller
+                                            .mindBehavioralScoreSettings,
+                                        mindYearHeatmapPresentation: controller
+                                            .mindYearHeatmapPresentation,
                                         headerBounds: geometry.headerBounds,
                                       ),
                                     ],
@@ -1954,6 +1962,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     required this.budgetHeaderPresentation,
     required this.budgetRingPresentation,
     this.shellPresentation,
+    this.mindBehavioralScoreSettings,
+    this.mindYearHeatmapPresentation,
     required this.headerBounds,
   });
 
@@ -1972,6 +1982,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   final DashboardBudgetHeaderPresentationController budgetHeaderPresentation;
   final BudgetRingPresentationController budgetRingPresentation;
   final DashboardShellPresentationController? shellPresentation;
+  final MindBehavioralScoreSettingsController? mindBehavioralScoreSettings;
+  final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
   final DashboardBounds headerBounds;
 
   @override
@@ -2041,6 +2053,10 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                           budgetHeaderPresentation: budgetHeaderPresentation,
                           budgetRingPresentation: budgetRingPresentation,
                           shellPresentation: shellPresentation,
+                          mindBehavioralScoreSettings:
+                              mindBehavioralScoreSettings,
+                          mindYearHeatmapPresentation:
+                              mindYearHeatmapPresentation,
                         ),
                       ),
                     ),

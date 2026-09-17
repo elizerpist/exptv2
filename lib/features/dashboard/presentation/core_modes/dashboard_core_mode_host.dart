@@ -11,6 +11,7 @@ import '../../application/dashboard_core_mode_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
@@ -65,6 +66,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindQueryAmountRangeState,
     this.mindQueryAmountRangeError,
     this.mindYearHeatmap,
+    this.mindYearHeatmapPresentation,
     this.mindYearHeatmapVisible = false,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
@@ -105,6 +107,8 @@ class DashboardCoreModeHost extends StatefulWidget {
   mindQueryAmountRangeState;
   final Object? Function()? mindQueryAmountRangeError;
   final ValueListenable<MindYearHeatmapFrame?>? mindYearHeatmap;
+  final ValueListenable<MindYearHeatmapPresentationSettings>?
+  mindYearHeatmapPresentation;
   final bool mindYearHeatmapVisible;
   final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
@@ -343,6 +347,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         queryAmountRangeState: widget.mindQueryAmountRangeState,
         queryAmountRangeError: widget.mindQueryAmountRangeError,
         yearHeatmap: widget.mindYearHeatmap,
+        yearHeatmapPresentation: widget.mindYearHeatmapPresentation,
         showYearHeatmap: widget.mindYearHeatmapVisible,
         onQueryAmountRangeRetry: widget.onMindQueryAmountRangeRetry,
         onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,

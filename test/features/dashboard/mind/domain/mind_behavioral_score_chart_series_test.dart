@@ -48,7 +48,10 @@ void main() {
       expect(series.points.length, lessThanOrEqualTo(56));
       expect(series.startInclusiveEpochDay, 20000);
       expect(series.endInclusiveEpochDay, 20140);
-      expect(series.points.first.epochDay, 20000);
+      // The lower range endpoint excludes the 100-unit first day. Sparse
+      // periods preserve real meaningful dates rather than fabricate a zero
+      // point at the visual boundary.
+      expect(series.points.first.epochDay, 20001);
       expect(series.points.last.epochDay, 20140);
       for (var index = 1; index < series.points.length; index += 1) {
         expect(
@@ -56,12 +59,19 @@ void main() {
           greaterThan(series.points[index - 1].epochDay),
         );
       }
-      for (final point in series.points) {
-        expect(
-          point,
-          prepared.preview(range: range, targetEpochDay: point.epochDay).point,
-        );
-      }
+      final resolved = prepared.resolve(
+        range: range,
+        request: const MindBehavioralScoreSeriesRequest(
+          analyticStartInclusiveEpochDay: 20000,
+          analyticEndInclusiveEpochDay: 20140,
+          chartStartInclusiveEpochDay: 20000,
+          targetEpochDay: 20140,
+        ),
+      );
+      // Header text and chart are published from one immutable scope result;
+      // no chart-only financial calculation is allowed.
+      expect(resolved.chartSeries, series);
+      expect(resolved.point, series.points.last);
     },
   );
 
@@ -96,16 +106,11 @@ void main() {
         endInclusiveEpochDay: 13,
       );
 
-      expect(series.points.map((point) => point.epochDay), <int>[
-        10,
-        11,
-        12,
-        13,
-      ]);
-      expect(series.points[1].expense!.dailyAmount, 200);
-      expect(series.points[2].expense!.dailyAmount, 700);
-      expect(series.points[0].expense!.dailyAmount, 0);
-      expect(series.points[3].expense!.dailyAmount, 0);
+      // HTML sparse series contains meaningful active dates only; 199 and
+      // 701 are excluded by the inclusive range before daily aggregation.
+      expect(series.points.map((point) => point.epochDay), <int>[11, 12]);
+      expect(series.points[0].expense!.dailyAmount, 200);
+      expect(series.points[1].expense!.dailyAmount, 700);
     },
   );
 

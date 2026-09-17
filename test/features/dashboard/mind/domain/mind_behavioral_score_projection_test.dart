@@ -203,7 +203,7 @@ void main() {
     });
 
     test(
-      'MBS-02 equal totals with different occurrence patterns remain distinguishable',
+      'MBS-02 equal historical totals with different occurrence pressure remain distinguishable',
       () {
         const target = LocalDate(year: 2025, month: 5, day: 31);
         final fourLargeDays = projection(
@@ -218,15 +218,17 @@ void main() {
         final twentySmallDays = projection(
           direction: LedgerDirection.expense,
           contributions: <MindBehavioralScoreContribution>[
-            for (var offset = 30; offset >= 11; offset -= 1)
+            // Same 40k historical total, but dense behaviour has had time
+            // to cool after the earlier twenty small active days.
+            for (var offset = 70; offset >= 51; offset -= 1)
               day(2000, dateOffset(target, -offset)),
           ],
         ).preview(range: fullRange, targetEpochDay: target.epochDay);
 
         expect(fourLargeDays.point.expense!.rollingAmount, 40000);
-        expect(twentySmallDays.point.expense!.rollingAmount, 40000);
+        expect(twentySmallDays.point.expense!.rollingAmount, 0);
         expect(fourLargeDays.point.expense!.activeDaysInContext, 4);
-        expect(twentySmallDays.point.expense!.activeDaysInContext, 20);
+        expect(twentySmallDays.point.expense!.isSparse, isFalse);
         expect(fourLargeDays.point.score, isNot(twentySmallDays.point.score));
       },
     );
@@ -434,38 +436,47 @@ void main() {
       },
     );
 
-    test('MBS-04 preview touches resident bounded expense buckets only', () {
-      const target = LocalDate(year: 2035, month: 12, day: 31);
-      final counter = MindBehavioralScoreSourceWorkCounter(
-        measurePreviewDurations: true,
-      );
-      final prepared = MindBehavioralScoreProjection.build(
-        identity: const MindBehavioralScoreIdentity(
-          upstreamScopeKey: 'expense|long-history',
-          indexGeneration: 1,
-          coreRevision: 1,
-          direction: LedgerDirection.expense,
-        ),
-        contributions: <MindBehavioralScoreContribution>[
-          for (var dayOffset = 0; dayOffset < 10000; dayOffset += 1)
-            MindBehavioralScoreContribution(
-              bookedLocalEpochDay: target.epochDay - dayOffset,
-              amountMinor: 100 + dayOffset % 17,
-            ),
-        ],
-        sourceWorkCounter: counter,
-      );
+    test(
+      'MSS-18 causal full-history preview touches only resident daily buckets',
+      () {
+        const target = LocalDate(year: 2035, month: 12, day: 31);
+        final counter = MindBehavioralScoreSourceWorkCounter(
+          measurePreviewDurations: true,
+        );
+        final prepared = MindBehavioralScoreProjection.build(
+          identity: const MindBehavioralScoreIdentity(
+            upstreamScopeKey: 'expense|long-history',
+            indexGeneration: 1,
+            coreRevision: 1,
+            direction: LedgerDirection.expense,
+          ),
+          contributions: <MindBehavioralScoreContribution>[
+            for (var dayOffset = 0; dayOffset < 10000; dayOffset += 1)
+              MindBehavioralScoreContribution(
+                bookedLocalEpochDay: target.epochDay - dayOffset,
+                amountMinor: 100 + dayOffset % 17,
+              ),
+          ],
+          sourceWorkCounter: counter,
+        );
 
-      for (var preview = 0; preview < 20; preview += 1) {
-        prepared.preview(range: fullRange, targetEpochDay: target.epochDay);
-      }
+        for (var preview = 0; preview < 20; preview += 1) {
+          prepared.preview(range: fullRange, targetEpochDay: target.epochDay);
+        }
 
-      expect(counter.sourceRowTouches, 0);
-      expect(counter.sourceRowTouchesDuringPreview, 0);
-      expect(counter.repositoryAccessesDuringPreview, 0);
-      expect(counter.indexBuildsDuringPreview, 0);
-      expect(counter.maxDayBucketsVisitedPerPreview, lessThanOrEqualTo(61));
-      expect(counter.previewDurationSummary()['sampleCount'], 20);
-    });
+        expect(counter.sourceRowTouches, 0);
+        expect(counter.sourceRowTouchesDuringPreview, 0);
+        expect(counter.repositoryAccessesDuringPreview, 0);
+        expect(counter.indexBuildsDuringPreview, 0);
+        // Full-history causality may traverse a long prepared day domain, but
+        // it never returns to source rows, Room, repositories or native index
+        // construction. The exact visited bound is the 10k admitted day bank.
+        expect(
+          counter.maxDayBucketsVisitedPerPreview,
+          lessThanOrEqualTo(10000),
+        );
+        expect(counter.previewDurationSummary()['sampleCount'], 20);
+      },
+    );
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../query/domain/ledger_direction.dart';
 import '../../query/domain/query_amount_range.dart';
+import 'mind_behavioral_score_settings.dart';
 
 /// Immutable provenance of a prepared Mind behavioural-score universe.
 ///
@@ -17,12 +18,14 @@ final class MindBehavioralScoreIdentity {
     required this.indexGeneration,
     required this.coreRevision,
     required this.direction,
+    this.settings = const MindBehavioralScoreSettings.defaults(),
   });
 
   final String upstreamScopeKey;
   final int indexGeneration;
   final int coreRevision;
   final LedgerDirection direction;
+  final MindBehavioralScoreSettings settings;
 
   @override
   bool operator ==(Object other) =>
@@ -30,11 +33,17 @@ final class MindBehavioralScoreIdentity {
       other.upstreamScopeKey == upstreamScopeKey &&
       other.indexGeneration == indexGeneration &&
       other.coreRevision == coreRevision &&
-      other.direction == direction;
+      other.direction == direction &&
+      other.settings == settings;
 
   @override
-  int get hashCode =>
-      Object.hash(upstreamScopeKey, indexGeneration, coreRevision, direction);
+  int get hashCode => Object.hash(
+    upstreamScopeKey,
+    indexGeneration,
+    coreRevision,
+    direction,
+    settings,
+  );
 }
 
 /// Compact transaction contribution copied from an already prepared Mind
@@ -148,6 +157,7 @@ final class MindBehavioralScoreFrame {
     required this.range,
     required this.point,
     this.chartSeries,
+    this.seriesRequest,
   });
 
   final MindBehavioralScoreIdentity identity;
@@ -158,6 +168,50 @@ final class MindBehavioralScoreFrame {
   /// It remains nullable for lightweight isolated consumers that intentionally
   /// provide just one already-computed point.
   final MindBehavioralScoreChartSeries? chartSeries;
+
+  /// Immutable evaluation provenance shared by the Header text/chart output.
+  /// The live publication lane adds its navigation generation separately;
+  /// together they reject stale scope/settings completions deterministically.
+  final MindBehavioralScoreSeriesRequest? seriesRequest;
+}
+
+/// One immutable request for the score series that serves both Header text
+/// and its chart. [analyticEndInclusiveEpochDay] may be later than [target]
+/// for an HTML mode because its approved whole-scope definition intentionally
+/// reads the selected scope's future values. Causal callers pass a target-end
+/// scope so past points never receive a future input.
+@immutable
+final class MindBehavioralScoreSeriesRequest {
+  const MindBehavioralScoreSeriesRequest({
+    required this.analyticStartInclusiveEpochDay,
+    required this.analyticEndInclusiveEpochDay,
+    required this.chartStartInclusiveEpochDay,
+    required this.targetEpochDay,
+  }) : assert(analyticStartInclusiveEpochDay <= analyticEndInclusiveEpochDay),
+       assert(chartStartInclusiveEpochDay <= targetEpochDay),
+       assert(targetEpochDay >= analyticStartInclusiveEpochDay),
+       assert(targetEpochDay <= analyticEndInclusiveEpochDay);
+
+  final int analyticStartInclusiveEpochDay;
+  final int analyticEndInclusiveEpochDay;
+  final int chartStartInclusiveEpochDay;
+  final int targetEpochDay;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MindBehavioralScoreSeriesRequest &&
+      other.analyticStartInclusiveEpochDay == analyticStartInclusiveEpochDay &&
+      other.analyticEndInclusiveEpochDay == analyticEndInclusiveEpochDay &&
+      other.chartStartInclusiveEpochDay == chartStartInclusiveEpochDay &&
+      other.targetEpochDay == targetEpochDay;
+
+  @override
+  int get hashCode => Object.hash(
+    analyticStartInclusiveEpochDay,
+    analyticEndInclusiveEpochDay,
+    chartStartInclusiveEpochDay,
+    targetEpochDay,
+  );
 }
 
 /// A compact, chronological visual sample of canonical daily Mind score
@@ -338,16 +392,10 @@ final class MindIncomeScoreComponents {
 /// Immutable, resident daily range projection for Mind behaviour.
 ///
 /// Every day stores amount-sorted values plus prefix sums. Range preview is
-/// therefore a fixed daily-index calculation, never a ledger-row/repository
-/// read. Expense evaluates its target from at most 61 daily buckets: 31
-/// output samples, each with its own causal 31-day rolling signal.
-///
-/// Dense Expense normalization is deliberately causal: each smoothed signal
-/// divides by the running maximum observed at or before that sample, inside
-/// the target's 31-sample causal evaluation strip. This replaces the HTML
-/// prototype's whole-visible-series maxima, so a future row or a wider UI
-/// TimePlane cannot rewrite an earlier point. It introduces no fixed HUF
-/// good/bad threshold.
+/// therefore a compact resident-day-index calculation, never a ledger-row or
+/// repository read. HTML modes intentionally evaluate their selected scope as
+/// one series; causal full-history may walk retained daily buckets, but never
+/// reconstruct raw source membership on a thumb event.
 @immutable
 final class MindBehavioralScoreProjection {
   const MindBehavioralScoreProjection._(
@@ -393,35 +441,109 @@ final class MindBehavioralScoreProjection {
   MindBehavioralScoreSourceWorkCounter get sourceWorkCounter =>
       _sourceWorkCounter;
 
+  /// Backwards-compatible one-target convenience for isolated consumers. Core
+  /// uses [resolve] so Header text and chart share one scope-series result.
   MindBehavioralScoreFrame preview({
     required QueryAmountRangeValues range,
     required int targetEpochDay,
   }) {
+    final first = _dayKeys.isEmpty
+        ? targetEpochDay
+        : firstEligibleEpochDay(
+            range: range,
+            startInclusiveEpochDay: _dayKeys.first,
+            endInclusiveEpochDay: targetEpochDay,
+            fallbackEpochDay: targetEpochDay,
+          );
+    return resolve(
+      range: range,
+      request: MindBehavioralScoreSeriesRequest(
+        analyticStartInclusiveEpochDay: first,
+        analyticEndInclusiveEpochDay: targetEpochDay,
+        chartStartInclusiveEpochDay: first,
+        targetEpochDay: targetEpochDay,
+      ),
+    );
+  }
+
+  /// Resolves one immutable scope series for both semantic Header score and
+  /// visual chart. It is invoked only at semantic/range publication time;
+  /// Header paint consumes the returned data without financial work.
+  MindBehavioralScoreFrame resolve({
+    required QueryAmountRangeValues range,
+    required MindBehavioralScoreSeriesRequest request,
+    int maximumChartPoints = MindBehavioralScoreChartSeries.maximumVisualPoints,
+  }) {
+    if (maximumChartPoints <= 0) {
+      throw ArgumentError.value(
+        maximumChartPoints,
+        'maximumChartPoints',
+        'must be positive',
+      );
+    }
     final watch = _sourceWorkCounter.measurePreviewDurations
         ? (Stopwatch()..start())
         : null;
     var visited = 0;
-    final point = _pointFor(
-      range: range,
-      targetEpochDay: targetEpochDay,
-      onDayBucketVisited: () => visited += 1,
+    final points = switch (identity.direction) {
+      LedgerDirection.expense => _expenseSeries(
+        range: range,
+        request: request,
+        onDayBucketVisited: () => visited += 1,
+      ),
+      LedgerDirection.income => _incomeChartPoints(
+        range: range,
+        sampleDays: _sampleEpochDays(
+          startInclusiveEpochDay: request.chartStartInclusiveEpochDay,
+          endInclusiveEpochDay: request.targetEpochDay,
+          maximumPoints: maximumChartPoints,
+        ),
+        onDayBucketVisited: () => visited += 1,
+      ),
+    };
+    final scopedPoints = points
+        .where(
+          (point) =>
+              point.epochDay >= request.chartStartInclusiveEpochDay &&
+              point.epochDay <= request.targetEpochDay,
+        )
+        .toList(growable: false);
+    final point = _latestPointAtOrBefore(
+      scopedPoints,
+      targetEpochDay: request.targetEpochDay,
+    );
+    final chartPoints = _chartPointsFor(
+      points,
+      chartStartInclusiveEpochDay: request.chartStartInclusiveEpochDay,
+      targetEpochDay: request.targetEpochDay,
+      maximumPoints: maximumChartPoints,
+      fallback: point,
     );
     watch?.stop();
     _sourceWorkCounter.finishPreview(
       dayBucketsVisited: visited,
       micros: watch?.elapsedMicroseconds ?? 0,
     );
+    _sourceWorkCounter.finishChartSeries(
+      pointCount: chartPoints.length,
+      dayBucketsVisited: visited,
+    );
     return MindBehavioralScoreFrame(
       identity: identity,
       range: range,
       point: point,
+      chartSeries: MindBehavioralScoreChartSeries(
+        startInclusiveEpochDay: request.chartStartInclusiveEpochDay,
+        endInclusiveEpochDay: request.targetEpochDay,
+        points: chartPoints,
+      ),
+      seriesRequest: request,
     );
   }
 
   /// Returns a visually bounded chronological history over the requested
-  /// already-selected scope. Every emitted sample is an exact canonical daily
-  /// score point, including the inclusive amount range; only pixel sampling
-  /// is bounded. Header paint never calls this method.
+  /// scope. It preserves the public convenience API while using the same
+  /// scope-series algorithm as [resolve].
   MindBehavioralScoreChartSeries chartSeries({
     required QueryAmountRangeValues range,
     required int startInclusiveEpochDay,
@@ -442,63 +564,61 @@ final class MindBehavioralScoreProjection {
         'must be positive',
       );
     }
-    final sampleDays = _sampleEpochDays(
-      startInclusiveEpochDay: startInclusiveEpochDay,
-      endInclusiveEpochDay: endInclusiveEpochDay,
-      maximumPoints: maximumPoints,
-    );
-    var visited = 0;
-    final points = switch (identity.direction) {
-      LedgerDirection.expense => <MindBehavioralScorePoint>[
-        for (final epochDay in sampleDays)
-          _pointFor(
-            range: range,
-            targetEpochDay: epochDay,
-            onDayBucketVisited: () => visited += 1,
-          ),
-      ],
-      LedgerDirection.income => _incomeChartPoints(
-        range: range,
-        sampleDays: sampleDays,
-        onDayBucketVisited: () => visited += 1,
+    return resolve(
+      range: range,
+      request: MindBehavioralScoreSeriesRequest(
+        analyticStartInclusiveEpochDay: startInclusiveEpochDay,
+        analyticEndInclusiveEpochDay: endInclusiveEpochDay,
+        chartStartInclusiveEpochDay: startInclusiveEpochDay,
+        targetEpochDay: endInclusiveEpochDay,
       ),
-    };
-    _sourceWorkCounter.finishChartSeries(
-      pointCount: points.length,
-      dayBucketsVisited: visited,
-    );
-    return MindBehavioralScoreChartSeries(
-      startInclusiveEpochDay: startInclusiveEpochDay,
-      endInclusiveEpochDay: endInclusiveEpochDay,
-      points: points,
-    );
+      maximumChartPoints: maximumPoints,
+    ).chartSeries!;
   }
 
-  MindBehavioralScorePoint _pointFor({
-    required QueryAmountRangeValues range,
+  MindBehavioralScorePoint _latestPointAtOrBefore(
+    List<MindBehavioralScorePoint> points, {
     required int targetEpochDay,
-    required VoidCallback onDayBucketVisited,
   }) {
-    int amountAt(int epochDay) {
-      onDayBucketVisited();
-      return _dayRanges[epochDay]?.sumWithin(
-            minimum: range.lowerScaled100,
-            maximum: range.upperScaled100,
-          ) ??
-          0;
+    for (var index = points.length - 1; index >= 0; index -= 1) {
+      final point = points[index];
+      if (point.epochDay <= targetEpochDay) return point;
     }
-
     return switch (identity.direction) {
-      LedgerDirection.expense => _expensePoint(
+      LedgerDirection.expense => _noPressureExpensePoint(targetEpochDay),
+      LedgerDirection.income => _incomePointFromHistory(
         targetEpochDay: targetEpochDay,
-        amountAt: amountAt,
-      ),
-      LedgerDirection.income => _incomePoint(
-        targetEpochDay: targetEpochDay,
-        amountAt: amountAt,
-        onDayKeyVisited: onDayBucketVisited,
+        current: 0,
+        priorCount: 0,
+        previousAverage: 0,
+        medianWithCurrent: 0,
       ),
     };
+  }
+
+  static List<MindBehavioralScorePoint> _chartPointsFor(
+    List<MindBehavioralScorePoint> points, {
+    required int chartStartInclusiveEpochDay,
+    required int targetEpochDay,
+    required int maximumPoints,
+    required MindBehavioralScorePoint fallback,
+  }) {
+    final scoped = points
+        .where(
+          (point) =>
+              point.epochDay >= chartStartInclusiveEpochDay &&
+              point.epochDay <= targetEpochDay,
+        )
+        .toList(growable: false);
+    final source = scoped.isEmpty
+        ? <MindBehavioralScorePoint>[fallback]
+        : scoped;
+    if (source.length <= maximumPoints) return source;
+    return List<MindBehavioralScorePoint>.generate(
+      maximumPoints,
+      (index) => source[(source.length - 1) * index ~/ (maximumPoints - 1)],
+      growable: false,
+    );
   }
 
   /// Resolves all sampled Income points in chronological order. The generic
@@ -644,167 +764,291 @@ final class MindBehavioralScoreProjection {
     return fallbackEpochDay;
   }
 
-  MindBehavioralScorePoint _expensePoint({
-    required int targetEpochDay,
-    required int Function(int epochDay) amountAt,
+  /// Builds one Expense series for the requested analytic scope. Every amount
+  /// lookup is against the resident per-day range index; there is no ledger
+  /// row, repository, renderer, or animation dependency here.
+  List<MindBehavioralScorePoint> _expenseSeries({
+    required QueryAmountRangeValues range,
+    required MindBehavioralScoreSeriesRequest request,
+    required VoidCallback onDayBucketVisited,
   }) {
-    final contextStart = targetEpochDay - (_behaviorWindowDays - 1);
-    final contextAmounts = List<int>.generate(
-      _behaviorWindowDays,
-      (index) => amountAt(contextStart + index),
+    int amountAt(int epochDay) {
+      onDayBucketVisited();
+      return _dayRanges[epochDay]?.sumWithin(
+            minimum: range.lowerScaled100,
+            maximum: range.upperScaled100,
+          ) ??
+          0;
+    }
+
+    final amounts = List<int>.generate(
+      request.analyticEndInclusiveEpochDay -
+          request.analyticStartInclusiveEpochDay +
+          1,
+      (index) => amountAt(request.analyticStartInclusiveEpochDay + index),
       growable: false,
     );
-    final activeDays = contextAmounts.where((amount) => amount > 0).length;
-    final dailyAmount = contextAmounts.last;
-    final amountMaximum = contextAmounts.fold<int>(
+    return switch (identity.settings.expenseAlgorithm) {
+      MindExpenseScoreAlgorithm.htmlCentered => _htmlExpenseSeries(
+        amounts: amounts,
+        seriesStartEpochDay: request.analyticStartInclusiveEpochDay,
+        centered: true,
+      ),
+      MindExpenseScoreAlgorithm.htmlTrailing => _htmlExpenseSeries(
+        amounts: amounts,
+        seriesStartEpochDay: request.analyticStartInclusiveEpochDay,
+        centered: false,
+      ),
+      MindExpenseScoreAlgorithm.causalTrailing => _causalExpenseSeries(
+        amounts: amounts,
+        seriesStartEpochDay: request.analyticStartInclusiveEpochDay,
+      ),
+    };
+  }
+
+  /// Exact scope-series form of the approved HTML Expense calculation. Sparse
+  /// versus dense is intentionally decided once across the whole active
+  /// evaluation series, never separately at each target date.
+  List<MindBehavioralScorePoint> _htmlExpenseSeries({
+    required List<int> amounts,
+    required int seriesStartEpochDay,
+    required bool centered,
+  }) {
+    final firstActive = amounts.indexWhere((amount) => amount > 0);
+    if (firstActive < 0) return const <MindBehavioralScorePoint>[];
+    var lastActive = amounts.length - 1;
+    while (amounts[lastActive] <= 0) {
+      lastActive -= 1;
+    }
+    final graph = amounts.sublist(firstActive, lastActive + 1);
+    final graphStart = seriesStartEpochDay + firstActive;
+    final activeDays = graph.where((amount) => amount > 0).length;
+    final amountMaximum = graph.fold<int>(
       0,
       (maximum, amount) => math.max(maximum, amount),
     );
+    final graphAmountTotal = graph.fold<int>(0, (sum, amount) => sum + amount);
     if (activeDays <= 12) {
-      final amountIndex = amountMaximum == 0
+      return <MindBehavioralScorePoint>[
+        for (var index = 0; index < graph.length; index += 1)
+          if (graph[index] > 0)
+            _sparseExpensePoint(
+              epochDay: graphStart + index,
+              dailyAmount: graph[index],
+              amountMaximum: amountMaximum,
+              activeDaysInContext: activeDays,
+              rollingOccurrence: activeDays,
+              rollingAmount: graphAmountTotal,
+            ),
+      ];
+    }
+
+    final prefixAmounts = _prefixSums(graph);
+    final prefixOccurrences = _prefixOccurrences(graph);
+    final occurrences = List<int>.filled(graph.length, 0, growable: false);
+    final rollingAmounts = List<int>.filled(graph.length, 0, growable: false);
+    for (var index = 0; index < graph.length; index += 1) {
+      final start = centered
+          ? math.max(0, index - 15)
+          : math.max(0, index - (_behaviorWindowDays - 1));
+      final endExclusive = centered
+          ? math.min(graph.length, index + 16)
+          : index + 1;
+      occurrences[index] =
+          prefixOccurrences[endExclusive] - prefixOccurrences[start];
+      rollingAmounts[index] =
+          prefixAmounts[endExclusive] - prefixAmounts[start];
+    }
+    final period = dynamicExpenseEmaPeriod(activeDays);
+    final alpha = 2 / (period + 1);
+    final smoothedOccurrences = _ema(occurrences, alpha);
+    final smoothedAmounts = _ema(rollingAmounts, alpha);
+    final occurrenceMaximum = smoothedOccurrences.fold<double>(0, math.max);
+    final amountMaximumSmoothed = smoothedAmounts.fold<double>(0, math.max);
+    return List<MindBehavioralScorePoint>.generate(graph.length, (index) {
+      final occurrenceIndex = occurrenceMaximum <= 0
           ? 0.0
-          : _clamp100(dailyAmount / amountMaximum * 100);
-      final score = _clamp100(100 - amountIndex);
+          : _clamp100(smoothedOccurrences[index] / occurrenceMaximum * 100);
+      final amountIndex = amountMaximumSmoothed <= 0
+          ? 0.0
+          : _clamp100(smoothedAmounts[index] / amountMaximumSmoothed * 100);
+      final pressure = _clamp100(.5 * occurrenceIndex + .5 * amountIndex);
       return MindBehavioralScorePoint(
-        epochDay: targetEpochDay,
-        score: score,
+        epochDay: graphStart + index,
+        score: _clamp100(100 - pressure),
         noSignal: false,
         expense: MindExpenseScoreComponents(
           activeDaysInContext: activeDays,
-          dailyAmount: dailyAmount,
+          dailyAmount: graph[index],
           amountMaximum: amountMaximum,
-          isSparse: true,
-          emaPeriod: null,
-          rollingOccurrence: activeDays,
-          rollingAmount: contextAmounts.fold<int>(
-            0,
-            (sum, value) => sum + value,
-          ),
-          smoothedOccurrence: activeDays.toDouble(),
-          smoothedAmount: dailyAmount.toDouble(),
-          occurrenceIndex: 0,
+          isSparse: false,
+          emaPeriod: period,
+          rollingOccurrence: occurrences[index],
+          rollingAmount: rollingAmounts[index],
+          smoothedOccurrence: smoothedOccurrences[index],
+          smoothedAmount: smoothedAmounts[index],
+          occurrenceIndex: occurrenceIndex,
           amountIndex: amountIndex,
-          pressure: amountIndex,
+          pressure: pressure,
+        ),
+      );
+    }, growable: false);
+  }
+
+  /// Forward-only robust Expense model. State begins at the caller-selected
+  /// analytic origin. Once the thirteenth qualifying active day arrives, the
+  /// model stays dense even if a later 31-day window becomes quiet.
+  List<MindBehavioralScorePoint> _causalExpenseSeries({
+    required List<int> amounts,
+    required int seriesStartEpochDay,
+  }) {
+    final prefixAmounts = _prefixSums(amounts);
+    final prefixOccurrences = _prefixOccurrences(amounts);
+    final points = <MindBehavioralScorePoint>[];
+    var cumulativeActiveDays = 0;
+    var smoothedOccurrence = 0.0;
+    var smoothedAmount = 0.0;
+    var occurrenceReference = 1.0;
+    var amountReference = 1.0;
+
+    for (var index = 0; index < amounts.length; index += 1) {
+      final dailyAmount = amounts[index];
+      if (dailyAmount > 0) cumulativeActiveDays += 1;
+      final start = math.max(0, index - (_behaviorWindowDays - 1));
+      final endExclusive = index + 1;
+      final rollingOccurrence =
+          prefixOccurrences[endExclusive] - prefixOccurrences[start];
+      final rollingAmount = prefixAmounts[endExclusive] - prefixAmounts[start];
+      final period = dynamicExpenseEmaPeriod(cumulativeActiveDays);
+      final alpha = 2 / (period + 1);
+      if (index == 0) {
+        smoothedOccurrence = rollingOccurrence.toDouble();
+        smoothedAmount = rollingAmount.toDouble();
+      } else {
+        smoothedOccurrence += alpha * (rollingOccurrence - smoothedOccurrence);
+        smoothedAmount += alpha * (rollingAmount - smoothedAmount);
+      }
+      occurrenceReference = math.max(occurrenceReference, smoothedOccurrence);
+      amountReference = math.max(amountReference, smoothedAmount);
+      final epochDay = seriesStartEpochDay + index;
+
+      if (cumulativeActiveDays <= 12) {
+        if (dailyAmount <= 0) continue;
+        var sparseMaximum = 0;
+        for (
+          var sparseIndex = start;
+          sparseIndex < endExclusive;
+          sparseIndex += 1
+        ) {
+          sparseMaximum = math.max(sparseMaximum, amounts[sparseIndex]);
+        }
+        points.add(
+          _sparseExpensePoint(
+            epochDay: epochDay,
+            dailyAmount: dailyAmount,
+            amountMaximum: sparseMaximum,
+            activeDaysInContext: rollingOccurrence,
+            rollingOccurrence: rollingOccurrence,
+            rollingAmount: rollingAmount,
+          ),
+        );
+        continue;
+      }
+
+      final occurrenceIndex = _clamp100(
+        smoothedOccurrence / occurrenceReference * 100,
+      );
+      final amountIndex = _clamp100(smoothedAmount / amountReference * 100);
+      final pressure = _clamp100(.5 * occurrenceIndex + .5 * amountIndex);
+      var amountMaximum = 0;
+      for (
+        var maximumIndex = start;
+        maximumIndex < endExclusive;
+        maximumIndex += 1
+      ) {
+        amountMaximum = math.max(amountMaximum, amounts[maximumIndex]);
+      }
+      points.add(
+        MindBehavioralScorePoint(
+          epochDay: epochDay,
+          score: _clamp100(100 - pressure),
+          noSignal: false,
+          expense: MindExpenseScoreComponents(
+            activeDaysInContext: rollingOccurrence,
+            dailyAmount: dailyAmount,
+            amountMaximum: amountMaximum,
+            isSparse: false,
+            emaPeriod: period,
+            rollingOccurrence: rollingOccurrence,
+            rollingAmount: rollingAmount,
+            smoothedOccurrence: smoothedOccurrence,
+            smoothedAmount: smoothedAmount,
+            occurrenceIndex: occurrenceIndex,
+            amountIndex: amountIndex,
+            pressure: pressure,
+          ),
         ),
       );
     }
+    return points;
+  }
 
-    // Each sample is a trailing 31-day signal. The sample strip ends at the
-    // target and has no future read; its first sample needs the preceding 30
-    // daily buckets, keeping the entire dense calculation bounded to 61 days.
-    final signalStart = contextStart;
-    final sourceStart = signalStart - (_behaviorWindowDays - 1);
-    // The tail of this 61-day source strip is exactly [contextAmounts]. Reuse
-    // it instead of asking the resident range index for those same 31 days a
-    // second time; dense preview therefore touches at most 61 daily buckets.
-    final sourceAmounts = List<int>.generate(
-      _behaviorWindowDays * 2 - 1,
-      (index) => index < _behaviorWindowDays - 1
-          ? amountAt(sourceStart + index)
-          : contextAmounts[index - (_behaviorWindowDays - 1)],
-      growable: false,
-    );
-    final prefixAmounts = List<int>.filled(sourceAmounts.length + 1, 0);
-    final prefixOccurrences = List<int>.filled(sourceAmounts.length + 1, 0);
-    for (var index = 0; index < sourceAmounts.length; index += 1) {
-      prefixAmounts[index + 1] = prefixAmounts[index] + sourceAmounts[index];
-      prefixOccurrences[index + 1] =
-          prefixOccurrences[index] + (sourceAmounts[index] > 0 ? 1 : 0);
-    }
-    final occurrenceSignals = List<int>.generate(_behaviorWindowDays, (index) {
-      final end = index + _behaviorWindowDays;
-      return prefixOccurrences[end] - prefixOccurrences[index];
-    }, growable: false);
-    final amountSignals = List<int>.generate(_behaviorWindowDays, (index) {
-      final end = index + _behaviorWindowDays;
-      return prefixAmounts[end] - prefixAmounts[index];
-    }, growable: false);
-    final period = dynamicExpenseEmaPeriod(activeDays);
-    final alpha = 2 / (period + 1);
-    final smoothedOccurrences = _ema(occurrenceSignals, alpha);
-    final smoothedAmounts = _ema(amountSignals, alpha);
-    var occurrenceReference = 1.0;
-    var amountReference = 1.0;
-    var occurrenceIndex = 0.0;
-    var amountIndex = 0.0;
-    for (var index = 0; index < _behaviorWindowDays; index += 1) {
-      occurrenceReference = math.max(
-        occurrenceReference,
-        smoothedOccurrences[index],
-      );
-      amountReference = math.max(amountReference, smoothedAmounts[index]);
-      if (index == _behaviorWindowDays - 1) {
-        occurrenceIndex = _clamp100(
-          smoothedOccurrences[index] / occurrenceReference * 100,
-        );
-        amountIndex = _clamp100(smoothedAmounts[index] / amountReference * 100);
-      }
-    }
-    final pressure = _clamp100(.5 * occurrenceIndex + .5 * amountIndex);
+  MindBehavioralScorePoint _sparseExpensePoint({
+    required int epochDay,
+    required int dailyAmount,
+    required int amountMaximum,
+    required int activeDaysInContext,
+    required int rollingOccurrence,
+    required int rollingAmount,
+  }) {
+    final amountIndex = amountMaximum == 0
+        ? 0.0
+        : _clamp100(dailyAmount / amountMaximum * 100);
     return MindBehavioralScorePoint(
-      epochDay: targetEpochDay,
-      score: _clamp100(100 - pressure),
+      epochDay: epochDay,
+      score: _clamp100(100 - amountIndex),
       noSignal: false,
       expense: MindExpenseScoreComponents(
-        activeDaysInContext: activeDays,
+        activeDaysInContext: activeDaysInContext,
         dailyAmount: dailyAmount,
         amountMaximum: amountMaximum,
-        isSparse: false,
-        emaPeriod: period,
-        rollingOccurrence: occurrenceSignals.last,
-        rollingAmount: amountSignals.last,
-        smoothedOccurrence: smoothedOccurrences.last,
-        smoothedAmount: smoothedAmounts.last,
-        occurrenceIndex: occurrenceIndex,
+        isSparse: true,
+        emaPeriod: null,
+        rollingOccurrence: rollingOccurrence,
+        rollingAmount: rollingAmount,
+        smoothedOccurrence: rollingOccurrence.toDouble(),
+        smoothedAmount: dailyAmount.toDouble(),
+        occurrenceIndex: 0,
         amountIndex: amountIndex,
-        pressure: pressure,
+        pressure: amountIndex,
       ),
     );
   }
 
-  MindBehavioralScorePoint _incomePoint({
-    required int targetEpochDay,
-    required int Function(int epochDay) amountAt,
-    required VoidCallback onDayKeyVisited,
-  }) {
-    final current = amountAt(targetEpochDay);
-    final previous = <int>[];
-    for (
-      var index = 0;
-      index < _lowerBound(_dayKeys, targetEpochDay);
-      index += 1
-    ) {
-      onDayKeyVisited();
-      final amount = amountAt(_dayKeys[index]);
-      if (amount > 0) previous.add(amount);
-    }
-    if (current <= 0 || previous.isEmpty) {
-      return _incomePointFromHistory(
-        targetEpochDay: targetEpochDay,
-        current: current,
-        priorCount: previous.length,
-        previousAverage: 0,
-        medianWithCurrent: 0,
+  MindBehavioralScorePoint _noPressureExpensePoint(int epochDay) =>
+      _sparseExpensePoint(
+        epochDay: epochDay,
+        dailyAmount: 0,
+        amountMaximum: 0,
+        activeDaysInContext: 0,
+        rollingOccurrence: 0,
+        rollingAmount: 0,
       );
+
+  static List<int> _prefixSums(List<int> values) {
+    final result = List<int>.filled(values.length + 1, 0, growable: false);
+    for (var index = 0; index < values.length; index += 1) {
+      result[index + 1] = result[index] + values[index];
     }
-    final start = math.max(0, previous.length - 3);
-    final recentPrevious = previous.sublist(start);
-    final average =
-        recentPrevious.fold<int>(0, (sum, value) => sum + value) /
-        recentPrevious.length;
-    final medianSource = <int>[...previous, current]..sort();
-    final median = medianSource.length.isOdd
-        ? medianSource[medianSource.length ~/ 2].toDouble()
-        : (medianSource[medianSource.length ~/ 2 - 1] +
-                  medianSource[medianSource.length ~/ 2]) /
-              2;
-    return _incomePointFromHistory(
-      targetEpochDay: targetEpochDay,
-      current: current,
-      priorCount: previous.length,
-      previousAverage: average,
-      medianWithCurrent: median,
-    );
+    return result;
+  }
+
+  static List<int> _prefixOccurrences(List<int> values) {
+    final result = List<int>.filled(values.length + 1, 0, growable: false);
+    for (var index = 0; index < values.length; index += 1) {
+      result[index + 1] = result[index] + (values[index] > 0 ? 1 : 0);
+    }
+    return result;
   }
 
   MindBehavioralScorePoint _incomePointFromHistory({

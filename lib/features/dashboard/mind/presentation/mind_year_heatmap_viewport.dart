@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -6,10 +8,13 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../../time_navigation/domain/local_date.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
+import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
+import 'mind_year_heatmap_palette_resolver.dart';
 
 /// The one scroll owner for the Mind annual MonthCard region.
 ///
@@ -19,10 +24,13 @@ final class MindYearHeatmapViewport extends StatefulWidget {
   const MindYearHeatmapViewport({
     super.key,
     required this.frameListenable,
+    this.presentationSettings,
     this.scrollController,
   });
 
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
+  final ValueListenable<MindYearHeatmapPresentationSettings>?
+  presentationSettings;
   final ScrollController? scrollController;
 
   @override
@@ -34,6 +42,10 @@ final class _MindYearHeatmapViewportState
     extends State<MindYearHeatmapViewport> {
   late bool _hasFrame;
   int? _geometryYear;
+  MindYearHeatmapIdentity? _staticFrameIdentity;
+  MindYearHeatmapMonthlyAggregates? _monthlyAggregates;
+  var _activeDirectionIsIncome = false;
+  late MindYearHeatmapPresentationSettings _presentationSettings;
   MindYearHeatmapIdentity? _lastVisibleIdentity;
   int? _lastLoggedGeometryYear;
 
@@ -42,7 +54,12 @@ final class _MindYearHeatmapViewportState
     super.initState();
     _hasFrame = widget.frameListenable.value != null;
     _geometryYear = widget.frameListenable.value?.identity.year;
+    _acceptStaticFrame(widget.frameListenable.value);
+    _presentationSettings =
+        widget.presentationSettings?.value ??
+        const MindYearHeatmapPresentationSettings.defaults();
     widget.frameListenable.addListener(_onFrameChanged);
+    widget.presentationSettings?.addListener(_onPresentationSettingsChanged);
     if (widget.frameListenable.value case final frame?) {
       _scheduleVisiblePaintDiagnostics(frame);
     }
@@ -55,14 +72,48 @@ final class _MindYearHeatmapViewportState
       oldWidget.frameListenable.removeListener(_onFrameChanged);
       _hasFrame = widget.frameListenable.value != null;
       _geometryYear = widget.frameListenable.value?.identity.year;
+      _acceptStaticFrame(widget.frameListenable.value);
       widget.frameListenable.addListener(_onFrameChanged);
+    }
+    if (!identical(
+      oldWidget.presentationSettings,
+      widget.presentationSettings,
+    )) {
+      oldWidget.presentationSettings?.removeListener(
+        _onPresentationSettingsChanged,
+      );
+      _presentationSettings =
+          widget.presentationSettings?.value ??
+          const MindYearHeatmapPresentationSettings.defaults();
+      widget.presentationSettings?.addListener(_onPresentationSettingsChanged);
     }
   }
 
   @override
   void dispose() {
     widget.frameListenable.removeListener(_onFrameChanged);
+    widget.presentationSettings?.removeListener(_onPresentationSettingsChanged);
     super.dispose();
+  }
+
+  void _onPresentationSettingsChanged() {
+    final next = widget.presentationSettings?.value;
+    if (next == null || next == _presentationSettings || !mounted) return;
+    setState(() => _presentationSettings = next);
+    // A 2×6 → 3×4 transition shortens the one existing viewport. Preserve
+    // its controller/physics and correct only an offset that became outside
+    // the newly computed extent.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final controller = widget.scrollController;
+      if (controller == null || !controller.hasClients) return;
+      final position = controller.position;
+      final clamped = position.pixels.clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      if (clamped != position.pixels) controller.jumpTo(clamped);
+    });
   }
 
   void _onFrameChanged() {
@@ -70,7 +121,11 @@ final class _MindYearHeatmapViewportState
     if (frame != null) _scheduleVisiblePaintDiagnostics(frame);
     final hasFrame = frame != null;
     final geometryYear = frame?.identity.year;
-    if ((hasFrame == _hasFrame && geometryYear == _geometryYear) || !mounted) {
+    final identityChanged = frame?.identity != _staticFrameIdentity;
+    if ((hasFrame == _hasFrame &&
+            geometryYear == _geometryYear &&
+            !identityChanged) ||
+        !mounted) {
       return;
     }
     if (SchedulerBinding.instance.schedulerPhase ==
@@ -83,7 +138,15 @@ final class _MindYearHeatmapViewportState
     setState(() {
       _hasFrame = hasFrame;
       _geometryYear = geometryYear;
+      _acceptStaticFrame(frame);
     });
+  }
+
+  void _acceptStaticFrame(MindYearHeatmapFrame? frame) {
+    _staticFrameIdentity = frame?.identity;
+    _monthlyAggregates = frame?.monthlyAggregates;
+    _activeDirectionIsIncome =
+        frame?.identity.upstreamScopeKey.startsWith('income|') ?? false;
   }
 
   @override
@@ -99,12 +162,17 @@ final class _MindYearHeatmapViewportState
       builder: (context, constraints) {
         const horizontalPadding = 10.0;
         const rowGap = 8.0;
+        final columns = _presentationSettings.monthCardLayout.columnCount;
+        final footerRowCount =
+            (_presentationSettings.showMonthlyNetClose ? 1 : 0) +
+            (_presentationSettings.showMonthlyDirectionTotal ? 1 : 0);
         final contentWidth = (constraints.maxWidth - horizontalPadding * 2)
             .clamp(0.0, double.infinity)
             .toDouble();
-        final monthCardWidth = ((contentWidth - rowGap * 2) / 3)
-            .clamp(0.0, double.infinity)
-            .toDouble();
+        final monthCardWidth =
+            ((contentWidth - rowGap * (columns - 1)) / columns)
+                .clamp(0.0, double.infinity)
+                .toDouble();
         final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
           12,
           (index) => MindYearHeatmapCalendarGeometry.forMonth(
@@ -121,11 +189,12 @@ final class _MindYearHeatmapViewportState
             controller: widget.scrollController,
             clipBehavior: Clip.hardEdge,
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
-            itemCount: 4,
+            itemCount: (12 + columns - 1) ~/ columns,
             separatorBuilder: (_, _) => const SizedBox(height: rowGap),
             itemBuilder: (context, annualRow) {
-              final offset = annualRow * 3;
-              final rowGeometries = geometries.sublist(offset, offset + 3);
+              final offset = annualRow * columns;
+              final rowEnd = math.min(offset + columns, geometries.length);
+              final rowGeometries = geometries.sublist(offset, rowEnd);
               final maximumCalendarRows = rowGeometries.fold<int>(
                 0,
                 (maximum, geometry) =>
@@ -134,21 +203,33 @@ final class _MindYearHeatmapViewportState
               final rowHeight = MindYearHeatmapMonthCard.heightFor(
                 width: monthCardWidth,
                 calendarRowCount: maximumCalendarRows,
+                footerRowCount: footerRowCount,
               );
               return SizedBox(
                 key: ValueKey('mind-year-heatmap-annual-row-$annualRow'),
                 height: rowHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List<Widget>.generate(3, (column) {
+                  children: List<Widget>.generate(rowGeometries.length, (
+                    column,
+                  ) {
                     final month = offset + column + 1;
                     return Padding(
-                      padding: EdgeInsets.only(right: column == 2 ? 0 : rowGap),
+                      padding: EdgeInsets.only(
+                        right: column == rowGeometries.length - 1 ? 0 : rowGap,
+                      ),
                       child: MindYearHeatmapMonthCard(
                         month: month,
                         width: monthCardWidth,
                         geometry: geometries[month - 1],
                         frameListenable: widget.frameListenable,
+                        paletteStyle: _presentationSettings.paletteStyle,
+                        showMonthlyNetClose:
+                            _presentationSettings.showMonthlyNetClose,
+                        showMonthlyDirectionTotal:
+                            _presentationSettings.showMonthlyDirectionTotal,
+                        monthlyAggregates: _monthlyAggregates,
+                        activeDirectionIsIncome: _activeDirectionIsIncome,
                       ),
                     );
                   }, growable: false),
@@ -235,16 +316,28 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
     required this.width,
     required this.geometry,
     required this.frameListenable,
+    this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
+    this.showMonthlyNetClose = false,
+    this.showMonthlyDirectionTotal = false,
+    this.monthlyAggregates,
+    this.activeDirectionIsIncome = false,
   });
 
   static const _padding = 6.0;
   static const _titleHeight = 12.0;
   static const _titleBottomGap = 4.0;
+  static const _footerTopGap = 5.0;
+  static const _footerRowHeight = 13.0;
 
   final int month;
   final double width;
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final bool showMonthlyNetClose;
+  final bool showMonthlyDirectionTotal;
+  final MindYearHeatmapMonthlyAggregates? monthlyAggregates;
+  final bool activeDirectionIsIncome;
 
   static double cellExtentFor(double width) {
     const totalHorizontalGaps =
@@ -269,11 +362,18 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   static double heightFor({
     required double width,
     required int calendarRowCount,
+    int footerRowCount = 0,
   }) =>
       _padding * 2 +
       _titleHeight +
       _titleBottomGap +
-      gridHeightFor(width: width, calendarRowCount: calendarRowCount);
+      gridHeightFor(width: width, calendarRowCount: calendarRowCount) +
+      (footerRowCount == 0
+          ? 0
+          : _footerTopGap + _footerRowHeight * footerRowCount);
+
+  int get _footerRowCount =>
+      (showMonthlyNetClose ? 1 : 0) + (showMonthlyDirectionTotal ? 1 : 0);
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +383,11 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
     );
     return SizedBox(
       width: width,
-      height: heightFor(width: width, calendarRowCount: geometry.rowCount),
+      height: heightFor(
+        width: width,
+        calendarRowCount: geometry.rowCount,
+        footerRowCount: _footerRowCount,
+      ),
       child: DecoratedBox(
         key: ValueKey('mind-year-heatmap-month-$month'),
         decoration: const BoxDecoration(
@@ -330,6 +434,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
                           month: month,
                           geometry: geometry,
                           frameListenable: frameListenable,
+                          paletteStyle: paletteStyle,
                         ),
                         isComplex: false,
                         willChange: true,
@@ -339,6 +444,25 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (_footerRowCount > 0) ...<Widget>[
+                const SizedBox(height: _footerTopGap),
+                if (showMonthlyNetClose)
+                  _MindYearHeatmapMonthFooter(
+                    label: 'Zárás',
+                    amount: monthlyAggregates?.netForMonth(month) ?? 0,
+                    semanticKind: _MindYearHeatmapFooterKind.net,
+                  ),
+                if (showMonthlyDirectionTotal)
+                  _MindYearHeatmapMonthFooter(
+                    label: activeDirectionIsIncome ? 'Bevétel' : 'Kiadás',
+                    amount: activeDirectionIsIncome
+                        ? monthlyAggregates?.incomeForMonth(month) ?? 0
+                        : monthlyAggregates?.expenseForMonth(month) ?? 0,
+                    semanticKind: activeDirectionIsIncome
+                        ? _MindYearHeatmapFooterKind.income
+                        : _MindYearHeatmapFooterKind.expense,
+                  ),
+              ],
             ],
           ),
         ),
@@ -355,6 +479,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
     required this.month,
     required this.geometry,
     required this.frameListenable,
+    this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
   }) : super(repaint: frameListenable);
 
   static const columnCount = 7;
@@ -364,6 +489,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
   final int month;
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
+  final MindYearHeatmapPaletteStyle paletteStyle;
 
   @visibleForTesting
   Color colorForDate(LocalDate date) {
@@ -379,17 +505,11 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
   }
 
   @visibleForTesting
-  Color colorFor(MindYearHeatmapDay day) => switch (day.paletteIntensity) {
-    MindYearHeatmapPaletteIntensity.empty => FluviVisualTokens.mindHeatmapEmpty,
-    MindYearHeatmapPaletteIntensity.minimum =>
-      FluviVisualTokens.mindHeatmapMinimum,
-    MindYearHeatmapPaletteIntensity.interpolated =>
-      FluviVisualTokens.mindHeatmapInterpolated(day.intensity),
-    MindYearHeatmapPaletteIntensity.maximum =>
-      FluviVisualTokens.mindHeatmapMaximum,
-    MindYearHeatmapPaletteIntensity.equalRange =>
-      FluviVisualTokens.mindHeatmapEqualRange,
-  };
+  Color colorFor(MindYearHeatmapDay day) =>
+      MindYearHeatmapPaletteResolver.resolve(
+        style: paletteStyle,
+        day: day,
+      ).background;
 
   @visibleForTesting
   int slotIndexForDate(LocalDate date) {
@@ -433,5 +553,65 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
       month != oldDelegate.month ||
       geometry.year != oldDelegate.geometry.year ||
       geometry.month != oldDelegate.geometry.month ||
-      !identical(frameListenable, oldDelegate.frameListenable);
+      !identical(frameListenable, oldDelegate.frameListenable) ||
+      paletteStyle != oldDelegate.paletteStyle;
+}
+
+enum _MindYearHeatmapFooterKind { net, income, expense }
+
+/// A pure presentation of a bounded, already-admitted calendar-month total.
+/// It has no frame listener so range preview repaint stays inside the cell
+/// painter rather than rebuilding static footer content.
+final class _MindYearHeatmapMonthFooter extends StatelessWidget {
+  const _MindYearHeatmapMonthFooter({
+    required this.label,
+    required this.amount,
+    required this.semanticKind,
+  });
+
+  final String label;
+  final int amount;
+  final _MindYearHeatmapFooterKind semanticKind;
+
+  Color get _amountColor => switch (semanticKind) {
+    _MindYearHeatmapFooterKind.income => FluviVisualTokens.logBoxIncomeAmount,
+    _MindYearHeatmapFooterKind.expense => FluviVisualTokens.logBoxExpenseAmount,
+    _MindYearHeatmapFooterKind.net =>
+      amount > 0
+          ? FluviVisualTokens.logBoxIncomeAmount
+          : amount < 0
+          ? FluviVisualTokens.logBoxExpenseAmount
+          : FluviVisualTokens.textSecondary,
+  };
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: MindYearHeatmapMonthCard._footerRowHeight,
+    child: Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 8,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Text(
+          QueryMenuFormatters.money(amount),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _amountColor,
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }

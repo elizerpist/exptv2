@@ -15,6 +15,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_live_interaction_
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_vertical_geometry_manifest.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -785,6 +787,248 @@ void main() {
     },
   );
 
+  test(
+    'MSS-14 production score settings republish one coherent resident Header frame',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          for (var day = 1; day <= 14; day += 1)
+            _mindYearEntry(
+              id: 'expense-$day',
+              direction: 'expense',
+              categoryId: 'food',
+              partnerId: 'shop',
+              amount: 100000 + day * 1000,
+              date: LocalDate(year: 2025, month: 1, day: day),
+            ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 1, 14),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await pumpEventQueue(times: 12);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+
+      final initial = core.mindBehavioralScore.value!;
+      final preparesBefore = repository.prepareCalls;
+      expect(
+        initial.identity.settings.expenseAlgorithm,
+        MindExpenseScoreAlgorithm.causalTrailing,
+      );
+      expect(initial.point, initial.chartSeries!.points.last);
+
+      const previewRange = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 114000,
+        lowerScaled100: 111000,
+        upperScaled100: 114000,
+      );
+      for (final algorithm in MindExpenseScoreAlgorithm.values) {
+        core.mindBehavioralScoreSettings.setExpenseAlgorithm(algorithm);
+        core.beginMindAmountRangeInteraction();
+        // This pure Core parent has no installed visual LogBox surface, so
+        // the outer transient-frame publication can fail closed. The semantic
+        // resident score publication must still update synchronously; the
+        // physical visible-preview contract is covered by the production
+        // slider test above with a live render resource.
+        core.previewMindAmountRange(previewRange);
+        final preview = core.mindBehavioralScore.value!;
+        expect(preview.range, previewRange, reason: algorithm.name);
+        expect(preview.identity.settings.expenseAlgorithm, algorithm);
+        expect(preview.point, preview.chartSeries!.points.last);
+        core.endMindAmountRangeInteraction(committed: false);
+      }
+
+      core.mindBehavioralScoreSettings.setExpenseAlgorithm(
+        MindExpenseScoreAlgorithm.causalTrailing,
+      );
+      core.mindBehavioralScoreSettings.setCausalHistoryOrigin(
+        MindCausalHistoryOrigin.selectedScopeStart,
+      );
+      final causalScope = core.mindBehavioralScore.value!;
+      expect(
+        causalScope.identity.settings.causalHistoryOrigin,
+        MindCausalHistoryOrigin.selectedScopeStart,
+      );
+      expect(causalScope.point, causalScope.chartSeries!.points.last);
+      expect(
+        repository.prepareCalls,
+        preparesBefore,
+        reason: 'settings are score provenance, not a Query/index mutation',
+      );
+    },
+  );
+
+  test(
+    'MSS/HMP-29 score and heatmap setting combinations retain one latest coherent state',
+    () async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          for (var day = 1; day <= 14; day += 1)
+            _mindYearEntry(
+              id: 'expense-$day',
+              direction: 'expense',
+              categoryId: 'food',
+              partnerId: 'shop',
+              amount: 100000 + day * 1000,
+              date: LocalDate(year: 2025, month: 1, day: day),
+            ),
+          for (var day = 1; day <= 3; day += 1)
+            _mindYearEntry(
+              id: 'income-$day',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 200000 + day * 10000,
+              date: LocalDate(year: 2025, month: 1, day: day),
+            ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2025, 1, 14),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await pumpEventQueue(times: 12);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+
+      void expectCoherentScore(MindExpenseScoreAlgorithm algorithm) {
+        final frame = core.mindBehavioralScore.value!;
+        expect(frame.identity.settings.expenseAlgorithm, algorithm);
+        expect(frame.point, frame.chartSeries!.points.last);
+      }
+
+      // Matrix 1: HTML centered + Fluvi + 3x4 + no footers.
+      core.mindBehavioralScoreSettings.setExpenseAlgorithm(
+        MindExpenseScoreAlgorithm.htmlCentered,
+      );
+      core.mindYearHeatmapPresentation.setPaletteStyle(
+        MindYearHeatmapPaletteStyle.fluvi,
+      );
+      core.mindYearHeatmapPresentation.setMonthCardLayout(
+        MindYearMonthCardLayout.threeColumns,
+      );
+      core.mindYearHeatmapPresentation.setShowMonthlyNetClose(false);
+      core.mindYearHeatmapPresentation.setShowMonthlyDirectionTotal(false);
+      expectCoherentScore(MindExpenseScoreAlgorithm.htmlCentered);
+      expect(
+        core.mindYearHeatmapPresentation.value,
+        const MindYearHeatmapPresentationSettings.defaults(),
+      );
+
+      // Matrix 2: HTML trailing + B3M + 3x4 + net.
+      core.mindBehavioralScoreSettings.setExpenseAlgorithm(
+        MindExpenseScoreAlgorithm.htmlTrailing,
+      );
+      core.mindYearHeatmapPresentation.setPaletteStyle(
+        MindYearHeatmapPaletteStyle.b3mMy3,
+      );
+      core.mindYearHeatmapPresentation.setShowMonthlyNetClose(true);
+      expectCoherentScore(MindExpenseScoreAlgorithm.htmlTrailing);
+      expect(
+        core.mindYearHeatmapPresentation.value.showMonthlyNetClose,
+        isTrue,
+      );
+
+      // Matrix 3: causal/full history + B3M + 2x6 + both footers.
+      core.mindBehavioralScoreSettings.setExpenseAlgorithm(
+        MindExpenseScoreAlgorithm.causalTrailing,
+      );
+      core.mindBehavioralScoreSettings.setCausalHistoryOrigin(
+        MindCausalHistoryOrigin.fullFilteredHistory,
+      );
+      core.mindYearHeatmapPresentation.setMonthCardLayout(
+        MindYearMonthCardLayout.twoColumns,
+      );
+      core.mindYearHeatmapPresentation.setShowMonthlyDirectionTotal(true);
+      expectCoherentScore(MindExpenseScoreAlgorithm.causalTrailing);
+      expect(
+        core.mindYearHeatmapPresentation.value,
+        isA<MindYearHeatmapPresentationSettings>()
+            .having(
+              (settings) => settings.paletteStyle,
+              'palette',
+              MindYearHeatmapPaletteStyle.b3mMy3,
+            )
+            .having(
+              (settings) => settings.monthCardLayout,
+              'layout',
+              MindYearMonthCardLayout.twoColumns,
+            )
+            .having((settings) => settings.showMonthlyNetClose, 'net', isTrue)
+            .having(
+              (settings) => settings.showMonthlyDirectionTotal,
+              'direction total',
+              isTrue,
+            ),
+      );
+
+      // Matrix 4: causal/scope start + Fluvi + 2x6 + direction total.
+      core.mindBehavioralScoreSettings.setCausalHistoryOrigin(
+        MindCausalHistoryOrigin.selectedScopeStart,
+      );
+      core.mindYearHeatmapPresentation.setPaletteStyle(
+        MindYearHeatmapPaletteStyle.fluvi,
+      );
+      core.mindYearHeatmapPresentation.setShowMonthlyNetClose(false);
+      expectCoherentScore(MindExpenseScoreAlgorithm.causalTrailing);
+      expect(
+        core.mindYearHeatmapPresentation.value.showMonthlyDirectionTotal,
+        isTrue,
+      );
+
+      // Rapid final state: algorithm -> live preview -> direction -> layout.
+      core.mindBehavioralScoreSettings.setExpenseAlgorithm(
+        MindExpenseScoreAlgorithm.htmlTrailing,
+      );
+      core.beginMindAmountRangeInteraction();
+      core.previewMindAmountRange(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 900000,
+          lowerScaled100: 108000,
+          upperScaled100: 114000,
+        ),
+      );
+      core.selectDirection(TransactionDirection.income);
+      core.mindYearHeatmapPresentation.setMonthCardLayout(
+        MindYearMonthCardLayout.threeColumns,
+      );
+      await pumpEventQueue(times: 12);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+      expect(core.transactionDirection.direction, TransactionDirection.income);
+      final finalFrame = core.mindBehavioralScore.value!;
+      expect(finalFrame.identity.direction, LedgerDirection.income);
+      expect(
+        finalFrame.identity.settings.expenseAlgorithm,
+        MindExpenseScoreAlgorithm.htmlTrailing,
+        reason: 'Income must not overwrite the selected Expense mathematics.',
+      );
+      expect(finalFrame.point, finalFrame.chartSeries!.points.last);
+      expect(
+        core.mindYearHeatmapPresentation.value.monthCardLayout,
+        MindYearMonthCardLayout.threeColumns,
+      );
+      core.endMindAmountRangeInteraction(committed: false);
+    },
+  );
+
   testWidgets(
     'MBS-01: an actually visible rail child retargets its score before settle without resurrecting coalesced children',
     (tester) async {
@@ -901,7 +1145,7 @@ void main() {
           date: const LocalDate(year: 2025, month: 12, day: 2),
         ),
       ];
-      final repository = _FocusSeedRepository(rows: rows);
+      final repository = _MindFooterRepository(rows: rows);
       final core = DashboardCoreController(
         dataRepository: repository,
         initialDate: DateTime.utc(2025, 7, 1),
@@ -931,6 +1175,12 @@ void main() {
             .isEmpty,
         isTrue,
       );
+      // Month footer aggregates are full calendar-month direction totals,
+      // admitted beside the prepared base. They deliberately do not inherit
+      // the active Income heatmap filter, focus or slider range.
+      expect(beforeFocus.monthlyAggregates.incomeForMonth(1), 100000);
+      expect(beforeFocus.monthlyAggregates.expenseForMonth(12), 300000);
+      expect(beforeFocus.monthlyAggregates.netForMonth(1), 100000);
       final sourceSeed = core.preparedIndex!
           .partitionFor(LedgerDirection.income)
           .focusMembershipSeed!;
@@ -962,6 +1212,16 @@ void main() {
         highFrame.dayFor(const LocalDate(year: 2025, month: 9, day: 2)).total,
         900000,
       );
+      expect(
+        highFrame.monthlyAggregates.incomeForMonth(1),
+        beforeFocus.monthlyAggregates.incomeForMonth(1),
+        reason: 'the amount preview only changes heatmap membership',
+      );
+      expect(
+        highFrame.monthlyAggregates.expenseForMonth(12),
+        beforeFocus.monthlyAggregates.expenseForMonth(12),
+        reason: 'the amount preview must not rewrite full monthly closes',
+      );
       for (var tick = 0; tick < 20; tick += 1) {
         core.previewMindAmountRange(highOnly);
       }
@@ -979,6 +1239,11 @@ void main() {
         isTrue,
       );
       final categoryFrame = core.mindYearHeatmap.value!;
+      expect(
+        categoryFrame.monthlyAggregates.incomeForMonth(9),
+        900000,
+        reason: 'category focus must recolor cells, never narrow footer sums',
+      );
       expect(
         categoryFrame
             .dayFor(const LocalDate(year: 2025, month: 1, day: 2))
@@ -1002,6 +1267,11 @@ void main() {
             .dayFor(const LocalDate(year: 2025, month: 1, day: 2))
             .total,
         100000,
+      );
+      expect(
+        core.mindYearHeatmap.value!.monthlyAggregates.expenseForMonth(12),
+        300000,
+        reason: 'partner focus must not narrow the calendar-month close',
       );
       expect(await core.clearAllEphemeralFocus(), isTrue);
       // Current prepared SearchPill semantics cover partner display and note
@@ -7528,7 +7798,7 @@ Set<String> _coloredHeatmapDates(MindYearHeatmapFrame frame) => frame.days
     )
     .toSet();
 
-final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
+class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   _FocusSeedRepository({
     List<DashboardLedgerEntry>? rows,
     Completer<void>? prepareAfterBootstrapGate,
@@ -7543,6 +7813,37 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
   final bool withPreparedYearRows;
   var prepareCalls = 0;
   var committedPageReads = 0;
+
+  List<DashboardLedgerEntry> get allRows => _rows ?? _defaultRows;
+
+  static const List<DashboardLedgerEntry> _defaultRows = <DashboardLedgerEntry>[
+    DashboardLedgerEntry(
+      id: 'utility-row',
+      partnerId: 'partner-utility',
+      categoryId: 'utilities',
+      direction: 'income',
+      amountMinor: 500,
+      bookedLocalEpochDay: 20636,
+      bookedLocalTimeMinutes: 600,
+      partnerDisplayName: 'Utility partner',
+      categoryDisplayName: 'Utilities',
+      categoryColorId: 'fallback',
+      categoryIconId: 'fallback',
+    ),
+    DashboardLedgerEntry(
+      id: 'food-row',
+      partnerId: 'partner-food',
+      categoryId: 'food',
+      direction: 'income',
+      amountMinor: 700,
+      bookedLocalEpochDay: 20635,
+      bookedLocalTimeMinutes: 600,
+      partnerDisplayName: 'Food partner',
+      categoryDisplayName: 'Food',
+      categoryColorId: 'fallback',
+      categoryIconId: 'fallback',
+    ),
+  ];
 
   @override
   Stream<int> watchCoreRevision() => Stream<int>.value(1);
@@ -7569,36 +7870,7 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
             deferredLogBoxes: true,
           )
         : await _empty.prepareIndex(request, token);
-    final rows =
-        _rows ??
-        <DashboardLedgerEntry>[
-          const DashboardLedgerEntry(
-            id: 'utility-row',
-            partnerId: 'partner-utility',
-            categoryId: 'utilities',
-            direction: 'income',
-            amountMinor: 500,
-            bookedLocalEpochDay: 20636,
-            bookedLocalTimeMinutes: 600,
-            partnerDisplayName: 'Utility partner',
-            categoryDisplayName: 'Utilities',
-            categoryColorId: 'fallback',
-            categoryIconId: 'fallback',
-          ),
-          const DashboardLedgerEntry(
-            id: 'food-row',
-            partnerId: 'partner-food',
-            categoryId: 'food',
-            direction: 'income',
-            amountMinor: 700,
-            bookedLocalEpochDay: 20635,
-            bookedLocalTimeMinutes: 600,
-            partnerDisplayName: 'Food partner',
-            categoryDisplayName: 'Food',
-            categoryColorId: 'fallback',
-            categoryIconId: 'fallback',
-          ),
-        ];
+    final rows = allRows;
     return PreparedDashboardIndex.complete(
       key: base.key,
       frames: base.frames,
@@ -7671,4 +7943,70 @@ final class _FocusSeedRepository implements DashboardDataRuntimeRepository {
 
   static int _preparedYearPreviewRowCount(CurrentLedgerQueryScope scope) =>
       _preparedYearEntryCount(scope).clamp(0, 24).toInt();
+}
+
+/// Test-only native snapshot capability: unlike the focus seed, it always
+/// exposes the full ledger aggregate at handle zero. This proves that a Mind
+/// MonthCard footer keeps the complete monthly close while its cells narrow.
+final class _MindFooterRepository extends _FocusSeedRepository
+    implements PreparedBudgetLimitSnapshotRepository {
+  _MindFooterRepository({super.rows});
+
+  @override
+  Future<PreparedBudgetLimitSnapshot> prepareBudgetLimitSnapshot({
+    required int coreRevision,
+    required int yearWindowStart,
+    required int yearWindowEndInclusive,
+  }) async {
+    final yearCount = yearWindowEndInclusive - yearWindowStart + 1;
+    final sliceCount = 1 + yearCount + yearCount * 12;
+
+    PreparedBudgetLimitDirectionBank bankFor(LedgerDirection direction) {
+      int totalFor({int? year, int? month}) => allRows
+          .where((entry) {
+            if (entry.direction != direction.name) return false;
+            final date = DateTime.utc(
+              1970,
+            ).add(Duration(days: entry.bookedLocalEpochDay));
+            if (date.year < yearWindowStart ||
+                date.year > yearWindowEndInclusive) {
+              return false;
+            }
+            return (year == null || date.year == year) &&
+                (month == null || date.month == month);
+          })
+          .fold<int>(0, (sum, entry) => sum + entry.amountMinor);
+
+      return PreparedBudgetLimitDirectionBank(
+        orderedCategoryIds: const <String>[],
+        cells: List<PreparedBudgetLimitCell>.generate(sliceCount, (slice) {
+          final actual = switch (slice) {
+            0 => totalFor(),
+            _ when slice <= yearCount => totalFor(
+              year: yearWindowStart + slice - 1,
+            ),
+            _ => () {
+              final monthOffset = slice - 1 - yearCount;
+              return totalFor(
+                year: yearWindowStart + monthOffset ~/ 12,
+                month: monthOffset % 12 + 1,
+              );
+            }(),
+          };
+          return PreparedBudgetLimitCell(
+            actualScaled100: actual,
+            limitScaled100: null,
+          );
+        }, growable: false),
+      );
+    }
+
+    return PreparedBudgetLimitSnapshot(
+      coreRevision: coreRevision,
+      yearWindowStart: yearWindowStart,
+      yearWindowEndInclusive: yearWindowEndInclusive,
+      incomeBank: bankFor(LedgerDirection.income),
+      expenseBank: bankFor(LedgerDirection.expense),
+    );
+  }
 }

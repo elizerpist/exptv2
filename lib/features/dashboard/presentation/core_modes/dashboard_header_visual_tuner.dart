@@ -21,6 +21,8 @@ import '../dashboard_shell_presentation.dart';
 import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
 import '../dashboard_summary_presentation.dart';
+import '../../mind/domain/mind_behavioral_score_settings.dart';
+import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -322,6 +324,167 @@ final class _TunerSlider extends StatelessWidget {
   );
 }
 
+/// The Header menu renders these settings, while their separate controllers
+/// retain the financial-model and heatmap-presentation ownership.
+final class _MindBehavioralScoreSettingsSection extends StatelessWidget {
+  const _MindBehavioralScoreSettingsSection({required this.controller});
+
+  final MindBehavioralScoreSettingsController controller;
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindBehavioralScoreSettings>(
+    valueListenable: controller,
+    builder: (context, settings, _) {
+      final causal =
+          settings.expenseAlgorithm == MindExpenseScoreAlgorithm.causalTrailing;
+      return _TunerSection(
+        title: 'Mind score',
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text('Kiadási score számítás'),
+          ),
+          RadioGroup<MindExpenseScoreAlgorithm>(
+            groupValue: settings.expenseAlgorithm,
+            onChanged: (algorithm) {
+              if (algorithm != null) controller.setExpenseAlgorithm(algorithm);
+            },
+            child: Column(
+              children: <Widget>[
+                for (final algorithm in MindExpenseScoreAlgorithm.values)
+                  RadioListTile<MindExpenseScoreAlgorithm>(
+                    key: ValueKey(
+                      'mind-expense-score-algorithm-${algorithm.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(algorithm.tunerLabel),
+                    value: algorithm,
+                  ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text('Kauzális előzmény'),
+          ),
+          if (!causal)
+            const Padding(
+              padding: EdgeInsets.only(top: 2, bottom: 2),
+              child: Text(
+                'Csak a Kauzális · trailing módban aktív.',
+                style: TextStyle(
+                  color: FluviVisualTokens.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          RadioGroup<MindCausalHistoryOrigin>(
+            groupValue: settings.causalHistoryOrigin,
+            onChanged: (origin) {
+              if (causal && origin != null) {
+                controller.setCausalHistoryOrigin(origin);
+              }
+            },
+            child: Column(
+              children: <Widget>[
+                for (final origin in MindCausalHistoryOrigin.values)
+                  RadioListTile<MindCausalHistoryOrigin>(
+                    key: ValueKey('mind-causal-history-origin-${origin.name}'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    enabled: causal,
+                    title: Text(origin.tunerLabel),
+                    value: origin,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+final class _MindYearHeatmapPresentationSection extends StatelessWidget {
+  const _MindYearHeatmapPresentationSection({required this.controller});
+
+  final MindYearHeatmapPresentationController controller;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+        valueListenable: controller,
+        builder: (context, settings, _) => _TunerSection(
+          title: 'Mind hőtérkép',
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('Színezés'),
+            ),
+            RadioGroup<MindYearHeatmapPaletteStyle>(
+              groupValue: settings.paletteStyle,
+              onChanged: (style) {
+                if (style != null) controller.setPaletteStyle(style);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final style in MindYearHeatmapPaletteStyle.values)
+                    RadioListTile<MindYearHeatmapPaletteStyle>(
+                      key: ValueKey('mind-heatmap-palette-${style.name}'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(style.tunerLabel),
+                      value: style,
+                    ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('MonthCard elrendezés'),
+            ),
+            RadioGroup<MindYearMonthCardLayout>(
+              groupValue: settings.monthCardLayout,
+              onChanged: (layout) {
+                if (layout != null) controller.setMonthCardLayout(layout);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final layout in MindYearMonthCardLayout.values)
+                    RadioListTile<MindYearMonthCardLayout>(
+                      key: ValueKey('mind-heatmap-layout-${layout.name}'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(layout.tunerLabel),
+                      value: layout,
+                    ),
+                ],
+              ),
+            ),
+            SwitchListTile.adaptive(
+              key: const ValueKey('mind-heatmap-monthly-net-toggle'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Havi nettó zárás'),
+              value: settings.showMonthlyNetClose,
+              onChanged: controller.setShowMonthlyNetClose,
+            ),
+            SwitchListTile.adaptive(
+              key: const ValueKey('mind-heatmap-monthly-direction-toggle'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Havi irányösszeg'),
+              value: settings.showMonthlyDirectionTotal,
+              onChanged: controller.setShowMonthlyDirectionTotal,
+            ),
+          ],
+        ),
+      );
+}
+
 String _formatControlValue(double value, double step) {
   final text = step.toString();
   final dot = text.indexOf('.');
@@ -366,6 +529,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.budgetHeaderPresentation,
     this.budgetRingPresentation,
     this.shellPresentation,
+    this.mindBehavioralScoreSettings,
+    this.mindYearHeatmapPresentation,
   });
 
   final DashboardHeaderVisualController controller;
@@ -383,6 +548,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final DashboardBudgetHeaderPresentationController? budgetHeaderPresentation;
   final BudgetRingPresentationController? budgetRingPresentation;
   final DashboardShellPresentationController? shellPresentation;
+  final MindBehavioralScoreSettingsController? mindBehavioralScoreSettings;
+  final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
 
   @override
   Widget build(
@@ -485,6 +652,18 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
               ],
               if (shellPresentation case final shell?) ...<Widget>[
                 _DashboardBottomNavPresentationSection(controller: shell),
+                const SizedBox(height: 14),
+              ],
+              if (mindBehavioralScoreSettings
+                  case final scoreSettings?) ...<Widget>[
+                _MindBehavioralScoreSettingsSection(controller: scoreSettings),
+                const SizedBox(height: 14),
+              ],
+              if (mindYearHeatmapPresentation
+                  case final heatmapPresentation?) ...<Widget>[
+                _MindYearHeatmapPresentationSection(
+                  controller: heatmapPresentation,
+                ),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(

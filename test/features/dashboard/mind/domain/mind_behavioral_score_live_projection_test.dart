@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_live_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 
@@ -167,6 +168,83 @@ void main() {
       expect(retargeted.chartSeries!.startInclusiveEpochDay, 110);
       expect(retargeted.chartSeries!.endInclusiveEpochDay, 130);
       expect(retargeted.chartSeries!.points.last, retargeted.point);
+    },
+  );
+
+  test(
+    'MSS-07 a stale algorithm provenance cannot replace the current score/chart frame',
+    () {
+      final live = MindBehavioralScoreLiveProjection();
+      addTearDown(live.dispose);
+      const causalIdentity = MindBehavioralScoreIdentity(
+        upstreamScopeKey: 'expense|all|category:food',
+        indexGeneration: 1,
+        coreRevision: 9,
+        direction: LedgerDirection.expense,
+        settings: MindBehavioralScoreSettings.defaults(),
+      );
+      const htmlIdentity = MindBehavioralScoreIdentity(
+        upstreamScopeKey: 'expense|all|category:food',
+        indexGeneration: 1,
+        coreRevision: 9,
+        direction: LedgerDirection.expense,
+        settings: MindBehavioralScoreSettings(
+          expenseAlgorithm: MindExpenseScoreAlgorithm.htmlTrailing,
+          causalHistoryOrigin: MindCausalHistoryOrigin.fullFilteredHistory,
+          revision: 1,
+        ),
+      );
+      final causalProjection = MindBehavioralScoreProjection.build(
+        identity: causalIdentity,
+        contributions: const <MindBehavioralScoreContribution>[
+          MindBehavioralScoreContribution(
+            bookedLocalEpochDay: 100,
+            amountMinor: 200,
+          ),
+        ],
+      );
+      final htmlProjection = MindBehavioralScoreProjection.build(
+        identity: htmlIdentity,
+        contributions: const <MindBehavioralScoreContribution>[
+          MindBehavioralScoreContribution(
+            bookedLocalEpochDay: 100,
+            amountMinor: 200,
+          ),
+        ],
+      );
+      const causalPublication = MindBehavioralScorePublicationIdentity(
+        projection: causalIdentity,
+        targetEpochDay: 100,
+        navigationEpoch: 7,
+      );
+      const htmlPublication = MindBehavioralScorePublicationIdentity(
+        projection: htmlIdentity,
+        targetEpochDay: 100,
+        navigationEpoch: 8,
+      );
+
+      live.install(
+        projection: causalProjection,
+        identity: causalPublication,
+        range: range,
+      );
+      live.install(
+        projection: htmlProjection,
+        identity: htmlPublication,
+        range: range,
+      );
+
+      expect(
+        live.publishPreview(expectedIdentity: causalPublication, range: range),
+        isFalse,
+      );
+      expect(live.identity, htmlPublication);
+      expect(
+        live.value!.identity.settings.expenseAlgorithm,
+        MindExpenseScoreAlgorithm.htmlTrailing,
+      );
+      expect(live.value!.point, live.value!.chartSeries!.points.last);
+      expect(live.stalePublicationRejectCount, 1);
     },
   );
 }

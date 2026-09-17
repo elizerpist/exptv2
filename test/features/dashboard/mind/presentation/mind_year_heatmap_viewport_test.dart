@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_viewport.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
@@ -13,10 +14,10 @@ void main() {
   setUp(FluviDiagnosticLogger.clear);
 
   const range = QueryAmountRangeValues(
-    minimumScaled100: 1,
-    maximumScaled100: 1000,
-    lowerScaled100: 1,
-    upperScaled100: 1000,
+    minimumScaled100: 100000,
+    maximumScaled100: 1000000,
+    lowerScaled100: 100000,
+    upperScaled100: 1000000,
   );
 
   testWidgets(
@@ -110,10 +111,15 @@ void main() {
       );
       await gesture.moveBy(const Offset(120, 0));
       await tester.pump();
+      // QueryAmountRangeControl intentionally crosses its display-frame
+      // coalescing boundary before publishing a hot-path preview. The thumb
+      // remains held here; this second frame proves the live preview rather
+      // than waiting for its terminal commit.
+      await tester.pump();
 
       final after = monthPainter().colorForDate(secondJanuary);
-      expect(after, isNot(before));
       expect(frame.value.range, isNot(range));
+      expect(after, isNot(before));
       await gesture.up();
     },
   );
@@ -378,6 +384,230 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'HMP-06/08 two-column layout fills width and keeps one scroll owner',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.b3mMy3,
+          monthCardLayout: MindYearMonthCardLayout.twoColumns,
+          showMonthlyNetClose: false,
+          showMonthlyDirectionTotal: false,
+          revision: 0,
+        ),
+      );
+      final scrollController = ScrollController();
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+                scrollController: scrollController,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final grid = tester.widget<ListView>(
+        find.byKey(const ValueKey('mind-year-heatmap-grid')),
+      );
+      // ListView.separated contributes one separator between each annual row.
+      expect(grid.childrenDelegate.estimatedChildCount, 11);
+      // The one ListView builds only its visible/cache rows; its six two-card
+      // rows are the structural proof of all twelve unique months.
+      expect(find.byType(MindYearHeatmapMonthCard), findsAtLeastNWidgets(8));
+      final twoColumnWidth = tester
+          .getSize(find.byKey(const ValueKey('mind-year-heatmap-month-1')))
+          .width;
+      expect(twoColumnWidth, greaterThan(150));
+
+      scrollController.jumpTo(scrollController.position.maxScrollExtent);
+      settings.setMonthCardLayout(MindYearMonthCardLayout.threeColumns);
+      await tester.pump();
+      await tester.pump();
+      final threeColumnWidth = tester
+          .getSize(find.byKey(const ValueKey('mind-year-heatmap-month-1')))
+          .width;
+      expect(threeColumnWidth, lessThan(twoColumnWidth));
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-grid')),
+        findsOneWidget,
+      );
+      expect(
+        identical(
+          tester
+              .widget<ListView>(
+                find.byKey(const ValueKey('mind-year-heatmap-grid')),
+              )
+              .controller,
+          scrollController,
+        ),
+        isTrue,
+      );
+      expect(
+        scrollController.offset,
+        lessThanOrEqualTo(scrollController.position.maxScrollExtent),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'HMP-05 palette switching repaints from the same frame identity',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController();
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 480,
+            child: MindYearHeatmapViewport(
+              frameListenable: frame,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      final painterFinder = find.byKey(
+        const ValueKey('mind-year-heatmap-month-cells-1'),
+      );
+      Color color() =>
+          (tester.widget<CustomPaint>(painterFinder).painter!
+                  as MindYearHeatmapMonthPainter)
+              .colorForDate(const LocalDate(year: 2025, month: 1, day: 2));
+      final identity = frame.value.identity;
+      final fluvi = color();
+
+      settings.setPaletteStyle(MindYearHeatmapPaletteStyle.b3mMy3);
+      await tester.pump();
+
+      expect(frame.value.identity, identity);
+      expect(color(), isNot(fluvi));
+    },
+  );
+
+  testWidgets('HMP-09/12 MonthCard footers use admitted full-month totals', (
+    tester,
+  ) async {
+    final noFooterHeight = MindYearHeatmapMonthCard.heightFor(
+      width: 100,
+      calendarRowCount: 5,
+    );
+    final oneFooterHeight = MindYearHeatmapMonthCard.heightFor(
+      width: 100,
+      calendarRowCount: 5,
+      footerRowCount: 1,
+    );
+    final bothFooterHeight = MindYearHeatmapMonthCard.heightFor(
+      width: 100,
+      calendarRowCount: 5,
+      footerRowCount: 2,
+    );
+    expect(oneFooterHeight, greaterThan(noFooterHeight));
+    expect(bothFooterHeight, greaterThan(oneFooterHeight));
+    final aggregates = MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+      year: 2025,
+      incomeEntries: <DashboardLedgerEntry>[
+        DashboardLedgerEntry(
+          id: 'income',
+          partnerId: 'salary',
+          categoryId: 'income',
+          direction: 'income',
+          amountMinor: 500000,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2025,
+            month: 1,
+            day: 1,
+          ).epochDay,
+          bookedLocalTimeMinutes: 0,
+        ),
+      ],
+      expenseEntries: <DashboardLedgerEntry>[
+        _entry(
+          'expense',
+          120000,
+          const LocalDate(year: 2025, month: 1, day: 2),
+        ),
+      ],
+    );
+    final projection = MindYearHeatmapProjection.build(
+      identity: const MindYearHeatmapIdentity(
+        upstreamScopeKey: 'expense|year:2025',
+        indexGeneration: 1,
+        coreRevision: 1,
+        year: 2025,
+        navigationEpoch: 1,
+      ),
+      entries: <DashboardLedgerEntry>[
+        _entry(
+          'focused',
+          100000,
+          const LocalDate(year: 2025, month: 1, day: 2),
+        ),
+      ],
+      monthlyAggregates: aggregates,
+    );
+    final frame = ValueNotifier(projection.preview(range));
+    final settings = MindYearHeatmapPresentationController(
+      initial: const MindYearHeatmapPresentationSettings(
+        paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+        monthCardLayout: MindYearMonthCardLayout.threeColumns,
+        showMonthlyNetClose: true,
+        showMonthlyDirectionTotal: true,
+        revision: 0,
+      ),
+    );
+    addTearDown(frame.dispose);
+    addTearDown(settings.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 500,
+          child: MindYearHeatmapViewport(
+            frameListenable: frame,
+            presentationSettings: settings,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Zárás'), findsAtLeastNWidgets(1));
+    expect(find.text('Kiadás'), findsAtLeastNWidgets(1));
+    expect(find.text('3 800 Ft'), findsAtLeastNWidgets(1));
+    expect(find.text('1 200 Ft'), findsAtLeastNWidgets(1));
+
+    final incomeProjection = MindYearHeatmapProjection.build(
+      identity: const MindYearHeatmapIdentity(
+        upstreamScopeKey: 'income|year:2025',
+        indexGeneration: 1,
+        coreRevision: 2,
+        year: 2025,
+        navigationEpoch: 2,
+      ),
+      entries: const <DashboardLedgerEntry>[],
+      monthlyAggregates: aggregates,
+    );
+    frame.value = incomeProjection.preview(range);
+    await tester.pump();
+    expect(find.text('Bevétel'), findsAtLeastNWidgets(1));
+    expect(find.text('5 000 Ft'), findsAtLeastNWidgets(1));
+  });
 }
 
 MindYearHeatmapProjection _projection() => MindYearHeatmapProjection.build(
@@ -389,8 +619,8 @@ MindYearHeatmapProjection _projection() => MindYearHeatmapProjection.build(
     navigationEpoch: 1,
   ),
   entries: <DashboardLedgerEntry>[
-    _entry('a', 100, const LocalDate(year: 2025, month: 1, day: 2)),
-    _entry('b', 900, const LocalDate(year: 2025, month: 9, day: 2)),
+    _entry('a', 100000, const LocalDate(year: 2025, month: 1, day: 2)),
+    _entry('b', 900000, const LocalDate(year: 2025, month: 9, day: 2)),
   ],
 );
 

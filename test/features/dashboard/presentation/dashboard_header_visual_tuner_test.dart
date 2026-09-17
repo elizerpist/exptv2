@@ -13,6 +13,8 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_amount_pa
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:flutter/material.dart';
@@ -746,5 +748,67 @@ void main() {
     expect(controller.tuning.value.budgetCategory.windowWidthPercent, 28);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
+  });
+
+  testWidgets('Mind score and heatmap settings use their separate owners', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final scoreSettings = MindBehavioralScoreSettingsController();
+    final heatmapSettings = MindYearHeatmapPresentationController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 520,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            mindBehavioralScoreSettings: scoreSettings,
+            mindYearHeatmapPresentation: heatmapSettings,
+          ),
+        ),
+      ),
+    );
+
+    final htmlTrailing = find.byKey(
+      const ValueKey('mind-expense-score-algorithm-htmlTrailing'),
+    );
+    await tester.ensureVisible(htmlTrailing);
+    await tester.tap(htmlTrailing);
+    await tester.pump();
+    expect(
+      scoreSettings.value.expenseAlgorithm,
+      MindExpenseScoreAlgorithm.htmlTrailing,
+    );
+    expect(
+      tester
+          .widget<RadioListTile<MindCausalHistoryOrigin>>(
+            find.byKey(
+              const ValueKey('mind-causal-history-origin-fullFilteredHistory'),
+            ),
+          )
+          .enabled,
+      isFalse,
+    );
+
+    final b3m = find.byKey(const ValueKey('mind-heatmap-palette-b3mMy3'));
+    await tester.ensureVisible(b3m);
+    await tester.tap(b3m);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.paletteStyle,
+      MindYearHeatmapPaletteStyle.b3mMy3,
+    );
+    final net = find.byKey(const ValueKey('mind-heatmap-monthly-net-toggle'));
+    await tester.ensureVisible(net);
+    await tester.tap(net);
+    await tester.pump();
+    expect(heatmapSettings.value.showMonthlyNetClose, isTrue);
+    expect(controller.tuning.value.mindScore.windowWidthPercent, 28);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    scoreSettings.dispose();
+    heatmapSettings.dispose();
   });
 }

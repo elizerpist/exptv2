@@ -22,6 +22,8 @@ import '../mind/domain/mind_year_heatmap_live_projection.dart';
 import '../mind/domain/mind_year_heatmap_projection.dart';
 import '../mind/domain/mind_behavioral_score_live_projection.dart';
 import '../mind/domain/mind_behavioral_score_projection.dart';
+import '../mind/domain/mind_behavioral_score_settings.dart';
+import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
 import '../motion/dashboard_motion_kernel.dart';
 import '../motion/dashboard_motion_state.dart';
@@ -51,6 +53,7 @@ import '../time_navigation/domain/dashboard_temporal_availability.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/time_plane.dart';
+import '../time_navigation/domain/year_month.dart';
 import '../time_navigation/presentation/summary_navigation_presentation.dart';
 import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
@@ -147,10 +150,12 @@ final class _MindAmountPreparedBaseSlot {
   const _MindAmountPreparedBaseSlot({
     required this.base,
     required this.annualMembership,
+    required this.monthlyAggregateBank,
   });
 
   final PreparedDashboardIndex base;
   final MindYearHeatmapPreparedMembership? annualMembership;
+  final MindYearHeatmapMonthlyAggregateBank? monthlyAggregateBank;
 }
 
 /// A presentation-owned resource capability. Dashboard navigation owns the
@@ -1021,6 +1026,9 @@ final class DashboardCoreController {
       ..bindPerformanceCounters(this.performanceCounters)
       ..bindRenderReadinessDiagnostics(this.renderReadinessDiagnostics);
     presentation.visibleFrames.addListener(_onVisibleFramePublished);
+    mindBehavioralScoreSettings.addListener(
+      _onMindBehavioralScoreSettingsChanged,
+    );
   }
 
   final DashboardLayoutMetrics metrics;
@@ -1058,6 +1066,13 @@ final class DashboardCoreController {
   /// renderer and remains available for every Summary Time plane.
   final MindBehavioralScoreLiveProjection mindBehavioralScore =
       MindBehavioralScoreLiveProjection();
+
+  /// Dedicated semantic/presentation settings live beside their Mind read
+  /// models, not inside Header visual tuning or canonical Query state.
+  final MindBehavioralScoreSettingsController mindBehavioralScoreSettings =
+      MindBehavioralScoreSettingsController();
+  final MindYearHeatmapPresentationController mindYearHeatmapPresentation =
+      MindYearHeatmapPresentationController();
   late final CurrentQueryController currentQuery;
   late final QueryComposerController queryComposer;
   final DashboardEphemeralFocusController focus =
@@ -4055,6 +4070,47 @@ final class DashboardCoreController {
     return null;
   }
 
+  MindYearHeatmapMonthlyAggregateBank? _mindYearHeatmapMonthlyAggregateBankFor({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope domainScope,
+  }) {
+    final slot = _mindAmountPreparedBases[domainScope];
+    if (slot != null &&
+        slot.monthlyAggregateBank != null &&
+        _samePreparedInteractionIndex(slot.base, base)) {
+      return slot.monthlyAggregateBank;
+    }
+    return null;
+  }
+
+  /// The MonthCard footers are whole-ledger month closes, not an extension of
+  /// the filtered Mind heatmap. The query-independent Budget snapshot already
+  /// admits those aggregate handle-zero cells with this exact revision/window;
+  /// using a focus membership seed here would incorrectly make a category,
+  /// partner or amount-range interaction rewrite the close.
+  MindYearHeatmapMonthlyAggregateBank? _fullMonthAggregateBankFor(
+    PreparedDashboardIndex base,
+  ) {
+    final snapshot = _activePreparedRevisionBundle?.budgetLimitSnapshot;
+    if (snapshot == null ||
+        snapshot.coreRevision != base.coreRevision ||
+        snapshot.yearWindowStart != base.key.yearWindowStart ||
+        snapshot.yearWindowEndInclusive != base.key.yearWindowEndInclusive) {
+      return null;
+    }
+    return MindYearHeatmapMonthlyAggregateBank.fromPreparedBudgetSnapshot(
+      snapshot,
+    );
+  }
+
+  void _onMindBehavioralScoreSettingsChanged() {
+    if (_disposed) return;
+    // Settings are semantic score provenance, not a Query mutation. Rebuild
+    // only from the already admitted prepared membership so the Header frame,
+    // chart and score palette advance together without source I/O.
+    ensureMindBehavioralScoreProjection();
+  }
+
   /// Installs or retargets Mind's one semantic score publication lane from
   /// the same resident prepared membership that backs the heatmap/range
   /// preview. This path never owns Query state or asks the repository for
@@ -4096,6 +4152,7 @@ final class DashboardCoreController {
       indexGeneration: base.generation,
       coreRevision: base.coreRevision,
       direction: resolvedDirection,
+      settings: mindBehavioralScoreSettings.value,
     );
     final activeProjection = mindBehavioralScore.projection;
     if (activeProjection?.identity == projectionIdentity) {
@@ -4104,7 +4161,7 @@ final class DashboardCoreController {
         range: binding.values,
         state: state,
       );
-      final chartStart = _mindScoreChartStartEpochDay(
+      final request = _mindScoreSeriesRequest(
         projection: activeProjection,
         range: binding.values,
         timeScope: state.effectiveScope,
@@ -4115,7 +4172,7 @@ final class DashboardCoreController {
         targetEpochDay: target,
         navigationEpoch: state.navigationEpoch,
         range: binding.values,
-        chartStartEpochDay: chartStart,
+        seriesRequest: request,
       );
     }
     final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
@@ -4144,7 +4201,7 @@ final class DashboardCoreController {
       range: binding.values,
       state: state,
     );
-    final chartStart = _mindScoreChartStartEpochDay(
+    final request = _mindScoreSeriesRequest(
       projection: projection,
       range: binding.values,
       timeScope: state.effectiveScope,
@@ -4157,9 +4214,10 @@ final class DashboardCoreController {
         projection: projectionIdentity,
         targetEpochDay: target,
         navigationEpoch: state.navigationEpoch,
+        seriesRequest: request,
       ),
       range: binding.values,
-      chartStartEpochDay: chartStart,
+      seriesRequest: request,
     );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -4217,29 +4275,60 @@ final class DashboardCoreController {
     return (start: boundaries.startInclusive.epochDay, end: end, fallback: end);
   }
 
-  int _mindScoreChartStartEpochDay({
+  /// Produces the complete score-series scope once at the Core semantic
+  /// boundary. The projection owns mathematics; this method owns only the
+  /// already-selected Time-plane interpretation and never mutates Query.
+  MindBehavioralScoreSeriesRequest _mindScoreSeriesRequest({
     required MindBehavioralScoreProjection projection,
     required QueryAmountRangeValues range,
     required LedgerTimeScope timeScope,
     required int targetEpochDay,
   }) {
-    final scope = switch (timeScope) {
+    final visible = switch (timeScope) {
       AllTimeScope() => (
-        start: -10000000,
+        start: projection.firstEligibleEpochDay(
+          range: range,
+          startInclusiveEpochDay: -10000000,
+          endInclusiveEpochDay: targetEpochDay,
+          fallbackEpochDay: targetEpochDay,
+        ),
         end: targetEpochDay,
         fallback: targetEpochDay,
       ),
       LedgerTimeScope selected => _mindScoreBoundsFor(selected),
     };
-    return switch (timeScope) {
-      AllTimeScope() => projection.firstEligibleEpochDay(
-        range: range,
-        startInclusiveEpochDay: scope.start,
-        endInclusiveEpochDay: scope.end,
-        fallbackEpochDay: scope.fallback,
-      ),
-      LedgerTimeScope() => scope.start,
+    final settings = projection.identity.settings;
+    final analyticStart = switch (settings.expenseAlgorithm) {
+      MindExpenseScoreAlgorithm.htmlCentered ||
+      MindExpenseScoreAlgorithm.htmlTrailing => visible.start,
+      MindExpenseScoreAlgorithm.causalTrailing =>
+        switch (settings.causalHistoryOrigin) {
+          MindCausalHistoryOrigin.fullFilteredHistory =>
+            projection.firstEligibleEpochDay(
+              range: range,
+              startInclusiveEpochDay: -10000000,
+              endInclusiveEpochDay: targetEpochDay,
+              fallbackEpochDay: visible.start,
+            ),
+          MindCausalHistoryOrigin.selectedScopeStart => switch (timeScope) {
+            DayScope(:final date) => MonthScope(
+              YearMonth(year: date.year, month: date.month),
+            ).boundaries.startInclusive.epochDay,
+            _ => visible.start,
+          },
+        },
     };
+    final analyticEnd = switch (settings.expenseAlgorithm) {
+      MindExpenseScoreAlgorithm.htmlCentered ||
+      MindExpenseScoreAlgorithm.htmlTrailing => visible.end,
+      MindExpenseScoreAlgorithm.causalTrailing => targetEpochDay,
+    };
+    return MindBehavioralScoreSeriesRequest(
+      analyticStartInclusiveEpochDay: analyticStart,
+      analyticEndInclusiveEpochDay: analyticEnd,
+      chartStartInclusiveEpochDay: visible.start,
+      targetEpochDay: targetEpochDay,
+    );
   }
 
   bool _publishMindBehavioralScorePreview({
@@ -4255,6 +4344,7 @@ final class DashboardCoreController {
       indexGeneration: base.generation,
       coreRevision: base.coreRevision,
       direction: direction,
+      settings: mindBehavioralScoreSettings.value,
     );
     final held = _mindScoreInteractionIdentity;
     if (projection == null ||
@@ -4269,7 +4359,7 @@ final class DashboardCoreController {
       range: values,
       state: navigation.state,
     );
-    final chartStart = _mindScoreChartStartEpochDay(
+    final request = _mindScoreSeriesRequest(
       projection: projection,
       range: values,
       timeScope: navigation.state.effectiveScope,
@@ -4280,7 +4370,7 @@ final class DashboardCoreController {
       targetEpochDay: target,
       navigationEpoch: navigation.state.navigationEpoch,
       range: values,
-      chartStartEpochDay: chartStart,
+      seriesRequest: request,
     );
     if (published) {
       _mindScoreInteractionIdentity = mindBehavioralScore.identity;
@@ -4313,6 +4403,10 @@ final class DashboardCoreController {
         previouslyRegistered != null &&
         _samePreparedInteractionIndex(previouslyRegistered.base, base) &&
         previouslyRegistered.annualMembership != null;
+    final keepMonthlyAggregateBank =
+        previouslyRegistered != null &&
+        _samePreparedInteractionIndex(previouslyRegistered.base, base) &&
+        previouslyRegistered.monthlyAggregateBank != null;
     for (final staleScope
         in _mindAmountPreparedBases.keys
             .where(
@@ -4333,11 +4427,15 @@ final class DashboardCoreController {
                 ? null
                 : MindYearHeatmapPreparedMembership.fromEntries(seed.entries);
           })();
+    final monthlyAggregateBank = keepMonthlyAggregateBank
+        ? previouslyRegistered.monthlyAggregateBank
+        : _fullMonthAggregateBankFor(base);
     _mindAmountPreparedBases
       ..remove(domainScope)
       ..[domainScope] = _MindAmountPreparedBaseSlot(
         base: base,
         annualMembership: annualMembership,
+        monthlyAggregateBank: monthlyAggregateBank,
       );
     while (_mindAmountPreparedBases.length > LedgerDirection.values.length) {
       final evictedScope = _mindAmountPreparedBases.keys.first;
@@ -4452,6 +4550,10 @@ final class DashboardCoreController {
       base: base,
       domainScope: domainScope,
     );
+    final monthlyAggregateBank = _mindYearHeatmapMonthlyAggregateBankFor(
+      base: base,
+      domainScope: domainScope,
+    );
     if (annualMembership == null) {
       mindYearHeatmap.clear();
       _logMindHeatmap(
@@ -4511,6 +4613,7 @@ final class DashboardCoreController {
         year: year,
         membership: memberships.entryIndices,
       ),
+      monthlyAggregates: monthlyAggregateBank?.forYear(year),
       sourceWorkCounter: MindYearHeatmapSourceWorkCounter(
         measurePreviewDurations: _physicalRailDiagnosticsEnabled,
       ),
@@ -14338,6 +14441,7 @@ final class DashboardCoreController {
       indexGeneration: base.generation,
       coreRevision: base.coreRevision,
       direction: direction,
+      settings: mindBehavioralScoreSettings.value,
     );
     if (mindBehavioralScore.projection?.identity != expectedProjection) {
       ensureMindBehavioralScoreProjection(direction: direction);
@@ -14349,7 +14453,7 @@ final class DashboardCoreController {
       range: binding.values,
       timeScope: frame.scope.timeScope,
     );
-    final chartStart = _mindScoreChartStartEpochDay(
+    final request = _mindScoreSeriesRequest(
       projection: projection,
       range: binding.values,
       timeScope: frame.scope.timeScope,
@@ -14359,6 +14463,7 @@ final class DashboardCoreController {
       projection: expectedProjection,
       targetEpochDay: target,
       navigationEpoch: frame.navigationEpoch,
+      seriesRequest: request,
     );
     if (mindBehavioralScore.identity == identity &&
         mindBehavioralScore.value?.range == binding.values) {
@@ -14369,7 +14474,7 @@ final class DashboardCoreController {
       targetEpochDay: target,
       navigationEpoch: frame.navigationEpoch,
       range: binding.values,
-      chartStartEpochDay: chartStart,
+      seriesRequest: request,
     );
   }
 
@@ -14469,6 +14574,11 @@ final class DashboardCoreController {
     segmentedTargetPainted.dispose();
     mindYearHeatmap.dispose();
     mindBehavioralScore.dispose();
+    mindBehavioralScoreSettings.removeListener(
+      _onMindBehavioralScoreSettingsChanged,
+    );
+    mindBehavioralScoreSettings.dispose();
+    mindYearHeatmapPresentation.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();
     railFlightRecorder?.dispose();

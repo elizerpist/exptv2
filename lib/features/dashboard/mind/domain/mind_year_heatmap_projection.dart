@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 import '../../query/data/dashboard_ledger_entry.dart';
+import '../../query/domain/ledger_direction.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../runtime/domain/dashboard_focus_membership_seed.dart';
+import '../../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../../time_navigation/domain/local_date.dart';
 
 /// Immutable upstream identity of the one active Mind annual read model.
@@ -271,6 +273,126 @@ final class MindYearHeatmapDay {
   bool get isEmpty => total == null;
 }
 
+/// Bounded full-calendar-month totals for the selected year. This read model
+/// is admitted from resident prepared direction seeds and deliberately does
+/// not depend on active Mind focus, amount range, painted cells or LogBox.
+@immutable
+final class MindYearHeatmapMonthlyAggregates {
+  MindYearHeatmapMonthlyAggregates._({
+    required this.year,
+    required List<int> incomeByMonth,
+    required List<int> expenseByMonth,
+  }) : incomeByMonth = List<int>.unmodifiable(incomeByMonth),
+       expenseByMonth = List<int>.unmodifiable(expenseByMonth) {
+    if (incomeByMonth.length != 12 || expenseByMonth.length != 12) {
+      throw ArgumentError('Monthly aggregates require exactly twelve months.');
+    }
+  }
+
+  factory MindYearHeatmapMonthlyAggregates.empty({required int year}) =>
+      MindYearHeatmapMonthlyAggregates._(
+        year: year,
+        incomeByMonth: List<int>.filled(12, 0, growable: false),
+        expenseByMonth: List<int>.filled(12, 0, growable: false),
+      );
+
+  factory MindYearHeatmapMonthlyAggregates.fromDirectionalEntries({
+    required int year,
+    required Iterable<DashboardLedgerEntry> incomeEntries,
+    required Iterable<DashboardLedgerEntry> expenseEntries,
+  }) {
+    final income = List<int>.filled(12, 0, growable: false);
+    final expense = List<int>.filled(12, 0, growable: false);
+    void accumulate(Iterable<DashboardLedgerEntry> entries, List<int> target) {
+      for (final entry in entries) {
+        final date = DateTime.utc(
+          1970,
+        ).add(Duration(days: entry.bookedLocalEpochDay));
+        if (date.year != year) continue;
+        target[date.month - 1] += entry.amountMinor;
+      }
+    }
+
+    accumulate(incomeEntries, income);
+    accumulate(expenseEntries, expense);
+    return MindYearHeatmapMonthlyAggregates._(
+      year: year,
+      incomeByMonth: income,
+      expenseByMonth: expense,
+    );
+  }
+
+  final int year;
+  final List<int> incomeByMonth;
+  final List<int> expenseByMonth;
+
+  int incomeForMonth(int month) => incomeByMonth[_monthIndex(month)];
+  int expenseForMonth(int month) => expenseByMonth[_monthIndex(month)];
+  int netForMonth(int month) => incomeForMonth(month) - expenseForMonth(month);
+
+  static int _monthIndex(int month) {
+    if (month < 1 || month > 12) throw RangeError.range(month, 1, 12);
+    return month - 1;
+  }
+}
+
+/// Base-lifetime bank of the compact twelve-month aggregates. Core creates it
+/// once as a prepared Mind base is admitted, then a Year frame receives only
+/// its selected immutable twelve-element view.
+@immutable
+final class MindYearHeatmapMonthlyAggregateBank {
+  const MindYearHeatmapMonthlyAggregateBank._(this._byYear);
+
+  /// Adapts the existing query-independent aggregate Budget cells into the
+  /// bounded MonthCard read model. Handle zero is the application's full
+  /// ledger total, so category/partner focus and Mind's amount refinement
+  /// cannot narrow these values. This is intentionally not reconstructed
+  /// from a query-specific focus membership seed.
+  factory MindYearHeatmapMonthlyAggregateBank.fromPreparedBudgetSnapshot(
+    PreparedBudgetLimitSnapshot snapshot,
+  ) {
+    final byYear = <int, MindYearHeatmapMonthlyAggregates>{};
+    for (
+      var year = snapshot.yearWindowStart;
+      year <= snapshot.yearWindowEndInclusive;
+      year += 1
+    ) {
+      final income = List<int>.filled(12, 0, growable: false);
+      final expense = List<int>.filled(12, 0, growable: false);
+      for (var month = 1; month <= 12; month += 1) {
+        final period = BudgetLimitPeriod.month(year, month);
+        income[month - 1] = snapshot
+            .cellAt(
+              direction: LedgerDirection.income,
+              period: period,
+              targetHandle: 0,
+            )
+            .actualScaled100;
+        expense[month - 1] = snapshot
+            .cellAt(
+              direction: LedgerDirection.expense,
+              period: period,
+              targetHandle: 0,
+            )
+            .actualScaled100;
+      }
+      byYear[year] = MindYearHeatmapMonthlyAggregates._(
+        year: year,
+        incomeByMonth: income,
+        expenseByMonth: expense,
+      );
+    }
+    return MindYearHeatmapMonthlyAggregateBank._(
+      Map<int, MindYearHeatmapMonthlyAggregates>.unmodifiable(byYear),
+    );
+  }
+
+  final Map<int, MindYearHeatmapMonthlyAggregates> _byYear;
+
+  MindYearHeatmapMonthlyAggregates forYear(int year) =>
+      _byYear[year] ?? MindYearHeatmapMonthlyAggregates.empty(year: year);
+}
+
 @immutable
 final class MindYearHeatmapFrame {
   factory MindYearHeatmapFrame({
@@ -280,6 +402,7 @@ final class MindYearHeatmapFrame {
     required List<List<MindYearHeatmapDay>> months,
     required int? minimumNonEmptyTotal,
     required int? maximumNonEmptyTotal,
+    MindYearHeatmapMonthlyAggregates? monthlyAggregates,
   }) => MindYearHeatmapFrame._(
     identity: identity,
     range: range,
@@ -289,6 +412,9 @@ final class MindYearHeatmapFrame {
     ),
     minimumNonEmptyTotal: minimumNonEmptyTotal,
     maximumNonEmptyTotal: maximumNonEmptyTotal,
+    monthlyAggregates:
+        monthlyAggregates ??
+        MindYearHeatmapMonthlyAggregates.empty(year: identity.year),
   );
 
   const MindYearHeatmapFrame._({
@@ -298,6 +424,7 @@ final class MindYearHeatmapFrame {
     required List<List<MindYearHeatmapDay>> months,
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
+    required this.monthlyAggregates,
   }) : _months = months;
 
   final MindYearHeatmapIdentity identity;
@@ -306,6 +433,7 @@ final class MindYearHeatmapFrame {
   final List<List<MindYearHeatmapDay>> _months;
   final int? minimumNonEmptyTotal;
   final int? maximumNonEmptyTotal;
+  final MindYearHeatmapMonthlyAggregates monthlyAggregates;
 
   List<MindYearHeatmapDay> month(int month) {
     if (month < 1 || month > 12) throw RangeError.range(month, 1, 12);
@@ -339,17 +467,20 @@ final class MindYearHeatmapProjection {
     this._days,
     this._startEpochDay,
     this._workCounter,
+    this._monthlyAggregates,
   );
 
   factory MindYearHeatmapProjection.build({
     required MindYearHeatmapIdentity identity,
     required Iterable<DashboardLedgerEntry> entries,
+    MindYearHeatmapMonthlyAggregates? monthlyAggregates,
     MindYearHeatmapSourceWorkCounter? sourceWorkCounter,
   }) {
     final counter = sourceWorkCounter ?? MindYearHeatmapSourceWorkCounter();
     return _buildFromContributions(
       identity: identity,
       sourceWorkCounter: counter,
+      monthlyAggregates: monthlyAggregates,
       contributions: entries.map((entry) {
         counter.recordSourceRowTouch();
         return MindYearHeatmapPreparedContribution(
@@ -364,12 +495,14 @@ final class MindYearHeatmapProjection {
   factory MindYearHeatmapProjection.buildFromPreparedContributions({
     required MindYearHeatmapIdentity identity,
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
+    MindYearHeatmapMonthlyAggregates? monthlyAggregates,
     MindYearHeatmapSourceWorkCounter? sourceWorkCounter,
   }) {
     final counter = sourceWorkCounter ?? MindYearHeatmapSourceWorkCounter();
     return _buildFromContributions(
       identity: identity,
       sourceWorkCounter: counter,
+      monthlyAggregates: monthlyAggregates,
       contributions: contributions.map((contribution) {
         counter.recordPreparedContributionTouch();
         return contribution;
@@ -381,6 +514,7 @@ final class MindYearHeatmapProjection {
     required MindYearHeatmapIdentity identity,
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
     required MindYearHeatmapSourceWorkCounter sourceWorkCounter,
+    MindYearHeatmapMonthlyAggregates? monthlyAggregates,
   }) {
     final start = LocalDate(year: identity.year, month: 1, day: 1).epochDay;
     final end = LocalDate(year: identity.year + 1, month: 1, day: 1).epochDay;
@@ -403,6 +537,8 @@ final class MindYearHeatmapProjection {
       ),
       start,
       sourceWorkCounter,
+      monthlyAggregates ??
+          MindYearHeatmapMonthlyAggregates.empty(year: identity.year),
     );
   }
 
@@ -410,6 +546,7 @@ final class MindYearHeatmapProjection {
   final List<_MindYearHeatmapDayRange> _days;
   final int _startEpochDay;
   final MindYearHeatmapSourceWorkCounter _workCounter;
+  final MindYearHeatmapMonthlyAggregates _monthlyAggregates;
 
   int get dayCount => _days.length;
   MindYearHeatmapSourceWorkCounter get sourceWorkCounter => _workCounter;
@@ -499,6 +636,7 @@ final class MindYearHeatmapProjection {
       months: months,
       minimumNonEmptyTotal: minimum,
       maximumNonEmptyTotal: maximum,
+      monthlyAggregates: _monthlyAggregates,
     );
     if (stopwatch != null) {
       stopwatch.stop();
