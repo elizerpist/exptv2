@@ -58,15 +58,8 @@ void main() {
         find.byKey(
           const ValueKey('dashboard-core-mode-content-gesture-region'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
-      final passiveContentGesture = tester.widget<GestureDetector>(
-        find.byKey(
-          const ValueKey('dashboard-core-mode-content-gesture-region'),
-        ),
-      );
-      expect(passiveContentGesture.onVerticalDragStart, isNull);
-      expect(passiveContentGesture.onVerticalDragUpdate, isNull);
 
       final footerBefore = tester.getRect(
         find.byKey(const ValueKey('mind-year-heatmap-fixed-footer')),

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_border_profile.dart';
@@ -46,6 +47,10 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.onQueryAmountRangeInteractionStarted,
     this.onQueryAmountRangeInteractionEnded,
     this.onQueryAmountRangeInteractionSummary,
+    this.onContentVerticalDragStart,
+    this.onContentVerticalDragUpdate,
+    this.onContentVerticalDragEnd,
+    this.onContentVerticalDragCancel,
     this.headerVisualController,
     this.headerVisualFrame,
     this.behavioralScore,
@@ -72,6 +77,10 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final VoidCallback? onQueryAmountRangeInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>?
   onQueryAmountRangeInteractionSummary;
+  final GestureDragStartCallback? onContentVerticalDragStart;
+  final GestureDragUpdateCallback? onContentVerticalDragUpdate;
+  final GestureDragEndCallback? onContentVerticalDragEnd;
+  final GestureDragCancelCallback? onContentVerticalDragCancel;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final ValueListenable<MindBehavioralScoreFrame?>? behavioralScore;
@@ -163,6 +172,13 @@ class MindDashboardCoreSurface extends StatelessWidget {
     // supplies the explicit temporal plane for Sum/Month.
     final resolvedPlane =
         temporalPlane ?? (showYearHeatmap ? TimePlane.year : null);
+    final temporalViewportOwnsVerticalDrag =
+        (resolvedPlane == TimePlane.year &&
+            showYearHeatmap &&
+            heatmap != null) ||
+        ((resolvedPlane == TimePlane.sum || resolvedPlane == TimePlane.month) &&
+            showTemporalHeatmap &&
+            temporalHeatmap != null);
     final temporalContent = switch (resolvedPlane) {
       TimePlane.year when showYearHeatmap && heatmap != null =>
         MindYearHeatmapViewport(
@@ -184,7 +200,18 @@ class MindDashboardCoreSurface extends StatelessWidget {
       ),
     };
     return _MindTemporalBody(
-      temporalContent: temporalContent,
+      temporalContent: temporalViewportOwnsVerticalDrag
+          ? temporalContent
+          : GestureDetector(
+              key: const ValueKey('dashboard-core-mode-content-gesture-region'),
+              behavior: HitTestBehavior.translucent,
+              dragStartBehavior: DragStartBehavior.down,
+              onVerticalDragStart: onContentVerticalDragStart,
+              onVerticalDragUpdate: onContentVerticalDragUpdate,
+              onVerticalDragEnd: onContentVerticalDragEnd,
+              onVerticalDragCancel: onContentVerticalDragCancel,
+              child: temporalContent,
+            ),
       range: range,
       presentationSettings: yearHeatmapPresentation,
     );

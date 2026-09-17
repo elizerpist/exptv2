@@ -266,9 +266,6 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     final mode = widget.controller.committedMode;
     final presentation = widget.presentationFor(mode);
     final headerBounds = presentation.geometry.headerBounds;
-    final mindViewportOwnsVerticalDrag =
-        mode.mode == DashboardMode.mind &&
-        (widget.mindTemporalHeatmapVisible || widget.mindYearHeatmapVisible);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -278,31 +275,24 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         // was the physical reason Card2 drags were insensitive.
         const SizedBox.expand(),
         Positioned.fill(
-          // Keep one stable element ancestry for Mind's shared fixed footer.
-          // Previously the vertical recognizer wrapper existed only outside a
-          // Year/Sum/Month heatmap; moving into Day inserted it and unmounted
-          // an active RangeSlider subtree. A passive GestureDetector has no
-          // vertical callbacks, therefore does not enter the scroll gesture
-          // arena while the temporal viewport owns scrolling, but preserves
-          // the physical range element across every TimePlane.
-          child: GestureDetector(
-            key: const ValueKey('dashboard-core-mode-content-gesture-region'),
-            behavior: HitTestBehavior.translucent,
-            dragStartBehavior: DragStartBehavior.down,
-            onVerticalDragStart: mindViewportOwnsVerticalDrag
-                ? null
-                : _onContentVerticalStart,
-            onVerticalDragUpdate: mindViewportOwnsVerticalDrag
-                ? null
-                : _onContentVerticalUpdate,
-            onVerticalDragEnd: mindViewportOwnsVerticalDrag
-                ? null
-                : _onContentVerticalEnd,
-            onVerticalDragCancel: mindViewportOwnsVerticalDrag
-                ? null
-                : _finishPointerSequence,
-            child: _buildModeSurface(mode, presentation),
-          ),
+          // Mind owns an invariant surface around its shared fixed footer.
+          // Its Day-only expansion gesture is placed inside that surface, so
+          // Sum/Year/Month retain exclusive viewport ownership without
+          // reparenting a held RangeSlider across TimePlane changes.
+          child: mode.mode == DashboardMode.mind
+              ? _buildModeSurface(mode, presentation)
+              : GestureDetector(
+                  key: const ValueKey(
+                    'dashboard-core-mode-content-gesture-region',
+                  ),
+                  behavior: HitTestBehavior.translucent,
+                  dragStartBehavior: DragStartBehavior.down,
+                  onVerticalDragStart: _onContentVerticalStart,
+                  onVerticalDragUpdate: _onContentVerticalUpdate,
+                  onVerticalDragEnd: _onContentVerticalEnd,
+                  onVerticalDragCancel: _finishPointerSequence,
+                  child: _buildModeSurface(mode, presentation),
+                ),
         ),
         Positioned(
           left: headerBounds.left,
@@ -386,6 +376,10 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             widget.onMindQueryAmountRangeInteractionEnded,
         onQueryAmountRangeInteractionSummary:
             widget.onMindQueryAmountRangeInteractionSummary,
+        onContentVerticalDragStart: _onContentVerticalStart,
+        onContentVerticalDragUpdate: _onContentVerticalUpdate,
+        onContentVerticalDragEnd: _onContentVerticalEnd,
+        onContentVerticalDragCancel: _finishPointerSequence,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,
         behavioralScore: widget.mindBehavioralScore,
