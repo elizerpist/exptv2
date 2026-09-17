@@ -65,16 +65,16 @@
 
 | ID | Source/reference | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| MRA-01 | §§4–6 | Query range + native facets | exact maximum belongs to non-amount domain; right-thumb filtering cannot shrink it | Dart/native domain tests | PARTIAL — Dart range tests pass; native exact-facet test is added, awaiting x86 CI because local AAPT2 blocks Robolectric before execution. |
+| MRA-01 | §§4–6 | Query range + native facets | exact maximum belongs to non-amount domain; right-thumb filtering cannot shrink it | Dart/native domain tests | DONE — Dart range tests pass; exact x86 CI Room/facet suite is green in run `35196364731`. |
 | MRA-02 | §§7–8 | shared range control | 1/2/5 monetary step is deterministic, monotonic, preview/final snapped parity and no pointer I/O | pure + widget/live tests | DONE — focused domain/control tests pass, including 260k/100k/20k/5k and terminal preview flush. |
 | MRA-03 | §9 | compact Mind range surface | slider precedes exactly one caption/value row without footer/layout regression | widget/layout test | DONE — compact layout test passes with one Slider and the caption row below it. |
-| MRA-04 | §§10–12 | static demo source fixture | source-list count is 100 and normalized SHA-256 is `cd8ec0a6bb2e5558a11e3dddd7aa6a087d9edde897b13fceea1da4eb82e5a65e` | generator test | PARTIAL — direct committed-prototype extraction and Kotlin fixture comparison are exact; JUnit execution awaits x86 CI. |
-| MRA-05 | §§11–14 | generator/use case/Room | real `Gyorsétterem` category and six partners map exact semantic 2027 rows; idempotent normal query path | Kotlin Room test | PARTIAL — real seed path and Room query/idempotence tests are added; local AAPT2 blocks their execution before Kotlin tests. |
+| MRA-04 | §§10–12 | static demo source fixture | source-list count is 100 and normalized SHA-256 is `cd8ec0a6bb2e5558a11e3dddd7aa6a087d9edde897b13fceea1da4eb82e5a65e` | generator test | DONE — direct committed-prototype extraction, Kotlin fixture comparison and x86 CI core suite are green. |
+| MRA-05 | §§11–14 | generator/use case/Room | real `Gyorsétterem` category and six partners map exact semantic 2027 rows; idempotent normal query path | Kotlin Room test | DONE — real seed/Room query/idempotence tests pass in the x86 CI core suite. |
 | MRA-06 | §§15–17 | Mind palette + shared Header color utility | exact 8 anchors, OKLab/OKLCH interpolation, unchanged window/tuner, Budget unaffected | pure/policy tests | DONE — 8-anchor/clamp/non-RGB/window/Budget tests pass; Category regression stays green. |
 | MRA-07 | §§1,18,22 | Mind Header chart/surface | chart baseline geometry, line/fade/endpoint/reveal/controller remain unchanged and readable | existing chart golden/boundary tests + source inspection | DONE — chart source is untouched; reference geometry/boundary tests and refreshed palette-following golden pass after direct reference inspection. |
 | MRA-08 | §§8,21 | query/controller/header paths | domain refresh occurs only on domain identity; drag reuses cached max and does no DB/index/row work | source-boundary + live tests | DONE — existing loader's amount-only-domain no-refetch and Core live-preview suites pass; only immutable local snapping runs during drag. |
-| MRA-09 | §§19–24 | test suites | required adaptive, query, heatmap/score, chart, color, Budget, DB-mirror tests and analyzer/diff check have evidence | exact command log | PARTIAL — focused Flutter suites and analyzer pass; native tests await CI and the broad Flutter suite has an inherited 30-second scene-window timeout. |
-| MRA-10 | §§23–27 | GitHub/tooling | feature commit/push, matching SCIP and human APK delivery if CI supports it; profile result remains honest | GitHub/tooling evidence | NOT DONE |
+| MRA-09 | §§19–24 | test suites | required adaptive, query, heatmap/score, chart, color, Budget, DB-mirror tests and analyzer/diff check have evidence | exact command log | PARTIAL — focused Flutter suites/analyzer and x86 native suites pass; the broad local Flutter suite retains its inherited 30-second scene-window timeout, and CI profile FrameTiming is separately red. |
+| MRA-10 | §§23–27 | GitHub/tooling | feature commit/push, matching SCIP and human APK delivery if CI supports it; profile result remains honest | GitHub/tooling evidence | PARTIAL — application/tests and exact SCIP/APK are pushed/delivered; CI profile remains the inherited null-FrameTiming failure. |
 | MRA-11 | §26 | physical device | user-only physical acceptance | user verification | PENDING — USER ONLY |
 
 ## Tasks
@@ -99,7 +99,7 @@
 - [x] Add RED source-count/digest/semantic-mirror and normal Room query tests.
 - [x] Run native test; it is blocked before Kotlin test execution by the documented local AAPT2 daemon startup failure.
 - [x] Add the static 100-row source list, append stable real category/partners and 2027 entry IDs, bump seed version/window contracts.
-- [ ] Run generator/use-case tests through normal Room/query machinery (x86 CI pending).
+- [x] Run generator/use-case tests through normal Room/query machinery in x86 CI.
 
 ### Task 3: Replace the Mind scale through a shared perceptual utility
 
@@ -116,5 +116,5 @@
 
 - [x] Run protected query, heatmap, score-live, compact-range, chart, palette/Budget and changed-source analysis suites; Kotlin demo/Room waits for CI.
 - [x] Reinspect reference PNG and chart golden; re-read this checklist and update every status truthfully.
-- [ ] Commit the application feature atomically on the mandatory branch, push, follow only relevant CI/APK workflow, and generate source-matching SCIP separately.
+- [x] Commit the application feature on the mandatory branch, push, deliver the human APK, and generate source-matching SCIP separately. The inherited CI profile FrameTiming failure remains recorded as a non-green gate.
 - [ ] Append final factual journal evidence in a separate `[skip ci]` commit if requested by the repository delivery protocol.
