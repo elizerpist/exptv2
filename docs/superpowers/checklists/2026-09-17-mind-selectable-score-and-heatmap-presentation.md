@@ -130,8 +130,8 @@ push is permitted.
 | VAL-05 | Analyzer and whitespace | changed Dart/tests | `flutter analyze` and `git diff --check` pass | Ubuntu / Git commands | DONE |
 | VAL-06 | Profile evidence | focused performance harness | Score/mode/range costs and prohibited-work counters meet contract; inherited null FrameTiming remains honestly classified | profile command | DONE |
 | VAL-07 | Build-gate table | this document + delivery log | Every functional row `DONE` and focused tests green before build/push | explicit pre-delivery table | DONE |
-| VAL-08 | Commit/push/CI/APK after gate only | GitHub delivery | Application commit/push, matching CI human APK, downloaded file and SHA | Git/GitHub/sha256 evidence | TODO |
-| VAL-09 | Matching SCIP after final application source | tooling branch | Manifest source head equals final app SHA; tooling artifacts separate | tooling tests/hash | TODO |
+| VAL-08 | Commit/push/CI/APK after gate only | GitHub delivery | Application commit/push, matching CI human APK, downloaded file and SHA | Git/GitHub/sha256 evidence | DONE |
+| VAL-09 | Matching SCIP after final application source | tooling branch | Manifest source head equals final app SHA; tooling artifacts separate | tooling tests/hash | DONE |
 
 ## Build-gate snapshot
 
@@ -229,3 +229,49 @@ KNOWN INHERITED LIMITATION
 
 `frame_timing_headroom` remains historically invalid (`null`) in the inherited
 full-suite profile evidence. It was not weakened or reported as green here.
+
+## Post-gate delivery evidence
+
+PASS
+
+```text
+git push origin fix/mind-year-heatmap-calendar-direction-fluvi-20260913
+```
+
+Application commit `2c7a9e69196267db0d14e153892ff2f192c13978` pushed to the
+required branch. GitHub Actions run
+`https://github.com/elizerpist/exptv2/actions/runs/35227140478` completed its
+`test-flutter`, `test-core`, and `build-human-diagnostic-apk` jobs successfully.
+
+PASS
+
+```text
+gh release view fluvi-human-diagnostic-2c7a9e6 --json targetCommitish,assets
+sha256sum /storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_2c7a9e6.apk
+strings /storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_2c7a9e6.apk | rg -F 2c7a9e69196267db0d14e153892ff2f192c13978
+```
+
+The 82,924,849-byte normal human diagnostic APK is present at
+`/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_2c7a9e6.apk`.
+Its release target and embedded build identity are
+`2c7a9e69196267db0d14e153892ff2f192c13978`; local and release SHA-256 are
+`6007dbef8134f5cf08c4e8220f32febbd620dd435ceae438f03a347e4ba4633e`.
+
+PASS
+
+```text
+dart pub global run scip_dart ./
+dart run tools/codegraph/bin/fluvi_codegraph.dart generate ...
+cd tools/codegraph && dart test --reporter compact
+```
+
+The exact-source index manifest records application source head
+`2c7a9e69196267db0d14e153892ff2f192c13978`, parent
+`eb9afc919f62e071c4d361cb9ccf3e495c047b3e`, `scip_dart` 1.6.2, and raw index
+SHA-256 `bf9e1ea1af3f10d0051be061a124646e6c16c95949c06e55e8d0a4f79242d369`.
+The separate tooling commit is `bf4e831e68ea5dd634b867ef328fafc26a6c0173` on
+`tooling/scip-codegraph-v1`; its 15 tooling tests and provenance query passed.
+
+PHYSICAL VALIDATION
+
+PENDING — USER ONLY
