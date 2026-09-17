@@ -1179,3 +1179,31 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   paging/render owner, score mathematics or Fastfood fixture changed.
 - Final online CI/APK/SCIP evidence remains pending after this journal-only
   commit. Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-18 — Mind temporal gesture ownership repair (`434276ac`)
+
+- The first final online workflow for the preceding delivery, run
+  `35282348049` at source head `f5d74e04`, passed `test-flutter`, clean Room
+  core tests, native dashboard bridge tests and the human diagnostic APK job.
+  Its profile B integration lane failed at
+  `_profileMindYearHeatmapSlider` because it found one
+  `dashboard-core-mode-content-gesture-region` where temporal Mind content
+  requires none. This is a real topology regression, not the inherited null
+  FrameTiming profile issue.
+- Root cause: the shared-footer refactor retained a passive outer
+  `GestureDetector` around every Mind TimePlane to preserve the held slider.
+  It preserved the slider but changed the mounted Year/Sum/Month hit-test
+  topology.
+- Repair: `DashboardCoreModeHost` now leaves Mind's surface invariant and
+  hands the existing expansion callbacks to `MindDashboardCoreSurface` only
+  for its non-temporal (Day) content slot. Sum/Year/Month contain no outer
+  content gesture region, while the compact footer remains under the same
+  `_MindTemporalBody` parent across every TimePlane.
+- PASS — Ubuntu/proot focused host regression:
+  `flutter test test/features/dashboard/presentation/mind_year_heatmap_mode_host_test.dart --plain-name "FTR-03: one active compact range element keeps its held thumb values across Mind TimePlane changes"`
+  reports one passing test. The direct Year-host topology test was also
+  exercised locally; exact final online profile B and APK evidence remain
+  pending.
+- Protected systems remain unchanged: Time/Avatar physics, Query ownership,
+  one compact range owner, score mathematics, Header chart/ticker, Budget and
+  LogBox. Physical validation: `PENDING — USER ONLY`.
