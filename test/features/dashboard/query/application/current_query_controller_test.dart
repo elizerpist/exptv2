@@ -19,6 +19,30 @@ void main() {
     temporalFilter: temporalFilter,
   );
 
+  test(
+    'AMD-05: visible amount domains coexist with the canonical all-time domain',
+    () {
+      final template = scope(LedgerDirection.expense);
+      final controller = CurrentQueryController(initialScope: template);
+      addTearDown(controller.dispose);
+      const allTime = QueryMenuAmountDomain(
+        minimumAmountScaled100: 100000,
+        maximumAmountScaled100: 26000000,
+      );
+      const fastfood2027 = QueryMenuAmountDomain(
+        minimumAmountScaled100: 180000,
+        maximumAmountScaled100: 1350000,
+      );
+      controller.publishAmountDomainForScope(template, allTime);
+      final visible2027 = template.copyWith(timeScope: const YearScope(2027));
+
+      controller.publishAmountDomainForScope(visible2027, fastfood2027);
+
+      expect(controller.amountDomainForScope(template), same(allTime));
+      expect(controller.amountDomainForScope(visible2027), same(fastfood2027));
+    },
+  );
+
   test('applied query retains independent income and expense templates', () {
     final controller = CurrentQueryController(
       initialScope: scope(LedgerDirection.income),

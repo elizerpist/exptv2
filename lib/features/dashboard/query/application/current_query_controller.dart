@@ -19,8 +19,8 @@ final class CurrentQueryController extends ChangeNotifier {
   DashboardDirectionalQuerySet _queries;
   final Map<LedgerDirection, QueryMenuData?> _facetPresentations =
       <LedgerDirection, QueryMenuData?>{};
-  final Map<LedgerDirection, _AmountDomainBinding> _amountDomains =
-      <LedgerDirection, _AmountDomainBinding>{};
+  final Map<CurrentLedgerQueryScope, _AmountDomainBinding> _amountDomains =
+      <CurrentLedgerQueryScope, _AmountDomainBinding>{};
   LedgerDirection _lastChangedDirection;
   int _generation = 0;
   final Map<LedgerDirection, int> _directionGenerations =
@@ -45,13 +45,59 @@ final class CurrentQueryController extends ChangeNotifier {
   QueryMenuData? facetPresentationFor(LedgerDirection direction) =>
       _facetPresentations[direction];
 
-  QueryMenuAmountDomain? amountDomainFor(LedgerDirection direction) {
-    final binding = _amountDomains[direction];
-    if (binding == null ||
-        binding.scope != QueryAmountRange.domainScope(scopeFor(direction))) {
-      return null;
+  /// Returns the amount domain for [scope]'s exact non-amount identity.
+  ///
+  /// The applied query templates intentionally remain non-temporal.  Mind's
+  /// physical range, however, is observed through the currently visible
+  /// structural time scope, so callers that render Mind must use this method
+  /// rather than accidentally falling back to an all-time template maximum.
+  QueryMenuAmountDomain? amountDomainForScope(CurrentLedgerQueryScope scope) {
+    final domainScope = QueryAmountRange.domainScope(scope);
+    return _amountDomains[domainScope]?.domain;
+  }
+
+  /// Compatibility access for consumers whose canonical scope is the stored
+  /// non-temporal template (for example the Query Menu itself).
+  QueryMenuAmountDomain? amountDomainFor(LedgerDirection direction) =>
+      amountDomainForScope(scopeFor(direction));
+
+  /// Publishes the native facet/domain result for an already-visible scope
+  /// without mutating the stored applied Query template.  Structural time is
+  /// owned by DashboardNavigation, not by this controller.
+  bool publishAmountDomainForScope(
+    CurrentLedgerQueryScope scope,
+    QueryMenuAmountDomain domain,
+  ) {
+    final domainScope = QueryAmountRange.domainScope(scope);
+    final binding = _AmountDomainBinding(scope: domainScope, domain: domain);
+    if (_amountDomains[domainScope] == binding) return false;
+    _amountDomains[domainScope] = binding;
+    notifyListeners();
+    return true;
+  }
+
+  /// Publishes a complete native facet result.  The compact Mind control can
+  /// also receive its already-prepared amount domain through
+  /// [publishAmountDomainForScope] while the rest of Query Menu data remains
+  /// owned by its native facet loader.
+  bool publishFacetPresentationForScope(
+    CurrentLedgerQueryScope scope,
+    QueryMenuData data,
+  ) {
+    final direction = scope.direction;
+    final domainScope = QueryAmountRange.domainScope(scope);
+    final binding = _AmountDomainBinding(
+      scope: domainScope,
+      domain: data.amountDomain,
+    );
+    if (identical(_facetPresentations[direction], data) &&
+        _amountDomains[domainScope] == binding) {
+      return false;
     }
-    return binding.domain;
+    _facetPresentations[direction] = data;
+    _amountDomains[domainScope] = binding;
+    notifyListeners();
+    return true;
   }
 
   int get generation => _generation;
@@ -87,7 +133,8 @@ final class CurrentQueryController extends ChangeNotifier {
     }
     final previousScope = scopeFor(direction);
     final previousPresentation = facetPresentationFor(direction);
-    final previousDomain = _amountDomains[direction];
+    final previousDomain =
+        _amountDomains[QueryAmountRange.domainScope(previousScope)];
     // A renderer-side temporary facet gap is not a new applied Query result.
     // Keep the exact QueryMenuData that was accepted for this unchanged scope
     // so every host retains the same canonical amount domain until a new
@@ -111,10 +158,11 @@ final class CurrentQueryController extends ChangeNotifier {
     }
     _queries = _queries.replaceDirection(direction, nextScope);
     _facetPresentations[direction] = nextPresentation;
-    if (nextDomain == null) {
-      _amountDomains.remove(direction);
-    } else {
-      _amountDomains[direction] = nextDomain;
+    if (!QueryAmountRange.hasSameDomainIdentity(previousScope, nextScope)) {
+      _amountDomains.removeWhere((scope, _) => scope.direction == direction);
+    }
+    if (nextDomain != null) {
+      _amountDomains[domainScope] = nextDomain;
     }
     _lastChangedDirection = direction;
     _generation += 1;

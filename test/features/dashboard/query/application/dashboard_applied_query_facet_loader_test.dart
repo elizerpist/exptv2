@@ -10,8 +10,111 @@ import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
+  test(
+    'AMD-01: structural Year scope owns the active Mind amount domain',
+    () async {
+      final direction = ValueNotifier<LedgerDirection>(LedgerDirection.expense);
+      addTearDown(direction.dispose);
+      final scopeChanges = ValueNotifier<int>(0);
+      addTearDown(scopeChanges.dispose);
+      final template = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final queries = CurrentQueryController(initialScope: template);
+      addTearDown(queries.dispose);
+      final repository = _DeferredRepository();
+      final visible2027Scope = template.copyWith(
+        timeScope: const YearScope(2027),
+      );
+      final loader = DashboardAppliedQueryFacetLoader(
+        currentQuery: queries,
+        directionChanges: direction,
+        scopeChanges: scopeChanges,
+        activeDirection: () => direction.value,
+        activeScopeForDirection: (_) => visible2027Scope,
+        repository: repository,
+      );
+      addTearDown(loader.dispose);
+
+      final loading = loader.start();
+
+      expect(repository.requestedScopes, hasLength(1));
+      expect(
+        repository.requestedScopes.single.timeScope,
+        const YearScope(2027),
+        reason:
+            'The adaptive range must query the visible 2027 scope rather '
+            'than the all-time CurrentQuery template.',
+      );
+      repository.completeNext(_data(maximum: 1350000));
+      await loading;
+
+      expect(
+        queries.amountDomainForScope(visible2027Scope)?.maximumAmountScaled100,
+        1350000,
+        reason:
+            'The exact Fastfood 2027 maximum must be published against its '
+            'own non-amount domain, not the 260,000 Ft all-time rent domain.',
+      );
+    },
+  );
+
+  test(
+    'AMD-03: a visible structural scope change replaces the prior domain',
+    () async {
+      final direction = ValueNotifier<LedgerDirection>(LedgerDirection.expense);
+      addTearDown(direction.dispose);
+      final scopeChanges = ValueNotifier<int>(0);
+      addTearDown(scopeChanges.dispose);
+      final template = CurrentLedgerQueryScope(
+        direction: LedgerDirection.expense,
+        timeScope: const AllTimeScope(),
+      );
+      final queries = CurrentQueryController(initialScope: template);
+      addTearDown(queries.dispose);
+      final repository = _DeferredRepository();
+      var visibleScope = template.copyWith(timeScope: const YearScope(2027));
+      final loader = DashboardAppliedQueryFacetLoader(
+        currentQuery: queries,
+        directionChanges: direction,
+        scopeChanges: scopeChanges,
+        activeDirection: () => direction.value,
+        activeScopeForDirection: (_) => visibleScope,
+        repository: repository,
+      );
+      addTearDown(loader.dispose);
+
+      final first = loader.start();
+      repository.completeAt(0, _data(maximum: 1350000));
+      await first;
+      expect(
+        queries.amountDomainForScope(visibleScope)?.maximumAmountScaled100,
+        1350000,
+      );
+
+      visibleScope = template.copyWith(
+        timeScope: const MonthScope(YearMonth(year: 2027, month: 5)),
+      );
+      scopeChanges.value += 1;
+      await Future<void>.microtask(() {});
+
+      expect(repository.requestedScopes, hasLength(2));
+      expect(
+        repository.requestedScopes.last.timeScope,
+        const MonthScope(YearMonth(year: 2027, month: 5)),
+      );
+      expect(
+        queries.amountDomainForScope(visibleScope),
+        isNull,
+        reason: 'The prior Year domain must never be reused for a Month.',
+      );
+    },
+  );
+
   test(
     'publishes the initial applied Query domain into CurrentQueryController',
     () async {

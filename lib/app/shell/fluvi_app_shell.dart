@@ -218,11 +218,13 @@ class _FluviAppShellState extends State<FluviAppShell> {
     _appliedQueryFacets = DashboardAppliedQueryFacetLoader(
       currentQuery: _controller.currentQuery,
       directionChanges: _controller.transactionDirection,
+      scopeChanges: _controller.visibleFrames,
       activeDirection: () =>
           _controller.transactionDirection.direction ==
               TransactionDirection.income
           ? LedgerDirection.income
           : LedgerDirection.expense,
+      activeScopeForDirection: _controller.mindAmountDomainScopeFor,
       repository: _queryRepository,
     );
     _savedQueries = SavedQueryController(repository: _queryRepository);

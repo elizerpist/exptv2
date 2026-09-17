@@ -32,18 +32,28 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
     required CurrentQueryController currentQuery,
     required Listenable directionChanges,
     required LedgerDirection Function() activeDirection,
+    Listenable? scopeChanges,
+    CurrentLedgerQueryScope Function(LedgerDirection direction)?
+    activeScopeForDirection,
     required QueryMenuRepository repository,
   }) : _currentQuery = currentQuery,
        _directionChanges = directionChanges,
        _activeDirection = activeDirection,
+       _scopeChanges = scopeChanges,
+       _activeScopeForDirection =
+           activeScopeForDirection ?? currentQuery.scopeFor,
        _repository = repository {
     _currentQuery.addListener(_onAppliedQueryChanged);
     _directionChanges.addListener(_onActiveDirectionChanged);
+    _scopeChanges?.addListener(_onActiveScopeChanged);
   }
 
   final CurrentQueryController _currentQuery;
   final Listenable _directionChanges;
   final LedgerDirection Function() _activeDirection;
+  final Listenable? _scopeChanges;
+  final CurrentLedgerQueryScope Function(LedgerDirection direction)
+  _activeScopeForDirection;
   final QueryMenuRepository _repository;
 
   var _started = false;
@@ -99,12 +109,17 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
     unawaited(_ensureActivePresentation(reason: 'activeDirectionChanged'));
   }
 
+  void _onActiveScopeChanged() {
+    if (!_started) return;
+    unawaited(_ensureActivePresentation(reason: 'visibleScopeChanged'));
+  }
+
   Future<void> _ensureActivePresentation({required String reason}) {
     if (_disposed) return Future<void>.value();
     final direction = _activeDirection();
-    final scope = _currentQuery.scopeFor(direction);
+    final scope = _activeScopeForDirection(direction);
     final domainScope = QueryAmountRange.domainScope(scope);
-    final existing = _currentQuery.amountDomainFor(direction);
+    final existing = _currentQuery.amountDomainForScope(scope);
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: 'MIND|RANGE_REQUIRED',
@@ -230,10 +245,10 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
           generation != _generation ||
           _activeDirection() != direction ||
           !QueryAmountRange.hasSameDomainIdentity(
-            _currentQuery.scopeFor(direction),
+            _activeScopeForDirection(direction),
             scope,
           ) ||
-          _currentQuery.amountDomainFor(direction) != null) {
+          _currentQuery.amountDomainForScope(scope) != null) {
         final rejectionReason = _disposed
             ? 'disposed'
             : generation != _generation
@@ -241,7 +256,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
             : _activeDirection() != direction
             ? 'directionChanged'
             : !QueryAmountRange.hasSameDomainIdentity(
-                _currentQuery.scopeFor(direction),
+                _activeScopeForDirection(direction),
                 scope,
               )
             ? 'domainScopeChanged'
@@ -258,10 +273,9 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         );
         return;
       }
-      final published = _currentQuery.replaceDirection(
-        direction,
-        _currentQuery.scopeFor(direction),
-        facetPresentation: data,
+      final published = _currentQuery.publishFacetPresentationForScope(
+        scope,
+        data,
       );
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -278,7 +292,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
               'entryCount=${data.result.entryCount}',
         ),
       );
-      if (published || _currentQuery.amountDomainFor(direction) != null) {
+      if (published || _currentQuery.amountDomainForScope(scope) != null) {
         _setState(
           DashboardAppliedQueryFacetLoadState.ready,
           scope: scope,
@@ -334,9 +348,9 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
       LedgerDirection.expense => LedgerDirection.income,
     };
     final scope = QueryAmountRange.domainScope(
-      _currentQuery.scopeFor(direction),
+      _activeScopeForDirection(direction),
     );
-    if (_currentQuery.amountDomainFor(direction) != null) {
+    if (_currentQuery.amountDomainForScope(scope) != null) {
       return Future<void>.value();
     }
     final existing = _oppositeDirectionPrewarmOperation;
@@ -383,13 +397,13 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
       final data = await _repository.readFacets(scope);
       timer.stop();
       final currentScope = QueryAmountRange.domainScope(
-        _currentQuery.scopeFor(direction),
+        _activeScopeForDirection(direction),
       );
       final accepted =
           !_disposed &&
           generation == _oppositeDirectionPrewarmGeneration &&
           currentScope == scope &&
-          _currentQuery.amountDomainFor(direction) == null;
+          _currentQuery.amountDomainForScope(scope) == null;
       if (!accepted) {
         final reason = _disposed
             ? 'disposed'
@@ -409,10 +423,9 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
         );
         return;
       }
-      final published = _currentQuery.replaceDirection(
-        direction,
-        _currentQuery.scopeFor(direction),
-        facetPresentation: data,
+      final published = _currentQuery.publishFacetPresentationForScope(
+        scope,
+        data,
       );
       FluviDiagnosticLogger.log(
         FluviDiagnosticEvent(
@@ -489,6 +502,7 @@ final class DashboardAppliedQueryFacetLoader extends ChangeNotifier {
     _oppositeDirectionPrewarmGeneration += 1;
     _currentQuery.removeListener(_onAppliedQueryChanged);
     _directionChanges.removeListener(_onActiveDirectionChanged);
+    _scopeChanges?.removeListener(_onActiveScopeChanged);
     super.dispose();
   }
 }

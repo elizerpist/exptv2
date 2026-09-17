@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 
 import '../../query/data/dashboard_ledger_entry.dart';
+import '../../time_navigation/domain/ledger_time_scope.dart';
 
 /// Immutable, exact base-scope row membership prepared before a focus gesture.
 ///
@@ -113,6 +114,52 @@ final class DashboardFocusMembershipSeed {
       entryIndices: selected,
       membershipLookupMicros: lookup.elapsedMicroseconds,
       intersectionMicros: intersectionMicros,
+    );
+  }
+
+  /// Exact transaction amount bounds for an already-selected semantic scope.
+  ///
+  /// The input deliberately has no amount endpoints: this is the source
+  /// domain consumed by the two-ended range refinement, so including that
+  /// refinement here would make the right thumb recursively alter its own
+  /// physical maximum.  The membership indexes handle focus/search first;
+  /// the remaining bounded temporal pass is admitted only when a visible
+  /// semantic scope changes, never from a pointer tick.
+  DashboardPreparedAmountDomain amountDomain({
+    required LedgerTimeScope timeScope,
+    String? categoryId,
+    String? partnerId,
+    String? normalizedSearch,
+  }) {
+    final selected = select(
+      categoryId: categoryId,
+      partnerId: partnerId,
+      normalizedSearch: normalizedSearch,
+    );
+    final boundaries = timeScope.boundaries;
+    final start = boundaries?.startInclusive.epochDay;
+    final end = boundaries?.endExclusive.epochDay;
+    var entryCount = 0;
+    var minimum = 0;
+    var maximum = 0;
+    for (final ordinal in selected.entryIndices) {
+      final entry = entryAt(ordinal);
+      final epochDay = entry.bookedLocalEpochDay;
+      if (start != null && (epochDay < start || epochDay >= end!)) continue;
+      final amount = entry.amountMinor;
+      if (entryCount == 0) {
+        minimum = amount;
+        maximum = amount;
+      } else {
+        if (amount < minimum) minimum = amount;
+        if (amount > maximum) maximum = amount;
+      }
+      entryCount += 1;
+    }
+    return DashboardPreparedAmountDomain(
+      entryCount: entryCount,
+      minimumAmountScaled100: minimum,
+      maximumAmountScaled100: maximum,
     );
   }
 
@@ -430,6 +477,24 @@ final class DashboardFocusOrdinalSet extends IterableBase<int> {
         ? empty
         : DashboardFocusOrdinalSet.fromSorted(matches);
   }
+}
+
+/// Compact semantic aggregate derived from resident prepared membership.
+///
+/// This is intentionally not a Query Menu result: it carries only the range
+/// domain needed to keep the Mind slider coherent while a visible scope
+/// changes, without making the renderer or a pointer interaction read Room.
+@immutable
+final class DashboardPreparedAmountDomain {
+  const DashboardPreparedAmountDomain({
+    required this.entryCount,
+    required this.minimumAmountScaled100,
+    required this.maximumAmountScaled100,
+  });
+
+  final int entryCount;
+  final int minimumAmountScaled100;
+  final int maximumAmountScaled100;
 }
 
 @immutable

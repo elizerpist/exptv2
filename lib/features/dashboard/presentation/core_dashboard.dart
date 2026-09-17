@@ -1306,11 +1306,11 @@ class _CoreDashboardState extends State<CoreDashboard>
   QueryAmountRangeValues? _mindQueryAmountRange() {
     final direction =
         controller.presentation.navigation.state.parentQueryScope.direction;
-    final scope = controller.currentQuery.scopeFor(direction);
-    final domain = controller.currentQuery.amountDomainFor(direction);
-    final binding = QueryAmountRangeBinding.ready(
-      scope: scope,
-      amountDomain: domain,
+    final binding = controller.mindAmountRangeBindingFor(direction);
+    final scope =
+        binding?.scope ?? controller.mindAmountDomainScopeFor(direction);
+    final domain = controller.currentQuery.amountDomainForScope(
+      controller.mindAmountDomainScopeFor(direction),
     );
     final values = binding?.values;
     final shouldRenderYearHeatmap =

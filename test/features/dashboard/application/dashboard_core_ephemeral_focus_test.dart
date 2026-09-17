@@ -539,9 +539,10 @@ void main() {
       final committed = core.visibleFrames.value!;
       final navigation = core.navigation.state;
       final applied = core.currentQuery.scopeFor(LedgerDirection.income);
-      core.currentQuery.apply(
-        applied,
-        facetPresentation: const QueryMenuData(
+      _publishMindAmountFacetPresentation(
+        core,
+        LedgerDirection.income,
+        const QueryMenuData(
           result: QueryMenuResultSummary(
             entryCount: 3,
             amountScaled100: 600000,
@@ -586,6 +587,55 @@ void main() {
             .scope,
         contains('repositoryRequests=0 indexBuilds=0 canonicalCommits=0'),
       );
+    },
+  );
+
+  test(
+    'AMD-04: Mind publishes the visible 2027 amount maximum, not an all-time rent maximum',
+    () async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'rent-2026',
+              direction: 'expense',
+              categoryId: 'housing',
+              partnerId: 'landlord',
+              amount: 26000000,
+              date: const LocalDate(year: 2026, month: 1, day: 5),
+            ),
+            _mindYearEntry(
+              id: 'fastfood-min-2027',
+              direction: 'expense',
+              categoryId: 'fastfood',
+              partnerId: 'kfc',
+              amount: 180000,
+              date: const LocalDate(year: 2027, month: 1, day: 5),
+            ),
+            _mindYearEntry(
+              id: 'fastfood-max-2027',
+              direction: 'expense',
+              categoryId: 'fastfood',
+              partnerId: 'mcdonalds',
+              amount: 1350000,
+              date: const LocalDate(year: 2027, month: 12, day: 5),
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2027, 6, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      final binding = core.mindAmountRangeBindingFor(LedgerDirection.expense)!;
+
+      expect(binding.values.maximumScaled100, 1350000);
+      expect(binding.values.minimumScaled100, 100000);
+      expect(binding.values.upperScaled100, 1350000);
     },
   );
 
@@ -720,7 +770,18 @@ void main() {
         core.mindBehavioralScore.value?.identity.upstreamScopeKey,
         contains('focus:category=salary'),
       );
-      expect(core.mindBehavioralScore.value?.range, middleOnly);
+      expect(
+        core.mindBehavioralScore.value?.range,
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 200000,
+          lowerScaled100: 200000,
+          upperScaled100: 200000,
+        ),
+        reason:
+            'The canonical 2000-Ft filter stays selected, while the physical '
+            'domain now follows the focused Salary population (1000–2000 Ft).',
+      );
     },
   );
 
@@ -2644,10 +2705,10 @@ void main() {
       );
       addTearDown(core.dispose);
       await core.bootstrap();
-      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
-      core.currentQuery.apply(
-        applied,
-        facetPresentation: const QueryMenuData(
+      _publishMindAmountFacetPresentation(
+        core,
+        LedgerDirection.income,
+        const QueryMenuData(
           result: QueryMenuResultSummary(
             entryCount: 3,
             amountScaled100: 600000,
@@ -2725,14 +2786,14 @@ void main() {
       );
       addTearDown(core.dispose);
       await core.bootstrap();
-      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
       const domain = QueryMenuAmountDomain(
         minimumAmountScaled100: 100000,
         maximumAmountScaled100: 300000,
       );
-      core.currentQuery.apply(
-        applied,
-        facetPresentation: const QueryMenuData(
+      _publishMindAmountFacetPresentation(
+        core,
+        LedgerDirection.income,
+        const QueryMenuData(
           result: QueryMenuResultSummary(
             entryCount: 3,
             amountScaled100: 600000,
@@ -3528,10 +3589,10 @@ void main() {
       );
       addTearDown(core.dispose);
       await core.bootstrap();
-      final applied = core.currentQuery.scopeFor(LedgerDirection.income);
-      core.currentQuery.apply(
-        applied,
-        facetPresentation: const QueryMenuData(
+      _publishMindAmountFacetPresentation(
+        core,
+        LedgerDirection.income,
+        const QueryMenuData(
           result: QueryMenuResultSummary(
             entryCount: 3,
             amountScaled100: 600000,
@@ -3712,9 +3773,10 @@ void main() {
         minimumAmountScaled100: 100000,
         maximumAmountScaled100: 300000,
       );
-      core.currentQuery.apply(
-        applied,
-        facetPresentation: const QueryMenuData(
+      _publishMindAmountFacetPresentation(
+        core,
+        LedgerDirection.income,
+        const QueryMenuData(
           result: QueryMenuResultSummary(
             entryCount: 3,
             amountScaled100: 600000,
@@ -3821,9 +3883,10 @@ void main() {
         minimumAmountScaled100: 100000,
         maximumAmountScaled100: 200000,
       );
-      core.currentQuery.apply(
-        applied,
-        facetPresentation: const QueryMenuData(
+      _publishMindAmountFacetPresentation(
+        core,
+        LedgerDirection.income,
+        const QueryMenuData(
           result: QueryMenuResultSummary(
             entryCount: 2,
             amountScaled100: 300000,
@@ -7407,10 +7470,10 @@ void _installMindAmountDomain(
   DashboardCoreController core,
   LedgerDirection direction,
 ) {
-  final scope = core.currentQuery.scopeFor(direction);
-  core.currentQuery.apply(
-    scope,
-    facetPresentation: const QueryMenuData(
+  _publishMindAmountFacetPresentation(
+    core,
+    direction,
+    const QueryMenuData(
       result: QueryMenuResultSummary(entryCount: 4, amountScaled100: 1800000),
       amountDomain: QueryMenuAmountDomain(
         minimumAmountScaled100: 100000,
@@ -7420,6 +7483,17 @@ void _installMindAmountDomain(
       categories: <QueryMenuCategoryFacet>[],
       partners: <QueryMenuPartnerFacet>[],
     ),
+  );
+}
+
+void _publishMindAmountFacetPresentation(
+  DashboardCoreController core,
+  LedgerDirection direction,
+  QueryMenuData data,
+) {
+  core.currentQuery.publishFacetPresentationForScope(
+    core.mindAmountDomainScopeFor(direction),
+    data,
   );
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
   DashboardLedgerEntry row(
@@ -129,6 +131,54 @@ void main() {
       <String>['c'],
     );
   });
+
+  test(
+    'AMD-02: derives a visible Year amount domain from prepared membership',
+    () {
+      final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+        DashboardLedgerEntry(
+          id: 'all-time-rent',
+          categoryId: 'housing',
+          partnerId: 'landlord',
+          direction: 'expense',
+          amountMinor: 26000000,
+          bookedLocalEpochDay: LocalDate(year: 2026, month: 1, day: 5).epochDay,
+          bookedLocalTimeMinutes: 600,
+        ),
+        DashboardLedgerEntry(
+          id: 'fastfood-small',
+          categoryId: 'fastfood',
+          partnerId: 'kfc',
+          direction: 'expense',
+          amountMinor: 180000,
+          bookedLocalEpochDay: LocalDate(year: 2027, month: 1, day: 5).epochDay,
+          bookedLocalTimeMinutes: 600,
+        ),
+        DashboardLedgerEntry(
+          id: 'fastfood-max',
+          categoryId: 'fastfood',
+          partnerId: 'mcdonalds',
+          direction: 'expense',
+          amountMinor: 1350000,
+          bookedLocalEpochDay: LocalDate(
+            year: 2027,
+            month: 12,
+            day: 5,
+          ).epochDay,
+          bookedLocalTimeMinutes: 600,
+        ),
+      ]);
+
+      final domain = seed.amountDomain(
+        timeScope: const YearScope(2027),
+        categoryId: 'fastfood',
+      );
+
+      expect(domain.entryCount, 2);
+      expect(domain.minimumAmountScaled100, 180000);
+      expect(domain.maximumAmountScaled100, 1350000);
+    },
+  );
 
   test(
     'RED: unchanged prepared membership is reused by identity when another focus dimension clears',

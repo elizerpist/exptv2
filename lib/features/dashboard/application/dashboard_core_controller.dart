@@ -3831,8 +3831,95 @@ final class DashboardCoreController {
     // cancel the active base.  The active base is already installed before
     // this Future resolves; only then may the bounded sibling prewarm enter
     // that shared lane.
-    if (activeReady) _prewarmInactiveMindAmountPreviewBase(direction);
+    if (activeReady) {
+      _publishPreparedMindAmountDomainForScope(
+        mindAmountDomainScopeFor(direction),
+      );
+      _prewarmInactiveMindAmountPreviewBase(direction);
+    }
     return activeReady;
+  }
+
+  /// Resolves the one visible, non-local scope whose native amount domain
+  /// defines Mind's slider bounds.  The applied Query remains an all-time
+  /// template; DashboardNavigation/visible frames own structural time (and
+  /// ephemeral focus), so neither the slider widget nor a Mind-local cache may
+  /// substitute the template's all-time maximum here.
+  CurrentLedgerQueryScope mindAmountDomainScopeFor(
+    LedgerDirection direction, {
+    DashboardNavigationState? navigationState,
+    DashboardVisibleFrame? visibleFrame,
+  }) {
+    final frame =
+        visibleFrame ?? (navigationState == null ? visibleFrames.value : null);
+    if (frame != null && frame.direction == direction) return frame.scope;
+    final template = currentQuery.scopeFor(direction);
+    final structural =
+        (navigationState ?? navigation.state).parentQueryScope.timeScope;
+    return focus.effectiveScopeFor(
+      template.copyWith(timeScope: structural),
+      coreRevision: coreRevision,
+    );
+  }
+
+  /// Publishes the exact visible non-amount domain from the already admitted
+  /// Mind index. It runs only at semantic scope/base boundaries; the compact
+  /// range renderer and every pointer tick only read this binding.
+  bool _publishPreparedMindAmountDomainForScope(CurrentLedgerQueryScope scope) {
+    final domainScope = QueryAmountRange.domainScope(scope);
+    if (currentQuery.amountDomainForScope(domainScope) != null) return true;
+    final canonicalScope = currentQuery.scopeFor(domainScope.direction);
+    final base = _mindAmountPreparedBaseFor(
+      QueryAmountRange.domainScope(canonicalScope),
+    );
+    if (base == null) return false;
+    final activeFocus = _activeMindFocusFor(base: base, scope: canonicalScope);
+    final seed = base.partitionFor(domainScope.direction).focusMembershipSeed;
+    if (seed == null) return false;
+    final prepared = seed.amountDomain(
+      timeScope: domainScope.timeScope,
+      categoryId: activeFocus?.category?.id,
+      partnerId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
+    );
+    currentQuery.publishAmountDomainForScope(
+      domainScope,
+      QueryMenuAmountDomain(
+        minimumAmountScaled100: prepared.minimumAmountScaled100,
+        maximumAmountScaled100: prepared.maximumAmountScaled100,
+      ),
+    );
+    return true;
+  }
+
+  /// The sole binding consumed by Mind's compact range control and semantic
+  /// score/heatmap preview lanes.
+  QueryAmountRangeBinding? mindAmountRangeBindingFor(
+    LedgerDirection direction, {
+    DashboardNavigationState? navigationState,
+    DashboardVisibleFrame? visibleFrame,
+  }) {
+    final domainScope = mindAmountDomainScopeFor(
+      direction,
+      navigationState: navigationState,
+      visibleFrame: visibleFrame,
+    );
+    return QueryAmountRangeBinding.ready(
+      // The range's values and its one canonical mutation target remain the
+      // directional all-time Query template.  Only its physical min/max
+      // source is structural/visible.  Keeping those roles separate prevents
+      // a pointer preview from accidentally turning a Year/Month/Day view
+      // scope into a second stored Query template.
+      scope: currentQuery.scopeFor(direction),
+      amountDomain:
+          currentQuery.amountDomainForScope(domainScope) ??
+          // A pre-admitted Mind base always publishes the exact visible
+          // domain first. Before that base exists, preserve the one canonical
+          // Query-Menu domain rather than making every protected non-Mind
+          // surface temporarily unavailable. The scoped facet loader replaces
+          // this handoff value; pointer ticks never initiate that work.
+          currentQuery.amountDomainFor(direction),
+    );
   }
 
   void _prewarmInactiveMindAmountPreviewBase(LedgerDirection activeDirection) {
@@ -3843,7 +3930,7 @@ final class DashboardCoreController {
     // The applied facet loader remains the only owner of canonical domains.
     // Core only retains a bounded immutable prepared base once that canonical
     // data is already available; it does not issue a second facet request.
-    if (currentQuery.amountDomainFor(inactiveDirection) == null) return;
+    if (mindAmountRangeBindingFor(inactiveDirection) == null) return;
     unawaited(
       _primeMindAmountPreviewBaseFor(
         direction: inactiveDirection,
@@ -3981,9 +4068,12 @@ final class DashboardCoreController {
     final state = navigationState ?? navigation.state;
     final resolvedDirection = direction ?? state.parentQueryScope.direction;
     final appliedScope = currentQuery.scopeFor(resolvedDirection);
-    final binding = QueryAmountRangeBinding.ready(
-      scope: appliedScope,
-      amountDomain: currentQuery.amountDomainFor(resolvedDirection),
+    _publishPreparedMindAmountDomainForScope(
+      mindAmountDomainScopeFor(resolvedDirection, navigationState: state),
+    );
+    final binding = mindAmountRangeBindingFor(
+      resolvedDirection,
+      navigationState: state,
     );
     final base = _compatibleMindAmountPreviewBase(appliedScope);
     if (binding == null || base == null) {
@@ -4323,10 +4413,7 @@ final class DashboardCoreController {
     int temporalGeneration = 0,
     bool allowBaseAdmission = true,
   }) {
-    final binding = QueryAmountRangeBinding.ready(
-      scope: appliedScope,
-      amountDomain: currentQuery.amountDomainFor(direction),
-    );
+    final binding = mindAmountRangeBindingFor(direction);
     final base = allowBaseAdmission
         ? _compatibleMindAmountPreviewBase(appliedScope)
         : _mindAmountPreparedBaseFor(
@@ -5167,11 +5254,7 @@ final class DashboardCoreController {
     if (_disposed) return false;
     final direction = navigation.state.parentQueryScope.direction;
     final appliedScope = currentQuery.scopeFor(direction);
-    final domain = currentQuery.amountDomainFor(direction);
-    final binding = QueryAmountRangeBinding.ready(
-      scope: appliedScope,
-      amountDomain: domain,
-    );
+    final binding = mindAmountRangeBindingFor(direction);
     // A pointer tick may use only a pre-admitted immutable base. In
     // particular, it must never fall through to dataRuntime.currentIndex and
     // construct annual membership from raw rows on the UI interaction path.
@@ -5433,10 +5516,7 @@ final class DashboardCoreController {
     }
     final direction = navigation.state.parentQueryScope.direction;
     final current = currentQuery.scopeFor(direction);
-    final binding = QueryAmountRangeBinding.ready(
-      scope: current,
-      amountDomain: currentQuery.amountDomainFor(direction),
-    );
+    final binding = mindAmountRangeBindingFor(direction);
     final base = _mindAmountPreparedBaseFor(
       QueryAmountRange.domainScope(current),
     );
@@ -14210,6 +14290,7 @@ final class DashboardCoreController {
     // observes only the frame that the visible-frame store actually accepted.
     // Bind its exact child time scope here so Header score/text/palette cannot
     // trail an already-visible Day/Month/Year child until rail settlement.
+    _publishPreparedMindAmountDomainForScope(frame.scope);
     _publishMindBehavioralScoreForVisibleFrame(frame);
     diagnostics.record(
       DashboardInteractionEvent.visibleFramePublished,
@@ -14247,10 +14328,7 @@ final class DashboardCoreController {
     // canonical query. The visible frame supplies only the temporal target
     // and (for an uncommitted Mind drag) its already-rendered range preview.
     final canonicalScope = currentQuery.scopeFor(direction);
-    final binding = QueryAmountRangeBinding.ready(
-      scope: frame.scope,
-      amountDomain: currentQuery.amountDomainFor(direction),
-    );
+    final binding = mindAmountRangeBindingFor(direction, visibleFrame: frame);
     final domainScope = QueryAmountRange.domainScope(canonicalScope);
     final base = _mindAmountPreparedBaseFor(domainScope);
     if (binding == null || base == null) return;
