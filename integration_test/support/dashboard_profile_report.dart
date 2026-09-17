@@ -605,39 +605,34 @@ abstract final class DashboardProfileReport {
       }
       validateAvatarFinalTargetEvidence(Map<String, Object?>.from(flight));
     }
-    final coveredTargetHandles = <int>{
-      for (final flight in flights.cast<Map>())
-        if (flight['physical_settle_target_handle'] case final int handle)
-          handle,
-    };
-    if (coveredTargetHandles.length != 9 ||
-        !coveredTargetHandles.containsAll(const <int>{
-          0,
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-        })) {
-      throw StateError(
-        'Avatar K requires real pointer coverage of every target handle: '
-        '$coveredTargetHandles.',
-      );
-    }
     final categories = evidence['fixture_category_row_counts'];
+    final rawNonemptyHandles = evidence['fixture_nonempty_target_handles'];
     if (categories is! Map ||
-        categories.length != 8 ||
-        [
-          for (var handle = 1; handle <= 8; handle++) categories['$handle'],
-        ].any((count) => count is! int || count < 1) ||
+        rawNonemptyHandles is! List ||
+        rawNonemptyHandles.length != 8 ||
+        rawNonemptyHandles.any((handle) => handle is! int || handle < 1) ||
+        rawNonemptyHandles.toSet().length != rawNonemptyHandles.length ||
+        rawNonemptyHandles.any(
+          (handle) =>
+              categories['$handle'] is! int || categories['$handle'] < 1,
+        ) ||
         evidence['fixture_category_rows_disjoint'] != true ||
         evidence['fixture_aggregate_row_count'] is! int ||
         (evidence['fixture_aggregate_row_count'] as int) < 8) {
       throw StateError(
         'Avatar K requires eight nonempty disjoint categories and aggregate.',
+      );
+    }
+    final expectedTargetHandles = <int>{0, ...rawNonemptyHandles.cast<int>()};
+    final coveredTargetHandles = <int>{
+      for (final flight in flights.cast<Map>())
+        if (flight['physical_settle_target_handle'] case final int handle)
+          handle,
+    };
+    if (!coveredTargetHandles.containsAll(expectedTargetHandles)) {
+      throw StateError(
+        'Avatar K requires real pointer coverage of every nonempty target: '
+        'expected=$expectedTargetHandles covered=$coveredTargetHandles.',
       );
     }
     final rowDiscovery = evidence['avatar_target_row_discovery_work_units'];
@@ -658,8 +653,7 @@ abstract final class DashboardProfileReport {
       final workUnit = unit['work_unit'];
       final elapsed = unit['elapsed_micros'];
       if (target is! int ||
-          target < 0 ||
-          target > 8 ||
+          !expectedTargetHandles.contains(target) ||
           generation is! int ||
           generation < 1 ||
           epoch is! int ||
@@ -743,7 +737,7 @@ abstract final class DashboardProfileReport {
       'Avatar final-target evidence $key is invalid: ${evidence[key]}.',
     );
     final physical = evidence['physical_settle_target_handle'];
-    if (physical is! int || physical < 0 || physical > 8) {
+    if (physical is! int || physical < 0) {
       reject('physical_settle_target_handle');
     }
     for (final key in const [

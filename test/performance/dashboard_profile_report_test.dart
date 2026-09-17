@@ -669,7 +669,7 @@ void main() {
         isA<StateError>().having(
           (error) => error.message,
           'message',
-          contains('every target handle'),
+          contains('every nonempty target'),
         ),
       ),
     );
@@ -1139,6 +1139,9 @@ Map<String, Object?> _avatarFirstTargetEvidence() => <String, Object?>{
   'fixture_category_row_counts': {
     for (var handle = 1; handle <= 8; handle++) '$handle': 1,
   },
+  'fixture_nonempty_target_handles': [
+    for (var handle = 1; handle <= 8; handle++) handle,
+  ],
   'fixture_aggregate_row_count': 8,
   'fixture_category_rows_disjoint': true,
   'pointer_accepted_count': 42,

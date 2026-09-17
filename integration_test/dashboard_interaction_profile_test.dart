@@ -16,6 +16,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_avatar_target_painted.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
@@ -2267,11 +2268,30 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
             row.bookedLocalEpochDay >= start && row.bookedLocalEpochDay < end,
       )
       .toList();
+  final categoryTargets = <DashboardBudgetTarget>[];
+  for (var handle = 1; ; handle += 1) {
+    final target = rail.presentation.targetForHandle(handle);
+    if (target == null) break;
+    categoryTargets.add(target);
+  }
+  final futureOnlyTarget = categoryTargets.singleWhere(
+    (target) => target.category?.displayName == 'Gyorsétterem',
+  );
   final seen = <String>{};
   final counts = <String, int>{};
-  for (var handle = 1; handle <= 8; handle++) {
-    final category = rail.presentation.targetForHandle(handle)?.category?.id;
-    expect(category, isNotNull, reason: 'K requires category handle $handle.');
+  final nonemptyTargets = categoryTargets
+      .where((target) {
+        final categoryId = target.category!.id;
+        return rows.any((row) => row.categoryId == categoryId);
+      })
+      .toList(growable: false);
+  expect(
+    nonemptyTargets,
+    hasLength(8),
+    reason: 'K requires the eight legacy nonempty July category targets.',
+  );
+  for (final target in nonemptyTargets) {
+    final category = target.category!.id;
     final ids = rows
         .where((row) => row.categoryId == category)
         .map((row) => row.id)
@@ -2287,16 +2307,14 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
       reason: 'K category rows must be disjoint.',
     );
     seen.addAll(ids);
-    counts['$handle'] = ids.length;
+    counts['${target.handle}'] = ids.length;
   }
   // The 2027 Fastfood mirror is intentionally outside this July 2026
   // performance fixture. It remains a real category target, but K measures
   // only the legacy nonempty target set so an empty future-only category is
   // not misrepresented as an exact nonempty Avatar paint.
-  final futureOnlyTarget = rail.presentation.targetForHandle(9);
-  expect(futureOnlyTarget?.category?.displayName, 'Gyorsétterem');
   final futureOnlyIds = rows
-      .where((row) => row.categoryId == futureOnlyTarget!.category!.id)
+      .where((row) => row.categoryId == futureOnlyTarget.category!.id)
       .map((row) => row.id)
       .toSet();
   expect(futureOnlyIds, isEmpty);
@@ -2309,6 +2327,9 @@ Map<String, Object?> _verifyAvatarNonemptyFixture(
   );
   return {
     'fixture_category_row_counts': counts,
+    'fixture_nonempty_target_handles': nonemptyTargets
+        .map((target) => target.handle)
+        .toList(growable: false),
     'fixture_aggregate_row_count': rows.length,
     'fixture_category_rows_disjoint':
         seen.length == counts.values.fold<int>(0, (a, b) => a + b),
