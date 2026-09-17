@@ -1207,3 +1207,28 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Protected systems remain unchanged: Time/Avatar physics, Query ownership,
   one compact range owner, score mathematics, Header chart/ticker, Budget and
   LogBox. Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-18 — Final online validation and delivery (`434276ac`)
+
+- Final workflow: `35285472445`, dispatched from journal head
+  `1da3809320457f6cddcc6328c5b2e6646e826466`; its runtime application source
+  is the immediately preceding repair commit `434276acd234f2ad04217365f30659204fe2159e`.
+- PASS — online `test-flutter`, clean Room `test-core`, native dashboard bridge
+  tests and `build-human-diagnostic-apk`. The first profile failure's temporal
+  hit-test assertion is absent after the repair: profile B proceeds past the
+  Mind Year slider topology check.
+- FAIL — online `run-dashboard-profile`, only at the inherited profile harness
+  check `Mind Year heatmap profile evidence frame_timing_headroom is invalid:
+  null`. This known runner/harness condition is not altered or called green;
+  it occurs after the repaired topology path.
+- Human artifact downloaded and digest-verified:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_1da3809.apk`
+  (83,252,529 bytes, SHA-256
+  `ff79a7e388fe78b82ca4aaf78a2d687836846d84e003498641ce807fa52c46a5`).
+  The compiled `FLUVI_BUILD_COMMIT` marker is `1da38093…`.
+- Final matching SCIP is tooling commit `53c1f6da9535c75c42ec425de3ae7bd708f5ee3a`
+  on `tooling/scip-codegraph-v1`: `manifest.source_head=434276ac…`,
+  SCIP Dart 1.6.2, raw index SHA-256
+  `0c7c77f79fb2990f4bbd92c0b62ef13c6b93169b7b461b19d2418ebaf9482462`,
+  and tooling tests pass 15/15.
+- Physical acceptance remains `PENDING — USER ONLY`.
