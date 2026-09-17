@@ -23,6 +23,7 @@ import '../mind/domain/mind_year_heatmap_projection.dart';
 import '../mind/domain/mind_behavioral_score_live_projection.dart';
 import '../mind/domain/mind_behavioral_score_projection.dart';
 import '../mind/domain/mind_behavioral_score_settings.dart';
+import '../mind/domain/mind_header_score_chart_presentation.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../motion/dashboard_display_frame_coalescer.dart';
 import '../motion/dashboard_motion_kernel.dart';
@@ -1071,6 +1072,9 @@ final class DashboardCoreController {
   /// models, not inside Header visual tuning or canonical Query state.
   final MindBehavioralScoreSettingsController mindBehavioralScoreSettings =
       MindBehavioralScoreSettingsController();
+  final MindHeaderScoreChartPresentationController
+  mindHeaderScoreChartPresentation =
+      MindHeaderScoreChartPresentationController();
   final MindYearHeatmapPresentationController mindYearHeatmapPresentation =
       MindYearHeatmapPresentationController();
   late final CurrentQueryController currentQuery;
@@ -3926,14 +3930,14 @@ final class DashboardCoreController {
       // a pointer preview from accidentally turning a Year/Month/Day view
       // scope into a second stored Query template.
       scope: currentQuery.scopeFor(direction),
-      amountDomain:
-          currentQuery.amountDomainForScope(domainScope) ??
-          // A pre-admitted Mind base always publishes the exact visible
-          // domain first. Before that base exists, preserve the one canonical
-          // Query-Menu domain rather than making every protected non-Mind
-          // surface temporarily unavailable. The scoped facet loader replaces
-          // this handoff value; pointer ticks never initiate that work.
-          currentQuery.amountDomainFor(direction),
+      // A structural Year/Month/Day/Sum view must never borrow the
+      // directional all-time Query-menu domain while its own exact domain is
+      // pending. That fallback can visibly render another scope's ceiling
+      // (for example an all-time 260,000 Ft rent maximum in a narrow 2027
+      // Fastfood year). The matching domain is published from the resident
+      // prepared Mind membership at the visible-frame boundary; until then
+      // the compact control is explicitly unavailable rather than false.
+      amountDomain: currentQuery.amountDomainForScope(domainScope),
     );
   }
 
@@ -3942,10 +3946,16 @@ final class DashboardCoreController {
       LedgerDirection.income => LedgerDirection.expense,
       LedgerDirection.expense => LedgerDirection.income,
     };
-    // The applied facet loader remains the only owner of canonical domains.
-    // Core only retains a bounded immutable prepared base once that canonical
-    // data is already available; it does not issue a second facet request.
-    if (mindAmountRangeBindingFor(inactiveDirection) == null) return;
+    // This is only a prewarm-admission predicate, not a visible slider
+    // binding. It keeps the existing inactive direction build serialized on
+    // the native lane whenever its canonical facet data is resident. The
+    // result is never published to the compact control, which continues to
+    // require its exact visible structural amount domain above.
+    final inactiveScope = mindAmountDomainScopeFor(inactiveDirection);
+    final inactivePrewarmDomain =
+        currentQuery.amountDomainForScope(inactiveScope) ??
+        currentQuery.amountDomainFor(inactiveDirection);
+    if (inactivePrewarmDomain == null) return;
     unawaited(
       _primeMindAmountPreviewBaseFor(
         direction: inactiveDirection,
@@ -14578,6 +14588,7 @@ final class DashboardCoreController {
       _onMindBehavioralScoreSettingsChanged,
     );
     mindBehavioralScoreSettings.dispose();
+    mindHeaderScoreChartPresentation.dispose();
     mindYearHeatmapPresentation.dispose();
     detachLogBoxSceneWindowCoordinator();
     _activeMotionLanes.clear();

@@ -608,6 +608,131 @@ void main() {
     expect(find.text('Bevétel'), findsAtLeastNWidgets(1));
     expect(find.text('5 000 Ft'), findsAtLeastNWidgets(1));
   });
+
+  testWidgets(
+    'RED H43-01/04: four-column Year mode solves one non-scrolling 4 × 3 viewport including both footer rows',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.fourColumns,
+          showMonthlyNetClose: true,
+          showMonthlyDirectionTotal: true,
+          revision: 0,
+        ),
+      );
+      final scrollController = ScrollController();
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 420,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+                scrollController: scrollController,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-annual-row-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-annual-row-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-annual-row-3')),
+        findsNothing,
+      );
+      expect(scrollController.hasClients, isTrue);
+      expect(scrollController.position.maxScrollExtent, 0);
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-grid')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(MindYearHeatmapMonthCard),
+          matching: find.byType(Scrollable),
+        ),
+        findsNothing,
+        reason:
+            'Only the single viewport owner may exist; MonthCards never scroll.',
+      );
+      final january = tester.widget<MindYearHeatmapMonthCard>(
+        find.byType(MindYearHeatmapMonthCard).first,
+      );
+      final april = tester.widget<MindYearHeatmapMonthCard>(
+        find.byType(MindYearHeatmapMonthCard).at(3),
+      );
+      expect(january.width, closeTo(april.width, .001));
+      expect(
+        tester
+            .getRect(find.byKey(const ValueKey('mind-year-heatmap-month-12')))
+            .bottom,
+        lessThanOrEqualTo(
+          tester
+              .getRect(
+                find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
+              )
+              .bottom,
+        ),
+      );
+
+      // The solver accounts for every optional footer configuration. Each
+      // setting still consumes the same one viewport controller and keeps the
+      // annual content physically within its finite bounds.
+      final sameController = scrollController;
+      for (final (showNet, showDirection) in <(bool, bool)>[
+        (true, false),
+        (false, true),
+        (false, false),
+      ]) {
+        settings.setShowMonthlyNetClose(showNet);
+        settings.setShowMonthlyDirectionTotal(showDirection);
+        await tester.pump();
+        expect(scrollController, same(sameController));
+        expect(scrollController.position.maxScrollExtent, 0);
+        expect(
+          tester
+              .getRect(find.byKey(const ValueKey('mind-year-heatmap-month-12')))
+              .bottom,
+          lessThanOrEqualTo(
+            tester
+                .getRect(
+                  find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
+                )
+                .bottom,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      }
+
+      // Changing the presentation back to a scrolling layout and then to the
+      // fit layout preserves the one controller object; no new scroll owner
+      // is introduced for 4 × 3.
+      settings.setMonthCardLayout(MindYearMonthCardLayout.threeColumns);
+      await tester.pump();
+      expect(scrollController, same(sameController));
+      settings.setMonthCardLayout(MindYearMonthCardLayout.fourColumns);
+      await tester.pump();
+      expect(scrollController, same(sameController));
+      expect(scrollController.position.maxScrollExtent, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 MindYearHeatmapProjection _projection() => MindYearHeatmapProjection.build(

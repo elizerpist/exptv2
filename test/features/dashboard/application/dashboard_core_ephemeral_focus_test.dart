@@ -638,6 +638,126 @@ void main() {
       expect(binding.values.maximumScaled100, 1350000);
       expect(binding.values.minimumScaled100, 100000);
       expect(binding.values.upperScaled100, 1350000);
+
+    },
+  );
+
+  testWidgets(
+    'RED AMD-06: a mounted Mind slider never paints the canonical all-time domain while its exact visible Year domain is pending',
+    (tester) async {
+      final rows = <DashboardLedgerEntry>[
+        _mindYearEntry(
+          id: 'rent-2026',
+          direction: 'expense',
+          categoryId: 'housing',
+          partnerId: 'landlord',
+          amount: 26000000,
+          date: const LocalDate(year: 2026, month: 1, day: 5),
+        ),
+        _mindYearEntry(
+          id: 'fastfood-min-2027',
+          direction: 'expense',
+          categoryId: 'fastfood',
+          partnerId: 'kfc',
+          amount: 180000,
+          date: const LocalDate(year: 2027, month: 1, day: 5),
+        ),
+        _mindYearEntry(
+          id: 'fastfood-max-2027',
+          direction: 'expense',
+          categoryId: 'fastfood',
+          partnerId: 'mcdonalds',
+          amount: 1350000,
+          date: const LocalDate(year: 2027, month: 12, day: 5),
+        ),
+      ];
+      final expectedVisibleMaximum = rows
+          .where(
+            (entry) =>
+                entry.direction == 'expense' &&
+                DateTime.fromMillisecondsSinceEpoch(
+                      entry.bookedLocalEpochDay * Duration.millisecondsPerDay,
+                      isUtc: true,
+                    ).year ==
+                    2027,
+          )
+          .map((entry) => entry.amountMinor)
+          .reduce((maximum, amount) => amount > maximum ? amount : maximum);
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(rows: rows),
+        initialDate: DateTime.utc(2027, 6, 1),
+        initialPlane: TimePlane.year,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      core.committedLogViewport.configureSurfaceWidth(378);
+
+      // This deliberately models the narrow timing gap proven in source: the
+      // generic Query-menu domain is resident but the exact visible Year
+      // domain has not been published yet. A physical Mind slider must wait
+      // for the latter instead of borrowing the unrelated 2026 rent maximum.
+      final visibleScope = core.mindAmountDomainScopeFor(
+        LedgerDirection.expense,
+      );
+      final canonicalScope = core.currentQuery.scopeFor(
+        LedgerDirection.expense,
+      );
+      expect(
+        QueryAmountRange.domainScope(visibleScope),
+        isNot(QueryAmountRange.domainScope(canonicalScope)),
+      );
+      core.currentQuery.publishFacetPresentationForScope(
+        canonicalScope,
+        const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 3,
+            amountScaled100: 27530000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 100000,
+            maximumAmountScaled100: 26000000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      expect(core.currentQuery.amountDomainForScope(visibleScope), isNull);
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      // The pre-repair fallback renders a live RangeSlider with a 260,000 Ft
+      // maximum at this exact first production-parent frame. That is the
+      // forbidden visible lie; after repair the range remains unavailable
+      // until its matching Year domain is admitted.
+      expect(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+        findsNothing,
+      );
+
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await tester.pump();
+      final slider = tester.widget<RangeSlider>(
+        find.byKey(const ValueKey('query-amount-range-slider')),
+      );
+      expect(slider.max.round(), expectedVisibleMaximum);
+      expect(find.text('Max.'), findsOneWidget);
+      expect(find.text('13 500 Ft'), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
     },
   );
 

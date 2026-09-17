@@ -22,6 +22,7 @@ import '../dashboard_shadow_style.dart';
 import '../summary_pill_variant.dart';
 import '../dashboard_summary_presentation.dart';
 import '../../mind/domain/mind_behavioral_score_settings.dart';
+import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
@@ -408,6 +409,48 @@ final class _MindBehavioralScoreSettingsSection extends StatelessWidget {
   );
 }
 
+final class _MindHeaderScoreChartPresentationSection extends StatelessWidget {
+  const _MindHeaderScoreChartPresentationSection({required this.controller});
+
+  final MindHeaderScoreChartPresentationController controller;
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindHeaderScoreChartPresentationSettings>(
+    valueListenable: controller,
+    builder: (context, settings, _) => _TunerSection(
+      title: 'Mind chart',
+      children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Line chart időjelölések'),
+        ),
+        RadioGroup<MindHeaderScoreChartTimeLabels>(
+          groupValue: settings.timeLabels,
+          onChanged: (visibility) {
+            if (visibility != null) controller.setTimeLabels(visibility);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final visibility in MindHeaderScoreChartTimeLabels.values)
+                RadioListTile<MindHeaderScoreChartTimeLabels>(
+                  key: ValueKey(
+                    'mind-header-score-chart-time-labels-${visibility.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(visibility.tunerLabel),
+                  value: visibility,
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 final class _MindYearHeatmapPresentationSection extends StatelessWidget {
   const _MindYearHeatmapPresentationSection({required this.controller});
 
@@ -530,6 +573,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.budgetRingPresentation,
     this.shellPresentation,
     this.mindBehavioralScoreSettings,
+    this.mindHeaderScoreChartPresentation,
     this.mindYearHeatmapPresentation,
   });
 
@@ -549,6 +593,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final BudgetRingPresentationController? budgetRingPresentation;
   final DashboardShellPresentationController? shellPresentation;
   final MindBehavioralScoreSettingsController? mindBehavioralScoreSettings;
+  final MindHeaderScoreChartPresentationController?
+  mindHeaderScoreChartPresentation;
   final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
 
   @override
@@ -657,6 +703,13 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
               if (mindBehavioralScoreSettings
                   case final scoreSettings?) ...<Widget>[
                 _MindBehavioralScoreSettingsSection(controller: scoreSettings),
+                const SizedBox(height: 14),
+              ],
+              if (mindHeaderScoreChartPresentation
+                  case final chartPresentation?) ...<Widget>[
+                _MindHeaderScoreChartPresentationSection(
+                  controller: chartPresentation,
+                ),
                 const SizedBox(height: 14),
               ],
               if (mindYearHeatmapPresentation

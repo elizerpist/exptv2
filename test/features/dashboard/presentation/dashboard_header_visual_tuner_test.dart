@@ -14,6 +14,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dar
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_header_score_chart_presentation.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
@@ -755,6 +756,7 @@ void main() {
   ) async {
     final controller = DashboardHeaderVisualController(vsync: tester);
     final scoreSettings = MindBehavioralScoreSettingsController();
+    final chartPresentation = MindHeaderScoreChartPresentationController();
     final heatmapSettings = MindYearHeatmapPresentationController();
     await tester.pumpWidget(
       MaterialApp(
@@ -764,6 +766,7 @@ void main() {
           child: DashboardHeaderVisualTuner(
             controller: controller,
             mindBehavioralScoreSettings: scoreSettings,
+            mindHeaderScoreChartPresentation: chartPresentation,
             mindYearHeatmapPresentation: heatmapSettings,
           ),
         ),
@@ -791,6 +794,16 @@ void main() {
       isFalse,
     );
 
+    final labels = find.byKey(
+      const ValueKey('mind-header-score-chart-time-labels-visible'),
+    );
+    await tester.ensureVisible(labels);
+    await tester.tap(labels);
+    await tester.pump();
+    expect(
+      chartPresentation.value.timeLabels,
+      MindHeaderScoreChartTimeLabels.visible,
+    );
     final b3m = find.byKey(const ValueKey('mind-heatmap-palette-b3mMy3'));
     await tester.ensureVisible(b3m);
     await tester.tap(b3m);
@@ -798,6 +811,16 @@ void main() {
     expect(
       heatmapSettings.value.paletteStyle,
       MindYearHeatmapPaletteStyle.b3mMy3,
+    );
+    final fourColumns = find.byKey(
+      const ValueKey('mind-heatmap-layout-fourColumns'),
+    );
+    await tester.ensureVisible(fourColumns);
+    await tester.tap(fourColumns);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.monthCardLayout,
+      MindYearMonthCardLayout.fourColumns,
     );
     final net = find.byKey(const ValueKey('mind-heatmap-monthly-net-toggle'));
     await tester.ensureVisible(net);
@@ -809,6 +832,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
     scoreSettings.dispose();
+    chartPresentation.dispose();
     heatmapSettings.dispose();
   });
 }

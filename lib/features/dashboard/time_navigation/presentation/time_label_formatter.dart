@@ -17,6 +17,24 @@ abstract final class DashboardTimeLabelFormatter {
     'december',
   ][month];
 
+  /// Compact localized month form shared by constrained visual timelines.
+  /// It avoids each chart inventing its own Hungarian abbreviation table.
+  static String shortMonthName(int month) => const <String>[
+    '',
+    'jan',
+    'febr',
+    'márc',
+    'ápr',
+    'máj',
+    'jún',
+    'júl',
+    'aug',
+    'szept',
+    'okt',
+    'nov',
+    'dec',
+  ][month];
+
   static String yearMonth(YearMonth value) {
     return '${value.year}. ${monthName(value.month)}';
   }

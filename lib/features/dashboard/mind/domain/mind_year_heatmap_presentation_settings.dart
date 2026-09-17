@@ -13,17 +13,22 @@ enum MindYearHeatmapPaletteStyle {
 
 enum MindYearMonthCardLayout {
   threeColumns,
-  twoColumns;
+  twoColumns,
+  fourColumns;
 
   String get tunerLabel => switch (this) {
     MindYearMonthCardLayout.threeColumns => '3 × 4',
     MindYearMonthCardLayout.twoColumns => '2 × 6',
+    MindYearMonthCardLayout.fourColumns => '4 × 3',
   };
 
   int get columnCount => switch (this) {
     MindYearMonthCardLayout.threeColumns => 3,
     MindYearMonthCardLayout.twoColumns => 2,
+    MindYearMonthCardLayout.fourColumns => 4,
   };
+
+  bool get fitsAnnualViewport => this == fourColumns;
 }
 
 /// Immutable user preferences for visualizing an admitted annual heatmap.

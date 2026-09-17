@@ -12,6 +12,7 @@ import '../../query/presentation/query_amount_range_control.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
+import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/presentation/mind_header_score_chart.dart';
 import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../widgets/dashboard_placeholder_card.dart';
@@ -41,6 +42,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.headerVisualController,
     this.headerVisualFrame,
     this.behavioralScore,
+    this.headerScoreChartPresentation,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -63,6 +65,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final ValueListenable<MindBehavioralScoreFrame?>? behavioralScore;
+  final ValueListenable<MindHeaderScoreChartPresentationSettings>?
+  headerScoreChartPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +116,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
                 : _MindHeaderScoreDetail(
                     score: behavioralScore!,
                     expansionProgress: geometry.headerExpansionProgress,
+                    chartPresentation: headerScoreChartPresentation,
                   ),
           ),
         ],
@@ -163,41 +168,54 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
   const _MindHeaderScoreDetail({
     required this.score,
     required this.expansionProgress,
+    this.chartPresentation,
   });
 
   final ValueListenable<MindBehavioralScoreFrame?> score;
   final double expansionProgress;
+  final ValueListenable<MindHeaderScoreChartPresentationSettings>?
+  chartPresentation;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<MindBehavioralScoreFrame?>(
-        valueListenable: score,
-        builder: (context, frame, _) => Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            if (frame?.chartSeries case final chartSeries?)
-              MindHeaderScoreChart(
-                series: chartSeries,
-                expansionProgress: expansionProgress,
-              ),
-            Positioned(
-              left: 16,
-              top: 16,
-              child: Text(
-                '${frame?.point.roundedScore ?? 50}/100',
-                key: const ValueKey<String>('mind-header-score-text'),
-                style: DefaultTextStyle.of(context).style.copyWith(
-                  color: FluviVisualTokens.textOnAction,
-                  fontSize: 19,
-                  height: .96,
-                  letterSpacing: -.76,
-                  fontWeight: FontWeight.w900,
-                ),
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindBehavioralScoreFrame?>(
+    valueListenable: score,
+    builder: (context, frame, _) {
+      Widget contentFor(bool showTimeLabels) => Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          if (frame?.chartSeries case final chartSeries?)
+            MindHeaderScoreChart(
+              series: chartSeries,
+              expansionProgress: expansionProgress,
+              showTimeLabels: showTimeLabels,
+            ),
+          Positioned(
+            left: 16,
+            top: 16,
+            child: Text(
+              '${frame?.point.roundedScore ?? 50}/100',
+              key: const ValueKey<String>('mind-header-score-text'),
+              style: DefaultTextStyle.of(context).style.copyWith(
+                color: FluviVisualTokens.textOnAction,
+                fontSize: 19,
+                height: .96,
+                letterSpacing: -.76,
+                fontWeight: FontWeight.w900,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       );
+      final presentation = chartPresentation;
+      if (presentation == null) return contentFor(false);
+      return ValueListenableBuilder<MindHeaderScoreChartPresentationSettings>(
+        valueListenable: presentation,
+        builder: (context, settings, _) => contentFor(settings.showsTimeLabels),
+      );
+    },
+  );
 }
 
 /// Structural Mind topology: one clipped vertical viewport followed by an

@@ -24,6 +24,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -128,6 +129,59 @@ class SeedFluviDemoDatasetUseCaseTest {
         )
         assertEquals(18L, highAmountTotal.entryCount)
         assertEquals(213_150L * 100L, highAmountTotal.amountScaled100)
+    }
+
+    @Test
+    fun sumExpensePagingKeepsOneAllTimeIdentityWhileItsNewestHundredRowsAreThe2027FastfoodMirror() = runBlocking {
+        core.demoSeed.seed()
+
+        val sumScope = FluviQueryScope(direction = LedgerDirection.expense)
+        val total = core.query.total(sumScope)
+        assertTrue(total.entryCount > 100L)
+        val revision = core.query.currentCoreRevision()
+        var cursor = null as com.fluvi.core.query.FluviTimelineCursor?
+        var firstQueryKey: String? = null
+        val newestHundred = mutableListOf<com.fluvi.core.query.FluviDashboardLedgerRow>()
+        var sawOlderYear = false
+
+        // This follows the same keyset cursor used by Flutter's committed
+        // LogBox pages. Four full 24-row pages plus the next page exhaust the
+        // demo's 100 newest 2027 records; the latter page must then enter the
+        // normal older all-time ledger rather than remain Year-scoped.
+        while (newestHundred.size < 100 || !sawOlderYear) {
+            val page = core.query.readCommittedPage(
+                scope = sumScope,
+                pageSize = 24,
+                after = cursor,
+                expectedRevision = revision,
+                authoritativeTotalMinor = total.amountScaled100,
+                authoritativeEntryCount = total.entryCount,
+            ).slice
+            firstQueryKey = firstQueryKey ?: page.queryKey
+            assertEquals(firstQueryKey, page.queryKey)
+            assertEquals(total.entryCount, page.entryCount)
+            assertEquals(total.amountScaled100, page.totalMinor)
+
+            page.entries.forEach { entry ->
+                val year = LocalDate.ofEpochDay(entry.bookedLocalEpochDay).year
+                if (year == 2027 && newestHundred.size < 100) {
+                    newestHundred += entry
+                }
+                if (year < 2027) sawOlderYear = true
+            }
+            cursor = page.nextCursor
+            assertTrue(
+                "All-time paging must continue after the newest 2027 mirror.",
+                cursor != null || sawOlderYear,
+            )
+        }
+
+        assertEquals(100, newestHundred.size)
+        assertTrue(newestHundred.all { entry ->
+            LocalDate.ofEpochDay(entry.bookedLocalEpochDay).year == 2027 &&
+                entry.categoryDisplayName == "Gyorsétterem"
+        })
+        assertTrue(sawOlderYear)
     }
 
     @Test

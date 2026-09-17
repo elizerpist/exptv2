@@ -32,6 +32,7 @@ import '../query/domain/query_amount_range.dart';
 import '../query/application/dashboard_applied_query_facet_loader.dart';
 import '../query/presentation/query_amount_range_control.dart';
 import '../mind/domain/mind_behavioral_score_settings.dart';
+import '../mind/domain/mind_header_score_chart_presentation.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
@@ -697,6 +698,9 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _mindHeaderColorPolicy,
                                         mindBehavioralScore:
                                             controller.mindBehavioralScore,
+                                        mindHeaderScoreChartPresentation:
+                                            controller
+                                                .mindHeaderScoreChartPresentation,
                                         mindQueryAmountRange:
                                             _mindQueryAmountRange,
                                         mindQueryAmountRangeChanges:
@@ -1199,6 +1203,9 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             widget.shellPresentation,
                                         mindBehavioralScoreSettings: controller
                                             .mindBehavioralScoreSettings,
+                                        mindHeaderScoreChartPresentation:
+                                            controller
+                                                .mindHeaderScoreChartPresentation,
                                         mindYearHeatmapPresentation: controller
                                             .mindYearHeatmapPresentation,
                                         headerBounds: geometry.headerBounds,
@@ -1963,6 +1970,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     required this.budgetRingPresentation,
     this.shellPresentation,
     this.mindBehavioralScoreSettings,
+    this.mindHeaderScoreChartPresentation,
     this.mindYearHeatmapPresentation,
     required this.headerBounds,
   });
@@ -1983,6 +1991,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   final BudgetRingPresentationController budgetRingPresentation;
   final DashboardShellPresentationController? shellPresentation;
   final MindBehavioralScoreSettingsController? mindBehavioralScoreSettings;
+  final MindHeaderScoreChartPresentationController?
+  mindHeaderScoreChartPresentation;
   final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
   final DashboardBounds headerBounds;
 
@@ -2055,6 +2065,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                           shellPresentation: shellPresentation,
                           mindBehavioralScoreSettings:
                               mindBehavioralScoreSettings,
+                          mindHeaderScoreChartPresentation:
+                              mindHeaderScoreChartPresentation,
                           mindYearHeatmapPresentation:
                               mindYearHeatmapPresentation,
                         ),
