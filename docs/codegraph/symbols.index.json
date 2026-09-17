@@ -1,48 +1,48 @@
 {
   "schema_version": 1,
-  "record_count": 10473,
+  "record_count": 10474,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#expansion.",
-      "sha256": "13369b69df3e9a75a106115c254a2caf7b9673438d7c494113f019fe4bb2259a"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#ensureMindYearHeatmapProjection().",
+      "sha256": "5c9890194bd8419ed124d6978ff6b022cb75df173b33dcfcef355989604e9588"
     },
     {
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#experimentalTemporalComponentOffsetCandidate().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#child.",
-      "sha256": "5275c89cac9769da2f128f49280d21a84f605b3ddddc5600e338180e02a72d27"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#expansion.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#build().",
+      "sha256": "eba214b36a3f548053a140f6d63b95afb64246329e8bed0fc0bd0aadf9e02660"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/bounds().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/DashboardLogBoxHeader#currentQuery.",
-      "sha256": "9aaaba93be9e9d71c2634061bc917e938659d439d5510a7d50c45e3168bbc6ab"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#child.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/DashboardLogBoxHeader#build().",
+      "sha256": "929914db098b6588759575606eb834bd1a1050a9d8a0dc325fbd219885f6ad6a"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/DashboardLogBoxHeader#focus.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`dashboard_data_runtime_repository.dart`/PreparedDashboardIndexRequest#initialYear.",
-      "sha256": "29965998803338bcd14f2a9604cdd0c487215c3a0d25d58deb6b20fe9e2ed39b"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/DashboardLogBoxHeader#currentQuery.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`dashboard_data_runtime_repository.dart`/PreparedDashboardIndexRequest#filterScope.",
+      "sha256": "f806ebbba008a3afc340bd62e457198f5ece21223ebefb18cb5aca4794e98ab1"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`dashboard_data_runtime_repository.dart`/PreparedDashboardIndexRequest#key.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`dashboard_header_material_transport_distribution_test.dart`/_DistributionMetrics#`<get>mid40to60Mass`.",
-      "sha256": "50dc9c52495332dcad5e03bb7d85d48335163ece10c937ae9e3faa06aed6d616"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`dashboard_data_runtime_repository.dart`/PreparedDashboardIndexRequest#initialYear.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`dashboard_header_material_transport_distribution_test.dart`/_DistributionMetrics#`<get>maxBinMass`.",
+      "sha256": "dbe3b9851f2cbddadbea70c4a7cad94b7c7f9db065018f76fdefb935fccb1962"
     },
     {
       "path": "symbols/part-005.jsonl",
-      "record_count": 473,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`dashboard_header_material_transport_distribution_test.dart`/_DistributionMetrics#`<get>normalizedEntropy`.",
+      "record_count": 474,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`dashboard_header_material_transport_distribution_test.dart`/_DistributionMetrics#`<get>mid40to60Mass`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "4b8b10338f21b9219ecc5e2f325e52650c403d79b4fed4f8c1f2c0382af504d0"
+      "sha256": "33317a1ea4bbb788184f6c633633d068a06491d269fdb45bae33369475ed96ed"
     }
   ]
 }

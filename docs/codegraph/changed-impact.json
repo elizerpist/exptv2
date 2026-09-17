@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "source_head": "50dc12c6c4d7bb177800520b149cec4bbc738c89",
-  "base_head": "59e6a7781c6d9d5f6efe24b73bb3e2e937433d99",
+  "source_head": "6bec8f2f5fac0806ff2a0cfbca1f7711adde209a",
+  "base_head": "50dc12c6c4d7bb177800520b149cec4bbc738c89",
   "changed_files": [
     "integration_test/dashboard_interaction_profile_test.dart"
   ],
@@ -43,6 +43,7 @@
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/oppositeOf().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/percentile().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/relativeDifference().",
+    "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/selectedTargetHasFixtureRows().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/sum().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/surfaceMatches().",
     "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/targetHandlesFor().",
@@ -92,6 +93,7 @@
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/oppositeOf().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/percentile().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/relativeDifference().",
+        "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/selectedTargetHasFixtureRows().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/sum().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/surfaceMatches().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/targetHandlesFor().",
@@ -99,7 +101,7 @@
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/thumbX().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/visit()."
       ],
-      "reference_count": 193,
+      "reference_count": 195,
       "first_line": 55,
       "first_column": 57,
       "basis": "scip_reference"
@@ -146,6 +148,7 @@
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/oppositeOf().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/percentile().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/relativeDifference().",
+        "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/selectedTargetHasFixtureRows().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/sum().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/surfaceMatches().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/targetHandlesFor().",
@@ -153,7 +156,7 @@
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/thumbX().",
         "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/visit()."
       ],
-      "reference_count": 193,
+      "reference_count": 195,
       "first_line": 55,
       "first_column": 57,
       "basis": "scip_reference"
