@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -60,6 +62,11 @@ abstract final class MindYearHeatmapPaletteResolver {
     MindYearHeatmapPaletteStyle.b3mMy3 => _b3m(
       isEmpty: isEmpty,
       intensity: intensity,
+    ),
+    _ => _authored(
+      isEmpty: isEmpty,
+      intensity: intensity,
+      stops: _authoredStopsFor(style),
     ),
   };
 
@@ -141,4 +148,130 @@ abstract final class MindYearHeatmapPaletteResolver {
       level: level,
     );
   }
+
+  static MindYearHeatmapPaletteSample _authored({
+    required bool isEmpty,
+    required double intensity,
+    required List<Color> stops,
+  }) {
+    if (isEmpty) {
+      return const MindYearHeatmapPaletteSample(
+        background: FluviVisualTokens.mindHeatmapEmpty,
+        foreground: FluviVisualTokens.textSecondary,
+      );
+    }
+    final background = _interpolateAuthoredStops(stops, intensity);
+    return MindYearHeatmapPaletteSample(
+      background: background,
+      foreground: _foregroundFor(background),
+    );
+  }
+
+  static Color _interpolateAuthoredStops(List<Color> stops, double intensity) {
+    final bounded = intensity.clamp(0.0, 1.0).toDouble();
+    final scaled = bounded * (stops.length - 1);
+    final lowerIndex = scaled.floor();
+    final upperIndex = math.min(lowerIndex + 1, stops.length - 1);
+    if (lowerIndex == upperIndex) return stops[lowerIndex];
+    return Color.lerp(
+      stops[lowerIndex],
+      stops[upperIndex],
+      scaled - lowerIndex,
+    )!;
+  }
+
+  static Color _foregroundFor(Color background) =>
+      background.computeLuminance() > .36
+      ? FluviVisualTokens.textSecondary
+      : Colors.white;
+
+  static List<Color> _authoredStopsFor(MindYearHeatmapPaletteStyle style) =>
+      switch (style) {
+        MindYearHeatmapPaletteStyle.oceanSunset => _oceanSunset,
+        MindYearHeatmapPaletteStyle.boldBerry => _boldBerry,
+        MindYearHeatmapPaletteStyle.meadowGreen => _meadowGreen,
+        MindYearHeatmapPaletteStyle.peachyDelight => _peachyDelight,
+        MindYearHeatmapPaletteStyle.softRainbow => _softRainbow,
+        MindYearHeatmapPaletteStyle.cherryBlossom => _cherryBlossom,
+        MindYearHeatmapPaletteStyle.softPastels => _softPastels,
+        MindYearHeatmapPaletteStyle.customColour => _customColour,
+        MindYearHeatmapPaletteStyle.fluvi ||
+        MindYearHeatmapPaletteStyle.b3mMy3 => throw ArgumentError.value(
+          style,
+          'style',
+          'Not an authored palette',
+        ),
+      };
+
+  static const List<Color> _oceanSunset = <Color>[
+    Color(0xff001219),
+    Color(0xff005f73),
+    Color(0xff0a9396),
+    Color(0xff94d2bd),
+    Color(0xffe9d8a6),
+    Color(0xffee9b00),
+    Color(0xffca6702),
+    Color(0xffbb3e03),
+    Color(0xffae2012),
+    Color(0xff9b2226),
+  ];
+  static const List<Color> _boldBerry = <Color>[
+    Color(0xfff9dbbd),
+    Color(0xffffa5ab),
+    Color(0xffda627d),
+    Color(0xffa53860),
+    Color(0xff450920),
+  ];
+  static const List<Color> _meadowGreen = <Color>[
+    Color(0xffd9ed92),
+    Color(0xffb5e48c),
+    Color(0xff99d98c),
+    Color(0xff76c893),
+    Color(0xff52b69a),
+    Color(0xff34a0a4),
+    Color(0xff168aad),
+    Color(0xff1a759f),
+    Color(0xff1e6091),
+    Color(0xff184e77),
+  ];
+  static const List<Color> _peachyDelight = <Color>[
+    Color(0xffd8e2dc),
+    Color(0xffffe5d9),
+    Color(0xffffcad4),
+    Color(0xfff4acb7),
+    Color(0xff9d8189),
+  ];
+  static const List<Color> _softRainbow = <Color>[
+    Color(0xfffbf8cc),
+    Color(0xfffde4cf),
+    Color(0xffffcfd2),
+    Color(0xfff1c0e8),
+    Color(0xffcfbaf0),
+    Color(0xffa3c4f3),
+    Color(0xff90dbf4),
+    Color(0xff8eecf5),
+    Color(0xff98f5e1),
+    Color(0xffb9fbc0),
+  ];
+  static const List<Color> _cherryBlossom = <Color>[
+    Color(0xffebd4cb),
+    Color(0xffda9f93),
+    Color(0xffb6465f),
+    Color(0xff890620),
+    Color(0xff2c0703),
+  ];
+  static const List<Color> _softPastels = <Color>[
+    Color(0xfffaf3dd),
+    Color(0xffc8d5b9),
+    Color(0xff8fc0a9),
+    Color(0xff68b0ab),
+    Color(0xff4a7c59),
+  ];
+  static const List<Color> _customColour = <Color>[
+    Color(0xffce84ad),
+    Color(0xffce96a6),
+    Color(0xffd1a7a0),
+    Color(0xffd4cbb3),
+    Color(0xffd2e0bf),
+  ];
 }

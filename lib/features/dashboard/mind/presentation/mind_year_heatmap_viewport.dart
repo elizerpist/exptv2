@@ -11,6 +11,8 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../../time_navigation/domain/local_date.dart';
+import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
+import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
@@ -26,12 +28,14 @@ final class MindYearHeatmapViewport extends StatefulWidget {
     required this.frameListenable,
     this.presentationSettings,
     this.scrollController,
+    this.upperVerticalGestures,
   });
 
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final ValueListenable<MindYearHeatmapPresentationSettings>?
   presentationSettings;
   final ScrollController? scrollController;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   State<MindYearHeatmapViewport> createState() =>
@@ -194,68 +198,74 @@ final class _MindYearHeatmapViewportState
           );
           return KeyedSubtree(
             key: const ValueKey('mind-year-heatmap-scroll'),
-            child: SingleChildScrollView(
-              key: const ValueKey('mind-year-heatmap-fit-scroll'),
-              controller: widget.scrollController,
-              physics: const NeverScrollableScrollPhysics(),
-              clipBehavior: Clip.hardEdge,
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
-              child: KeyedSubtree(
-                key: const ValueKey('mind-year-heatmap-grid'),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List<Widget>.generate(3, (annualRow) {
-                    final offset = annualRow * columns;
-                    final rowGeometries = geometries.sublist(
-                      offset,
-                      offset + columns,
-                    );
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        bottom: annualRow == 2 ? 0 : rowGap,
-                      ),
-                      child: SizedBox(
-                        key: ValueKey(
-                          'mind-year-heatmap-annual-row-$annualRow',
+            child: DashboardVerticalScrollBoundaryHandoff(
+              upperVerticalGestures: widget.upperVerticalGestures,
+              handoffOnDirectVerticalDrag: true,
+              child: SingleChildScrollView(
+                key: const ValueKey('mind-year-heatmap-fit-scroll'),
+                controller: widget.scrollController,
+                physics: const NeverScrollableScrollPhysics(),
+                clipBehavior: Clip.hardEdge,
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+                child: KeyedSubtree(
+                  key: const ValueKey('mind-year-heatmap-grid'),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List<Widget>.generate(3, (annualRow) {
+                      final offset = annualRow * columns;
+                      final rowGeometries = geometries.sublist(
+                        offset,
+                        offset + columns,
+                      );
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: annualRow == 2 ? 0 : rowGap,
                         ),
-                        height: fit.rowHeights[annualRow],
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: List<Widget>.generate(
-                            rowGeometries.length,
-                            (column) {
-                              final month = offset + column + 1;
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  right: column == rowGeometries.length - 1
-                                      ? 0
-                                      : rowGap,
-                                ),
-                                child: MindYearHeatmapMonthCard(
-                                  month: month,
-                                  width: monthCardWidth,
-                                  cellExtent: fit.cellExtent,
-                                  geometry: geometries[month - 1],
-                                  frameListenable: widget.frameListenable,
-                                  paletteStyle:
-                                      _presentationSettings.paletteStyle,
-                                  showMonthlyNetClose:
-                                      _presentationSettings.showMonthlyNetClose,
-                                  showMonthlyDirectionTotal:
-                                      _presentationSettings
-                                          .showMonthlyDirectionTotal,
-                                  monthlyAggregates: _monthlyAggregates,
-                                  activeDirectionIsIncome:
-                                      _activeDirectionIsIncome,
-                                ),
-                              );
-                            },
-                            growable: false,
+                        child: SizedBox(
+                          key: ValueKey(
+                            'mind-year-heatmap-annual-row-$annualRow',
+                          ),
+                          height: fit.rowHeights[annualRow],
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: List<Widget>.generate(
+                              rowGeometries.length,
+                              (column) {
+                                final month = offset + column + 1;
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    right: column == rowGeometries.length - 1
+                                        ? 0
+                                        : rowGap,
+                                  ),
+                                  child: MindYearHeatmapMonthCard(
+                                    month: month,
+                                    width: monthCardWidth,
+                                    cellExtent: fit.cellExtent,
+                                    geometry: geometries[month - 1],
+                                    frameListenable: widget.frameListenable,
+                                    paletteStyle:
+                                        _presentationSettings.paletteStyle,
+                                    surfaceStyle: _presentationSettings
+                                        .annualSurfaceStyle,
+                                    showMonthlyNetClose: _presentationSettings
+                                        .showMonthlyNetClose,
+                                    showMonthlyDirectionTotal:
+                                        _presentationSettings
+                                            .showMonthlyDirectionTotal,
+                                    monthlyAggregates: _monthlyAggregates,
+                                    activeDirectionIsIncome:
+                                        _activeDirectionIsIncome,
+                                  ),
+                                );
+                              },
+                              growable: false,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  }, growable: false),
+                      );
+                    }, growable: false),
+                  ),
                 ),
               ),
             ),
@@ -263,58 +273,65 @@ final class _MindYearHeatmapViewportState
         }
         return KeyedSubtree(
           key: const ValueKey('mind-year-heatmap-scroll'),
-          child: ListView.separated(
-            key: const ValueKey('mind-year-heatmap-grid'),
-            controller: widget.scrollController,
-            // Six-row MonthCard envelopes are intentionally taller than the
-            // former variable geometry. Keep the same bounded 12-card annual
-            // field warm so a layout switch never exposes a sparse edge.
-            cacheExtent: 500,
-            clipBehavior: Clip.hardEdge,
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
-            itemCount: (12 + columns - 1) ~/ columns,
-            separatorBuilder: (_, _) => const SizedBox(height: rowGap),
-            itemBuilder: (context, annualRow) {
-              final offset = annualRow * columns;
-              final rowEnd = math.min(offset + columns, geometries.length);
-              final rowGeometries = geometries.sublist(offset, rowEnd);
-              final rowHeight = MindYearHeatmapMonthCard.heightFor(
-                width: monthCardWidth,
-                calendarRowCount:
-                    MindYearHeatmapMonthCard.displayCalendarRowCount,
-                footerRowCount: footerRowCount,
-              );
-              return SizedBox(
-                key: ValueKey('mind-year-heatmap-annual-row-$annualRow'),
-                height: rowHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List<Widget>.generate(rowGeometries.length, (
-                    column,
-                  ) {
-                    final month = offset + column + 1;
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: column == rowGeometries.length - 1 ? 0 : rowGap,
-                      ),
-                      child: MindYearHeatmapMonthCard(
-                        month: month,
-                        width: monthCardWidth,
-                        geometry: geometries[month - 1],
-                        frameListenable: widget.frameListenable,
-                        paletteStyle: _presentationSettings.paletteStyle,
-                        showMonthlyNetClose:
-                            _presentationSettings.showMonthlyNetClose,
-                        showMonthlyDirectionTotal:
-                            _presentationSettings.showMonthlyDirectionTotal,
-                        monthlyAggregates: _monthlyAggregates,
-                        activeDirectionIsIncome: _activeDirectionIsIncome,
-                      ),
-                    );
-                  }, growable: false),
-                ),
-              );
-            },
+          child: DashboardVerticalScrollBoundaryHandoff(
+            upperVerticalGestures: widget.upperVerticalGestures,
+            child: ListView.separated(
+              key: const ValueKey('mind-year-heatmap-grid'),
+              controller: widget.scrollController,
+              // Six-row MonthCard envelopes are intentionally taller than the
+              // former variable geometry. Keep the same bounded 12-card annual
+              // field warm so a layout switch never exposes a sparse edge.
+              cacheExtent: 500,
+              clipBehavior: Clip.hardEdge,
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 14),
+              itemCount: (12 + columns - 1) ~/ columns,
+              separatorBuilder: (_, _) => const SizedBox(height: rowGap),
+              itemBuilder: (context, annualRow) {
+                final offset = annualRow * columns;
+                final rowEnd = math.min(offset + columns, geometries.length);
+                final rowGeometries = geometries.sublist(offset, rowEnd);
+                final rowHeight = MindYearHeatmapMonthCard.heightFor(
+                  width: monthCardWidth,
+                  calendarRowCount:
+                      MindYearHeatmapMonthCard.displayCalendarRowCount,
+                  footerRowCount: footerRowCount,
+                );
+                return SizedBox(
+                  key: ValueKey('mind-year-heatmap-annual-row-$annualRow'),
+                  height: rowHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List<Widget>.generate(rowGeometries.length, (
+                      column,
+                    ) {
+                      final month = offset + column + 1;
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: column == rowGeometries.length - 1
+                              ? 0
+                              : rowGap,
+                        ),
+                        child: MindYearHeatmapMonthCard(
+                          month: month,
+                          width: monthCardWidth,
+                          geometry: geometries[month - 1],
+                          frameListenable: widget.frameListenable,
+                          paletteStyle: _presentationSettings.paletteStyle,
+                          surfaceStyle:
+                              _presentationSettings.annualSurfaceStyle,
+                          showMonthlyNetClose:
+                              _presentationSettings.showMonthlyNetClose,
+                          showMonthlyDirectionTotal:
+                              _presentationSettings.showMonthlyDirectionTotal,
+                          monthlyAggregates: _monthlyAggregates,
+                          activeDirectionIsIncome: _activeDirectionIsIncome,
+                        ),
+                      );
+                    }, growable: false),
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
@@ -470,6 +487,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
     required this.frameListenable,
     this.cellExtent,
     this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
+    this.surfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
     this.showMonthlyNetClose = false,
     this.showMonthlyDirectionTotal = false,
     this.monthlyAggregates,
@@ -492,6 +510,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindYearHeatmapAnnualSurfaceStyle surfaceStyle;
   final bool showMonthlyNetClose;
   final bool showMonthlyDirectionTotal;
   final MindYearHeatmapMonthlyAggregates? monthlyAggregates;
@@ -549,6 +568,79 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
       calendarRowCount: displayCalendarRowCount,
       cellExtent: cellExtent,
     );
+    final content = Padding(
+      padding: const EdgeInsets.all(_padding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox(
+            height: _titleHeight,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  DashboardTimeLabelFormatter.monthName(month),
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: _titleBottomGap),
+          SizedBox(
+            height: gridHeight,
+            child: RepaintBoundary(
+              child: Semantics(
+                label:
+                    'Mind heatmap ${DashboardTimeLabelFormatter.monthName(month)}',
+                readOnly: true,
+                child: ExcludeSemantics(
+                  child: CustomPaint(
+                    key: ValueKey('mind-year-heatmap-month-cells-$month'),
+                    painter: MindYearHeatmapMonthPainter(
+                      month: month,
+                      geometry: geometry,
+                      frameListenable: frameListenable,
+                      paletteStyle: paletteStyle,
+                      cellExtent: cellExtent,
+                    ),
+                    isComplex: false,
+                    willChange: true,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (_footerRowCount > 0) ...<Widget>[
+            const SizedBox(height: _footerTopGap),
+            if (showMonthlyNetClose)
+              _MindYearHeatmapMonthFooter(
+                label: 'Zárás',
+                amount: monthlyAggregates?.netForMonth(month) ?? 0,
+                semanticKind: _MindYearHeatmapFooterKind.net,
+              ),
+            if (showMonthlyDirectionTotal)
+              _MindYearHeatmapMonthFooter(
+                label: activeDirectionIsIncome ? 'Bevétel' : 'Kiadás',
+                amount: activeDirectionIsIncome
+                    ? monthlyAggregates?.incomeForMonth(month) ?? 0
+                    : monthlyAggregates?.expenseForMonth(month) ?? 0,
+                semanticKind: activeDirectionIsIncome
+                    ? _MindYearHeatmapFooterKind.income
+                    : _MindYearHeatmapFooterKind.expense,
+              ),
+          ],
+        ],
+      ),
+    );
     return SizedBox(
       width: width,
       height: heightFor(
@@ -557,86 +649,20 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
         footerRowCount: _footerRowCount,
         cellExtent: cellExtent,
       ),
-      child: DecoratedBox(
-        key: ValueKey('mind-year-heatmap-month-$month'),
-        decoration: const BoxDecoration(
-          color: FluviVisualTokens.surfaceMuted,
-          borderRadius: FluviVisualTokens.smallRadius,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(_padding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              SizedBox(
-                height: _titleHeight,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      DashboardTimeLabelFormatter.monthName(month),
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: _titleBottomGap),
-              SizedBox(
-                height: gridHeight,
-                child: RepaintBoundary(
-                  child: Semantics(
-                    label:
-                        'Mind heatmap ${DashboardTimeLabelFormatter.monthName(month)}',
-                    readOnly: true,
-                    child: ExcludeSemantics(
-                      child: CustomPaint(
-                        key: ValueKey('mind-year-heatmap-month-cells-$month'),
-                        painter: MindYearHeatmapMonthPainter(
-                          month: month,
-                          geometry: geometry,
-                          frameListenable: frameListenable,
-                          paletteStyle: paletteStyle,
-                          cellExtent: cellExtent,
-                        ),
-                        isComplex: false,
-                        willChange: true,
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (_footerRowCount > 0) ...<Widget>[
-                const SizedBox(height: _footerTopGap),
-                if (showMonthlyNetClose)
-                  _MindYearHeatmapMonthFooter(
-                    label: 'Zárás',
-                    amount: monthlyAggregates?.netForMonth(month) ?? 0,
-                    semanticKind: _MindYearHeatmapFooterKind.net,
-                  ),
-                if (showMonthlyDirectionTotal)
-                  _MindYearHeatmapMonthFooter(
-                    label: activeDirectionIsIncome ? 'Bevétel' : 'Kiadás',
-                    amount: activeDirectionIsIncome
-                        ? monthlyAggregates?.incomeForMonth(month) ?? 0
-                        : monthlyAggregates?.expenseForMonth(month) ?? 0,
-                    semanticKind: activeDirectionIsIncome
-                        ? _MindYearHeatmapFooterKind.income
-                        : _MindYearHeatmapFooterKind.expense,
-                  ),
-              ],
-            ],
+      child: switch (surfaceStyle) {
+        MindYearHeatmapAnnualSurfaceStyle.monthCards => DecoratedBox(
+          key: ValueKey('mind-year-heatmap-month-$month'),
+          decoration: const BoxDecoration(
+            color: FluviVisualTokens.surfaceMuted,
+            borderRadius: FluviVisualTokens.smallRadius,
           ),
+          child: content,
         ),
-      ),
+        MindYearHeatmapAnnualSurfaceStyle.directCells => KeyedSubtree(
+          key: ValueKey('mind-year-heatmap-month-direct-$month'),
+          child: content,
+        ),
+      },
     );
   }
 }

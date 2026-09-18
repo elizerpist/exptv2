@@ -380,6 +380,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         onContentVerticalDragUpdate: _onContentVerticalUpdate,
         onContentVerticalDragEnd: _onContentVerticalEnd,
         onContentVerticalDragCancel: _finishPointerSequence,
+        upperVerticalGestures: widget.upperVerticalGestures,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.mindHeaderVisualFrame,
         behavioralScore: widget.mindBehavioralScore,

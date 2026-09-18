@@ -56,6 +56,18 @@ void main() {
       );
       expect(controller.value.showMonthlyNetClose, isFalse);
       expect(controller.value.showMonthlyDirectionTotal, isFalse);
+      expect(
+        controller.value.showHeatmapLegend,
+        isTrue,
+        reason:
+            'The current visible legend remains the default until a user hides it.',
+      );
+      expect(
+        controller.value.annualSurfaceStyle,
+        MindYearHeatmapAnnualSurfaceStyle.monthCards,
+        reason:
+            'The accepted MonthCard shell remains the conservative default.',
+      );
       expect(controller.value.revision, 0);
     });
 
@@ -77,5 +89,51 @@ void main() {
       expect(controller.value.showMonthlyNetClose, isTrue);
       expect(controller.value.showMonthlyDirectionTotal, isTrue);
     });
+
+    test(
+      'RED HMP-SET-01: legend and annual surface are independent presentation preferences',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+        controller.setShowHeatmapLegend(false);
+        expect(controller.value.showHeatmapLegend, isFalse);
+        expect(controller.value.revision, 1);
+
+        controller.setAnnualSurfaceStyle(
+          MindYearHeatmapAnnualSurfaceStyle.directCells,
+        );
+        expect(
+          controller.value.annualSurfaceStyle,
+          MindYearHeatmapAnnualSurfaceStyle.directCells,
+        );
+        expect(controller.value.revision, 2);
+
+        controller.setAnnualSurfaceStyle(
+          MindYearHeatmapAnnualSurfaceStyle.directCells,
+        );
+        expect(controller.value.revision, 2);
+      },
+    );
+
+    test(
+      'RED HMP-SET-02: all fixed product palette presets are selectable',
+      () {
+        expect(
+          MindYearHeatmapPaletteStyle.values.map((style) => style.name),
+          <String>[
+            'fluvi',
+            'b3mMy3',
+            'oceanSunset',
+            'boldBerry',
+            'meadowGreen',
+            'peachyDelight',
+            'softRainbow',
+            'cherryBlossom',
+            'softPastels',
+            'customColour',
+          ],
+        );
+      },
+    );
   });
 }

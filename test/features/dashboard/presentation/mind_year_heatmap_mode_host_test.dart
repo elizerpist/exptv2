@@ -4,6 +4,7 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -13,6 +14,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_proje
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
@@ -93,6 +95,181 @@ void main() {
       await tester.pump();
       expect(expansion.starts, 1);
       expect(expansion.ends, 1);
+    },
+  );
+
+  testWidgets(
+    'RED GESTURE-02: Year boundary overscroll hands only the unconsumed drag to the shared expansion owner',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final expansion = DashboardExpansionController();
+      final coordinator = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(expansion.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          upperVerticalGestures: coordinator,
+          showYearHeatmap: true,
+        ),
+      );
+      final scroll = find.byKey(
+        const ValueKey<String>('mind-year-heatmap-scroll'),
+      );
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(of: scroll, matching: find.byType(Scrollable)).first,
+      );
+      final interiorGesture = await tester.startGesture(
+        tester.getCenter(scroll),
+      );
+      await interiorGesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(scrollable.position.pixels, greaterThan(0));
+      expect(expansion.isDragging, isFalse);
+      await interiorGesture.up();
+      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+      await tester.pump();
+
+      final gesture = await tester.startGesture(tester.getCenter(scroll));
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+
+      expect(expansion.isDragging, isTrue);
+      expect(expansion.progress, greaterThan(0));
+      expect(scrollable.position.pixels, scrollable.position.maxScrollExtent);
+      await gesture.up();
+      expect(expansion.isDragging, isFalse);
+    },
+  );
+
+  testWidgets(
+    'GESTURE-04: a non-scroll Sum viewport hands its outward drag to the shared expansion owner',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final year = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final temporal = ValueNotifier<MindTemporalHeatmapFrame?>(_sumFrame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final expansion = DashboardExpansionController();
+      final coordinator = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      addTearDown(mode.dispose);
+      addTearDown(year.dispose);
+      addTearDown(temporal.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(expansion.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: year,
+          temporalFrame: temporal,
+          temporalPlane: TimePlane.sum,
+          showTemporalHeatmap: true,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          upperVerticalGestures: coordinator,
+          showYearHeatmap: false,
+        ),
+      );
+      final scroll = find.byKey(
+        const ValueKey<String>('mind-sum-heatmap-scroll'),
+      );
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(of: scroll, matching: find.byType(Scrollable)).first,
+      );
+      expect(scrollable.position.maxScrollExtent, 0);
+      final gesture = await tester.startGesture(tester.getCenter(scroll));
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(expansion.isDragging, isTrue);
+      expect(expansion.progress, greaterThan(0));
+      await gesture.up();
+    },
+  );
+
+  testWidgets(
+    'RED GESTURE-03/RANGE-ISOLATION-01: non-scroll Month content hands off while the compact range remains isolated',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final year = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final temporal = ValueNotifier<MindTemporalHeatmapFrame?>(_monthFrame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final expansion = DashboardExpansionController();
+      final coordinator = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      addTearDown(mode.dispose);
+      addTearDown(year.dispose);
+      addTearDown(temporal.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(expansion.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: year,
+          temporalFrame: temporal,
+          temporalPlane: TimePlane.month,
+          showTemporalHeatmap: true,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          upperVerticalGestures: coordinator,
+          showYearHeatmap: false,
+        ),
+      );
+      final month = find.byKey(
+        const ValueKey<String>('mind-month-heatmap-grid'),
+      );
+      final contentGesture = await tester.startGesture(tester.getCenter(month));
+      await contentGesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+      expect(expansion.isDragging, isTrue);
+      expect(expansion.progress, greaterThan(0));
+      await contentGesture.up();
+
+      final slider = find.byKey(
+        const ValueKey<String>('query-amount-range-slider'),
+      );
+      final sliderBounds = tester.getRect(slider);
+      // Exercise both physical thumbs.  The shared direct-drag handoff must
+      // never include the fixed compact range lane.
+      final lowerThumbGesture = await tester.startGesture(
+        Offset(sliderBounds.left + 4, sliderBounds.center.dy),
+      );
+      await lowerThumbGesture.moveBy(const Offset(40, 0));
+      await tester.pump();
+      expect(expansion.isDragging, isFalse);
+      expect(expansion.progress, 0);
+      await lowerThumbGesture.up();
+
+      final upperThumbGesture = await tester.startGesture(
+        Offset(sliderBounds.right - 4, sliderBounds.center.dy),
+      );
+      await upperThumbGesture.moveBy(const Offset(-40, 0));
+      await tester.pump();
+      expect(expansion.isDragging, isFalse);
+      expect(expansion.progress, 0);
+      await upperThumbGesture.up();
     },
   );
 
@@ -247,6 +424,121 @@ void main() {
               )
               .top,
         ),
+      );
+    },
+  );
+
+  testWidgets(
+    'LEGEND-GEOM-01/02: hiding the legend structurally returns its lane to four-column Year content',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.fourColumns,
+          showMonthlyNetClose: true,
+          showMonthlyDirectionTotal: true,
+          revision: 0,
+        ),
+      );
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          showYearHeatmap: true,
+          presentationSettings: settings,
+        ),
+      );
+      final legend = find.byKey(
+        const ValueKey<String>('mind-heatmap-palette-legend'),
+      );
+      final footer = find.byKey(
+        const ValueKey<String>('mind-year-heatmap-fixed-footer'),
+      );
+      final content = find.byKey(
+        const ValueKey<String>('mind-year-heatmap-fit-scroll'),
+      );
+      final footerBefore = tester.getRect(footer);
+      final contentBefore = tester.getRect(content);
+      expect(legend, findsOneWidget);
+
+      settings.setShowHeatmapLegend(false);
+      await tester.pump();
+
+      expect(legend, findsNothing);
+      expect(tester.getRect(footer), footerBefore);
+      final contentAfter = tester.getRect(content);
+      expect(contentAfter.bottom, contentBefore.bottom + 28);
+      expect(contentAfter.top, contentBefore.top);
+    },
+  );
+
+  testWidgets(
+    'SETTINGS-NO-DATA-MUTATION-01: presentation-only settings retain the admitted frame and compact range',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final settings = MindYearHeatmapPresentationController();
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(settings.dispose);
+
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 1000000,
+        lowerScaled100: 100000,
+        upperScaled100: 1000000,
+      );
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          showYearHeatmap: true,
+          presentationSettings: settings,
+          amountRange: range,
+        ),
+      );
+      final admittedFrame = frame.value;
+      final rangeElement = tester.element(
+        find.byKey(const ValueKey<String>('mind-query-amount-range')),
+      );
+      settings
+        ..setShowHeatmapLegend(false)
+        ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.directCells)
+        ..setPaletteStyle(MindYearHeatmapPaletteStyle.oceanSunset);
+      await tester.pump();
+
+      expect(frame.value, same(admittedFrame));
+      expect(
+        tester.element(
+          find.byKey(const ValueKey<String>('mind-query-amount-range')),
+        ),
+        same(rangeElement),
+      );
+      expect(
+        tester
+            .widget<RangeSlider>(
+              find.byKey(const ValueKey<String>('query-amount-range-slider')),
+            )
+            .values,
+        const RangeValues(100000, 1000000),
       );
     },
   );
@@ -614,6 +906,7 @@ final class _HostHarness extends StatelessWidget {
     this.showTemporalHeatmap = false,
     this.presentationSettings,
     this.score,
+    this.upperVerticalGestures,
     this.collapseProgress = 0,
     this.amountRange = const QueryAmountRangeValues(
       minimumScaled100: 1,
@@ -633,6 +926,7 @@ final class _HostHarness extends StatelessWidget {
   final bool showTemporalHeatmap;
   final MindYearHeatmapPresentationController? presentationSettings;
   final ValueNotifier<MindBehavioralScoreFrame?>? score;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
   final double collapseProgress;
   final QueryAmountRangeValues amountRange;
 
@@ -681,6 +975,7 @@ final class _HostHarness extends StatelessWidget {
               onVerticalExpansionStart: expansion.begin,
               onVerticalExpansionDragBy: expansion.drag,
               onVerticalExpansionEnd: expansion.end,
+              upperVerticalGestures: upperVerticalGestures,
             ),
           ),
         ),

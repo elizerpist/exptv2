@@ -74,6 +74,59 @@ void main() {
   );
 
   testWidgets(
+    'RED SUM-PAINT-01: a non-empty Sum month has a visible bounded rectangle',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 260,
+              child: MindSumHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final viewport = find.byKey(
+        const ValueKey<String>('mind-sum-heatmap-scroll'),
+      );
+      final cell = find.byKey(
+        const ValueKey<String>('mind-sum-heatmap-cell-2025-5'),
+      );
+      final cellRect = tester.getRect(cell);
+      final viewportRect = tester.getRect(viewport);
+      final decoration =
+          tester.widget<DecoratedBox>(cell).decoration as BoxDecoration;
+
+      expect(cellRect.width, greaterThan(0));
+      expect(cellRect.height, greaterThan(0));
+      expect(viewportRect.overlaps(cellRect), isTrue);
+      expect(
+        decoration.color,
+        MindYearHeatmapPaletteResolver.resolveTile(
+          style: MindYearHeatmapPaletteStyle.fluvi,
+          isEmpty: false,
+          intensity: 1,
+          paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
+        ).background,
+      );
+    },
+  );
+
+  testWidgets(
     'MONTH-HM-01/05/06: Month uses a fixed six-row envelope with real numbered days and no nested scroll',
     (tester) async {
       final frame = MindMonthHeatmapProjection.build(
@@ -111,6 +164,92 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(Scrollable), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'RED MONTH-B3M-01: wide Month content centers its grid at the 282px reference width',
+    (tester) async {
+      final frame = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2025-05',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2025-05',
+        ),
+        year: 2025,
+        month: 5,
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 420,
+              child: MindMonthHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final grid = find.byKey(
+        const ValueKey<String>('mind-month-heatmap-grid'),
+      );
+      final rect = tester.getRect(grid);
+      expect(rect.width, closeTo(282, .01));
+      expect(rect.left, closeTo((360 - 282) / 2, .01));
+      final day = find.text('3');
+      expect(day, findsOneWidget);
+      final dayText = tester.widget<Text>(day);
+      expect(dayText.style?.fontSize, 7);
+      expect(dayText.style?.fontWeight, FontWeight.w900);
+      expect(mindMonthHeatmapCellCornerRadius, 6);
+      expect(
+        find.ancestor(of: day, matching: find.byType(Center)),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'MONTH-B3M-02: narrow Month content preserves the responsive centered seven-column grid',
+    (tester) async {
+      final frame = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2025-05',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2025-05',
+        ),
+        year: 2025,
+        month: 5,
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 240,
+              height: 420,
+              child: MindMonthHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final grid = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+      );
+      expect(grid.width, closeTo(216, .01));
+      expect(grid.left, closeTo(12, .01));
+      expect(grid.height, closeTo((216 - 6 * 4) / 7 * 6 + 5 * 4, .01));
     },
   );
 

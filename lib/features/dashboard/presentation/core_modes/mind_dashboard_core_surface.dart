@@ -21,6 +21,7 @@ import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../../mind/presentation/mind_temporal_heatmap_viewports.dart';
 import '../../time_navigation/domain/time_plane.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
@@ -51,6 +52,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.onContentVerticalDragUpdate,
     this.onContentVerticalDragEnd,
     this.onContentVerticalDragCancel,
+    this.upperVerticalGestures,
     this.headerVisualController,
     this.headerVisualFrame,
     this.behavioralScore,
@@ -81,6 +83,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final GestureDragUpdateCallback? onContentVerticalDragUpdate;
   final GestureDragEndCallback? onContentVerticalDragEnd;
   final GestureDragCancelCallback? onContentVerticalDragCancel;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
   final DashboardHeaderVisualController? headerVisualController;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final ValueListenable<MindBehavioralScoreFrame?>? behavioralScore;
@@ -184,16 +187,19 @@ class MindDashboardCoreSurface extends StatelessWidget {
         MindYearHeatmapViewport(
           frameListenable: heatmap,
           presentationSettings: yearHeatmapPresentation,
+          upperVerticalGestures: upperVerticalGestures,
         ),
       TimePlane.sum when showTemporalHeatmap && temporalHeatmap != null =>
         MindSumHeatmapViewport(
           frameListenable: temporalHeatmap!,
           presentationSettings: yearHeatmapPresentation,
+          upperVerticalGestures: upperVerticalGestures,
         ),
       TimePlane.month when showTemporalHeatmap && temporalHeatmap != null =>
         MindMonthHeatmapViewport(
           frameListenable: temporalHeatmap!,
           presentationSettings: yearHeatmapPresentation,
+          upperVerticalGestures: upperVerticalGestures,
         ),
       _ => const SizedBox.expand(
         key: ValueKey<String>('mind-temporal-content-unavailable'),
@@ -295,21 +301,30 @@ final class _MindTemporalBody extends StatelessWidget {
   presentationSettings;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: <Widget>[
-      Expanded(child: ClipRect(child: temporalContent)),
-      SizedBox(
-        height: _legendHeight,
-        child: _MindHeatmapPaletteLegend(
-          presentationSettings: presentationSettings,
+  Widget build(BuildContext context) {
+    Widget bodyFor(bool showLegend) => Column(
+      children: <Widget>[
+        Expanded(child: ClipRect(child: temporalContent)),
+        if (showLegend)
+          SizedBox(
+            height: _legendHeight,
+            child: _MindHeatmapPaletteLegend(
+              presentationSettings: presentationSettings,
+            ),
+          ),
+        KeyedSubtree(
+          key: const ValueKey('mind-year-heatmap-fixed-footer'),
+          child: SizedBox(height: _footerHeight, child: range),
         ),
-      ),
-      KeyedSubtree(
-        key: const ValueKey('mind-year-heatmap-fixed-footer'),
-        child: SizedBox(height: _footerHeight, child: range),
-      ),
-    ],
-  );
+      ],
+    );
+    final settings = presentationSettings;
+    if (settings == null) return bodyFor(true);
+    return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => bodyFor(value.showHeatmapLegend),
+    );
+  }
 }
 
 /// Fixed, quiet presentation of the five non-empty palette scale positions.

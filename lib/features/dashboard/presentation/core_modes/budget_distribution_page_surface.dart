@@ -8,6 +8,7 @@ import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 import '../dashboard_border_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
+import '../dashboard_vertical_scroll_boundary_handoff.dart';
 import '../widgets/dashboard_render_diagnostic_probe.dart';
 
 /// Explicitly separates physical material from PageView clipping ownership.
@@ -147,37 +148,11 @@ class BudgetDistributionPageSurface extends StatefulWidget {
 final class _BudgetDistributionPageSurfaceState
     extends State<BudgetDistributionPageSurface> {
   late final ScrollController _legendScrollController = ScrollController();
-  bool _isBoundaryHandoff = false;
 
   @override
   void dispose() {
-    if (_isBoundaryHandoff) widget.upperVerticalGestures?.end();
     _legendScrollController.dispose();
     super.dispose();
-  }
-
-  bool _handleScrollNotification(ScrollNotification notification) {
-    final coordinator = widget.upperVerticalGestures;
-    if (coordinator == null) return false;
-    if (notification is ScrollStartNotification &&
-        notification.dragDetails != null) {
-      coordinator.onForegroundInteraction?.call();
-      if (_isBoundaryHandoff) {
-        // The child regained a real scrollable range; it again owns this drag.
-        coordinator.end();
-        _isBoundaryHandoff = false;
-      }
-    }
-    if (notification is OverscrollNotification &&
-        notification.dragDetails != null) {
-      coordinator.consumeBoundaryOverscroll(notification.overscroll);
-      _isBoundaryHandoff = true;
-    }
-    if (notification is ScrollEndNotification && _isBoundaryHandoff) {
-      coordinator.end();
-      _isBoundaryHandoff = false;
-    }
-    return false;
   }
 
   @override
@@ -289,8 +264,8 @@ final class _BudgetDistributionPageSurfaceState
                         ),
                       ),
                     )
-                  : NotificationListener<ScrollNotification>(
-                      onNotification: _handleScrollNotification,
+                  : DashboardVerticalScrollBoundaryHandoff(
+                      upperVerticalGestures: widget.upperVerticalGestures,
                       child: ListView.builder(
                         key: widget.listKey,
                         controller: _legendScrollController,

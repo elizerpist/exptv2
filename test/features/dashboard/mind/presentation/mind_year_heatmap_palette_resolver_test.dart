@@ -147,4 +147,143 @@ void main() {
       FluviVisualTokens.mindHeatmapMaximum,
     ]);
   });
+
+  test(
+    'RED HMP-PRESET-01: ordered fixed presets retain every authored stop',
+    () {
+      final expected = <String, List<Color>>{
+        'oceanSunset': const <Color>[
+          Color(0xff001219),
+          Color(0xff005f73),
+          Color(0xff0a9396),
+          Color(0xff94d2bd),
+          Color(0xffe9d8a6),
+          Color(0xffee9b00),
+          Color(0xffca6702),
+          Color(0xffbb3e03),
+          Color(0xffae2012),
+          Color(0xff9b2226),
+        ],
+        'boldBerry': const <Color>[
+          Color(0xfff9dbbd),
+          Color(0xffffa5ab),
+          Color(0xffda627d),
+          Color(0xffa53860),
+          Color(0xff450920),
+        ],
+        'meadowGreen': const <Color>[
+          Color(0xffd9ed92),
+          Color(0xffb5e48c),
+          Color(0xff99d98c),
+          Color(0xff76c893),
+          Color(0xff52b69a),
+          Color(0xff34a0a4),
+          Color(0xff168aad),
+          Color(0xff1a759f),
+          Color(0xff1e6091),
+          Color(0xff184e77),
+        ],
+        'peachyDelight': const <Color>[
+          Color(0xffd8e2dc),
+          Color(0xffffe5d9),
+          Color(0xffffcad4),
+          Color(0xfff4acb7),
+          Color(0xff9d8189),
+        ],
+        'softRainbow': const <Color>[
+          Color(0xfffbf8cc),
+          Color(0xfffde4cf),
+          Color(0xffffcfd2),
+          Color(0xfff1c0e8),
+          Color(0xffcfbaf0),
+          Color(0xffa3c4f3),
+          Color(0xff90dbf4),
+          Color(0xff8eecf5),
+          Color(0xff98f5e1),
+          Color(0xffb9fbc0),
+        ],
+        'cherryBlossom': const <Color>[
+          Color(0xffebd4cb),
+          Color(0xffda9f93),
+          Color(0xffb6465f),
+          Color(0xff890620),
+          Color(0xff2c0703),
+        ],
+        'softPastels': const <Color>[
+          Color(0xfffaf3dd),
+          Color(0xffc8d5b9),
+          Color(0xff8fc0a9),
+          Color(0xff68b0ab),
+          Color(0xff4a7c59),
+        ],
+        'customColour': const <Color>[
+          Color(0xffce84ad),
+          Color(0xffce96a6),
+          Color(0xffd1a7a0),
+          Color(0xffd4cbb3),
+          Color(0xffd2e0bf),
+        ],
+      };
+
+      for (final entry in expected.entries) {
+        final style = MindYearHeatmapPaletteStyle.values.singleWhere(
+          (candidate) => candidate.name == entry.key,
+        );
+        for (var index = 0; index < entry.value.length; index += 1) {
+          final intensity = index / (entry.value.length - 1);
+          expect(
+            MindYearHeatmapPaletteResolver.resolve(
+              style: style,
+              day: day(intensity: intensity),
+            ).background,
+            entry.value[index],
+            reason: '${entry.key} stop $index must remain exact.',
+          );
+        }
+        expect(
+          MindYearHeatmapPaletteResolver.resolve(
+            style: style,
+            day: day(intensity: -1),
+          ).background,
+          entry.value.first,
+        );
+        expect(
+          MindYearHeatmapPaletteResolver.resolve(
+            style: style,
+            day: day(intensity: 2),
+          ).background,
+          entry.value.last,
+        );
+      }
+    },
+  );
+
+  test(
+    'HMP-PRESET-02: authored palettes interpolate adjacent stops and keep a bounded resolver legend',
+    () {
+      final midpoint = MindYearHeatmapPaletteResolver.resolve(
+        style: MindYearHeatmapPaletteStyle.oceanSunset,
+        day: day(intensity: .5 / 9),
+      );
+      expect(
+        midpoint.background,
+        Color.lerp(const Color(0xff001219), const Color(0xff005f73), .5),
+      );
+      expect(midpoint.foreground, Colors.white);
+
+      for (final style in MindYearHeatmapPaletteStyle.values) {
+        final samples = MindYearHeatmapPaletteResolver.legendSamples(style);
+        expect(samples, hasLength(5));
+        for (var index = 0; index < samples.length; index += 1) {
+          expect(
+            samples[index].background,
+            MindYearHeatmapPaletteResolver.resolve(
+              style: style,
+              day: day(intensity: index / 4),
+            ).background,
+          );
+        }
+      }
+    },
+  );
 }

@@ -543,6 +543,52 @@ void main() {
     },
   );
 
+  testWidgets(
+    'RED YEAR-SURFACE-01: direct annual cells use the same frame without a muted MonthCard shell',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.threeColumns,
+          showMonthlyNetClose: false,
+          showMonthlyDirectionTotal: false,
+          annualSurfaceStyle: MindYearHeatmapAnnualSurfaceStyle.directCells,
+          revision: 0,
+        ),
+      );
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 500,
+            child: MindYearHeatmapViewport(
+              frameListenable: frame,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-direct-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
+        findsOneWidget,
+      );
+      expect(frame.value.identity.year, 2025);
+    },
+  );
+
   testWidgets('HMP-09/12 MonthCard footers use admitted full-month totals', (
     tester,
   ) async {
@@ -773,6 +819,53 @@ void main() {
       expect(scrollController, same(sameController));
       expect(scrollController.position.maxScrollExtent, 0);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'YEAR-SURFACE-02: direct four-column annual groups retain zero-scroll fit without MonthCard shells',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.b3mMy3,
+          monthCardLayout: MindYearMonthCardLayout.fourColumns,
+          showMonthlyNetClose: true,
+          showMonthlyDirectionTotal: true,
+          annualSurfaceStyle: MindYearHeatmapAnnualSurfaceStyle.directCells,
+          revision: 0,
+        ),
+      );
+      final scrollController = ScrollController();
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 420,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+                scrollController: scrollController,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(scrollController.position.maxScrollExtent, 0);
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-direct-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+        findsNothing,
+      );
+      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
     },
   );
 }

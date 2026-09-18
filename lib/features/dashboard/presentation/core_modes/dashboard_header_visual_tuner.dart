@@ -507,6 +507,38 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
                 ],
               ),
             ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('Éves cella stílus'),
+            ),
+            RadioGroup<MindYearHeatmapAnnualSurfaceStyle>(
+              groupValue: settings.annualSurfaceStyle,
+              onChanged: (style) {
+                if (style != null) controller.setAnnualSurfaceStyle(style);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final style in MindYearHeatmapAnnualSurfaceStyle.values)
+                    RadioListTile<MindYearHeatmapAnnualSurfaceStyle>(
+                      key: ValueKey(
+                        'mind-heatmap-annual-surface-${style.name}',
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(style.tunerLabel),
+                      value: style,
+                    ),
+                ],
+              ),
+            ),
+            SwitchListTile.adaptive(
+              key: const ValueKey('mind-heatmap-legend-toggle'),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Hőtérkép jelmagyarázat'),
+              value: settings.showHeatmapLegend,
+              onChanged: controller.setShowHeatmapLegend,
+            ),
             SwitchListTile.adaptive(
               key: const ValueKey('mind-heatmap-monthly-net-toggle'),
               dense: true,

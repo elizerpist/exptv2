@@ -754,6 +754,8 @@ void main() {
   testWidgets('Mind score and heatmap settings use their separate owners', (
     tester,
   ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final controller = DashboardHeaderVisualController(vsync: tester);
     final scoreSettings = MindBehavioralScoreSettingsController();
     final chartPresentation = MindHeaderScoreChartPresentationController();
@@ -762,7 +764,7 @@ void main() {
       MaterialApp(
         home: SizedBox(
           width: 360,
-          height: 520,
+          height: 1500,
           child: DashboardHeaderVisualTuner(
             controller: controller,
             mindBehavioralScoreSettings: scoreSettings,
@@ -827,6 +829,33 @@ void main() {
     await tester.tap(net);
     await tester.pump();
     expect(heatmapSettings.value.showMonthlyNetClose, isTrue);
+    final legend = find.byKey(const ValueKey('mind-heatmap-legend-toggle'));
+    await tester.ensureVisible(legend);
+    tester.widget<SwitchListTile>(legend).onChanged!(false);
+    await tester.pump();
+    expect(heatmapSettings.value.showHeatmapLegend, isFalse);
+
+    final directSurface = find.byKey(
+      const ValueKey('mind-heatmap-annual-surface-directCells'),
+    );
+    final tunerScroll = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(
+              const ValueKey<String>('dashboard-header-visual-tuner-list'),
+            ),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    tunerScroll.position.jumpTo(0);
+    await tester.pump();
+    await tester.tap(directSurface);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.annualSurfaceStyle,
+      MindYearHeatmapAnnualSurfaceStyle.directCells,
+    );
     expect(controller.tuning.value.mindScore.windowWidthPercent, 28);
 
     await tester.pumpWidget(const SizedBox.shrink());
