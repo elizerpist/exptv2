@@ -1341,3 +1341,14 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **MISSING EVIDENCE:** mounted RED→GREEN compact-control geometry test and user physical validation of the eventual application change.
 - Prompt-writer change for this feedback: journal only, build-trigger-free `[skip ci]` commit. No application source, test, workflow, tooling graph or milestone file is modified.
 - Physical validation of the eventual correction: `PENDING — USER ONLY`.
+
+
+## 2026-09-18 — Mind compact amount slider: remove left `Összeg` caption
+
+- User feedback: in the Mind compact amount-range footer, remove the standalone `Összeg` label shown to the left of the minimum/maximum values. Keep the slider itself and the `Min.` / `Max.` amount readouts.
+- Remote branch audit before this journal-only entry: `fix/mind-year-heatmap-calendar-direction-fluvi-20260913` HEAD was `00d96125251b0e3d3e8ef353e1d2945f57b8175f`, a journal-only commit. The latest delivered application source remains `43b5fc1090cfd35562df84d8d65838a297c0b689`.
+- **PROVEN source owner at 43b5fc10:** `lib/features/dashboard/query/presentation/query_amount_range_control.dart` renders the Mind-specific footer through `_CompactMindAmountRangeSurface`. Its lower Row begins with a standalone `Text('Összeg')`, followed by an 8px gap, then the `Min.` and `Max.` compact amount values. This is the exact label visible at the left side of the slider footer.
+- Scope clarification: remove this standalone caption from the **compact Mind presentation only**. Do not remove the `Összeg` heading from the standard Query amount-range surface unless separately requested; do not change range semantics, slider geometry, snapping, min/max values, diagnostics, commit behavior or gesture ownership.
+- **MISSING EVIDENCE:** mounted RED→GREEN geometry for the compact footer after caption removal, final application commit/APK and user physical revalidation.
+- Prompt-writer change for this feedback: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, workflow, tooling graph or milestone file is modified.
+- Physical validation of the eventual correction: `PENDING — USER ONLY`.
