@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "source_head": "43b5fc1090cfd35562df84d8d65838a297c0b689",
-  "source_parent": "75b50e1469609df298b450af5618b6f9ea1867cf",
+  "source_head": "33facc5f1bfcee5d02abd07dd16448aa0173604b",
+  "source_parent": "ae7809c6bcea93854a76c4333eec8c569554859a",
   "source_ref": "fix/mind-year-heatmap-calendar-direction-fluvi-20260913",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "f3b8b75fbe2f197a3fcb57dbe8e7c0ff1e36f6117cf0ba6583825b9d8a394662",
+  "index_sha256": "4c2cad6557be62ef4498e9815c8d9f8013896690265f314a174b64af693e6888",
   "document_count": 474,
-  "occurrence_count": 314460,
-  "defined_symbol_count": 43156,
-  "repository_defined_symbol_count": 10825,
+  "occurrence_count": 316161,
+  "defined_symbol_count": 43337,
+  "repository_defined_symbol_count": 10869,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
     {
       "name": "symbols",
       "storage": "jsonl_shards",
-      "record_count": 10825,
+      "record_count": 10869,
       "paths": [
         "symbols.index.json",
         "symbols/part-000.jsonl",
@@ -24,12 +24,12 @@
         "symbols/part-004.jsonl",
         "symbols/part-005.jsonl"
       ],
-      "byte_count": 4581745
+      "byte_count": 4600463
     },
     {
       "name": "refs",
       "storage": "jsonl_shards",
-      "record_count": 80799,
+      "record_count": 81033,
       "paths": [
         "refs.index.json",
         "refs/part-000.jsonl",
@@ -74,12 +74,12 @@
         "refs/part-039.jsonl",
         "refs/part-040.jsonl"
       ],
-      "byte_count": 26101134
+      "byte_count": 26175710
     },
     {
       "name": "edges",
       "storage": "jsonl_shards",
-      "record_count": 23472,
+      "record_count": 23573,
       "paths": [
         "edges.index.json",
         "edges/part-000.jsonl",
@@ -95,16 +95,16 @@
         "edges/part-010.jsonl",
         "edges/part-011.jsonl"
       ],
-      "byte_count": 8259204
+      "byte_count": 8294040
     },
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 32,
+      "record_count": 54,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 291008
+      "byte_count": 689744
     }
   ]
 }
