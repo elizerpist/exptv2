@@ -1251,3 +1251,65 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **MISSING EVIDENCE:** post-2026-09-18 runtime logs, exact screenshot build identity, mounted RED→GREEN for Sum painted-cell bounds/golden, production-parent Mind card collapse/scroll arbitration, optional-legend 4×3 geometry, direct-on-card Year style, exact B3M-MYM geometry, all new palette resolver/tuner tests, final CI/APK/final matching SCIP and user physical revalidation.
 - Prompt-writer change for this feedback: this journal entry only, in a build-trigger-free `[skip ci]` commit. No application source, test, workflow, graph, milestone or runtime behavior is changed by the prompt writer.
 - Physical validation of the eventual candidate APK: `PENDING — USER ONLY`.
+
+## 2026-09-18 — Mind heatmap presentation and boundary-swipe delivery (`43b5fc10`)
+
+- Application commit `43b5fc1090cfd35562df84d8d65838a297c0b689`
+  (`feat(mind): repair heatmap presentation and card swipes`) repairs the
+  source-proven Sum zero-height tile failure by materializing each bounded
+  month tile extent. `SUM-PAINT-01` was RED at the audited parent with a
+  `RenderBox` height of `0.0`; it is GREEN with positive in-viewport bounds
+  and resolver-owned colour.
+- Mind presentation now has one existing-settings-controller path for a
+  default-ON optional legend and an independent annual MonthCard/direct-cell
+  surface choice. Hiding the legend removes its 28px lane structurally, gives
+  the space back to temporal content, and leaves the fixed compact slider
+  bounds unchanged. Direct Year cells keep the same immutable frame, calendar
+  geometry, titles, totals and 2×6/3×4/4×3 arrangements without the muted
+  nested shell.
+- Month now follows the audited B3M-MYM geometry only: centered
+  `min(available, 282px)` seven-column grid, 4px gaps, square cells, 3px
+  inset, 6px radius, and top-left 7px/900 day labels. Prototype fixture data
+  did not enter the production projection.
+- Fluvi and B3M-MY3 are byte-value regression-protected. One existing palette
+  resolver now additionally owns the eight exact fixed user presets (Ocean
+  Sunset, Bold Berry, Meadow Green, Peachy Delight, Soft Rainbow, Cherry
+  Blossom, Soft Pastels, and fixed `Custom colour`), including every authored
+  stop and five bounded resolver-derived legend samples.
+- Mind Sum/Year keep their child-scroll owner and hand only boundary
+  overscroll to the existing `DashboardUpperVerticalGestureCoordinator`.
+  Zero-extent Sum/Month content can use that same owner; the compact range is
+  a sibling and both physical thumbs are regression-tested to produce zero
+  expansion. Budget was refactored to the same extracted boundary-handoff
+  primitive without a behavior change. No second expansion controller, broad
+  Mind recognizer, timer, Query owner, or financial projection was added.
+- PASS — Ubuntu/proot formatter reports 15 changed Dart files already
+  formatted. Focused Mind/settings/resolver/viewport/host/tuner/coordinator
+  and Budget-boundary suite: 68 tests passed. `./scripts/test-fluvi-fast.sh`
+  passed 431 tests. `flutter analyze --no-pub` reports no issues (132.3s).
+  `git diff --check` passed before the application commit.
+- PASS — online workflow `35318487076` for exact application SHA `43b5fc10`
+  passed `test-flutter`, `test-core`, and `build-human-diagnostic-apk`.
+  The normal app-entrypoint artifact is
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_43b5fc1.apk`,
+  83,285,297 bytes, SHA-256
+  `48248c8f1be0c20eefdc659b7f00b3cf8d1e8a12e925866d28437b1a821240d7`.
+  Its release target and embedded `FLUVI_BUILD_COMMIT` marker are exact
+  `43b5fc1090cfd35562df84d8d65838a297c0b689`.
+- FAIL — the same workflow's automatic `run-dashboard-profile` lane reaches
+  the established harness failure:
+  `Mind Year heatmap profile evidence frame_timing_headroom is invalid: null`
+  in `DashboardProfileReport.validateMindYearHeatmapEvidence`. The subsequent
+  missing B report is consequential. No profile threshold, instrumentation,
+  Time/Avatar physics, or application behavior was changed to mask it; it is
+  not called green and is not physical validation.
+- PASS — exact-source SCIP regenerated from `43b5fc10` with `scip_dart 1.6.2`.
+  Manifest: 474 documents, 314,460 occurrences, 10,825 repository-defined
+  symbols; raw index SHA-256
+  `f3b8b75fbe2f197a3fcb57dbe8e7c0ff1e36f6117cf0ba6583825b9d8a394662`.
+  Tooling commit `b96bbfe5` on `tooling/scip-codegraph-v1` is pushed and its
+  15 Dart tests pass. The raw index remains untracked; graph evidence is
+  navigation/provenance evidence, not runtime causality.
+- The earlier screenshot's exact source identity remains unavailable; this
+  delivery does not retroactively claim it was `434276ac` or `43b5fc10`.
+  Physical validation: `PENDING — USER ONLY`.
