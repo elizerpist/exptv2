@@ -39,9 +39,9 @@ rows are `DONE` and focused tests are green.
 | NRG-02 | §§12,15 | controller identity | no new expansion/scroll/range controller and no broad recognizer | host topology + source inspection | DONE |
 | VAL-01 | §17 | changed Dart | formatter + focused suites green | exact command output | DONE |
 | VAL-02 | §§15,17 | dashboard | analyzer, fast and broader relevant suites green or exact inherited proof | `flutter analyze --no-pub`, targeted dashboard suite, `test-fluvi-fast.sh`, diff check | DONE |
-| DEL-01 | §18 | journal | separate non-duplicate journal-only entry after each substantive commit | `git show --name-only` | NOT DONE |
-| DEL-02 | §19 | CI/APK | final app SHA triggers normal CI/human APK with verified marker/hash | workflow + local SHA-256 | NOT DONE |
-| DEL-03 | §19 | tooling | manifest indexes exact final app SHA | tooling test + manifest | NOT DONE |
+| DEL-01 | §18 | journal | separate non-duplicate journal-only entry after each substantive commit | `git show --name-only` | DONE — `7c26ef19` changes only `docs/FLUVI_ENGINEERING_JOURNAL.md`. |
+| DEL-02 | §19 | CI/APK | final app SHA triggers normal CI/human APK with verified marker/hash | workflow + local SHA-256 | DONE — run `35318487076`, application SHA `43b5fc10`, human APK marker/hash verified. |
+| DEL-03 | §19 | tooling | manifest indexes exact final app SHA | tooling test + manifest | DONE — tooling `b96bbfe5`, manifest source head `43b5fc10`, 15/15 tests. |
 
 ## Build gate
 
@@ -55,4 +55,4 @@ rows are `DONE` and focused tests are green.
 | Gesture arbitration and slider isolation | DONE |
 | Protected regressions / analyzer | DONE |
 
-**BUILD GATE = OPEN — all functional checklist rows above are `DONE`; delivery rows remain intentionally open until the exact application SHA is pushed, built, and indexed.**
+**BUILD GATE = COMPLETE — all functional and delivery rows are `DONE`. The online automated profile lane remains a separately recorded inherited failure and is not represented as green.**

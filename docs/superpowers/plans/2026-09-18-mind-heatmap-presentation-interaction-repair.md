@@ -159,8 +159,8 @@ the sole route to `DashboardExpansionController`.
 - [x] Re-read this plan and the acceptance checklist; every functional row is
   `DONE` and the build gate is open before the final application push/build.
   before the final application push/build.
-- [ ] Commit the application work, append the journal-only evidence, push the
-  exact app tip, obtain the human APK, and regenerate matching SCIP.
+- [x] Commit and push the exact application tip, obtain and verify the normal
+  human APK, regenerate/push matching SCIP, then append journal-only evidence.
   evidence after each substantive commit.
 - [ ] Push the final application SHA as branch tip, monitor CI/human APK,
   verify local APK SHA/marker, regenerate final matching SCIP, then make/push
