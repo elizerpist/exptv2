@@ -1329,3 +1329,15 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **MISSING EVIDENCE:** exact screenshot build marker, production-card RED→GREEN cell bounds for a five-row 31-day month, mounted left/right header-row geometry, final APK and user physical revalidation.
 - Prompt-writer change for this feedback: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, workflow, tooling graph or milestone file is modified.
 - Physical validation of the eventual correction: `PENDING — USER ONLY`.
+
+
+## 2026-09-18 — Mind compact amount slider left-label removal feedback
+
+- User follow-up on the current Mind Month screenshot: remove the visible `Összeg` text at the left side of the compact amount-slider metadata row.
+- Remote branch audit before this journal-only entry: `fix/mind-year-heatmap-calendar-direction-fluvi-20260913` HEAD `00d96125251b0e3d3e8ef353e1d2945f57b8175f`; effective delivered application source remains `43b5fc1090cfd35562df84d8d65838a297c0b689`. The commits above the application SHA are documentation-only.
+- **PROVEN source owner at 43b5fc10:** `lib/features/dashboard/query/presentation/query_amount_range_control.dart` renders an explicit `Text('Összeg')` in the compact Mind amount control immediately before the `Min.` / `Max.` values. This is the label visible in the supplied screenshot and is the requested removal target.
+- Scope clarification: this feedback targets the compact Mind slider row only. The separate standard Query amount-range control also contains an `Összeg` heading, but removing that standard-control heading is **not requested** by this feedback and must not be changed without separate evidence.
+- Required resulting composition: compact Mind slider retains the RangeSlider plus `Min.` and `Max.` values, but the standalone left-side `Összeg` label is absent; the reclaimed horizontal space should remain available to the Min/Max row rather than being replaced by an empty spacer.
+- **MISSING EVIDENCE:** mounted RED→GREEN compact-control geometry test and user physical validation of the eventual application change.
+- Prompt-writer change for this feedback: journal only, build-trigger-free `[skip ci]` commit. No application source, test, workflow, tooling graph or milestone file is modified.
+- Physical validation of the eventual correction: `PENDING — USER ONLY`.
