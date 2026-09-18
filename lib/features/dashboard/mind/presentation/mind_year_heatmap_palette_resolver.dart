@@ -14,27 +14,16 @@ final class MindYearHeatmapPaletteSample {
   const MindYearHeatmapPaletteSample({
     required this.background,
     required this.foreground,
-    this.level,
   });
 
   final Color background;
   final Color foreground;
-
-  /// B3M visual level when applicable. `null` means the preserved Fluvi
-  /// semantic palette or the separate empty-day treatment.
-  final int? level;
 }
 
 /// Central resolver shared by MonthCard paint and tests. It deliberately maps
 /// the already-real Fluvi intensity; the B3M HTML's decorative fixture never
 /// enters this financial presentation path.
 abstract final class MindYearHeatmapPaletteResolver {
-  static const Color _b3mLevel0 = Color.fromARGB(128, 255, 255, 255);
-  static const Color _b3mLevel1 = Color.fromARGB(107, 255, 177, 92);
-  static const Color _b3mLevel2 = Color.fromARGB(148, 255, 107, 107);
-  static const Color _b3mLevel3 = Color.fromARGB(184, 245, 54, 141);
-  static const Color _b3mLevel4 = Color.fromARGB(214, 130, 42, 194);
-
   static MindYearHeatmapPaletteSample resolve({
     required MindYearHeatmapPaletteStyle style,
     required MindYearHeatmapDay day,
@@ -53,32 +42,21 @@ abstract final class MindYearHeatmapPaletteResolver {
     required bool isEmpty,
     required double intensity,
     required MindYearHeatmapPaletteIntensity paletteIntensity,
-  }) => switch (style) {
-    MindYearHeatmapPaletteStyle.fluvi => _fluvi(
-      isEmpty: isEmpty,
-      intensity: intensity,
-      paletteIntensity: paletteIntensity,
-    ),
-    MindYearHeatmapPaletteStyle.b3mMy3 => _b3m(
-      isEmpty: isEmpty,
-      intensity: intensity,
-    ),
-    _ => _authored(
-      isEmpty: isEmpty,
-      intensity: intensity,
-      stops: _authoredStopsFor(style),
-    ),
-  };
+  }) => _authored(
+    isEmpty: isEmpty,
+    intensity: intensity,
+    stops: _authoredStopsFor(style),
+  );
 
-  /// Five ordered, non-empty scale positions for every Mind heatmap surface.
+  /// Ten ordered, non-empty authored scale positions for every Mind surface.
   /// The legend intentionally delegates to this resolver rather than owning
   /// another palette; empty and equal-range are tile states, not scale stops.
   static List<MindYearHeatmapPaletteSample> legendSamples(
     MindYearHeatmapPaletteStyle style,
   ) => List<MindYearHeatmapPaletteSample>.unmodifiable(
     List<MindYearHeatmapPaletteSample>.generate(
-      5,
-      (index) => resolve(style: style, day: _legendDay(index / 4)),
+      10,
+      (index) => resolve(style: style, day: _legendDay(index / 9)),
       growable: false,
     ),
   );
@@ -101,51 +79,6 @@ abstract final class MindYearHeatmapPaletteResolver {
       },
       intensity: intensity,
       paletteIntensity: paletteIntensity,
-    );
-  }
-
-  static MindYearHeatmapPaletteSample _fluvi({
-    required bool isEmpty,
-    required double intensity,
-    required MindYearHeatmapPaletteIntensity paletteIntensity,
-  }) => MindYearHeatmapPaletteSample(
-    background: switch (paletteIntensity) {
-      MindYearHeatmapPaletteIntensity.empty =>
-        FluviVisualTokens.mindHeatmapEmpty,
-      MindYearHeatmapPaletteIntensity.minimum =>
-        FluviVisualTokens.mindHeatmapMinimum,
-      MindYearHeatmapPaletteIntensity.interpolated =>
-        FluviVisualTokens.mindHeatmapInterpolated(intensity),
-      MindYearHeatmapPaletteIntensity.maximum =>
-        FluviVisualTokens.mindHeatmapMaximum,
-      MindYearHeatmapPaletteIntensity.equalRange =>
-        FluviVisualTokens.mindHeatmapEqualRange,
-    },
-    foreground: FluviVisualTokens.textSecondary,
-  );
-
-  static MindYearHeatmapPaletteSample _b3m({
-    required bool isEmpty,
-    required double intensity,
-  }) {
-    if (isEmpty) {
-      return const MindYearHeatmapPaletteSample(
-        background: FluviVisualTokens.mindHeatmapEmpty,
-        foreground: FluviVisualTokens.textSecondary,
-      );
-    }
-    final level = (intensity.clamp(0.0, 1.0) * 4).round();
-    final background = switch (level) {
-      0 => _b3mLevel0,
-      1 => _b3mLevel1,
-      2 => _b3mLevel2,
-      3 => _b3mLevel3,
-      _ => _b3mLevel4,
-    };
-    return MindYearHeatmapPaletteSample(
-      background: background,
-      foreground: level >= 3 ? Colors.white : const Color(0xA314213A),
-      level: level,
     );
   }
 
@@ -187,40 +120,38 @@ abstract final class MindYearHeatmapPaletteResolver {
 
   static List<Color> _authoredStopsFor(MindYearHeatmapPaletteStyle style) =>
       switch (style) {
-        MindYearHeatmapPaletteStyle.oceanSunset => _oceanSunset,
-        MindYearHeatmapPaletteStyle.boldBerry => _boldBerry,
+        MindYearHeatmapPaletteStyle.fluvi => _fluvi,
+        MindYearHeatmapPaletteStyle.b3mMy3 => _b3mMy3,
         MindYearHeatmapPaletteStyle.meadowGreen => _meadowGreen,
-        MindYearHeatmapPaletteStyle.peachyDelight => _peachyDelight,
         MindYearHeatmapPaletteStyle.softRainbow => _softRainbow,
-        MindYearHeatmapPaletteStyle.cherryBlossom => _cherryBlossom,
-        MindYearHeatmapPaletteStyle.softPastels => _softPastels,
-        MindYearHeatmapPaletteStyle.customColour => _customColour,
-        MindYearHeatmapPaletteStyle.fluvi ||
-        MindYearHeatmapPaletteStyle.b3mMy3 => throw ArgumentError.value(
-          style,
-          'style',
-          'Not an authored palette',
-        ),
+        MindYearHeatmapPaletteStyle.peachyDelight => _peachyDelight,
+        MindYearHeatmapPaletteStyle.fluviStretched => _fluviStretched,
+        MindYearHeatmapPaletteStyle.b3mMy3Stretched => _b3mMy3Stretched,
       };
 
-  static const List<Color> _oceanSunset = <Color>[
-    Color(0xff001219),
-    Color(0xff005f73),
-    Color(0xff0a9396),
-    Color(0xff94d2bd),
-    Color(0xffe9d8a6),
-    Color(0xffee9b00),
-    Color(0xffca6702),
-    Color(0xffbb3e03),
-    Color(0xffae2012),
-    Color(0xff9b2226),
+  static const List<Color> _fluvi = <Color>[
+    Color(0xffedf7f6),
+    Color(0xffd6f1ef),
+    Color(0xffb7e9ea),
+    Color(0xff8fdadf),
+    Color(0xff67c7dd),
+    Color(0xff56b0e1),
+    Color(0xff668fe3),
+    Color(0xff816fe1),
+    Color(0xffa05fdd),
+    Color(0xffc05cd7),
   ];
-  static const List<Color> _boldBerry = <Color>[
-    Color(0xfff9dbbd),
-    Color(0xffffa5ab),
-    Color(0xffda627d),
-    Color(0xffa53860),
-    Color(0xff450920),
+  static const List<Color> _b3mMy3 = <Color>[
+    Color(0xfff4f7fb),
+    Color(0xffffeeda),
+    Color(0xffffd5af),
+    Color(0xffffb15c),
+    Color(0xffff8d64),
+    Color(0xffff6b6b),
+    Color(0xfff536bd),
+    Color(0xffd03cb0),
+    Color(0xffa237bf),
+    Color(0xff821ac2),
   ];
   static const List<Color> _meadowGreen = <Color>[
     Color(0xffd9ed92),
@@ -236,9 +167,14 @@ abstract final class MindYearHeatmapPaletteResolver {
   ];
   static const List<Color> _peachyDelight = <Color>[
     Color(0xffd8e2dc),
+    Color(0xffece4da),
     Color(0xffffe5d9),
+    Color(0xffffd7d7),
     Color(0xffffcad4),
+    Color(0xfff9bbc6),
     Color(0xfff4acb7),
+    Color(0xffc89aa0),
+    Color(0xffb28d94),
     Color(0xff9d8189),
   ];
   static const List<Color> _softRainbow = <Color>[
@@ -253,25 +189,28 @@ abstract final class MindYearHeatmapPaletteResolver {
     Color(0xff98f5e1),
     Color(0xffb9fbc0),
   ];
-  static const List<Color> _cherryBlossom = <Color>[
-    Color(0xffebd4cb),
-    Color(0xffda9f93),
-    Color(0xffb6465f),
-    Color(0xff890620),
-    Color(0xff2c0703),
+  static const List<Color> _fluviStretched = <Color>[
+    Color(0xffe9e0fc),
+    Color(0xffdcccfd),
+    Color(0xffcab0fb),
+    Color(0xffbfa1fa),
+    Color(0xffb18ef8),
+    Color(0xff9570ed),
+    Color(0xff8b65e5),
+    Color(0xff7657c5),
+    Color(0xff684eb1),
+    Color(0xff493590),
   ];
-  static const List<Color> _softPastels = <Color>[
-    Color(0xfffaf3dd),
-    Color(0xffc8d5b9),
-    Color(0xff8fc0a9),
-    Color(0xff68b0ab),
-    Color(0xff4a7c59),
-  ];
-  static const List<Color> _customColour = <Color>[
-    Color(0xffce84ad),
-    Color(0xffce96a6),
-    Color(0xffd1a7a0),
-    Color(0xffd4cbb3),
-    Color(0xffd2e0bf),
+  static const List<Color> _b3mMy3Stretched = <Color>[
+    Color(0xfffcf0e4),
+    Color(0xfffed2a6),
+    Color(0xfffcb476),
+    Color(0xfff5956a),
+    Color(0xfff97184),
+    Color(0xfff96b8b),
+    Color(0xffee46a1),
+    Color(0xffbf3cb6),
+    Color(0xff843bc3),
+    Color(0xff47188c),
   ];
 }

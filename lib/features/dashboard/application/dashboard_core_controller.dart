@@ -4665,11 +4665,25 @@ final class DashboardCoreController {
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
     );
+    // This separate twelve-month value is the bounded inspection read model
+    // for an active category/partner/search membership. It is intentionally
+    // admitted before the amount-range preview and never replaces the
+    // query-independent full income/expense/net bank below.
+    final scopedContributions = annualMembership
+        .contributionsForYear(year: year, membership: memberships.entryIndices)
+        .toList(growable: false);
     final projection = MindYearHeatmapProjection.buildFromPreparedContributions(
       identity: identity,
-      contributions: annualMembership.contributionsForYear(
-        year: year,
-        membership: memberships.entryIndices,
+      contributions: scopedContributions,
+      scopedMonthlyAggregates:
+          MindYearHeatmapScopedMonthlyAggregates.fromPreparedContributions(
+            year: year,
+            contributions: scopedContributions,
+          ),
+      inspectionScope: _mindYearHeatmapInspectionScopeFor(
+        direction: direction,
+        appliedScope: appliedScope,
+        activeFocus: activeFocus,
       ),
       monthlyAggregates: monthlyAggregateBank?.forYear(year),
       sourceWorkCounter: MindYearHeatmapSourceWorkCounter(
@@ -5046,6 +5060,55 @@ final class DashboardCoreController {
     return 'focus:category=${active?.category?.id ?? '-'}'
         ',partner=${active?.partner?.id ?? '-'}'
         ',search=${active?.normalizedSearch ?? '-'}';
+  }
+
+  MindYearHeatmapInspectionScope _mindYearHeatmapInspectionScopeFor({
+    required LedgerDirection direction,
+    required CurrentLedgerQueryScope appliedScope,
+    required DashboardEphemeralFocusState? activeFocus,
+  }) {
+    final facets = currentQuery.facetPresentationFor(direction);
+    final inspectionFacets = <MindYearHeatmapInspectionFacet>[
+      if (activeFocus?.category case final category?)
+        MindYearHeatmapInspectionFacet(
+          kind: MindYearHeatmapInspectionFacetKind.category,
+          id: category.id,
+          displayName: category.displayName,
+          colorId: category.colorId ?? '',
+          iconId: category.iconId ?? '',
+        )
+      else
+        for (final category
+            in facets?.categories ?? const <QueryMenuCategoryFacet>[])
+          if (appliedScope.categoryIds.contains(category.id))
+            MindYearHeatmapInspectionFacet(
+              kind: MindYearHeatmapInspectionFacetKind.category,
+              id: category.id,
+              displayName: category.displayName,
+              colorId: category.colorId,
+              iconId: category.iconId,
+            ),
+      if (activeFocus?.partner case final partner?)
+        MindYearHeatmapInspectionFacet(
+          kind: MindYearHeatmapInspectionFacetKind.partner,
+          id: partner.id,
+          displayName: partner.displayName,
+          colorId: partner.colorId ?? '',
+          iconId: partner.iconId ?? '',
+        )
+      else
+        for (final partner
+            in facets?.partners ?? const <QueryMenuPartnerFacet>[])
+          if (appliedScope.partnerIds.contains(partner.id))
+            MindYearHeatmapInspectionFacet(
+              kind: MindYearHeatmapInspectionFacetKind.partner,
+              id: partner.id,
+              displayName: partner.displayName,
+              colorId: partner.categoryColorId,
+              iconId: partner.categoryIconId,
+            ),
+    ];
+    return MindYearHeatmapInspectionScope(facets: inspectionFacets);
   }
 
   bool _isMindYearHeatmapIdentityCurrent({

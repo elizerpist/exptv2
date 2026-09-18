@@ -1,5 +1,8 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/categories/catalog/category_visual_resolver.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
@@ -96,6 +99,272 @@ void main() {
             'A five-real-row month reserves the same sixth display row as a '
             'six-real-row month; only real dates are painted.',
       );
+    },
+  );
+
+  testWidgets(
+    'RED YEAR-INFO-01/02/03/04/05: a MonthCard morphs locally into stable full-month information',
+    (tester) async {
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      final january = find.byKey(const ValueKey('mind-year-heatmap-month-1'));
+      final januaryTap = find.byKey(
+        const ValueKey('mind-year-heatmap-month-tap-1'),
+      );
+      final before = tester.getRect(january);
+      final scrollExtentBefore = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byKey(const ValueKey('mind-year-heatmap-scroll')),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position
+          .maxScrollExtent;
+      await tester.tap(januaryTap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsOneWidget,
+        reason:
+            'A clean Year MonthCard tap opens local inspection, not Month navigation.',
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-morph-1')),
+        findsOneWidget,
+        reason:
+            'The inspection content must have a measurable intermediate morph state.',
+      );
+      await tester.pump(const Duration(milliseconds: 220));
+      expect(find.text('Hó végi maradék'), findsOneWidget);
+      expect(find.text('Összbevétel'), findsOneWidget);
+      expect(find.text('Összkiadás'), findsOneWidget);
+      expect(find.text('3 800 Ft'), findsOneWidget);
+      expect(find.text('5 000 Ft'), findsOneWidget);
+      expect(find.text('1 200 Ft'), findsOneWidget);
+      expect(find.text('Étel'), findsOneWidget);
+      expect(find.text('1 000 Ft'), findsOneWidget);
+      final scopeSpan =
+          tester
+                  .widget<Text>(
+                    find.byKey(
+                      const ValueKey(
+                        'mind-year-heatmap-inspection-scope-label',
+                      ),
+                    ),
+                  )
+                  .textSpan!
+              as TextSpan;
+      expect(
+        (scopeSpan.children!.single as TextSpan).style?.color,
+        CategoryVisualResolver.resolve(
+          colorId: 'orange',
+          iconId: 'fork',
+        ).gradient.middleColor,
+        reason:
+            'The scoped category uses the canonical category visual authority.',
+      );
+      expect(tester.getRect(january), before);
+      expect(
+        tester
+            .state<ScrollableState>(
+              find
+                  .descendant(
+                    of: find.byKey(const ValueKey('mind-year-heatmap-scroll')),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            )
+            .position
+            .maxScrollExtent,
+        scrollExtentBefore,
+      );
+      expect(
+        tester.getSemantics(januaryTap).flagsCollection.isToggled,
+        Tristate.isTrue,
+        reason: 'The same card remains the selected local inspection owner.',
+      );
+
+      await tester.tap(januaryTap);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsNothing,
+      );
+      expect(tester.getRect(january), before);
+    },
+  );
+
+  testWidgets(
+    'RED YEAR-INFO-14: a Year scroll drag never becomes a MonthCard inspection tap',
+    (tester) async {
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      final scrollController = ScrollController();
+      addTearDown(frame.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 180,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                scrollController: scrollController,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey('mind-year-heatmap-month-tap-1')),
+        const Offset(0, -100),
+      );
+      await tester.pump();
+
+      expect(scrollController.offset, greaterThan(0));
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsNothing,
+        reason: 'The tap observer must not enter the Scrollable gesture arena.',
+      );
+    },
+  );
+
+  testWidgets(
+    'RED YEAR-INFO-04/06/13/15/17: inspection has one owner, survives same-Year data changes, and clears before a new Year paints',
+    (tester) async {
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.threeColumns,
+          showMonthlyNetClose: false,
+          showMonthlyDirectionTotal: false,
+          annualSurfaceStyle: MindYearHeatmapAnnualSurfaceStyle.directCells,
+          revision: 0,
+        ),
+      );
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final january = find.byKey(
+        const ValueKey('mind-year-heatmap-month-tap-1'),
+      );
+      final february = find.byKey(
+        const ValueKey('mind-year-heatmap-month-tap-2'),
+      );
+      await tester.tap(january);
+      await tester.pump(const Duration(milliseconds: 240));
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-direct-1')),
+        findsOneWidget,
+      );
+
+      // A new direction/frame for the same selected Year must update only
+      // data. It must neither navigate nor close the local inspection.
+      frame.value = _inspectionProjection(
+        upstreamScopeKey: 'income|year:2025',
+        coreRevision: 2,
+      ).preview(range);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Hó végi maradék'), findsOneWidget);
+      expect(find.text('3 800 Ft'), findsOneWidget);
+
+      settings
+        ..setPaletteStyle(MindYearHeatmapPaletteStyle.softRainbow)
+        ..setShowHeatmapLegend(false)
+        ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.monthCards);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsOneWidget,
+        reason:
+            'Presentation-only changes retain a same-Year local inspection.',
+      );
+
+      await tester.tap(february);
+      await tester.pump(const Duration(milliseconds: 480));
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+        findsOneWidget,
+        reason:
+            'A surface-style change updates only the shell, not the selected '
+            'Year inspection state.',
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('mind-year-heatmap-month-info-2')),
+            )
+            .size,
+        isNot(Size.zero),
+      );
+
+      frame.value = _inspectionProjection(
+        year: 2026,
+        upstreamScopeKey: 'income|year:2026',
+        coreRevision: 3,
+      ).preview(range);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-info-2')),
+        findsNothing,
+        reason: 'A 2025 inspection must be cleared before a 2026 frame paints.',
+      );
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -823,6 +1092,90 @@ void main() {
   );
 
   testWidgets(
+    'RED YEAR-INFO-16/17: four-column inspection stays inside its stable slot at supported mobile widths',
+    (tester) async {
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.fourColumns,
+          showMonthlyNetClose: true,
+          showMonthlyDirectionTotal: true,
+          revision: 0,
+        ),
+      );
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+
+      for (final width in <double>[360, 390, 412, 430]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: width,
+                height: 420,
+                child: MindYearHeatmapViewport(
+                  key: ValueKey<String>('mind-year-info-width-$width'),
+                  frameListenable: frame,
+                  presentationSettings: settings,
+                ),
+              ),
+            ),
+          ),
+        );
+        final card = find.byKey(const ValueKey('mind-year-heatmap-month-1'));
+        final slotBefore = tester.getRect(card);
+        final scrollExtentBefore = tester
+            .state<ScrollableState>(
+              find
+                  .descendant(
+                    of: find.byKey(
+                      const ValueKey('mind-year-heatmap-fit-scroll'),
+                    ),
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            )
+            .position
+            .maxScrollExtent;
+        await tester.tap(
+          find.byKey(const ValueKey('mind-year-heatmap-month-tap-1')),
+        );
+        await tester.pump(const Duration(milliseconds: 240));
+        final info = tester.getRect(
+          find.byKey(const ValueKey('mind-year-heatmap-month-info-1')),
+        );
+        final slot = tester.getRect(card);
+        expect(slot, slotBefore);
+        expect(
+          tester
+              .state<ScrollableState>(
+                find
+                    .descendant(
+                      of: find.byKey(
+                        const ValueKey('mind-year-heatmap-fit-scroll'),
+                      ),
+                      matching: find.byType(Scrollable),
+                    )
+                    .first,
+              )
+              .position
+              .maxScrollExtent,
+          scrollExtentBefore,
+        );
+        expect(info.width, greaterThan(0));
+        expect(info.height, greaterThan(0));
+        expect(slot.contains(info.topLeft), isTrue);
+        expect(
+          slot.contains(info.bottomRight - const Offset(.01, .01)),
+          isTrue,
+        );
+        expect(tester.takeException(), isNull, reason: 'width=$width');
+      }
+    },
+  );
+
+  testWidgets(
     'YEAR-SURFACE-02: direct four-column annual groups retain zero-scroll fit without MonthCard shells',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
@@ -882,6 +1235,58 @@ MindYearHeatmapProjection _projection() => MindYearHeatmapProjection.build(
     _entry('a', 100000, const LocalDate(year: 2025, month: 1, day: 2)),
     _entry('b', 900000, const LocalDate(year: 2025, month: 9, day: 2)),
   ],
+);
+
+MindYearHeatmapProjection _inspectionProjection({
+  int year = 2025,
+  String upstreamScopeKey = 'expense|year:2025',
+  int coreRevision = 1,
+}) => MindYearHeatmapProjection.build(
+  identity: MindYearHeatmapIdentity(
+    upstreamScopeKey: upstreamScopeKey,
+    indexGeneration: 1,
+    coreRevision: coreRevision,
+    year: year,
+    navigationEpoch: 1,
+  ),
+  entries: <DashboardLedgerEntry>[
+    _entry('a', 100000, LocalDate(year: year, month: 1, day: 2)),
+  ],
+  monthlyAggregates: MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+    year: year,
+    incomeEntries: <DashboardLedgerEntry>[
+      _entry('income', 500000, LocalDate(year: year, month: 1, day: 2)),
+    ],
+    expenseEntries: <DashboardLedgerEntry>[
+      _entry('expense', 120000, LocalDate(year: year, month: 1, day: 3)),
+    ],
+  ),
+  scopedMonthlyAggregates:
+      MindYearHeatmapScopedMonthlyAggregates.fromPreparedContributions(
+        year: year,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          MindYearHeatmapPreparedContribution(
+            ordinal: 0,
+            bookedLocalEpochDay: LocalDate(
+              year: year,
+              month: 1,
+              day: 2,
+            ).epochDay,
+            amountMinor: 100000,
+          ),
+        ],
+      ),
+  inspectionScope: const MindYearHeatmapInspectionScope(
+    facets: <MindYearHeatmapInspectionFacet>[
+      MindYearHeatmapInspectionFacet(
+        kind: MindYearHeatmapInspectionFacetKind.category,
+        id: 'food',
+        displayName: 'Étel',
+        colorId: 'orange',
+        iconId: 'fork',
+      ),
+    ],
+  ),
 );
 
 DashboardLedgerEntry _entry(String id, int amount, LocalDate date) =>

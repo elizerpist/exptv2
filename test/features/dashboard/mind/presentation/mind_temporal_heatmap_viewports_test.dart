@@ -127,17 +127,17 @@ void main() {
   );
 
   testWidgets(
-    'MONTH-HM-01/05/06: Month uses a fixed six-row envelope with real numbered days and no nested scroll',
+    'RED MONTH-B3M-REAL-ROW-01: July 2026 uses five real calendar rows with numbered days and no nested scroll',
     (tester) async {
       final frame = MindMonthHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
-          upstreamScopeKey: 'expense|month:2025-05',
+          upstreamScopeKey: 'expense|month:2026-07',
           indexGeneration: 1,
           coreRevision: 1,
-          timeScopeKey: 'month:2025-05',
+          timeScopeKey: 'month:2026-07',
         ),
-        year: 2025,
-        month: 5,
+        year: 2026,
+        month: 7,
         contributions: contributions,
       ).preview(range);
       final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
@@ -157,12 +157,35 @@ void main() {
 
       expect(find.text('Napi aktivitás'), findsOneWidget);
       expect(find.text('31 nap'), findsOneWidget);
-      expect(find.text('május 2025'), findsOneWidget);
-      expect(find.text('2 aktív nap'), findsOneWidget);
+      expect(find.text('július 2026'), findsOneWidget);
+      expect(find.text('0 aktív nap'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('mind-month-heatmap-grid')),
         findsOneWidget,
       );
+      final grid = tester.getSize(
+        find.byKey(const ValueKey('mind-month-heatmap-grid')),
+      );
+      final cellExtent = (282 - 6 * 4) / 7;
+      expect(
+        grid.height,
+        closeTo(cellExtent * 5 + 4 * 4, .01),
+        reason: 'July 2026 occupies five real Monday–Sunday rows.',
+      );
+      final titleRect = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-title')),
+      );
+      final dayCountRect = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-day-count')),
+      );
+      final monthRect = tester.getRect(find.text('július 2026'));
+      final activeRect = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-active-days')),
+      );
+      expect(titleRect.center.dy, closeTo(dayCountRect.center.dy, .01));
+      expect(monthRect.center.dy, closeTo(activeRect.center.dy, .01));
+      expect(titleRect.left, lessThan(dayCountRect.left));
+      expect(monthRect.left, lessThan(activeRect.left));
       expect(find.byType(Scrollable), findsNothing);
     },
   );
@@ -216,6 +239,49 @@ void main() {
   );
 
   testWidgets(
+    'MONTH-B3M-REAL-ROW-02: a real six-row Month uses its sixth row rather than a five-row shortcut',
+    (tester) async {
+      final frame = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2025-06',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2025-06',
+        ),
+        year: 2025,
+        month: 6,
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 420,
+              child: MindMonthHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final grid = tester.getSize(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+      );
+      final cellExtent = (282 - 6 * 4) / 7;
+      expect(
+        grid.height,
+        closeTo(cellExtent * 6 + 4 * 5, .01),
+        reason: 'June 2025 starts on Sunday and needs six real rows.',
+      );
+      expect(find.text('június 2025'), findsOneWidget);
+      expect(find.text('30 nap'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'MONTH-B3M-02: narrow Month content preserves the responsive centered seven-column grid',
     (tester) async {
       final frame = MindMonthHeatmapProjection.build(
@@ -249,7 +315,7 @@ void main() {
       );
       expect(grid.width, closeTo(216, .01));
       expect(grid.left, closeTo(12, .01));
-      expect(grid.height, closeTo((216 - 6 * 4) / 7 * 6 + 5 * 4, .01));
+      expect(grid.height, closeTo((216 - 6 * 4) / 7 * 5 + 4 * 4, .01));
     },
   );
 

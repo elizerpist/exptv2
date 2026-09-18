@@ -230,6 +230,92 @@ void main() {
       expect(counter.preparedContributionTouches, 1);
     },
   );
+
+  test(
+    'RED MYH-31: scoped month totals are a separate twelve-month prepared read model',
+    () {
+      final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+        _entry(
+          'food-march',
+          250,
+          const LocalDate(year: 2025, month: 3, day: 3),
+        ),
+        _entry(
+          'food-april',
+          175,
+          const LocalDate(year: 2025, month: 4, day: 9),
+        ),
+        DashboardLedgerEntry(
+          id: 'travel-march',
+          partnerId: 'partner',
+          categoryId: 'travel',
+          direction: 'expense',
+          amountMinor: 900,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2025,
+            month: 3,
+            day: 4,
+          ).epochDay,
+          bookedLocalTimeMinutes: 12 * 60,
+        ),
+        _entry(
+          'food-previous-year',
+          700,
+          const LocalDate(year: 2024, month: 3, day: 3),
+        ),
+      ]);
+      final prepared = MindYearHeatmapPreparedMembership.fromEntries(
+        seed.entries,
+      );
+
+      final scoped =
+          MindYearHeatmapScopedMonthlyAggregates.fromPreparedContributions(
+            year: 2025,
+            contributions: prepared.contributionsForYear(
+              year: 2025,
+              membership: seed.select(categoryId: 'food').entryIndices,
+            ),
+          );
+
+      expect(scoped.year, 2025);
+      expect(scoped.amountsByMonth, hasLength(12));
+      expect(scoped.amountForMonth(3), 250);
+      expect(scoped.amountForMonth(4), 175);
+      expect(scoped.amountForMonth(1), 0);
+      expect(scoped.amountForMonth(12), 0);
+
+      final frame = MindYearHeatmapProjection.buildFromPreparedContributions(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'expense|year:2025|category:food|partner:-',
+          indexGeneration: 17,
+          coreRevision: 42,
+          year: 2025,
+          navigationEpoch: 9,
+        ),
+        contributions: prepared.contributionsForYear(
+          year: 2025,
+          membership: seed.select(categoryId: 'food').entryIndices,
+        ),
+        scopedMonthlyAggregates: scoped,
+        inspectionScope: const MindYearHeatmapInspectionScope(
+          facets: <MindYearHeatmapInspectionFacet>[
+            MindYearHeatmapInspectionFacet(
+              kind: MindYearHeatmapInspectionFacetKind.category,
+              id: 'food',
+              displayName: 'Étel',
+              colorId: 'orange',
+              iconId: 'fork',
+            ),
+          ],
+        ),
+      ).preview(range(1, 1000));
+
+      expect(frame.scopedMonthlyAggregates.amountForMonth(3), 250);
+      expect(frame.scopedMonthlyAggregates.amountForMonth(4), 175);
+      expect(frame.inspectionScope.facets, hasLength(1));
+      expect(frame.inspectionScope.facets.single.displayName, 'Étel');
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(String id, int amount, LocalDate date) =>

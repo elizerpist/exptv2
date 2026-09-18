@@ -327,7 +327,7 @@ final class _MindTemporalBody extends StatelessWidget {
   }
 }
 
-/// Fixed, quiet presentation of the five non-empty palette scale positions.
+/// Fixed, quiet presentation of the ten authored non-empty palette positions.
 /// It sits outside the temporal viewport and delegates every color choice to
 /// the same resolver that paints heatmap cells.
 final class _MindHeatmapPaletteLegend extends StatelessWidget {

@@ -380,7 +380,7 @@ void main() {
   );
 
   testWidgets(
-    'RED LEG-01/04: the fixed Mind legend has five resolver swatches above the compact range',
+    'RED LEG-01/04: the fixed Mind legend has ten resolver swatches above the compact range',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -405,13 +405,15 @@ void main() {
         find.byKey(const ValueKey('mind-heatmap-palette-legend')),
         findsOneWidget,
       );
+      for (var index = 0; index < 10; index += 1) {
+        expect(
+          find.byKey(ValueKey('mind-heatmap-palette-swatch-$index')),
+          findsOneWidget,
+        );
+      }
       expect(
-        find.byKey(const ValueKey('mind-heatmap-palette-swatch-0')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-heatmap-palette-swatch-4')),
-        findsOneWidget,
+        find.byKey(const ValueKey('mind-heatmap-palette-swatch-10')),
+        findsNothing,
       );
       expect(
         tester
@@ -471,6 +473,12 @@ void main() {
       );
       final footerBefore = tester.getRect(footer);
       final contentBefore = tester.getRect(content);
+      final cellsBefore = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-month-cells-1')),
+      );
+      final lastRowBefore = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-annual-row-2')),
+      );
       expect(legend, findsOneWidget);
 
       settings.setShowHeatmapLegend(false);
@@ -481,6 +489,19 @@ void main() {
       final contentAfter = tester.getRect(content);
       expect(contentAfter.bottom, contentBefore.bottom + 28);
       expect(contentAfter.top, contentBefore.top);
+      final cellsAfter = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-month-cells-1')),
+      );
+      final lastRowAfter = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-annual-row-2')),
+      );
+      // Width is the maximum square-cell limit at this reference width. The
+      // reclaimed height must nevertheless reach the fit solver (never a
+      // stale legend-present envelope): it may increase cells when height
+      // limited and otherwise leaves the width-limited cells unchanged.
+      expect(cellsAfter.height, greaterThanOrEqualTo(cellsBefore.height));
+      expect(lastRowAfter.bottom, greaterThanOrEqualTo(lastRowBefore.bottom));
+      expect(lastRowAfter.bottom, lessThanOrEqualTo(contentAfter.bottom));
     },
   );
 
@@ -522,7 +543,7 @@ void main() {
       settings
         ..setShowHeatmapLegend(false)
         ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.directCells)
-        ..setPaletteStyle(MindYearHeatmapPaletteStyle.oceanSunset);
+        ..setPaletteStyle(MindYearHeatmapPaletteStyle.fluviStretched);
       await tester.pump();
 
       expect(frame.value, same(admittedFrame));
@@ -594,7 +615,7 @@ void main() {
       addTearDown(temporal.dispose);
       addTearDown(rangeChanges.dispose);
 
-      Future<(Rect footer, Rect legend, Rect slider, Rect caption)> pumpPlane({
+      Future<(Rect footer, Rect legend, Rect slider, Rect minimum)> pumpPlane({
         required bool yearVisible,
         required TimePlane plane,
         bool temporalVisible = true,
@@ -621,7 +642,7 @@ void main() {
           tester.getRect(
             find.byKey(const ValueKey('query-amount-range-slider')),
           ),
-          tester.getRect(find.text('Összeg').last),
+          tester.getRect(find.text('Min.').last),
         );
       }
 

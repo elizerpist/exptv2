@@ -123,14 +123,11 @@ void main() {
           <String>[
             'fluvi',
             'b3mMy3',
-            'oceanSunset',
-            'boldBerry',
             'meadowGreen',
-            'peachyDelight',
             'softRainbow',
-            'cherryBlossom',
-            'softPastels',
-            'customColour',
+            'peachyDelight',
+            'fluviStretched',
+            'b3mMy3Stretched',
           ],
         );
       },

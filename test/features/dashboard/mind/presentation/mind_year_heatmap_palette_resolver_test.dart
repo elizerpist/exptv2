@@ -7,283 +7,168 @@ import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_pal
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
-  MindYearHeatmapDay day({
-    required double intensity,
-    MindYearHeatmapPaletteIntensity paletteIntensity =
-        MindYearHeatmapPaletteIntensity.interpolated,
-    int? total = 100,
-  }) => MindYearHeatmapDay(
-    date: const LocalDate(year: 2027, month: 1, day: 1),
-    total: total,
-    kind: total == null
-        ? MindYearHeatmapTileKind.empty
-        : MindYearHeatmapTileKind.interpolated,
-    intensity: intensity,
-    paletteIntensity: paletteIntensity,
-  );
+  MindYearHeatmapDay day(double intensity, {bool empty = false}) =>
+      MindYearHeatmapDay(
+        date: const LocalDate(year: 2027, month: 1, day: 1),
+        total: empty ? null : 100,
+        kind: empty
+            ? MindYearHeatmapTileKind.empty
+            : MindYearHeatmapTileKind.interpolated,
+        intensity: intensity,
+        paletteIntensity: empty
+            ? MindYearHeatmapPaletteIntensity.empty
+            : MindYearHeatmapPaletteIntensity.interpolated,
+      );
 
-  test('HMP-03 B3M-MY3 uses the exact five approved visual levels', () {
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: 0),
-      ).background,
-      const Color.fromARGB(128, 255, 255, 255),
-    );
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: .25),
-      ).background,
-      const Color.fromARGB(107, 255, 177, 92),
-    );
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: .5),
-      ).background,
-      const Color.fromARGB(148, 255, 107, 107),
-    );
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: .75),
-      ).background,
-      const Color.fromARGB(184, 245, 54, 141),
-    );
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: .75),
-      ).foreground,
-      Colors.white,
-    );
-    final maximum = MindYearHeatmapPaletteResolver.resolve(
-      style: MindYearHeatmapPaletteStyle.b3mMy3,
-      day: day(intensity: 1),
-    );
-    expect(maximum.background, const Color.fromARGB(214, 130, 42, 194));
-    expect(maximum.foreground, Colors.white);
-  });
-
-  test('HMP-04 B3M maps real non-empty intensity but keeps empty neutral', () {
-    final empty = MindYearHeatmapPaletteResolver.resolve(
-      style: MindYearHeatmapPaletteStyle.b3mMy3,
-      day: day(
-        intensity: 0,
-        total: null,
-        paletteIntensity: MindYearHeatmapPaletteIntensity.empty,
-      ),
-    );
-    final minimum = MindYearHeatmapPaletteResolver.resolve(
-      style: MindYearHeatmapPaletteStyle.b3mMy3,
-      day: day(
-        intensity: 0,
-        paletteIntensity: MindYearHeatmapPaletteIntensity.minimum,
-      ),
-    );
-
-    expect(empty.background, FluviVisualTokens.mindHeatmapEmpty);
-    expect(minimum.background, isNot(empty.background));
-    expect(minimum.level, 0);
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: -.8),
-      ).level,
-      0,
-    );
-    expect(
-      MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.b3mMy3,
-        day: day(intensity: 1.8),
-      ).level,
-      4,
-    );
-  });
-
-  test('HMP-02 Fluvi stays byte-for-byte on its existing semantic palette', () {
-    final minimum = MindYearHeatmapPaletteResolver.resolve(
-      style: MindYearHeatmapPaletteStyle.fluvi,
-      day: day(
-        intensity: 0,
-        paletteIntensity: MindYearHeatmapPaletteIntensity.minimum,
-      ),
-    );
-    final equalRange = MindYearHeatmapPaletteResolver.resolve(
-      style: MindYearHeatmapPaletteStyle.fluvi,
-      day: day(
-        intensity: .72,
-        paletteIntensity: MindYearHeatmapPaletteIntensity.equalRange,
-      ),
-    );
-
-    expect(minimum.background, FluviVisualTokens.mindHeatmapMinimum);
-    expect(equalRange.background, FluviVisualTokens.mindHeatmapEqualRange);
-  });
-
-  test('RED LEG-02: legend samples use the active resolver scale only', () {
-    final fluvi = MindYearHeatmapPaletteResolver.legendSamples(
-      MindYearHeatmapPaletteStyle.fluvi,
-    );
-    final b3m = MindYearHeatmapPaletteResolver.legendSamples(
-      MindYearHeatmapPaletteStyle.b3mMy3,
-    );
-
-    expect(fluvi, hasLength(5));
-    expect(b3m, hasLength(5));
-    expect(b3m.map((sample) => sample.background), const <Color>[
-      Color.fromARGB(128, 255, 255, 255),
-      Color.fromARGB(107, 255, 177, 92),
-      Color.fromARGB(148, 255, 107, 107),
-      Color.fromARGB(184, 245, 54, 141),
-      Color.fromARGB(214, 130, 42, 194),
-    ]);
-    expect(fluvi.map((sample) => sample.background), <Color>[
-      FluviVisualTokens.mindHeatmapMinimum,
-      FluviVisualTokens.mindHeatmapInterpolated(.25),
-      FluviVisualTokens.mindHeatmapInterpolated(.5),
-      FluviVisualTokens.mindHeatmapInterpolated(.75),
-      FluviVisualTokens.mindHeatmapMaximum,
-    ]);
-  });
+  const expected = <MindYearHeatmapPaletteStyle, List<Color>>{
+    MindYearHeatmapPaletteStyle.fluvi: <Color>[
+      Color(0xffedf7f6),
+      Color(0xffd6f1ef),
+      Color(0xffb7e9ea),
+      Color(0xff8fdadf),
+      Color(0xff67c7dd),
+      Color(0xff56b0e1),
+      Color(0xff668fe3),
+      Color(0xff816fe1),
+      Color(0xffa05fdd),
+      Color(0xffc05cd7),
+    ],
+    MindYearHeatmapPaletteStyle.b3mMy3: <Color>[
+      Color(0xfff4f7fb),
+      Color(0xffffeeda),
+      Color(0xffffd5af),
+      Color(0xffffb15c),
+      Color(0xffff8d64),
+      Color(0xffff6b6b),
+      Color(0xfff536bd),
+      Color(0xffd03cb0),
+      Color(0xffa237bf),
+      Color(0xff821ac2),
+    ],
+    MindYearHeatmapPaletteStyle.meadowGreen: <Color>[
+      Color(0xffd9ed92),
+      Color(0xffb5e48c),
+      Color(0xff99d98c),
+      Color(0xff76c893),
+      Color(0xff52b69a),
+      Color(0xff34a0a4),
+      Color(0xff168aad),
+      Color(0xff1a759f),
+      Color(0xff1e6091),
+      Color(0xff184e77),
+    ],
+    MindYearHeatmapPaletteStyle.softRainbow: <Color>[
+      Color(0xfffbf8cc),
+      Color(0xfffde4cf),
+      Color(0xffffcfd2),
+      Color(0xfff1c0e8),
+      Color(0xffcfbaf0),
+      Color(0xffa3c4f3),
+      Color(0xff90dbf4),
+      Color(0xff8eecf5),
+      Color(0xff98f5e1),
+      Color(0xffb9fbc0),
+    ],
+    MindYearHeatmapPaletteStyle.peachyDelight: <Color>[
+      Color(0xffd8e2dc),
+      Color(0xffece4da),
+      Color(0xffffe5d9),
+      Color(0xffffd7d7),
+      Color(0xffffcad4),
+      Color(0xfff9bbc6),
+      Color(0xfff4acb7),
+      Color(0xffc89aa0),
+      Color(0xffb28d94),
+      Color(0xff9d8189),
+    ],
+    MindYearHeatmapPaletteStyle.fluviStretched: <Color>[
+      Color(0xffe9e0fc),
+      Color(0xffdcccfd),
+      Color(0xffcab0fb),
+      Color(0xffbfa1fa),
+      Color(0xffb18ef8),
+      Color(0xff9570ed),
+      Color(0xff8b65e5),
+      Color(0xff7657c5),
+      Color(0xff684eb1),
+      Color(0xff493590),
+    ],
+    MindYearHeatmapPaletteStyle.b3mMy3Stretched: <Color>[
+      Color(0xfffcf0e4),
+      Color(0xfffed2a6),
+      Color(0xfffcb476),
+      Color(0xfff5956a),
+      Color(0xfff97184),
+      Color(0xfff96b8b),
+      Color(0xffee46a1),
+      Color(0xffbf3cb6),
+      Color(0xff843bc3),
+      Color(0xff47188c),
+    ],
+  };
 
   test(
-    'RED HMP-PRESET-01: ordered fixed presets retain every authored stop',
+    'RED PAL-01/02: exactly seven product scales expose ten authored anchors',
     () {
-      final expected = <String, List<Color>>{
-        'oceanSunset': const <Color>[
-          Color(0xff001219),
-          Color(0xff005f73),
-          Color(0xff0a9396),
-          Color(0xff94d2bd),
-          Color(0xffe9d8a6),
-          Color(0xffee9b00),
-          Color(0xffca6702),
-          Color(0xffbb3e03),
-          Color(0xffae2012),
-          Color(0xff9b2226),
-        ],
-        'boldBerry': const <Color>[
-          Color(0xfff9dbbd),
-          Color(0xffffa5ab),
-          Color(0xffda627d),
-          Color(0xffa53860),
-          Color(0xff450920),
-        ],
-        'meadowGreen': const <Color>[
-          Color(0xffd9ed92),
-          Color(0xffb5e48c),
-          Color(0xff99d98c),
-          Color(0xff76c893),
-          Color(0xff52b69a),
-          Color(0xff34a0a4),
-          Color(0xff168aad),
-          Color(0xff1a759f),
-          Color(0xff1e6091),
-          Color(0xff184e77),
-        ],
-        'peachyDelight': const <Color>[
-          Color(0xffd8e2dc),
-          Color(0xffffe5d9),
-          Color(0xffffcad4),
-          Color(0xfff4acb7),
-          Color(0xff9d8189),
-        ],
-        'softRainbow': const <Color>[
-          Color(0xfffbf8cc),
-          Color(0xfffde4cf),
-          Color(0xffffcfd2),
-          Color(0xfff1c0e8),
-          Color(0xffcfbaf0),
-          Color(0xffa3c4f3),
-          Color(0xff90dbf4),
-          Color(0xff8eecf5),
-          Color(0xff98f5e1),
-          Color(0xffb9fbc0),
-        ],
-        'cherryBlossom': const <Color>[
-          Color(0xffebd4cb),
-          Color(0xffda9f93),
-          Color(0xffb6465f),
-          Color(0xff890620),
-          Color(0xff2c0703),
-        ],
-        'softPastels': const <Color>[
-          Color(0xfffaf3dd),
-          Color(0xffc8d5b9),
-          Color(0xff8fc0a9),
-          Color(0xff68b0ab),
-          Color(0xff4a7c59),
-        ],
-        'customColour': const <Color>[
-          Color(0xffce84ad),
-          Color(0xffce96a6),
-          Color(0xffd1a7a0),
-          Color(0xffd4cbb3),
-          Color(0xffd2e0bf),
-        ],
-      };
-
+      expect(MindYearHeatmapPaletteStyle.values, hasLength(7));
+      expect(expected, hasLength(7));
       for (final entry in expected.entries) {
-        final style = MindYearHeatmapPaletteStyle.values.singleWhere(
-          (candidate) => candidate.name == entry.key,
-        );
-        for (var index = 0; index < entry.value.length; index += 1) {
-          final intensity = index / (entry.value.length - 1);
+        expect(entry.value, hasLength(10), reason: entry.key.name);
+        for (var index = 0; index < 10; index += 1) {
           expect(
             MindYearHeatmapPaletteResolver.resolve(
-              style: style,
-              day: day(intensity: intensity),
+              style: entry.key,
+              day: day(index / 9),
             ).background,
             entry.value[index],
-            reason: '${entry.key} stop $index must remain exact.',
+            reason: '${entry.key.name} stop $index',
           );
         }
-        expect(
-          MindYearHeatmapPaletteResolver.resolve(
-            style: style,
-            day: day(intensity: -1),
-          ).background,
-          entry.value.first,
-        );
-        expect(
-          MindYearHeatmapPaletteResolver.resolve(
-            style: style,
-            day: day(intensity: 2),
-          ).background,
-          entry.value.last,
-        );
       }
     },
   );
 
+  test('RED PAL-03: ten resolver samples form the bounded active legend', () {
+    for (final entry in expected.entries) {
+      final legend = MindYearHeatmapPaletteResolver.legendSamples(entry.key);
+      expect(legend, hasLength(10));
+      expect(legend.map((sample) => sample.background), entry.value);
+    }
+  });
+
   test(
-    'HMP-PRESET-02: authored palettes interpolate adjacent stops and keep a bounded resolver legend',
+    'RED PAL-04: interpolation is adjacent, clamped and empty stays neutral',
     () {
-      final midpoint = MindYearHeatmapPaletteResolver.resolve(
-        style: MindYearHeatmapPaletteStyle.oceanSunset,
-        day: day(intensity: .5 / 9),
+      final style = MindYearHeatmapPaletteStyle.meadowGreen;
+      final stops = expected[style]!;
+      expect(
+        MindYearHeatmapPaletteResolver.resolve(
+          style: style,
+          day: day(.5 / 9),
+        ).background,
+        Color.lerp(stops[0], stops[1], .5),
       );
       expect(
-        midpoint.background,
-        Color.lerp(const Color(0xff001219), const Color(0xff005f73), .5),
+        MindYearHeatmapPaletteResolver.resolve(
+          style: style,
+          day: day(-1),
+        ).background,
+        stops.first,
       );
-      expect(midpoint.foreground, Colors.white);
-
-      for (final style in MindYearHeatmapPaletteStyle.values) {
-        final samples = MindYearHeatmapPaletteResolver.legendSamples(style);
-        expect(samples, hasLength(5));
-        for (var index = 0; index < samples.length; index += 1) {
-          expect(
-            samples[index].background,
-            MindYearHeatmapPaletteResolver.resolve(
-              style: style,
-              day: day(intensity: index / 4),
-            ).background,
-          );
-        }
-      }
+      expect(
+        MindYearHeatmapPaletteResolver.resolve(
+          style: style,
+          day: day(2),
+        ).background,
+        stops.last,
+      );
+      expect(
+        MindYearHeatmapPaletteResolver.resolve(
+          style: style,
+          day: day(0, empty: true),
+        ).background,
+        FluviVisualTokens.mindHeatmapEmpty,
+      );
     },
   );
 }

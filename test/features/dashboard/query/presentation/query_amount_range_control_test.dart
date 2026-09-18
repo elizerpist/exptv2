@@ -501,7 +501,7 @@ void main() {
   );
 
   testWidgets(
-    'MRA-03: compact Mind places its one amount caption row below the slider',
+    'RED COMPACT-RANGE-01: compact Mind omits only the standalone amount caption',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -527,12 +527,9 @@ void main() {
       final slider = find.byKey(const ValueKey('query-amount-range-slider'));
       final caption = find.text('Összeg');
       expect(slider, findsOneWidget);
-      expect(caption, findsOneWidget);
-      expect(
-        tester.getTopLeft(slider).dy,
-        lessThan(tester.getTopLeft(caption).dy),
-        reason: 'The compact slider must precede, not duplicate, its caption.',
-      );
+      expect(caption, findsNothing);
+      expect(find.text('Min.'), findsOneWidget);
+      expect(find.text('Max.'), findsOneWidget);
     },
   );
 }

@@ -338,6 +338,93 @@ final class MindYearHeatmapMonthlyAggregates {
   }
 }
 
+/// Bounded scoped month amounts for one admitted Mind Year identity.
+///
+/// Unlike [MindYearHeatmapMonthlyAggregates], this value intentionally follows
+/// the already-selected category/partner/search membership. It is derived once
+/// from resident prepared contributions at semantic admission, before the
+/// amount-range preview path. It must never replace the whole-ledger monthly
+/// income/expense/net authority used by MonthCard close values.
+@immutable
+final class MindYearHeatmapScopedMonthlyAggregates {
+  MindYearHeatmapScopedMonthlyAggregates._({
+    required this.year,
+    required List<int> amountsByMonth,
+  }) : amountsByMonth = List<int>.unmodifiable(amountsByMonth) {
+    if (amountsByMonth.length != 12) {
+      throw ArgumentError('Scoped monthly aggregates require twelve months.');
+    }
+  }
+
+  factory MindYearHeatmapScopedMonthlyAggregates.empty({required int year}) =>
+      MindYearHeatmapScopedMonthlyAggregates._(
+        year: year,
+        amountsByMonth: List<int>.filled(12, 0, growable: false),
+      );
+
+  factory MindYearHeatmapScopedMonthlyAggregates.fromPreparedContributions({
+    required int year,
+    required Iterable<MindYearHeatmapPreparedContribution> contributions,
+  }) {
+    final amounts = List<int>.filled(12, 0, growable: false);
+    for (final contribution in contributions) {
+      final date = DateTime.utc(
+        1970,
+      ).add(Duration(days: contribution.bookedLocalEpochDay));
+      if (date.year != year) continue;
+      amounts[date.month - 1] += contribution.amountMinor;
+    }
+    return MindYearHeatmapScopedMonthlyAggregates._(
+      year: year,
+      amountsByMonth: amounts,
+    );
+  }
+
+  final int year;
+  final List<int> amountsByMonth;
+
+  int amountForMonth(int month) => amountsByMonth[_monthIndex(month)];
+
+  static int _monthIndex(int month) {
+    if (month < 1 || month > 12) throw RangeError.range(month, 1, 12);
+    return month - 1;
+  }
+}
+
+/// The already-resolved category/partner identities that may accompany a
+/// MonthCard inspection. This is presentation metadata only: its monthly
+/// amount comes from [MindYearHeatmapScopedMonthlyAggregates], while the
+/// canonical full-month finance bank remains independent of it.
+@immutable
+final class MindYearHeatmapInspectionScope {
+  const MindYearHeatmapInspectionScope({
+    this.facets = const <MindYearHeatmapInspectionFacet>[],
+  });
+
+  final List<MindYearHeatmapInspectionFacet> facets;
+
+  bool get hasFacet => facets.isNotEmpty;
+}
+
+enum MindYearHeatmapInspectionFacetKind { category, partner }
+
+@immutable
+final class MindYearHeatmapInspectionFacet {
+  const MindYearHeatmapInspectionFacet({
+    required this.kind,
+    required this.id,
+    required this.displayName,
+    required this.colorId,
+    required this.iconId,
+  });
+
+  final MindYearHeatmapInspectionFacetKind kind;
+  final String id;
+  final String displayName;
+  final String colorId;
+  final String iconId;
+}
+
 /// Base-lifetime bank of the compact twelve-month aggregates. Core creates it
 /// once as a prepared Mind base is admitted, then a Year frame receives only
 /// its selected immutable twelve-element view.
@@ -405,6 +492,8 @@ final class MindYearHeatmapFrame implements MindTemporalHeatmapFrame {
     required int? minimumNonEmptyTotal,
     required int? maximumNonEmptyTotal,
     MindYearHeatmapMonthlyAggregates? monthlyAggregates,
+    MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates,
+    MindYearHeatmapInspectionScope? inspectionScope,
   }) => MindYearHeatmapFrame._(
     identity: identity,
     range: range,
@@ -417,6 +506,10 @@ final class MindYearHeatmapFrame implements MindTemporalHeatmapFrame {
     monthlyAggregates:
         monthlyAggregates ??
         MindYearHeatmapMonthlyAggregates.empty(year: identity.year),
+    scopedMonthlyAggregates:
+        scopedMonthlyAggregates ??
+        MindYearHeatmapScopedMonthlyAggregates.empty(year: identity.year),
+    inspectionScope: inspectionScope ?? const MindYearHeatmapInspectionScope(),
   );
 
   const MindYearHeatmapFrame._({
@@ -427,6 +520,8 @@ final class MindYearHeatmapFrame implements MindTemporalHeatmapFrame {
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
     required this.monthlyAggregates,
+    required this.scopedMonthlyAggregates,
+    required this.inspectionScope,
   }) : _months = months;
 
   @override
@@ -438,6 +533,8 @@ final class MindYearHeatmapFrame implements MindTemporalHeatmapFrame {
   final int? minimumNonEmptyTotal;
   final int? maximumNonEmptyTotal;
   final MindYearHeatmapMonthlyAggregates monthlyAggregates;
+  final MindYearHeatmapScopedMonthlyAggregates scopedMonthlyAggregates;
+  final MindYearHeatmapInspectionScope inspectionScope;
 
   List<MindYearHeatmapDay> month(int month) {
     if (month < 1 || month > 12) throw RangeError.range(month, 1, 12);
@@ -472,12 +569,16 @@ final class MindYearHeatmapProjection {
     this._startEpochDay,
     this._workCounter,
     this._monthlyAggregates,
+    this._scopedMonthlyAggregates,
+    this._inspectionScope,
   );
 
   factory MindYearHeatmapProjection.build({
     required MindYearHeatmapIdentity identity,
     required Iterable<DashboardLedgerEntry> entries,
     MindYearHeatmapMonthlyAggregates? monthlyAggregates,
+    MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates,
+    MindYearHeatmapInspectionScope? inspectionScope,
     MindYearHeatmapSourceWorkCounter? sourceWorkCounter,
   }) {
     final counter = sourceWorkCounter ?? MindYearHeatmapSourceWorkCounter();
@@ -485,6 +586,8 @@ final class MindYearHeatmapProjection {
       identity: identity,
       sourceWorkCounter: counter,
       monthlyAggregates: monthlyAggregates,
+      scopedMonthlyAggregates: scopedMonthlyAggregates,
+      inspectionScope: inspectionScope,
       contributions: entries.map((entry) {
         counter.recordSourceRowTouch();
         return MindYearHeatmapPreparedContribution(
@@ -500,6 +603,8 @@ final class MindYearHeatmapProjection {
     required MindYearHeatmapIdentity identity,
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
     MindYearHeatmapMonthlyAggregates? monthlyAggregates,
+    MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates,
+    MindYearHeatmapInspectionScope? inspectionScope,
     MindYearHeatmapSourceWorkCounter? sourceWorkCounter,
   }) {
     final counter = sourceWorkCounter ?? MindYearHeatmapSourceWorkCounter();
@@ -507,6 +612,8 @@ final class MindYearHeatmapProjection {
       identity: identity,
       sourceWorkCounter: counter,
       monthlyAggregates: monthlyAggregates,
+      scopedMonthlyAggregates: scopedMonthlyAggregates,
+      inspectionScope: inspectionScope,
       contributions: contributions.map((contribution) {
         counter.recordPreparedContributionTouch();
         return contribution;
@@ -519,6 +626,8 @@ final class MindYearHeatmapProjection {
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
     required MindYearHeatmapSourceWorkCounter sourceWorkCounter,
     MindYearHeatmapMonthlyAggregates? monthlyAggregates,
+    MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates,
+    MindYearHeatmapInspectionScope? inspectionScope,
   }) {
     final start = LocalDate(year: identity.year, month: 1, day: 1).epochDay;
     final end = LocalDate(year: identity.year + 1, month: 1, day: 1).epochDay;
@@ -543,6 +652,9 @@ final class MindYearHeatmapProjection {
       sourceWorkCounter,
       monthlyAggregates ??
           MindYearHeatmapMonthlyAggregates.empty(year: identity.year),
+      scopedMonthlyAggregates ??
+          MindYearHeatmapScopedMonthlyAggregates.empty(year: identity.year),
+      inspectionScope ?? const MindYearHeatmapInspectionScope(),
     );
   }
 
@@ -551,6 +663,8 @@ final class MindYearHeatmapProjection {
   final int _startEpochDay;
   final MindYearHeatmapSourceWorkCounter _workCounter;
   final MindYearHeatmapMonthlyAggregates _monthlyAggregates;
+  final MindYearHeatmapScopedMonthlyAggregates _scopedMonthlyAggregates;
+  final MindYearHeatmapInspectionScope _inspectionScope;
 
   int get dayCount => _days.length;
   MindYearHeatmapSourceWorkCounter get sourceWorkCounter => _workCounter;
@@ -641,6 +755,8 @@ final class MindYearHeatmapProjection {
       minimumNonEmptyTotal: minimum,
       maximumNonEmptyTotal: maximum,
       monthlyAggregates: _monthlyAggregates,
+      scopedMonthlyAggregates: _scopedMonthlyAggregates,
+      inspectionScope: _inspectionScope,
     );
     if (stopwatch != null) {
       stopwatch.stop();

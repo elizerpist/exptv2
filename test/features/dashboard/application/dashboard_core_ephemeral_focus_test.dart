@@ -1350,7 +1350,9 @@ void main() {
         find.byKey(const ValueKey<String>('query-amount-range-slider')),
         findsOneWidget,
       );
-      expect(find.text('Összeg'), findsOneWidget);
+      expect(find.text('Összeg'), findsNothing);
+      expect(find.text('Min.'), findsOneWidget);
+      expect(find.text('Max.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1966,6 +1968,14 @@ void main() {
       expect(beforeFocus.monthlyAggregates.incomeForMonth(1), 100000);
       expect(beforeFocus.monthlyAggregates.expenseForMonth(12), 300000);
       expect(beforeFocus.monthlyAggregates.netForMonth(1), 100000);
+      expect(
+        beforeFocus.scopedMonthlyAggregates.amountForMonth(1),
+        100000,
+        reason:
+            'the optional inspection scope is derived from the admitted '
+            'direction/focus membership, not the whole-month aggregate bank',
+      );
+      expect(beforeFocus.scopedMonthlyAggregates.amountForMonth(9), 900000);
       final sourceSeed = core.preparedIndex!
           .partitionFor(LedgerDirection.income)
           .focusMembershipSeed!;
@@ -2007,6 +2017,13 @@ void main() {
         beforeFocus.monthlyAggregates.expenseForMonth(12),
         reason: 'the amount preview must not rewrite full monthly closes',
       );
+      expect(
+        highFrame.scopedMonthlyAggregates.amountForMonth(1),
+        100000,
+        reason:
+            'the scope inspection read model is pre-amount-range and cannot '
+            'move with a held range thumb',
+      );
       for (var tick = 0; tick < 20; tick += 1) {
         core.previewMindAmountRange(highOnly);
       }
@@ -2041,6 +2058,17 @@ void main() {
             .isEmpty,
         isTrue,
       );
+      expect(categoryFrame.scopedMonthlyAggregates.amountForMonth(1), 100000);
+      expect(categoryFrame.scopedMonthlyAggregates.amountForMonth(9), 0);
+      expect(categoryFrame.inspectionScope.facets, hasLength(1));
+      expect(
+        categoryFrame.inspectionScope.facets.single.displayName,
+        'Utilities',
+      );
+      expect(
+        categoryFrame.inspectionScope.facets.single.kind,
+        MindYearHeatmapInspectionFacetKind.category,
+      );
       expect(
         await core.requestPartnerFocus(
           const DashboardFocusFacet(id: 'partner-a', displayName: 'Partner A'),
@@ -2057,6 +2085,29 @@ void main() {
         core.mindYearHeatmap.value!.monthlyAggregates.expenseForMonth(12),
         300000,
         reason: 'partner focus must not narrow the calendar-month close',
+      );
+      expect(
+        core.mindYearHeatmap.value!.scopedMonthlyAggregates.amountForMonth(1),
+        100000,
+      );
+      expect(
+        core.mindYearHeatmap.value!.inspectionScope.facets.map(
+          (facet) => facet.kind,
+        ),
+        orderedEquals(<MindYearHeatmapInspectionFacetKind>[
+          MindYearHeatmapInspectionFacetKind.category,
+          MindYearHeatmapInspectionFacetKind.partner,
+        ]),
+        reason:
+            'The optional inspection row retains both active dimensions; its '
+            'single amount is the selected category/partner intersection.',
+      );
+      expect(
+        core.mindYearHeatmap.value!.scopedMonthlyAggregates.amountForMonth(1),
+        100000,
+        reason:
+            'The combined scope remains the prepared intersection, not a sum '
+            'of independent category and partner totals.',
       );
       expect(await core.clearAllEphemeralFocus(), isTrue);
       // Current prepared SearchPill semantics cover partner display and note
@@ -2075,6 +2126,15 @@ void main() {
       expect(
         searchFrame.dayFor(const LocalDate(year: 2025, month: 9, day: 2)).total,
         900000,
+      );
+      expect(searchFrame.scopedMonthlyAggregates.amountForMonth(1), 0);
+      expect(searchFrame.scopedMonthlyAggregates.amountForMonth(9), 900000);
+      expect(
+        searchFrame.inspectionScope.facets,
+        isEmpty,
+        reason:
+            'Search narrows heatmap membership but must not invent a '
+            'category/vendor inspection identity or tint.',
       );
       expect(repository.prepareCalls, 1);
     },

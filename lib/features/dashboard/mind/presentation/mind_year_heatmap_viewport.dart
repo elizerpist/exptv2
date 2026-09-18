@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../../core/categories/catalog/category_visual_resolver.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
@@ -42,16 +43,24 @@ final class MindYearHeatmapViewport extends StatefulWidget {
       _MindYearHeatmapViewportState();
 }
 
-final class _MindYearHeatmapViewportState
-    extends State<MindYearHeatmapViewport> {
+final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
+    with SingleTickerProviderStateMixin {
   late bool _hasFrame;
   int? _geometryYear;
   MindYearHeatmapIdentity? _staticFrameIdentity;
   MindYearHeatmapMonthlyAggregates? _monthlyAggregates;
+  MindYearHeatmapScopedMonthlyAggregates? _scopedMonthlyAggregates;
+  MindYearHeatmapInspectionScope _inspectionScope =
+      const MindYearHeatmapInspectionScope();
   var _activeDirectionIsIncome = false;
   late MindYearHeatmapPresentationSettings _presentationSettings;
   MindYearHeatmapIdentity? _lastVisibleIdentity;
   int? _lastLoggedGeometryYear;
+  late final AnimationController _inspectionController;
+  int? _inspectedYear;
+  int? _inspectedMonth;
+  int? _pendingInspectionMonth;
+  var _isClosingInspection = false;
 
   @override
   void initState() {
@@ -62,6 +71,10 @@ final class _MindYearHeatmapViewportState
     _presentationSettings =
         widget.presentationSettings?.value ??
         const MindYearHeatmapPresentationSettings.defaults();
+    _inspectionController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    )..addStatusListener(_onInspectionStatus);
     widget.frameListenable.addListener(_onFrameChanged);
     widget.presentationSettings?.addListener(_onPresentationSettingsChanged);
     if (widget.frameListenable.value case final frame?) {
@@ -74,9 +87,11 @@ final class _MindYearHeatmapViewportState
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.frameListenable, widget.frameListenable)) {
       oldWidget.frameListenable.removeListener(_onFrameChanged);
-      _hasFrame = widget.frameListenable.value != null;
-      _geometryYear = widget.frameListenable.value?.identity.year;
-      _acceptStaticFrame(widget.frameListenable.value);
+      final nextFrame = widget.frameListenable.value;
+      _hasFrame = nextFrame != null;
+      _geometryYear = nextFrame?.identity.year;
+      _invalidateInspectionFor(nextFrame);
+      _acceptStaticFrame(nextFrame);
       widget.frameListenable.addListener(_onFrameChanged);
     }
     if (!identical(
@@ -95,6 +110,8 @@ final class _MindYearHeatmapViewportState
 
   @override
   void dispose() {
+    _inspectionController.removeStatusListener(_onInspectionStatus);
+    _inspectionController.dispose();
     widget.frameListenable.removeListener(_onFrameChanged);
     widget.presentationSettings?.removeListener(_onPresentationSettingsChanged);
     super.dispose();
@@ -139,6 +156,7 @@ final class _MindYearHeatmapViewportState
       });
       return;
     }
+    _invalidateInspectionFor(frame);
     setState(() {
       _hasFrame = hasFrame;
       _geometryYear = geometryYear;
@@ -146,11 +164,76 @@ final class _MindYearHeatmapViewportState
     });
   }
 
+  void _invalidateInspectionFor(MindYearHeatmapFrame? frame) {
+    if (_inspectedYear != null && _inspectedYear != frame?.identity.year) {
+      _inspectionController.stop();
+      _inspectionController.value = 0;
+      _inspectedYear = null;
+      _inspectedMonth = null;
+      _pendingInspectionMonth = null;
+      _isClosingInspection = false;
+    }
+  }
+
   void _acceptStaticFrame(MindYearHeatmapFrame? frame) {
     _staticFrameIdentity = frame?.identity;
     _monthlyAggregates = frame?.monthlyAggregates;
+    _scopedMonthlyAggregates = frame?.scopedMonthlyAggregates;
+    _inspectionScope =
+        frame?.inspectionScope ?? const MindYearHeatmapInspectionScope();
     _activeDirectionIsIncome =
         frame?.identity.upstreamScopeKey.startsWith('income|') ?? false;
+  }
+
+  void _onMonthTapped({required int year, required int month}) {
+    if (_inspectedYear != year || _inspectedMonth == null) {
+      setState(() {
+        _inspectedYear = year;
+        _inspectedMonth = month;
+        _pendingInspectionMonth = null;
+      });
+      _isClosingInspection = false;
+      _inspectionController.forward(from: 0);
+      return;
+    }
+    if (_inspectedMonth == month) {
+      _pendingInspectionMonth = null;
+      _closeInspection();
+      return;
+    }
+    _pendingInspectionMonth = month;
+    _closeInspection();
+  }
+
+  void _closeInspection() {
+    _isClosingInspection = true;
+    if (_inspectionController.value <= 0) {
+      _completeInspectionDismissal();
+      return;
+    }
+    _inspectionController.reverse();
+  }
+
+  void _onInspectionStatus(AnimationStatus status) {
+    if (status != AnimationStatus.dismissed ||
+        !mounted ||
+        !_isClosingInspection ||
+        _inspectedMonth == null) {
+      return;
+    }
+    _completeInspectionDismissal();
+  }
+
+  void _completeInspectionDismissal() {
+    if (!mounted || _inspectedMonth == null) return;
+    _isClosingInspection = false;
+    final nextMonth = _pendingInspectionMonth;
+    setState(() {
+      _inspectedMonth = nextMonth;
+      _pendingInspectionMonth = null;
+      if (nextMonth == null) _inspectedYear = null;
+    });
+    if (nextMonth != null) _inspectionController.forward(from: 0);
   }
 
   @override
@@ -254,8 +337,23 @@ final class _MindYearHeatmapViewportState
                                         _presentationSettings
                                             .showMonthlyDirectionTotal,
                                     monthlyAggregates: _monthlyAggregates,
+                                    scopedMonthlyAggregates:
+                                        _scopedMonthlyAggregates,
+                                    inspectionScope: _inspectionScope,
                                     activeDirectionIsIncome:
                                         _activeDirectionIsIncome,
+                                    isInspected:
+                                        _inspectedYear == year &&
+                                        _inspectedMonth == month,
+                                    inspectionProgress:
+                                        _inspectedYear == year &&
+                                            _inspectedMonth == month
+                                        ? _inspectionController
+                                        : null,
+                                    onTap: () => _onMonthTapped(
+                                      year: year,
+                                      month: month,
+                                    ),
                                   ),
                                 );
                               },
@@ -324,7 +422,17 @@ final class _MindYearHeatmapViewportState
                           showMonthlyDirectionTotal:
                               _presentationSettings.showMonthlyDirectionTotal,
                           monthlyAggregates: _monthlyAggregates,
+                          scopedMonthlyAggregates: _scopedMonthlyAggregates,
+                          inspectionScope: _inspectionScope,
                           activeDirectionIsIncome: _activeDirectionIsIncome,
+                          isInspected:
+                              _inspectedYear == year &&
+                              _inspectedMonth == month,
+                          inspectionProgress:
+                              _inspectedYear == year && _inspectedMonth == month
+                              ? _inspectionController
+                              : null,
+                          onTap: () => _onMonthTapped(year: year, month: month),
                         ),
                       );
                     }, growable: false),
@@ -491,7 +599,12 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
     this.showMonthlyNetClose = false,
     this.showMonthlyDirectionTotal = false,
     this.monthlyAggregates,
+    this.scopedMonthlyAggregates,
+    this.inspectionScope = const MindYearHeatmapInspectionScope(),
     this.activeDirectionIsIncome = false,
+    this.isInspected = false,
+    this.inspectionProgress,
+    this.onTap,
   });
 
   static const _padding = 6.0;
@@ -514,7 +627,12 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   final bool showMonthlyNetClose;
   final bool showMonthlyDirectionTotal;
   final MindYearHeatmapMonthlyAggregates? monthlyAggregates;
+  final MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates;
+  final MindYearHeatmapInspectionScope inspectionScope;
   final bool activeDirectionIsIncome;
+  final bool isInspected;
+  final Animation<double>? inspectionProgress;
+  final VoidCallback? onTap;
 
   static double cellExtentFor(double width) {
     const totalHorizontalGaps =
@@ -568,7 +686,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
       calendarRowCount: displayCalendarRowCount,
       cellExtent: cellExtent,
     );
-    final content = Padding(
+    final heatmapContent = Padding(
       padding: const EdgeInsets.all(_padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -641,6 +759,20 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
         ],
       ),
     );
+    final surface = switch (surfaceStyle) {
+      MindYearHeatmapAnnualSurfaceStyle.monthCards => DecoratedBox(
+        key: ValueKey('mind-year-heatmap-month-$month'),
+        decoration: const BoxDecoration(
+          color: FluviVisualTokens.surfaceMuted,
+          borderRadius: FluviVisualTokens.smallRadius,
+        ),
+        child: _contentFor(heatmapContent),
+      ),
+      MindYearHeatmapAnnualSurfaceStyle.directCells => KeyedSubtree(
+        key: ValueKey('mind-year-heatmap-month-direct-$month'),
+        child: _contentFor(heatmapContent),
+      ),
+    };
     return SizedBox(
       width: width,
       height: heightFor(
@@ -649,22 +781,335 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
         footerRowCount: _footerRowCount,
         cellExtent: cellExtent,
       ),
-      child: switch (surfaceStyle) {
-        MindYearHeatmapAnnualSurfaceStyle.monthCards => DecoratedBox(
-          key: ValueKey('mind-year-heatmap-month-$month'),
-          decoration: const BoxDecoration(
-            color: FluviVisualTokens.surfaceMuted,
-            borderRadius: FluviVisualTokens.smallRadius,
-          ),
-          child: content,
+      child: Semantics(
+        button: onTap != null,
+        toggled: isInspected,
+        label:
+            '${DashboardTimeLabelFormatter.monthName(month)} ${geometry.year}'
+            '${isInspected ? ', részletek megnyitva' : ', részletek megnyitása'}',
+        child: _MindYearMonthCardTapRegion(
+          key: ValueKey('mind-year-heatmap-month-tap-$month'),
+          onTap: onTap,
+          child: surface,
         ),
-        MindYearHeatmapAnnualSurfaceStyle.directCells => KeyedSubtree(
-          key: ValueKey('mind-year-heatmap-month-direct-$month'),
-          child: content,
-        ),
+      ),
+    );
+  }
+
+  Widget _contentFor(Widget heatmapContent) {
+    final progress = inspectionProgress;
+    if (!isInspected || progress == null) return heatmapContent;
+    return AnimatedBuilder(
+      animation: progress,
+      builder: (context, _) {
+        final value = Curves.easeInOutCubic.transform(progress.value);
+        final information = _MindYearHeatmapMonthInformation(
+          key: ValueKey('mind-year-heatmap-month-info-$month'),
+          month: month,
+          year: geometry.year,
+          monthlyAggregates: monthlyAggregates,
+          scopedMonthlyAggregates: scopedMonthlyAggregates,
+          inspectionScope: inspectionScope,
+        );
+        if (value >= 1) return information;
+        return Stack(
+          key: ValueKey('mind-year-heatmap-month-info-morph-$month'),
+          fit: StackFit.expand,
+          children: <Widget>[
+            Opacity(
+              opacity: 1 - value,
+              child: ExcludeSemantics(child: heatmapContent),
+            ),
+            Opacity(
+              opacity: value,
+              child: ExcludeSemantics(child: information),
+            ),
+          ],
+        );
       },
     );
   }
+}
+
+/// Observes a clean press without entering Flutter's gesture arena.
+///
+/// MonthCards live inside the annual scrollable, which already hands a real
+/// boundary overscroll to the one Header-expansion coordinator. A regular
+/// [GestureDetector] tap recognizer can win that sequence before the
+/// scrollable reports its overscroll. This listener deliberately owns no drag
+/// recognizer: it rejects a press once it moves beyond the ordinary touch
+/// slop and leaves scrolling/boundary handoff unchanged.
+final class _MindYearMonthCardTapRegion extends StatefulWidget {
+  const _MindYearMonthCardTapRegion({
+    super.key,
+    required this.child,
+    this.onTap,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  State<_MindYearMonthCardTapRegion> createState() =>
+      _MindYearMonthCardTapRegionState();
+}
+
+final class _MindYearMonthCardTapRegionState
+    extends State<_MindYearMonthCardTapRegion> {
+  static const _tapSlop = 12.0;
+
+  int? _pointer;
+  Offset? _downPosition;
+  var _moved = false;
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _downPosition = event.position;
+    _moved = false;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer || _moved) return;
+    final downPosition = _downPosition;
+    if (downPosition == null) return;
+    if ((event.position - downPosition).distance > _tapSlop) _moved = true;
+  }
+
+  void _reset() {
+    _pointer = null;
+    _downPosition = null;
+    _moved = false;
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    if (event.pointer != _pointer) return;
+    final isTap = !_moved;
+    _reset();
+    if (isTap) widget.onTap?.call();
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    if (event.pointer == _pointer) _reset();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerDown: _onPointerDown,
+    onPointerMove: _onPointerMove,
+    onPointerUp: _onPointerUp,
+    onPointerCancel: _onPointerCancel,
+    child: widget.child,
+  );
+}
+
+/// A local MonthCard inspection endpoint. The values are already admitted
+/// immutable read models; tapping this card performs no financial work.
+final class _MindYearHeatmapMonthInformation extends StatelessWidget {
+  const _MindYearHeatmapMonthInformation({
+    super.key,
+    required this.month,
+    required this.year,
+    this.monthlyAggregates,
+    this.scopedMonthlyAggregates,
+    required this.inspectionScope,
+  });
+
+  final int month;
+  final int year;
+  final MindYearHeatmapMonthlyAggregates? monthlyAggregates;
+  final MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates;
+  final MindYearHeatmapInspectionScope inspectionScope;
+
+  @override
+  Widget build(BuildContext context) {
+    final aggregates =
+        monthlyAggregates ?? MindYearHeatmapMonthlyAggregates.empty(year: year);
+    return Padding(
+      padding: const EdgeInsets.all(MindYearHeatmapMonthCard._padding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: MindYearHeatmapMonthCard._titleHeight,
+            child: Text(
+              DashboardTimeLabelFormatter.monthName(month),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: FluviVisualTokens.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: <Widget>[
+                _MindYearHeatmapInformationMetric(
+                  label: 'Hó végi maradék',
+                  amount: aggregates.netForMonth(month),
+                  kind: _MindYearHeatmapFooterKind.net,
+                ),
+                _MindYearHeatmapInformationMetric(
+                  label: 'Összbevétel',
+                  amount: aggregates.incomeForMonth(month),
+                  kind: _MindYearHeatmapFooterKind.income,
+                ),
+                _MindYearHeatmapInformationMetric(
+                  label: 'Összkiadás',
+                  amount: aggregates.expenseForMonth(month),
+                  kind: _MindYearHeatmapFooterKind.expense,
+                ),
+                if (inspectionScope.hasFacet)
+                  _MindYearHeatmapScopedInformationMetric(
+                    facets: inspectionScope.facets,
+                    amount: scopedMonthlyAggregates?.amountForMonth(month) ?? 0,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _MindYearHeatmapScopedInformationMetric extends StatelessWidget {
+  const _MindYearHeatmapScopedInformationMetric({
+    required this.facets,
+    required this.amount,
+  });
+
+  final List<MindYearHeatmapInspectionFacet> facets;
+  final int amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final amountColor = facets.length == 1
+        ? CategoryVisualResolver.resolve(
+            colorId: facets.single.colorId,
+            iconId: facets.single.iconId,
+          ).gradient.middleColor
+        : FluviVisualTokens.textSecondary;
+    final label = facets.map((facet) => facet.displayName).join(' · ');
+    return Semantics(
+      label: 'Aktív scope: $label, ${QueryMenuFormatters.money(amount)}',
+      child: ExcludeSemantics(
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: <InlineSpan>[
+                    for (
+                      var index = 0;
+                      index < facets.length;
+                      index += 1
+                    ) ...<InlineSpan>[
+                      if (index > 0)
+                        const TextSpan(
+                          text: ' · ',
+                          style: TextStyle(
+                            color: FluviVisualTokens.textSecondary,
+                          ),
+                        ),
+                      TextSpan(
+                        text: facets[index].displayName,
+                        style: TextStyle(
+                          color: CategoryVisualResolver.resolve(
+                            colorId: facets[index].colorId,
+                            iconId: facets[index].iconId,
+                          ).gradient.middleColor,
+                          fontSize: 7,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                key: const ValueKey<String>(
+                  'mind-year-heatmap-inspection-scope-label',
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 3),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                QueryMenuFormatters.money(amount),
+                style: TextStyle(
+                  color: amountColor,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final class _MindYearHeatmapInformationMetric extends StatelessWidget {
+  const _MindYearHeatmapInformationMetric({
+    required this.label,
+    required this.amount,
+    required this.kind,
+  });
+
+  final String label;
+  final int amount;
+  final _MindYearHeatmapFooterKind kind;
+
+  Color get _amountColor => switch (kind) {
+    _MindYearHeatmapFooterKind.income => FluviVisualTokens.logBoxIncomeAmount,
+    _MindYearHeatmapFooterKind.expense => FluviVisualTokens.logBoxExpenseAmount,
+    _MindYearHeatmapFooterKind.net =>
+      amount > 0
+          ? FluviVisualTokens.logBoxIncomeAmount
+          : amount < 0
+          ? FluviVisualTokens.logBoxExpenseAmount
+          : FluviVisualTokens.textSecondary,
+  };
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      Expanded(
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: FluviVisualTokens.textSecondary,
+            fontSize: 7,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      const SizedBox(width: 3),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerRight,
+        child: Text(
+          QueryMenuFormatters.money(amount),
+          style: TextStyle(
+            color: _amountColor,
+            fontSize: 8,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 /// Paints one month's non-interactive local-day cells as a single dynamic

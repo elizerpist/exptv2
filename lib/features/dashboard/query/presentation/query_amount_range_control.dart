@@ -418,15 +418,6 @@ final class _CompactMindAmountRangeSurface extends StatelessWidget {
         ),
         Row(
           children: <Widget>[
-            const Text(
-              'Összeg',
-              style: TextStyle(
-                color: QueryMenuTokens.textPrimary,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: _CompactAmountValue(
                 label: 'Min.',

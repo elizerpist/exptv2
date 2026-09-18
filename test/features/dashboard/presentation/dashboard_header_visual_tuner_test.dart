@@ -806,14 +806,15 @@ void main() {
       chartPresentation.value.timeLabels,
       MindHeaderScoreChartTimeLabels.visible,
     );
-    final b3m = find.byKey(const ValueKey('mind-heatmap-palette-b3mMy3'));
-    await tester.ensureVisible(b3m);
-    await tester.tap(b3m);
-    await tester.pump();
-    expect(
-      heatmapSettings.value.paletteStyle,
-      MindYearHeatmapPaletteStyle.b3mMy3,
-    );
+    for (final style in MindYearHeatmapPaletteStyle.values) {
+      final palette = find.byKey(
+        ValueKey('mind-heatmap-palette-${style.name}'),
+      );
+      await tester.ensureVisible(palette);
+      await tester.tap(palette);
+      await tester.pump();
+      expect(heatmapSettings.value.paletteStyle, style);
+    }
     final fourColumns = find.byKey(
       const ValueKey('mind-heatmap-layout-fourColumns'),
     );

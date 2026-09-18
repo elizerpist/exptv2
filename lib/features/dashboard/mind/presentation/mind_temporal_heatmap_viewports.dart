@@ -324,10 +324,11 @@ final class _MindMonthHeatmapContent extends StatelessWidget {
           const horizontalPadding = 12.0;
           const gap = 4.0;
           const referenceGridWidth = 282.0;
-          // Includes the actual two header lines, month summary, footer and
-          // outer vertical padding. Keep this explicit so a constrained Month
-          // viewport solves its six square rows instead of overflowing.
-          const staticChrome = 96.0;
+          // The B3M-MYM header has two horizontal information rows plus the
+          // compact total/footer and outer padding. Solve only the real
+          // calendar row count so a five-row month is never shrunk by a fake
+          // sixth presentation row.
+          const staticChrome = 77.0;
           final availableGridWidth =
               (constraints.maxWidth - horizontalPadding * 2)
                   .clamp(0.0, double.infinity)
@@ -339,53 +340,82 @@ final class _MindMonthHeatmapContent extends StatelessWidget {
           final cellByWidth = ((boundedGridWidth - gap * 6) / 7)
               .clamp(0.0, double.infinity)
               .toDouble();
+          final calendarRows = geometry.rowCount;
           final cellByHeight = constraints.maxHeight.isFinite
-              ? ((constraints.maxHeight - staticChrome - gap * 5) / 6)
+              ? ((constraints.maxHeight -
+                            staticChrome -
+                            gap * (calendarRows - 1)) /
+                        calendarRows)
                     .clamp(0.0, double.infinity)
                     .toDouble()
               : cellByWidth;
           final cellExtent = math.min(cellByWidth, cellByHeight);
           final gridWidth = cellExtent * 7 + gap * 6;
-          final gridHeight = cellExtent * 6 + gap * 5;
+          final gridHeight =
+              cellExtent * calendarRows + gap * (calendarRows - 1);
           return Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Text(
-                  'Napi aktivitás',
-                  key: const ValueKey<String>('mind-month-heatmap-title'),
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                SizedBox(
+                  key: const ValueKey<String>('mind-month-heatmap-header-row'),
+                  height: 20,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      const Text(
+                        'Napi aktivitás',
+                        key: ValueKey<String>('mind-month-heatmap-title'),
+                        style: TextStyle(
+                          color: FluviVisualTokens.textSecondary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        '${frame.days.length} nap',
+                        key: const ValueKey<String>(
+                          'mind-month-heatmap-day-count',
+                        ),
+                        style: const TextStyle(
+                          color: FluviVisualTokens.textSecondary,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  '${frame.days.length} nap',
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 9,
+                SizedBox(
+                  key: const ValueKey<String>('mind-month-heatmap-summary-row'),
+                  height: 17,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      Text(
+                        '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
+                        style: const TextStyle(
+                          color: FluviVisualTokens.textSecondary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        '${frame.activeDayCount} aktív nap',
+                        key: const ValueKey<String>(
+                          'mind-month-heatmap-active-days',
+                        ),
+                        style: const TextStyle(
+                          color: FluviVisualTokens.textSecondary,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  '${frame.activeDayCount} aktív nap',
-                  key: const ValueKey<String>('mind-month-heatmap-active-days'),
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 9,
-                  ),
-                ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 7),
                 Align(
                   alignment: Alignment.topCenter,
                   child: SizedBox(

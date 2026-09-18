@@ -4,26 +4,20 @@ import 'package:flutter/foundation.dart';
 enum MindYearHeatmapPaletteStyle {
   fluvi,
   b3mMy3,
-  oceanSunset,
-  boldBerry,
   meadowGreen,
-  peachyDelight,
   softRainbow,
-  cherryBlossom,
-  softPastels,
-  customColour;
+  peachyDelight,
+  fluviStretched,
+  b3mMy3Stretched;
 
   String get tunerLabel => switch (this) {
     MindYearHeatmapPaletteStyle.fluvi => 'Fluvi',
     MindYearHeatmapPaletteStyle.b3mMy3 => 'B3M-MY3',
-    MindYearHeatmapPaletteStyle.oceanSunset => 'Ocean Sunset',
-    MindYearHeatmapPaletteStyle.boldBerry => 'Bold Berry',
     MindYearHeatmapPaletteStyle.meadowGreen => 'Meadow Green',
-    MindYearHeatmapPaletteStyle.peachyDelight => 'Peachy Delight',
     MindYearHeatmapPaletteStyle.softRainbow => 'Soft Rainbow',
-    MindYearHeatmapPaletteStyle.cherryBlossom => 'Cherry Blossom',
-    MindYearHeatmapPaletteStyle.softPastels => 'Soft Pastels',
-    MindYearHeatmapPaletteStyle.customColour => 'Custom colour',
+    MindYearHeatmapPaletteStyle.peachyDelight => 'Peachy Delight',
+    MindYearHeatmapPaletteStyle.fluviStretched => 'Fluvi — stretched',
+    MindYearHeatmapPaletteStyle.b3mMy3Stretched => 'B3M-MY3 — stretched',
   };
 }
 
