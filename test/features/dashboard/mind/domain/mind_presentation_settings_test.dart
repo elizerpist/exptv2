@@ -116,7 +116,7 @@ void main() {
     );
 
     test(
-      'RED HMP-SET-02: all fixed product palette presets are selectable',
+      'PAL-REDUCE-01: exactly five approved product palettes are selectable',
       () {
         expect(
           MindYearHeatmapPaletteStyle.values.map((style) => style.name),
@@ -124,8 +124,6 @@ void main() {
             'fluvi',
             'b3mMy3',
             'meadowGreen',
-            'softRainbow',
-            'peachyDelight',
             'fluviStretched',
             'b3mMy3Stretched',
           ],

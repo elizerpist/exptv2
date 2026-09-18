@@ -57,30 +57,6 @@ void main() {
       Color(0xff1e6091),
       Color(0xff184e77),
     ],
-    MindYearHeatmapPaletteStyle.softRainbow: <Color>[
-      Color(0xfffbf8cc),
-      Color(0xfffde4cf),
-      Color(0xffffcfd2),
-      Color(0xfff1c0e8),
-      Color(0xffcfbaf0),
-      Color(0xffa3c4f3),
-      Color(0xff90dbf4),
-      Color(0xff8eecf5),
-      Color(0xff98f5e1),
-      Color(0xffb9fbc0),
-    ],
-    MindYearHeatmapPaletteStyle.peachyDelight: <Color>[
-      Color(0xffd8e2dc),
-      Color(0xffece4da),
-      Color(0xffffe5d9),
-      Color(0xffffd7d7),
-      Color(0xffffcad4),
-      Color(0xfff9bbc6),
-      Color(0xfff4acb7),
-      Color(0xffc89aa0),
-      Color(0xffb28d94),
-      Color(0xff9d8189),
-    ],
     MindYearHeatmapPaletteStyle.fluviStretched: <Color>[
       Color(0xffe9e0fc),
       Color(0xffdcccfd),
@@ -108,10 +84,10 @@ void main() {
   };
 
   test(
-    'RED PAL-01/02: exactly seven product scales expose ten authored anchors',
+    'PAL-REDUCE-03: exactly five product scales expose ten authored anchors',
     () {
-      expect(MindYearHeatmapPaletteStyle.values, hasLength(7));
-      expect(expected, hasLength(7));
+      expect(MindYearHeatmapPaletteStyle.values, hasLength(5));
+      expect(expected, hasLength(5));
       for (final entry in expected.entries) {
         expect(entry.value, hasLength(10), reason: entry.key.name);
         for (var index = 0; index < 10; index += 1) {
@@ -128,13 +104,16 @@ void main() {
     },
   );
 
-  test('RED PAL-03: ten resolver samples form the bounded active legend', () {
-    for (final entry in expected.entries) {
-      final legend = MindYearHeatmapPaletteResolver.legendSamples(entry.key);
-      expect(legend, hasLength(10));
-      expect(legend.map((sample) => sample.background), entry.value);
-    }
-  });
+  test(
+    'PAL-REDUCE-04: ten resolver samples form the bounded active legend',
+    () {
+      for (final entry in expected.entries) {
+        final legend = MindYearHeatmapPaletteResolver.legendSamples(entry.key);
+        expect(legend, hasLength(10));
+        expect(legend.map((sample) => sample.background), entry.value);
+      }
+    },
+  );
 
   test(
     'RED PAL-04: interpolation is adjacent, clamped and empty stays neutral',

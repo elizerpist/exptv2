@@ -191,6 +191,96 @@ void main() {
   );
 
   testWidgets(
+    'DAY-UI-01/02/03/04: Day presents one bounded chronological 4 by 6 grid from the shared palette authority',
+    (tester) async {
+      const date = LocalDate(year: 2026, month: 7, day: 14);
+      final frame = MindDayHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'income|day:2026-07-14',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'day:2026-07-14',
+        ),
+        date: date,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _entry(0, 100, date, localTimeMinutes: 0),
+          _entry(1, 500, date, localTimeMinutes: 1439),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings.defaults(),
+      )..setPaletteStyle(MindYearHeatmapPaletteStyle.meadowGreen);
+      addTearDown(listenable.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindDayHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Óránkénti aktivitás'), findsOneWidget);
+      expect(find.text('2 aktív óra'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-date')),
+        findsOneWidget,
+      );
+      expect(find.text('Összesen'), findsOneWidget);
+      final summaryTotal = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-summary-total')),
+      );
+      final footerTotal = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-total')),
+      );
+      expect(summaryTotal.data, footerTotal.data);
+      for (var hour = 0; hour < 24; hour += 1) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              'mind-day-heatmap-cell-${hour.toString().padLeft(2, '0')}',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+      final hour00 = find.byKey(
+        const ValueKey<String>('mind-day-heatmap-cell-00'),
+      );
+      final hour23 = find.byKey(
+        const ValueKey<String>('mind-day-heatmap-cell-23'),
+      );
+      final hour00Rect = tester.getRect(hour00);
+      final hour23Rect = tester.getRect(hour23);
+      expect(hour00Rect.width, greaterThan(0));
+      expect(hour00Rect.height, closeTo(hour00Rect.width, .01));
+      expect(hour23Rect.top, greaterThan(hour00Rect.top));
+      expect(hour23Rect.left, greaterThan(hour00Rect.left));
+      expect(find.byType(Scrollable), findsNothing);
+      final decoration =
+          tester.widget<DecoratedBox>(hour23).decoration as BoxDecoration;
+      expect(
+        decoration.color,
+        MindYearHeatmapPaletteResolver.resolveTile(
+          style: MindYearHeatmapPaletteStyle.meadowGreen,
+          isEmpty: false,
+          intensity: 1,
+          paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
+        ).background,
+      );
+    },
+  );
+
+  testWidgets(
     'RED MONTH-B3M-01: wide Month content centers its grid at the 282px reference width',
     (tester) async {
       final frame = MindMonthHeatmapProjection.build(
@@ -411,9 +501,11 @@ void main() {
 MindYearHeatmapPreparedContribution _entry(
   int ordinal,
   int amount,
-  LocalDate date,
-) => MindYearHeatmapPreparedContribution(
+  LocalDate date, {
+  int localTimeMinutes = 0,
+}) => MindYearHeatmapPreparedContribution(
   ordinal: ordinal,
   bookedLocalEpochDay: date.epochDay,
+  bookedLocalTimeMinutes: localTimeMinutes,
   amountMinor: amount,
 );

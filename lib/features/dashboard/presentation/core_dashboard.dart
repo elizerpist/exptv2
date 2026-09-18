@@ -789,7 +789,31 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                 .presentation
                                                 .navigation
                                                 .state
-                                                .isRailOpen,
+                                                .isRailOpen ||
+                                            controller
+                                                    .presentation
+                                                    .navigation
+                                                    .state
+                                                    .effectiveScope
+                                                is DayScope,
+                                        mindTemporalDayVisible:
+                                            controller
+                                                    .presentation
+                                                    .navigation
+                                                    .state
+                                                    .plane ==
+                                                TimePlane.month &&
+                                            controller
+                                                .presentation
+                                                .navigation
+                                                .state
+                                                .isRailOpen &&
+                                            controller
+                                                    .presentation
+                                                    .navigation
+                                                    .state
+                                                    .effectiveScope
+                                                is DayScope,
                                         onMindQueryAmountRangeRetry:
                                             widget.mindQueryFacetLoader == null
                                             ? null

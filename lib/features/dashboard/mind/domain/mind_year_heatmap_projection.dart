@@ -167,6 +167,7 @@ final class MindYearHeatmapPreparedMembership {
             MindYearHeatmapPreparedContribution(
               ordinal: ordinal,
               bookedLocalEpochDay: entry.bookedLocalEpochDay,
+              bookedLocalTimeMinutes: entry.bookedLocalTimeMinutes,
               amountMinor: entry.amountMinor,
             ),
           );
@@ -226,11 +227,13 @@ final class MindYearHeatmapPreparedContribution {
   const MindYearHeatmapPreparedContribution({
     required this.ordinal,
     required this.bookedLocalEpochDay,
+    this.bookedLocalTimeMinutes = 0,
     required this.amountMinor,
   });
 
   final int ordinal;
   final int bookedLocalEpochDay;
+  final int bookedLocalTimeMinutes;
   final int amountMinor;
 }
 
@@ -593,6 +596,7 @@ final class MindYearHeatmapProjection {
         return MindYearHeatmapPreparedContribution(
           ordinal: -1,
           bookedLocalEpochDay: entry.bookedLocalEpochDay,
+          bookedLocalTimeMinutes: entry.bookedLocalTimeMinutes,
           amountMinor: entry.amountMinor,
         );
       }),

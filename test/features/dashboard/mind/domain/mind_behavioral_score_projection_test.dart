@@ -289,6 +289,49 @@ void main() {
       expect(year.point, dayFrame.point);
       expect(sum.point, dayFrame.point);
     });
+
+    test(
+      'DAY-LIVE-02/03: a rolling Day chart preserves the canonical selected-day point',
+      () {
+        const target = LocalDate(year: 2025, month: 5, day: 15);
+        for (final direction in LedgerDirection.values) {
+          final prepared = projection(
+            direction: direction,
+            contributions: <MindBehavioralScoreContribution>[
+              for (var offset = 0; offset < 31; offset += 1)
+                day(100 + offset, dateOffset(target, -offset)),
+            ],
+          );
+          final canonical = prepared.resolve(
+            range: fullRange,
+            request: MindBehavioralScoreSeriesRequest(
+              analyticStartInclusiveEpochDay: target.epochDay,
+              analyticEndInclusiveEpochDay: target.epochDay,
+              chartStartInclusiveEpochDay: target.epochDay,
+              targetEpochDay: target.epochDay,
+            ),
+          );
+          final rolling = prepared.resolve(
+            range: fullRange,
+            request: MindBehavioralScoreSeriesRequest(
+              analyticStartInclusiveEpochDay: target.epochDay - 30,
+              analyticEndInclusiveEpochDay: target.epochDay,
+              chartStartInclusiveEpochDay: target.epochDay - 30,
+              targetEpochDay: target.epochDay,
+              pointAnalyticStartInclusiveEpochDay: target.epochDay,
+            ),
+          );
+
+          expect(rolling.point, canonical.point, reason: direction.name);
+          expect(
+            rolling.chartSeries!.startInclusiveEpochDay,
+            target.epochDay - 30,
+          );
+          expect(rolling.chartSeries!.endInclusiveEpochDay, target.epochDay);
+          expect(rolling.chartSeries!.points.last, rolling.point);
+        }
+      },
+    );
   });
 
   group('Mind behavioral score — Income', () {

@@ -7,6 +7,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
+import '../../time_navigation/domain/year_month.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_frame.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
@@ -557,4 +558,231 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
       paletteStyle != oldDelegate.paletteStyle ||
       cellExtent != oldDelegate.cellExtent ||
       gap != oldDelegate.gap;
+}
+
+/// The existing Month-plane [DayScope] has one compact, non-scrollable daily
+/// activity surface.  It consumes Core's immutable 24-hour frame and never
+/// owns query, score or temporal navigation state.
+final class MindDayHeatmapViewport extends StatelessWidget {
+  const MindDayHeatmapViewport({
+    super.key,
+    required this.frameListenable,
+    this.presentationSettings,
+  });
+
+  final ValueListenable<MindTemporalHeatmapFrame?> frameListenable;
+  final ValueListenable<MindYearHeatmapPresentationSettings>?
+  presentationSettings;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<MindTemporalHeatmapFrame?>(
+        valueListenable: frameListenable,
+        builder: (context, current, _) {
+          final frame = current is MindDayHeatmapFrame ? current : null;
+          if (frame == null) {
+            return const SizedBox(
+              key: ValueKey<String>('mind-day-heatmap-unavailable'),
+            );
+          }
+          Widget content(MindYearHeatmapPaletteStyle style) =>
+              _MindDayHeatmapContent(frame: frame, paletteStyle: style);
+          final settings = presentationSettings;
+          if (settings == null) {
+            return content(MindYearHeatmapPaletteStyle.fluvi);
+          }
+          return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+            valueListenable: settings,
+            builder: (context, value, _) => content(value.paletteStyle),
+          );
+        },
+      );
+}
+
+final class _MindDayHeatmapContent extends StatelessWidget {
+  const _MindDayHeatmapContent({
+    required this.frame,
+    required this.paletteStyle,
+  });
+
+  final MindDayHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const horizontalPadding = 12.0;
+      const gap = 4.0;
+      const staticChrome = 70.0;
+      final gridAvailableWidth = (constraints.maxWidth - horizontalPadding * 2)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+      final cellByWidth = ((gridAvailableWidth - gap * 5) / 6)
+          .clamp(0.0, double.infinity)
+          .toDouble();
+      final cellByHeight = constraints.maxHeight.isFinite
+          ? ((constraints.maxHeight - staticChrome - gap * 3) / 4)
+                .clamp(0.0, double.infinity)
+                .toDouble()
+          : cellByWidth;
+      final cellExtent = math.min(cellByWidth, cellByHeight);
+      final gridWidth = cellExtent * 6 + gap * 5;
+      final gridHeight = cellExtent * 4 + gap * 3;
+      final date = DashboardTimeLabelFormatter.date(
+        YearMonth(year: frame.date.year, month: frame.date.month),
+        frame.date.day,
+      );
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            SizedBox(
+              height: 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  const Text(
+                    'Óránkénti aktivitás',
+                    key: ValueKey<String>('mind-day-heatmap-title'),
+                    style: TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    '${frame.activeHourCount} aktív óra',
+                    key: const ValueKey<String>(
+                      'mind-day-heatmap-active-hours',
+                    ),
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 17,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text(
+                    date,
+                    key: const ValueKey<String>('mind-day-heatmap-date'),
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  Text(
+                    QueryMenuFormatters.money(frame.total),
+                    key: const ValueKey<String>(
+                      'mind-day-heatmap-summary-total',
+                    ),
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 7),
+            Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                key: const ValueKey<String>('mind-day-heatmap-grid'),
+                width: gridWidth,
+                height: gridHeight,
+                child: Column(
+                  children: List<Widget>.generate(4, (row) {
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: row == 3 ? 0 : gap),
+                      child: Row(
+                        children: List<Widget>.generate(6, (column) {
+                          final hour = row * 6 + column;
+                          final tile = frame.hour(hour);
+                          final palette =
+                              MindYearHeatmapPaletteResolver.resolveTile(
+                                style: paletteStyle,
+                                isEmpty: tile.isEmpty,
+                                intensity: tile.intensity,
+                                paletteIntensity: tile.paletteIntensity,
+                              );
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              right: column == 5 ? 0 : gap,
+                            ),
+                            child: SizedBox(
+                              width: cellExtent,
+                              height: cellExtent,
+                              child: DecoratedBox(
+                                key: ValueKey<String>(
+                                  'mind-day-heatmap-cell-${hour.toString().padLeft(2, '0')}',
+                                ),
+                                decoration: BoxDecoration(
+                                  color: palette.background,
+                                  borderRadius: BorderRadius.circular(
+                                    mindMonthHeatmapCellCornerRadius,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(3),
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Text(
+                                      hour.toString().padLeft(2, '0'),
+                                      style: TextStyle(
+                                        color: palette.foreground,
+                                        fontSize: 7,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }, growable: false),
+                      ),
+                    );
+                  }, growable: false),
+                ),
+              ),
+            ),
+            const SizedBox(height: 3),
+            Row(
+              children: <Widget>[
+                const Text(
+                  'Összesen',
+                  style: TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  QueryMenuFormatters.money(frame.total),
+                  key: const ValueKey<String>('mind-day-heatmap-total'),
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }

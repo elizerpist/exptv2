@@ -40,6 +40,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/dashboard_temporal_availability.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_state.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_time_navigation_controller.dart';
 import 'package:fluvi/features/dashboard/time_navigation/application/dashboard_segmented_target_acceptance.dart';
@@ -1010,6 +1011,183 @@ void main() {
   );
 
   testWidgets(
+    'MONTH-LIVE-01 RED: a renderer-accepted Month target publishes body and score before canonical settle',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-june',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 200000,
+            date: const LocalDate(year: 2026, month: 6, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'income-july-prior-year',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 350000,
+            date: const LocalDate(year: 2025, month: 7, day: 2),
+          ),
+          _mindYearEntry(
+            id: 'income-july',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 500000,
+            date: const LocalDate(year: 2026, month: 7, day: 3),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 3),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      final origin = core.navigation.state;
+      expect(origin.monthCursor, const YearMonth(year: 2026, month: 7));
+      core.beginSegmentedSummaryMotion();
+      final acceptedJune = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: -1,
+        base: origin,
+      )!;
+      expect(acceptedJune.monthCursor, const YearMonth(year: 2026, month: 6));
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: acceptedJune,
+              component: DashboardTemporalAnchorComponent.month,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.logBoxLane.value!),
+      );
+
+      // This is the exact renderer acknowledgement delivered by the mounted
+      // segmented Summary.  No settle follows: this is the physical liveness
+      // boundary that Year already owns and Month currently misses.
+      core.noteSegmentedSummaryComponentVisualTargetPainted(
+        candidate: acceptedJune,
+        component: DashboardTemporalAnchorComponent.month,
+      );
+      await tester.pump();
+
+      final frame = core.mindTemporalHeatmap.value;
+      expect(frame, isA<MindMonthHeatmapFrame>());
+      final monthFrame = frame! as MindMonthHeatmapFrame;
+      expect(monthFrame.year, 2026);
+      expect(monthFrame.month, 6);
+      expect(find.text('június 2026'), findsOneWidget);
+      expect(
+        core.mindBehavioralScore.identity?.navigationEpoch,
+        1,
+        reason:
+            'Month heatmap and Header score must share the accepted Summary generation before settle.',
+      );
+      expect(
+        core.mindBehavioralScore.value?.chartSeries?.points.last,
+        core.mindBehavioralScore.value?.point,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('mind-header-score-text')),
+            )
+            .data,
+        '${core.mindBehavioralScore.value!.point.roundedScore}/100',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart')),
+        findsOneWidget,
+      );
+      expect(
+        core.navigation.state.monthCursor,
+        const YearMonth(year: 2026, month: 7),
+        reason: 'Renderer admission must not force canonical Month settlement.',
+      );
+      expect(repository.prepareCalls, 1);
+
+      // A parent-year crossing is the second Month target shape. The Month
+      // component remains July, but its accepted calendar year changes before
+      // canonical navigation is allowed to settle.
+      core.beginSegmentedSummaryMotion();
+      final acceptedPriorYear = core
+          .experimentalTemporalComponentOffsetCandidate(
+            plane: TimePlane.month,
+            isRailOpen: false,
+            component: DashboardTemporalAnchorComponent.year,
+            offset: -1,
+            base: origin,
+          )!;
+      expect(
+        acceptedPriorYear.monthCursor,
+        const YearMonth(year: 2025, month: 7),
+      );
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: acceptedPriorYear,
+              component: DashboardTemporalAnchorComponent.year,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.logBoxLane.value!),
+      );
+      core.noteSegmentedSummaryComponentVisualTargetPainted(
+        candidate: acceptedPriorYear,
+        component: DashboardTemporalAnchorComponent.year,
+      );
+      await tester.pump();
+
+      final parentYearFrame = core.mindTemporalHeatmap.value;
+      expect(parentYearFrame, isA<MindMonthHeatmapFrame>());
+      final parentYearMonthFrame = parentYearFrame! as MindMonthHeatmapFrame;
+      expect(parentYearMonthFrame.year, 2025);
+      expect(parentYearMonthFrame.month, 7);
+      expect(find.text('július 2025'), findsOneWidget);
+      expect(core.mindBehavioralScore.identity?.navigationEpoch, 2);
+      expect(
+        core.navigation.state.monthCursor,
+        const YearMonth(year: 2026, month: 7),
+        reason:
+            'The renderer acknowledgement publishes the new Month target, '
+            'not an early canonical parent-Year commit.',
+      );
+    },
+  );
+
+  testWidgets(
     'LIV-04: the mounted shared compact slider publishes Month, Sum and Year heatmap plus Header score in its first preview frame',
     (tester) async {
       final repository = _FocusSeedRepository(
@@ -1855,11 +2033,24 @@ void main() {
         initialCoreRevision: 1,
         initialDirection: LedgerDirection.income,
       );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
       addTearDown(core.dispose);
+      addTearDown(modes.dispose);
       await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
       _installMindAmountDomain(core, LedgerDirection.income);
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
       expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
       expect(
         core.mindBehavioralScore.value?.point.epochDay,
         const LocalDate(year: 2025, month: 5, day: 15).epochDay,
@@ -1885,6 +2076,61 @@ void main() {
         core.mindBehavioralScore.identity?.targetEpochDay,
         const LocalDate(year: 2025, month: 5, day: 16).epochDay,
       );
+      final dayFrame = core.mindTemporalHeatmap.value;
+      expect(dayFrame, isA<MindDayHeatmapFrame>());
+      expect(
+        (dayFrame! as MindDayHeatmapFrame).date,
+        const LocalDate(year: 2025, month: 5, day: 16),
+        reason:
+            'The Day body must follow the actually visible rail child on the '
+            'same frame as the pre-settle score publication.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        findsOneWidget,
+        reason: 'The mounted Mind body must paint the accepted Day target.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-date')),
+        findsOneWidget,
+      );
+      final headerScore = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-header-score-text')),
+      );
+      expect(
+        headerScore.data,
+        '${core.mindBehavioralScore.value!.point.roundedScore}/100',
+        reason:
+            'The mounted Header text reads the same accepted Day score as '
+            'the visible body and chart endpoint.',
+      );
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 900000,
+            lowerScaled100: 100000,
+            upperScaled100: 900000,
+          ),
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      expect(
+        (core.mindTemporalHeatmap.value! as MindDayHeatmapFrame).date,
+        const LocalDate(year: 2025, month: 5, day: 16),
+        reason:
+            'A held range preview cannot restore the pre-crossing Day body.',
+      );
+      expect(
+        core.mindBehavioralScore.value?.point.epochDay,
+        const LocalDate(year: 2025, month: 5, day: 16).epochDay,
+        reason:
+            'A held range preview uses the same accepted Day target as the '
+            '24-hour heatmap.',
+      );
+      core.endMindAmountRangeInteraction(committed: false);
       expect(
         core.mindBehavioralScore.publicationCount,
         greaterThanOrEqualTo(2),
@@ -1892,6 +2138,88 @@ void main() {
             'The final visible child receives a new score; coalesced day 14 '
             'never becomes a visible score authority.',
       );
+    },
+  );
+
+  testWidgets(
+    'DAY-HOST-01 RED: an open Month rail renders one DayScope Mind body',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(
+          rows: <DashboardLedgerEntry>[
+            _mindYearEntry(
+              id: 'income-day-hour-00',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 200000,
+              date: const LocalDate(year: 2026, month: 7, day: 14),
+              localTimeMinutes: 0,
+            ),
+            _mindYearEntry(
+              id: 'income-day-hour-23',
+              direction: 'income',
+              categoryId: 'salary',
+              partnerId: 'employer',
+              amount: 300000,
+              date: const LocalDate(year: 2026, month: 7, day: 14),
+              localTimeMinutes: 1439,
+            ),
+          ],
+        ),
+        initialDate: DateTime.utc(2026, 7, 14),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      expect(
+        core.navigation.state.effectiveScope,
+        const DayScope(LocalDate(year: 2026, month: 7, day: 14)),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        findsOneWidget,
+      );
+      expect(find.text('Óránkénti aktivitás'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-cell-00')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-cell-23')),
+        findsOneWidget,
+      );
+      final score = core.mindBehavioralScore.value!;
+      expect(
+        score.chartSeries!.startInclusiveEpochDay,
+        const LocalDate(year: 2026, month: 6, day: 14).epochDay,
+        reason: 'Day presents a rolling 31-day daily score context.',
+      );
+      expect(
+        score.chartSeries!.endInclusiveEpochDay,
+        const LocalDate(year: 2026, month: 7, day: 14).epochDay,
+      );
+      expect(score.chartSeries!.points.last, score.point);
     },
   );
 
@@ -8777,6 +9105,7 @@ DashboardLedgerEntry _mindYearEntry({
   required String partnerId,
   required int amount,
   required LocalDate date,
+  int localTimeMinutes = 600,
 }) => DashboardLedgerEntry(
   id: id,
   partnerId: partnerId,
@@ -8784,7 +9113,7 @@ DashboardLedgerEntry _mindYearEntry({
   direction: direction,
   amountMinor: amount,
   bookedLocalEpochDay: date.epochDay,
-  bookedLocalTimeMinutes: 600,
+  bookedLocalTimeMinutes: localTimeMinutes,
   partnerDisplayName: partnerId,
   categoryDisplayName: categoryId,
   categoryColorId: 'fallback',

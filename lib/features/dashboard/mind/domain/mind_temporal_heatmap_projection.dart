@@ -13,12 +13,14 @@ final class MindTemporalHeatmapIdentity {
     required this.indexGeneration,
     required this.coreRevision,
     required this.timeScopeKey,
+    this.navigationEpoch = 0,
   });
 
   final String upstreamScopeKey;
   final int indexGeneration;
   final int coreRevision;
   final String timeScopeKey;
+  final int navigationEpoch;
 
   @override
   bool operator ==(Object other) =>
@@ -26,7 +28,8 @@ final class MindTemporalHeatmapIdentity {
       other.upstreamScopeKey == upstreamScopeKey &&
       other.indexGeneration == indexGeneration &&
       other.coreRevision == coreRevision &&
-      other.timeScopeKey == timeScopeKey;
+      other.timeScopeKey == timeScopeKey &&
+      other.navigationEpoch == navigationEpoch;
 
   @override
   int get hashCode => Object.hash(
@@ -34,6 +37,7 @@ final class MindTemporalHeatmapIdentity {
     indexGeneration,
     coreRevision,
     timeScopeKey,
+    navigationEpoch,
   );
 }
 
@@ -223,6 +227,7 @@ final class MindMonthHeatmapProjection {
     required this.year,
     required this.month,
     required List<MindHeatmapAmountRangeBucket> days,
+    required this.preparedContributionTouches,
   }) : _days = List<MindHeatmapAmountRangeBucket>.unmodifiable(days);
 
   factory MindMonthHeatmapProjection.build({
@@ -233,7 +238,9 @@ final class MindMonthHeatmapProjection {
   }) {
     final count = DateTime.utc(year, month + 1, 0).day;
     final values = List<List<int>>.generate(count, (_) => <int>[]);
+    var preparedContributionTouches = 0;
     for (final contribution in contributions) {
+      preparedContributionTouches += 1;
       final date = _dateForEpochDay(contribution.bookedLocalEpochDay);
       if (date.year == year && date.month == month) {
         values[date.day - 1].add(contribution.amountMinor);
@@ -244,6 +251,7 @@ final class MindMonthHeatmapProjection {
       year: year,
       month: month,
       days: values.map(MindHeatmapAmountRangeBucket.fromUnsorted).toList(),
+      preparedContributionTouches: preparedContributionTouches,
     );
   }
 
@@ -251,6 +259,7 @@ final class MindMonthHeatmapProjection {
   final int year;
   final int month;
   final List<MindHeatmapAmountRangeBucket> _days;
+  final int preparedContributionTouches;
 
   MindMonthHeatmapFrame preview(QueryAmountRangeValues range) {
     final totals = _days
@@ -297,6 +306,141 @@ final class MindMonthHeatmapProjection {
       month: month,
       days: days,
       activeDayCount: activeDays,
+      total: total,
+      minimumNonEmptyTotal: minimum,
+      maximumNonEmptyTotal: maximum,
+    );
+  }
+}
+
+/// Compact immutable Day frame.  Its hourly cells are a presentation of the
+/// admitted monetary membership; behavioral score ownership remains entirely
+/// with [MindBehavioralScoreProjection].
+final class MindDayHeatmapFrame implements MindTemporalHeatmapFrame {
+  MindDayHeatmapFrame({
+    required this.identity,
+    required this.range,
+    required this.date,
+    required List<MindDayHeatmapHour> hours,
+    required this.activeHourCount,
+    required this.total,
+    required this.minimumNonEmptyTotal,
+    required this.maximumNonEmptyTotal,
+  }) : hours = List<MindDayHeatmapHour>.unmodifiable(hours);
+
+  @override
+  final MindTemporalHeatmapIdentity identity;
+  @override
+  final QueryAmountRangeValues range;
+  final LocalDate date;
+  final List<MindDayHeatmapHour> hours;
+  final int activeHourCount;
+  final int total;
+  final int? minimumNonEmptyTotal;
+  final int? maximumNonEmptyTotal;
+
+  MindDayHeatmapHour hour(int value) => hours[value];
+}
+
+final class MindDayHeatmapHour {
+  const MindDayHeatmapHour({
+    required this.hour,
+    required this.total,
+    required this.kind,
+    required this.intensity,
+    required this.paletteIntensity,
+  });
+
+  final int hour;
+  final int? total;
+  final MindYearHeatmapTileKind kind;
+  final double intensity;
+  final MindYearHeatmapPaletteIntensity paletteIntensity;
+
+  bool get isEmpty => total == null;
+}
+
+/// Resident 24-bucket projection for the existing Month-plane [DayScope].
+/// Target construction reads prepared contributions only; a held amount range
+/// preview visits exactly these buckets and never consults ledger rows.
+final class MindDayHeatmapProjection {
+  MindDayHeatmapProjection._({
+    required this.identity,
+    required this.date,
+    required List<MindHeatmapAmountRangeBucket> hours,
+    required this.preparedContributionTouches,
+  }) : _hours = List<MindHeatmapAmountRangeBucket>.unmodifiable(hours);
+
+  factory MindDayHeatmapProjection.build({
+    required MindTemporalHeatmapIdentity identity,
+    required LocalDate date,
+    required Iterable<MindYearHeatmapPreparedContribution> contributions,
+  }) {
+    final values = List<List<int>>.generate(24, (_) => <int>[]);
+    var preparedContributionTouches = 0;
+    for (final contribution in contributions) {
+      preparedContributionTouches += 1;
+      if (contribution.bookedLocalEpochDay != date.epochDay) continue;
+      final minutes = contribution.bookedLocalTimeMinutes;
+      if (minutes < 0 || minutes >= 24 * 60) continue;
+      values[minutes ~/ 60].add(contribution.amountMinor);
+    }
+    return MindDayHeatmapProjection._(
+      identity: identity,
+      date: date,
+      hours: values.map(MindHeatmapAmountRangeBucket.fromUnsorted).toList(),
+      preparedContributionTouches: preparedContributionTouches,
+    );
+  }
+
+  final MindTemporalHeatmapIdentity identity;
+  final LocalDate date;
+  final List<MindHeatmapAmountRangeBucket> _hours;
+  final int preparedContributionTouches;
+
+  MindDayHeatmapFrame preview(QueryAmountRangeValues range) {
+    final totals = _hours
+        .map(
+          (bucket) => bucket.sumWithin(
+            minimum: range.lowerScaled100,
+            maximum: range.upperScaled100,
+          ),
+        )
+        .toList(growable: false);
+    int? minimum;
+    int? maximum;
+    var total = 0;
+    var activeHours = 0;
+    for (final value in totals) {
+      if (value == null) continue;
+      activeHours += 1;
+      total += value;
+      minimum = minimum == null || value < minimum ? value : minimum;
+      maximum = maximum == null || value > maximum ? value : maximum;
+    }
+    return MindDayHeatmapFrame(
+      identity: identity,
+      range: range,
+      date: date,
+      hours: List<MindDayHeatmapHour>.generate(24, (hour) {
+        final value = totals[hour];
+        return MindDayHeatmapHour(
+          hour: hour,
+          total: value,
+          kind: _kindFor(total: value, minimum: minimum, maximum: maximum),
+          intensity: _intensityFor(
+            total: value,
+            minimum: minimum,
+            maximum: maximum,
+          ),
+          paletteIntensity: _paletteIntensityFor(
+            total: value,
+            minimum: minimum,
+            maximum: maximum,
+          ),
+        );
+      }, growable: false),
+      activeHourCount: activeHours,
       total: total,
       minimumNonEmptyTotal: minimum,
       maximumNonEmptyTotal: maximum,

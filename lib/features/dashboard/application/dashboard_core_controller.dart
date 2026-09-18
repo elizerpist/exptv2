@@ -1075,6 +1075,7 @@ final class DashboardCoreController {
 
   MindSumHeatmapProjection? _mindSumHeatmapProjection;
   MindMonthHeatmapProjection? _mindMonthHeatmapProjection;
+  MindDayHeatmapProjection? _mindDayHeatmapProjection;
 
   /// The semantic daily Mind score is independent from the annual heatmap
   /// renderer and remains available for every Summary Time plane.
@@ -1252,6 +1253,11 @@ final class DashboardCoreController {
   // It remains authoritative over a canonical/presentation refresh until a
   // newer visual acknowledgement replaces it.
   _SegmentedTemporalPaintTarget? _mindYearHeatmapVisualTemporalTarget;
+  // Month owns the same renderer-acknowledged semantic boundary as Year.
+  // Keeping a typed retained target prevents an ordinary canonical refresh
+  // from repainting the preceding Month between accepted target paint and
+  // terminal settlement.
+  _SegmentedTemporalPaintTarget? _mindMonthHeatmapVisualTemporalTarget;
   int _segmentedTimeFlightGeneration = 0;
   int _segmentedTimePreviewCrossings = 0;
   int _segmentedTimeLivePublications = 0;
@@ -4153,20 +4159,33 @@ final class DashboardCoreController {
     if (_disposed) return false;
     final state = navigationState ?? navigation.state;
     final resolvedDirection = direction ?? state.parentQueryScope.direction;
+    final visible = visibleFrames.value;
+    final visibleScope = visible?.scope.timeScope;
+    if (respectAcceptedMindTemporalTarget &&
+        visible != null &&
+        visible.plane == TimePlane.month &&
+        visible.railOpen &&
+        visible.direction == resolvedDirection &&
+        visible.parentQueryKey == state.parentQueryKey &&
+        visibleScope is DayScope &&
+        mindBehavioralScore.projection != null) {
+      _publishMindBehavioralScoreForVisibleFrame(visible);
+      return mindBehavioralScore.identity?.targetEpochDay ==
+          visibleScope.date.epochDay;
+    }
     // While a segmented Summary target has crossed the renderer boundary,
     // canonical navigation intentionally still names the preceding year.
     // Ordinary refreshes (including the Mind prepared-base completion) must
     // preserve the accepted target instead of restoring that older score.
     final acceptedVisualTarget = respectAcceptedMindTemporalTarget
-        ? _currentMindYearHeatmapVisualTemporalTarget(
-            direction: resolvedDirection,
-          )
+        ? _currentMindAcceptedTemporalTarget(direction: resolvedDirection)
         : null;
     if (acceptedVisualTarget != null) {
       return _publishMindBehavioralScoreForAcceptedTemporalTarget(
         direction: resolvedDirection,
-        timeScope: YearScope(acceptedVisualTarget.candidate.yearCursor),
+        timeScope: acceptedVisualTarget.candidate.effectiveScope,
         temporalGeneration: acceptedVisualTarget.interactionGeneration,
+        navigationState: acceptedVisualTarget.candidate,
       );
     }
     final appliedScope = currentQuery.scopeFor(resolvedDirection);
@@ -4341,6 +4360,11 @@ final class DashboardCoreController {
         end: targetEpochDay,
         fallback: targetEpochDay,
       ),
+      DayScope(:final date) => (
+        start: date.epochDay - 30,
+        end: date.epochDay,
+        fallback: date.epochDay,
+      ),
       LedgerTimeScope selected => _mindScoreBoundsFor(selected),
     };
     final settings = projection.identity.settings;
@@ -4369,11 +4393,16 @@ final class DashboardCoreController {
       MindExpenseScoreAlgorithm.htmlTrailing => visible.end,
       MindExpenseScoreAlgorithm.causalTrailing => targetEpochDay,
     };
+    final pointAnalyticStart = switch (timeScope) {
+      DayScope(:final date) => date.epochDay,
+      _ => null,
+    };
     return MindBehavioralScoreSeriesRequest(
       analyticStartInclusiveEpochDay: analyticStart,
       analyticEndInclusiveEpochDay: analyticEnd,
       chartStartInclusiveEpochDay: visible.start,
       targetEpochDay: targetEpochDay,
+      pointAnalyticStartInclusiveEpochDay: pointAnalyticStart,
     );
   }
 
@@ -4392,13 +4421,28 @@ final class DashboardCoreController {
       direction: direction,
       settings: mindBehavioralScoreSettings.value,
     );
+    final visible = visibleFrames.value;
+    final visibleScope = visible?.scope.timeScope;
+    final acceptedVisibleDay =
+        visible != null &&
+        visible.plane == TimePlane.month &&
+        visible.railOpen &&
+        visible.direction == direction &&
+        visible.parentQueryKey == navigation.state.parentQueryKey &&
+        visibleScope is DayScope;
+    final timeScope = acceptedVisibleDay
+        ? visibleScope
+        : navigation.state.effectiveScope;
+    final navigationEpoch = acceptedVisibleDay
+        ? visible.navigationEpoch
+        : navigation.state.navigationEpoch;
     var held = _mindScoreInteractionIdentity;
     if (projection == null || projection.identity != expectedProjection) {
       return mindBehavioralScore.rejectStalePublication();
     }
     if (held != null &&
         (held.projection != expectedProjection ||
-            held.navigationEpoch != navigation.state.navigationEpoch)) {
+            held.navigationEpoch != navigationEpoch)) {
       // The one physical range control deliberately survives a Sum/Year/Month
       // switch while its thumb remains held. That accepted temporal target
       // synchronously publishes a new score identity before the next preview
@@ -4407,26 +4451,26 @@ final class DashboardCoreController {
       // the heatmap preview advance while the Header score was rejected.
       final current = mindBehavioralScore.identity;
       if (current?.projection != expectedProjection ||
-          current?.navigationEpoch != navigation.state.navigationEpoch) {
+          current?.navigationEpoch != navigationEpoch) {
         return mindBehavioralScore.rejectStalePublication();
       }
       _mindScoreInteractionIdentity = current;
     }
-    final target = _mindScoreTargetEpochDay(
+    final target = _mindScoreTargetEpochDayForScope(
       projection: projection,
       range: values,
-      state: navigation.state,
+      timeScope: timeScope,
     );
     final request = _mindScoreSeriesRequest(
       projection: projection,
       range: values,
-      timeScope: navigation.state.effectiveScope,
+      timeScope: timeScope,
       targetEpochDay: target,
     );
     final published = mindBehavioralScore.publishTarget(
       expectedProjectionIdentity: expectedProjection,
       targetEpochDay: target,
-      navigationEpoch: navigation.state.navigationEpoch,
+      navigationEpoch: navigationEpoch,
       range: values,
       seriesRequest: request,
     );
@@ -4809,13 +4853,40 @@ final class DashboardCoreController {
       TimePlane.year => () {
         _mindSumHeatmapProjection = null;
         _mindMonthHeatmapProjection = null;
+        _mindDayHeatmapProjection = null;
+        _mindMonthHeatmapVisualTemporalTarget = null;
         if (mindTemporalHeatmap.value is! MindYearHeatmapFrame) {
           mindTemporalHeatmap.value = null;
         }
         return ensureMindYearHeatmapProjection();
       }(),
       TimePlane.sum => _installMindSumHeatmapProjection(state),
-      TimePlane.month => _installMindMonthHeatmapProjection(state),
+      TimePlane.month => () {
+        final visible = visibleFrames.value;
+        final visibleScope = visible?.scope.timeScope;
+        // A rail child can cross the real visible-frame boundary before the
+        // parent navigation state is committed. Keep the Day body pinned to
+        // that renderer-accepted child so an ordinary host rebuild cannot
+        // restore the preceding canonical day in the same Flutter frame.
+        if (visible != null &&
+            visible.plane == TimePlane.month &&
+            visible.railOpen &&
+            visible.direction == state.parentQueryScope.direction &&
+            visible.parentQueryKey == state.parentQueryKey &&
+            visibleScope is DayScope) {
+          return _installMindDayHeatmapProjection(
+            state,
+            visibleFrame: visible,
+            selectedDayScope: visibleScope,
+            navigationEpoch: visible.navigationEpoch,
+            isStillCurrent: () => identical(visibleFrames.value, visible),
+          );
+        }
+        return switch (state.effectiveScope) {
+          DayScope() => _installMindDayHeatmapProjection(state),
+          _ => _ensureMindMonthHeatmapProjection(state),
+        };
+      }(),
     };
   }
 
@@ -4835,6 +4906,8 @@ final class DashboardCoreController {
   bool _installMindSumHeatmapProjection(DashboardNavigationState state) {
     clearMindYearHeatmapProjection();
     _mindMonthHeatmapProjection = null;
+    _mindDayHeatmapProjection = null;
+    _mindMonthHeatmapVisualTemporalTarget = null;
     if (mindTemporalHeatmap.value is! MindSumHeatmapFrame) {
       mindTemporalHeatmap.value = null;
     }
@@ -4901,7 +4974,33 @@ final class DashboardCoreController {
     return true;
   }
 
-  bool _installMindMonthHeatmapProjection(DashboardNavigationState state) {
+  bool _ensureMindMonthHeatmapProjection(DashboardNavigationState state) {
+    _mindDayHeatmapProjection = null;
+    final direction = state.parentQueryScope.direction;
+    final visualTarget = _currentMindMonthHeatmapVisualTemporalTarget(
+      direction: direction,
+    );
+    final target = visualTarget?.candidate ?? state;
+    final requiresAdmittedBase = visualTarget != null;
+    return _installMindMonthHeatmapProjection(
+      target,
+      temporalGeneration: visualTarget?.interactionGeneration ?? 0,
+      allowBaseAdmission: !requiresAdmittedBase,
+      isStillCurrent: () =>
+          !_disposed &&
+          navigation.state.plane == TimePlane.month &&
+          navigation.state.parentQueryScope.direction == direction &&
+          (visualTarget == null ||
+              identical(_mindMonthHeatmapVisualTemporalTarget, visualTarget)),
+    );
+  }
+
+  bool _installMindMonthHeatmapProjection(
+    DashboardNavigationState state, {
+    int temporalGeneration = 0,
+    bool allowBaseAdmission = true,
+    bool Function()? isStillCurrent,
+  }) {
     clearMindYearHeatmapProjection();
     _mindSumHeatmapProjection = null;
     if (mindTemporalHeatmap.value is! MindMonthHeatmapFrame) {
@@ -4916,7 +5015,11 @@ final class DashboardCoreController {
       direction,
       navigationState: state,
     );
-    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    final base = allowBaseAdmission
+        ? _compatibleMindAmountPreviewBase(appliedScope)
+        : _mindAmountPreparedBaseFor(
+            QueryAmountRange.domainScope(appliedScope),
+          );
     if (binding == null || base == null) {
       _clearCurrentMindTemporalHeatmap();
       return false;
@@ -4938,6 +5041,7 @@ final class DashboardCoreController {
       indexGeneration: base.generation,
       coreRevision: base.coreRevision,
       timeScopeKey: MonthScope(selectedMonth).canonicalKey,
+      navigationEpoch: temporalGeneration,
     );
     final existing = _mindMonthHeatmapProjection;
     if (existing?.identity == identity) {
@@ -4955,12 +5059,22 @@ final class DashboardCoreController {
       identity: identity,
       year: selectedMonth.year,
       month: selectedMonth.month,
-      contributions: membership.contributionsForMembership(
+      contributions: membership.contributionsForYear(
+        year: selectedMonth.year,
         membership: selected.entryIndices,
       ),
     );
     stopwatch.stop();
-    if (_disposed || navigation.state.plane != TimePlane.month) return false;
+    if (_disposed ||
+        navigation.state.plane != TimePlane.month ||
+        !(isStillCurrent?.call() ?? true) ||
+        !_isMindYearHeatmapBaseCurrent(
+          base: base,
+          scope: appliedScope,
+          allowBaseAdmission: allowBaseAdmission,
+        )) {
+      return false;
+    }
     _mindMonthHeatmapProjection = projection;
     mindTemporalHeatmap.value = projection.preview(binding.values);
     _logMindTemporalHeatmapPublished(
@@ -4968,7 +5082,106 @@ final class DashboardCoreController {
       identity: identity,
       kind: 'month',
       buildMicros: stopwatch.elapsedMicroseconds,
-      preparedContributions: selected.entryIndices.length,
+      preparedContributions: projection.preparedContributionTouches,
+    );
+    return true;
+  }
+
+  bool _installMindDayHeatmapProjection(
+    DashboardNavigationState state, {
+    DashboardVisibleFrame? visibleFrame,
+    DayScope? selectedDayScope,
+    int? navigationEpoch,
+    bool Function()? isStillCurrent,
+  }) {
+    clearMindYearHeatmapProjection();
+    _mindSumHeatmapProjection = null;
+    _mindMonthHeatmapProjection = null;
+    _mindMonthHeatmapVisualTemporalTarget = null;
+    if (mindTemporalHeatmap.value is! MindDayHeatmapFrame) {
+      mindTemporalHeatmap.value = null;
+    }
+    final dayScope =
+        selectedDayScope ??
+        visibleFrame?.scope.timeScope ??
+        state.effectiveScope;
+    if (dayScope is! DayScope) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final direction = state.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    _publishPreparedMindAmountDomainForScope(
+      mindAmountDomainScopeFor(
+        direction,
+        navigationState: state,
+        visibleFrame: visibleFrame,
+      ),
+    );
+    final binding = mindAmountRangeBindingFor(
+      direction,
+      navigationState: state,
+      visibleFrame: visibleFrame,
+    );
+    final base = _compatibleMindAmountPreviewBase(appliedScope);
+    if (binding == null || base == null) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final domainScope = QueryAmountRange.domainScope(appliedScope);
+    final seed = base.partitionFor(direction).focusMembershipSeed;
+    final membership = _mindYearHeatmapPreparedMembershipFor(
+      base: base,
+      domainScope: domainScope,
+    );
+    if (seed == null || membership == null) {
+      _clearCurrentMindTemporalHeatmap();
+      return false;
+    }
+    final identity = MindTemporalHeatmapIdentity(
+      upstreamScopeKey:
+          '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
+      indexGeneration: base.generation,
+      coreRevision: base.coreRevision,
+      timeScopeKey: dayScope.canonicalKey,
+      navigationEpoch: navigationEpoch ?? state.navigationEpoch,
+    );
+    final existing = _mindDayHeatmapProjection;
+    if (existing?.identity == identity) {
+      mindTemporalHeatmap.value = existing!.preview(binding.values);
+      return true;
+    }
+    final activeFocus = _activeMindFocusFor(base: base, scope: appliedScope);
+    final selected = seed.select(
+      categoryId: activeFocus?.category?.id,
+      partnerId: activeFocus?.partner?.id,
+      normalizedSearch: activeFocus?.normalizedSearch,
+    );
+    final stopwatch = Stopwatch()..start();
+    final projection = MindDayHeatmapProjection.build(
+      identity: identity,
+      date: dayScope.date,
+      contributions: membership.contributionsForYear(
+        year: dayScope.date.year,
+        membership: selected.entryIndices,
+      ),
+    );
+    stopwatch.stop();
+    if (_disposed ||
+        navigation.state.plane != TimePlane.month ||
+        !(isStillCurrent?.call() ??
+            navigation.state.effectiveScope == dayScope) ||
+        !_isMindYearHeatmapBaseCurrent(base: base, scope: appliedScope)) {
+      return false;
+    }
+    _mindDayHeatmapProjection = projection;
+    mindTemporalHeatmap.value = projection.preview(binding.values);
+    _logMindTemporalHeatmapPublished(
+      direction: direction,
+      identity: identity,
+      kind: 'day',
+      buildMicros: stopwatch.elapsedMicroseconds,
+      preparedContributions: projection.preparedContributionTouches,
     );
     return true;
   }
@@ -4984,6 +5197,12 @@ final class DashboardCoreController {
       return true;
     }(),
     TimePlane.month => () {
+      if (navigation.state.effectiveScope is DayScope) {
+        final projection = _mindDayHeatmapProjection;
+        if (projection == null) return false;
+        mindTemporalHeatmap.value = projection.preview(values);
+        return true;
+      }
       final projection = _mindMonthHeatmapProjection;
       if (projection == null) return false;
       mindTemporalHeatmap.value = projection.preview(values);
@@ -4994,6 +5213,8 @@ final class DashboardCoreController {
   void _clearCurrentMindTemporalHeatmap() {
     _mindSumHeatmapProjection = null;
     _mindMonthHeatmapProjection = null;
+    _mindDayHeatmapProjection = null;
+    _mindMonthHeatmapVisualTemporalTarget = null;
     mindTemporalHeatmap.value = null;
   }
 
@@ -5159,6 +5380,25 @@ final class DashboardCoreController {
     return target;
   }
 
+  _SegmentedTemporalPaintTarget? _currentMindMonthHeatmapVisualTemporalTarget({
+    required LedgerDirection direction,
+  }) {
+    final target = _mindMonthHeatmapVisualTemporalTarget;
+    if (target == null ||
+        target.candidate.plane != TimePlane.month ||
+        target.candidate.parentQueryScope.direction != direction ||
+        navigation.state.plane != TimePlane.month) {
+      return null;
+    }
+    return target;
+  }
+
+  _SegmentedTemporalPaintTarget? _currentMindAcceptedTemporalTarget({
+    required LedgerDirection direction,
+  }) =>
+      _currentMindYearHeatmapVisualTemporalTarget(direction: direction) ??
+      _currentMindMonthHeatmapVisualTemporalTarget(direction: direction);
+
   MindYearHeatmapIdentity? _currentMindYearHeatmapHeldIdentity({
     required DashboardNavigationState state,
   }) {
@@ -5181,10 +5421,12 @@ final class DashboardCoreController {
     required DashboardTemporalAnchorComponent component,
   }) {
     if (_disposed ||
-        component != DashboardTemporalAnchorComponent.year ||
-        candidate.plane != TimePlane.year ||
-        navigation.state.plane != TimePlane.year ||
-        mindYearHeatmap.value == null) {
+        candidate.plane != navigation.state.plane ||
+        (candidate.plane != TimePlane.year &&
+            candidate.plane != TimePlane.month) ||
+        (candidate.plane == TimePlane.year && mindYearHeatmap.value == null) ||
+        (candidate.plane == TimePlane.month &&
+            mindTemporalHeatmap.value is! MindMonthHeatmapFrame)) {
       return;
     }
     final accepted = _segmentedLatestAcceptedPaintTarget;
@@ -5194,12 +5436,30 @@ final class DashboardCoreController {
         !_sameTemporalTarget(accepted.candidate, candidate)) {
       return;
     }
-    _admitMindYearHeatmapForSegmentedTarget(
+    _admitMindTemporalHeatmapForSegmentedTarget(
       accepted: accepted,
       candidate: candidate,
       source: 'summaryRendererAcknowledgement',
     );
   }
+
+  bool _admitMindTemporalHeatmapForSegmentedTarget({
+    required _SegmentedTemporalPaintTarget accepted,
+    required DashboardNavigationState candidate,
+    required String source,
+  }) => switch (candidate.plane) {
+    TimePlane.year => _admitMindYearHeatmapForSegmentedTarget(
+      accepted: accepted,
+      candidate: candidate,
+      source: source,
+    ),
+    TimePlane.month => _admitMindMonthHeatmapForSegmentedTarget(
+      accepted: accepted,
+      candidate: candidate,
+      source: source,
+    ),
+    TimePlane.sum => false,
+  };
 
   /// Admits the compact annual frame from the accepted segmented Year target.
   ///
@@ -5267,6 +5527,59 @@ final class DashboardCoreController {
     return published;
   }
 
+  /// Month uses the same renderer-accepted semantic admission as Year.  Its
+  /// frame and Header score are derived from the candidate's exact YearMonth,
+  /// not from the preceding canonical navigation state that remains in place
+  /// until the segmented selector settles.
+  bool _admitMindMonthHeatmapForSegmentedTarget({
+    required _SegmentedTemporalPaintTarget accepted,
+    required DashboardNavigationState candidate,
+    required String source,
+  }) {
+    final direction = candidate.parentQueryScope.direction;
+    final appliedScope = currentQuery.scopeFor(direction);
+    final heatmapPublished = _installMindMonthHeatmapProjection(
+      candidate,
+      temporalGeneration: accepted.interactionGeneration,
+      allowBaseAdmission: false,
+      isStillCurrent: () =>
+          !_disposed &&
+          navigation.state.plane == TimePlane.month &&
+          navigation.state.parentQueryScope.direction == direction &&
+          currentQuery.scopeFor(direction) == appliedScope &&
+          identical(_segmentedLatestAcceptedPaintTarget, accepted) &&
+          accepted.interactionGeneration == _segmentedTimeFlightGeneration &&
+          _sameTemporalTarget(accepted.candidate, candidate),
+    );
+    final scorePublished =
+        heatmapPublished &&
+        _publishMindBehavioralScoreForAcceptedTemporalTarget(
+          direction: direction,
+          timeScope: MonthScope(candidate.monthCursor),
+          temporalGeneration: accepted.interactionGeneration,
+          navigationState: candidate,
+        );
+    if (heatmapPublished && !scorePublished) {
+      _clearCurrentMindTemporalHeatmap();
+    }
+    final published = heatmapPublished && scorePublished;
+    if (published) _mindMonthHeatmapVisualTemporalTarget = accepted;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_TEMPORAL_HEATMAP|ACCEPTED_TARGET_ADMISSION',
+        queryKey: candidate.parentQueryKey.value,
+        direction: direction.name,
+        coreRevision: preparedIndex?.coreRevision,
+        scope:
+            'kind=month year=${candidate.monthCursor.year} '
+            'month=${candidate.monthCursor.month} source=$source '
+            'temporalGeneration=${accepted.interactionGeneration} '
+            'published=$published sourceRows=0 repositoryRequests=0 indexBuilds=0',
+      ),
+    );
+    return published;
+  }
+
   /// Publishes the existing resident score projection for a renderer-accepted
   /// temporal target.  A segmented target's [DashboardNavigationState] is an
   /// intentionally transient presentation value, so its [effectiveScope] may
@@ -5281,8 +5594,12 @@ final class DashboardCoreController {
     required LedgerDirection direction,
     required LedgerTimeScope timeScope,
     required int temporalGeneration,
+    DashboardNavigationState? navigationState,
   }) {
-    final binding = mindAmountRangeBindingFor(direction);
+    final binding = mindAmountRangeBindingFor(
+      direction,
+      navigationState: navigationState,
+    );
     final canonicalScope = currentQuery.scopeFor(direction);
     final domainScope = QueryAmountRange.domainScope(canonicalScope);
     final base = _mindAmountPreparedBaseFor(domainScope);
@@ -5301,6 +5618,7 @@ final class DashboardCoreController {
       // target method still supplies the exact transient temporal scope.
       ensureMindBehavioralScoreProjection(
         direction: direction,
+        navigationState: navigationState,
         respectAcceptedMindTemporalTarget: false,
       );
     }
@@ -9526,6 +9844,9 @@ final class DashboardCoreController {
         candidate.plane == TimePlane.year) {
       _mindYearHeatmapVisualTemporalTarget = null;
     }
+    if (candidate.plane == TimePlane.month) {
+      _mindMonthHeatmapVisualTemporalTarget = null;
+    }
     _recordNavigationSelection('summaryExperimentPaintedTargetSettled');
     return true;
   }
@@ -12964,12 +13285,17 @@ final class DashboardCoreController {
             'paintedRows=${snapshot.paintedRowCount}',
       ),
     );
-    if (accepted.component == DashboardTemporalAnchorComponent.year &&
-        accepted.candidate.plane == TimePlane.year &&
-        navigation.state.plane == TimePlane.year &&
-        mindYearHeatmap.value != null &&
-        !identical(_mindYearHeatmapVisualTemporalTarget, accepted)) {
-      _admitMindYearHeatmapForSegmentedTarget(
+    final isCurrentMindTemporalTarget =
+        (accepted.candidate.plane == TimePlane.year &&
+            navigation.state.plane == TimePlane.year &&
+            mindYearHeatmap.value != null &&
+            !identical(_mindYearHeatmapVisualTemporalTarget, accepted)) ||
+        (accepted.candidate.plane == TimePlane.month &&
+            navigation.state.plane == TimePlane.month &&
+            mindTemporalHeatmap.value is MindMonthHeatmapFrame &&
+            !identical(_mindMonthHeatmapVisualTemporalTarget, accepted));
+    if (isCurrentMindTemporalTarget) {
+      _admitMindTemporalHeatmapForSegmentedTarget(
         accepted: accepted,
         candidate: accepted.candidate,
         source: 'segmentedExactListPaint',
@@ -14839,6 +15165,23 @@ final class DashboardCoreController {
     // trail an already-visible Day/Month/Year child until rail settlement.
     _publishPreparedMindAmountDomainForScope(frame.scope);
     _publishMindBehavioralScoreForVisibleFrame(frame);
+    final dayScope = frame.scope.timeScope;
+    if (frame.plane == TimePlane.month &&
+        frame.railOpen &&
+        dayScope is DayScope) {
+      // The visible-frame store is the renderer-acknowledged owner for rail
+      // children.  Build the compact Day body from this exact admitted child
+      // rather than waiting for navigation's later canonical rail settle.
+      // The same callback publishes its score above, so neither product can
+      // cross another Flutter frame with an older Day provenance.
+      _installMindDayHeatmapProjection(
+        navigation.state,
+        visibleFrame: frame,
+        selectedDayScope: dayScope,
+        navigationEpoch: frame.navigationEpoch,
+        isStillCurrent: () => identical(visibleFrames.value, frame),
+      );
+    }
     diagnostics.record(
       DashboardInteractionEvent.visibleFramePublished,
       context: _diagnosticContext(frame: frame),
@@ -14888,7 +15231,14 @@ final class DashboardCoreController {
       settings: mindBehavioralScoreSettings.value,
     );
     if (mindBehavioralScore.projection?.identity != expectedProjection) {
-      ensureMindBehavioralScoreProjection(direction: direction);
+      // The visible frame can outlive the focus/query identity that produced
+      // it. Rebuild that membership from the canonical owner once; routing
+      // back through the accepted-visible-Day shortcut here would call this
+      // method again with the same stale frame and recurse indefinitely.
+      ensureMindBehavioralScoreProjection(
+        direction: direction,
+        respectAcceptedMindTemporalTarget: false,
+      );
     }
     final projection = mindBehavioralScore.projection;
     if (projection?.identity != expectedProjection) return;

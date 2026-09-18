@@ -75,6 +75,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindYearHeatmapPresentation,
     this.mindYearHeatmapVisible = false,
     this.mindTemporalHeatmapVisible = false,
+    this.mindTemporalDayVisible = false,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
     this.onMindQueryAmountRangePreviewChanged,
@@ -122,6 +123,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   mindYearHeatmapPresentation;
   final bool mindYearHeatmapVisible;
   final bool mindTemporalHeatmapVisible;
+  final bool mindTemporalDayVisible;
   final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>?
@@ -366,6 +368,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         yearHeatmapPresentation: widget.mindYearHeatmapPresentation,
         showYearHeatmap: widget.mindYearHeatmapVisible,
         showTemporalHeatmap: widget.mindTemporalHeatmapVisible,
+        showTemporalDayHeatmap: widget.mindTemporalDayVisible,
         onQueryAmountRangeRetry: widget.onMindQueryAmountRangeRetry,
         onQueryAmountRangeCommitted: widget.onMindQueryAmountRangeCommitted,
         onQueryAmountRangePreviewChanged:

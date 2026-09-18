@@ -42,6 +42,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.yearHeatmapPresentation,
     this.showYearHeatmap = false,
     this.showTemporalHeatmap = false,
+    this.showTemporalDayHeatmap = false,
     this.onQueryAmountRangeRetry,
     this.onQueryAmountRangeCommitted,
     this.onQueryAmountRangePreviewChanged,
@@ -72,6 +73,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   yearHeatmapPresentation;
   final bool showYearHeatmap;
   final bool showTemporalHeatmap;
+  final bool showTemporalDayHeatmap;
   final VoidCallback? onQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>? onQueryAmountRangePreviewChanged;
@@ -181,7 +183,8 @@ class MindDashboardCoreSurface extends StatelessWidget {
             heatmap != null) ||
         ((resolvedPlane == TimePlane.sum || resolvedPlane == TimePlane.month) &&
             showTemporalHeatmap &&
-            temporalHeatmap != null);
+            temporalHeatmap != null &&
+            !showTemporalDayHeatmap);
     final temporalContent = switch (resolvedPlane) {
       TimePlane.year when showYearHeatmap && heatmap != null =>
         MindYearHeatmapViewport(
@@ -196,11 +199,16 @@ class MindDashboardCoreSurface extends StatelessWidget {
           upperVerticalGestures: upperVerticalGestures,
         ),
       TimePlane.month when showTemporalHeatmap && temporalHeatmap != null =>
-        MindMonthHeatmapViewport(
-          frameListenable: temporalHeatmap!,
-          presentationSettings: yearHeatmapPresentation,
-          upperVerticalGestures: upperVerticalGestures,
-        ),
+        showTemporalDayHeatmap
+            ? MindDayHeatmapViewport(
+                frameListenable: temporalHeatmap!,
+                presentationSettings: yearHeatmapPresentation,
+              )
+            : MindMonthHeatmapViewport(
+                frameListenable: temporalHeatmap!,
+                presentationSettings: yearHeatmapPresentation,
+                upperVerticalGestures: upperVerticalGestures,
+              ),
       _ => const SizedBox.expand(
         key: ValueKey<String>('mind-temporal-content-unavailable'),
       ),

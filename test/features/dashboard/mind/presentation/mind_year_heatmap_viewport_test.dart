@@ -316,7 +316,7 @@ void main() {
       expect(find.text('3 800 Ft'), findsOneWidget);
 
       settings
-        ..setPaletteStyle(MindYearHeatmapPaletteStyle.softRainbow)
+        ..setPaletteStyle(MindYearHeatmapPaletteStyle.meadowGreen)
         ..setShowHeatmapLegend(false)
         ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.monthCards);
       await tester.pump();

@@ -187,15 +187,25 @@ final class MindBehavioralScoreSeriesRequest {
     required this.analyticEndInclusiveEpochDay,
     required this.chartStartInclusiveEpochDay,
     required this.targetEpochDay,
+    this.pointAnalyticStartInclusiveEpochDay,
   }) : assert(analyticStartInclusiveEpochDay <= analyticEndInclusiveEpochDay),
        assert(chartStartInclusiveEpochDay <= targetEpochDay),
        assert(targetEpochDay >= analyticStartInclusiveEpochDay),
-       assert(targetEpochDay <= analyticEndInclusiveEpochDay);
+       assert(targetEpochDay <= analyticEndInclusiveEpochDay),
+       assert(
+         pointAnalyticStartInclusiveEpochDay == null ||
+             pointAnalyticStartInclusiveEpochDay <= targetEpochDay,
+       );
 
   final int analyticStartInclusiveEpochDay;
   final int analyticEndInclusiveEpochDay;
   final int chartStartInclusiveEpochDay;
   final int targetEpochDay;
+
+  /// A Day chart may show 31 days while retaining the point semantics that
+  /// the canonical single-day request already approved.  Other scopes leave
+  /// this null and therefore evaluate their point from [analyticStart].
+  final int? pointAnalyticStartInclusiveEpochDay;
 
   @override
   bool operator ==(Object other) =>
@@ -203,7 +213,9 @@ final class MindBehavioralScoreSeriesRequest {
       other.analyticStartInclusiveEpochDay == analyticStartInclusiveEpochDay &&
       other.analyticEndInclusiveEpochDay == analyticEndInclusiveEpochDay &&
       other.chartStartInclusiveEpochDay == chartStartInclusiveEpochDay &&
-      other.targetEpochDay == targetEpochDay;
+      other.targetEpochDay == targetEpochDay &&
+      other.pointAnalyticStartInclusiveEpochDay ==
+          pointAnalyticStartInclusiveEpochDay;
 
   @override
   int get hashCode => Object.hash(
@@ -211,6 +223,7 @@ final class MindBehavioralScoreSeriesRequest {
     analyticEndInclusiveEpochDay,
     chartStartInclusiveEpochDay,
     targetEpochDay,
+    pointAnalyticStartInclusiveEpochDay,
   );
 }
 
@@ -485,22 +498,25 @@ final class MindBehavioralScoreProjection {
         ? (Stopwatch()..start())
         : null;
     var visited = 0;
-    final points = switch (identity.direction) {
+    List<MindBehavioralScorePoint> pointsFor(
+      MindBehavioralScoreSeriesRequest seriesRequest,
+    ) => switch (identity.direction) {
       LedgerDirection.expense => _expenseSeries(
         range: range,
-        request: request,
+        request: seriesRequest,
         onDayBucketVisited: () => visited += 1,
       ),
       LedgerDirection.income => _incomeChartPoints(
         range: range,
         sampleDays: _sampleEpochDays(
-          startInclusiveEpochDay: request.chartStartInclusiveEpochDay,
-          endInclusiveEpochDay: request.targetEpochDay,
+          startInclusiveEpochDay: seriesRequest.chartStartInclusiveEpochDay,
+          endInclusiveEpochDay: seriesRequest.targetEpochDay,
           maximumPoints: maximumChartPoints,
         ),
         onDayBucketVisited: () => visited += 1,
       ),
     };
+    final points = pointsFor(request);
     final scopedPoints = points
         .where(
           (point) =>
@@ -508,10 +524,25 @@ final class MindBehavioralScoreProjection {
               point.epochDay <= request.targetEpochDay,
         )
         .toList(growable: false);
-    final point = _latestPointAtOrBefore(
-      scopedPoints,
-      targetEpochDay: request.targetEpochDay,
-    );
+    final pointStart = request.pointAnalyticStartInclusiveEpochDay;
+    final point =
+        pointStart == null ||
+            pointStart == request.analyticStartInclusiveEpochDay
+        ? _latestPointAtOrBefore(
+            scopedPoints,
+            targetEpochDay: request.targetEpochDay,
+          )
+        : _latestPointAtOrBefore(
+            pointsFor(
+              MindBehavioralScoreSeriesRequest(
+                analyticStartInclusiveEpochDay: pointStart,
+                analyticEndInclusiveEpochDay: request.targetEpochDay,
+                chartStartInclusiveEpochDay: request.targetEpochDay,
+                targetEpochDay: request.targetEpochDay,
+              ),
+            ),
+            targetEpochDay: request.targetEpochDay,
+          );
     final chartPoints = _chartPointsFor(
       points,
       chartStartInclusiveEpochDay: request.chartStartInclusiveEpochDay,
@@ -519,6 +550,22 @@ final class MindBehavioralScoreProjection {
       maximumPoints: maximumChartPoints,
       fallback: point,
     );
+    // Only the Day presentation requests a distinct point analytic origin.
+    // Its 31-day chart must end at that canonical Day point. Existing scopes
+    // retain their established sparse chart sampling without a synthetic end
+    // point (for example an amount-excluded final day).
+    final endpointChartPoints = List<MindBehavioralScorePoint>.of(
+      chartPoints,
+      growable: true,
+    );
+    if (pointStart != null) {
+      if (endpointChartPoints.isEmpty ||
+          endpointChartPoints.last.epochDay != request.targetEpochDay) {
+        endpointChartPoints.add(point);
+      } else {
+        endpointChartPoints[endpointChartPoints.length - 1] = point;
+      }
+    }
     watch?.stop();
     _sourceWorkCounter.finishPreview(
       dayBucketsVisited: visited,
@@ -535,7 +582,7 @@ final class MindBehavioralScoreProjection {
       chartSeries: MindBehavioralScoreChartSeries(
         startInclusiveEpochDay: request.chartStartInclusiveEpochDay,
         endInclusiveEpochDay: request.targetEpochDay,
-        points: chartPoints,
+        points: endpointChartPoints,
       ),
       seriesRequest: request,
     );

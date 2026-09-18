@@ -5,8 +5,6 @@ enum MindYearHeatmapPaletteStyle {
   fluvi,
   b3mMy3,
   meadowGreen,
-  softRainbow,
-  peachyDelight,
   fluviStretched,
   b3mMy3Stretched;
 
@@ -14,8 +12,6 @@ enum MindYearHeatmapPaletteStyle {
     MindYearHeatmapPaletteStyle.fluvi => 'Fluvi',
     MindYearHeatmapPaletteStyle.b3mMy3 => 'B3M-MY3',
     MindYearHeatmapPaletteStyle.meadowGreen => 'Meadow Green',
-    MindYearHeatmapPaletteStyle.softRainbow => 'Soft Rainbow',
-    MindYearHeatmapPaletteStyle.peachyDelight => 'Peachy Delight',
     MindYearHeatmapPaletteStyle.fluviStretched => 'Fluvi — stretched',
     MindYearHeatmapPaletteStyle.b3mMy3Stretched => 'B3M-MY3 — stretched',
   };
