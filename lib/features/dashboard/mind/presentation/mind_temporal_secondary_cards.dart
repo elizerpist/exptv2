@@ -28,6 +28,7 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final points = frame.dailyRhythmPoints;
+    final fullPoints = frame.fullDailyRhythmPoints;
     final strongest = points.fold<MindAggregateLinePoint>(
       points.first,
       (current, point) => point.total > current.total ? point : current,
@@ -71,6 +72,7 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
                       height: chartHeight,
                       child: _MindMonthRhythmPlot(
                         points: points,
+                        fullPoints: fullPoints,
                         average: average,
                         barColor: barColor,
                       ),
@@ -81,7 +83,12 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
                         _MindTemporalStatValue(
                           keyName: 'mind-month-rhythm-stat-total',
                           label: 'Teljes hónap',
-                          value: QueryMenuFormatters.money(frame.total),
+                          value: QueryMenuFormatters.money(
+                            fullPoints.fold<int>(
+                              0,
+                              (total, point) => total + point.total,
+                            ),
+                          ),
                         ),
                         _MindTemporalStatValue(
                           keyName: 'mind-month-rhythm-stat-active',
@@ -116,11 +123,13 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
 final class _MindMonthRhythmPlot extends StatelessWidget {
   const _MindMonthRhythmPlot({
     required this.points,
+    required this.fullPoints,
     required this.average,
     required this.barColor,
   });
 
   final List<MindAggregateLinePoint> points;
+  final List<MindAggregateLinePoint> fullPoints;
   final double average;
   final Color barColor;
 
@@ -140,6 +149,7 @@ final class _MindMonthRhythmPlot extends StatelessWidget {
             key: const ValueKey<String>('mind-month-rhythm-chart'),
             painter: _MindMonthRhythmPainter(
               points: points,
+              fullPoints: fullPoints,
               average: average,
               barColor: barColor,
             ),
@@ -177,11 +187,13 @@ final class _MindMonthRhythmPlot extends StatelessWidget {
 final class _MindMonthRhythmPainter extends CustomPainter {
   _MindMonthRhythmPainter({
     required this.points,
+    required this.fullPoints,
     required this.average,
     required this.barColor,
   });
 
   final List<MindAggregateLinePoint> points;
+  final List<MindAggregateLinePoint> fullPoints;
   final double average;
   final Color barColor;
 
@@ -199,7 +211,10 @@ final class _MindMonthRhythmPainter extends CustomPainter {
     );
     final maximum = math.max(
       1,
-      points.fold<int>(0, (current, point) => math.max(current, point.total)),
+      fullPoints.fold<int>(
+        0,
+        (current, point) => math.max(current, point.total),
+      ),
     );
     final grid = Paint()
       ..color = FluviVisualTokens.surfaceMuted
@@ -211,9 +226,22 @@ final class _MindMonthRhythmPainter extends CustomPainter {
     if (points.isEmpty || plot.width <= 0 || plot.height <= 0) return;
     final unit = plot.width / points.length;
     final barWidth = math.max(1.0, unit * .58);
+    final fullBar = Paint()..color = FluviVisualTokens.surfaceMuted;
     final bar = Paint()..color = barColor;
     for (var index = 0; index < points.length; index += 1) {
       final point = points[index];
+      final fullPoint = fullPoints[index];
+      final fullHeight = plot.height * fullPoint.total / maximum;
+      final fullRect = Rect.fromLTWH(
+        plot.left + index * unit + (unit - barWidth) / 2,
+        plot.bottom - fullHeight,
+        barWidth,
+        fullHeight,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(fullRect, const Radius.circular(2)),
+        fullBar,
+      );
       final height = plot.height * point.total / maximum;
       final rect = Rect.fromLTWH(
         plot.left + index * unit + (unit - barWidth) / 2,
@@ -259,6 +287,7 @@ final class _MindMonthRhythmPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MindMonthRhythmPainter oldDelegate) =>
       oldDelegate.points != points ||
+      oldDelegate.fullPoints != fullPoints ||
       oldDelegate.average != average ||
       oldDelegate.barColor != barColor;
 }
@@ -322,6 +351,7 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
                       height: chartHeight,
                       child: _MindDayTimelinePlot(
                         events: frame.timelineEvents,
+                        fullEvents: frame.fullTimelineEvents,
                         markerColor: markerColor,
                       ),
                     ),
@@ -349,7 +379,7 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
                           keyName: 'mind-day-timeline-stat-total',
                           label: 'Teljes nap',
                           value:
-                              '${QueryMenuFormatters.money(frame.total)} · ${frame.timelineEvents.length} db',
+                              '${QueryMenuFormatters.money(frame.fullTimelineTotal)} · ${frame.fullTimelineEvents.length} db',
                         ),
                         _MindTemporalStatValue(
                           keyName: 'mind-day-timeline-stat-range',
@@ -385,9 +415,14 @@ String _timeLabel(int minutes) =>
     '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
 final class _MindDayTimelinePlot extends StatelessWidget {
-  const _MindDayTimelinePlot({required this.events, required this.markerColor});
+  const _MindDayTimelinePlot({
+    required this.events,
+    required this.fullEvents,
+    required this.markerColor,
+  });
 
   final List<MindDayTimelineEvent> events;
+  final List<MindDayTimelineEvent> fullEvents;
   final Color markerColor;
 
   @override
@@ -406,6 +441,7 @@ final class _MindDayTimelinePlot extends StatelessWidget {
             key: const ValueKey<String>('mind-day-timeline-chart'),
             painter: _MindDayTimelinePainter(
               events: events,
+              fullEvents: fullEvents,
               markerColor: markerColor,
             ),
           ),
@@ -427,9 +463,14 @@ final class _MindDayTimelinePlot extends StatelessWidget {
 }
 
 final class _MindDayTimelinePainter extends CustomPainter {
-  _MindDayTimelinePainter({required this.events, required this.markerColor});
+  _MindDayTimelinePainter({
+    required this.events,
+    required this.fullEvents,
+    required this.markerColor,
+  });
 
   final List<MindDayTimelineEvent> events;
+  final List<MindDayTimelineEvent> fullEvents;
   final Color markerColor;
 
   @override
@@ -465,17 +506,28 @@ final class _MindDayTimelinePainter extends CustomPainter {
     }
     final maximum = math.max(
       1,
-      events.fold<int>(0, (current, event) => math.max(current, event.total)),
+      fullEvents.fold<int>(
+        0,
+        (current, event) => math.max(current, event.total),
+      ),
     );
+    final fullMarker = Paint()
+      ..color = FluviVisualTokens.surfaceMuted
+      ..strokeWidth = 1.2;
     final marker = Paint()
       ..color = markerColor
       ..strokeWidth = 1.5;
-    for (final event in events) {
+    void drawMarker(
+      MindDayTimelineEvent event,
+      Paint paint, {
+      required bool selected,
+    }) {
       final x = plot.left + plot.width * event.timeMinutes / (24 * 60);
       final stem = plot.height * (.16 + .44 * event.total / maximum);
       final y = axisY - stem;
-      canvas.drawLine(Offset(x, axisY), Offset(x, y), marker);
-      canvas.drawCircle(Offset(x, y), 3.5, marker);
+      canvas.drawLine(Offset(x, axisY), Offset(x, y), paint);
+      canvas.drawCircle(Offset(x, y), selected ? 3.5 : 2.6, paint);
+      if (!selected) return;
       label.text = TextSpan(
         text: _timeLabel(event.timeMinutes),
         style: TextStyle(
@@ -493,11 +545,20 @@ final class _MindDayTimelinePainter extends CustomPainter {
         ),
       );
     }
+
+    for (final event in fullEvents) {
+      drawMarker(event, fullMarker, selected: false);
+    }
+    for (final event in events) {
+      drawMarker(event, marker, selected: true);
+    }
   }
 
   @override
   bool shouldRepaint(covariant _MindDayTimelinePainter oldDelegate) =>
-      oldDelegate.events != events || oldDelegate.markerColor != markerColor;
+      oldDelegate.events != events ||
+      oldDelegate.fullEvents != fullEvents ||
+      oldDelegate.markerColor != markerColor;
 }
 
 final class _MindTimelineLegendDot extends StatelessWidget {

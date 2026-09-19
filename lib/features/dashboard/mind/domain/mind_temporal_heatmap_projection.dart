@@ -161,11 +161,13 @@ final class MindMonthHeatmapFrame implements MindTemporalHeatmapFrame {
     required this.year,
     required this.month,
     required List<MindYearHeatmapDay> days,
+    required List<int> fullDailyTotals,
     required this.activeDayCount,
     required this.total,
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
-  }) : days = List<MindYearHeatmapDay>.unmodifiable(days);
+  }) : days = List<MindYearHeatmapDay>.unmodifiable(days),
+       _fullDailyTotals = List<int>.unmodifiable(fullDailyTotals);
 
   @override
   final MindTemporalHeatmapIdentity identity;
@@ -174,6 +176,7 @@ final class MindMonthHeatmapFrame implements MindTemporalHeatmapFrame {
   final int year;
   final int month;
   final List<MindYearHeatmapDay> days;
+  final List<int> _fullDailyTotals;
   final int activeDayCount;
   final int total;
   final int? minimumNonEmptyTotal;
@@ -191,6 +194,20 @@ final class MindMonthHeatmapFrame implements MindTemporalHeatmapFrame {
           ordinal: index + 1,
           label: '${index + 1}',
           total: days[index].total ?? 0,
+        ),
+        growable: false,
+      );
+
+  /// The same admitted membership before only the live amount-range preview.
+  /// This gives the rhythm page a truthful gray comparison layer without an
+  /// upstream Query mutation or a new financial authority.
+  List<MindAggregateLinePoint> get fullDailyRhythmPoints =>
+      List<MindAggregateLinePoint>.generate(
+        _fullDailyTotals.length,
+        (index) => MindAggregateLinePoint(
+          ordinal: index + 1,
+          label: '${index + 1}',
+          total: _fullDailyTotals[index],
         ),
         growable: false,
       );
@@ -396,6 +413,16 @@ final class MindMonthHeatmapProjection {
           ),
         )
         .toList(growable: false);
+    final fullDailyTotals = _days
+        .map(
+          (bucket) =>
+              bucket.sumWithin(
+                minimum: range.minimumScaled100,
+                maximum: range.maximumScaled100,
+              ) ??
+              0,
+        )
+        .toList(growable: false);
     int? minimum;
     int? maximum;
     var total = 0;
@@ -431,6 +458,7 @@ final class MindMonthHeatmapProjection {
       year: year,
       month: month,
       days: days,
+      fullDailyTotals: fullDailyTotals,
       activeDayCount: activeDays,
       total: total,
       minimumNonEmptyTotal: minimum,
@@ -449,12 +477,16 @@ final class MindDayHeatmapFrame implements MindTemporalHeatmapFrame {
     required this.date,
     required List<MindDayHeatmapHour> hours,
     required List<MindDayTimelineEvent> timelineEvents,
+    required List<MindDayTimelineEvent> fullTimelineEvents,
     required this.activeHourCount,
     required this.total,
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
   }) : hours = List<MindDayHeatmapHour>.unmodifiable(hours),
-       timelineEvents = List<MindDayTimelineEvent>.unmodifiable(timelineEvents);
+       timelineEvents = List<MindDayTimelineEvent>.unmodifiable(timelineEvents),
+       fullTimelineEvents = List<MindDayTimelineEvent>.unmodifiable(
+         fullTimelineEvents,
+       );
 
   @override
   final MindTemporalHeatmapIdentity identity;
@@ -467,6 +499,11 @@ final class MindDayHeatmapFrame implements MindTemporalHeatmapFrame {
   /// captured from the admitted prepared contribution set at projection build;
   /// they never cause a ledger or repository read from presentation.
   final List<MindDayTimelineEvent> timelineEvents;
+
+  /// Exact selected-day markers before the live amount-range refinement.
+  final List<MindDayTimelineEvent> fullTimelineEvents;
+  int get fullTimelineTotal =>
+      fullTimelineEvents.fold<int>(0, (total, event) => total + event.total);
   final int activeHourCount;
   final int total;
   final int? minimumNonEmptyTotal;
@@ -598,6 +635,20 @@ final class MindDayHeatmapProjection {
             final byTime = left.timeMinutes.compareTo(right.timeMinutes);
             return byTime != 0 ? byTime : left.ordinal.compareTo(right.ordinal);
           });
+    final fullTimelineEvents =
+        _timelineEvents
+            .map(
+              (event) => MindDayTimelineEvent(
+                ordinal: event.ordinal,
+                timeMinutes: event.timeMinutes,
+                total: event.total,
+              ),
+            )
+            .toList(growable: false)
+          ..sort((left, right) {
+            final byTime = left.timeMinutes.compareTo(right.timeMinutes);
+            return byTime != 0 ? byTime : left.ordinal.compareTo(right.ordinal);
+          });
     return MindDayHeatmapFrame(
       identity: identity,
       range: range,
@@ -621,6 +672,7 @@ final class MindDayHeatmapProjection {
         );
       }, growable: false),
       timelineEvents: timelineEvents,
+      fullTimelineEvents: fullTimelineEvents,
       activeHourCount: activeHours,
       total: total,
       minimumNonEmptyTotal: minimum,

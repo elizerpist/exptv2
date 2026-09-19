@@ -203,6 +203,50 @@ void main() {
   );
 
   test(
+    'MONTH-RHYTHM-02 RED: Month keeps slider-before daily comparison bars resident beside the live preview',
+    () {
+      final projection = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2025-05',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2025-05',
+        ),
+        year: 2025,
+        month: 5,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _contribution(0, 100, const LocalDate(year: 2025, month: 5, day: 2)),
+          _contribution(1, 700, const LocalDate(year: 2025, month: 5, day: 2)),
+          _contribution(2, 900, const LocalDate(year: 2025, month: 5, day: 9)),
+        ],
+      );
+      final frame = projection.preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100,
+          maximumScaled100: 1000,
+          lowerScaled100: 500,
+          upperScaled100: 800,
+        ),
+      );
+
+      expect(
+        frame.fullDailyRhythmPoints
+            .where((point) => point.total > 0)
+            .map((point) => (point.ordinal, point.total)),
+        <(int, int)>[(2, 800), (9, 900)],
+        reason:
+            'The gray comparison remains the admitted membership before only the live slider refinement.',
+      );
+      expect(
+        frame.dailyRhythmPoints
+            .where((point) => point.total > 0)
+            .map((point) => (point.ordinal, point.total)),
+        <(int, int)>[(2, 700)],
+      );
+    },
+  );
+
+  test(
     'RED MONTH-HM-02: selected Month projects real daily filtered totals',
     () {
       final projection = MindMonthHeatmapProjection.build(
@@ -416,6 +460,43 @@ void main() {
             .having((event) => event.ordinal, 'ordinal', 5),
       ]);
       expect(projection.preparedContributionTouches, 5);
+    },
+  );
+
+  test(
+    'DAY-TIMELINE-02 RED: Day keeps resident slider-before events for the gray comparison series',
+    () {
+      const selected = LocalDate(year: 2026, month: 7, day: 14);
+      final projection = MindDayHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|day:2026-07-14',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'day:2026-07-14',
+        ),
+        date: selected,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _contribution(0, 100, selected, localTimeMinutes: 15),
+          _contribution(1, 700, selected, localTimeMinutes: 721),
+          _contribution(2, 900, selected, localTimeMinutes: 1438),
+        ],
+      );
+      final frame = projection.preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100,
+          maximumScaled100: 1000,
+          lowerScaled100: 500,
+          upperScaled100: 800,
+        ),
+      );
+
+      expect(frame.fullTimelineEvents.map((event) => event.total), <int>[
+        100,
+        700,
+        900,
+      ]);
+      expect(frame.timelineEvents.map((event) => event.total), <int>[700]);
+      expect(frame.fullTimelineTotal, 1700);
     },
   );
 }
