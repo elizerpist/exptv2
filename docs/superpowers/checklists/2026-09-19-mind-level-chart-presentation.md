@@ -25,7 +25,7 @@
 | LEVEL-03 | §A, screenshot | host + Month viewport | Month grid is mounted with positive bounds; unavailable body and Day grid are absent | widget bounds | DONE |
 | LEVEL-04 | §12 | Core score/body contract | body, score, chart endpoint and colour use one accepted Month identity | mounted provenance test | DONE |
 | LEVEL-05 | §13 | Core temporal coordinator | Month → Day → Month round trips never revive a stale Day frame | latest-wins Core test | DONE |
-| LEVEL-06 | §13 | Core temporal coordinator | rapid child/level/component input paints only latest target | targeted Core test | PARTIAL |
+| LEVEL-06 | §13 | Core temporal coordinator | rapid child/level/component input paints only latest target | `e19e5a6` latest-wins Core test; final focused suite | DONE |
 | LEVEL-07 | §§14–15 | Core prepared data | level publication uses zero repository/index/Query/scene acquisition | work-counter test | DONE |
 | LEVEL-08 | §13 | existing Month/Day paths | Month component and Day fast-path positive controls remain green | existing focused tests | DONE |
 
@@ -37,7 +37,7 @@
 | SCALE-02 | §14D | central resolver | five existing ten-stop palettes are byte-compatible at anchors and off-anchor samples | resolver baseline test | DONE |
 | SCALE-03 | §14E | central resolver | each specified 20-stop list resolves exactly at `index / 19` | resolver unit test | DONE |
 | SCALE-04 | §14F–G | resolver + viewports | selected resolution drives Sum, Year, Month, Day and legend count | all-plane widget test | DONE |
-| SCALE-05 | §B, §15 | presentation controller | 10↔20 changes paint only; financial frame, Query, Time, source/index/projection work remain unchanged | identity/counter test | PARTIAL |
+| SCALE-05 | §B, §15 | presentation controller | 10↔20 changes paint only; financial frame, Query, Time, source/index/projection work remain unchanged | `e19e5a6` production Core identity/counter test; final focused suite | DONE |
 | SCALE-06 | §21 | palette contract | exactly five palette identities remain; removed palettes do not reappear | enum/tuner test | DONE |
 
 ## Legend placement and body geometry
@@ -60,7 +60,7 @@
 | CHART-04 | §C, §14O–P | chart presentation context | exact Year/Sum/Month/Day bottom labels reuse the Hungarian formatter | widget test | DONE |
 | CHART-05 | §C, §12.6 | chart-local lifecycle | immutable series/domain change clears selected state synchronously; same series survives Header collapse | widget test | DONE |
 | CHART-06 | §C, §12.7 | Header gesture coexistence | labels hidden/visible are independent; vertical chart drag selects nothing and still drives Header gesture | widget test | DONE |
-| CHART-07 | §15 | chart-local state | repeated taps cause zero score/Core/Query/Time/repository/index work | counter test | PARTIAL |
+| CHART-07 | §15 | chart-local state | repeated taps cause zero score/Core/Query/Time/repository/index work | `e19e5a6` production Core counter test; final focused suite | DONE |
 | CHART-08 | §C | chart layout | edge labels stay in Header bounds without altering real crosshair X | widget bounds test | DONE |
 
 ## Summary startup defaults
@@ -77,9 +77,9 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| SAFE-01 | §11, §15 | protected systems | no diffs in Time/Avatar physics/controller/position, Query semantics, score/color maths, Room/Kotlin/schema, LogBox, Budget, Day aggregation, Year inspection or milestone file | diff/boundary review | PARTIAL |
-| VAL-01 | §§10,13,17 | all changed features | every production behavior has observed current-source RED before GREEN | command log | PARTIAL |
+| SAFE-01 | §11, §15 | protected systems | no diffs in Time/Avatar physics/controller/position, Query semantics, score/color maths, Room/Kotlin/schema, LogBox, Budget, Day aggregation, Year inspection or milestone file | c1b12..5893 diff and boundary review | DONE |
+| VAL-01 | §§10,13,17 | all changed features | every production behavior has observed current-source RED before GREEN | committed RED/GREEN tests, including post-default narrow-layout RED | DONE |
 | VAL-02 | §17 | Flutter suites | focused tests, analyzer, fast suite, boundary verifier and diff check pass | Ubuntu/proot output | DONE |
-| VAL-03 | §§18–19 | commits/journal | application commits have factual separate journal-only evidence, final app tip triggers build | git audit | PARTIAL |
+| VAL-03 | §§18–19 | commits/journal | application commits have factual separate journal-only evidence, final app tip triggers build | `git show` audit; exact `5893b456` first pushed for workflow 35436924400 | DONE |
 | VAL-04 | §19 | CI/APK/SCIP | each CI job is reported independently; normal APK embeds exact app SHA and final SCIP indexes it | workflow/artifact/manifest | NOT DONE |
 | VAL-05 | §21 | user validation | Android physical acceptance remains user-only | user report | NOT DONE |
