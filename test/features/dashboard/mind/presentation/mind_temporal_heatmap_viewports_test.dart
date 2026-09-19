@@ -130,7 +130,7 @@ void main() {
         findsWidgets,
       );
 
-      settings..setSumMonthLabelPlacement(
+      settings.setSumMonthLabelPlacement(
         MindSumMonthLabelPlacement.insideMonthCells,
       );
       await tester.pump();
