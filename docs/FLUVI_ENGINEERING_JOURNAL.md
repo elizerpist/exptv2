@@ -237,6 +237,12 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - The guard proves every rail-closed return immediately has `MonthScope`, a `MindMonthHeatmapFrame` for June 2027, a mounted Month grid, and no Day grid; every reopened rail has the converse Day frame/grid. Resident-data invariants remain `repository.prepareCalls` unchanged and identical prepared-index object identity. The focused test passes in Ubuntu proot.
 - No production source, Time/Avatar behavior, Query semantics, score algorithm, or additional notifier changed. Physical validation remains: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Avatar fixture startup-state audit
+
+- Test commit `641fd6d5` resolves the fast-suite Avatar liveness failures without changing Avatar/Core production code. Ten physical Avatar cases had implicitly inherited the former Legacy Summary geometry; under the new Segmented/Mirrored product startup they could prepare/canonicalize the target yet miss the fixture's old painted-handle condition.
+- Both shared `CoreDashboard` mount factories in `dashboard_avatar_target_liveness_test.dart` now explicitly request `SummaryPillVariant.legacy`. The dedicated file passes all 10 cases, including cold, persistent, sparse, Month/Day startup sequences, final-target replacement and exact resource preparation. First-frame product-default coverage remains unparameterized elsewhere.
+- No Time/Avatar controller, physics, cache, scene preparation, Query, score, production layout, or semantic owner changed. Physical validation remains: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
