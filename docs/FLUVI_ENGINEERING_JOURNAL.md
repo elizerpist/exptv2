@@ -224,6 +224,13 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Focused validation in Ubuntu proot: SUMMARY-DEFAULT-03/04 CoreDashboard test PASS; legacy→segmented footprint fixture PASS; summary controller/presentation and Header tuner focused tests PASS; Dart formatting and `git diff --check` PASS.
 - **Still pending:** final full suite/analyzer/Actions/human diagnostic APK/final exact-source SCIP and user device validation. Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Summary-default fixture and structural-range test alignment
+
+- Application/test commit `beb24681` keeps the new product default (`segmented` + `mirrored`) intact while making existing CoreDashboard fixtures declare their intended Legacy source whenever they specifically exercise the Legacy Summary shell, chevron/rail, narrow geometry, or Legacy→Segmented transition. The production default remains covered separately by the unparameterized first-frame test.
+- The updated full `core_dashboard_test.dart` passes 34 tests in Ubuntu proot. The former 14 aggregate failures were audited rather than labelled inherited: they were implicit Legacy fixture starts. The 206px collapse fixture now explicitly starts Legacy, and the mirrored Segmented background probe uses its actual left-side unassigned inset.
+- A pre-existing range test asserted that a ready all-time Query facet would mount the Mind compact slider even while its matching Year/Month structural amount domain was absent. The Core owner deliberately rejects that false fallback. The corrected test passes the lifecycle loader into production composition and proves the control stays unavailable rather than rendering an incorrect all-time range; range-mount/hit-geometry coverage remains in the dedicated mounted Mind range tests.
+- No production behavior, Query semantics, score calculation, Time/Avatar motion owners, or dashboard layout algorithm changed in this commit. Physical validation remains: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
