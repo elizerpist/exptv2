@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_c
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_scene_window.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -65,6 +66,7 @@ void main() {
             controller: core,
             modeController: mode,
             categoryCollection: categories,
+            initialSummaryPillVariant: SummaryPillVariant.legacy,
           ),
         );
         // FakeAsync otherwise repeatedly drains the scheduler's rejected idle
@@ -703,6 +705,7 @@ class _PhysicalAvatarSequence {
         controller: core,
         modeController: mode,
         categoryCollection: categories,
+        initialSummaryPillVariant: SummaryPillVariant.legacy,
       ),
       // The open day rail and focused-query chips leave a zero-height inner
       // LogBox at 412x892. Keep production geometry unchanged and give this
