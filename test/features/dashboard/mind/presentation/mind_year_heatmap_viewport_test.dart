@@ -68,6 +68,253 @@ void main() {
     },
   );
 
+  test(
+    'YEAR-BAR-01/02/03 RED: a Year frame exposes twelve full-versus-filtered directional bars and a zero-based nice scale',
+    () {
+      final aggregates =
+          MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+            year: 2025,
+            incomeEntries: <DashboardLedgerEntry>[
+              _directionEntry(
+                'income-jan',
+                300000,
+                const LocalDate(year: 2025, month: 1, day: 2),
+                'income',
+              ),
+              _directionEntry(
+                'income-feb',
+                700000,
+                const LocalDate(year: 2025, month: 2, day: 2),
+                'income',
+              ),
+            ],
+            expenseEntries: <DashboardLedgerEntry>[
+              _entry(
+                'expense-jan-full',
+                1000000,
+                const LocalDate(year: 2025, month: 1, day: 2),
+              ),
+              _entry(
+                'expense-feb-full',
+                5000000,
+                const LocalDate(year: 2025, month: 2, day: 2),
+              ),
+            ],
+          );
+      final expense = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'expense|category:food|year:2025',
+          indexGeneration: 1,
+          coreRevision: 1,
+          year: 2025,
+          navigationEpoch: 1,
+        ),
+        entries: <DashboardLedgerEntry>[
+          _entry(
+            'food-jan',
+            400000,
+            const LocalDate(year: 2025, month: 1, day: 3),
+          ),
+          _entry(
+            'food-feb',
+            1000000,
+            const LocalDate(year: 2025, month: 2, day: 3),
+          ),
+        ],
+        monthlyAggregates: aggregates,
+      ).preview(range);
+
+      final expenseBars = MindYearHeatmapPartialBarSeries.fromFrame(expense);
+      expect(expenseBars.values, hasLength(12));
+      expect(expenseBars.values[0].fullAmount, 1000000);
+      expect(expenseBars.values[0].filteredAmount, 400000);
+      expect(expenseBars.values[1].fullAmount, 5000000);
+      expect(expenseBars.values[1].filteredAmount, 1000000);
+      expect(expenseBars.values[2].fullAmount, 0);
+      expect(expenseBars.values[2].filteredAmount, 0);
+      expect(expenseBars.scale.levels.first, 0);
+      expect(expenseBars.scale.top, greaterThanOrEqualTo(5000000));
+
+      final income = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'income|partner:salary|year:2025',
+          indexGeneration: 1,
+          coreRevision: 2,
+          year: 2025,
+          navigationEpoch: 2,
+        ),
+        entries: <DashboardLedgerEntry>[
+          _directionEntry(
+            'salary-jan',
+            300000,
+            const LocalDate(year: 2025, month: 1, day: 3),
+            'income',
+          ),
+          _directionEntry(
+            'salary-feb',
+            200000,
+            const LocalDate(year: 2025, month: 2, day: 3),
+            'income',
+          ),
+        ],
+        monthlyAggregates: aggregates,
+      ).preview(range);
+      final incomeBars = MindYearHeatmapPartialBarSeries.fromFrame(income);
+      expect(incomeBars.values[0].fullAmount, 300000);
+      expect(incomeBars.values[0].filteredAmount, 300000);
+      expect(incomeBars.values[1].fullAmount, 700000);
+      expect(incomeBars.values[1].filteredAmount, 200000);
+    },
+  );
+
+  testWidgets(
+    'YEAR-BAR-04 RED: the annual heatmap and partial-bar pages share one frame and leave the Year scroll on page zero',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final scrollController = ScrollController();
+      addTearDown(frame.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                scrollController: scrollController,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final admitted = frame.value;
+      final pager = find.byKey(
+        const ValueKey<String>('mind-year-heatmap-pager'),
+      );
+      expect(pager, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-page-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-grid')),
+        findsOneWidget,
+      );
+
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-page-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-partial-bar-chart')),
+        findsOneWidget,
+      );
+      expect(frame.value, same(admitted));
+      expect(find.text('J'), findsNWidgets(3));
+      expect(find.text('D'), findsOneWidget);
+
+      await tester.drag(pager, const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-page-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-grid')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'YEAR-BAR-05: the secondary page consumes the current range-preview frame without a second Query path',
+    (tester) async {
+      final aggregates =
+          MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+            year: 2025,
+            incomeEntries: const <DashboardLedgerEntry>[],
+            expenseEntries: <DashboardLedgerEntry>[
+              _entry(
+                'full-jan',
+                600000,
+                const LocalDate(year: 2025, month: 1, day: 2),
+              ),
+            ],
+          );
+      final projection = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'expense|category:food|year:2025',
+          indexGeneration: 1,
+          coreRevision: 1,
+          year: 2025,
+          navigationEpoch: 1,
+        ),
+        entries: <DashboardLedgerEntry>[
+          _entry(
+            'food-low',
+            100000,
+            const LocalDate(year: 2025, month: 1, day: 3),
+          ),
+          _entry(
+            'food-high',
+            500000,
+            const LocalDate(year: 2025, month: 1, day: 4),
+          ),
+        ],
+        monthlyAggregates: aggregates,
+      );
+      final frame = ValueNotifier(projection.preview(range));
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+      final pager = find.byKey(
+        const ValueKey<String>('mind-year-heatmap-pager'),
+      );
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-page-1')),
+        findsOneWidget,
+      );
+      MindYearHeatmapPartialBarPainter painter() =>
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(
+                      const ValueKey<String>('mind-year-partial-bar-chart'),
+                    ),
+                  )
+                  .painter!
+              as MindYearHeatmapPartialBarPainter;
+      expect(painter().series.values.first.filteredAmount, 600000);
+
+      frame.value = projection.preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 1000000,
+          lowerScaled100: 450000,
+          upperScaled100: 1000000,
+        ),
+      );
+      await tester.pump();
+      expect(painter().series.values.first.fullAmount, 600000);
+      expect(painter().series.values.first.filteredAmount, 500000);
+    },
+  );
+
   testWidgets(
     'RED YEAR-6R-01: every Year MonthCard reserves the same six-row envelope',
     (tester) async {
@@ -1316,3 +1563,18 @@ DashboardLedgerEntry _entry(String id, int amount, LocalDate date) =>
       bookedLocalEpochDay: date.epochDay,
       bookedLocalTimeMinutes: 0,
     );
+
+DashboardLedgerEntry _directionEntry(
+  String id,
+  int amount,
+  LocalDate date,
+  String direction,
+) => DashboardLedgerEntry(
+  id: id,
+  partnerId: 'p',
+  categoryId: 'c',
+  direction: direction,
+  amountMinor: amount,
+  bookedLocalEpochDay: date.epochDay,
+  bookedLocalTimeMinutes: 0,
+);

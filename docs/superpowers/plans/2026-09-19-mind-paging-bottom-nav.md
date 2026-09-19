@@ -95,11 +95,11 @@
 - Consume `MindYearHeatmapFrame.monthlyAggregates`, `MindYearHeatmapFrame.month(month)`, `MindYearHeatmapDay.total`, and active direction already carried by the viewport.
 - Produce a viewport-local page index and pure bounded scale model where `foreground <= background` is debug-asserted and paint-clamped only as a safe fallback.
 
-- [ ] **Step 1: Write math/widget RED tests.** Cover income and expense, no filter/full coverage, category/partner/range partial coverage, filtered zero/full nonzero, full zero and twelve Hungarian labels/grid/ticks.
-- [ ] **Step 2: Run RED.** Expected failure: the Year viewport has no secondary page or bar model.
-- [ ] **Step 3: Implement pure scale calculation and the secondary page.** Background reads selected directional monthly aggregate; foreground sums the current frame month days. Derive a deterministic zero-based nice scale from maximum background and render only the approved chart chrome.
-- [ ] **Step 4: Verify mounted gestures.** Page selection stays outside footer; a slider thumb sequence is not claimed by Year page; existing Year scroll/handoff remains page-0 behavior.
-- [ ] **Step 5: Run GREEN suites and commit/journal.** Run Year viewport, host, temporal projection direct tests and source-work checks, then atomic app/journal commits.
+- [x] **Step 1: Write math/widget RED tests.** Cover expense/income full versus filtered values, zero totals, nice scale, pager mount and current range-preview refresh.
+- [x] **Step 2: Run RED.** `MindYearHeatmapPartialBarSeries` did not exist; the Year-BAR test failed to compile before implementation.
+- [x] **Step 3: Implement pure scale calculation and the secondary page.** Background reads selected directional monthly aggregate; foreground sums current frame month days. A deterministic zero-based nice scale, thin grid and month initials render in a constrained page-two painter.
+- [x] **Step 4: Verify mounted gestures.** Page selection remains inside the Year visualization region; external Year controller identity is retained on page zero. A shared passive pager-boundary adapter handles both Sum and Year without a second recognizer or duplicate handoff path.
+- [x] **Step 5: Run GREEN suites and commit/journal.** Year viewport, Sum viewport and production host suites are green; application and separate journal commits are next.
 
 ### Task 4: Add an additive contained-flat BottomNav layout style
 

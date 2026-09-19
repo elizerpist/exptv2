@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../presentation/dashboard_paged_vertical_boundary_handoff.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
@@ -87,8 +87,7 @@ final class _MindSumHeatmapContent extends StatefulWidget {
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
-  State<_MindSumHeatmapContent> createState() =>
-      _MindSumHeatmapContentState();
+  State<_MindSumHeatmapContent> createState() => _MindSumHeatmapContentState();
 }
 
 /// Format a whole-forint annual total for the compact, read-only Mind year
@@ -98,25 +97,19 @@ String formatMindCompactForints(int forints) {
   final absolute = forints.abs();
   final sign = forints < 0 ? '-' : '';
   if (absolute >= 1000000) {
-    final millions = (absolute / 1000000).toStringAsFixed(2).replaceAll(
-      '.',
-      ',',
-    );
+    final millions = (absolute / 1000000)
+        .toStringAsFixed(2)
+        .replaceAll('.', ',');
     return '$sign$millions M Ft';
   }
   if (absolute >= 1000) return '$sign${(absolute / 1000).round()} k Ft';
   return '$forints Ft';
 }
 
-final class _MindSumHeatmapContentState
-    extends State<_MindSumHeatmapContent> {
+final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   late final PageController _pageController;
   late final ScrollController _heatmapScrollController;
   late final ScrollController _lineScrollController;
-  int? _handoffPointer;
-  Offset? _handoffOrigin;
-  Offset? _lastPointerPosition;
-  bool _isDirectVerticalHandoff = false;
 
   @override
   void initState() {
@@ -140,7 +133,6 @@ final class _MindSumHeatmapContentState
 
   @override
   void dispose() {
-    _endDirectVerticalHandoff(cancelled: true);
     _pageController.dispose();
     _heatmapScrollController.dispose();
     _lineScrollController.dispose();
@@ -152,71 +144,6 @@ final class _MindSumHeatmapContentState
     return (page ?? 0).round() == 1
         ? _lineScrollController
         : _heatmapScrollController;
-  }
-
-  bool _activePageCanHandOff(double viewportDeltaY) {
-    final controller = _activePageScrollController;
-    if (!controller.hasClients) return false;
-    final position = controller.position;
-    if (position.maxScrollExtent == 0) return true;
-    if (viewportDeltaY < 0) {
-      return position.pixels >= position.maxScrollExtent;
-    }
-    if (viewportDeltaY > 0) {
-      return position.pixels <= position.minScrollExtent;
-    }
-    return false;
-  }
-
-  void _onPagerPointerDown(PointerDownEvent event) {
-    _handoffPointer = event.pointer;
-    _handoffOrigin = event.position;
-    _lastPointerPosition = event.position;
-  }
-
-  void _onPagerPointerMove(PointerMoveEvent event) {
-    if (event.pointer != _handoffPointer) return;
-    final origin = _handoffOrigin;
-    final previous = _lastPointerPosition;
-    _lastPointerPosition = event.position;
-    if (origin == null || previous == null) return;
-    final travel = event.position - origin;
-    if (!_isDirectVerticalHandoff) {
-      if (travel.distance < kTouchSlop ||
-          travel.dy.abs() <= travel.dx.abs() ||
-          !_activePageCanHandOff(travel.dy)) {
-        return;
-      }
-      _isDirectVerticalHandoff = true;
-      widget.upperVerticalGestures?.begin();
-    }
-    widget.upperVerticalGestures?.dragByViewport(event.position.dy - previous.dy);
-  }
-
-  void _onPagerPointerUp(PointerUpEvent event) {
-    if (event.pointer != _handoffPointer) return;
-    _endDirectVerticalHandoff(cancelled: false);
-    _handoffPointer = null;
-    _handoffOrigin = null;
-    _lastPointerPosition = null;
-  }
-
-  void _onPagerPointerCancel(PointerCancelEvent event) {
-    if (event.pointer != _handoffPointer) return;
-    _endDirectVerticalHandoff(cancelled: true);
-    _handoffPointer = null;
-    _handoffOrigin = null;
-    _lastPointerPosition = null;
-  }
-
-  void _endDirectVerticalHandoff({required bool cancelled}) {
-    if (!_isDirectVerticalHandoff) return;
-    _isDirectVerticalHandoff = false;
-    if (cancelled) {
-      widget.upperVerticalGestures?.cancel();
-    } else {
-      widget.upperVerticalGestures?.end();
-    }
   }
 
   @override
@@ -250,18 +177,9 @@ final class _MindSumHeatmapContentState
           ),
           const SizedBox(height: 5),
           Expanded(
-            child: Listener(
-              // PageView prevents a bounded child ListView from emitting its
-              // usual OverscrollNotification. This observer owns no gesture:
-              // only a vertical, slop-clearing sequence at the active page's
-              // actual outgoing boundary is forwarded to the existing
-              // Header-expansion coordinator. The normal ListView continues
-              // to own every in-bounds vertical scroll sequence.
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: _onPagerPointerDown,
-              onPointerMove: _onPagerPointerMove,
-              onPointerUp: _onPagerPointerUp,
-              onPointerCancel: _onPagerPointerCancel,
+            child: DashboardPagedVerticalBoundaryHandoff(
+              upperVerticalGestures: widget.upperVerticalGestures,
+              activePageScrollController: () => _activePageScrollController,
               child: PageView(
                 key: const ValueKey<String>('mind-sum-heatmap-pager'),
                 controller: _pageController,
@@ -389,41 +307,41 @@ final class _MindSumLinePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView.separated(
-      key: const ValueKey<String>('mind-sum-line-scroll'),
-      controller: scrollController,
-      padding: EdgeInsets.zero,
-      itemCount: frame.years.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final year = frame.years[index];
-        final lineColor = MindYearHeatmapPaletteResolver.resolveTile(
-          style: paletteStyle,
-          isEmpty: false,
-          intensity: 1,
-          paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
-          scaleResolution: scaleResolution,
-        ).background;
-        return Column(
-          key: ValueKey<String>('mind-sum-line-year-$year'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _MindSumYearHeader(frame: frame, year: year, page: 'line'),
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 86,
-              child: CustomPaint(
-                key: ValueKey<String>('mind-sum-line-chart-$year'),
-                painter: MindSumYearTrendPainter(
-                  year: year,
-                  points: frame.dailyPointsForYear(year),
-                  lineColor: lineColor,
-                ),
+    key: const ValueKey<String>('mind-sum-line-scroll'),
+    controller: scrollController,
+    padding: EdgeInsets.zero,
+    itemCount: frame.years.length,
+    separatorBuilder: (_, _) => const SizedBox(height: 8),
+    itemBuilder: (context, index) {
+      final year = frame.years[index];
+      final lineColor = MindYearHeatmapPaletteResolver.resolveTile(
+        style: paletteStyle,
+        isEmpty: false,
+        intensity: 1,
+        paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
+        scaleResolution: scaleResolution,
+      ).background;
+      return Column(
+        key: ValueKey<String>('mind-sum-line-year-$year'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _MindSumYearHeader(frame: frame, year: year, page: 'line'),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 86,
+            child: CustomPaint(
+              key: ValueKey<String>('mind-sum-line-chart-$year'),
+              painter: MindSumYearTrendPainter(
+                year: year,
+                points: frame.dailyPointsForYear(year),
+                lineColor: lineColor,
               ),
             ),
-          ],
-        );
-      },
-    );
+          ),
+        ],
+      );
+    },
+  );
 }
 
 final class _MindSumYearHeader extends StatelessWidget {
@@ -494,11 +412,8 @@ final class MindSumYearTrendPainter extends CustomPainter {
   final List<MindSumHeatmapDailyPoint> points;
   final Color lineColor;
 
-  List<double> get monthBoundaryFractions => List<double>.generate(
-    11,
-    (index) => (index + 1) / 12,
-    growable: false,
-  );
+  List<double> get monthBoundaryFractions =>
+      List<double>.generate(11, (index) => (index + 1) / 12, growable: false);
 
   @override
   void paint(Canvas canvas, Size size) {

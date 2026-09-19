@@ -135,7 +135,9 @@ void main() {
       final interiorGesture = await tester.startGesture(
         tester.getCenter(scroll),
       );
-      await interiorGesture.moveBy(const Offset(0, -80));
+      await interiorGesture.moveBy(const Offset(0, -20));
+      await tester.pump();
+      await interiorGesture.moveBy(const Offset(0, -60));
       await tester.pump();
       expect(scrollable.position.pixels, greaterThan(0));
       expect(expansion.isDragging, isFalse);

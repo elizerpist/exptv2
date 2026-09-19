@@ -48,10 +48,10 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| YEAR-BAR-01 | §§4,13E | Year viewport/read model | page 1 has exactly 12 aligned background/foreground bars; gray background uses selected-direction full `monthlyAggregates` | mounted income/expense test | NOT DONE |
-| YEAR-BAR-02 | §§4,14E | Year viewport | foreground is current `frame.month(month)` sum, including focus/search and amount preview; no filter fully covers background | filter/range math test | NOT DONE |
-| YEAR-BAR-03 | §13F | chart scale | zero totals are safe; monthly initials, zero baseline, readable nice full-total scale and horizontal grid lines render | pure scale + widget test | NOT DONE |
-| YEAR-BAR-04 | §§4,15 | ownership | preview is read-only bounded frame derivation; no second Query/repository/raw-row scan | counter/source audit | NOT DONE |
+| YEAR-BAR-01 | §§4,13E | Year viewport/read model | page 1 has exactly 12 aligned background/foreground bars; gray background uses selected-direction full `monthlyAggregates` | mounted income/expense test | DONE |
+| YEAR-BAR-02 | §§4,14E | Year viewport | foreground is current `frame.month(month)` sum, including focus/search and amount preview; no filter fully covers background | filter/range math test | DONE |
+| YEAR-BAR-03 | §13F | chart scale | zero totals are safe; monthly initials, zero baseline, readable nice full-total scale and horizontal grid lines render | pure scale + widget test | PARTIAL — pure zero-based nice scale and mounted month initials/grid paint are green; focused raster/golden review remains pending. |
+| YEAR-BAR-04 | §§4,15 | ownership | preview is read-only bounded frame derivation; no second Query/repository/raw-row scan | counter/source audit | PARTIAL — page-two range-preview test consumes only a replacement immutable frame; final Core/repository counter evidence remains package-level work. |
 
 ## Additive BottomNav style
 
