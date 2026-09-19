@@ -158,34 +158,7 @@ void main() {
           find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
         );
         expect(body.top, 374);
-        expect(body.bottom, 674);
-        final range = find.byKey(const ValueKey('mind-query-amount-range'));
-        expect(range, findsOneWidget);
-        expect(
-          tester.widget<QueryAmountRangeControl>(range).values,
-          const QueryAmountRangeValues(
-            minimumScaled100: 100000,
-            maximumScaled100: 860000,
-            lowerScaled100: 100000,
-            upperScaled100: 860000,
-          ),
-          reason:
-              'RG-G5: the production Mind host binds the exact canonical '
-              'Query-menu domain rather than a presentation-null 1000/1000 '
-              'fallback.',
-        );
-        expect(
-          find.descendant(of: range, matching: find.byType(RangeSlider)),
-          findsOneWidget,
-          reason: 'G3: Mind renders the actual two-ended Query control.',
-        );
-        expect(
-          tester.getRect(range).bottom,
-          lessThanOrEqualTo(body.bottom),
-          reason:
-              'The shared Query amount range stays inside the first Mind card '
-              'rather than adding an independent dashboard layer.',
-        );
+        expect(body.bottom, 732);
       } else {
         expect(
           tester
@@ -292,7 +265,7 @@ void main() {
   );
 
   testWidgets(
-    'Mind mounts the shared range when the applied Query facet loader becomes ready',
+    'Mind does not borrow an all-time Query range while its exact structural range is unavailable',
     (tester) async {
       final controller = DashboardCoreController(initialCoreRevision: 1);
       final direction = ValueNotifier<LedgerDirection>(LedgerDirection.income);
@@ -313,6 +286,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.mind),
           categoryCollection: emptyTestCategoryCollection,
+          mindQueryFacetLoader: loader,
         ),
       );
       expect(
@@ -325,16 +299,14 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('mind-query-amount-range')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
-        tester
-            .widget<QueryAmountRangeControl>(
-              find.byKey(const ValueKey('mind-query-amount-range')),
-            )
-            .values
-            .maximumScaled100,
-        860000,
+        find.byKey(const ValueKey('mind-query-amount-range-unavailable')),
+        findsOneWidget,
+        reason:
+            'A ready all-time Query facet must not become a wrong Year/Month '
+            'Mind range while the matching structural domain is unavailable.',
       );
       await tester.pump();
       final sliderStages = FluviDiagnosticLogger.entries
@@ -342,14 +314,10 @@ void main() {
           .toList(growable: false);
       expect(
         sliderStages,
-        containsAll(<String>[
-          'MIND|SLIDER_MOUNT',
-          'MIND|SLIDER_LAYOUT',
-          'MIND|SLIDER_VISIBLE',
-        ]),
+        isNot(contains('MIND|SLIDER_MOUNT')),
         reason:
-            'MR-01: a canonical ready range is not accepted until the real '
-            'Mind host has mounted, laid out, and exposed the shared control.',
+            'The compact control must stay absent instead of rendering the '
+            'wrong all-time amount domain.',
       );
     },
   );
@@ -458,6 +426,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.budget),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
       await tester.pump();
@@ -947,6 +916,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
       tester
@@ -963,7 +933,7 @@ void main() {
       // The selector cells now fill the navigation zone up to the amount
       // boundary. Use the real unassigned trailing Summary inset rather than
       // a formerly dead strip beside the Day glyph.
-      final backgroundStart = Offset(summary.right - 1, summary.center.dy);
+      final backgroundStart = Offset(summary.left + 1, summary.center.dy);
       expect(summary.contains(backgroundStart), isTrue);
       final expansionBefore = controller.expansion.progress;
       FluviDiagnosticLogger.clear();
@@ -1186,6 +1156,7 @@ void main() {
             controller: controller,
             modeController: _modeControllerFor(DashboardModeSpec.budget),
             categoryCollection: categories,
+            initialSummaryPillVariant: SummaryPillVariant.legacy,
           ),
         ),
       );
@@ -1539,6 +1510,7 @@ void main() {
             controller: controller,
             modeController: _modeControllerFor(spec),
             categoryCollection: emptyTestCategoryCollection,
+            initialSummaryPillVariant: SummaryPillVariant.legacy,
           ),
         );
 
@@ -1619,6 +1591,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1655,6 +1628,7 @@ void main() {
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
         categoryCollection: emptyTestCategoryCollection,
+        initialSummaryPillVariant: SummaryPillVariant.legacy,
       ),
     );
 
@@ -1730,6 +1704,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1806,6 +1781,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -1841,6 +1817,7 @@ void main() {
         controller: controller,
         modeController: _modeControllerFor(DashboardModeSpec.balance),
         categoryCollection: emptyTestCategoryCollection,
+        initialSummaryPillVariant: SummaryPillVariant.legacy,
       ),
     );
 
@@ -1887,6 +1864,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 
@@ -2018,6 +1996,10 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.balance),
           categoryCollection: emptyTestCategoryCollection,
+          // This reduced-width geometry fixture predates the segmented
+          // product default and exercises collapse travel, not Summary mode.
+          // Keep its authored narrow legacy surface explicit.
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
         surfaceSize: halfSurface,
       );
