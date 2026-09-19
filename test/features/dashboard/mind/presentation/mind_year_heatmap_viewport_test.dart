@@ -246,6 +246,7 @@ void main() {
         find.byKey(const ValueKey<String>('mind-aggregate-line-infocard')),
         findsOneWidget,
       );
+      expect(find.textContaining('2025.'), findsOneWidget);
       expect(frame.value, same(admitted));
 
       await tester.drag(pager, const Offset(300, 0));

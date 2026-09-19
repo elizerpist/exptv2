@@ -473,6 +473,7 @@ final class _MindSumExactYearPage extends StatelessWidget {
         title: '',
         subtitle: '',
         lineColor: const Color(0xff7657c5),
+        relativeLabel: 'az előző évhez képest',
       ),
     );
   }

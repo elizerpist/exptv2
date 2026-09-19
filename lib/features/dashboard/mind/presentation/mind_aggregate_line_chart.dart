@@ -15,6 +15,8 @@ final class MindAggregateLineChart extends StatefulWidget {
     required this.subtitle,
     required this.lineColor,
     this.monthDomain = false,
+    this.infoLabelForPoint,
+    this.relativeLabel = 'az előzőhöz képest',
   });
 
   final List<MindAggregateLinePoint> points;
@@ -22,6 +24,8 @@ final class MindAggregateLineChart extends StatefulWidget {
   final String subtitle;
   final Color lineColor;
   final bool monthDomain;
+  final String Function(MindAggregateLinePoint point)? infoLabelForPoint;
+  final String relativeLabel;
 
   @override
   State<MindAggregateLineChart> createState() => _MindAggregateLineChartState();
@@ -143,6 +147,8 @@ final class _MindAggregateLineChartState extends State<MindAggregateLineChart> {
                           previous: _selectedIndex! == 0
                               ? null
                               : widget.points[_selectedIndex! - 1],
+                          label: widget.infoLabelForPoint?.call(selected),
+                          relativeLabel: widget.relativeLabel,
                         ),
                       ),
                   ],
@@ -196,9 +202,16 @@ final class _MindAggregateYAxis extends StatelessWidget {
 }
 
 final class _MindAggregateInfoCard extends StatelessWidget {
-  const _MindAggregateInfoCard({required this.point, required this.previous});
+  const _MindAggregateInfoCard({
+    required this.point,
+    required this.previous,
+    required this.label,
+    required this.relativeLabel,
+  });
   final MindAggregateLinePoint point;
   final MindAggregateLinePoint? previous;
+  final String? label;
+  final String relativeLabel;
   @override
   Widget build(BuildContext context) {
     final delta = previous == null ? null : point.total - previous!.total;
@@ -222,7 +235,7 @@ final class _MindAggregateInfoCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Text(
-                point.label,
+                label ?? point.label,
                 style: const TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w800,
@@ -244,8 +257,8 @@ final class _MindAggregateInfoCard extends StatelessWidget {
                   ),
                 ),
               if (delta != null)
-                const Text(
-                  'az előzőhöz képest',
+                Text(
+                  relativeLabel,
                   style: TextStyle(
                     fontSize: 7,
                     color: FluviVisualTokens.textSecondary,

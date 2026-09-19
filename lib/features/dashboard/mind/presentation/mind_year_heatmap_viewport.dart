@@ -881,39 +881,43 @@ final class _MindYearMonthlyLinePage extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<MindYearHeatmapFrame?>(
-        valueListenable: frameListenable,
-        builder: (context, frame, _) {
-          if (frame == null) {
-            return const SizedBox.shrink();
-          }
-          final points = List<MindAggregateLinePoint>.generate(12, (index) {
-            final month = index + 1;
-            final total = frame
-                .month(month)
-                .fold<int>(0, (sum, day) => sum + (day.total ?? 0));
-            return MindAggregateLinePoint(
-              ordinal: month,
-              label: _monthInitials[index],
-              total: total,
-            );
-          }, growable: false);
-          return SingleChildScrollView(
-            controller: scrollController,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-            child: MindAggregateLineChart(
-              key: const ValueKey<String>('mind-year-monthly-line-chart'),
-              points: points,
-              title: 'Havi alakulás',
-              subtitle: '${frame.identity.year} · 12 hónap',
-              lineColor: const Color(0xff7657c5),
-              monthDomain: true,
-            ),
-          );
-        },
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindYearHeatmapFrame?>(
+    valueListenable: frameListenable,
+    builder: (context, frame, _) {
+      if (frame == null) {
+        return const SizedBox.shrink();
+      }
+      final points = List<MindAggregateLinePoint>.generate(12, (index) {
+        final month = index + 1;
+        final total = frame
+            .month(month)
+            .fold<int>(0, (sum, day) => sum + (day.total ?? 0));
+        return MindAggregateLinePoint(
+          ordinal: month,
+          label: _monthInitials[index],
+          total: total,
+        );
+      }, growable: false);
+      return SingleChildScrollView(
+        controller: scrollController,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+        child: MindAggregateLineChart(
+          key: const ValueKey<String>('mind-year-monthly-line-chart'),
+          points: points,
+          title: 'Havi alakulás',
+          subtitle: '${frame.identity.year} · 12 hónap',
+          lineColor: const Color(0xff7657c5),
+          monthDomain: true,
+          infoLabelForPoint: (point) =>
+              '${frame.identity.year}. ${DashboardTimeLabelFormatter.monthName(point.ordinal)}',
+          relativeLabel: 'az előző hónaphoz képest',
+        ),
       );
+    },
+  );
 }
 
 final class _MindYearHeatmapFourColumnFit {
