@@ -185,6 +185,16 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   None was staged, modified, stashed, cleaned or deleted.
 - Physical validation: `PENDING — USER ONLY`.
 
+
+## 2026-09-19 — Selectable 10/20-colour Mind heatmap resolution
+
+- Application commit `a7561cba942918b90d766ebc379d5d8c49471bbb` adds `MindHeatmapScaleResolution` to the existing `MindYearHeatmapPresentationSettings` owner. The product default remains `ten`; a real 10↔20 change advances presentation revision once, while a no-op does not. It is not persisted and does not alter Query, financial membership, normalized intensity, score, range, or navigation.
+- **RED evidence:** SCALE-01 initially failed because the enum, settings field and controller setter were absent. SCALE-03 initially failed because the central resolver had no resolution parameter or twenty-stop path.
+- **Resolver evidence:** `MindYearHeatmapPaletteResolver` remains the sole colour authority. Its exact existing ten-stop lists and adjacent `Color.lerp` behavior stay default-compatible at every anchor and representative off-anchor test. It now contains the user-approved fixed twenty-stop lists for exactly Fluvi, B3M-MY3, Meadow Green, Fluvi stretched and B3M-MY3 stretched. SCALE-03 verifies all 100 twenty anchors; SCALE-04 proves twenty affects actual tile resolution rather than only the legend.
+- **Surface ownership:** the selected resolution is passed through the existing Year MonthCard painter, Sum viewport, Month viewport, Day viewport and the one Mind legend. The tuner exposes `10 szín` and `20 szín`. Tests retain the same admitted frame identity while changing resolution, and the shared legend is exactly 10 or 20 samples from the resolver.
+- Focused validation: settings/resolver/temporal viewport/Year viewport/Header tuner/Mind mode-host suite passed (53 tests); Dart format check passed. No palette enum was added, so Soft Rainbow and Peachy Delight remain absent.
+- **Still pending:** the separate compact-legend placement/body-height work, physical colour assessment, final CI, human diagnostic APK, final-source SCIP and user device validation. Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
