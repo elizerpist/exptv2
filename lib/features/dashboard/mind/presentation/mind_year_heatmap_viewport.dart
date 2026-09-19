@@ -20,6 +20,7 @@ import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_aggregate_line_chart.dart';
+import 'mind_anchored_info_card.dart';
 
 /// Immutable paint input for the Year comparison page. Full values intentionally
 /// come from the unfiltered directional month authority; filtered values come
@@ -506,36 +507,12 @@ final class _MindYearHeatmapViewportState
                   children: <Widget>[
                     heatmapPage,
                     if (_selectedDay case final selection?)
-                      Builder(
-                        builder: (context) {
-                          final box = context.findRenderObject() as RenderBox?;
-                          final origin =
-                              box?.localToGlobal(Offset.zero) ?? Offset.zero;
-                          final anchor = selection.anchor - origin;
-                          final left = (anchor.dx - 62)
-                              .clamp(
-                                2.0,
-                                math.max(2.0, (box?.size.width ?? 128) - 126),
-                              )
-                              .toDouble();
-                          final top = anchor.dy < 68
-                              ? anchor.dy + 10
-                              : anchor.dy - 52;
-                          return Positioned(
-                            top: top
-                                .clamp(
-                                  2.0,
-                                  math.max(2.0, (box?.size.height ?? 64) - 48),
-                                )
-                                .toDouble(),
-                            left: left,
-                            child: _MindYearDayInfoCard(
-                              day: selection.day,
-                              onDismiss: () =>
-                                  setState(() => _selectedDay = null),
-                            ),
-                          );
-                        },
+                      MindAnchoredInfoCard(
+                        globalAnchor: selection.anchor,
+                        child: _MindYearDayInfoCard(
+                          day: selection.day,
+                          onDismiss: () => setState(() => _selectedDay = null),
+                        ),
                       ),
                   ],
                 ),
@@ -900,20 +877,28 @@ final class _MindYearMonthlyLinePage extends StatelessWidget {
           total: total,
         );
       }, growable: false);
-      return SingleChildScrollView(
-        controller: scrollController,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-        child: MindAggregateLineChart(
-          key: const ValueKey<String>('mind-year-monthly-line-chart'),
-          points: points,
-          title: 'Havi alakulás',
-          subtitle: '${frame.identity.year} · 12 hónap',
-          lineColor: const Color(0xff7657c5),
-          monthDomain: true,
-          infoLabelForPoint: (point) =>
-              '${frame.identity.year}. ${DashboardTimeLabelFormatter.monthName(point.ordinal)}',
-          relativeLabel: 'az előző hónaphoz képest',
+      return LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          controller: scrollController,
+          physics: const NeverScrollableScrollPhysics(),
+          child: SizedBox(
+            height: math.max(0, constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              child: MindAggregateLineChart(
+                key: const ValueKey<String>('mind-year-monthly-line-chart'),
+                points: points,
+                title: 'Havi alakulás',
+                subtitle: '${frame.identity.year} · 12 hónap',
+                lineColor: const Color(0xff7657c5),
+                monthDomain: true,
+                fitDomainWidth: true,
+                infoLabelForPoint: (point) =>
+                    '${frame.identity.year}. ${DashboardTimeLabelFormatter.monthName(point.ordinal)}',
+                relativeLabel: 'az előző hónaphoz képest',
+              ),
+            ),
+          ),
         ),
       );
     },

@@ -15,6 +15,7 @@ final class MindAggregateLineChart extends StatefulWidget {
     required this.subtitle,
     required this.lineColor,
     this.monthDomain = false,
+    this.fitDomainWidth = false,
     this.infoLabelForPoint,
     this.relativeLabel = 'az előzőhöz képest',
   });
@@ -24,6 +25,11 @@ final class MindAggregateLineChart extends StatefulWidget {
   final String subtitle;
   final Color lineColor;
   final bool monthDomain;
+
+  /// The Year card has exactly twelve month aggregates and must keep all of
+  /// them in one width-fit plot. Sum deliberately leaves this false so a long
+  /// annual history retains its readable, horizontally scrollable slot width.
+  final bool fitDomainWidth;
   final String Function(MindAggregateLinePoint point)? infoLabelForPoint;
   final String relativeLabel;
 
@@ -48,35 +54,42 @@ final class _MindAggregateLineChartState extends State<MindAggregateLineChart> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final slotWidth = widget.monthDomain ? _monthSlotWidth : _yearSlotWidth;
-      final plotWidth = math.max(
-        constraints.maxWidth - 34,
-        widget.points.length * slotWidth,
-      );
+      final availablePlotWidth = math.max(0.0, constraints.maxWidth - 34);
+      final plotWidth = widget.fitDomainWidth
+          ? availablePlotWidth
+          : math.max(availablePlotWidth, widget.points.length * slotWidth);
+      final hasHeading = widget.title.isNotEmpty || widget.subtitle.isNotEmpty;
+      // The two text lines plus their deliberate breathing room occupy 34px
+      // under the current Material text metrics. Keep this token explicit so
+      // the chart consumes the rest of the card without a Flex overflow.
+      final headingHeight = hasHeading ? 34.0 : 0.0;
       final chartHeight = constraints.maxHeight.isFinite
-          ? (constraints.maxHeight - 38).clamp(92.0, 156.0).toDouble()
-          : 156.0;
+          ? math.max(0.0, constraints.maxHeight - headingHeight)
+          : 180.0;
       final selected = _selectedIndex == null
           ? null
           : widget.points[_selectedIndex!];
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(
-            widget.title,
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
+          if (widget.title.isNotEmpty)
+            Text(
+              widget.title,
+              style: const TextStyle(
+                color: FluviVisualTokens.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-          Text(
-            widget.subtitle,
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 9,
+          if (widget.subtitle.isNotEmpty)
+            Text(
+              widget.subtitle,
+              style: const TextStyle(
+                color: FluviVisualTokens.textSecondary,
+                fontSize: 9,
+              ),
             ),
-          ),
-          const SizedBox(height: 5),
+          if (hasHeading) const SizedBox(height: 5),
           SizedBox(
             height: chartHeight,
             child: SingleChildScrollView(
@@ -131,17 +144,17 @@ final class _MindAggregateLineChartState extends State<MindAggregateLineChart> {
                     if (selected != null)
                       Positioned(
                         top: 2,
-                        left: math.min(
-                          plotWidth - 112,
-                          math.max(
-                            34,
-                            34 +
-                                plotWidth *
-                                    (_selectedIndex! /
-                                        math.max(1, widget.points.length - 1)) -
-                                56,
-                          ),
-                        ),
+                        left:
+                            (34 +
+                                    plotWidth *
+                                        (_selectedIndex! /
+                                            math.max(
+                                              1,
+                                              widget.points.length - 1,
+                                            )) -
+                                    56)
+                                .clamp(0.0, math.max(0.0, plotWidth + 34 - 112))
+                                .toDouble(),
                         child: _MindAggregateInfoCard(
                           point: selected,
                           previous: _selectedIndex! == 0

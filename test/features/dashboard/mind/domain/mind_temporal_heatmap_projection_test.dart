@@ -251,6 +251,48 @@ void main() {
     expect(frame.total, 400);
   });
 
+  test(
+    'MONTH-RHYTHM-01 RED: Month exposes a continuous bounded daily aggregate domain for the rhythm card',
+    () {
+      final projection = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2025-05',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2025-05',
+        ),
+        year: 2025,
+        month: 5,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _contribution(0, 200, const LocalDate(year: 2025, month: 5, day: 2)),
+          _contribution(1, 700, const LocalDate(year: 2025, month: 5, day: 2)),
+          _contribution(2, 400, const LocalDate(year: 2025, month: 5, day: 31)),
+        ],
+      );
+
+      final frame = projection.preview(fullRange);
+
+      expect(frame.dailyRhythmPoints, hasLength(31));
+      expect(
+        frame.dailyRhythmPoints.map((point) => (point.ordinal, point.total)),
+        <(int, int)>[
+          for (var day = 1; day <= 31; day += 1)
+            (
+              day,
+              day == 2
+                  ? 900
+                  : day == 31
+                  ? 400
+                  : 0,
+            ),
+        ],
+        reason:
+            'The chart has one truthful current-range aggregate for each real calendar day, including empty days as zero visual positions.',
+      );
+      expect(projection.preparedContributionTouches, 3);
+    },
+  );
+
   test('DAY-DATA-01 RED: selected Day keeps 24 local-hour amount buckets', () {
     const selected = LocalDate(year: 2026, month: 7, day: 14);
     final projection = MindDayHeatmapProjection.build(
@@ -325,6 +367,55 @@ void main() {
         hasLength(24),
         reason: 'The preview loop is bounded to the frame\'s 24 buckets.',
       );
+    },
+  );
+
+  test(
+    'DAY-TIMELINE-01 RED: Day retains exact resident transaction markers and filters them by the live amount range',
+    () {
+      const selected = LocalDate(year: 2026, month: 7, day: 14);
+      final projection = MindDayHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|day:2026-07-14',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'day:2026-07-14',
+        ),
+        date: selected,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _contribution(8, 100, selected, localTimeMinutes: 15),
+          _contribution(2, 700, selected, localTimeMinutes: 721),
+          _contribution(5, 400, selected, localTimeMinutes: 721),
+          _contribution(9, 900, selected, localTimeMinutes: 1438),
+          _contribution(
+            10,
+            999,
+            const LocalDate(year: 2026, month: 7, day: 13),
+            localTimeMinutes: 120,
+          ),
+        ],
+      );
+
+      final frame = projection.preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100,
+          maximumScaled100: 1000,
+          lowerScaled100: 350,
+          upperScaled100: 800,
+        ),
+      );
+
+      expect(frame.timelineEvents, <Matcher>[
+        isA<MindDayTimelineEvent>()
+            .having((event) => event.timeMinutes, 'time', 721)
+            .having((event) => event.total, 'total', 700)
+            .having((event) => event.ordinal, 'ordinal', 2),
+        isA<MindDayTimelineEvent>()
+            .having((event) => event.timeMinutes, 'time', 721)
+            .having((event) => event.total, 'total', 400)
+            .having((event) => event.ordinal, 'ordinal', 5),
+      ]);
+      expect(projection.preparedContributionTouches, 5);
     },
   );
 }

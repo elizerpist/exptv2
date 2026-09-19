@@ -125,10 +125,39 @@ void main() {
         ..setSumYearRowLayout(MindSumYearRowLayout.oneRowCompact)
         ..setSumMonthLabelPlacement(MindSumMonthLabelPlacement.belowEachRow);
       await tester.pump();
-      expect(
-        find.text('J   F   M   Á   M   J   J   A   S   O   N   D'),
-        findsWidgets,
+      final compactYear = find.byKey(
+        const ValueKey('mind-sum-heatmap-compact-year-2025'),
       );
+      final compactCells = find.byKey(
+        const ValueKey('mind-sum-heatmap-compact-cells-2025'),
+      );
+      final compactTotal = find.byKey(
+        const ValueKey('mind-sum-heatmap-compact-total-2025'),
+      );
+      expect(compactYear, findsOneWidget);
+      expect(compactCells, findsOneWidget);
+      expect(compactTotal, findsOneWidget);
+      expect(
+        tester.getRect(compactYear).right,
+        lessThan(tester.getRect(compactCells).left),
+      );
+      expect(
+        tester.getRect(compactCells).right,
+        lessThan(tester.getRect(compactTotal).left),
+      );
+      for (var month = 1; month <= 12; month += 1) {
+        final label = find.byKey(
+          ValueKey('mind-sum-heatmap-month-label-2025-$month'),
+        );
+        final cell = find.byKey(ValueKey('mind-sum-heatmap-cell-2025-$month'));
+        expect(label, findsOneWidget);
+        expect(
+          tester.getRect(label).center.dx,
+          closeTo(tester.getRect(cell).center.dx, .01),
+          reason:
+              'Every month label owns the same horizontal centre as its cell.',
+        );
+      }
 
       settings.setSumMonthLabelPlacement(
         MindSumMonthLabelPlacement.insideMonthCells,
@@ -343,7 +372,7 @@ void main() {
   );
 
   testWidgets(
-    'RED MONTH-B3M-REAL-ROW-01: July 2026 uses five real calendar rows with numbered days and no nested scroll',
+    'RED MONTH-B3M-REAL-ROW-01: July 2026 uses five real calendar rows with numbered days and only the horizontal visual pager',
     (tester) async {
       final frame = MindMonthHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
@@ -402,7 +431,12 @@ void main() {
       expect(monthRect.center.dy, closeTo(activeRect.center.dy, .01));
       expect(titleRect.left, lessThan(dayCountRect.left));
       expect(monthRect.left, lessThan(activeRect.left));
-      expect(find.byType(Scrollable), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mind-month-heatmap-pager')),
+        findsOneWidget,
+        reason:
+            'The new secondary card adds only the horizontal pager; the grid itself remains non-scrollable.',
+      );
     },
   );
 
@@ -481,7 +515,12 @@ void main() {
       expect(hour00Rect.height, closeTo(hour00Rect.width, .01));
       expect(hour23Rect.top, greaterThan(hour00Rect.top));
       expect(hour23Rect.left, greaterThan(hour00Rect.left));
-      expect(find.byType(Scrollable), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mind-day-heatmap-pager')),
+        findsOneWidget,
+        reason:
+            'The new secondary card adds only the horizontal pager; the 4×6 grid remains non-scrollable.',
+      );
       final decoration =
           tester.widget<DecoratedBox>(hour23).decoration as BoxDecoration;
       expect(
@@ -492,6 +531,143 @@ void main() {
           intensity: 1,
           paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
         ).background,
+      );
+    },
+  );
+
+  testWidgets(
+    'MONTH-RHYTHM-UI-01 RED: Month preserves its heatmap primary page and exposes the daily-rhythm secondary page from resident daily totals',
+    (tester) async {
+      final frame = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2025-05',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2025-05',
+        ),
+        year: 2025,
+        month: 5,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _entry(0, 200, const LocalDate(year: 2025, month: 5, day: 2)),
+          _entry(1, 700, const LocalDate(year: 2025, month: 5, day: 2)),
+          _entry(2, 400, const LocalDate(year: 2025, month: 5, day: 31)),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindMonthHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final pager = find.byKey(const ValueKey('mind-month-heatmap-pager'));
+      expect(pager, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-month-heatmap-page-0')),
+        findsOneWidget,
+      );
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mind-month-heatmap-page-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Napi költési ritmus'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-month-rhythm-chart')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-month-rhythm-average')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-month-rhythm-bar-02')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-month-rhythm-stat-total')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-month-rhythm-stat-strongest')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'DAY-TIMELINE-UI-01 RED: Day preserves its hourly heatmap primary page and exposes a real-time-marker timeline secondary page',
+    (tester) async {
+      const date = LocalDate(year: 2026, month: 7, day: 14);
+      final frame = MindDayHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|day:2026-07-14',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'day:2026-07-14',
+        ),
+        date: date,
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _entry(0, 100, date, localTimeMinutes: 15),
+          _entry(1, 700, date, localTimeMinutes: 721),
+          _entry(2, 400, date, localTimeMinutes: 721),
+          _entry(3, 900, date, localTimeMinutes: 1438),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindDayHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final pager = find.byKey(const ValueKey('mind-day-heatmap-pager'));
+      expect(pager, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-day-heatmap-page-0')),
+        findsOneWidget,
+      );
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mind-day-heatmap-page-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-chart')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-marker-1')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-stat-total')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-stat-range')),
+        findsOneWidget,
       );
     },
   );

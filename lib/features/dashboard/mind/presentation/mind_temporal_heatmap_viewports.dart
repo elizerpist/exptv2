@@ -18,6 +18,8 @@ import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_aggregate_line_chart.dart';
+import 'mind_anchored_info_card.dart';
+import 'mind_temporal_secondary_cards.dart';
 
 @visibleForTesting
 const mindMonthHeatmapCellCornerRadius = 6.0;
@@ -297,26 +299,12 @@ final class _MindSumHeatmapPageState extends State<_MindSumHeatmapPage> {
         ),
       ),
       if (_selectedMonth case final selected?)
-        Builder(
-          builder: (context) {
-            final box = context.findRenderObject() as RenderBox?;
-            final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
-            final localAnchor = selected.anchor - origin;
-            final left = (localAnchor.dx - 62)
-                .clamp(2.0, math.max(2.0, (box?.size.width ?? 128) - 126))
-                .toDouble();
-            final top = localAnchor.dy < 68
-                ? localAnchor.dy + 10
-                : localAnchor.dy - 52;
-            return Positioned(
-              top: top.clamp(2.0, math.max(2.0, (box?.size.height ?? 64) - 48)),
-              left: left,
-              child: _MindSumMonthInfoCard(
-                month: selected.month,
-                onDismiss: () => setState(() => _selectedMonth = null),
-              ),
-            );
-          },
+        MindAnchoredInfoCard(
+          globalAnchor: selected.anchor,
+          child: _MindSumMonthInfoCard(
+            month: selected.month,
+            onDismiss: () => setState(() => _selectedMonth = null),
+          ),
         ),
     ],
   );
@@ -349,14 +337,102 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
   final void Function(MindSumHeatmapMonth month, Offset anchor) onMonthTap;
 
   @override
-  Widget build(BuildContext context) => Column(
-    key: ValueKey<String>('mind-sum-heatmap-year-$year'),
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: <Widget>[
-      if (layout == MindSumYearRowLayout.twoRowExpanded) ...<Widget>[
+  Widget build(BuildContext context) {
+    final cells = _MindSumMonthCells(
+      frame: frame,
+      year: year,
+      paletteStyle: paletteStyle,
+      scaleResolution: scaleResolution,
+      labelPlacement: labelPlacement,
+      onMonthTap: onMonthTap,
+    );
+    if (layout == MindSumYearRowLayout.oneRowCompact) {
+      return Row(
+        key: ValueKey<String>('mind-sum-heatmap-year-$year'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            key: ValueKey<String>('mind-sum-heatmap-compact-year-$year'),
+            width: 36,
+            height: 22,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '$year',
+                style: const TextStyle(
+                  color: FluviVisualTokens.textSecondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: KeyedSubtree(
+              key: ValueKey<String>('mind-sum-heatmap-compact-cells-$year'),
+              child: cells,
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            key: ValueKey<String>('mind-sum-heatmap-compact-total-$year'),
+            width: 56,
+            height: 22,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                formatMindCompactForints(frame.yearTotal(year) ~/ 100),
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: FluviVisualTokens.textSecondary,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      key: ValueKey<String>('mind-sum-heatmap-year-$year'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
         _MindSumYearHeader(frame: frame, year: year, page: 'heatmap'),
         const SizedBox(height: 4),
+        cells,
       ],
+    );
+  }
+}
+
+/// The cell strip owns aligned tile and label geometry for both Sum layouts.
+/// Every label gets the exact same Expanded/Padding envelope as its month tile;
+/// it cannot degrade into one unrelated centred text string.
+final class _MindSumMonthCells extends StatelessWidget {
+  const _MindSumMonthCells({
+    required this.frame,
+    required this.year,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    required this.labelPlacement,
+    required this.onMonthTap,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final int year;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindSumMonthLabelPlacement labelPlacement;
+  final void Function(MindSumHeatmapMonth month, Offset anchor) onMonthTap;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: <Widget>[
       SizedBox(
         height: 22,
         child: Row(
@@ -374,48 +450,44 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.only(right: month == 12 ? 0 : 2),
                 child: Builder(
-                  builder: (cellContext) {
-                    return InkWell(
+                  builder: (cellContext) => InkWell(
+                    key: ValueKey<String>('mind-sum-heatmap-tap-$year-$month'),
+                    onTap: item.isEmpty
+                        ? null
+                        : () {
+                            final box =
+                                cellContext.findRenderObject() as RenderBox?;
+                            final anchor = box == null
+                                ? Offset.zero
+                                : box.localToGlobal(
+                                    box.size.center(Offset.zero),
+                                  );
+                            onMonthTap(item, anchor);
+                          },
+                    child: DecoratedBox(
                       key: ValueKey<String>(
-                        'mind-sum-heatmap-tap-$year-$month',
+                        'mind-sum-heatmap-cell-$year-$month',
                       ),
-                      onTap: item.isEmpty
-                          ? null
-                          : () {
-                              final box =
-                                  cellContext.findRenderObject() as RenderBox?;
-                              final anchor = box == null
-                                  ? Offset.zero
-                                  : box.localToGlobal(
-                                      box.size.center(Offset.zero),
-                                    );
-                              onMonthTap(item, anchor);
-                            },
-                      child: DecoratedBox(
-                        key: ValueKey<String>(
-                          'mind-sum-heatmap-cell-$year-$month',
-                        ),
-                        decoration: BoxDecoration(
-                          color: palette.background,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: Center(
-                          child:
-                              labelPlacement ==
-                                  MindSumMonthLabelPlacement.insideMonthCells
-                              ? Text(
-                                  _monthInitials[monthIndex],
-                                  style: const TextStyle(
-                                    fontSize: 7,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                )
-                              : const SizedBox.expand(),
-                        ),
+                      decoration: BoxDecoration(
+                        color: palette.background,
+                        borderRadius: BorderRadius.circular(3),
                       ),
-                    );
-                  },
+                      child: Center(
+                        child:
+                            labelPlacement ==
+                                MindSumMonthLabelPlacement.insideMonthCells
+                            ? Text(
+                                _monthInitials[monthIndex],
+                                style: const TextStyle(
+                                  fontSize: 7,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              )
+                            : const SizedBox.expand(),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             );
@@ -423,14 +495,29 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
         ),
       ),
       if (labelPlacement == MindSumMonthLabelPlacement.belowEachRow)
-        const Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: Text(
-            'J   F   M   Á   M   J   J   A   S   O   N   D',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 7,
-              color: FluviVisualTokens.textSecondary,
+        SizedBox(
+          height: 10,
+          child: Row(
+            children: List<Widget>.generate(
+              12,
+              (monthIndex) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: monthIndex == 11 ? 0 : 2),
+                  child: Center(
+                    child: Text(
+                      _monthInitials[monthIndex],
+                      key: ValueKey<String>(
+                        'mind-sum-heatmap-month-label-$year-${monthIndex + 1}',
+                      ),
+                      style: const TextStyle(
+                        fontSize: 7,
+                        color: FluviVisualTokens.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              growable: false,
             ),
           ),
         ),
@@ -791,7 +878,7 @@ final class MindMonthHeatmapViewport extends StatelessWidget {
       );
 }
 
-final class _MindMonthHeatmapContent extends StatelessWidget {
+final class _MindMonthHeatmapContent extends StatefulWidget {
   const _MindMonthHeatmapContent({
     required this.frame,
     required this.frameListenable,
@@ -807,198 +894,265 @@ final class _MindMonthHeatmapContent extends StatelessWidget {
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
+  State<_MindMonthHeatmapContent> createState() =>
+      _MindMonthHeatmapContentState();
+}
+
+final class _MindMonthHeatmapContentState
+    extends State<_MindMonthHeatmapContent> {
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MindMonthHeatmapContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.frame.identity != widget.frame.identity &&
+        _pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => DashboardVerticalScrollBoundaryHandoff(
+    upperVerticalGestures: widget.upperVerticalGestures,
+    handoffOnDirectVerticalDrag: true,
+    child: PageView(
+      key: const ValueKey<String>('mind-month-heatmap-pager'),
+      controller: _pageController,
+      children: <Widget>[
+        KeyedSubtree(
+          key: const ValueKey<String>('mind-month-heatmap-page-0'),
+          child: _MindMonthHeatmapPage(
+            frame: widget.frame,
+            frameListenable: widget.frameListenable,
+            paletteStyle: widget.paletteStyle,
+            scaleResolution: widget.scaleResolution,
+          ),
+        ),
+        KeyedSubtree(
+          key: const ValueKey<String>('mind-month-heatmap-page-1'),
+          child: MindMonthDailyRhythmCard(
+            frame: widget.frame,
+            paletteStyle: widget.paletteStyle,
+            scaleResolution: widget.scaleResolution,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+final class _MindMonthHeatmapPage extends StatelessWidget {
+  const _MindMonthHeatmapPage({
+    required this.frame,
+    required this.frameListenable,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final MindMonthHeatmapFrame frame;
+  final ValueListenable<MindTemporalHeatmapFrame?> frameListenable;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
   Widget build(BuildContext context) {
     final geometry = MindYearHeatmapCalendarGeometry.forMonth(
       year: frame.year,
       month: frame.month,
     );
-    return DashboardVerticalScrollBoundaryHandoff(
-      upperVerticalGestures: upperVerticalGestures,
-      handoffOnDirectVerticalDrag: true,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          const horizontalPadding = 12.0;
-          const gap = 4.0;
-          const referenceGridWidth = 282.0;
-          // The B3M-MYM header has two horizontal information rows plus the
-          // compact total/footer and outer padding. Solve only the real
-          // calendar row count so a five-row month is never shrunk by a fake
-          // sixth presentation row.
-          const staticChrome = 77.0;
-          final availableGridWidth =
-              (constraints.maxWidth - horizontalPadding * 2)
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const horizontalPadding = 12.0;
+        const gap = 4.0;
+        const referenceGridWidth = 282.0;
+        // The B3M-MYM header has two horizontal information rows plus the
+        // compact total/footer and outer padding. Solve only the real
+        // calendar row count so a five-row month is never shrunk by a fake
+        // sixth presentation row.
+        const staticChrome = 77.0;
+        final availableGridWidth =
+            (constraints.maxWidth - horizontalPadding * 2)
+                .clamp(0.0, double.infinity)
+                .toDouble();
+        final boundedGridWidth = math.min(
+          availableGridWidth,
+          referenceGridWidth,
+        );
+        final cellByWidth = ((boundedGridWidth - gap * 6) / 7)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+        final calendarRows = geometry.rowCount;
+        final cellByHeight = constraints.maxHeight.isFinite
+            ? ((constraints.maxHeight -
+                          staticChrome -
+                          gap * (calendarRows - 1)) /
+                      calendarRows)
                   .clamp(0.0, double.infinity)
-                  .toDouble();
-          final boundedGridWidth = math.min(
-            availableGridWidth,
-            referenceGridWidth,
-          );
-          final cellByWidth = ((boundedGridWidth - gap * 6) / 7)
-              .clamp(0.0, double.infinity)
-              .toDouble();
-          final calendarRows = geometry.rowCount;
-          final cellByHeight = constraints.maxHeight.isFinite
-              ? ((constraints.maxHeight -
-                            staticChrome -
-                            gap * (calendarRows - 1)) /
-                        calendarRows)
-                    .clamp(0.0, double.infinity)
-                    .toDouble()
-              : cellByWidth;
-          final cellExtent = math.min(cellByWidth, cellByHeight);
-          final gridWidth = cellExtent * 7 + gap * 6;
-          final gridHeight =
-              cellExtent * calendarRows + gap * (calendarRows - 1);
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                SizedBox(
-                  key: const ValueKey<String>('mind-month-heatmap-header-row'),
-                  height: 20,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      const Text(
-                        'Napi aktivitás',
-                        key: ValueKey<String>('mind-month-heatmap-title'),
-                        style: TextStyle(
-                          color: FluviVisualTokens.textSecondary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        '${frame.days.length} nap',
-                        key: const ValueKey<String>(
-                          'mind-month-heatmap-day-count',
-                        ),
-                        style: const TextStyle(
-                          color: FluviVisualTokens.textSecondary,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  key: const ValueKey<String>('mind-month-heatmap-summary-row'),
-                  height: 17,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      Text(
-                        '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
-                        style: const TextStyle(
-                          color: FluviVisualTokens.textSecondary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        '${frame.activeDayCount} aktív nap',
-                        key: const ValueKey<String>(
-                          'mind-month-heatmap-active-days',
-                        ),
-                        style: const TextStyle(
-                          color: FluviVisualTokens.textSecondary,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    key: const ValueKey<String>('mind-month-heatmap-grid'),
-                    width: gridWidth,
-                    height: gridHeight,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: <Widget>[
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: _MindMonthHeatmapPainter(
-                              geometry: geometry,
-                              frameListenable: frameListenable,
-                              paletteStyle: paletteStyle,
-                              scaleResolution: scaleResolution,
-                              cellExtent: cellExtent,
-                              gap: gap,
-                            ),
-                          ),
-                        ),
-                        ...frame.days.map((day) {
-                          final slot = geometry.slotIndexForDay(day.date.day);
-                          final row = slot ~/ 7;
-                          final column = slot % 7;
-                          final palette =
-                              MindYearHeatmapPaletteResolver.resolve(
-                                style: paletteStyle,
-                                day: day,
-                                scaleResolution: scaleResolution,
-                              );
-                          return Positioned(
-                            left: column * (cellExtent + gap),
-                            top: row * (cellExtent + gap),
-                            width: cellExtent,
-                            height: cellExtent,
-                            child: IgnorePointer(
-                              child: Padding(
-                                padding: const EdgeInsets.all(3),
-                                child: Align(
-                                  alignment: Alignment.topLeft,
-                                  child: Text(
-                                    '${day.date.day}',
-                                    style: TextStyle(
-                                      color: palette.foreground,
-                                      fontSize: 7,
-                                      fontWeight: FontWeight.w900,
-                                      height: 1,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Row(
+                  .toDouble()
+            : cellByWidth;
+        final cellExtent = math.min(cellByWidth, cellByHeight);
+        final gridWidth = cellExtent * 7 + gap * 6;
+        final gridHeight = cellExtent * calendarRows + gap * (calendarRows - 1);
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              SizedBox(
+                key: const ValueKey<String>('mind-month-heatmap-header-row'),
+                height: 20,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
                     const Text(
-                      'Összesen',
+                      'Napi aktivitás',
+                      key: ValueKey<String>('mind-month-heatmap-title'),
                       style: TextStyle(
                         color: FluviVisualTokens.textSecondary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const Spacer(),
                     Text(
-                      QueryMenuFormatters.money(frame.total),
-                      key: const ValueKey<String>('mind-month-heatmap-total'),
+                      '${frame.days.length} nap',
+                      key: const ValueKey<String>(
+                        'mind-month-heatmap-day-count',
+                      ),
                       style: const TextStyle(
                         color: FluviVisualTokens.textSecondary,
-                        fontSize: 9,
+                        fontSize: 8,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              ),
+              SizedBox(
+                key: const ValueKey<String>('mind-month-heatmap-summary-row'),
+                height: 17,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    Text(
+                      '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
+                      style: const TextStyle(
+                        color: FluviVisualTokens.textSecondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${frame.activeDayCount} aktív nap',
+                      key: const ValueKey<String>(
+                        'mind-month-heatmap-active-days',
+                      ),
+                      style: const TextStyle(
+                        color: FluviVisualTokens.textSecondary,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 7),
+              Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  key: const ValueKey<String>('mind-month-heatmap-grid'),
+                  width: gridWidth,
+                  height: gridHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      RepaintBoundary(
+                        child: CustomPaint(
+                          painter: _MindMonthHeatmapPainter(
+                            geometry: geometry,
+                            frameListenable: frameListenable,
+                            paletteStyle: paletteStyle,
+                            scaleResolution: scaleResolution,
+                            cellExtent: cellExtent,
+                            gap: gap,
+                          ),
+                        ),
+                      ),
+                      ...frame.days.map((day) {
+                        final slot = geometry.slotIndexForDay(day.date.day);
+                        final row = slot ~/ 7;
+                        final column = slot % 7;
+                        final palette = MindYearHeatmapPaletteResolver.resolve(
+                          style: paletteStyle,
+                          day: day,
+                          scaleResolution: scaleResolution,
+                        );
+                        return Positioned(
+                          left: column * (cellExtent + gap),
+                          top: row * (cellExtent + gap),
+                          width: cellExtent,
+                          height: cellExtent,
+                          child: IgnorePointer(
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Align(
+                                alignment: Alignment.topLeft,
+                                child: Text(
+                                  '${day.date.day}',
+                                  style: TextStyle(
+                                    color: palette.foreground,
+                                    fontSize: 7,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+              Row(
+                children: <Widget>[
+                  const Text(
+                    'Összesen',
+                    style: TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    QueryMenuFormatters.money(frame.total),
+                    key: const ValueKey<String>('mind-month-heatmap-total'),
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1110,8 +1264,72 @@ final class MindDayHeatmapViewport extends StatelessWidget {
       );
 }
 
-final class _MindDayHeatmapContent extends StatelessWidget {
+final class _MindDayHeatmapContent extends StatefulWidget {
   const _MindDayHeatmapContent({
+    required this.frame,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final MindDayHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  State<_MindDayHeatmapContent> createState() => _MindDayHeatmapContentState();
+}
+
+final class _MindDayHeatmapContentState extends State<_MindDayHeatmapContent> {
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MindDayHeatmapContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.frame.identity != widget.frame.identity &&
+        _pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => PageView(
+    key: const ValueKey<String>('mind-day-heatmap-pager'),
+    controller: _pageController,
+    children: <Widget>[
+      KeyedSubtree(
+        key: const ValueKey<String>('mind-day-heatmap-page-0'),
+        child: _MindDayHeatmapPage(
+          frame: widget.frame,
+          paletteStyle: widget.paletteStyle,
+          scaleResolution: widget.scaleResolution,
+        ),
+      ),
+      KeyedSubtree(
+        key: const ValueKey<String>('mind-day-heatmap-page-1'),
+        child: MindDayTransactionTimelineCard(
+          frame: widget.frame,
+          paletteStyle: widget.paletteStyle,
+          scaleResolution: widget.scaleResolution,
+        ),
+      ),
+    ],
+  );
+}
+
+final class _MindDayHeatmapPage extends StatelessWidget {
+  const _MindDayHeatmapPage({
     required this.frame,
     required this.paletteStyle,
     required this.scaleResolution,

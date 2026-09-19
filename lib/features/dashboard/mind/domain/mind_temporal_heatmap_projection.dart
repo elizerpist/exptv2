@@ -180,6 +180,20 @@ final class MindMonthHeatmapFrame implements MindTemporalHeatmapFrame {
   final int? maximumNonEmptyTotal;
 
   MindYearHeatmapDay day(int value) => days[value - 1];
+
+  /// A continuous visual day domain for Month's rhythm page. Empty calendar
+  /// days are explicit zero aggregates, not invented transactions; non-empty
+  /// values are the same live amount-range totals consumed by the heatmap.
+  List<MindAggregateLinePoint> get dailyRhythmPoints =>
+      List<MindAggregateLinePoint>.generate(
+        days.length,
+        (index) => MindAggregateLinePoint(
+          ordinal: index + 1,
+          label: '${index + 1}',
+          total: days[index].total ?? 0,
+        ),
+        growable: false,
+      );
 }
 
 /// Resident month-bucket projection for Sum. Range previews visit only
@@ -434,11 +448,13 @@ final class MindDayHeatmapFrame implements MindTemporalHeatmapFrame {
     required this.range,
     required this.date,
     required List<MindDayHeatmapHour> hours,
+    required List<MindDayTimelineEvent> timelineEvents,
     required this.activeHourCount,
     required this.total,
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
-  }) : hours = List<MindDayHeatmapHour>.unmodifiable(hours);
+  }) : hours = List<MindDayHeatmapHour>.unmodifiable(hours),
+       timelineEvents = List<MindDayTimelineEvent>.unmodifiable(timelineEvents);
 
   @override
   final MindTemporalHeatmapIdentity identity;
@@ -446,12 +462,31 @@ final class MindDayHeatmapFrame implements MindTemporalHeatmapFrame {
   final QueryAmountRangeValues range;
   final LocalDate date;
   final List<MindDayHeatmapHour> hours;
+
+  /// Exact current-range event markers for the Day timeline. These markers are
+  /// captured from the admitted prepared contribution set at projection build;
+  /// they never cause a ledger or repository read from presentation.
+  final List<MindDayTimelineEvent> timelineEvents;
   final int activeHourCount;
   final int total;
   final int? minimumNonEmptyTotal;
   final int? maximumNonEmptyTotal;
 
   MindDayHeatmapHour hour(int value) => hours[value];
+}
+
+/// One exact resident transaction marker for the Day timeline. [ordinal]
+/// retains stable prepared ordering when two transactions share a minute.
+final class MindDayTimelineEvent {
+  const MindDayTimelineEvent({
+    required this.ordinal,
+    required this.timeMinutes,
+    required this.total,
+  });
+
+  final int ordinal;
+  final int timeMinutes;
+  final int total;
 }
 
 final class MindDayHeatmapHour {
@@ -480,8 +515,12 @@ final class MindDayHeatmapProjection {
     required this.identity,
     required this.date,
     required List<MindHeatmapAmountRangeBucket> hours,
+    required List<_MindDayTimelinePreparedEvent> timelineEvents,
     required this.preparedContributionTouches,
-  }) : _hours = List<MindHeatmapAmountRangeBucket>.unmodifiable(hours);
+  }) : _hours = List<MindHeatmapAmountRangeBucket>.unmodifiable(hours),
+       _timelineEvents = List<_MindDayTimelinePreparedEvent>.unmodifiable(
+         timelineEvents,
+       );
 
   factory MindDayHeatmapProjection.build({
     required MindTemporalHeatmapIdentity identity,
@@ -489,6 +528,7 @@ final class MindDayHeatmapProjection {
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
   }) {
     final values = List<List<int>>.generate(24, (_) => <int>[]);
+    final timelineEvents = <_MindDayTimelinePreparedEvent>[];
     var preparedContributionTouches = 0;
     for (final contribution in contributions) {
       preparedContributionTouches += 1;
@@ -496,11 +536,19 @@ final class MindDayHeatmapProjection {
       final minutes = contribution.bookedLocalTimeMinutes;
       if (minutes < 0 || minutes >= 24 * 60) continue;
       values[minutes ~/ 60].add(contribution.amountMinor);
+      timelineEvents.add(
+        _MindDayTimelinePreparedEvent(
+          ordinal: contribution.ordinal,
+          timeMinutes: minutes,
+          total: contribution.amountMinor,
+        ),
+      );
     }
     return MindDayHeatmapProjection._(
       identity: identity,
       date: date,
       hours: values.map(MindHeatmapAmountRangeBucket.fromUnsorted).toList(),
+      timelineEvents: timelineEvents,
       preparedContributionTouches: preparedContributionTouches,
     );
   }
@@ -508,6 +556,7 @@ final class MindDayHeatmapProjection {
   final MindTemporalHeatmapIdentity identity;
   final LocalDate date;
   final List<MindHeatmapAmountRangeBucket> _hours;
+  final List<_MindDayTimelinePreparedEvent> _timelineEvents;
   final int preparedContributionTouches;
 
   MindDayHeatmapFrame preview(QueryAmountRangeValues range) {
@@ -530,6 +579,25 @@ final class MindDayHeatmapProjection {
       minimum = minimum == null || value < minimum ? value : minimum;
       maximum = maximum == null || value > maximum ? value : maximum;
     }
+    final timelineEvents =
+        _timelineEvents
+            .where(
+              (event) =>
+                  event.total >= range.lowerScaled100 &&
+                  event.total <= range.upperScaled100,
+            )
+            .map(
+              (event) => MindDayTimelineEvent(
+                ordinal: event.ordinal,
+                timeMinutes: event.timeMinutes,
+                total: event.total,
+              ),
+            )
+            .toList(growable: false)
+          ..sort((left, right) {
+            final byTime = left.timeMinutes.compareTo(right.timeMinutes);
+            return byTime != 0 ? byTime : left.ordinal.compareTo(right.ordinal);
+          });
     return MindDayHeatmapFrame(
       identity: identity,
       range: range,
@@ -552,12 +620,25 @@ final class MindDayHeatmapProjection {
           ),
         );
       }, growable: false),
+      timelineEvents: timelineEvents,
       activeHourCount: activeHours,
       total: total,
       minimumNonEmptyTotal: minimum,
       maximumNonEmptyTotal: maximum,
     );
   }
+}
+
+final class _MindDayTimelinePreparedEvent {
+  const _MindDayTimelinePreparedEvent({
+    required this.ordinal,
+    required this.timeMinutes,
+    required this.total,
+  });
+
+  final int ordinal;
+  final int timeMinutes;
+  final int total;
 }
 
 MindYearHeatmapTileKind _kindFor({

@@ -236,6 +236,33 @@ void main() {
       expect(monthlyChart.points, hasLength(12));
       expect(monthlyChart.points.first.total, 100000);
       expect(monthlyChart.points[8].total, 900000);
+      final yearlyLineScroll = find.byKey(
+        const ValueKey('mind-aggregate-line-scroll'),
+      );
+      final yearlyLinePosition = tester.state<ScrollableState>(
+        find.descendant(
+          of: yearlyLineScroll,
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(
+        yearlyLinePosition.position.maxScrollExtent,
+        0,
+        reason:
+            'All twelve selected-year month anchors must fit this card without a horizontal scroll domain.',
+      );
+      final pageRect = tester.getRect(
+        find.byKey(const ValueKey('mind-year-heatmap-page-2')),
+      );
+      final plotRect = tester.getRect(
+        find.byKey(const ValueKey('mind-aggregate-line-plot')),
+      );
+      expect(
+        plotRect.height,
+        greaterThan(pageRect.height * .55),
+        reason:
+            'The line plot must use the available Year card height rather than float inside a shallow box.',
+      );
       await tester.tapAt(
         tester.getCenter(
           find.byKey(const ValueKey<String>('mind-aggregate-line-plot')),
