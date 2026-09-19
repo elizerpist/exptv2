@@ -349,6 +349,60 @@ void main() {
   );
 
   testWidgets(
+    'YEAR-LINE-01: the third card reads current filtered month totals from the same range-preview frame',
+    (tester) async {
+      final projection = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'expense|category:food|year:2025',
+          indexGeneration: 1,
+          coreRevision: 1,
+          year: 2025,
+          navigationEpoch: 1,
+        ),
+        entries: <DashboardLedgerEntry>[
+          _entry('low', 100000, const LocalDate(year: 2025, month: 1, day: 3)),
+          _entry('high', 500000, const LocalDate(year: 2025, month: 1, day: 4)),
+        ],
+      );
+      final frame = ValueNotifier(projection.preview(range));
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+      final pager = find.byKey(
+        const ValueKey<String>('mind-year-heatmap-pager'),
+      );
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      MindAggregateLineChart chart() => tester.widget<MindAggregateLineChart>(
+        find.byKey(const ValueKey('mind-year-monthly-line-chart')),
+      );
+      expect(chart().points.first.total, 600000);
+
+      frame.value = projection.preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 1000000,
+          lowerScaled100: 450000,
+          upperScaled100: 1000000,
+        ),
+      );
+      await tester.pump();
+      expect(chart().points.first.total, 500000);
+    },
+  );
+
+  testWidgets(
     'RED YEAR-6R-01: every Year MonthCard reserves the same six-row envelope',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
