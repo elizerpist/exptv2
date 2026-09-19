@@ -121,16 +121,16 @@
 - [x] **Step 3: Run RED.** The source failed to compile because `DashboardBottomNavLayoutStyle`, the BNB input and flat-contour flag did not yet exist.
 - [x] **Step 4: Implement alternate physical geometry.** Raised keeps its exact 96px shell/84px ring/24px overflow. `containedFlat` uses a 72px semantics shell and 60px visible ring wholly inside the 75px bar, with the single contour owner switched to horizontal-centre mode.
 - [x] **Step 5: Run GREEN and inspect focused raster.** BNB raster/bounds/interaction/SafeArea and tuner/app suites are green; the raised raster remains an independent positive control.
-- [ ] **Step 6: Commit and journal.** Make atomic application then one-file journal commit.
+- [x] **Step 6: Commit and journal.** Application commit `28188f9a615f252d14501ebeaccf72c9bfa392d0` and file-only journal child `d03f43353b637d447113653c6138434f6a5048d1` record the contained-style evidence.
 
 ### Task 5: Whole-package verification and delivery evidence
 
-- [ ] **Step 1: Re-read this plan, the acceptance checklist, journal, milestone file and screenshot references.** Mark only verified rows `DONE`; preserve `PARTIAL`/`NOT DONE` honestly.
-- [ ] **Step 2: Format and run required local suites in Ubuntu proot.** At minimum run settings, temporal viewport, Year viewport, mode host, tuner, range, BNB03 and app tests; then `flutter analyze --no-pub`, `./scripts/test-fluvi-fast.sh`, `./scripts/verify-fluvi-boundaries.sh`, and `git diff --check`.
-- [ ] **Step 3: Audit no-touch boundaries and commits.** Confirm no protected files/systems changed and every app commit has a separate journal child.
+- [x] **Step 1: Re-read this plan, the acceptance checklist, journal, milestone file and screenshot references.** Mark only verified rows `DONE`; preserve `PARTIAL`/`NOT DONE` honestly.
+- [x] **Step 2: Format and run required local suites in Ubuntu proot.** The focused eight-file suite passed 118 tests; analyzer passed; `test-fluvi-fast.sh` passed 431 tests with the Ubuntu Flutter PATH; boundary and diff checks passed.
+- [x] **Step 3: Audit no-touch boundaries and commits.** Final app diff and boundary script confirm protected owners remain untouched; every application commit has its file-only journal child.
 - [ ] **Step 4: Push the final application SHA as branch tip.** Monitor individual GitHub Actions lanes; do not call profile globally green if `frame_timing_headroom` remains null.
-- [ ] **Step 5: Download and verify the normal human APK.** Store it at `/storage/emulated/0/Download/fluvi`, hash it and verify its exact embedded build SHA.
-- [ ] **Step 6: Regenerate exact-source SCIP in the tooling worktree.** Require manifest `source_head` equal final application SHA; test/push tooling separately; append final journal-only evidence after build/graph.
+- [x] **Step 5: Download and verify the normal human APK.** Release `fluvi-human-diagnostic-28188f9` targets the final application SHA; the downloaded APK is `83,678,513` bytes with SHA-256 `0f7eaca408269f79d75c3e33874f98478840780a0a111de2c19a42e3baf2e4c2`.
+- [x] **Step 6: Regenerate exact-source SCIP in the tooling worktree.** Tooling commit `3f141699c65a4e5ea0d5479bab58aea1eb88e19a` is pushed; its manifest `source_head` is `28188f9a615f252d14501ebeaccf72c9bfa392d0` and two generation hash manifests were identical. Final journal evidence remains pending the active profile rerun.
 
 ## Plan self-review
 

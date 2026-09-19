@@ -66,8 +66,8 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| SAFE-PAGE-01 | §§11,15 | protected owners | no Time/Avatar physics/controller/position, Query semantics, score, Budget, LogBox, Room/Kotlin/schema or milestone diff | diff/boundary audit | NOT DONE |
+| SAFE-PAGE-01 | §§11,15 | protected owners | no Time/Avatar physics/controller/position, Query semantics, score, Budget, LogBox, Room/Kotlin/schema or milestone diff | diff/boundary audit | DONE — final `5893b456..28188f9` path audit and `verify-fluvi-boundaries.sh` are green; `MILESTONE_COMMITS.md` is unchanged. |
 | SAFE-PAGE-02 | §§12,15 | gesture/data boundaries | one effective pointer owner; pager visual-only; no second slider, Query controller or data store | parent widget tests + source review | PARTIAL — Sum parent tests cover slider/page/vertical ownership; all-unit audit remains pending. |
-| VAL-PAGE-01 | §§13,16 | all units | every production unit has an observed RED then GREEN test and its app commit has a separate file-only journal evidence commit | test/commit audit | PARTIAL — Units 1–3 are committed and separately journaled; Unit 4 has observed RED→GREEN and awaits its application/journal commits. |
-| VAL-PAGE-02 | §§17,19 | delivery | required focused suites, analyzer, fast/boundary checks, exact final CI/APK and exact-source SCIP are truthfully recorded | command/Actions/manifest evidence | NOT DONE |
+| VAL-PAGE-01 | §§13,16 | all units | every production unit has an observed RED then GREEN test and its app commit has a separate file-only journal evidence commit | test/commit audit | DONE — application commits `1bf1fa1`, `1635f46`, `9877c77`, `28188f9` each have a separate journal-only child. |
+| VAL-PAGE-02 | §§17,19 | delivery | required focused suites, analyzer, fast/boundary checks, exact final CI/APK and exact-source SCIP are truthfully recorded | command/Actions/manifest evidence | PARTIAL — focused 118-test suite, analyzer, 431-test fast suite, boundary check, exact release APK and deterministic exact-source SCIP are recorded; the rerun of the profile lane remains active after the original early profile failure, so no final all-lanes claim is possible. |
 | VAL-PAGE-03 | §§4,20 | physical | device visual/touch acceptance is not self-approved | user validation | NOT DONE |
