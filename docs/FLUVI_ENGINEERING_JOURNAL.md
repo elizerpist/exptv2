@@ -215,6 +215,15 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Focused validation in Ubuntu proot: `mind_header_score_chart_test.dart` PASS (10); `mind_header_score_chart_golden_test.dart` PASS (2); `mind_year_heatmap_mode_host_test.dart` PASS (18); Dart formatting and `git diff --check` PASS.
 - **Still pending:** user device perception/animation validation, final CI/human diagnostic APK/final exact-source SCIP. Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Segmented and mirrored Summary startup defaults
+
+- Application commit `b124698e` changes the product startup/default presentation only: `SummaryPillVariantController()` now starts `segmented`, and `DashboardSummaryPresentationSettings.defaults()` (including reset) starts `mirrored`. No persistence was added; the Header tuner still selects both Klasszikus/Szekciós and Normál/Tükrözött options.
+- **RED/GREEN evidence:** SUMMARY-DEFAULT-01 initially observed the old Legacy controller default and then passes with segmented plus `transitionEpoch == 0`; SUMMARY-DEFAULT-02 initially observed normal orientation and now proves mirrored default/reset. The controller accepts an explicit initial variant so transition-specific tests can begin legacy by intent instead of inheriting an obsolete global default.
+- **First-frame owner repair:** CoreDashboard formerly hard-coded `_lastSummaryPillVariant = legacy`. It now constructs the variant controller from its explicit/product initial value and immediately initializes bookkeeping from that actual value before registering the listener. This prevents a fabricated outgoing Legacy state or a synthetic transition.
+- `SUMMARY-DEFAULT-03/04` mounts a fresh real CoreDashboard and proves the segmented selector is physical, the legacy shell is absent, mode selector lies on the mirrored side of the amount zone, orientation is mirrored, transition epoch is zero, and no `SUMMARY_VARIANT_TRANSITION_STARTED` is emitted during startup. A legacy→segmented Budget footprint fixture now declares `initialSummaryPillVariant: legacy` and remains green.
+- Focused validation in Ubuntu proot: SUMMARY-DEFAULT-03/04 CoreDashboard test PASS; legacy→segmented footprint fixture PASS; summary controller/presentation and Header tuner focused tests PASS; Dart formatting and `git diff --check` PASS.
+- **Still pending:** final full suite/analyzer/Actions/human diagnostic APK/final exact-source SCIP and user device validation. Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
