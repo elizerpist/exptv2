@@ -2223,6 +2223,127 @@ void main() {
     },
   );
 
+  testWidgets(
+    'LEVEL-MONTH-01/02/03/04 RED: closing DayScope to Month publishes one mounted Month body and Header target without acquisition',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-june-day',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 250000,
+            date: const LocalDate(year: 2027, month: 6, day: 6),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2027, 6, 6),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      expect(
+        core.navigation.state.effectiveScope,
+        const DayScope(LocalDate(year: 2027, month: 6, day: 6)),
+      );
+      expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        findsOneWidget,
+      );
+      final readsBeforeLevelClose = repository.prepareCalls;
+      final indexBeforeLevelClose = core.preparedIndex;
+
+      FluviDiagnosticLogger.clear();
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.month,
+        isRailOpen: false,
+      );
+      // This is the first accepted Flutter opportunity.  Do not use a later
+      // Month-component crossing or an unrelated settle to repair the body.
+      await tester.pump();
+
+      expect(core.navigation.state.effectiveScope, isA<MonthScope>());
+      final frame = core.mindTemporalHeatmap.value;
+      expect(frame, isA<MindMonthHeatmapFrame>());
+      final month = frame! as MindMonthHeatmapFrame;
+      expect(month.year, 2027);
+      expect(month.month, 6);
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+        findsOneWidget,
+      );
+      final monthGridRect = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+      );
+      expect(monthGridRect.width, greaterThan(0));
+      expect(monthGridRect.height, greaterThan(0));
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-unavailable')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        findsNothing,
+      );
+
+      final monthScore = core.mindBehavioralScore.value!;
+      expect(
+        core.mindBehavioralScore.identity?.navigationEpoch,
+        month.identity.navigationEpoch,
+      );
+      expect(
+        monthScore.seriesRequest?.chartStartInclusiveEpochDay,
+        const LocalDate(year: 2027, month: 6, day: 1).epochDay,
+      );
+      expect(
+        monthScore.seriesRequest?.targetEpochDay,
+        const LocalDate(year: 2027, month: 6, day: 6).epochDay,
+      );
+      expect(
+        monthScore.chartSeries!.endInclusiveEpochDay,
+        monthScore.point.epochDay,
+      );
+      expect(monthScore.chartSeries!.points.last, monthScore.point);
+      expect(repository.prepareCalls, readsBeforeLevelClose);
+      expect(core.preparedIndex, same(indexBeforeLevelClose));
+      final admission = FluviDiagnosticLogger.entries.lastWhere(
+        (event) =>
+            event.stage == 'MIND_TEMPORAL_HEATMAP|ACCEPTED_TARGET_ADMISSION' &&
+            (event.scope?.contains('source=visibleFrameLevelAcceptance') ??
+                false),
+      );
+      expect(admission.scope, contains('published=true'));
+      expect(admission.scope, contains('repositoryRequests=0'));
+      expect(admission.scope, contains('indexBuilds=0'));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'RED MYH-04/05/06/14: the production Mind Year projection shares direction, focus, year and range identity without drag reads',
     () async {

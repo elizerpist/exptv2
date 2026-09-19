@@ -5538,8 +5538,9 @@ final class DashboardCoreController {
   }) {
     final direction = candidate.parentQueryScope.direction;
     final appliedScope = currentQuery.scopeFor(direction);
-    final heatmapPublished = _installMindMonthHeatmapProjection(
-      candidate,
+    final published = _publishMindMonthBodyAndScoreForExactTarget(
+      candidate: candidate,
+      direction: direction,
       temporalGeneration: accepted.interactionGeneration,
       allowBaseAdmission: false,
       isStillCurrent: () =>
@@ -5551,18 +5552,6 @@ final class DashboardCoreController {
           accepted.interactionGeneration == _segmentedTimeFlightGeneration &&
           _sameTemporalTarget(accepted.candidate, candidate),
     );
-    final scorePublished =
-        heatmapPublished &&
-        _publishMindBehavioralScoreForAcceptedTemporalTarget(
-          direction: direction,
-          timeScope: MonthScope(candidate.monthCursor),
-          temporalGeneration: accepted.interactionGeneration,
-          navigationState: candidate,
-        );
-    if (heatmapPublished && !scorePublished) {
-      _clearCurrentMindTemporalHeatmap();
-    }
-    final published = heatmapPublished && scorePublished;
     if (published) _mindMonthHeatmapVisualTemporalTarget = accepted;
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
@@ -5578,6 +5567,39 @@ final class DashboardCoreController {
       ),
     );
     return published;
+  }
+
+  /// Publishes the Month body and Header score from one exact temporal target.
+  ///
+  /// Component crossings and a rail-closed level transition arrive through
+  /// different physical visible-frame adapters, but neither may reconstruct a
+  /// Month from an older Day navigation state. Keeping the two writes here
+  /// makes their accepted target indivisible before Flutter can expose it.
+  bool _publishMindMonthBodyAndScoreForExactTarget({
+    required DashboardNavigationState candidate,
+    required LedgerDirection direction,
+    required int temporalGeneration,
+    required bool allowBaseAdmission,
+    required bool Function() isStillCurrent,
+  }) {
+    final heatmapPublished = _installMindMonthHeatmapProjection(
+      candidate,
+      temporalGeneration: temporalGeneration,
+      allowBaseAdmission: allowBaseAdmission,
+      isStillCurrent: isStillCurrent,
+    );
+    final scorePublished =
+        heatmapPublished &&
+        _publishMindBehavioralScoreForAcceptedTemporalTarget(
+          direction: direction,
+          timeScope: MonthScope(candidate.monthCursor),
+          temporalGeneration: temporalGeneration,
+          navigationState: candidate,
+        );
+    if (heatmapPublished && !scorePublished) {
+      _clearCurrentMindTemporalHeatmap();
+    }
+    return heatmapPublished && scorePublished;
   }
 
   /// Publishes the existing resident score projection for a renderer-accepted
@@ -15164,8 +15186,55 @@ final class DashboardCoreController {
     // Bind its exact child time scope here so Header score/text/palette cannot
     // trail an already-visible Day/Month/Year child until rail settlement.
     _publishPreparedMindAmountDomainForScope(frame.scope);
-    _publishMindBehavioralScoreForVisibleFrame(frame);
-    final dayScope = frame.scope.timeScope;
+    final timeScope = frame.scope.timeScope;
+    final isVisibleClosedMonth =
+        frame.plane == TimePlane.month &&
+        !frame.railOpen &&
+        timeScope is MonthScope;
+    if (isVisibleClosedMonth) {
+      final candidate = navigation.state;
+      final direction = frame.direction;
+      final matchesExactVisibleMonth =
+          candidate.plane == TimePlane.month &&
+          !candidate.isRailOpen &&
+          candidate.parentQueryScope.direction == direction &&
+          candidate.effectiveScope == timeScope;
+      final published =
+          matchesExactVisibleMonth &&
+          _publishMindMonthBodyAndScoreForExactTarget(
+            candidate: candidate,
+            direction: direction,
+            temporalGeneration: frame.navigationEpoch,
+            // The visible frame is already Phase-A admitted. A level close
+            // must consume that resident Mind base, never start acquisition
+            // or index work while replacing its Day body.
+            allowBaseAdmission: false,
+            isStillCurrent: () =>
+                !_disposed &&
+                identical(visibleFrames.value, frame) &&
+                navigation.state.plane == TimePlane.month &&
+                !navigation.state.isRailOpen &&
+                navigation.state.parentQueryScope.direction == direction &&
+                navigation.state.effectiveScope == timeScope,
+          );
+      FluviDiagnosticLogger.log(
+        FluviDiagnosticEvent(
+          stage: 'MIND_TEMPORAL_HEATMAP|ACCEPTED_TARGET_ADMISSION',
+          queryKey: frame.parentQueryKey.value,
+          direction: direction.name,
+          coreRevision: frame.coreRevision,
+          scope:
+              'kind=month year=${timeScope.value.year} '
+              'month=${timeScope.value.month} '
+              'source=visibleFrameLevelAcceptance '
+              'temporalGeneration=${frame.navigationEpoch} '
+              'published=$published sourceRows=0 repositoryRequests=0 indexBuilds=0',
+        ),
+      );
+    } else {
+      _publishMindBehavioralScoreForVisibleFrame(frame);
+    }
+    final dayScope = timeScope;
     if (frame.plane == TimePlane.month &&
         frame.railOpen &&
         dayScope is DayScope) {
