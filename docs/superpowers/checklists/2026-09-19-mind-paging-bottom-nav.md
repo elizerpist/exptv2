@@ -57,10 +57,10 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| BOTTOMNAV-01 | §§5,14F | shell settings/controller/tuner | `raisedFab` remains default/selectable and `containedFlat` is selectable | controller + tuner test | NOT DONE |
-| BOTTOMNAV-02 | §§5,13G | BNB-03 | raised variant keeps 75px bar, 24px overflow, 84px ring and current contour/raster behavior | existing regression/raster test | NOT DONE |
-| BOTTOMNAV-03 | §§5,12 | BNB-03 | contained variant has horizontal central top edge, zero FAB overflow and a smaller visible circle wholly in bar | bounds/contour test | NOT DONE |
-| BOTTOMNAV-04 | §§5,13G | BNB-03 | contained FAB hit/semantics target is at least 48px; item actions, edge-shape/top-border and safe area remain correct | semantics/interaction/widget test | NOT DONE |
+| BOTTOMNAV-01 | §§5,14F | shell settings/controller/tuner | `raisedFab` remains default/selectable and `containedFlat` is selectable | controller + tuner test | DONE |
+| BOTTOMNAV-02 | §§5,13G | BNB-03 | raised variant keeps 75px bar, 24px overflow, 84px ring and current contour/raster behavior | existing regression/raster test | DONE |
+| BOTTOMNAV-03 | §§5,12 | BNB-03 | contained variant has horizontal central top edge, zero FAB overflow and a smaller visible circle wholly in bar | bounds/contour and focused raster tests | DONE |
+| BOTTOMNAV-04 | §§5,13G | BNB-03 | contained FAB hit/semantics target is at least 48px; item actions, edge-shape/top-border and safe area remain correct | semantics/interaction/SafeArea widget test | DONE |
 
 ## No-touch, delivery and evidence
 
@@ -68,6 +68,6 @@
 | --- | --- | --- | --- | --- | --- |
 | SAFE-PAGE-01 | §§11,15 | protected owners | no Time/Avatar physics/controller/position, Query semantics, score, Budget, LogBox, Room/Kotlin/schema or milestone diff | diff/boundary audit | NOT DONE |
 | SAFE-PAGE-02 | §§12,15 | gesture/data boundaries | one effective pointer owner; pager visual-only; no second slider, Query controller or data store | parent widget tests + source review | PARTIAL — Sum parent tests cover slider/page/vertical ownership; all-unit audit remains pending. |
-| VAL-PAGE-01 | §§13,16 | all units | every production unit has an observed RED then GREEN test and its app commit has a separate file-only journal evidence commit | test/commit audit | PARTIAL — Unit 1 is committed and journaled; Unit 2 has observed RED→GREEN and awaits its application/journal commits. |
+| VAL-PAGE-01 | §§13,16 | all units | every production unit has an observed RED then GREEN test and its app commit has a separate file-only journal evidence commit | test/commit audit | PARTIAL — Units 1–3 are committed and separately journaled; Unit 4 has observed RED→GREEN and awaits its application/journal commits. |
 | VAL-PAGE-02 | §§17,19 | delivery | required focused suites, analyzer, fast/boundary checks, exact final CI/APK and exact-source SCIP are truthfully recorded | command/Actions/manifest evidence | NOT DONE |
 | VAL-PAGE-03 | §§4,20 | physical | device visual/touch acceptance is not self-approved | user validation | NOT DONE |

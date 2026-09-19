@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_height.da
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_logbox_amount_palette.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_presentation.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
@@ -22,6 +23,46 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('BottomNav layout style is default-raised and tuner-selectable', (
+    tester,
+  ) async {
+    final controller = DashboardHeaderVisualController(vsync: tester);
+    final shell = DashboardShellPresentationController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 2400,
+          child: DashboardHeaderVisualTuner(
+            controller: controller,
+            shellPresentation: shell,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      shell.value.bottomNavLayoutStyle,
+      DashboardBottomNavLayoutStyle.raisedFab,
+    );
+    final contained = find.byKey(
+      const ValueKey<String>(
+        'dashboard-bottom-nav-layout-DashboardBottomNavLayoutStyle.containedFlat',
+      ),
+    );
+    await tester.ensureVisible(contained);
+    await tester.tap(contained);
+    await tester.pump();
+    expect(
+      shell.value.bottomNavLayoutStyle,
+      DashboardBottomNavLayoutStyle.containedFlat,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    shell.dispose();
+  });
+
   testWidgets('Budget content composition is session-owned and live', (
     tester,
   ) async {

@@ -772,6 +772,7 @@ class _FluviAppShellState extends State<FluviAppShell> {
                 selected: _selectedNavigationItem,
                 edgeShape: settings.bottomNavEdgeShape,
                 topBorder: settings.bottomNavTopBorder,
+                layoutStyle: settings.bottomNavLayoutStyle,
                 onChanged: (item) {
                   if (item == Bnb03Item.search) {
                     _openQueryMenu();

@@ -82,7 +82,7 @@
 - [x] **Step 3: Extend the existing Sum projection.** Build now groups resident prepared contributions by local epoch day into amount-range buckets; preview exposes only real nonempty daily aggregates under the same range and retains existing monthly behavior.
 - [x] **Step 4: Write viewport/parent RED tests.** The baseline lacked approved header/page/painter APIs. The parent coverage asserts slider isolation, no frame replacement, non-scroll direct handoff and long-list boundary handoff.
 - [x] **Step 5: Implement the local pager and renderers.** The `PageView` is limited to Sum visual content; page/scroll state is local, footer/range remains outside. A passive boundary-only observer reuses the existing expansion coordinator because PageView suppresses the child overscroll notification.
-- [x] **Step 6: Run GREEN suites and commit/journal.** Domain, temporal viewport and mode-host suites are green; application and separate journal commits are the next step.
+- [x] **Step 6: Run GREEN suites and commit/journal.** Domain, temporal viewport and mode-host suites are green; application commit `1635f46c9a6815e8775ba008a086adc4dade5012` and journal commit `84d44a8e68e0235a94aec9249d45816563e457cc` record the bounded read-model/pager evidence.
 
 ### Task 3: Add the Year full-versus-filtered bar page
 
@@ -99,7 +99,7 @@
 - [x] **Step 2: Run RED.** `MindYearHeatmapPartialBarSeries` did not exist; the Year-BAR test failed to compile before implementation.
 - [x] **Step 3: Implement pure scale calculation and the secondary page.** Background reads selected directional monthly aggregate; foreground sums current frame month days. A deterministic zero-based nice scale, thin grid and month initials render in a constrained page-two painter.
 - [x] **Step 4: Verify mounted gestures.** Page selection remains inside the Year visualization region; external Year controller identity is retained on page zero. A shared passive pager-boundary adapter handles both Sum and Year without a second recognizer or duplicate handoff path.
-- [x] **Step 5: Run GREEN suites and commit/journal.** Year viewport, Sum viewport and production host suites are green; application and separate journal commits are next.
+- [x] **Step 5: Run GREEN suites and commit/journal.** Year viewport, Sum viewport and production host suites are green; application commit `9877c77aea24326f2816a52d6951a6f0151f8854` and journal commit `559d94993097eb0fa06b4735b2dab3c501fabc20` record the bar/pager evidence.
 
 ### Task 4: Add an additive contained-flat BottomNav layout style
 
@@ -116,11 +116,11 @@
 - Consume shell settings in `FluviAppShell` and the existing BNB item callbacks.
 - Produce `DashboardBottomNavLayoutStyle.raisedFab/containedFlat`, default `raisedFab`, and `Bnb03BottomNavigation(layoutStyle: ...)`.
 
-- [ ] **Step 1: Write RED settings/tuner tests.** Require the default existing raised choice and reversible selection of contained flat style.
-- [ ] **Step 2: Write RED geometry/raster/semantics tests.** Freeze existing raised contour constants. For contained, assert 75px bar envelope, top-contour center at y=0, zero FAB overflow, a visible circle smaller than 84px within physical bar, and a ≥48px semantic/hit rect.
-- [ ] **Step 3: Run RED.** Expected failure: style enum/input and contained bounds do not exist.
-- [ ] **Step 4: Implement alternate physical geometry.** Preserve raised constants/positions exactly. For contained style use a horizontal contour with existing outer-corner option, a token-aligned visible circle that fits in 75px, and an independently ≥48px transparent interaction shell.
-- [ ] **Step 5: Run GREEN and inspect focused raster.** Verify both variants, top-border/edge-shape independence, actions and safe-area mount; do not replace old golden/raster proof.
+- [x] **Step 1: Write RED settings/tuner tests.** The default raised and tuner `containedFlat` choice were requested before the settings enum/input existed.
+- [x] **Step 2: Write RED geometry/raster/semantics tests.** The tests freeze the raised 99/75/24/84 geometry and require a flat centre, contained smaller ring, ≥48px hit target, action callbacks, outer edge/border and SafeArea coverage.
+- [x] **Step 3: Run RED.** The source failed to compile because `DashboardBottomNavLayoutStyle`, the BNB input and flat-contour flag did not yet exist.
+- [x] **Step 4: Implement alternate physical geometry.** Raised keeps its exact 96px shell/84px ring/24px overflow. `containedFlat` uses a 72px semantics shell and 60px visible ring wholly inside the 75px bar, with the single contour owner switched to horizontal-centre mode.
+- [x] **Step 5: Run GREEN and inspect focused raster.** BNB raster/bounds/interaction/SafeArea and tuner/app suites are green; the raised raster remains an independent positive control.
 - [ ] **Step 6: Commit and journal.** Make atomic application then one-file journal commit.
 
 ### Task 5: Whole-package verification and delivery evidence

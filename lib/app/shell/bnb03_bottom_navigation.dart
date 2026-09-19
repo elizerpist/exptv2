@@ -22,6 +22,7 @@ final class Bnb03BottomNavigationContour {
     required this.fabCenterY,
     required this.fabRadius,
     required this.cornerRadius,
+    this.hasCentralProtrusion = true,
   });
 
   final DashboardBottomNavEdgeShape edgeShape;
@@ -29,6 +30,7 @@ final class Bnb03BottomNavigationContour {
   final double fabCenterY;
   final double fabRadius;
   final double cornerRadius;
+  final bool hasCentralProtrusion;
 
   Path physicalPath(Size size) {
     final path = topContour(size)
@@ -50,7 +52,9 @@ final class Bnb03BottomNavigationContour {
         ..moveTo(0, radius)
         ..quadraticBezierTo(0, 0, radius, 0);
     }
-    final verticalDistance = fabCenterY.abs();
+    final verticalDistance = hasCentralProtrusion
+        ? fabCenterY.abs()
+        : fabRadius;
     final arcHalfWidth = verticalDistance >= fabRadius
         ? 0.0
         : math.sqrt(
@@ -110,6 +114,7 @@ final class Bnb03BottomNavigationContour {
   /// so symmetry and clearance can be tested without relying on a raster.
   double topEdgeYAt(double x) {
     final dx = (x - fabCenterX).abs();
+    if (!hasCentralProtrusion) return 0;
     final verticalDistance = fabCenterY.abs();
     final arcHalfWidth = verticalDistance >= fabRadius
         ? 0.0
@@ -236,6 +241,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
     this.fontFamily = 'SF Pro Text',
     this.edgeShape = DashboardBottomNavEdgeShape.rounded,
     this.topBorder = DashboardBottomNavTopBorder.off,
+    this.layoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
   });
 
   final Bnb03Item selected;
@@ -249,11 +255,16 @@ class Bnb03BottomNavigation extends StatelessWidget {
   final String fontFamily;
   final DashboardBottomNavEdgeShape edgeShape;
   final DashboardBottomNavTopBorder topBorder;
+  final DashboardBottomNavLayoutStyle layoutStyle;
 
   static const double _figmaWidth = 428;
   static const double _barHeight = 75;
   static const double _overflowTop = 24;
   static const double _totalHeight = _barHeight + _overflowTop;
+  static const double _raisedFabShellDiameter = 96;
+  static const double _raisedFabVisibleDiameter = 84;
+  static const double _containedFabShellDiameter = 72;
+  static const double _containedFabVisibleDiameter = 60;
 
   static const Color _unselected = Color(0xFF9DB2CE);
 
@@ -268,24 +279,39 @@ class Bnb03BottomNavigation extends StatelessWidget {
         final scale = actualWidth / _figmaWidth;
 
         double s(double value) => value * scale;
+        final isRaised = layoutStyle == DashboardBottomNavLayoutStyle.raisedFab;
+        final overflowTop = isRaised ? s(_overflowTop) : 0.0;
+        final totalHeight = isRaised ? s(_totalHeight) : s(_barHeight);
+        final fabShellDiameter = s(
+          isRaised ? _raisedFabShellDiameter : _containedFabShellDiameter,
+        );
+        final fabVisibleDiameter = s(
+          isRaised ? _raisedFabVisibleDiameter : _containedFabVisibleDiameter,
+        );
+        final fabShellInset = (fabShellDiameter - fabVisibleDiameter) / 2;
+        final fabTop = isRaised ? 0.0 : (s(_barHeight) - fabShellDiameter) / 2;
         final contour = Bnb03BottomNavigationContour(
           edgeShape: edgeShape,
           fabCenterX: actualWidth / 2,
-          // The bar begins 24px below the 96px outer FAB canvas.
-          fabCenterY: s(24),
+          // Raised BNB-03 begins 24px below its 96px shell. The contained
+          // variant has no centre contour and keeps its visible 60px ring
+          // entirely inside the physical 75px bar.
+          fabCenterY: isRaised ? s(24) : s(_barHeight) / 2,
           fabRadius: s(48),
           cornerRadius: s(32),
+          hasCentralProtrusion: isRaised,
         );
 
         return SizedBox(
+          key: const ValueKey('bnb03-navigation-envelope'),
           width: actualWidth,
-          height: s(_totalHeight),
+          height: totalHeight,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
               Positioned(
                 left: 0,
-                top: s(_overflowTop),
+                top: overflowTop,
                 width: actualWidth,
                 height: s(_barHeight),
                 child: CustomPaint(
@@ -297,7 +323,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
               // Left group: x=25, width=142, gap=8.
               Positioned(
                 left: s(25),
-                top: s(_overflowTop),
+                top: overflowTop,
                 width: s(142),
                 height: s(75),
                 child: Row(
@@ -335,7 +361,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
               // Right group: x=273, width=130, gap=8.
               Positioned(
                 left: s(273),
-                top: s(_overflowTop),
+                top: overflowTop,
                 width: s(130),
                 height: s(75),
                 child: Row(
@@ -370,15 +396,17 @@ class Bnb03BottomNavigation extends StatelessWidget {
                 ),
               ),
 
-              // The outer 96px FAB shell and physical contour share their
-              // exact centre. The wrapper begins 24px above the 75px bar.
+              // Raised BNB-03 keeps its original 96/84 shell/ring and 24px
+              // overflow. The contained alternative uses a 72px hit shell
+              // around a 60px ring, both within the 75px physical bar.
               Positioned(
                 key: const ValueKey('bnb03-fab-layer'),
-                left: actualWidth / 2 - s(48),
-                top: 0,
-                width: s(96),
-                height: s(96),
+                left: actualWidth / 2 - fabShellDiameter / 2,
+                top: fabTop,
+                width: fabShellDiameter,
+                height: fabShellDiameter,
                 child: Semantics(
+                  key: const ValueKey('bnb03-fab-hit-target'),
                   button: true,
                   selected: selected == Bnb03Item.shop,
                   label: 'Shop',
@@ -388,7 +416,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                       customBorder: const CircleBorder(),
                       onTap: () => onChanged(Bnb03Item.shop),
                       child: Container(
-                        padding: EdgeInsets.all(s(6)),
+                        padding: EdgeInsets.all(fabShellInset),
                         decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
@@ -431,7 +459,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
                 Positioned(
                   key: const ValueKey('bnb03-top-contour-layer'),
                   left: 0,
-                  top: s(_overflowTop),
+                  top: overflowTop,
                   width: actualWidth,
                   height: s(_barHeight),
                   child: IgnorePointer(

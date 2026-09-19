@@ -65,6 +65,22 @@ void main() {
     expect(physical.fabRadius - 42, 6);
   });
 
+  test('contained-flat contour keeps the centre top edge horizontal', () {
+    const contained = Bnb03BottomNavigationContour(
+      edgeShape: DashboardBottomNavEdgeShape.rounded,
+      fabCenterX: 214,
+      fabCenterY: 37.5,
+      fabRadius: 30,
+      cornerRadius: 32,
+      hasCentralProtrusion: false,
+    );
+
+    expect(contained.topEdgeYAt(214), 0);
+    expect(contained.topEdgeYAt(190), 0);
+    expect(contained.topEdgeYAt(238), 0);
+    expect(contained.topContour(size).getBounds().top, 0);
+  });
+
   testWidgets('shape and border controls preserve the authored FAB rect', (
     tester,
   ) async {
@@ -132,6 +148,189 @@ void main() {
       find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
     );
     expect(fab.center.dx, bar.center.dx);
+  });
+
+  testWidgets(
+    'contained-flat style has a wholly-contained smaller visible FAB and a 48px hit target',
+    (tester) async {
+      Bnb03Item? selected;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: Bnb03BottomNavigation(
+                width: 428,
+                selected: Bnb03Item.home,
+                layoutStyle: DashboardBottomNavLayoutStyle.containedFlat,
+                topBorder: DashboardBottomNavTopBorder.thinGrey,
+                onChanged: (item) => selected = item,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final bar = tester.getRect(
+        find.byKey(const ValueKey('bnb03-physical-bar-surface')),
+      );
+      final visibleFab = tester.getRect(
+        find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+      );
+      final hitTarget = tester.getRect(
+        find.byKey(const ValueKey('bnb03-fab-hit-target')),
+      );
+      expect(bar.height, 75);
+      expect(visibleFab.width, lessThan(84));
+      expect(visibleFab.top, greaterThanOrEqualTo(bar.top));
+      expect(visibleFab.bottom, lessThanOrEqualTo(bar.bottom));
+      expect(visibleFab.center.dx, bar.center.dx);
+      expect(hitTarget.width, greaterThanOrEqualTo(48));
+      expect(hitTarget.height, greaterThanOrEqualTo(48));
+      expect(
+        find.byKey(const ValueKey('bnb03-top-contour-overlay')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('bnb03-fab-hit-target')));
+      expect(selected, Bnb03Item.shop);
+      await tester.tap(find.text('Home'));
+      expect(selected, Bnb03Item.home);
+    },
+  );
+
+  testWidgets('raised style remains the default 24px-overflow geometry', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: Bnb03BottomNavigation(
+              width: 428,
+              selected: Bnb03Item.home,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final navigation = tester.getRect(
+      find.byKey(const ValueKey('bnb03-navigation-envelope')),
+    );
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('bnb03-physical-bar-surface')),
+    );
+    final visibleFab = tester.getRect(
+      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+    );
+    expect(navigation.height, 99);
+    expect(bar.top - navigation.top, 24);
+    expect(visibleFab.width, 84);
+  });
+
+  testWidgets('contained-flat raster keeps the border horizontal at centre', (
+    tester,
+  ) async {
+    const boundaryKey = ValueKey<String>('bnb03-contained-raster-boundary');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: RepaintBoundary(
+            key: boundaryKey,
+            child: Bnb03BottomNavigation(
+              width: 428,
+              selected: Bnb03Item.home,
+              layoutStyle: DashboardBottomNavLayoutStyle.containedFlat,
+              topBorder: DashboardBottomNavTopBorder.thinGrey,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(boundaryKey),
+    );
+    final image = (await tester.runAsync(
+      () => boundary.toImage(pixelRatio: 1),
+    ))!;
+    try {
+      final bytes = await tester.runAsync(
+        () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+      );
+      expect(bytes, isNotNull);
+      for (final point in const <Offset>[
+        Offset(190, 0),
+        Offset(214, 0),
+        Offset(238, 0),
+      ]) {
+        expect(
+          _hasBorderPixelNear(
+            bytes!,
+            width: image.width,
+            height: image.height,
+            center: point,
+          ),
+          isTrue,
+          reason: 'Expected a horizontal contained border near $point.',
+        );
+      }
+    } finally {
+      image.dispose();
+    }
+  });
+
+  testWidgets('contained-flat keeps edge, border, and SafeArea behavior', (
+    tester,
+  ) async {
+    tester.view.padding = const FakeViewPadding(bottom: 24);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: SafeArea(
+            top: false,
+            child: Bnb03BottomNavigation(
+              width: 428,
+              selected: Bnb03Item.home,
+              edgeShape: DashboardBottomNavEdgeShape.straight,
+              layoutStyle: DashboardBottomNavLayoutStyle.containedFlat,
+              topBorder: DashboardBottomNavTopBorder.off,
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final bar = tester.getRect(
+      find.byKey(const ValueKey('bnb03-physical-bar-surface')),
+    );
+    final ring = tester.getRect(
+      find.byKey(const ValueKey('bnb03-fab-outer-purple-ring')),
+    );
+    expect(
+      find.byKey(const ValueKey('bnb03-top-contour-overlay')),
+      findsNothing,
+    );
+    expect(ring.top, greaterThanOrEqualTo(bar.top));
+    expect(ring.bottom, lessThanOrEqualTo(bar.bottom));
+
+    const straightFlat = Bnb03BottomNavigationContour(
+      edgeShape: DashboardBottomNavEdgeShape.straight,
+      fabCenterX: 214,
+      fabCenterY: 37.5,
+      fabRadius: 30,
+      cornerRadius: 32,
+      hasCentralProtrusion: false,
+    );
+    expect(
+      straightFlat.physicalPath(size).contains(const Offset(0, .25)),
+      isTrue,
+    );
   });
 
   testWidgets(

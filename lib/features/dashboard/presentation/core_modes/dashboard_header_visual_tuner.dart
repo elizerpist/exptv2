@@ -1798,6 +1798,17 @@ final class _DashboardBottomNavPresentationSection extends StatelessWidget {
         builder: (context, settings, _) => _TunerSection(
           title: 'BottomNav',
           children: <Widget>[
+            _SummaryRadioGroup<DashboardBottomNavLayoutStyle>(
+              label: 'Elrendezés',
+              value: settings.bottomNavLayoutStyle,
+              values: DashboardBottomNavLayoutStyle.values,
+              itemLabel: (value) =>
+                  value == DashboardBottomNavLayoutStyle.raisedFab
+                  ? 'Kiemelkedő közép'
+                  : 'Sík, benne lévő közép',
+              onChanged: controller.selectBottomNavLayoutStyle,
+              keyPrefix: 'dashboard-bottom-nav-layout',
+            ),
             _SummaryRadioGroup<DashboardBottomNavEdgeShape>(
               label: 'Felső szélek',
               value: settings.bottomNavEdgeShape,
