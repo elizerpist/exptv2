@@ -19,3 +19,11 @@
 | SAFE-01 | no duplicate Query/data owner; no protected motion/data architecture change | all | source/boundary audit | DONE |
 | DELIVERY-01 | focused suites, analyzer, CI/APK and exact-source SCIP are recorded | delivery | command/Actions/manifest evidence | PARTIAL |
 | PHYSICAL-01 | exact APK is tested by the user on Android | user | user validation | NOT DONE |
+
+## Delivery evidence — 2026-09-19
+
+- Final production application source: `299196d4ceb07cd6a98dd5704cbb00df5516a436`. Later commits `649a5c04` and `9afafd28` are test-only and journal-only respectively; neither changes application source.
+- Local evidence: combined Sum/Year viewport suite PASS (34), `flutter analyze --no-pub` PASS, `./scripts/test-fluvi-fast.sh` PASS (431), and `./scripts/verify-fluvi-boundaries.sh` PASS.
+- Exact application workflow `35460432390`: dashboard-paths, test-flutter, test-core and build-human-diagnostic-apk PASS. The workflow is FAIL overall only because run-dashboard-profile reaches the inherited `Mind Year heatmap profile evidence frame_timing_headroom is invalid: null` gate; this leaves DELIVERY-01 PARTIAL.
+- Exact normal human APK: `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_299196d.apk`, 83,793,201 bytes, SHA-256 `033759d8500bf6ff263a46879c89b21f340c83d17b14fadb3ba55d879de54545`; release target and embedded build marker are `299196d4ceb07cd6a98dd5704cbb00df5516a436`.
+- Exact-source SCIP: tooling commit `96124386a7e6e9b424ece8f2b3c31012706c26de`; manifest source head `299196d4ceb07cd6a98dd5704cbb00df5516a436`, index SHA-256 `af541117c85c3f8a75339471c90138a7a526f1c59f8d91f1de7fd8ae7b27211b`, 476 documents, 327,273 occurrences, 11,139 repository-defined symbols. Independent regeneration produced no diff.
