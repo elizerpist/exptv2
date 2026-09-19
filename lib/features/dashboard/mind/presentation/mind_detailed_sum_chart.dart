@@ -1,0 +1,419 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../query/presentation/query_menu_formatters.dart';
+import '../../time_navigation/domain/local_date.dart';
+import '../domain/mind_detailed_sum_chart_model.dart';
+import '../domain/mind_temporal_heatmap_projection.dart';
+
+/// The preserved third Sum card. It owns only its local time-window gesture
+/// state and renders the immutable range-preview day series supplied by the
+/// admitted Sum frame. It has no Core, Query or repository write path.
+final class MindDetailedSumChart extends StatelessWidget {
+  const MindDetailedSumChart({
+    super.key,
+    required this.frame,
+    required this.lineColor,
+    required this.scrollController,
+  });
+
+  static const _minimumTwoYearBandHeight = 118.0;
+
+  final MindSumHeatmapFrame frame;
+  final Color lineColor;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final years = frame.years;
+      final availableHeight = constraints.maxHeight.isFinite
+          ? constraints.maxHeight
+          : _minimumTwoYearBandHeight * 2;
+      final bandHeight = switch (years.length) {
+        0 => _minimumTwoYearBandHeight,
+        1 => math.max(_minimumTwoYearBandHeight, availableHeight),
+        2 => math.max(_minimumTwoYearBandHeight, (availableHeight - 8) / 2),
+        _ => _minimumTwoYearBandHeight,
+      };
+      return ListView.separated(
+        key: const ValueKey<String>('mind-sum-detailed-scroll'),
+        controller: scrollController,
+        padding: EdgeInsets.zero,
+        itemCount: years.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final year = years[index];
+          return SizedBox(
+            height: bandHeight,
+            child: _MindDetailedSumYearBand(
+              key: ValueKey<String>('mind-sum-detailed-band-$year'),
+              year: year,
+              frameIdentity: frame.identity,
+              points: frame.dailyPointsForYear(year),
+              lineColor: lineColor,
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+final class _MindDetailedSumYearBand extends StatefulWidget {
+  const _MindDetailedSumYearBand({
+    super.key,
+    required this.year,
+    required this.frameIdentity,
+    required this.points,
+    required this.lineColor,
+  });
+
+  final int year;
+  final MindTemporalHeatmapIdentity frameIdentity;
+  final List<MindSumHeatmapDailyPoint> points;
+  final Color lineColor;
+
+  @override
+  State<_MindDetailedSumYearBand> createState() =>
+      _MindDetailedSumYearBandState();
+}
+
+final class _MindDetailedSumYearBandState
+    extends State<_MindDetailedSumYearBand> {
+  late MindDetailedSumTimeWindow _window;
+  MindDetailedSumTimeWindow? _scaleStartWindow;
+
+  @override
+  void initState() {
+    super.initState();
+    _window = MindDetailedSumTimeWindow.fullYear(widget.year);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MindDetailedSumYearBand oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.year != widget.year ||
+        oldWidget.frameIdentity != widget.frameIdentity) {
+      _window = MindDetailedSumTimeWindow.fullYear(widget.year);
+      _scaleStartWindow = null;
+    }
+  }
+
+  bool get _isZoomed => _window.visibleDayCount < _window.homeDayCount;
+
+  void _onScaleStart(ScaleStartDetails _) => _scaleStartWindow = _window;
+
+  void _onScaleUpdate(
+    ScaleUpdateDetails details,
+    double plotLeft,
+    double plotWidth,
+  ) {
+    final start = _scaleStartWindow;
+    if (details.pointerCount < 2 || start == null || plotWidth <= 0) return;
+    final fraction = ((details.localFocalPoint.dx - plotLeft) / plotWidth)
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final focalEpochDay =
+        start.startEpochDay + (start.visibleDayCount - 1) * fraction;
+    final next = start.zoom(
+      scaleDelta: details.scale,
+      focalEpochDay: focalEpochDay.round(),
+    );
+    if (next == _window) return;
+    setState(() => _window = next);
+  }
+
+  void _onScaleEnd(ScaleEndDetails _) => _scaleStartWindow = null;
+
+  void _panBy(DragUpdateDetails details, double plotWidth) {
+    if (plotWidth <= 0 || !_isZoomed) return;
+    final days = (-details.delta.dx / plotWidth * _window.visibleDayCount)
+        .round();
+    if (days == 0) return;
+    setState(() => _window = _window.panByDays(days));
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const headerHeight = 16.0;
+      const axisLeft = 34.0;
+      const axisBottom = 18.0;
+      final plotWidth = math.max(1.0, constraints.maxWidth - axisLeft - 3);
+      final lod = MindDetailedSumLod.sample(
+        points: widget.points,
+        window: _window,
+        pixelWidth: plotWidth,
+      );
+      final maximum = math.max(
+        1,
+        lod.fold<int>(0, (value, point) => math.max(value, point.total)),
+      );
+      final chart = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onScaleStart: _onScaleStart,
+        onScaleUpdate: (details) =>
+            _onScaleUpdate(details, axisLeft, plotWidth),
+        onScaleEnd: _onScaleEnd,
+        child: CustomPaint(
+          key: ValueKey<String>('mind-sum-detailed-plot-${widget.year}'),
+          painter: _MindDetailedSumPainter(
+            points: lod,
+            window: _window,
+            lineColor: widget.lineColor,
+            axisLeft: axisLeft,
+            axisBottom: axisBottom,
+            maximum: maximum,
+          ),
+          child: const SizedBox.expand(),
+        ),
+      );
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: headerHeight,
+            child: Row(
+              children: <Widget>[
+                Text(
+                  '${widget.year}',
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Semantics(
+                  key: ValueKey<String>(
+                    'mind-sum-detailed-window-${widget.year}',
+                  ),
+                  label: '${_window.startEpochDay}:${_window.endEpochDay}',
+                  child: const SizedBox(width: 0, height: 0),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: _isZoomed
+                      ? GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onHorizontalDragUpdate: (details) =>
+                              _panBy(details, plotWidth),
+                          child: chart,
+                        )
+                      : chart,
+                ),
+                Positioned(
+                  left: 0,
+                  top: 2,
+                  bottom: axisBottom,
+                  width: axisLeft - 3,
+                  child: _MindDetailedSumYAxis(
+                    year: widget.year,
+                    maximum: maximum,
+                  ),
+                ),
+                Positioned(
+                  left: axisLeft,
+                  right: 0,
+                  bottom: 0,
+                  height: axisBottom,
+                  child: _MindDetailedSumMonthAxis(
+                    year: widget.year,
+                    window: _window,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+final class _MindDetailedSumYAxis extends StatelessWidget {
+  const _MindDetailedSumYAxis({required this.year, required this.maximum});
+
+  final int year;
+  final int maximum;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: <Widget>[
+      for (var index = 3; index >= 0; index -= 1)
+        Text(
+          _formatMinor(maximum * index ~/ 3),
+          key: ValueKey<String>('mind-sum-detailed-axis-y-$year-$index'),
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          style: const TextStyle(
+            color: FluviVisualTokens.textSecondary,
+            fontSize: 7,
+          ),
+        ),
+    ],
+  );
+}
+
+final class _MindDetailedSumMonthAxis extends StatelessWidget {
+  const _MindDetailedSumMonthAxis({required this.year, required this.window});
+
+  final int year;
+  final MindDetailedSumTimeWindow window;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final start = window.startEpochDay;
+      final span = math.max(1, window.visibleDayCount - 1);
+      return Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          for (var month = 1; month <= 12; month += 1)
+            if (_positionFor(month, start, span) case final fraction?)
+              Positioned(
+                left: (constraints.maxWidth * fraction - 3)
+                    .clamp(0.0, math.max(0.0, constraints.maxWidth - 7))
+                    .toDouble(),
+                top: 2,
+                child: Text(
+                  _monthInitials[month - 1],
+                  key: ValueKey<String>(
+                    'mind-sum-detailed-axis-month-$year-$month',
+                  ),
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 7,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+        ],
+      );
+    },
+  );
+
+  double? _positionFor(int month, int start, int span) {
+    final epoch = LocalDate(year: year, month: month, day: 1).epochDay;
+    if (epoch < window.startEpochDay || epoch > window.endEpochDay) return null;
+    return ((epoch - start) / span).clamp(0.0, 1.0).toDouble();
+  }
+}
+
+final class _MindDetailedSumPainter extends CustomPainter {
+  const _MindDetailedSumPainter({
+    required this.points,
+    required this.window,
+    required this.lineColor,
+    required this.axisLeft,
+    required this.axisBottom,
+    required this.maximum,
+  });
+
+  final List<MindSumHeatmapDailyPoint> points;
+  final MindDetailedSumTimeWindow window;
+  final Color lineColor;
+  final double axisLeft;
+  final double axisBottom;
+  final int maximum;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final plot = Rect.fromLTWH(
+      axisLeft,
+      3,
+      math.max(0, size.width - axisLeft - 3),
+      math.max(0, size.height - axisBottom - 4),
+    );
+    if (plot.width <= 0 || plot.height <= 0) return;
+    final guide = Paint()
+      ..color = FluviVisualTokens.textSecondary.withValues(alpha: .15)
+      ..strokeWidth = .75;
+    for (var index = 0; index < 4; index += 1) {
+      final y = plot.top + plot.height * index / 3;
+      canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), guide);
+    }
+    if (points.isEmpty) return;
+    Offset pointAt(MindSumHeatmapDailyPoint point) {
+      final fraction = window.normalizedPositionOf(point.date.epochDay);
+      final intensity = (point.total / maximum).clamp(0.0, 1.0).toDouble();
+      return Offset(
+        plot.left + plot.width * fraction,
+        plot.bottom - plot.height * intensity,
+      );
+    }
+
+    final offsets = points.map(pointAt).toList(growable: false);
+    final line = Path()..moveTo(offsets.first.dx, offsets.first.dy);
+    for (final offset in offsets.skip(1)) {
+      line.lineTo(offset.dx, offset.dy);
+    }
+    final fill = Path.from(line)
+      ..lineTo(offsets.last.dx, plot.bottom)
+      ..lineTo(offsets.first.dx, plot.bottom)
+      ..close();
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            lineColor.withValues(alpha: .28),
+            lineColor.withValues(alpha: 0),
+          ],
+        ).createShader(plot),
+    );
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = lineColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.7
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    final marker = Paint()..color = lineColor;
+    for (final offset in offsets) {
+      canvas.drawCircle(offset, 1.5, marker);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MindDetailedSumPainter oldDelegate) =>
+      oldDelegate.points != points ||
+      oldDelegate.window != window ||
+      oldDelegate.lineColor != lineColor ||
+      oldDelegate.maximum != maximum;
+}
+
+String _formatMinor(int minor) {
+  final forints = minor ~/ 100;
+  if (forints >= 1000000) return '${(forints / 1000000).toStringAsFixed(0)} M';
+  if (forints >= 1000) return '${(forints / 1000).toStringAsFixed(0)} k';
+  return QueryMenuFormatters.money(forints);
+}
+
+const _monthInitials = <String>[
+  'J',
+  'F',
+  'M',
+  'Á',
+  'M',
+  'J',
+  'J',
+  'A',
+  'S',
+  'O',
+  'N',
+  'D',
+];

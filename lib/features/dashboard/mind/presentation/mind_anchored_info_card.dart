@@ -9,22 +9,26 @@ final class MindAnchoredInfoCard extends StatelessWidget {
   const MindAnchoredInfoCard({
     super.key,
     required this.globalAnchor,
+    required this.cardKey,
     required this.child,
     this.estimatedWidth = 126,
     this.estimatedHeight = 48,
     this.edgeInset = 2,
+    this.ignorePointer = false,
   });
 
   final Offset globalAnchor;
+  final GlobalKey cardKey;
   final Widget child;
   final double estimatedWidth;
   final double estimatedHeight;
   final double edgeInset;
+  final bool ignorePointer;
 
   @override
   Widget build(BuildContext context) => Builder(
     builder: (context) {
-      final box = context.findRenderObject() as RenderBox?;
+      final box = cardKey.currentContext?.findRenderObject() as RenderBox?;
       final origin = box?.localToGlobal(Offset.zero) ?? Offset.zero;
       final anchor = globalAnchor - origin;
       final width = box?.size.width ?? estimatedWidth + edgeInset * 2;
@@ -42,7 +46,11 @@ final class MindAnchoredInfoCard extends StatelessWidget {
             math.max(edgeInset, height - estimatedHeight - edgeInset),
           )
           .toDouble();
-      return Positioned(top: top, left: left, child: child);
+      return Positioned(
+        top: top,
+        left: left,
+        child: ignorePointer ? IgnorePointer(child: child) : child,
+      );
     },
   );
 }

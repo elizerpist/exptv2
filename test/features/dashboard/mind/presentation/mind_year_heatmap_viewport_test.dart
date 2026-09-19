@@ -496,6 +496,17 @@ void main() {
       );
       expect(find.textContaining('2025.'), findsOneWidget);
       expect(find.textContaining('1 000 Ft'), findsOneWidget);
+      final dismiss = find.byKey(
+        const ValueKey('mind-year-day-infocard-dismiss'),
+      );
+      expect(dismiss, findsOneWidget);
+      await tester.tap(dismiss);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-day-infocard')),
+        findsNothing,
+        reason: 'An anchored popup retains an explicit accessible dismissal.',
+      );
     },
   );
 
@@ -533,6 +544,55 @@ void main() {
         find.byKey(const ValueKey('mind-year-day-infocard')),
         findsNothing,
         reason: 'The tap observer must not enter the Scrollable gesture arena.',
+      );
+    },
+  );
+
+  testWidgets(
+    'YEAR-DAY-INFO-ANCHOR-01: day infocards follow their actual colored cells instead of a fixed annual origin',
+    (tester) async {
+      final frame = ValueNotifier(
+        _inspectionProjection(includeSeptemberDay: true).preview(range),
+      );
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      final januaryDay = find.byKey(
+        const ValueKey('mind-year-heatmap-day-tap-2025-1-2'),
+      );
+      await tester.tap(januaryDay);
+      await tester.pump();
+      final januaryPopup = tester.getRect(
+        find.byKey(const ValueKey('mind-year-day-infocard')),
+      );
+      expect(
+        (januaryPopup.center.dx - tester.getRect(januaryDay).center.dx).abs(),
+        lessThan(100),
+      );
+
+      final septemberDay = find.byKey(
+        const ValueKey('mind-year-heatmap-day-tap-2025-9-2'),
+      );
+      await tester.tap(septemberDay);
+      await tester.pump();
+      final septemberPopup = tester.getRect(
+        find.byKey(const ValueKey('mind-year-day-infocard')),
+      );
+      expect(septemberPopup.center.dx, greaterThan(januaryPopup.center.dx));
+      expect(
+        (septemberPopup.center.dx - tester.getRect(septemberDay).center.dx)
+            .abs(),
+        lessThan(100),
       );
     },
   );
@@ -1447,6 +1507,7 @@ MindYearHeatmapProjection _inspectionProjection({
   int year = 2025,
   String upstreamScopeKey = 'expense|year:2025',
   int coreRevision = 1,
+  bool includeSeptemberDay = false,
 }) => MindYearHeatmapProjection.build(
   identity: MindYearHeatmapIdentity(
     upstreamScopeKey: upstreamScopeKey,
@@ -1457,6 +1518,8 @@ MindYearHeatmapProjection _inspectionProjection({
   ),
   entries: <DashboardLedgerEntry>[
     _entry('a', 100000, LocalDate(year: year, month: 1, day: 2)),
+    if (includeSeptemberDay)
+      _entry('september', 200000, LocalDate(year: year, month: 9, day: 2)),
   ],
   monthlyAggregates: MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
     year: year,
@@ -1480,6 +1543,16 @@ MindYearHeatmapProjection _inspectionProjection({
             ).epochDay,
             amountMinor: 100000,
           ),
+          if (includeSeptemberDay)
+            MindYearHeatmapPreparedContribution(
+              ordinal: 1,
+              bookedLocalEpochDay: LocalDate(
+                year: year,
+                month: 9,
+                day: 2,
+              ).epochDay,
+              amountMinor: 200000,
+            ),
         ],
       ),
   inspectionScope: const MindYearHeatmapInspectionScope(

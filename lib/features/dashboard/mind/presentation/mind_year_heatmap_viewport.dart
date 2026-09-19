@@ -154,6 +154,7 @@ final class MindYearHeatmapViewport extends StatefulWidget {
 
 final class _MindYearHeatmapViewportState
     extends State<MindYearHeatmapViewport> {
+  final _heatmapCardKey = GlobalKey();
   late bool _hasFrame;
   int? _geometryYear;
   MindYearHeatmapIdentity? _staticFrameIdentity;
@@ -304,7 +305,11 @@ final class _MindYearHeatmapViewportState
   }
 
   void _onDayTapped(MindYearHeatmapDay day, Offset anchor) {
-    setState(() => _selectedDay = _MindYearDaySelection(day, anchor));
+    setState(() {
+      _selectedDay = _selectedDay?.day.date == day.date
+          ? null
+          : _MindYearDaySelection(day, anchor);
+    });
   }
 
   @override
@@ -504,11 +509,13 @@ final class _MindYearHeatmapViewportState
               KeyedSubtree(
                 key: const ValueKey<String>('mind-year-heatmap-page-0'),
                 child: Stack(
+                  key: _heatmapCardKey,
                   children: <Widget>[
                     heatmapPage,
                     if (_selectedDay case final selection?)
                       MindAnchoredInfoCard(
                         globalAnchor: selection.anchor,
+                        cardKey: _heatmapCardKey,
                         child: _MindYearDayInfoCard(
                           day: selection.day,
                           onDismiss: () => setState(() => _selectedDay = null),
@@ -637,10 +644,11 @@ final class _MindYearDayInfoCard extends StatelessWidget {
           ),
           IconButton(
             key: const ValueKey<String>('mind-year-day-infocard-dismiss'),
-            iconSize: 14,
-            visualDensity: VisualDensity.compact,
+            tooltip: 'Bezárás',
             onPressed: onDismiss,
-            icon: const Icon(Icons.close),
+            constraints: const BoxConstraints.tightFor(width: 18, height: 18),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.close, size: 12),
           ),
         ],
       ),
