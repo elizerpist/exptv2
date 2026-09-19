@@ -19,7 +19,9 @@ extension SummaryPillVariantPresentation on SummaryPillVariant {
 /// comparison, so persistence would be a separate product decision.
 final class SummaryPillVariantController
     extends ValueNotifier<SummaryPillVariant> {
-  SummaryPillVariantController() : super(SummaryPillVariant.legacy);
+  SummaryPillVariantController({
+    SummaryPillVariant initialVariant = SummaryPillVariant.segmented,
+  }) : super(initialVariant);
 
   int _transitionEpoch = 0;
 

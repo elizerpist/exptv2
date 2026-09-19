@@ -91,6 +91,7 @@ class CoreDashboard extends StatefulWidget {
     this.initialLogBoxReadinessActive = false,
     this.shellPresentation,
     this.mindQueryFacetLoader,
+    this.initialSummaryPillVariant = SummaryPillVariant.segmented,
   });
 
   final DashboardCoreController controller;
@@ -106,6 +107,7 @@ class CoreDashboard extends StatefulWidget {
   final bool initialLogBoxReadinessActive;
   final DashboardShellPresentationController? shellPresentation;
   final DashboardAppliedQueryFacetLoader? mindQueryFacetLoader;
+  final SummaryPillVariant initialSummaryPillVariant;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -152,7 +154,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   int? _mindAmountPreviewPrimeSignature;
   bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
-  SummaryPillVariant _lastSummaryPillVariant = SummaryPillVariant.legacy;
+  late SummaryPillVariant _lastSummaryPillVariant;
   int _lastSummaryVariantTransitionLayoutEpoch = 0;
   int? _lastRejectedSummaryVariantCallbackEpoch;
   double _mindModeContentExtraHeight = 0;
@@ -166,7 +168,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     _mindModeContentExtraHeight = _resolveMindModeContentExtraHeight();
     _summaryMotionController = SummaryNavigationMotionController();
     _summaryMotionController.addListener(_onSummaryTextMotionChanged);
-    _summaryPillVariantController = SummaryPillVariantController();
+    _summaryPillVariantController = SummaryPillVariantController(
+      initialVariant: widget.initialSummaryPillVariant,
+    );
+    _lastSummaryPillVariant = _summaryPillVariantController.value;
     _bodyOrderController = DashboardBodyOrderController();
     _budgetContentCardStyle = BudgetContentCardStyleController();
     _budgetSectionOrderController = BudgetSectionOrderController();

@@ -4,7 +4,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presenta
 
 void main() {
   test(
-    'Summary presentation defaults preserve the current visual contract',
+    'SUMMARY-DEFAULT-02: Summary presentation defaults to mirrored segmented geometry',
     () {
       final controller = DashboardSummaryPresentationController();
       addTearDown(controller.dispose);
@@ -16,7 +16,7 @@ void main() {
       );
       expect(
         controller.value.segmentedOrientation,
-        SummarySegmentedOrientation.normal,
+        SummarySegmentedOrientation.mirrored,
       );
     },
   );
@@ -49,7 +49,7 @@ void main() {
     summary.reset();
     expect(
       summary.value.segmentedOrientation,
-      SummarySegmentedOrientation.normal,
+      SummarySegmentedOrientation.mirrored,
     );
     expect(order.value, BudgetSectionOrder.chartThenAvatars);
   });

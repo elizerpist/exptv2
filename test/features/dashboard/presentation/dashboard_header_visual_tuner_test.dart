@@ -265,6 +265,20 @@ void main() {
       SummaryTemporalFlingPresentation.dynamicTrio,
     );
 
+    final normal = find.byKey(
+      ValueKey<String>(
+        'dashboard-summary-segmented-orientation-'
+        '${SummarySegmentedOrientation.normal}',
+      ),
+    );
+    await tester.ensureVisible(normal);
+    await tester.tap(normal);
+    await tester.pump();
+    expect(
+      summary.value.segmentedOrientation,
+      SummarySegmentedOrientation.normal,
+    );
+
     final mirrored = find.byKey(
       ValueKey<String>(
         'dashboard-summary-segmented-orientation-'

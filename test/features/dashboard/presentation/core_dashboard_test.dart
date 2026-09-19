@@ -20,6 +20,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
@@ -145,12 +146,12 @@ void main() {
         241,
       );
       expect(
-        tester
-            .getTopLeft(
-              find.byKey(const ValueKey('dashboard-summary-shell-transform')),
-            )
-            .dy,
-        304,
+        find.byKey(const ValueKey('dashboard-summary-shell-transform')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('summary-pill-experiment-segmented')),
+        findsOneWidget,
       );
       if (spec == DashboardModeSpec.mind) {
         final body = tester.getRect(
@@ -209,6 +210,57 @@ void main() {
       }
     });
   }
+
+  testWidgets(
+    'SUMMARY-DEFAULT-03/04: fresh CoreDashboard mounts segmented mirrored Summary at epoch zero without a synthetic Legacy transition',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      FluviDiagnosticLogger.clear();
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      final tuner = tester.widget<DashboardHeaderVisualTuner>(
+        find.byType(DashboardHeaderVisualTuner),
+      );
+      expect(tuner.summaryPillVariants!.value, SummaryPillVariant.segmented);
+      expect(tuner.summaryPillVariants!.transitionEpoch, 0);
+      expect(
+        tuner.summaryPresentation!.value.segmentedOrientation,
+        SummarySegmentedOrientation.mirrored,
+      );
+      final mode = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-mode-selector'),
+      );
+      final amount = find.byKey(
+        const ValueKey<String>('summary-pill-experiment-amount-zone'),
+      );
+      expect(mode, findsOneWidget);
+      expect(amount, findsOneWidget);
+      expect(
+        tester.getCenter(mode).dx,
+        greaterThan(tester.getCenter(amount).dx),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-summary-shell-transform')),
+        findsNothing,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.where(
+          (event) => event.stage == 'SUMMARY_VARIANT_TRANSITION_STARTED',
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   testWidgets(
     'RG-G5: Mind represents a genuinely unavailable canonical domain explicitly',
@@ -502,6 +554,7 @@ void main() {
           controller: controller,
           modeController: _modeControllerFor(DashboardModeSpec.budget),
           categoryCollection: emptyTestCategoryCollection,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
 

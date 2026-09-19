@@ -24,13 +24,13 @@ final class DashboardSummaryPresentationSettings {
   const DashboardSummaryPresentationSettings({
     required this.showSeparators,
     required this.temporalFlingPresentation,
-    this.segmentedOrientation = SummarySegmentedOrientation.normal,
+    this.segmentedOrientation = SummarySegmentedOrientation.mirrored,
   });
 
   const DashboardSummaryPresentationSettings.defaults()
     : showSeparators = true,
       temporalFlingPresentation = SummaryTemporalFlingPresentation.current,
-      segmentedOrientation = SummarySegmentedOrientation.normal;
+      segmentedOrientation = SummarySegmentedOrientation.mirrored;
 
   final bool showSeparators;
   final SummaryTemporalFlingPresentation temporalFlingPresentation;

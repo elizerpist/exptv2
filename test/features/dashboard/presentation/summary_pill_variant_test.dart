@@ -18,17 +18,23 @@ void main() {
     },
   );
 
-  test('the experiment controller defaults to the legacy control group', () {
-    final controller = SummaryPillVariantController();
-    addTearDown(controller.dispose);
+  test(
+    'SUMMARY-DEFAULT-01: the experiment controller starts segmented at transition epoch zero',
+    () {
+      final controller = SummaryPillVariantController();
+      addTearDown(controller.dispose);
 
-    expect(controller.value, SummaryPillVariant.legacy);
-  });
+      expect(controller.value, SummaryPillVariant.segmented);
+      expect(controller.transitionEpoch, 0);
+    },
+  );
 
   test(
     'variant selection has a monotonic epoch without duplicate transitions',
     () {
-      final controller = SummaryPillVariantController();
+      final controller = SummaryPillVariantController(
+        initialVariant: SummaryPillVariant.legacy,
+      );
       addTearDown(controller.dispose);
 
       expect(controller.transitionEpoch, 0);
@@ -86,6 +92,11 @@ void main() {
         find.byKey(const ValueKey<String>('summary-pill-variant-swipeMode')),
         findsNothing,
       );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('summary-pill-variant-legacy')),
+      );
+      await tester.pump();
+      expect(variants.value, SummaryPillVariant.legacy);
       await tester.tap(
         find.byKey(const ValueKey<String>('summary-pill-variant-segmented')),
       );
