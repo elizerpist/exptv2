@@ -1664,3 +1664,9 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 
 - Application commit `299196d4ceb07cd6a98dd5704cbb00df5516a436` is a one-line presentation correction: only the newly added annual aggregate page uses `Többéves alakulás`; the retained tertiary daily multi-line page keeps the pre-existing `Többéves aktivitás` heading. This protects the explicit instruction to preserve rather than silently redefine that card.
 - Ubuntu/proot `SUM-CARDS-01/02/03` is GREEN. No model, Query, frame, chart point, scroll, range, Core, Time/Avatar or data-store owner changed. Final exact-SHA CI/APK/SCIP and Android physical validation remain pending. Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-19 — Analyzer-clean aggregate chart test follow-up
+
+- Test-only commit `649a5c04863a24cdf865384b59220e0c38f0f332` removes one unnecessary cascade in the Sum month-label test. It does not modify production sources; the final application source remains `299196d4ceb07cd6a98dd5704cbb00df5516a436`.
+- Evidence: the full Ubuntu/proot analyzer initially reported exactly one `avoid_single_cascade_in_expression_statements` finding at this test line. After the mechanical test-only correction, the combined Sum/Year Mind viewport command passes **34 tests** and full `flutter analyze --no-pub` reports `No issues found!` in 123.7 seconds. `dart format --output=none --set-exit-if-changed` and `git diff --check` pass.
+- This does not affect the already pushed exact-application CI/APK/SCIP inputs. Final Actions lane audit, final human APK download/hash and Android physical validation remain pending. Physical validation: `PENDING — USER ONLY`.
