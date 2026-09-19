@@ -535,6 +535,54 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
+              child: Text('Sum évblokk'),
+            ),
+            RadioGroup<MindSumYearRowLayout>(
+              groupValue: settings.sumYearRowLayout,
+              onChanged: (layout) {
+                if (layout != null) controller.setSumYearRowLayout(layout);
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final layout in MindSumYearRowLayout.values)
+                    RadioListTile<MindSumYearRowLayout>(
+                      key: ValueKey('mind-sum-row-layout-${layout.name}'),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(layout.tunerLabel),
+                      value: layout,
+                    ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('Sum hónapjelölés'),
+            ),
+            RadioGroup<MindSumMonthLabelPlacement>(
+              groupValue: settings.sumMonthLabelPlacement,
+              onChanged: (placement) {
+                if (placement != null) {
+                  controller.setSumMonthLabelPlacement(placement);
+                }
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final placement in MindSumMonthLabelPlacement.values)
+                    RadioListTile<MindSumMonthLabelPlacement>(
+                      key: ValueKey(
+                        'mind-sum-month-label-placement-${placement.name}',
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(placement.tunerLabel),
+                      value: placement,
+                    ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
               child: Text('Éves cella stílus'),
             ),
             RadioGroup<MindYearHeatmapAnnualSurfaceStyle>(

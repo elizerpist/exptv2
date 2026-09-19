@@ -67,6 +67,30 @@ enum MindYearMonthCardLayout {
   bool get fitsAnnualViewport => this == fourColumns;
 }
 
+/// Sum-only visual density alternative over the unchanged month frame.
+enum MindSumYearRowLayout {
+  twoRowExpanded,
+  oneRowCompact;
+
+  String get tunerLabel => switch (this) {
+    MindSumYearRowLayout.twoRowExpanded => 'Két soros',
+    MindSumYearRowLayout.oneRowCompact => 'Egy soros, kompakt',
+  };
+}
+
+/// Where the static Hungarian initial appears relative to a Sum month tile.
+enum MindSumMonthLabelPlacement {
+  none,
+  belowEachRow,
+  insideMonthCells;
+
+  String get tunerLabel => switch (this) {
+    MindSumMonthLabelPlacement.none => 'Sehol',
+    MindSumMonthLabelPlacement.belowEachRow => 'Minden sor alatt',
+    MindSumMonthLabelPlacement.insideMonthCells => 'A hónapcellákban',
+  };
+}
+
 /// Immutable user preferences for visualizing an admitted annual heatmap.
 /// None of these values changes financial membership, Query state or score.
 @immutable
@@ -86,6 +110,8 @@ final class MindYearHeatmapPresentationSettings {
     required this.revision,
     this.annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
+    this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
+    this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
   });
 
   const MindYearHeatmapPresentationSettings.defaults()
@@ -95,6 +121,8 @@ final class MindYearHeatmapPresentationSettings {
       showMonthlyDirectionTotal = false,
       annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
       scaleResolution = MindHeatmapScaleResolution.ten,
+      sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
+      sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
@@ -103,6 +131,8 @@ final class MindYearHeatmapPresentationSettings {
   final bool showMonthlyDirectionTotal;
   final MindYearHeatmapAnnualSurfaceStyle annualSurfaceStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindSumYearRowLayout sumYearRowLayout;
+  final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final int revision;
 
   /// A presentation-only annual fit guard. It has no Query, financial, or
@@ -119,6 +149,8 @@ final class MindYearHeatmapPresentationSettings {
     bool? showMonthlyDirectionTotal,
     MindYearHeatmapAnnualSurfaceStyle? annualSurfaceStyle,
     MindHeatmapScaleResolution? scaleResolution,
+    MindSumYearRowLayout? sumYearRowLayout,
+    MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
@@ -128,6 +160,9 @@ final class MindYearHeatmapPresentationSettings {
         showMonthlyDirectionTotal ?? this.showMonthlyDirectionTotal,
     annualSurfaceStyle: annualSurfaceStyle ?? this.annualSurfaceStyle,
     scaleResolution: scaleResolution ?? this.scaleResolution,
+    sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
+    sumMonthLabelPlacement:
+        sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
     revision: revision ?? this.revision,
   );
 
@@ -140,6 +175,8 @@ final class MindYearHeatmapPresentationSettings {
       other.showMonthlyDirectionTotal == showMonthlyDirectionTotal &&
       other.annualSurfaceStyle == annualSurfaceStyle &&
       other.scaleResolution == scaleResolution &&
+      other.sumYearRowLayout == sumYearRowLayout &&
+      other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.revision == revision;
 
   @override
@@ -150,6 +187,8 @@ final class MindYearHeatmapPresentationSettings {
     showMonthlyDirectionTotal,
     annualSurfaceStyle,
     scaleResolution,
+    sumYearRowLayout,
+    sumMonthLabelPlacement,
     revision,
   );
 }
@@ -212,6 +251,24 @@ final class MindYearHeatmapPresentationController
     if (current.scaleResolution == resolution) return;
     value = current.copyWith(
       scaleResolution: resolution,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumYearRowLayout(MindSumYearRowLayout layout) {
+    final current = value;
+    if (current.sumYearRowLayout == layout) return;
+    value = current.copyWith(
+      sumYearRowLayout: layout,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumMonthLabelPlacement(MindSumMonthLabelPlacement placement) {
+    final current = value;
+    if (current.sumMonthLabelPlacement == placement) return;
+    value = current.copyWith(
+      sumMonthLabelPlacement: placement,
       revision: current.revision + 1,
     );
   }

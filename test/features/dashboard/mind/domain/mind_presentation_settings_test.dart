@@ -146,6 +146,36 @@ void main() {
     );
 
     test(
+      'SUM-PRESENT-01 RED: Sum year layout and month-label placement are presentation-only revisioned choices',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.sumYearRowLayout,
+          MindSumYearRowLayout.twoRowExpanded,
+        );
+        expect(
+          controller.value.sumMonthLabelPlacement,
+          MindSumMonthLabelPlacement.none,
+        );
+        expect(controller.value.revision, 0);
+
+        controller.setSumYearRowLayout(MindSumYearRowLayout.oneRowCompact);
+        controller.setSumMonthLabelPlacement(
+          MindSumMonthLabelPlacement.insideMonthCells,
+        );
+        expect(controller.value.revision, 2);
+
+        controller.setSumYearRowLayout(MindSumYearRowLayout.oneRowCompact);
+        controller.setSumMonthLabelPlacement(
+          MindSumMonthLabelPlacement.insideMonthCells,
+        );
+        expect(controller.value.revision, 2);
+      },
+    );
+
+    test(
       'YEAR-HEIGHT-01 RED: the two-footer annual fit guard is shared by every column layout',
       () {
         const base = MindYearHeatmapPresentationSettings.defaults();

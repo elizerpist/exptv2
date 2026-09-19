@@ -84,6 +84,24 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
 
   int yearTotal(int year) => _yearTotals[year] ?? 0;
 
+  /// One exact annual aggregate per continuous represented calendar year.
+  /// Internal years without prepared membership deliberately remain zero so the
+  /// aggregate chart preserves a truthful temporal domain without inventing
+  /// transactions or a second aggregation authority.
+  List<MindAggregateLinePoint> get yearlyPoints {
+    if (years.isEmpty) return const <MindAggregateLinePoint>[];
+    return List<MindAggregateLinePoint>.generate(years.last - years.first + 1, (
+      index,
+    ) {
+      final year = years.first + index;
+      return MindAggregateLinePoint(
+        ordinal: year,
+        label: '$year',
+        total: yearTotal(year),
+      );
+    }, growable: false);
+  }
+
   /// Only real local calendar days with a non-empty current range total are
   /// exposed. The chart may join them visually, but it cannot invent a day.
   List<MindSumHeatmapDailyPoint> dailyPointsForYear(int year) =>
@@ -96,6 +114,21 @@ final class MindSumHeatmapDailyPoint {
   const MindSumHeatmapDailyPoint({required this.date, required this.total});
 
   final LocalDate date;
+  final int total;
+}
+
+/// A reusable immutable financial aggregate anchor. The ordinal is its only
+/// geometry domain; renderers may refine a line between anchors but never
+/// create an additional financial observation.
+final class MindAggregateLinePoint {
+  const MindAggregateLinePoint({
+    required this.ordinal,
+    required this.label,
+    required this.total,
+  });
+
+  final int ordinal;
+  final String label;
   final int total;
 }
 
