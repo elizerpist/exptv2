@@ -123,9 +123,16 @@ void main() {
 
       settings
         ..setSumYearRowLayout(MindSumYearRowLayout.oneRowCompact)
-        ..setSumMonthLabelPlacement(
-          MindSumMonthLabelPlacement.insideMonthCells,
-        );
+        ..setSumMonthLabelPlacement(MindSumMonthLabelPlacement.belowEachRow);
+      await tester.pump();
+      expect(
+        find.text('J   F   M   Á   M   J   J   A   S   O   N   D'),
+        findsWidgets,
+      );
+
+      settings..setSumMonthLabelPlacement(
+        MindSumMonthLabelPlacement.insideMonthCells,
+      );
       await tester.pump();
       expect(
         find.byKey(const ValueKey('mind-sum-heatmap-year-header-2025')),
