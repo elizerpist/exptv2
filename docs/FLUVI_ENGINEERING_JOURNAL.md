@@ -195,6 +195,16 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Focused validation: settings/resolver/temporal viewport/Year viewport/Header tuner/Mind mode-host suite passed (53 tests); Dart format check passed. No palette enum was added, so Soft Rainbow and Peachy Delight remain absent.
 - **Still pending:** the separate compact-legend placement/body-height work, physical colour assessment, final CI, human diagnostic APK, final-source SCIP and user device validation. Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Compact Mind legend placement and reclaimed body space
+
+- Application commit `7f8e91ee` introduces the presentation-only `MindHeatmapLegendPlacement` in the existing `MindYearHeatmapPresentationSettings` owner: `aboveSlider` remains the default; `inlineBetweenRangeValues` is independently selectable from visibility and scale resolution. The header tuner exposes `Slider felett` and `Slider alatt — Min/Max között`.
+- **RED/GREEN evidence:** the new setting test was initially red because placement state/controller API did not exist. Mounted `LEGEND-POS-01/BODY-SPACE-01` now measures the default above composition: temporal viewport followed by a `16.0px` external legend lane and a `68.0px` fixed compact footer, for `84.0px` total reservation. Against the audited former source contract `28 + 74 = 102px`, this is a measured `18.0px` return to the temporal body. Slider, Min. and Max. have positive bounds and no widget exception/overflow is recorded.
+- **Inline evidence:** `LEGEND-POS-02/03` proves that inline placement mounts no external lane, positions the read-only Mind legend between Min. and Max., and reserves no legend space when visibility is off. Ten mode swatches are `6×6px` with `1px` gaps; twenty mode is `4×4px`, with the full 20-swatch block measuring `99px` (≤100px). The exact same resolver supplies tiles and both legend modes.
+- **Range ownership:** `QueryAmountRangeControl` remains the sole slider/range authority. It accepts only an inert `compactMindCenterAccessory`, and its standard Query presentation deliberately ignores it. `RANGE-ACCESSORY-01` verifies that standard rendering does not mount the accessory; `RANGE-GEOM-01` verifies the compact variant inside a real 68px parent. Range preview/commit/snap values and touch geometry are unmodified.
+- **No remount/data work evidence:** switching above→inline retains the actual `mind-query-amount-range` element identity, and changing 10→20 inline also retains it. Existing presentation-only frame identity coverage remains green. No repository/index/Query/time/score owner was introduced or mutated for either legend choice.
+- Focused validation in Ubuntu proot: `query_amount_range_control_test.dart` PASS (12); `mind_year_heatmap_mode_host_test.dart` PASS (17); `mind_presentation_settings_test.dart` plus `dashboard_header_visual_tuner_test.dart` PASS (22); Dart formatting and `git diff --check` PASS.
+- **Still pending:** physical readability across device/text-scale combinations, final CI/human diagnostic APK/final exact-source SCIP, and user device validation. The inherited profile `frame_timing_headroom` gate is not claimed green. Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
