@@ -231,6 +231,12 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - A pre-existing range test asserted that a ready all-time Query facet would mount the Mind compact slider even while its matching Year/Month structural amount domain was absent. The Core owner deliberately rejects that false fallback. The corrected test passes the lifecycle loader into production composition and proves the control stays unavailable rather than rendering an incorrect all-time range; range-mount/hit-geometry coverage remains in the dedicated mounted Mind range tests.
 - No production behavior, Query semantics, score calculation, Time/Avatar motion owners, or dashboard layout algorithm changed in this commit. Physical validation remains: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Repeated Day→Month level-return guard
+
+- Test commit `e1fc59cb` adds `LEVEL-MONTH-05` to the already repaired Core semantic admission boundary. A real mounted Mind Day body performs exactly `Month → Day → Month → Day → Month` level navigation with no month-component change and no settling workaround.
+- The guard proves every rail-closed return immediately has `MonthScope`, a `MindMonthHeatmapFrame` for June 2027, a mounted Month grid, and no Day grid; every reopened rail has the converse Day frame/grid. Resident-data invariants remain `repository.prepareCalls` unchanged and identical prepared-index object identity. The focused test passes in Ubuntu proot.
+- No production source, Time/Avatar behavior, Query semantics, score algorithm, or additional notifier changed. Physical validation remains: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
