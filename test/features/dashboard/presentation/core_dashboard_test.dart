@@ -22,13 +22,11 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribu
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
-import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
 import 'package:fluvi/features/dashboard/query/data/query_menu_repository.dart';
-import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
