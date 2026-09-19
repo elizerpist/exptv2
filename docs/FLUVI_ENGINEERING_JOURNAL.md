@@ -1653,3 +1653,7 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Application commit `c68216cd757d69beb6e4742f2a923e2c891d6506` corrects the selected-point presentation contract without changing a financial datum. The shared aggregate chart now accepts a presentation-only selected label and comparison-period label. Sum supplies `az előző évhez képest`; Year supplies the selected `YYYY. month` label and `az előző hónaphoz képest`.
 - The correction follows mounted Year page-three selection evidence: the common x-axis label was correctly a month initial but was insufficient as an infocard identity. No Query, range, frame, repository, prepared-data, chart point or navigation owner changed.
 - Validation: Ubuntu/proot targeted analyzer passed with `No issues found!`; Sum/Year viewport suite passed **32 tests**. Full CI/APK/final SCIP and Android validation remain pending. Physical validation: `PENDING — USER ONLY`.
+
+### Gesture evidence follow-up
+
+- Test commit `c7db9cb897a10476303e3d982d060345a7866b62` adds `SUM-GESTURE-01`: fifteen annual anchors exceed the shared chart's minimum slot-width domain, a deliberate drag on `mind-aggregate-line-scroll` advances only the inner horizontal Scrollable, and the Sum PageView remains on page 1. The Ubuntu/proot focused test is GREEN. This is test-only; no application data, gesture implementation, Query or navigation code changed.
