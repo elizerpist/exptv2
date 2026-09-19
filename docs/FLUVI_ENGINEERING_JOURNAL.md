@@ -205,6 +205,16 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Focused validation in Ubuntu proot: `query_amount_range_control_test.dart` PASS (12); `mind_year_heatmap_mode_host_test.dart` PASS (17); `mind_presentation_settings_test.dart` plus `dashboard_header_visual_tuner_test.dart` PASS (22); Dart formatting and `git diff --check` PASS.
 - **Still pending:** physical readability across device/text-scale combinations, final CI/human diagnostic APK/final exact-source SCIP, and user device validation. The inherited profile `frame_timing_headroom` gate is not claimed green. Physical validation: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Mind Header temporal score-chart inspection
+
+- Application commit `8845e748` replaces the former split chart X authorities with `MindHeaderScoreChartTemporalProjection`. c1b12 painted score anchors by list index while its time labels derived positions from the epoch-day domain; sparse `CHART-X-01/02` now proves anchors at 0/10/90/100% for a 0..100 series, and proves line, static labels, nearest-point hit testing and crosshair share the same clamped epoch-day mapping.
+- The selected value is always the existing immutable `MindBehavioralScorePoint`: a clean tap snaps to the nearest temporal point, white vertical crosshair and white marker paint at that exact X, the top label is the point's existing rounded `NN/100`, another point moves selection, and the same selected point clears it. Selection is local chart State and synchronously clears when the immutable series/domain changes; no Core, Query, Time, repository, index or score calculation owner is called.
+- Explicit presentation context reaches the chart from existing Sum/Year/Month/Day body state. Selected labels use the existing Hungarian short-month formatter: Year/Day `aug 26`, Sum `2027. aug`, Month `26`. Static time-label visibility remains its independent existing setting and crosshair works with it hidden or shown.
+- **Header coexistence:** the chart cannot sit above the physical Header pan layer. Instead the existing Header gesture layer passively relays raw pointer events to the chart while retaining its existing pan recognizer. The relay owns no selection state and enters no competing gesture arena. `CHART-TAP-08/09` proves an in-plot vertical drag starts/ends Header expansion and creates no crosshair; a clean production Header tap still selects.
+- Golden evidence: new selected crosshair golden `test/goldens/mind_header_score_chart_selected_crosshair.png`, SHA-256 `d037f455327a4ddf220579535a05b90710ca3620e66b8c365ad46bd8c71fd974`, was generated and directly inspected. The existing unselected reference golden remains green.
+- Focused validation in Ubuntu proot: `mind_header_score_chart_test.dart` PASS (10); `mind_header_score_chart_golden_test.dart` PASS (2); `mind_year_heatmap_mode_host_test.dart` PASS (18); Dart formatting and `git diff --check` PASS.
+- **Still pending:** user device perception/animation validation, final CI/human diagnostic APK/final exact-source SCIP. Physical validation: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
