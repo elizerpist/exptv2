@@ -140,6 +140,55 @@ final class SummarySegmentedTrackGeometry {
         (metrics.modeVisualSize + metrics.yearWidth) / 2;
   }
 
+  /// Smallest navigation lane that can retain the authored selectors and the
+  /// pre-regression half-gap rule. The surrounding Summary may give an amount
+  /// slot its preferred 40% width only while this lower bound is satisfied.
+  static double minimumWidthFor({
+    required List<int> activeTrackIndices,
+    required double preRegressionInset,
+    double height = 59,
+    SummarySegmentedContentMetrics? contentMetrics,
+  }) {
+    if (height <= 0 || preRegressionInset < 0 || activeTrackIndices.isEmpty) {
+      throw ArgumentError(
+        'Segmented track minimum width needs a positive height and tracks.',
+      );
+    }
+    var previous = -1;
+    for (final track in activeTrackIndices) {
+      if (track < 0 || track > 3 || track <= previous) {
+        throw ArgumentError('Active tracks must be ascending Summary tracks.');
+      }
+      previous = track;
+    }
+    final metrics = contentMetrics ?? SummarySegmentedContentMetrics.authored;
+    final preRegression = SummarySegmentedContentMetrics.preRegression;
+    final trackCount = activeTrackIndices.length;
+    final contentWidth = activeTrackIndices.fold<double>(
+      0,
+      (sum, track) => sum + metrics.widthForTrack(track),
+    );
+    final modeInset = (height - metrics.modeVisualSize) / 2;
+    final preRegressionPair =
+        preRegression.modeVisualSize + preRegression.yearWidth;
+    // `gap = (width - inset) / 8 - preRegressionPair / 4` and every
+    // selector after the first consumes that gap. Solve the final selector's
+    // right edge against the navigation lane directly instead of shrinking
+    // any authored visual content.
+    final gapCount = trackCount - 1;
+    final widthForVisuals =
+        (modeInset +
+            contentWidth -
+            gapCount * preRegressionInset / 8 -
+            gapCount * preRegressionPair / 4) /
+        (1 - gapCount / 8);
+    final widthForNonnegativeBaselineGap =
+        preRegressionInset + preRegressionPair * 2;
+    return math
+        .max(widthForVisuals, widthForNonnegativeBaselineGap)
+        .toDouble();
+  }
+
   factory SummarySegmentedTrackGeometry.resolve({
     required double width,
     required List<int> activeTrackIndices,
@@ -464,9 +513,34 @@ final class SummaryPillExperiment extends StatelessWidget {
             final inset = bounds.width <= 320
                 ? 6.0
                 : FluviVisualTokens.controlHorizontalInset;
-            // Keep the pre-existing prepared-amount width contract while
-            // turning its remaining area into deterministic fixed tracks.
-            final amountWidth = constraints.maxWidth * .40;
+            final activeTracks = <int>[
+              0,
+              if (level != SummaryPillExperimentLevel.sum) 1,
+              if (level == SummaryPillExperimentLevel.month ||
+                  level == SummaryPillExperimentLevel.day)
+                2,
+              if (level == SummaryPillExperimentLevel.day) 3,
+            ];
+            // Keep the pre-existing prepared-amount 40% preference unless it
+            // would steal an authored selector's required visual/semantic
+            // lane. This is a narrow-host redistribution only: neither the
+            // selectors nor the normal-width amount envelope are resized.
+            final minimumNavigationWidth =
+                SummarySegmentedTrackGeometry.minimumWidthFor(
+                  activeTrackIndices: activeTracks,
+                  height: bounds.height,
+                  preRegressionInset: inset,
+                );
+            final preferredAmountWidth = constraints.maxWidth * .40;
+            final maximumAmountWidth =
+                math
+                    .max(
+                      0,
+                      constraints.maxWidth - inset - minimumNavigationWidth,
+                    )
+                    .toDouble();
+            final amountWidth =
+                math.min(preferredAmountWidth, maximumAmountWidth).toDouble();
             // This is the original quarter-track navigation footprint. It is
             // retained only as the measured pre-regression content-edge baseline
             // for the requested 50% gap—not as a visual or gesture lane.
@@ -476,14 +550,6 @@ final class SummaryPillExperiment extends StatelessWidget {
             // swaps the two whole zones. In either orientation, navigation's
             // outer edge is the mode badge's equal horizontal/vertical inset.
             final navigationWidth = constraints.maxWidth - amountWidth - inset;
-            final activeTracks = <int>[
-              0,
-              if (level != SummaryPillExperimentLevel.sum) 1,
-              if (level == SummaryPillExperimentLevel.month ||
-                  level == SummaryPillExperimentLevel.day)
-                2,
-              if (level == SummaryPillExperimentLevel.day) 3,
-            ];
             final selectorGeometry = SummarySegmentedTrackGeometry.resolve(
               width: navigationWidth,
               height: bounds.height,

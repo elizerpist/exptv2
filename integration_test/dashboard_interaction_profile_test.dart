@@ -25,6 +25,7 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/motion/dashboard_semantic_catalog.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/data/method_channel_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
@@ -284,6 +285,10 @@ Future<Map<String, dynamic>> _runScenario(
       initialPlane: scenario.initialPlane,
       initialRailOpen: scenario.initialRailOpen,
       initialDirection: scenario.initialDirection,
+      // The physical rail profile protects the legacy Time-carousel contract.
+      // Product startup remains Segmented; this harness requests its measured
+      // Legacy fixture explicitly rather than depending on an obsolete default.
+      initialSummaryPillVariant: SummaryPillVariant.legacy,
     ),
   );
   await _pumpUntilDashboardReady(tester);

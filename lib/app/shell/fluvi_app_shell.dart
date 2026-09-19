@@ -28,6 +28,7 @@ import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
+import '../../features/dashboard/presentation/summary_pill_variant.dart';
 import '../../features/dashboard/query/application/query_menu_data_controller.dart';
 import '../../features/dashboard/query/application/dashboard_applied_query_facet_loader.dart';
 import '../../features/dashboard/query/application/saved_query_controller.dart';
@@ -84,6 +85,7 @@ class FluviAppShell extends StatefulWidget {
     this.initialPlane = TimePlane.month,
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
+    this.initialSummaryPillVariant,
   });
 
   final DashboardModeSpec mode;
@@ -95,6 +97,7 @@ class FluviAppShell extends StatefulWidget {
   final TimePlane initialPlane;
   final bool initialRailOpen;
   final LedgerDirection initialDirection;
+  final SummaryPillVariant? initialSummaryPillVariant;
 
   @override
   State<FluviAppShell> createState() => _FluviAppShellState();
@@ -718,6 +721,9 @@ class _FluviAppShellState extends State<FluviAppShell> {
                             preparedLogBoxRasters: _preparedLogBoxRasters!,
                             shellPresentation: _shellPresentation,
                             mindQueryFacetLoader: _appliedQueryFacets,
+                            initialSummaryPillVariant:
+                                widget.initialSummaryPillVariant ??
+                                SummaryPillVariant.segmented,
                             onLogBoxWarmupSurfaceAttached: (viewportId) {
                               _readiness.markLogBoxSurfaceAttached(
                                 viewportId: viewportId,

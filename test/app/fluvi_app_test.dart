@@ -13,6 +13,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_performance_count
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
@@ -90,6 +91,25 @@ void main() {
     expect(gate.absorbing, isFalse);
     expect(find.byKey(const ValueKey('core-dashboard')), findsOneWidget);
   });
+
+  testWidgets(
+    'a Legacy profile fixture explicitly mounts its protected Time rail',
+    (tester) async {
+      await tester.pumpWidget(
+        const FluviApp(
+          dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+          initialRailOpen: true,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      expect(
+        find.byKey(const ValueKey('dashboard-time-rail')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'FPA-17 RED: a cold non-empty Time frame never paints before exact Phase A is ready',

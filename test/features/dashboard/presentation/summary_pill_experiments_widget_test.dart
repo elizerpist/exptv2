@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
@@ -21,6 +23,41 @@ import 'package:fluvi/features/dashboard/visible/application/dashboard_visible_f
 const _bounds = DashboardBounds(left: 0, top: 0, width: 378, height: 59);
 
 void main() {
+  test(
+    'narrow segmented Summary redistributes only the amount envelope before authored tracks clip',
+    () {
+      const hostWidth = 252.59302325581396;
+      const inset = 6.0;
+      const activeTracks = <int>[0, 1, 2, 3];
+      final minimumNavigationWidth = SummarySegmentedTrackGeometry.minimumWidthFor(
+        activeTrackIndices: activeTracks,
+        preRegressionInset: inset,
+      );
+      final amountWidth =
+          math
+              .min(
+                hostWidth * .40,
+                math.max(0, hostWidth - inset - minimumNavigationWidth),
+              )
+              .toDouble();
+      final navigationWidth = hostWidth - amountWidth - inset;
+      final geometry = SummarySegmentedTrackGeometry.resolve(
+        width: navigationWidth,
+        preRegressionNavigationWidth: navigationWidth - inset,
+        activeTrackIndices: activeTracks,
+        orientation: SummarySegmentedOrientation.mirrored,
+      );
+
+      expect(navigationWidth, greaterThanOrEqualTo(minimumNavigationWidth));
+      expect(amountWidth, greaterThan(0));
+      for (final track in activeTracks) {
+        final rect = geometry.visualContentRectForTrack(track);
+        expect(rect.left, greaterThanOrEqualTo(0));
+        expect(rect.right, lessThanOrEqualTo(navigationWidth));
+      }
+    },
+  );
+
   test(
     'segmented visual content stays fixed while interaction cells meet at selector boundaries',
     () {
@@ -310,6 +347,12 @@ void main() {
                 bounds: _bounds,
                 navigation: navigation,
                 visibleFrames: visibleFrames,
+                presentation: const DashboardSummaryPresentationSettings(
+                  showSeparators: true,
+                  temporalFlingPresentation:
+                      SummaryTemporalFlingPresentation.current,
+                  segmentedOrientation: SummarySegmentedOrientation.normal,
+                ),
                 onLevelCrossed: (_, _) {},
                 onComponentCrossed: (_, _) {},
                 onSelectorDirectInputStarted: () => selectorPointerStarts += 1,
@@ -1345,6 +1388,12 @@ void main() {
                   ),
                   navigation: navigation,
                   visibleFrames: visibleFrames,
+                  presentation: const DashboardSummaryPresentationSettings(
+                    showSeparators: true,
+                    temporalFlingPresentation:
+                        SummaryTemporalFlingPresentation.current,
+                    segmentedOrientation: SummarySegmentedOrientation.normal,
+                  ),
                   onLevelCrossed: (_, _) {},
                   onComponentCrossed: (_, _) {},
                 ),
@@ -1633,6 +1682,12 @@ void main() {
             bounds: _bounds,
             navigation: navigation,
             visibleFrames: visibleFrames,
+            presentation: const DashboardSummaryPresentationSettings(
+              showSeparators: true,
+              temporalFlingPresentation:
+                  SummaryTemporalFlingPresentation.current,
+              segmentedOrientation: SummarySegmentedOrientation.normal,
+            ),
             onLevelCrossed: (_, _) {},
             onComponentCrossed: (_, _) {},
           ),
@@ -1686,6 +1741,12 @@ void main() {
           bounds: _bounds,
           navigation: navigation,
           visibleFrames: visibleFrames,
+          presentation: const DashboardSummaryPresentationSettings(
+            showSeparators: true,
+            temporalFlingPresentation:
+                SummaryTemporalFlingPresentation.current,
+            segmentedOrientation: SummarySegmentedOrientation.normal,
+          ),
           onLevelCrossed: (_, _) {},
           onComponentCrossed: (_, _) {},
         ),
