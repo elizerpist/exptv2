@@ -1608,3 +1608,12 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Application SHA `28188f9a615f252d14501ebeaccf72c9bfa392d0` was pushed as the branch tip for its build-triggering workflow `35447287389`; at this entry it is queued, so no lane is pre-classified as green.
 - The preceding Year-bar application SHA `9877c77aea24326f2816a52d6951a6f0151f8854` has workflow `35446376580`: dashboard-paths, test-flutter and test-core are PASS; build-human-diagnostic-apk is PASS; `run-dashboard-profile` is still running at this entry and therefore no global-green claim is made. Its normal human APK `fluvi_HUMAN_DIAGNOSTIC_9877c77.apk` was downloaded to `/storage/emulated/0/Download/fluvi/`; size `83,678,513` bytes; SHA-256 `9265776b99162f0cfc0263ca814a30922acedd3e76f5bb20bb9c87f002f1f6c6`.
 - Physical validation: `PENDING — USER ONLY`.
+
+
+## 2026-09-19 — Canonical formatting follow-up for Mind paging
+
+- Application commit `0e97ce1c66bbd8fcce543eb8508c88feb690733e` applies the mandatory `dart format` output to four already-delivered Mind paging files: `mind_temporal_heatmap_projection.dart` and its direct projection/viewport/host tests. This is a formatter-only delivery follow-up; no feature behavior, data owner, Query/Time/Avatar physics, score, Room/Kotlin/schema, BottomNav geometry or `MILESTONE_COMMITS.md` owner changed.
+- Evidence: the final format gate identified those four files as noncanonical. After `dart format`, the required Ubuntu/proot eight-file focused suite passed **118 tests**, `flutter analyze --no-pub` passed with `No issues found!` in 148.5s, and `git diff --check` passed. The changed lines are canonical Dart wrapping in generic and test expressions; the original feature RED→GREEN evidence remains the respective Unit 2/3 evidence above.
+- The application SHA was pushed as branch tip for a new exact-SHA CI/APK run. The previous `28188f9` profile rerun reached the same inherited `Mind Year heatmap profile evidence frame_timing_headroom is invalid: null` gate as baseline `5893` and Unit 3; it did **not** reproduce the first run's earlier `Missing Mind painted event for expense`. That earlier event is therefore not sufficient evidence of a new product regression. Neither profile run is globally green.
+- Still pending for `0e97ce1`: exact-SHA Actions lane audit, normal human APK download/hash, regenerated exact-source SCIP, and user Android validation.
+- Physical validation: `PENDING — USER ONLY`.
