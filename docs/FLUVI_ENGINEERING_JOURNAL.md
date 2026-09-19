@@ -243,6 +243,12 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Both shared `CoreDashboard` mount factories in `dashboard_avatar_target_liveness_test.dart` now explicitly request `SummaryPillVariant.legacy`. The dedicated file passes all 10 cases, including cold, persistent, sparse, Month/Day startup sequences, final-target replacement and exact resource preparation. First-frame product-default coverage remains unparameterized elsewhere.
 - No Time/Avatar controller, physics, cache, scene preparation, Query, score, production layout, or semantic owner changed. Physical validation remains: `PENDING — USER ONLY`.
 
+## 2026-09-19 — Rail identity fixture startup-state audit
+
+- Test commit `98eaba5e` makes the structural controller/position/physics identity fixture explicitly start the Legacy Summary variant. Its stated object of observation is the physical `dashboard-time-rail`, which intentionally is not mounted by the new Segmented startup mode.
+- The direct rebuild-isolation test passes with the actual rail controller, ScrollPosition and physics identities unchanged throughout all structural changes. No production Time/Avatar/Query or Summary behavior changed; the fresh Segmented/Mirrored first-frame test remains the product-default proof.
+- Physical validation remains: `PENDING — USER ONLY`.
+
 ## 2026-09-14 — Prepared-base repair delivery and final graph provenance
 
 - Final application source remains
