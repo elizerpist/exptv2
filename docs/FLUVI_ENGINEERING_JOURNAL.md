@@ -185,7 +185,6 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   None was staged, modified, stashed, cleaned or deleted.
 - Physical validation: `PENDING — USER ONLY`.
 
-
 ## 2026-09-19 — Segmented startup narrow-layout and Legacy rail-profile compatibility repair
 
 - Application commit `5893b4568f7061c6e643e7ce767ac76716c7c8d1` follows the first exact delivery candidate `98eaba5e...` and addresses two newly observed verification failures without changing the requested product default: production startup remains `Segmented` + `Mirrored`.
@@ -301,6 +300,17 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
   running. It is not substituted for user physical acceptance and its result
   must be reported factually when observed.
 - Physical validation: `PENDING — USER ONLY`.
+
+## 2026-09-20 — Detailed Sum chart zoom and anchored-cell delivery
+
+- Application commit `15bae5ac712eec4683ce808e06a4d6106a2818db` (`feat(mind): add zoomable detailed Sum chart`) advances the approved Mind feature delivery from the current three-card baseline. This is feature work; the user explicitly excluded fresh Drive/runtime-log audit, none was performed, and this entry makes no runtime-causality claim.
+- Sum preserves its ordered presentation contract: page 0 is the multi-year month heatmap, page 1 is the exact one-point-per-year aggregate trend, and page 2 remains the distinct detailed per-year multi-line visualization. The exact chart was not conflated with the detailed chart and its annual aggregate semantics were not changed.
+- The detailed chart now uses `MindDetailedSumTimeWindow` and `MindDetailedSumLod`: its minimum extent is the actual Jan–Dec epoch-day domain, pinch zoom changes that semantic temporal interval around the gesture focal point, and panning applies only while zoomed. Its bounded LOD emits only selected real immutable daily aggregate points from the already-admitted Sum frame; it never fabricates financial samples and does not enter Query, Core, Time, repository, Room or a raw-ledger scan.
+- One year expands into the chart viewport, two years share it, and three or more retain a 118px minimum band in an inner vertical scroll surface. Every band has Hungarian month-initial X labels and readable compact monetary Y labels. The compact line/heatmap switch uses the existing Sum pager and leaves the current financial frame identity untouched.
+- `MindAnchoredInfoCard` was corrected to calculate local placement from the actual card stack bounds. Sum month and Year day info cards now derive their anchor from the tapped cell’s global geometry, clamp only at card edges, pass through pointer hit testing so a subsequent cell can be selected, and dismiss by tapping the currently selected cell again. No static top-left popup origin remains in these paths.
+- **RED/GREEN evidence:** the new detailed-model and mounted Sum-page contracts were written before their model/widget wiring; they initially failed for the missing time-window/LOD/chart surface, third-page keys and transition path. Popup geometry tests exposed the former card-origin anchor and are green with actual Stack bounds. Independent review then exposed a same-year identity zoom-reset gap, Y-gutter focal-X mismatch and inaccessible Year-popup dismissal; each was first RED and is GREEN. The final focused model + Sum/Year viewport command is PASS (**43 tests**); Ubuntu/proot `flutter analyze --no-pub` is PASS (`No issues found!`, 179.3 seconds); `./scripts/test-fluvi-fast.sh` is PASS (**431 tests**); and `./scripts/verify-fluvi-boundaries.sh` plus `git diff --check` are PASS. The unzoomed detailed-page swipe and zoomed local-pan boundary were both mounted-tested.
+- Intentionally unchanged: Avatar/Time/Summary physics and controllers, canonical Query and range-slider ownership, repository/Room/Kotlin/schema, financial scoring/Header colour, Budget, LogBox, palette authority, BottomNav, and `MILESTONE_COMMITS.md`. The current app still retains the earlier Year heatmap/partial-bars/monthly-line, Month rhythm, Day timeline and permanent inline legend features.
+- Still unproven: final Actions results, normal human APK for exact `15bae5ac`, exact-source SCIP, reference-image raster parity and real-device nested pinch/pan/page/slider interaction. Physical validation: `PENDING — USER ONLY`.
 
 ## 2026-09-14 — Physical Mind direction/LogBox regression on `2fc02e143197996eee2218fe3830a1349e0f1f5d`
 
