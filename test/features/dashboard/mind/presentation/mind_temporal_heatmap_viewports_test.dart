@@ -231,6 +231,58 @@ void main() {
   );
 
   testWidgets(
+    'SUM-GESTURE-01: a deliberately dragged wide annual chart scrolls its own year domain without changing the visual card',
+    (tester) async {
+      final wideContributions =
+          List<MindYearHeatmapPreparedContribution>.generate(
+            15,
+            (index) => _entry(
+              index,
+              500,
+              LocalDate(year: 2010 + index, month: 1, day: 2),
+            ),
+            growable: false,
+          );
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: wideContributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 260,
+              child: MindSumHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+      final pager = find.byKey(const ValueKey('mind-sum-heatmap-pager'));
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      final scroll = find.byKey(const ValueKey('mind-aggregate-line-scroll'));
+      final position = tester.state<ScrollableState>(
+        find.descendant(of: scroll, matching: find.byType(Scrollable)),
+      );
+      await tester.drag(scroll, const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(position.position.pixels, greaterThan(0));
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-page-1')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'RED SUM-PAINT-01: a non-empty Sum month has a visible bounded rectangle',
     (tester) async {
       final frame = MindSumHeatmapProjection.build(
