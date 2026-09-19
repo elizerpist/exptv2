@@ -62,7 +62,7 @@
 - [x] **Step 3: Run RED tests in Ubuntu proot.** The baseline contained the old setting/lane; removing the four-column +50 initially exposed the measured 15px two-footer chrome deficit, which was separately RED before its shared annual fit guard was implemented.
 - [x] **Step 4: Implement the minimal settings/surface/Core changes.** Delete the obsolete enum/fields/setters/tuner controls and external lane branch; always pass one resolver-owned inline child; retire the four-column-only +50 request and retain only the measured shared two-footer annual fit guard.
 - [x] **Step 5: Run focused GREEN tests.** Settings, tuner, mode-host, Year viewport and range-control suites pass in Ubuntu/proot; final device rect comparison remains pending.
-- [ ] **Step 6: Commit and journal.** Application commit then a separate `[skip ci]` journal-only commit with RED/GREEN and physical uncertainty.
+- [x] **Step 6: Commit and journal.** Application commit `1bf1fa1e6ae4218e8abc8c351b0e7dae3dc3b9da` and the separate journal commit `6382e2cdfcbe5a18526ccc8766397936a61893a0` recorded the evidence and physical uncertainty; `3e05d97c` later corrected its CI result.
 
 ### Task 2: Add a bounded Sum daily trend read model and two-page Sum viewport
 
@@ -77,12 +77,12 @@
 - Consume `MindYearHeatmapPreparedContribution.bookedLocalEpochDay/amountMinor`, `MindHeatmapAmountRangeBucket.sumWithin`, `MindSumHeatmapFrame.identity/range/yearTotal`.
 - Produce `MindSumHeatmapFrame.dailyPointsForYear(int)` immutable points and a Sum viewport-local `PageController` whose pages consume only that frame.
 
-- [ ] **Step 1: Write domain RED tests.** Use nonuniform local days across months and ranges; assert real daily totals/epoch days, no synthetic days, range adjustment and no repository/index/source-row preview work.
-- [ ] **Step 2: Run domain RED.** Expected failure: `MindSumHeatmapFrame` has no daily-point read model.
-- [ ] **Step 3: Extend the existing Sum projection.** At build, group resident prepared contributions by local epoch day into amount-range buckets; at preview, expose only nonempty real day aggregates under the same range. Retain existing monthly frame behavior.
-- [ ] **Step 4: Write viewport/parent RED tests.** Require page 0, exact `Többéves aktivitás` hierarchy and compact totals; page 1 with real sub-month anchors, separators/markers/fade; horizontal swipe changes page only; slider drag never pages; vertical boundary handoff remains.
-- [ ] **Step 5: Implement the local pager and renderers.** Put a `PageView` exclusively inside Sum visual content; retain each page state; use one shared compact-money presentation helper after searching existing formatters; paint smoothed geometry only through real anchors without overshoot.
-- [ ] **Step 6: Run GREEN suites and commit/journal.** Run domain, temporal viewport, host and range interaction suites, then make application and journal commits.
+- [x] **Step 1: Write domain RED tests.** Nonuniform local days and range changes assert real epoch-day totals, no synthetic dates and a bounded range-preview read count.
+- [x] **Step 2: Run domain RED.** Before the implementation, the missing frame type/method/counter caused compilation failure, proving no daily-point read model existed.
+- [x] **Step 3: Extend the existing Sum projection.** Build now groups resident prepared contributions by local epoch day into amount-range buckets; preview exposes only real nonempty daily aggregates under the same range and retains existing monthly behavior.
+- [x] **Step 4: Write viewport/parent RED tests.** The baseline lacked approved header/page/painter APIs. The parent coverage asserts slider isolation, no frame replacement, non-scroll direct handoff and long-list boundary handoff.
+- [x] **Step 5: Implement the local pager and renderers.** The `PageView` is limited to Sum visual content; page/scroll state is local, footer/range remains outside. A passive boundary-only observer reuses the existing expansion coordinator because PageView suppresses the child overscroll notification.
+- [x] **Step 6: Run GREEN suites and commit/journal.** Domain, temporal viewport and mode-host suites are green; application and separate journal commits are the next step.
 
 ### Task 3: Add the Year full-versus-filtered bar page
 

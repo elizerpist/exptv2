@@ -50,13 +50,23 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
     required List<int> years,
     required Map<(int year, int month), MindSumHeatmapMonth> months,
     required Map<int, int> yearTotals,
+    required Map<int, List<MindSumHeatmapDailyPoint>> dailyPointsByYear,
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
   }) : years = List<int>.unmodifiable(years),
        _months = Map<(int year, int month), MindSumHeatmapMonth>.unmodifiable(
          months,
        ),
-       _yearTotals = Map<int, int>.unmodifiable(yearTotals);
+       _yearTotals = Map<int, int>.unmodifiable(yearTotals),
+       _dailyPointsByYear =
+           Map<int, List<MindSumHeatmapDailyPoint>>.unmodifiable(
+             dailyPointsByYear.map(
+               (year, points) => MapEntry(
+                 year,
+                 List<MindSumHeatmapDailyPoint>.unmodifiable(points),
+               ),
+             ),
+           );
 
   @override
   final MindTemporalHeatmapIdentity identity;
@@ -65,6 +75,7 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
   final List<int> years;
   final Map<(int year, int month), MindSumHeatmapMonth> _months;
   final Map<int, int> _yearTotals;
+  final Map<int, List<MindSumHeatmapDailyPoint>> _dailyPointsByYear;
   final int? minimumNonEmptyTotal;
   final int? maximumNonEmptyTotal;
 
@@ -72,6 +83,20 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
       _months[(year, month)]!;
 
   int yearTotal(int year) => _yearTotals[year] ?? 0;
+
+  /// Only real local calendar days with a non-empty current range total are
+  /// exposed. The chart may join them visually, but it cannot invent a day.
+  List<MindSumHeatmapDailyPoint> dailyPointsForYear(int year) =>
+      _dailyPointsByYear[year] ?? const <MindSumHeatmapDailyPoint>[];
+}
+
+/// One immutable Sum line-chart anchor. Its amount is derived from the same
+/// prepared membership and live amount-range preview as the Sum heatmap cell.
+final class MindSumHeatmapDailyPoint {
+  const MindSumHeatmapDailyPoint({required this.date, required this.total});
+
+  final LocalDate date;
+  final int total;
 }
 
 final class MindSumHeatmapMonth {
@@ -130,12 +155,23 @@ final class MindSumHeatmapProjection {
   MindSumHeatmapProjection._({
     required this.identity,
     required Map<(int year, int month), MindHeatmapAmountRangeBucket> buckets,
+    required Map<int, Map<int, MindHeatmapAmountRangeBucket>> dailyBuckets,
     required List<int> years,
+    required this.preparedContributionTouches,
   }) : _buckets =
            Map<
              (int year, int month),
              MindHeatmapAmountRangeBucket
            >.unmodifiable(buckets),
+       _dailyBuckets = Map<int, Map<int, MindHeatmapAmountRangeBucket>>
+           .unmodifiable(
+             dailyBuckets.map(
+               (year, buckets) => MapEntry(
+                 year,
+                 Map<int, MindHeatmapAmountRangeBucket>.unmodifiable(buckets),
+               ),
+             ),
+           ),
        _years = List<int>.unmodifiable(years);
 
   factory MindSumHeatmapProjection.build({
@@ -143,10 +179,17 @@ final class MindSumHeatmapProjection {
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
   }) {
     final values = <(int year, int month), List<int>>{};
+    final dailyValues = <int, Map<int, List<int>>>{};
+    var preparedContributionTouches = 0;
     for (final contribution in contributions) {
+      preparedContributionTouches += 1;
       final date = _dateForEpochDay(contribution.bookedLocalEpochDay);
       values
           .putIfAbsent((date.year, date.month), () => <int>[])
+          .add(contribution.amountMinor);
+      dailyValues
+          .putIfAbsent(date.year, () => <int, List<int>>{})
+          .putIfAbsent(contribution.bookedLocalEpochDay, () => <int>[])
           .add(contribution.amountMinor);
     }
     final years = values.keys.map((key) => key.$1).toSet().toList()..sort();
@@ -156,13 +199,27 @@ final class MindSumHeatmapProjection {
         (key, value) =>
             MapEntry(key, MindHeatmapAmountRangeBucket.fromUnsorted(value)),
       ),
+      dailyBuckets: dailyValues.map(
+        (year, valuesForYear) => MapEntry(
+          year,
+          valuesForYear.map(
+            (epochDay, valuesForDay) => MapEntry(
+              epochDay,
+              MindHeatmapAmountRangeBucket.fromUnsorted(valuesForDay),
+            ),
+          ),
+        ),
+      ),
       years: years,
+      preparedContributionTouches: preparedContributionTouches,
     );
   }
 
   final MindTemporalHeatmapIdentity identity;
   final Map<(int year, int month), MindHeatmapAmountRangeBucket> _buckets;
+  final Map<int, Map<int, MindHeatmapAmountRangeBucket>> _dailyBuckets;
   final List<int> _years;
+  final int preparedContributionTouches;
 
   MindSumHeatmapFrame preview(QueryAmountRangeValues range) {
     final totals = <(int year, int month), int?>{};
@@ -207,12 +264,34 @@ final class MindSumHeatmapProjection {
       }
       yearTotals[year] = yearTotal;
     }
+    final dailyPointsByYear = <int, List<MindSumHeatmapDailyPoint>>{};
+    for (final year in _years) {
+      final buckets = _dailyBuckets[year];
+      if (buckets == null || buckets.isEmpty) continue;
+      final points = <MindSumHeatmapDailyPoint>[];
+      final epochDays = buckets.keys.toList(growable: false)..sort();
+      for (final epochDay in epochDays) {
+        final total = buckets[epochDay]!.sumWithin(
+          minimum: range.lowerScaled100,
+          maximum: range.upperScaled100,
+        );
+        if (total == null) continue;
+        points.add(
+          MindSumHeatmapDailyPoint(
+            date: _dateForEpochDay(epochDay),
+            total: total,
+          ),
+        );
+      }
+      dailyPointsByYear[year] = points;
+    }
     return MindSumHeatmapFrame(
       identity: identity,
       range: range,
       years: _years,
       months: months,
       yearTotals: yearTotals,
+      dailyPointsByYear: dailyPointsByYear,
       minimumNonEmptyTotal: minimum,
       maximumNonEmptyTotal: maximum,
     );

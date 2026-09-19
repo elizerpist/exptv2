@@ -7,7 +7,6 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
-import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 
 void main() {
   group('DashboardGeometryResolver', () {

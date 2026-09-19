@@ -342,6 +342,133 @@ void main() {
   );
 
   testWidgets(
+    'SUM-PAGER-02: the Sum visual pager never claims the one compact range slider or mutates its admitted frame',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final year = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final temporal = ValueNotifier<MindTemporalHeatmapFrame?>(_sumFrame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final expansion = _ExpansionRecorder();
+      addTearDown(mode.dispose);
+      addTearDown(year.dispose);
+      addTearDown(temporal.dispose);
+      addTearDown(rangeChanges.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: year,
+          temporalFrame: temporal,
+          temporalPlane: TimePlane.sum,
+          showYearHeatmap: false,
+          showTemporalHeatmap: true,
+          rangeChanges: rangeChanges,
+          expansion: expansion,
+        ),
+      );
+      final admitted = temporal.value;
+      final range = find.byKey(
+        const ValueKey<String>('mind-query-amount-range'),
+      );
+      final rangeElement = tester.element(range);
+      final slider = find.byKey(
+        const ValueKey<String>('query-amount-range-slider'),
+      );
+      final sliderBounds = tester.getRect(slider);
+      final pager = find.byKey(const ValueKey<String>('mind-sum-heatmap-pager'));
+
+      await tester.drag(
+        slider,
+        Offset(-sliderBounds.width * .25, 0),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-page-0')),
+        findsOneWidget,
+      );
+      expect(temporal.value, same(admitted));
+      expect(tester.element(range), same(rangeElement));
+      expect(expansion.starts, 0);
+
+      await tester.drag(pager, const Offset(-260, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-page-1')),
+        findsOneWidget,
+      );
+      expect(temporal.value, same(admitted));
+      expect(tester.element(range), same(rangeElement));
+      expect(expansion.starts, 0);
+    },
+  );
+
+  testWidgets(
+    'SUM-PAGER-03: a scrollable Sum page retains the existing boundary handoff',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final year = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final temporal = ValueNotifier<MindTemporalHeatmapFrame?>(
+        _sumFrameWithYears(2016, 2025),
+      );
+      final rangeChanges = ValueNotifier<int>(0);
+      final expansion = DashboardExpansionController();
+      final coordinator = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      addTearDown(mode.dispose);
+      addTearDown(year.dispose);
+      addTearDown(temporal.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(expansion.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: year,
+          temporalFrame: temporal,
+          temporalPlane: TimePlane.sum,
+          showYearHeatmap: false,
+          showTemporalHeatmap: true,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          upperVerticalGestures: coordinator,
+        ),
+      );
+      final scroll = find.byKey(
+        const ValueKey<String>('mind-sum-heatmap-scroll'),
+      );
+      final scrollable = tester.state<ScrollableState>(
+        find.descendant(of: scroll, matching: find.byType(Scrollable)).first,
+      );
+      expect(scrollable.position.maxScrollExtent, greaterThan(0));
+
+      await tester.drag(scroll, const Offset(0, -80));
+      await tester.pump();
+      expect(scrollable.position.pixels, greaterThan(0));
+      expect(expansion.isDragging, isFalse);
+
+      scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+      await tester.pump();
+      final boundary = await tester.startGesture(tester.getCenter(scroll));
+      await boundary.moveBy(const Offset(0, -80));
+      await tester.pump();
+
+      expect(expansion.isDragging, isTrue);
+      expect(expansion.progress, greaterThan(0));
+      expect(scrollable.position.pixels, scrollable.position.maxScrollExtent);
+      await boundary.up();
+      expect(expansion.isDragging, isFalse);
+    },
+  );
+
+  testWidgets(
     'RED MYH-01: non-Year Mind composition does not mount the annual grid',
     (tester) async {
       final mode = DashboardCoreModeController(
@@ -1380,6 +1507,24 @@ MindSumHeatmapFrame _sumFrame() => MindSumHeatmapProjection.build(
     ),
   ],
 ).preview(_temporalRange);
+
+MindSumHeatmapFrame _sumFrameWithYears(int firstYear, int lastYear) =>
+    MindSumHeatmapProjection.build(
+      identity: const MindTemporalHeatmapIdentity(
+        upstreamScopeKey: 'expense|all',
+        indexGeneration: 1,
+        coreRevision: 1,
+        timeScopeKey: 'all',
+      ),
+      contributions: <MindYearHeatmapPreparedContribution>[
+        for (var year = firstYear; year <= lastYear; year++)
+          _temporalContribution(
+            year - firstYear,
+            100 + year - firstYear,
+            LocalDate(year: year, month: 1, day: 1),
+          ),
+      ],
+    ).preview(_temporalRange);
 
 MindMonthHeatmapFrame _monthFrame() => MindMonthHeatmapProjection.build(
   identity: const MindTemporalHeatmapIdentity(

@@ -24,7 +24,7 @@ void main() {
   ];
 
   testWidgets(
-    'SUM-HM-03/04/05: Sum presents real years, month axis and twelve cells per year',
+    'SUM-HEATMAP-01/02 RED: Sum starts on the approved two-row multi-year heatmap hierarchy',
     (tester) async {
       final frame = MindSumHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
@@ -50,9 +50,17 @@ void main() {
         ),
       );
 
-      expect(find.text('Többéves hőtérkép'), findsOneWidget);
-      expect(find.text('2 év · 24 hónap'), findsOneWidget);
-      expect(find.text('J'), findsNWidgets(3));
+      expect(find.text('Többéves aktivitás'), findsOneWidget);
+      expect(find.text('2024–2025 · 24 hónap'), findsOneWidget);
+      expect(find.text('Éves aktivitás'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-year-header-2025')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('mind-sum-heatmap-year-2024')),
         findsOneWidget,
@@ -70,6 +78,67 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(ListView), findsOneWidget);
+    },
+  );
+
+  test('SUM-HEATMAP-02 RED: compact Mind annual amounts use the approved units', () {
+    expect(formatMindCompactForints(7728364), '7,73 M Ft');
+    expect(formatMindCompactForints(645560), '646 k Ft');
+  });
+
+  testWidgets(
+    'SUM-PAGER-01/SUM-LINE-02 RED: a visual-only horizontal page reaches a real daily trend chart',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 260,
+              child: MindSumHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final pager = find.byKey(const ValueKey('mind-sum-heatmap-pager'));
+      expect(pager, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
+        findsOneWidget,
+      );
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-page-1')),
+        findsOneWidget,
+      );
+      final chart = tester.widget<CustomPaint>(
+        find.byKey(const ValueKey('mind-sum-line-chart-2025')),
+      );
+      final painter = chart.painter! as MindSumYearTrendPainter;
+      expect(painter.points.map((point) => point.date.day), <int>[3, 4]);
+      expect(painter.monthBoundaryFractions, hasLength(11));
+
+      await tester.drag(pager, const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
+        findsOneWidget,
+      );
     },
   );
 

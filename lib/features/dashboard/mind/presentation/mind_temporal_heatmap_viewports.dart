@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -8,11 +9,13 @@ import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/domain/year_month.dart';
+import '../../time_navigation/domain/local_date.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_frame.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
+import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 
 @visibleForTesting
@@ -70,7 +73,7 @@ final class MindSumHeatmapViewport extends StatelessWidget {
       );
 }
 
-final class _MindSumHeatmapContent extends StatelessWidget {
+final class _MindSumHeatmapContent extends StatefulWidget {
   const _MindSumHeatmapContent({
     required this.frame,
     required this.paletteStyle,
@@ -78,185 +81,520 @@ final class _MindSumHeatmapContent extends StatelessWidget {
     this.upperVerticalGestures,
   });
 
-  static const _monthAxis = <String>[
-    'J',
-    'F',
-    'M',
-    'Á',
-    'M',
-    'J',
-    'J',
-    'A',
-    'S',
-    'O',
-    'N',
-    'D',
-  ];
-
   final MindSumHeatmapFrame frame;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text(
-          'Többéves hőtérkép',
-          key: const ValueKey<String>('mind-sum-heatmap-title'),
-          style: const TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
+  State<_MindSumHeatmapContent> createState() =>
+      _MindSumHeatmapContentState();
+}
+
+/// Format a whole-forint annual total for the compact, read-only Mind year
+/// chip. Query's canonical full-money formatter remains the owner for Query.
+@visibleForTesting
+String formatMindCompactForints(int forints) {
+  final absolute = forints.abs();
+  final sign = forints < 0 ? '-' : '';
+  if (absolute >= 1000000) {
+    final millions = (absolute / 1000000).toStringAsFixed(2).replaceAll(
+      '.',
+      ',',
+    );
+    return '$sign$millions M Ft';
+  }
+  if (absolute >= 1000) return '$sign${(absolute / 1000).round()} k Ft';
+  return '$forints Ft';
+}
+
+final class _MindSumHeatmapContentState
+    extends State<_MindSumHeatmapContent> {
+  late final PageController _pageController;
+  late final ScrollController _heatmapScrollController;
+  late final ScrollController _lineScrollController;
+  int? _handoffPointer;
+  Offset? _handoffOrigin;
+  Offset? _lastPointerPosition;
+  bool _isDirectVerticalHandoff = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    _heatmapScrollController = ScrollController();
+    _lineScrollController = ScrollController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MindSumHeatmapContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A range preview keeps the same immutable identity and therefore keeps
+    // the visual page and both scroll positions. A new admitted identity
+    // starts on the heatmap without writing Query, Time or prepared data.
+    if (oldWidget.frame.identity != widget.frame.identity &&
+        _pageController.hasClients) {
+      _pageController.jumpToPage(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _endDirectVerticalHandoff(cancelled: true);
+    _pageController.dispose();
+    _heatmapScrollController.dispose();
+    _lineScrollController.dispose();
+    super.dispose();
+  }
+
+  ScrollController get _activePageScrollController {
+    final page = _pageController.hasClients ? _pageController.page : 0;
+    return (page ?? 0).round() == 1
+        ? _lineScrollController
+        : _heatmapScrollController;
+  }
+
+  bool _activePageCanHandOff(double viewportDeltaY) {
+    final controller = _activePageScrollController;
+    if (!controller.hasClients) return false;
+    final position = controller.position;
+    if (position.maxScrollExtent == 0) return true;
+    if (viewportDeltaY < 0) {
+      return position.pixels >= position.maxScrollExtent;
+    }
+    if (viewportDeltaY > 0) {
+      return position.pixels <= position.minScrollExtent;
+    }
+    return false;
+  }
+
+  void _onPagerPointerDown(PointerDownEvent event) {
+    _handoffPointer = event.pointer;
+    _handoffOrigin = event.position;
+    _lastPointerPosition = event.position;
+  }
+
+  void _onPagerPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _handoffPointer) return;
+    final origin = _handoffOrigin;
+    final previous = _lastPointerPosition;
+    _lastPointerPosition = event.position;
+    if (origin == null || previous == null) return;
+    final travel = event.position - origin;
+    if (!_isDirectVerticalHandoff) {
+      if (travel.distance < kTouchSlop ||
+          travel.dy.abs() <= travel.dx.abs() ||
+          !_activePageCanHandOff(travel.dy)) {
+        return;
+      }
+      _isDirectVerticalHandoff = true;
+      widget.upperVerticalGestures?.begin();
+    }
+    widget.upperVerticalGestures?.dragByViewport(event.position.dy - previous.dy);
+  }
+
+  void _onPagerPointerUp(PointerUpEvent event) {
+    if (event.pointer != _handoffPointer) return;
+    _endDirectVerticalHandoff(cancelled: false);
+    _handoffPointer = null;
+    _handoffOrigin = null;
+    _lastPointerPosition = null;
+  }
+
+  void _onPagerPointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _handoffPointer) return;
+    _endDirectVerticalHandoff(cancelled: true);
+    _handoffPointer = null;
+    _handoffOrigin = null;
+    _lastPointerPosition = null;
+  }
+
+  void _endDirectVerticalHandoff({required bool cancelled}) {
+    if (!_isDirectVerticalHandoff) return;
+    _isDirectVerticalHandoff = false;
+    if (cancelled) {
+      widget.upperVerticalGestures?.cancel();
+    } else {
+      widget.upperVerticalGestures?.end();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final years = widget.frame.years;
+    final period = years.isEmpty
+        ? '— · 0 hónap'
+        : '${years.first}–${years.last} · ${years.length * 12} hónap';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Text(
+            'Többéves aktivitás',
+            key: ValueKey<String>('mind-sum-heatmap-title'),
+            style: TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-        ),
-        const SizedBox(height: 1),
-        Text(
-          '${frame.years.length} év · ${frame.years.length * 12} hónap',
-          style: const TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: 9,
+          const SizedBox(height: 1),
+          Text(
+            period,
+            key: const ValueKey<String>('mind-sum-heatmap-period'),
+            style: const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 9,
+            ),
           ),
-        ),
-        const SizedBox(height: 5),
-        const Text(
-          'Éves aktivitás',
-          style: TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Row(
-          children: <Widget>[
-            const SizedBox(width: 34),
-            Expanded(
-              child: Row(
-                children: List<Widget>.generate(
-                  _monthAxis.length,
-                  (index) => Expanded(
-                    child: Center(
-                      child: Text(
-                        _monthAxis[index],
-                        style: const TextStyle(
-                          color: FluviVisualTokens.textSecondary,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
+          const SizedBox(height: 5),
+          Expanded(
+            child: Listener(
+              // PageView prevents a bounded child ListView from emitting its
+              // usual OverscrollNotification. This observer owns no gesture:
+              // only a vertical, slop-clearing sequence at the active page's
+              // actual outgoing boundary is forwarded to the existing
+              // Header-expansion coordinator. The normal ListView continues
+              // to own every in-bounds vertical scroll sequence.
+              behavior: HitTestBehavior.opaque,
+              onPointerDown: _onPagerPointerDown,
+              onPointerMove: _onPagerPointerMove,
+              onPointerUp: _onPagerPointerUp,
+              onPointerCancel: _onPagerPointerCancel,
+              child: PageView(
+                key: const ValueKey<String>('mind-sum-heatmap-pager'),
+                controller: _pageController,
+                children: <Widget>[
+                  _MindSumHeatmapPage(
+                    key: const ValueKey<String>('mind-sum-heatmap-page-0'),
+                    frame: widget.frame,
+                    paletteStyle: widget.paletteStyle,
+                    scaleResolution: widget.scaleResolution,
+                    scrollController: _heatmapScrollController,
                   ),
-                  growable: false,
+                  _MindSumLinePage(
+                    key: const ValueKey<String>('mind-sum-heatmap-page-1'),
+                    frame: widget.frame,
+                    paletteStyle: widget.paletteStyle,
+                    scaleResolution: widget.scaleResolution,
+                    scrollController: _lineScrollController,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _MindSumHeatmapPage extends StatelessWidget {
+  const _MindSumHeatmapPage({
+    super.key,
+    required this.frame,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    required this.scrollController,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) => ListView.separated(
+    key: const ValueKey<String>('mind-sum-heatmap-scroll'),
+    controller: scrollController,
+    padding: EdgeInsets.zero,
+    itemCount: frame.years.length,
+    separatorBuilder: (_, _) => const SizedBox(height: 8),
+    itemBuilder: (context, index) => _MindSumYearHeatmapUnit(
+      frame: frame,
+      year: frame.years[index],
+      paletteStyle: paletteStyle,
+      scaleResolution: scaleResolution,
+    ),
+  );
+}
+
+final class _MindSumYearHeatmapUnit extends StatelessWidget {
+  const _MindSumYearHeatmapUnit({
+    required this.frame,
+    required this.year,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final int year;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    key: ValueKey<String>('mind-sum-heatmap-year-$year'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      _MindSumYearHeader(frame: frame, year: year, page: 'heatmap'),
+      const SizedBox(height: 4),
+      SizedBox(
+        height: 22,
+        child: Row(
+          children: List<Widget>.generate(12, (monthIndex) {
+            final month = monthIndex + 1;
+            final item = frame.month(year: year, month: month);
+            final palette = MindYearHeatmapPaletteResolver.resolveTile(
+              style: paletteStyle,
+              isEmpty: item.isEmpty,
+              intensity: item.intensity,
+              paletteIntensity: item.paletteIntensity,
+              scaleResolution: scaleResolution,
+            );
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: month == 12 ? 0 : 2),
+                child: DecoratedBox(
+                  key: ValueKey<String>('mind-sum-heatmap-cell-$year-$month'),
+                  decoration: BoxDecoration(
+                    color: palette.background,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            );
+          }, growable: false),
+        ),
+      ),
+    ],
+  );
+}
+
+final class _MindSumLinePage extends StatelessWidget {
+  const _MindSumLinePage({
+    super.key,
+    required this.frame,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    required this.scrollController,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) => ListView.separated(
+      key: const ValueKey<String>('mind-sum-line-scroll'),
+      controller: scrollController,
+      padding: EdgeInsets.zero,
+      itemCount: frame.years.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final year = frame.years[index];
+        final lineColor = MindYearHeatmapPaletteResolver.resolveTile(
+          style: paletteStyle,
+          isEmpty: false,
+          intensity: 1,
+          paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
+          scaleResolution: scaleResolution,
+        ).background;
+        return Column(
+          key: ValueKey<String>('mind-sum-line-year-$year'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _MindSumYearHeader(frame: frame, year: year, page: 'line'),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 86,
+              child: CustomPaint(
+                key: ValueKey<String>('mind-sum-line-chart-$year'),
+                painter: MindSumYearTrendPainter(
+                  year: year,
+                  points: frame.dailyPointsForYear(year),
+                  lineColor: lineColor,
                 ),
               ),
             ),
-            const SizedBox(width: 58),
           ],
-        ),
-        const SizedBox(height: 2),
+        );
+      },
+    );
+}
+
+final class _MindSumYearHeader extends StatelessWidget {
+  const _MindSumYearHeader({
+    required this.frame,
+    required this.year,
+    required this.page,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final int year;
+  final String page;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    key: ValueKey<String>('mind-sum-$page-year-header-$year'),
+    height: 18,
+    child: Row(
+      children: <Widget>[
         Expanded(
-          child: DashboardVerticalScrollBoundaryHandoff(
-            upperVerticalGestures: upperVerticalGestures,
-            child: ListView.separated(
-              key: const ValueKey<String>('mind-sum-heatmap-scroll'),
-              padding: EdgeInsets.zero,
-              itemCount: frame.years.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 2),
-              itemBuilder: (context, index) {
-                final year = frame.years[index];
-                return SizedBox(
-                  key: ValueKey<String>('mind-sum-heatmap-year-$year'),
-                  height: 29,
-                  child: Row(
-                    children: <Widget>[
-                      SizedBox(
-                        width: 34,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '$year',
-                            style: const TextStyle(
-                              color: FluviVisualTokens.textSecondary,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Row(
-                          children: List<Widget>.generate(12, (monthIndex) {
-                            final item = frame.month(
-                              year: year,
-                              month: monthIndex + 1,
-                            );
-                            final palette =
-                                MindYearHeatmapPaletteResolver.resolveTile(
-                                  style: paletteStyle,
-                                  isEmpty: item.isEmpty,
-                                  intensity: item.intensity,
-                                  paletteIntensity: item.paletteIntensity,
-                                  scaleResolution: scaleResolution,
-                                );
-                            return Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  right: monthIndex == 11 ? 0 : 2,
-                                ),
-                                child: DecoratedBox(
-                                  key: ValueKey<String>(
-                                    'mind-sum-heatmap-cell-$year-${monthIndex + 1}',
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: palette.background,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                  // A Row gives this child a loose cross-axis
-                                  // constraint. Materialize the available row
-                                  // extent so a keyed, coloured month tile is
-                                  // also a real visible rectangle.
-                                  child: const SizedBox.expand(),
-                                ),
-                              ),
-                            );
-                          }, growable: false),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 58,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              QueryMenuFormatters.money(frame.yearTotal(year)),
-                              key: ValueKey<String>(
-                                'mind-sum-heatmap-total-$year',
-                              ),
-                              style: const TextStyle(
-                                color: FluviVisualTokens.textSecondary,
-                                fontSize: 8,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$year',
+              style: const TextStyle(
+                color: FluviVisualTokens.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: FluviVisualTokens.surfaceMuted,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Text(
+              formatMindCompactForints(frame.yearTotal(year) ~/ 100),
+              key: ValueKey<String>('mind-sum-heatmap-total-$year'),
+              style: const TextStyle(
+                color: FluviVisualTokens.textSecondary,
+                fontSize: 8,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ),
       ],
     ),
   );
+}
+
+/// Paint-only chart geometry over exact immutable daily anchors. Dashed month
+/// boundaries and month-center markers are calendar guides; they do not add
+/// financial observations or mutate the admitted Sum frame.
+@visibleForTesting
+final class MindSumYearTrendPainter extends CustomPainter {
+  MindSumYearTrendPainter({
+    required this.year,
+    required List<MindSumHeatmapDailyPoint> points,
+    required this.lineColor,
+  }) : points = List<MindSumHeatmapDailyPoint>.unmodifiable(points);
+
+  final int year;
+  final List<MindSumHeatmapDailyPoint> points;
+  final Color lineColor;
+
+  List<double> get monthBoundaryFractions => List<double>.generate(
+    11,
+    (index) => (index + 1) / 12,
+    growable: false,
+  );
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    const left = 5.0;
+    const right = 3.0;
+    const top = 6.0;
+    const bottom = 7.0;
+    final plot = Rect.fromLTWH(
+      left,
+      top,
+      math.max(0, size.width - left - right),
+      math.max(0, size.height - top - bottom),
+    );
+    if (plot.width <= 0 || plot.height <= 0) return;
+
+    final guidePaint = Paint()
+      ..color = FluviVisualTokens.textSecondary.withValues(alpha: .20)
+      ..strokeWidth = 1;
+    for (final fraction in monthBoundaryFractions) {
+      final x = plot.left + plot.width * fraction;
+      for (var y = plot.top; y < plot.bottom; y += 4) {
+        canvas.drawLine(
+          Offset(x, y),
+          Offset(x, math.min(y + 2, plot.bottom)),
+          guidePaint,
+        );
+      }
+    }
+    for (var month = 0; month < 12; month += 1) {
+      final x = plot.left + plot.width * ((month + .5) / 12);
+      canvas.drawCircle(Offset(x, plot.bottom), 1.25, guidePaint);
+    }
+    if (points.isEmpty) return;
+
+    final maximum = points.fold<int>(
+      0,
+      (current, point) => math.max(current, point.total),
+    );
+    if (maximum <= 0) return;
+    final startEpoch = LocalDate(year: year, month: 1, day: 1).epochDay;
+    final endEpoch = LocalDate(year: year, month: 12, day: 31).epochDay;
+    Offset pointOffset(MindSumHeatmapDailyPoint point) {
+      final fraction = endEpoch == startEpoch
+          ? .5
+          : ((point.date.epochDay - startEpoch) / (endEpoch - startEpoch))
+                .clamp(0.0, 1.0)
+                .toDouble();
+      final normalized = (point.total / maximum).clamp(0.0, 1.0).toDouble();
+      return Offset(
+        plot.left + plot.width * fraction,
+        plot.bottom - plot.height * normalized,
+      );
+    }
+
+    final offsets = points.map(pointOffset).toList(growable: false);
+    final line = Path()..moveTo(offsets.first.dx, offsets.first.dy);
+    for (final offset in offsets.skip(1)) {
+      line.lineTo(offset.dx, offset.dy);
+    }
+    final fill = Path.from(line)
+      ..lineTo(offsets.last.dx, plot.bottom)
+      ..lineTo(offsets.first.dx, plot.bottom)
+      ..close();
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[
+            lineColor.withValues(alpha: .30),
+            lineColor.withValues(alpha: 0),
+          ],
+        ).createShader(plot),
+    );
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = lineColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    final pointPaint = Paint()..color = lineColor;
+    for (final offset in offsets) {
+      canvas.drawCircle(offset, 1.75, pointPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant MindSumYearTrendPainter oldDelegate) =>
+      year != oldDelegate.year ||
+      lineColor != oldDelegate.lineColor ||
+      !listEquals(points, oldDelegate.points);
 }
 
 /// B3M-MYM-inspired selected-month day grid. The dynamic tile field repaints

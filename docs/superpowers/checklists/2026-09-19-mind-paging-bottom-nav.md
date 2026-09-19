@@ -36,13 +36,13 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| SUM-PAGER-01 | §§3,12 | Sum viewport/surface | page 0 starts heatmap, horizontal visual-region swipe reaches page 1 and reverse retains page-0 scroll state | mounted pager test | NOT DONE |
-| SUM-PAGER-02 | §§3,12,15 | pager/range | slider horizontal drag cannot page; visual page changes preserve Query, Time and prepared-frame identity and create no duplicate owner | production-parent gesture/counter test | NOT DONE |
-| SUM-HEATMAP-01 | §§3,13C | Sum viewport | title is `Többéves aktivitás`, subtitle is exact represented period/month count, no `Éves aktivitás` remains | widget text test | NOT DONE |
-| SUM-HEATMAP-02 | §13C | Sum viewport/formatter | each year is header row (year left, rounded compact amount right) plus one full-width twelve-cell row; examples format 7,728,364 as `7,73 M Ft` and 645,560 as `646 k Ft` | widget + formatter test | NOT DONE |
-| SUM-LINE-01 | §§4,14D | temporal projection | per-year immutable real local-day series derives from prepared membership and range bucket preview; it contains no fabricated transaction | domain RED→GREEN | NOT DONE |
-| SUM-LINE-02 | §§4,13E | Sum chart painter | page 1 paints monthly dashed separators, month-centre markers, continuous real anchors and clipped downward transparent area fade | mounted geometry/golden test | NOT DONE |
-| SUM-LINE-03 | §§4,15 | Sum projection/Core | range/focus/direction updates follow current frame identity with no repository/index/raw-ledger scan | projection counter/Core test | NOT DONE |
+| SUM-PAGER-01 | §§3,12 | Sum viewport/surface | page 0 starts heatmap, horizontal visual-region swipe reaches page 1 and reverse retains page-0 scroll state | mounted pager test | DONE |
+| SUM-PAGER-02 | §§3,12,15 | pager/range | slider horizontal drag cannot page; visual page changes preserve Query, Time and prepared-frame identity and create no duplicate owner | production-parent gesture/counter test | PARTIAL — slider/page gestures, range-element identity and admitted-frame identity are green; direct Core Query/Time mutation counters remain final-package evidence. |
+| SUM-HEATMAP-01 | §§3,13C | Sum viewport | title is `Többéves aktivitás`, subtitle is exact represented period/month count, no `Éves aktivitás` remains | widget text test | DONE |
+| SUM-HEATMAP-02 | §13C | Sum viewport/formatter | each year is header row (year left, rounded compact amount right) plus one full-width twelve-cell row; examples format 7,728,364 as `7,73 M Ft` and 645,560 as `646 k Ft` | widget + formatter test | DONE |
+| SUM-LINE-01 | §§4,14D | temporal projection | per-year immutable real local-day series derives from prepared membership and range bucket preview; it contains no fabricated transaction | domain RED→GREEN | DONE |
+| SUM-LINE-02 | §§4,13E | Sum chart painter | page 1 paints monthly dashed separators, month-centre markers, continuous real anchors and clipped downward transparent area fade | mounted geometry/golden test | PARTIAL — mounted painter/anchor tests are green; focused raster/golden evidence remains pending. |
+| SUM-LINE-03 | §§4,15 | Sum projection/Core | range/focus/direction updates follow current frame identity with no repository/index/raw-ledger scan | projection counter/Core test | PARTIAL — immutable range-bucket counter proves preview avoids a second contribution scan; final Core counter evidence remains pending. |
 
 ## Year overlay-bar page
 
@@ -67,7 +67,7 @@
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
 | SAFE-PAGE-01 | §§11,15 | protected owners | no Time/Avatar physics/controller/position, Query semantics, score, Budget, LogBox, Room/Kotlin/schema or milestone diff | diff/boundary audit | NOT DONE |
-| SAFE-PAGE-02 | §§12,15 | gesture/data boundaries | one effective pointer owner; pager visual-only; no second slider, Query controller or data store | parent widget tests + source review | NOT DONE |
-| VAL-PAGE-01 | §§13,16 | all units | every production unit has an observed RED then GREEN test and its app commit has a separate file-only journal evidence commit | test/commit audit | NOT DONE |
+| SAFE-PAGE-02 | §§12,15 | gesture/data boundaries | one effective pointer owner; pager visual-only; no second slider, Query controller or data store | parent widget tests + source review | PARTIAL — Sum parent tests cover slider/page/vertical ownership; all-unit audit remains pending. |
+| VAL-PAGE-01 | §§13,16 | all units | every production unit has an observed RED then GREEN test and its app commit has a separate file-only journal evidence commit | test/commit audit | PARTIAL — Unit 1 is committed and journaled; Unit 2 has observed RED→GREEN and awaits its application/journal commits. |
 | VAL-PAGE-02 | §§17,19 | delivery | required focused suites, analyzer, fast/boundary checks, exact final CI/APK and exact-source SCIP are truthfully recorded | command/Actions/manifest evidence | NOT DONE |
 | VAL-PAGE-03 | §§4,20 | physical | device visual/touch acceptance is not self-approved | user validation | NOT DONE |
