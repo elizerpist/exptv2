@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 11054,
+  "record_count": 11139,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -13,36 +13,36 @@
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#dispose().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_header_score_chart.dart`/MindHeaderScoreChart#expansionProgress.",
-      "sha256": "1421fea8fabb7521e0024ec237322a11df15570cf6cd267e746eb39f3c6dbfde"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_projection.dart`/MindYearHeatmapSourceWorkCounter#previewDurationSummary().",
+      "sha256": "5068738a84d2101d446821e0d9043fe40ddce0cb96499e94e84958a88d0cfdc2"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_header_score_chart.dart`/MindHeaderScoreChart#pointerObserver.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_visual_engine.dart`/DashboardHeaderEffectId#magneticMembrane.",
-      "sha256": "3115de2d2c5392a2014c96108c6e99657f5cc17ca0ab3913d61e0ce939a38f6b"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_projection.dart`/MindYearHeatmapSourceWorkCounter#recordPreparedContributionTouch().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_tap_wave.dart`/DashboardHeaderTapWaveState#`<get>rippleCount`.",
+      "sha256": "c270e11448cc4d1de0708a94c43ac6f76755fc8ce2ca0ebe2b397170fceb54c5"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_visual_engine.dart`/DashboardHeaderEffectId#metricBloom.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/presentation/`query_amount_range_control.dart`/_AmountValue#`<constructor>`().",
-      "sha256": "8ad5623eb95ba2f49795e454f660b4c20968abe63740c62d8bc3f5837799041a"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_tap_wave.dart`/DashboardHeaderTapWaveState#`<get>ripples`.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/domain/`query_temporal_filter.dart`/QueryPeriodKind#day.",
+      "sha256": "09899f92182156dee8030489600f88220d1998f1cf5edc50c79cdd6db2882153"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/presentation/`query_amount_range_control.dart`/_AmountValue#alignEnd.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/boundary/`fluvi_boundary_test.dart`/main().",
-      "sha256": "5101a84cf89674bfae7ac91841744863f89d6037ed961982667f7dcb8d4778ef"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/domain/`query_temporal_filter.dart`/QueryPeriodKind#month.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_spec.dart`/CenteredCarouselSpec#minScale.",
+      "sha256": "7ab5ace961b6f6ea2f485bdfc9b6997b41c8ec86c3b212df72e748f0b29b5361"
     },
     {
       "path": "symbols/part-005.jsonl",
-      "record_count": 1054,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/boundary/`human_diagnostic_apk_delivery_boundary_test.dart`/main().",
+      "record_count": 1139,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_spec.dart`/CenteredCarouselSpec#motionProfile.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "e1eb5885d96ac4cf39d3391341a4cc3f918704384a092df061053f1f4ac155c9"
+      "sha256": "5246212b707d44329c03ebdb941dbc5293472abca55b5974544b965a21245f22"
     }
   ]
 }
