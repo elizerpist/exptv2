@@ -130,5 +130,29 @@ void main() {
         );
       },
     );
+
+    test(
+      'SCALE-01 RED: scale resolution defaults to ten and changes one presentation revision only when real',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.scaleResolution,
+          MindHeatmapScaleResolution.ten,
+        );
+        expect(controller.value.revision, 0);
+
+        controller.setScaleResolution(MindHeatmapScaleResolution.twenty);
+        expect(
+          controller.value.scaleResolution,
+          MindHeatmapScaleResolution.twenty,
+        );
+        expect(controller.value.revision, 1);
+
+        controller.setScaleResolution(MindHeatmapScaleResolution.twenty);
+        expect(controller.value.revision, 1);
+      },
+    );
   });
 }

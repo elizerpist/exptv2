@@ -487,6 +487,32 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
+              child: Text('Színfelbontás'),
+            ),
+            RadioGroup<MindHeatmapScaleResolution>(
+              groupValue: settings.scaleResolution,
+              onChanged: (resolution) {
+                if (resolution != null) {
+                  controller.setScaleResolution(resolution);
+                }
+              },
+              child: Column(
+                children: <Widget>[
+                  for (final resolution in MindHeatmapScaleResolution.values)
+                    RadioListTile<MindHeatmapScaleResolution>(
+                      key: ValueKey(
+                        'mind-heatmap-scale-resolution-${resolution.name}',
+                      ),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(resolution.tunerLabel),
+                      value: resolution,
+                    ),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
               child: Text('MonthCard elrendezés'),
             ),
             RadioGroup<MindYearMonthCardLayout>(

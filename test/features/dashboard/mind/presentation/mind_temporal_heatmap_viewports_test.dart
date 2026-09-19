@@ -492,6 +492,12 @@ void main() {
           paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
         ).background,
       );
+
+      settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
+      await tester.pump();
+      expect(settings.value.scaleResolution, MindHeatmapScaleResolution.twenty);
+      expect(identical(sumListenable.value, sum), isTrue);
+      expect(identical(monthListenable.value, month), isTrue);
       expect(identical(sumListenable.value, sum), isTrue);
       expect(identical(monthListenable.value, month), isTrue);
     },

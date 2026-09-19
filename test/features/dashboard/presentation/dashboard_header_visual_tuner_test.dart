@@ -815,6 +815,15 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.paletteStyle, style);
     }
+    for (final resolution in MindHeatmapScaleResolution.values) {
+      final scale = find.byKey(
+        ValueKey('mind-heatmap-scale-resolution-${resolution.name}'),
+      );
+      await tester.ensureVisible(scale);
+      await tester.tap(scale);
+      await tester.pump();
+      expect(heatmapSettings.value.scaleResolution, resolution);
+    }
     final fourColumns = find.byKey(
       const ValueKey('mind-heatmap-layout-fourColumns'),
     );

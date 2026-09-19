@@ -50,6 +50,9 @@ final class MindSumHeatmapViewport extends StatelessWidget {
             paletteStyle:
                 presentationSettings?.value.paletteStyle ??
                 MindYearHeatmapPaletteStyle.fluvi,
+            scaleResolution:
+                presentationSettings?.value.scaleResolution ??
+                MindHeatmapScaleResolution.ten,
             upperVerticalGestures: upperVerticalGestures,
           );
           final settings = presentationSettings;
@@ -59,6 +62,7 @@ final class MindSumHeatmapViewport extends StatelessWidget {
             builder: (context, value, _) => _MindSumHeatmapContent(
               frame: frame,
               paletteStyle: value.paletteStyle,
+              scaleResolution: value.scaleResolution,
               upperVerticalGestures: upperVerticalGestures,
             ),
           );
@@ -70,6 +74,7 @@ final class _MindSumHeatmapContent extends StatelessWidget {
   const _MindSumHeatmapContent({
     required this.frame,
     required this.paletteStyle,
+    required this.scaleResolution,
     this.upperVerticalGestures,
   });
 
@@ -90,6 +95,7 @@ final class _MindSumHeatmapContent extends StatelessWidget {
 
   final MindSumHeatmapFrame frame;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -194,6 +200,7 @@ final class _MindSumHeatmapContent extends StatelessWidget {
                                   isEmpty: item.isEmpty,
                                   intensity: item.intensity,
                                   paletteIntensity: item.paletteIntensity,
+                                  scaleResolution: scaleResolution,
                                 );
                             return Expanded(
                               child: Padding(
@@ -279,20 +286,27 @@ final class MindMonthHeatmapViewport extends StatelessWidget {
               key: ValueKey<String>('mind-month-heatmap-unavailable'),
             );
           }
-          Widget content(MindYearHeatmapPaletteStyle style) =>
-              _MindMonthHeatmapContent(
-                frame: frame,
-                frameListenable: frameListenable,
-                paletteStyle: style,
-                upperVerticalGestures: upperVerticalGestures,
-              );
+          Widget content(
+            MindYearHeatmapPaletteStyle style,
+            MindHeatmapScaleResolution scaleResolution,
+          ) => _MindMonthHeatmapContent(
+            frame: frame,
+            frameListenable: frameListenable,
+            paletteStyle: style,
+            scaleResolution: scaleResolution,
+            upperVerticalGestures: upperVerticalGestures,
+          );
           final settings = presentationSettings;
           if (settings == null) {
-            return content(MindYearHeatmapPaletteStyle.fluvi);
+            return content(
+              MindYearHeatmapPaletteStyle.fluvi,
+              MindHeatmapScaleResolution.ten,
+            );
           }
           return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
             valueListenable: settings,
-            builder: (context, value, _) => content(value.paletteStyle),
+            builder: (context, value, _) =>
+                content(value.paletteStyle, value.scaleResolution),
           );
         },
       );
@@ -303,12 +317,14 @@ final class _MindMonthHeatmapContent extends StatelessWidget {
     required this.frame,
     required this.frameListenable,
     required this.paletteStyle,
+    required this.scaleResolution,
     this.upperVerticalGestures,
   });
 
   final MindMonthHeatmapFrame frame;
   final ValueListenable<MindTemporalHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -432,6 +448,7 @@ final class _MindMonthHeatmapContent extends StatelessWidget {
                               geometry: geometry,
                               frameListenable: frameListenable,
                               paletteStyle: paletteStyle,
+                              scaleResolution: scaleResolution,
                               cellExtent: cellExtent,
                               gap: gap,
                             ),
@@ -445,6 +462,7 @@ final class _MindMonthHeatmapContent extends StatelessWidget {
                               MindYearHeatmapPaletteResolver.resolve(
                                 style: paletteStyle,
                                 day: day,
+                                scaleResolution: scaleResolution,
                               );
                           return Positioned(
                             left: column * (cellExtent + gap),
@@ -511,6 +529,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
     required this.geometry,
     required this.frameListenable,
     required this.paletteStyle,
+    required this.scaleResolution,
     required this.cellExtent,
     required this.gap,
   }) : super(repaint: frameListenable);
@@ -518,6 +537,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindTemporalHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final double cellExtent;
   final double gap;
 
@@ -533,6 +553,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
       final palette = MindYearHeatmapPaletteResolver.resolve(
         style: paletteStyle,
         day: day,
+        scaleResolution: scaleResolution,
       );
       paint.color = palette.background;
       canvas.drawRRect(
@@ -556,6 +577,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
       geometry.month != oldDelegate.geometry.month ||
       !identical(frameListenable, oldDelegate.frameListenable) ||
       paletteStyle != oldDelegate.paletteStyle ||
+      scaleResolution != oldDelegate.scaleResolution ||
       cellExtent != oldDelegate.cellExtent ||
       gap != oldDelegate.gap;
 }
@@ -585,15 +607,25 @@ final class MindDayHeatmapViewport extends StatelessWidget {
               key: ValueKey<String>('mind-day-heatmap-unavailable'),
             );
           }
-          Widget content(MindYearHeatmapPaletteStyle style) =>
-              _MindDayHeatmapContent(frame: frame, paletteStyle: style);
+          Widget content(
+            MindYearHeatmapPaletteStyle style,
+            MindHeatmapScaleResolution scaleResolution,
+          ) => _MindDayHeatmapContent(
+            frame: frame,
+            paletteStyle: style,
+            scaleResolution: scaleResolution,
+          );
           final settings = presentationSettings;
           if (settings == null) {
-            return content(MindYearHeatmapPaletteStyle.fluvi);
+            return content(
+              MindYearHeatmapPaletteStyle.fluvi,
+              MindHeatmapScaleResolution.ten,
+            );
           }
           return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
             valueListenable: settings,
-            builder: (context, value, _) => content(value.paletteStyle),
+            builder: (context, value, _) =>
+                content(value.paletteStyle, value.scaleResolution),
           );
         },
       );
@@ -603,10 +635,12 @@ final class _MindDayHeatmapContent extends StatelessWidget {
   const _MindDayHeatmapContent({
     required this.frame,
     required this.paletteStyle,
+    required this.scaleResolution,
   });
 
   final MindDayHeatmapFrame frame;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -714,6 +748,7 @@ final class _MindDayHeatmapContent extends StatelessWidget {
                                 isEmpty: tile.isEmpty,
                                 intensity: tile.intensity,
                                 paletteIntensity: tile.paletteIntensity,
+                                scaleResolution: scaleResolution,
                               );
                           return Padding(
                             padding: EdgeInsets.only(

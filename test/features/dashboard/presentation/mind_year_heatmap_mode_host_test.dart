@@ -387,9 +387,11 @@ void main() {
       );
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         _HostHarness(
@@ -398,6 +400,7 @@ void main() {
           rangeChanges: rangeChanges,
           expansion: _ExpansionRecorder(),
           showYearHeatmap: true,
+          presentationSettings: settings,
         ),
       );
 
@@ -426,6 +429,19 @@ void main() {
               )
               .top,
         ),
+      );
+
+      settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
+      await tester.pump();
+      for (var index = 0; index < 20; index += 1) {
+        expect(
+          find.byKey(ValueKey('mind-heatmap-palette-swatch-$index')),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.byKey(const ValueKey('mind-heatmap-palette-swatch-20')),
+        findsNothing,
       );
     },
   );
@@ -543,7 +559,8 @@ void main() {
       settings
         ..setShowHeatmapLegend(false)
         ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.directCells)
-        ..setPaletteStyle(MindYearHeatmapPaletteStyle.fluviStretched);
+        ..setPaletteStyle(MindYearHeatmapPaletteStyle.fluviStretched)
+        ..setScaleResolution(MindHeatmapScaleResolution.twenty);
       await tester.pump();
 
       expect(frame.value, same(admittedFrame));

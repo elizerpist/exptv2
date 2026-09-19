@@ -335,7 +335,7 @@ final class _MindTemporalBody extends StatelessWidget {
   }
 }
 
-/// Fixed, quiet presentation of the ten authored non-empty palette positions.
+/// Fixed, quiet presentation of the selected authored palette positions.
 /// It sits outside the temporal viewport and delegates every color choice to
 /// the same resolver that paints heatmap cells.
 final class _MindHeatmapPaletteLegend extends StatelessWidget {
@@ -346,8 +346,14 @@ final class _MindHeatmapPaletteLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget contentFor(MindYearHeatmapPaletteStyle style) {
-      final samples = MindYearHeatmapPaletteResolver.legendSamples(style);
+    Widget contentFor(
+      MindYearHeatmapPaletteStyle style,
+      MindHeatmapScaleResolution scaleResolution,
+    ) {
+      final samples = MindYearHeatmapPaletteResolver.legendSamples(
+        style,
+        scaleResolution: scaleResolution,
+      );
       return Semantics(
         label: 'Heatmap intenzitás, alacsonytól magasig',
         readOnly: true,
@@ -387,11 +393,15 @@ final class _MindHeatmapPaletteLegend extends StatelessWidget {
 
     final settings = presentationSettings;
     if (settings == null) {
-      return contentFor(MindYearHeatmapPaletteStyle.fluvi);
+      return contentFor(
+        MindYearHeatmapPaletteStyle.fluvi,
+        MindHeatmapScaleResolution.ten,
+      );
     }
     return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
       valueListenable: settings,
-      builder: (context, value, _) => contentFor(value.paletteStyle),
+      builder: (context, value, _) =>
+          contentFor(value.paletteStyle, value.scaleResolution),
     );
   }
 }

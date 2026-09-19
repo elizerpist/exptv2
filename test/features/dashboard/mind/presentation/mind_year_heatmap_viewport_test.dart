@@ -804,11 +804,29 @@ void main() {
       final identity = frame.value.identity;
       final fluvi = color();
 
+      expect(
+        (tester.widget<CustomPaint>(painterFinder).painter!
+                as MindYearHeatmapMonthPainter)
+            .scaleResolution,
+        MindHeatmapScaleResolution.ten,
+      );
+
       settings.setPaletteStyle(MindYearHeatmapPaletteStyle.b3mMy3);
       await tester.pump();
 
       expect(frame.value.identity, identity);
       expect(color(), isNot(fluvi));
+
+      settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
+      await tester.pump();
+
+      expect(frame.value.identity, identity);
+      expect(
+        (tester.widget<CustomPaint>(painterFinder).painter!
+                as MindYearHeatmapMonthPainter)
+            .scaleResolution,
+        MindHeatmapScaleResolution.twenty,
+      );
     },
   );
 

@@ -329,6 +329,8 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
                                     frameListenable: widget.frameListenable,
                                     paletteStyle:
                                         _presentationSettings.paletteStyle,
+                                    scaleResolution:
+                                        _presentationSettings.scaleResolution,
                                     surfaceStyle: _presentationSettings
                                         .annualSurfaceStyle,
                                     showMonthlyNetClose: _presentationSettings
@@ -415,6 +417,8 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
                           geometry: geometries[month - 1],
                           frameListenable: widget.frameListenable,
                           paletteStyle: _presentationSettings.paletteStyle,
+                          scaleResolution:
+                              _presentationSettings.scaleResolution,
                           surfaceStyle:
                               _presentationSettings.annualSurfaceStyle,
                           showMonthlyNetClose:
@@ -595,6 +599,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
     required this.frameListenable,
     this.cellExtent,
     this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
+    this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.surfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
     this.showMonthlyNetClose = false,
     this.showMonthlyDirectionTotal = false,
@@ -623,6 +628,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final MindYearHeatmapAnnualSurfaceStyle surfaceStyle;
   final bool showMonthlyNetClose;
   final bool showMonthlyDirectionTotal;
@@ -727,6 +733,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
                       geometry: geometry,
                       frameListenable: frameListenable,
                       paletteStyle: paletteStyle,
+                      scaleResolution: scaleResolution,
                       cellExtent: cellExtent,
                     ),
                     isComplex: false,
@@ -1121,6 +1128,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
     required this.geometry,
     required this.frameListenable,
     this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
+    this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.cellExtent,
   }) : super(repaint: frameListenable);
 
@@ -1132,6 +1140,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final double? cellExtent;
 
   @visibleForTesting
@@ -1152,6 +1161,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
       MindYearHeatmapPaletteResolver.resolve(
         style: paletteStyle,
         day: day,
+        scaleResolution: scaleResolution,
       ).background;
 
   @visibleForTesting
@@ -1204,6 +1214,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
       geometry.month != oldDelegate.geometry.month ||
       !identical(frameListenable, oldDelegate.frameListenable) ||
       paletteStyle != oldDelegate.paletteStyle ||
+      scaleResolution != oldDelegate.scaleResolution ||
       cellExtent != oldDelegate.cellExtent;
 }
 

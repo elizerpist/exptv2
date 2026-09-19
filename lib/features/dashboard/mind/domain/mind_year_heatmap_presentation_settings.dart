@@ -17,6 +17,24 @@ enum MindYearHeatmapPaletteStyle {
   };
 }
 
+/// The authored palette path can be displayed at its original ten stops or
+/// at the approved twenty-stop refinement. This is presentation-only; it
+/// never changes the immutable financial frame or normalized intensity.
+enum MindHeatmapScaleResolution {
+  ten,
+  twenty;
+
+  String get tunerLabel => switch (this) {
+    MindHeatmapScaleResolution.ten => '10 szín',
+    MindHeatmapScaleResolution.twenty => '20 szín',
+  };
+
+  int get authoredStopCount => switch (this) {
+    MindHeatmapScaleResolution.ten => 10,
+    MindHeatmapScaleResolution.twenty => 20,
+  };
+}
+
 /// Shell choice is independent from the annual column count. Both choices
 /// render the same admitted frame and calendar geometry.
 enum MindYearHeatmapAnnualSurfaceStyle {
@@ -71,6 +89,7 @@ final class MindYearHeatmapPresentationSettings {
     required this.revision,
     this.showHeatmapLegend = true,
     this.annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
+    this.scaleResolution = MindHeatmapScaleResolution.ten,
   });
 
   const MindYearHeatmapPresentationSettings.defaults()
@@ -80,6 +99,7 @@ final class MindYearHeatmapPresentationSettings {
       showMonthlyDirectionTotal = false,
       showHeatmapLegend = true,
       annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
+      scaleResolution = MindHeatmapScaleResolution.ten,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
@@ -88,6 +108,7 @@ final class MindYearHeatmapPresentationSettings {
   final bool showMonthlyDirectionTotal;
   final bool showHeatmapLegend;
   final MindYearHeatmapAnnualSurfaceStyle annualSurfaceStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final int revision;
 
   MindYearHeatmapPresentationSettings copyWith({
@@ -97,6 +118,7 @@ final class MindYearHeatmapPresentationSettings {
     bool? showMonthlyDirectionTotal,
     bool? showHeatmapLegend,
     MindYearHeatmapAnnualSurfaceStyle? annualSurfaceStyle,
+    MindHeatmapScaleResolution? scaleResolution,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
@@ -106,6 +128,7 @@ final class MindYearHeatmapPresentationSettings {
         showMonthlyDirectionTotal ?? this.showMonthlyDirectionTotal,
     showHeatmapLegend: showHeatmapLegend ?? this.showHeatmapLegend,
     annualSurfaceStyle: annualSurfaceStyle ?? this.annualSurfaceStyle,
+    scaleResolution: scaleResolution ?? this.scaleResolution,
     revision: revision ?? this.revision,
   );
 
@@ -118,6 +141,7 @@ final class MindYearHeatmapPresentationSettings {
       other.showMonthlyDirectionTotal == showMonthlyDirectionTotal &&
       other.showHeatmapLegend == showHeatmapLegend &&
       other.annualSurfaceStyle == annualSurfaceStyle &&
+      other.scaleResolution == scaleResolution &&
       other.revision == revision;
 
   @override
@@ -128,6 +152,7 @@ final class MindYearHeatmapPresentationSettings {
     showMonthlyDirectionTotal,
     showHeatmapLegend,
     annualSurfaceStyle,
+    scaleResolution,
     revision,
   );
 }
@@ -190,6 +215,15 @@ final class MindYearHeatmapPresentationController
     if (current.annualSurfaceStyle == style) return;
     value = current.copyWith(
       annualSurfaceStyle: style,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setScaleResolution(MindHeatmapScaleResolution resolution) {
+    final current = value;
+    if (current.scaleResolution == resolution) return;
+    value = current.copyWith(
+      scaleResolution: resolution,
       revision: current.revision + 1,
     );
   }
