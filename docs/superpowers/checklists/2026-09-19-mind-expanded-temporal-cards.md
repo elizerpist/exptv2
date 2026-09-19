@@ -15,4 +15,4 @@
 | LEGEND-01 | approved prior contract | Mind surface/footer | Single always-visible inline legend; no user setting/top lane regression | existing focused test | DONE |
 | BNB-01 | approved prior contract | shell/navigation | Raised and contained-flat nav choices remain selectable | existing focused test | DONE |
 | SAFE-01 | milestone 6e96218 | protected systems | No Time/Avatar/Query/Room/score/schema changes | diff + boundary verification | DONE |
-| DELIVERY-01 | AGENTS.md/prompt | commits/journal/CI | Journal after each app commit; tests, analyzer, online APK and exact SCIP evidence | command/output audit | PARTIAL — local validation, push and exact-source SCIP are complete; exact-SHA Actions/APK audit is in progress |
+| DELIVERY-01 | AGENTS.md/prompt | commits/journal/CI | Journal after each app commit; tests, analyzer, online APK and exact SCIP evidence | command/output audit | PARTIAL — exact Actions `35468024801` has Flutter/Core/human-APK PASS, but is overall FAIL at the inherited `frame_timing_headroom == null` profile-evidence gate; APK and exact-source SCIP are complete |
