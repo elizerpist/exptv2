@@ -2344,6 +2344,89 @@ void main() {
     },
   );
 
+  testWidgets(
+    'LEVEL-MONTH-05: repeated Month-Day-Month level returns never retain a stale Day frame',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-june-day-round-trip',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 250000,
+            date: const LocalDate(year: 2027, month: 6, day: 6),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2027, 6, 6),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+      expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
+      final readsBefore = repository.prepareCalls;
+      final indexBefore = core.preparedIndex;
+
+      for (final railOpen in <bool>[false, true, false, true, false]) {
+        core.beginSegmentedSummaryMotion();
+        core.navigateExperimentalTemporalSelection(
+          plane: TimePlane.month,
+          isRailOpen: railOpen,
+        );
+        await tester.pump();
+        if (railOpen) {
+          expect(core.navigation.state.effectiveScope, isA<DayScope>());
+          expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
+          expect(
+            find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+            findsOneWidget,
+          );
+        } else {
+          final frame = core.mindTemporalHeatmap.value;
+          expect(core.navigation.state.effectiveScope, isA<MonthScope>());
+          expect(frame, isA<MindMonthHeatmapFrame>());
+          final month = frame! as MindMonthHeatmapFrame;
+          expect(month.year, 2027);
+          expect(month.month, 6);
+          expect(
+            find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+            findsNothing,
+          );
+        }
+      }
+
+      expect(repository.prepareCalls, readsBefore);
+      expect(core.preparedIndex, same(indexBefore));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'RED MYH-04/05/06/14: the production Mind Year projection shares direction, focus, year and range identity without drag reads',
     () async {
