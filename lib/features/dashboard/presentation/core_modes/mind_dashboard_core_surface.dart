@@ -58,6 +58,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.headerVisualFrame,
     this.behavioralScore,
     this.headerScoreChartPresentation,
+    this.headerScoreChartPointerObserver,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -91,6 +92,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final ValueListenable<MindBehavioralScoreFrame?>? behavioralScore;
   final ValueListenable<MindHeaderScoreChartPresentationSettings>?
   headerScoreChartPresentation;
+  final MindHeaderScoreChartPointerObserver? headerScoreChartPointerObserver;
 
   @override
   Widget build(BuildContext context) {
@@ -141,12 +143,23 @@ class MindDashboardCoreSurface extends StatelessWidget {
                     score: behavioralScore!,
                     expansionProgress: geometry.headerExpansionProgress,
                     chartPresentation: headerScoreChartPresentation,
+                    temporalContext: _headerScoreChartTemporalContext,
+                    pointerObserver: headerScoreChartPointerObserver,
                   ),
           ),
         ],
       ),
     );
   }
+
+  MindHeaderScoreChartTemporalContext get _headerScoreChartTemporalContext =>
+      switch (temporalPlane) {
+        TimePlane.sum => MindHeaderScoreChartTemporalContext.sum,
+        TimePlane.month when showTemporalDayHeatmap =>
+          MindHeaderScoreChartTemporalContext.day,
+        TimePlane.month => MindHeaderScoreChartTemporalContext.month,
+        TimePlane.year || null => MindHeaderScoreChartTemporalContext.year,
+      };
 
   Widget? _bodyChild() {
     if (queryAmountRange == null ||
@@ -259,12 +272,16 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
     required this.score,
     required this.expansionProgress,
     this.chartPresentation,
+    required this.temporalContext,
+    this.pointerObserver,
   });
 
   final ValueListenable<MindBehavioralScoreFrame?> score;
   final double expansionProgress;
   final ValueListenable<MindHeaderScoreChartPresentationSettings>?
   chartPresentation;
+  final MindHeaderScoreChartTemporalContext temporalContext;
+  final MindHeaderScoreChartPointerObserver? pointerObserver;
 
   @override
   Widget build(
@@ -280,6 +297,8 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
               series: chartSeries,
               expansionProgress: expansionProgress,
               showTimeLabels: showTimeLabels,
+              temporalContext: temporalContext,
+              pointerObserver: pointerObserver,
             ),
           Positioned(
             left: 16,

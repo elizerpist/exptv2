@@ -90,6 +90,262 @@ void main() {
     },
   );
 
+  test(
+    'CHART-X-01/02: sparse points, label anchors and hit testing share one epoch-day projection',
+    () {
+      final sparse = MindBehavioralScoreChartSeries(
+        startInclusiveEpochDay: 0,
+        endInclusiveEpochDay: 100,
+        points: const <MindBehavioralScorePoint>[
+          MindBehavioralScorePoint(epochDay: 0, score: 100, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 10, score: 80, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 90, score: 20, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 100, score: 0, noSignal: false),
+        ],
+      );
+      const projection = MindHeaderScoreChartTemporalProjection(
+        startInclusiveEpochDay: 0,
+        endInclusiveEpochDay: 100,
+      );
+      final painter = MindHeaderScoreChartPainter(series: sparse);
+      const plotSize = Size(100, 60);
+
+      expect(
+        List<double>.generate(
+          sparse.points.length,
+          (index) => painter.pointOffsetAt(index, plotSize, projection).dx,
+        ),
+        <double>[0, 10, 90, 100],
+        reason:
+            'The c1b12 index authority was 0/33/66/100; every chart X user '
+            'must now receive the actual epoch-day geometry.',
+      );
+      expect(projection.normalizedEpochDay(10), .1);
+      expect(projection.normalizedEpochDay(90), .9);
+      expect(
+        projection.nearestPointForPlotX(sparse.points, 11, plotSize.width),
+        sparse.points[1],
+      );
+      expect(
+        projection.nearestPointForPlotX(sparse.points, 88, plotSize.width),
+        sparse.points[2],
+      );
+      expect(
+        MindHeaderScoreChart.projectedTimeLabelEpochDays(sparse),
+        const <int>[0, 25, 50, 75, 100],
+      );
+    },
+  );
+
+  testWidgets(
+    'CHART-TAP-01/02/03/04/07: clean taps select, move and toggle immutable points independently of static labels',
+    (tester) async {
+      final sparse = MindBehavioralScoreChartSeries(
+        startInclusiveEpochDay: 0,
+        endInclusiveEpochDay: 100,
+        points: const <MindBehavioralScorePoint>[
+          MindBehavioralScorePoint(epochDay: 0, score: 100, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 10, score: 80, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 90, score: 20, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 100, score: 0, noSignal: false),
+        ],
+      );
+      await tester.pumpWidget(
+        _chart(
+          series: sparse,
+          expansion: 1,
+          temporalContext: MindHeaderScoreChartTemporalContext.month,
+        ),
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+        findsNothing,
+      );
+
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart-paint')),
+      );
+      await tester.tapAt(Offset(plot.left + plot.width * .1, plot.center.dy));
+      await tester.pump();
+      expect(find.text('80/100'), findsOneWidget);
+      expect(find.text('11'), findsOneWidget);
+      expect(_painter(tester).selectedEpochDay, 10);
+
+      await tester.tapAt(Offset(plot.left + plot.width * .9, plot.center.dy));
+      await tester.pump();
+      expect(find.text('20/100'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+      expect(_painter(tester).selectedEpochDay, 90);
+
+      await tester.tapAt(Offset(plot.left + plot.width * .9, plot.center.dy));
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+        findsNothing,
+      );
+
+      await tester.pumpWidget(
+        _chart(
+          series: sparse,
+          expansion: 1,
+          showTimeLabels: true,
+          temporalContext: MindHeaderScoreChartTemporalContext.month,
+        ),
+      );
+      await tester.tapAt(Offset(plot.left + plot.width * .1, plot.center.dy));
+      await tester.pump();
+      expect(find.text('80/100'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-time-label-0'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'CHART-X-02: static time labels use the same rounded epoch-day projection as the line',
+    (tester) async {
+      final nonUniformDomain = MindBehavioralScoreChartSeries(
+        startInclusiveEpochDay: 0,
+        endInclusiveEpochDay: 3,
+        points: const <MindBehavioralScorePoint>[
+          MindBehavioralScorePoint(epochDay: 0, score: 30, noSignal: false),
+          MindBehavioralScorePoint(epochDay: 3, score: 80, noSignal: false),
+        ],
+      );
+      await tester.pumpWidget(
+        _chart(series: nonUniformDomain, expansion: 1, showTimeLabels: true),
+      );
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart-paint')),
+      );
+      final firstQuarter = tester.getCenter(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-time-label-1'),
+        ),
+      );
+      final midpoint = tester.getCenter(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-time-label-2'),
+        ),
+      );
+      final thirdQuarter = tester.getCenter(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-time-label-3'),
+        ),
+      );
+
+      // projectedTimeLabelEpochDays rounds 0.75/1.5/2.25 to 1/2/2, so the
+      // labels must land at 1/3, 2/3 and 2/3—not artificial 25/50/75% slots.
+      expect(firstQuarter.dx, closeTo(plot.left + plot.width / 3, .001));
+      expect(midpoint.dx, closeTo(plot.left + plot.width * 2 / 3, .001));
+      expect(thirdQuarter.dx, closeTo(plot.left + plot.width * 2 / 3, .001));
+    },
+  );
+
+  testWidgets(
+    'CHART-TAP-05/06/10: series change clears selection, labels honor explicit mode, and edge boxes clamp inside Header',
+    (tester) async {
+      final first = _seriesFor(
+        DateTime.utc(2027, 8, 1),
+        DateTime.utc(2027, 8, 31),
+      );
+      await tester.pumpWidget(
+        _chart(
+          series: first,
+          expansion: 1,
+          temporalContext: MindHeaderScoreChartTemporalContext.year,
+        ),
+      );
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart-paint')),
+      );
+      await tester.tapAt(Offset(plot.left, plot.center.dy));
+      await tester.pump();
+      final score = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+      );
+      final temporal = tester.getRect(
+        find.byKey(
+          const ValueKey<String>(
+            'mind-header-score-chart-selected-temporal-label',
+          ),
+        ),
+      );
+      final header = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart')),
+      );
+      expect(score.left, greaterThanOrEqualTo(header.left));
+      expect(temporal.left, greaterThanOrEqualTo(header.left));
+      expect(score.right, lessThanOrEqualTo(header.right));
+      expect(temporal.right, lessThanOrEqualTo(header.right));
+
+      final second = _seriesFor(
+        DateTime.utc(2028, 1, 1),
+        DateTime.utc(2028, 1, 31),
+      );
+      await tester.pumpWidget(
+        _chart(
+          series: second,
+          expansion: 1,
+          temporalContext: MindHeaderScoreChartTemporalContext.year,
+        ),
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+        findsNothing,
+      );
+
+      final august26 = MindBehavioralScorePoint(
+        epochDay: DateTime.utc(
+          2027,
+          8,
+          26,
+        ).difference(DateTime.utc(1970)).inDays,
+        score: 42,
+        noSignal: false,
+      );
+      expect(
+        MindHeaderScoreChart.selectedTemporalLabel(
+          august26,
+          MindHeaderScoreChartTemporalContext.year,
+        ),
+        'aug 26',
+      );
+      expect(
+        MindHeaderScoreChart.selectedTemporalLabel(
+          august26,
+          MindHeaderScoreChartTemporalContext.sum,
+        ),
+        '2027. aug',
+      );
+      expect(
+        MindHeaderScoreChart.selectedTemporalLabel(
+          august26,
+          MindHeaderScoreChartTemporalContext.month,
+        ),
+        '26',
+      );
+      expect(
+        MindHeaderScoreChart.selectedTemporalLabel(
+          august26,
+          MindHeaderScoreChartTemporalContext.day,
+        ),
+        'aug 26',
+      );
+    },
+  );
+
   testWidgets(
     'RED CLB-01/03: visible time-label projection renders exactly five actual-domain dates without changing the plot',
     (tester) async {
@@ -293,6 +549,8 @@ Widget _chart({
   required MindBehavioralScoreChartSeries series,
   required double expansion,
   bool showTimeLabels = false,
+  MindHeaderScoreChartTemporalContext temporalContext =
+      MindHeaderScoreChartTemporalContext.year,
 }) => Directionality(
   textDirection: TextDirection.ltr,
   child: SizedBox(
@@ -304,8 +562,19 @@ Widget _chart({
           series: series,
           expansionProgress: expansion,
           showTimeLabels: showTimeLabels,
+          temporalContext: temporalContext,
         ),
       ],
     ),
   ),
 );
+
+MindHeaderScoreChartPainter _painter(WidgetTester tester) =>
+    tester
+            .widget<CustomPaint>(
+              find.byKey(
+                const ValueKey<String>('mind-header-score-chart-paint'),
+              ),
+            )
+            .painter!
+        as MindHeaderScoreChartPainter;

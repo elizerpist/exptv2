@@ -5106,10 +5106,18 @@ final class DashboardHeaderTapWaveGestureLayer extends StatefulWidget {
     super.key,
     required this.controller,
     required this.child,
+    this.onPointerDown,
+    this.onPointerMove,
+    this.onPointerUp,
+    this.onPointerCancel,
   });
 
   final DashboardHeaderVisualController? controller;
   final Widget child;
+  final void Function(PointerDownEvent event)? onPointerDown;
+  final void Function(PointerMoveEvent event)? onPointerMove;
+  final void Function(PointerUpEvent event)? onPointerUp;
+  final void Function(PointerCancelEvent event)? onPointerCancel;
 
   @override
   State<DashboardHeaderTapWaveGestureLayer> createState() =>
@@ -5130,25 +5138,43 @@ final class _DashboardHeaderTapWaveGestureLayerState
         (local.dy / height).clamp(0.0, 1.0).toDouble(),
       );
       final visual = widget.controller;
-      if (visual == null || width <= 0 || height <= 0) return widget.child;
+      final observesPointer =
+          widget.onPointerDown != null ||
+          widget.onPointerMove != null ||
+          widget.onPointerUp != null ||
+          widget.onPointerCancel != null;
+      if ((visual == null && !observesPointer) || width <= 0 || height <= 0) {
+        return widget.child;
+      }
       return MouseRegion(
-        onExit: (_) => _endActivePointer(visual),
+        onExit: (_) {
+          if (visual != null) _endActivePointer(visual);
+        },
         child: Listener(
           behavior: HitTestBehavior.translucent,
           onPointerDown: (event) {
+            widget.onPointerDown?.call(event);
             // DOM `event.isPrimary === false` is ignored by the source.
             // Flutter exposes pointer ids instead, so retain exactly one
             // Header-local primary interaction until its terminal event.
-            if (_activePointer != null) return;
+            if (visual == null || _activePointer != null) return;
             _activePointer = event.pointer;
             visual.beginTapWave(origin(event.localPosition));
           },
           onPointerMove: (event) {
+            widget.onPointerMove?.call(event);
+            if (visual == null) return;
             if (event.pointer != _activePointer) return;
             visual.updateTapWave(origin(event.localPosition));
           },
-          onPointerUp: (event) => _endPointer(visual, event.pointer),
-          onPointerCancel: (event) => _endPointer(visual, event.pointer),
+          onPointerUp: (event) {
+            widget.onPointerUp?.call(event);
+            if (visual != null) _endPointer(visual, event.pointer);
+          },
+          onPointerCancel: (event) {
+            widget.onPointerCancel?.call(event);
+            if (visual != null) _endPointer(visual, event.pointer);
+          },
           child: widget.child,
         ),
       );

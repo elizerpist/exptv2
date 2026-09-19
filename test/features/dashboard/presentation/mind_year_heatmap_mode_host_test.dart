@@ -1068,6 +1068,59 @@ void main() {
   );
 
   testWidgets(
+    'CHART-TAP-08/09: production Header forwards a chart clean tap passively while a vertical chart drag remains Header-owned',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final score = ValueNotifier<MindBehavioralScoreFrame?>(_score(63));
+      final expansion = _ExpansionRecorder();
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(score.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: expansion,
+          showYearHeatmap: false,
+          score: score,
+        ),
+      );
+      final plot = find.byKey(
+        const ValueKey<String>('mind-header-score-chart-paint'),
+      );
+      final drag = await tester.startGesture(tester.getCenter(plot));
+      await drag.moveBy(const Offset(0, 48));
+      await tester.pump();
+      await drag.up();
+      expect(expansion.starts, 1);
+      expect(expansion.ends, 1);
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(plot, warnIfMissed: false);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('63/100'), findsNWidgets(2));
+    },
+  );
+
+  testWidgets(
     'MHC-01 production Mind Header clips score history completely when collapsed',
     (tester) async {
       final mode = DashboardCoreModeController(

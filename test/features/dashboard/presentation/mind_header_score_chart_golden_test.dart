@@ -94,6 +94,90 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'CHART-GOLDEN-01 selected crosshair is a white temporal inspection overlay',
+    (tester) async {
+      const points = <MindBehavioralScorePoint>[
+        MindBehavioralScorePoint(epochDay: 0, score: 100, noSignal: false),
+        MindBehavioralScorePoint(epochDay: 10, score: 80, noSignal: false),
+        MindBehavioralScorePoint(epochDay: 90, score: 20, noSignal: false),
+        MindBehavioralScorePoint(epochDay: 100, score: 0, noSignal: false),
+      ];
+      final series = MindBehavioralScoreChartSeries(
+        startInclusiveEpochDay: 0,
+        endInclusiveEpochDay: 100,
+        points: points,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: const Color(0xfff1f5f9),
+            body: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: SizedBox(
+                  key: const ValueKey<String>(
+                    'mind-header-chart-selected-golden',
+                  ),
+                  width: 378,
+                  height: 126,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: <Color>[
+                          MindHeaderTrafficLightScale.sample(0),
+                          MindHeaderTrafficLightScale.sample(28),
+                          MindHeaderTrafficLightScale.sample(54),
+                        ],
+                      ),
+                    ),
+                    child: Stack(
+                      children: <Widget>[
+                        MindHeaderScoreChart(
+                          series: series,
+                          expansionProgress: 1,
+                          showTimeLabels: true,
+                          temporalContext:
+                              MindHeaderScoreChartTemporalContext.month,
+                        ),
+                        const Positioned(
+                          left: 16,
+                          top: 16,
+                          child: Text(
+                            '20/100',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              height: .96,
+                              letterSpacing: -.76,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-header-score-chart-paint')),
+      );
+      await tester.tapAt(Offset(plot.left + plot.width * .9, plot.center.dy));
+      await tester.pump();
+
+      await expectLater(
+        find.byKey(const ValueKey<String>('mind-header-chart-selected-golden')),
+        matchesGoldenFile(
+          '../../../goldens/mind_header_score_chart_selected_crosshair.png',
+        ),
+      );
+    },
+  );
 }
 
 double _referenceLikeScore(int index) {

@@ -15,6 +15,7 @@ import '../../mind/domain/mind_temporal_heatmap_frame.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
+import '../../mind/presentation/mind_header_score_chart.dart';
 import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
@@ -142,6 +143,8 @@ class DashboardCoreModeHost extends StatefulWidget {
 }
 
 class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
+  final MindHeaderScoreChartPointerObserver _mindHeaderScoreChartPointers =
+      MindHeaderScoreChartPointerObserver();
   GestureDirectionIntent? _pointerAxis;
   Offset? _pointerOrigin;
   double _appliedVerticalDisplacement = 0;
@@ -303,6 +306,18 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
           height: headerBounds.height,
           child: DashboardHeaderTapWaveGestureLayer(
             controller: widget.headerVisualController,
+            onPointerDown: mode.mode == DashboardMode.mind
+                ? _mindHeaderScoreChartPointers.observePointerDown
+                : null,
+            onPointerMove: mode.mode == DashboardMode.mind
+                ? _mindHeaderScoreChartPointers.observePointerMove
+                : null,
+            onPointerUp: mode.mode == DashboardMode.mind
+                ? _mindHeaderScoreChartPointers.observePointerUp
+                : null,
+            onPointerCancel: mode.mode == DashboardMode.mind
+                ? _mindHeaderScoreChartPointers.observePointerCancel
+                : null,
             child: GestureDetector(
               key: const ValueKey('dashboard-core-mode-header-gesture-region'),
               behavior: HitTestBehavior.translucent,
@@ -388,6 +403,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         headerVisualFrame: widget.mindHeaderVisualFrame,
         behavioralScore: widget.mindBehavioralScore,
         headerScoreChartPresentation: widget.mindHeaderScoreChartPresentation,
+        headerScoreChartPointerObserver: _mindHeaderScoreChartPointers,
       ),
     };
   }
