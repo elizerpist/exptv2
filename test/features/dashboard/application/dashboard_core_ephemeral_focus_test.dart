@@ -2427,6 +2427,305 @@ void main() {
     },
   );
 
+  testWidgets(
+    'LEVEL-MONTH-06: a Day child, level close and later Month target paint only the latest Month',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'income-june-day-latest-wins',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 250000,
+            date: const LocalDate(year: 2027, month: 6, day: 6),
+          ),
+          _mindYearEntry(
+            id: 'income-july-month-latest-wins',
+            direction: 'income',
+            categoryId: 'salary',
+            partnerId: 'employer',
+            amount: 300000,
+            date: const LocalDate(year: 2027, month: 7, day: 1),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2027, 6, 6),
+        initialPlane: TimePlane.month,
+        initialRailOpen: true,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.income);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      final origin = core.navigation.state;
+      final dayChild = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: true,
+        component: DashboardTemporalAnchorComponent.day,
+        offset: 1,
+        base: origin,
+      )!;
+      core.beginSegmentedSummaryMotion();
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: dayChild,
+              component: DashboardTemporalAnchorComponent.day,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
+
+      // Keep these two later semantic targets in one render opportunity.  A
+      // close can publish its visible June Month target internally, but it
+      // may not leave a Day frame mounted or overwrite the later July target.
+      core.beginSegmentedSummaryMotion();
+      core.navigateExperimentalTemporalSelection(
+        plane: TimePlane.month,
+        isRailOpen: false,
+      );
+      final closedMonth = core.navigation.state;
+      final latestMonth = core.experimentalTemporalComponentOffsetCandidate(
+        plane: TimePlane.month,
+        isRailOpen: false,
+        component: DashboardTemporalAnchorComponent.month,
+        offset: 1,
+        base: closedMonth,
+      )!;
+      expect(latestMonth.monthCursor, const YearMonth(year: 2027, month: 7));
+      expect(
+        core
+            .navigateExperimentalTemporalComponentCandidate(
+              candidate: latestMonth,
+              component: DashboardTemporalAnchorComponent.month,
+            )
+            .isExactLivePublication,
+        isTrue,
+      );
+      await tester.pump();
+      core.recordLogBoxRenderExtent(
+        _exactPaintSnapshot(core.visibleFrames.logBoxLane.value!),
+      );
+      core.noteSegmentedSummaryComponentVisualTargetPainted(
+        candidate: latestMonth,
+        component: DashboardTemporalAnchorComponent.month,
+      );
+      await tester.pump();
+
+      final frame = core.mindTemporalHeatmap.value;
+      expect(frame, isA<MindMonthHeatmapFrame>());
+      final month = frame! as MindMonthHeatmapFrame;
+      expect(month.year, 2027);
+      expect(month.month, 7);
+      expect(
+        find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        findsNothing,
+      );
+      expect(
+        core.mindBehavioralScore.value?.seriesRequest?.targetEpochDay,
+        const LocalDate(year: 2027, month: 7, day: 1).epochDay,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'SCALE-05: changing 10 to 20 repaints presentation without Core, Query, source or score work',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'expense-june-scale-presentation-only',
+            direction: 'expense',
+            categoryId: 'home',
+            partnerId: 'utility',
+            amount: 150000,
+            date: const LocalDate(year: 2027, month: 6, day: 6),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2027, 6, 6),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      final frame = core.mindTemporalHeatmap.value;
+      final score = core.mindBehavioralScore.value;
+      final scoreProjection = core.mindBehavioralScore.projection;
+      final index = core.preparedIndex;
+      final navigation = core.navigation.state;
+      final scope = core.currentQuery.scopeFor(LedgerDirection.expense);
+      final repositoryCalls = repository.prepareCalls;
+      var heatmapPublications = 0;
+      var scorePublications = 0;
+      var navigationMutations = 0;
+      var queryMutations = 0;
+      core.mindTemporalHeatmap.addListener(() => heatmapPublications += 1);
+      core.mindBehavioralScore.addListener(() => scorePublications += 1);
+      core.navigation.addListener(() => navigationMutations += 1);
+      core.currentQuery.addListener(() => queryMutations += 1);
+
+      core.mindYearHeatmapPresentation.setScaleResolution(
+        MindHeatmapScaleResolution.twenty,
+      );
+      await tester.pump();
+
+      expect(
+        core.mindYearHeatmapPresentation.value.scaleResolution,
+        MindHeatmapScaleResolution.twenty,
+      );
+      expect(core.mindTemporalHeatmap.value, same(frame));
+      expect(core.mindBehavioralScore.value, same(score));
+      expect(core.mindBehavioralScore.projection, same(scoreProjection));
+      expect(core.preparedIndex, same(index));
+      expect(core.navigation.state, same(navigation));
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), same(scope));
+      expect(repository.prepareCalls, repositoryCalls);
+      expect(heatmapPublications, 0);
+      expect(scorePublications, 0);
+      expect(navigationMutations, 0);
+      expect(queryMutations, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'CHART-TAP-09: repeated real Header taps keep score, Core, Query, Time and source identities stable',
+    (tester) async {
+      final repository = _FocusSeedRepository(
+        rows: <DashboardLedgerEntry>[
+          _mindYearEntry(
+            id: 'expense-june-chart-tap-presentation-only',
+            direction: 'expense',
+            categoryId: 'home',
+            partnerId: 'utility',
+            amount: 150000,
+            date: const LocalDate(year: 2027, month: 6, day: 6),
+          ),
+        ],
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2027, 6, 6),
+        initialPlane: TimePlane.month,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.expense,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      _installMindAmountDomain(core, LedgerDirection.expense);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      expect(core.ensureMindTemporalVisualProjection(), isTrue);
+      await tester.pump();
+
+      final plot = find.byKey(
+        const ValueKey<String>('mind-header-score-chart-paint'),
+      );
+      expect(plot, findsOneWidget);
+      final frame = core.mindTemporalHeatmap.value;
+      final score = core.mindBehavioralScore.value;
+      final scoreProjection = core.mindBehavioralScore.projection;
+      final index = core.preparedIndex;
+      final navigation = core.navigation.state;
+      final scope = core.currentQuery.scopeFor(LedgerDirection.expense);
+      final repositoryCalls = repository.prepareCalls;
+      var heatmapPublications = 0;
+      var scorePublications = 0;
+      var navigationMutations = 0;
+      var queryMutations = 0;
+      core.mindTemporalHeatmap.addListener(() => heatmapPublications += 1);
+      core.mindBehavioralScore.addListener(() => scorePublications += 1);
+      core.navigation.addListener(() => navigationMutations += 1);
+      core.currentQuery.addListener(() => queryMutations += 1);
+
+      final center = tester.getCenter(plot);
+      await tester.tapAt(center);
+      await tester.pump();
+      await tester.tapAt(center);
+      await tester.pump();
+      await tester.tapAt(center);
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-score'),
+        ),
+        findsOneWidget,
+      );
+      expect(core.mindTemporalHeatmap.value, same(frame));
+      expect(core.mindBehavioralScore.value, same(score));
+      expect(core.mindBehavioralScore.projection, same(scoreProjection));
+      expect(core.preparedIndex, same(index));
+      expect(core.navigation.state, same(navigation));
+      expect(core.currentQuery.scopeFor(LedgerDirection.expense), same(scope));
+      expect(repository.prepareCalls, repositoryCalls);
+      expect(heatmapPublications, 0);
+      expect(scorePublications, 0);
+      expect(navigationMutations, 0);
+      expect(queryMutations, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'RED MYH-04/05/06/14: the production Mind Year projection shares direction, focus, year and range identity without drag reads',
     () async {
