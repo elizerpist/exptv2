@@ -81,10 +81,13 @@ void main() {
     },
   );
 
-  test('SUM-HEATMAP-02 RED: compact Mind annual amounts use the approved units', () {
-    expect(formatMindCompactForints(7728364), '7,73 M Ft');
-    expect(formatMindCompactForints(645560), '646 k Ft');
-  });
+  test(
+    'SUM-HEATMAP-02 RED: compact Mind annual amounts use the approved units',
+    () {
+      expect(formatMindCompactForints(7728364), '7,73 M Ft');
+      expect(formatMindCompactForints(645560), '646 k Ft');
+    },
+  );
 
   testWidgets(
     'SUM-PAGER-01/SUM-LINE-02 RED: a visual-only horizontal page reaches a real daily trend chart',

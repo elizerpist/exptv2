@@ -163,8 +163,8 @@ final class MindSumHeatmapProjection {
              (int year, int month),
              MindHeatmapAmountRangeBucket
            >.unmodifiable(buckets),
-       _dailyBuckets = Map<int, Map<int, MindHeatmapAmountRangeBucket>>
-           .unmodifiable(
+       _dailyBuckets =
+           Map<int, Map<int, MindHeatmapAmountRangeBucket>>.unmodifiable(
              dailyBuckets.map(
                (year, buckets) => MapEntry(
                  year,

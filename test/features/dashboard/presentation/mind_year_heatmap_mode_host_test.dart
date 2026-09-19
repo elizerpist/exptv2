@@ -381,12 +381,11 @@ void main() {
         const ValueKey<String>('query-amount-range-slider'),
       );
       final sliderBounds = tester.getRect(slider);
-      final pager = find.byKey(const ValueKey<String>('mind-sum-heatmap-pager'));
-
-      await tester.drag(
-        slider,
-        Offset(-sliderBounds.width * .25, 0),
+      final pager = find.byKey(
+        const ValueKey<String>('mind-sum-heatmap-pager'),
       );
+
+      await tester.drag(slider, Offset(-sliderBounds.width * .25, 0));
       await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('mind-sum-heatmap-page-0')),

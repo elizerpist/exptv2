@@ -101,7 +101,11 @@ void main() {
           _contribution(0, 100, const LocalDate(year: 2025, month: 1, day: 2)),
           _contribution(1, 400, const LocalDate(year: 2025, month: 1, day: 2)),
           _contribution(2, 700, const LocalDate(year: 2025, month: 2, day: 14)),
-          _contribution(3, 900, const LocalDate(year: 2025, month: 11, day: 30)),
+          _contribution(
+            3,
+            900,
+            const LocalDate(year: 2025, month: 11, day: 30),
+          ),
         ],
       );
 
@@ -110,16 +114,29 @@ void main() {
         full.dailyPointsForYear(2025),
         <Matcher>[
           isA<MindSumHeatmapDailyPoint>()
-              .having((point) => point.date, 'date', const LocalDate(year: 2025, month: 1, day: 2))
+              .having(
+                (point) => point.date,
+                'date',
+                const LocalDate(year: 2025, month: 1, day: 2),
+              )
               .having((point) => point.total, 'total', 500),
           isA<MindSumHeatmapDailyPoint>()
-              .having((point) => point.date, 'date', const LocalDate(year: 2025, month: 2, day: 14))
+              .having(
+                (point) => point.date,
+                'date',
+                const LocalDate(year: 2025, month: 2, day: 14),
+              )
               .having((point) => point.total, 'total', 700),
           isA<MindSumHeatmapDailyPoint>()
-              .having((point) => point.date, 'date', const LocalDate(year: 2025, month: 11, day: 30))
+              .having(
+                (point) => point.date,
+                'date',
+                const LocalDate(year: 2025, month: 11, day: 30),
+              )
               .having((point) => point.total, 'total', 900),
         ],
-        reason: 'No empty or interpolated calendar day may become a financial point.',
+        reason:
+            'No empty or interpolated calendar day may become a financial point.',
       );
 
       final narrowed = projection.preview(
