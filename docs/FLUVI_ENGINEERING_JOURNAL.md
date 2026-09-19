@@ -186,6 +186,17 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Physical validation: `PENDING — USER ONLY`.
 
 
+## 2026-09-19 — Segmented startup narrow-layout and Legacy rail-profile compatibility repair
+
+- Application commit `5893b4568f7061c6e643e7ce767ac76716c7c8d1` follows the first exact delivery candidate `98eaba5e...` and addresses two newly observed verification failures without changing the requested product default: production startup remains `Segmented` + `Mirrored`.
+- **RED external evidence:** workflow `35433511022` reached `I_first_fling` then failed at `ScrollController.position` with `Bad state: No element`, before the inherited `frame_timing_headroom` profile gate. Current source explains this: the protected physical profile drives the Legacy-only `dashboard-time-rail`, while a Segmented Summary intentionally replaces that legacy rail surface. The c1b12 reference workflow `35392071533` instead reached the older `frame_timing_headroom is invalid: null` failure.
+- **RED mounted evidence:** the product default caused the app-shell test harness to throw `Segmented Summary cannot fit its authored content` with a 146.56px navigation lane. The initial 40% amount envelope left insufficient width for the immutable selector visuals at that narrow host.
+- **Repair:** `FluviApp` / `FluviAppShell` expose an optional embedding/test initial Summary variant; normal app construction still resolves to Segmented. The A–K profile now explicitly requests Legacy, so it measures the same protected Time-carousel fixture rather than relying on an obsolete product default. `SummarySegmentedTrackGeometry.minimumWidthFor` computes the exact lower bound for active authored tracks and existing half-gap invariant; only when needed, the Summary gives the amount slot just enough width back to satisfy that bound. No selector glyph/semantic cell is scaled or clipped; normal-width amount allocation remains 40%.
+- **GREEN evidence:** `test/features/dashboard/presentation/summary_pill_experiments_widget_test.dart` passes 30 tests, including the exact narrow-host no-clip geometry proof. `test/app/fluvi_app_test.dart` passes 18 tests, including explicit Legacy Time-rail mounting and the default Segmented startup path. Existing normal-orientation geometry tests now request Normal explicitly; the separate startup/default coverage continues to assert Mirrored. `flutter analyze --no-pub` reports no issues; `git diff --check` passes.
+- **No-touch:** no Time physics/controller/position behavior, Avatar behavior, Query semantics, score calculation, Header colour policy, LogBox, Budget, Room/Kotlin/schema, or `MILESTONE_COMMITS.md` change is included.
+- **Still required:** rerun exact-SHA CI/profile, obtain the normal human diagnostic APK, regenerate exact-SHA SCIP, and user device validation. Physical validation: `PENDING — USER ONLY`.
+
+
 ## 2026-09-19 — Selectable 10/20-colour Mind heatmap resolution
 
 - Application commit `a7561cba942918b90d766ebc379d5d8c49471bbb` adds `MindHeatmapScaleResolution` to the existing `MindYearHeatmapPresentationSettings` owner. The product default remains `ten`; a real 10↔20 change advances presentation revision once, while a no-op does not. It is not persisted and does not alter Query, financial membership, normalized intensity, score, range, or navigation.
