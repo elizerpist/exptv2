@@ -170,7 +170,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
     final pageTitle = switch (_currentPage) {
       0 => 'Többéves aktivitás',
       1 => 'Többéves alakulás',
-      _ => 'Részletes alakulás',
+      _ => 'Többéves aktivitás',
     };
     final pagePeriod = _currentPage == 1
         ? (years.isEmpty
