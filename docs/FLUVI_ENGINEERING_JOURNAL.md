@@ -1657,3 +1657,4 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 ### Gesture evidence follow-up
 
 - Test commit `c7db9cb897a10476303e3d982d060345a7866b62` adds `SUM-GESTURE-01`: fifteen annual anchors exceed the shared chart's minimum slot-width domain, a deliberate drag on `mind-aggregate-line-scroll` advances only the inner horizontal Scrollable, and the Sum PageView remains on page 1. The Ubuntu/proot focused test is GREEN. This is test-only; no application data, gesture implementation, Query or navigation code changed.
+- Test commit `7afd52b00edec3b358fc7a85aa60f14837cbd4d3` adds `YEAR-LINE-01`: the page-three January aggregate changes from `600000` to `500000` when the existing range-preview frame excludes the lower entry. It is GREEN in Ubuntu/proot and confirms that the Year line is neither raw-event data nor a second Query projection. This is test-only; no production owner changed.
