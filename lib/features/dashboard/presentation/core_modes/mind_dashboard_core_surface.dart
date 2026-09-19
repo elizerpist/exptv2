@@ -222,10 +222,10 @@ class MindDashboardCoreSurface extends StatelessWidget {
             child: temporalContent,
           );
     Widget bodyFor(MindYearHeatmapPresentationSettings? settings) {
-      final showInlineLegend =
-          settings?.showHeatmapLegend == true &&
-          settings?.legendPlacement ==
-              MindHeatmapLegendPlacement.inlineBetweenRangeValues;
+      final paletteStyle =
+          settings?.paletteStyle ?? MindYearHeatmapPaletteStyle.fluvi;
+      final scaleResolution =
+          settings?.scaleResolution ?? MindHeatmapScaleResolution.ten;
       final range = _MindQueryAmountRangeListener(
         valuesFor: queryAmountRange!,
         valuesChanges: queryAmountRangeChanges!,
@@ -242,17 +242,14 @@ class MindDashboardCoreSurface extends StatelessWidget {
         // temporal content may vary, but its range must never fall back to the
         // standard Query-menu geometry on another TimePlane.
         compactPresentation: true,
-        compactMindCenterAccessory: showInlineLegend
-            ? _MindHeatmapInlineLegend(
-                style: settings!.paletteStyle,
-                scaleResolution: settings.scaleResolution,
-              )
-            : null,
+        compactMindCenterAccessory: _MindHeatmapInlineLegend(
+          style: paletteStyle,
+          scaleResolution: scaleResolution,
+        ),
       );
       return _MindTemporalBody(
         temporalContent: guardedTemporalContent,
         range: range,
-        presentationSettings: settings,
       );
     }
 
@@ -330,107 +327,29 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
 /// Structural Mind topology: one clipped vertical viewport followed by an
 /// independent footer. The slider never overlays scroll content.
 final class _MindTemporalBody extends StatelessWidget {
-  const _MindTemporalBody({
-    required this.temporalContent,
-    required this.range,
-    this.presentationSettings,
-  });
+  const _MindTemporalBody({required this.temporalContent, required this.range});
 
   // The compact shared slider keeps its existing touch geometry inside this
-  // measured footer. The above-slider legend is intentionally a separate,
-  // smaller presentation lane; inline mode reserves none here.
+  // measured footer. The palette legend is permanently inline between Min.
+  // and Max., so the visualization has no separate legend lane.
   static const _footerHeight = 68.0;
-  static const _legendHeight = 16.0;
 
   final Widget temporalContent;
   final Widget range;
-  final MindYearHeatmapPresentationSettings? presentationSettings;
 
   @override
-  Widget build(BuildContext context) {
-    final settings = presentationSettings;
-    final showAboveLegend =
-        (settings?.showHeatmapLegend ?? true) &&
-        (settings?.legendPlacement ?? MindHeatmapLegendPlacement.aboveSlider) ==
-            MindHeatmapLegendPlacement.aboveSlider;
-    return Column(
-      children: <Widget>[
-        Expanded(
-          key: const ValueKey<String>('mind-temporal-content-viewport'),
-          child: ClipRect(child: temporalContent),
-        ),
-        if (showAboveLegend)
-          SizedBox(
-            key: const ValueKey<String>('mind-heatmap-legend-lane'),
-            height: _legendHeight,
-            child: _MindHeatmapPaletteLegend(
-              style:
-                  settings?.paletteStyle ?? MindYearHeatmapPaletteStyle.fluvi,
-              scaleResolution:
-                  settings?.scaleResolution ?? MindHeatmapScaleResolution.ten,
-            ),
-          ),
-        KeyedSubtree(
-          key: const ValueKey('mind-year-heatmap-fixed-footer'),
-          child: SizedBox(height: _footerHeight, child: range),
-        ),
-      ],
-    );
-  }
-}
-
-/// Fixed, quiet presentation of the selected authored palette positions.
-/// It sits outside the temporal viewport and delegates every color choice to
-/// the same resolver that paints heatmap cells.
-final class _MindHeatmapPaletteLegend extends StatelessWidget {
-  const _MindHeatmapPaletteLegend({
-    required this.style,
-    required this.scaleResolution,
-  });
-
-  final MindYearHeatmapPaletteStyle style;
-  final MindHeatmapScaleResolution scaleResolution;
-
-  @override
-  Widget build(BuildContext context) {
-    final samples = MindYearHeatmapPaletteResolver.legendSamples(
-      style,
-      scaleResolution: scaleResolution,
-    );
-    return Semantics(
-      label: 'Heatmap intenzitás, alacsonytól magasig',
-      readOnly: true,
-      child: ExcludeSemantics(
-        child: Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            key: const ValueKey<String>('mind-heatmap-palette-legend'),
-            height: 10,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List<Widget>.generate(
-                samples.length,
-                (index) => Padding(
-                  padding: EdgeInsets.only(
-                    right: index == samples.length - 1 ? 0 : 2,
-                  ),
-                  child: DecoratedBox(
-                    key: ValueKey<String>('mind-heatmap-palette-swatch-$index'),
-                    decoration: BoxDecoration(
-                      color: samples[index].background,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: const SizedBox(width: 12, height: 10),
-                  ),
-                ),
-                growable: false,
-              ),
-            ),
-          ),
-        ),
+  Widget build(BuildContext context) => Column(
+    children: <Widget>[
+      Expanded(
+        key: const ValueKey<String>('mind-temporal-content-viewport'),
+        child: ClipRect(child: temporalContent),
       ),
-    );
-  }
+      KeyedSubtree(
+        key: const ValueKey('mind-year-heatmap-fixed-footer'),
+        child: SizedBox(height: _footerHeight, child: range),
+      ),
+    ],
+  );
 }
 
 /// A Mind-supplied, read-only center accessory. QueryAmountRangeControl owns

@@ -513,32 +513,6 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
-              child: Text('Jelmagyarázat elhelyezése'),
-            ),
-            RadioGroup<MindHeatmapLegendPlacement>(
-              groupValue: settings.legendPlacement,
-              onChanged: (placement) {
-                if (placement != null) {
-                  controller.setLegendPlacement(placement);
-                }
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final placement in MindHeatmapLegendPlacement.values)
-                    RadioListTile<MindHeatmapLegendPlacement>(
-                      key: ValueKey(
-                        'mind-heatmap-legend-placement-${placement.name}',
-                      ),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(placement.tunerLabel),
-                      value: placement,
-                    ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
               child: Text('MonthCard elrendezés'),
             ),
             RadioGroup<MindYearMonthCardLayout>(
@@ -582,14 +556,6 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
                     ),
                 ],
               ),
-            ),
-            SwitchListTile.adaptive(
-              key: const ValueKey('mind-heatmap-legend-toggle'),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Hőtérkép jelmagyarázat'),
-              value: settings.showHeatmapLegend,
-              onChanged: controller.setShowHeatmapLegend,
             ),
             SwitchListTile.adaptive(
               key: const ValueKey('mind-heatmap-monthly-net-toggle'),

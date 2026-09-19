@@ -57,20 +57,10 @@ void main() {
       expect(controller.value.showMonthlyNetClose, isFalse);
       expect(controller.value.showMonthlyDirectionTotal, isFalse);
       expect(
-        controller.value.showHeatmapLegend,
-        isTrue,
-        reason:
-            'The current visible legend remains the default until a user hides it.',
-      );
-      expect(
         controller.value.annualSurfaceStyle,
         MindYearHeatmapAnnualSurfaceStyle.monthCards,
         reason:
             'The accepted MonthCard shell remains the conservative default.',
-      );
-      expect(
-        controller.value.legendPlacement,
-        MindHeatmapLegendPlacement.aboveSlider,
       );
       expect(controller.value.revision, 0);
     });
@@ -95,14 +85,10 @@ void main() {
     });
 
     test(
-      'RED HMP-SET-01: legend and annual surface are independent presentation preferences',
+      'HMP-SET-01: annual surface remains an independent presentation preference',
       () {
         final controller = MindYearHeatmapPresentationController();
         addTearDown(controller.dispose);
-        controller.setShowHeatmapLegend(false);
-        expect(controller.value.showHeatmapLegend, isFalse);
-        expect(controller.value.revision, 1);
-
         controller.setAnnualSurfaceStyle(
           MindYearHeatmapAnnualSurfaceStyle.directCells,
         );
@@ -110,12 +96,12 @@ void main() {
           controller.value.annualSurfaceStyle,
           MindYearHeatmapAnnualSurfaceStyle.directCells,
         );
-        expect(controller.value.revision, 2);
+        expect(controller.value.revision, 1);
 
         controller.setAnnualSurfaceStyle(
           MindYearHeatmapAnnualSurfaceStyle.directCells,
         );
-        expect(controller.value.revision, 2);
+        expect(controller.value.revision, 1);
       },
     );
 
@@ -160,30 +146,26 @@ void main() {
     );
 
     test(
-      'LEGEND-POS-SET-01 RED: legend placement defaults above the slider and is independently selectable',
+      'YEAR-HEIGHT-01 RED: the two-footer annual fit guard is shared by every column layout',
       () {
-        final controller = MindYearHeatmapPresentationController();
-        addTearDown(controller.dispose);
+        const base = MindYearHeatmapPresentationSettings.defaults();
+        expect(base.requiredMindModeContentExtraHeight, 0);
 
-        expect(
-          controller.value.legendPlacement,
-          MindHeatmapLegendPlacement.aboveSlider,
-        );
-        controller.setLegendPlacement(
-          MindHeatmapLegendPlacement.inlineBetweenRangeValues,
-        );
-        expect(
-          controller.value.legendPlacement,
-          MindHeatmapLegendPlacement.inlineBetweenRangeValues,
-        );
-        expect(controller.value.revision, 1);
-
-        controller.setShowHeatmapLegend(false);
-        expect(controller.value.showHeatmapLegend, isFalse);
-        expect(
-          controller.value.legendPlacement,
-          MindHeatmapLegendPlacement.inlineBetweenRangeValues,
-        );
+        for (final layout in MindYearMonthCardLayout.values) {
+          final twoFooter = base.copyWith(
+            monthCardLayout: layout,
+            showMonthlyNetClose: true,
+            showMonthlyDirectionTotal: true,
+          );
+          expect(
+            twoFooter.requiredMindModeContentExtraHeight,
+            15,
+            reason:
+                'The measured compact Mind viewport lacks exactly 15px for '
+                'the fixed two-footer MonthCard chrome; this must never be a '
+                'four-column-only envelope.',
+          );
+        }
       },
     );
   });

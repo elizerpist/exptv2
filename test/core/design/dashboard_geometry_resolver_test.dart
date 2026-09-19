@@ -239,9 +239,7 @@ void main() {
           mode: DashboardModeSpec.mind,
           collapseProgress: 0,
           isRailExpanded: true,
-          modeContentExtraHeight: MindYearMonthCardLayout
-              .fourColumns
-              .requiredMindModeContentExtraHeight,
+          modeContentExtraHeight: 0,
         );
 
         // 5 px comes from the dedicated open-rail handle gap and 4 px from
@@ -303,25 +301,13 @@ void main() {
         expect(openRail.zone2Bounds.height, metrics.zone2CardHeight);
         expect(
           mind.unifiedSubheaderBounds!.bottom,
-          openRail.zone2Bounds.bottom +
-              MindYearMonthCardLayout
-                  .fourColumns
-                  .requiredMindModeContentExtraHeight,
+          openRail.zone2Bounds.bottom,
         );
         expect(
           mind.zone2IndicatorBounds.top,
-          openRail.zone2IndicatorBounds.top +
-              MindYearMonthCardLayout
-                  .fourColumns
-                  .requiredMindModeContentExtraHeight,
+          openRail.zone2IndicatorBounds.top,
         );
-        expect(
-          mind.railBounds.top,
-          openRail.railBounds.top +
-              MindYearMonthCardLayout
-                  .fourColumns
-                  .requiredMindModeContentExtraHeight,
-        );
+        expect(mind.railBounds.top, openRail.railBounds.top);
         expect(
           openRail.railBounds.bottom,
           lessThan(openRail.collapseHandleBounds.top),
@@ -368,7 +354,7 @@ void main() {
     });
 
     test(
-      'keeps split envelopes stable while selected four-column Mind reserves its unified body extension',
+      'keeps split envelopes stable while selected four-column Mind uses the shared unified body height',
       () {
         final balance = DashboardGeometryResolver.resolve(
           metrics: DashboardLayoutMetrics.reference,
@@ -387,9 +373,7 @@ void main() {
           mode: DashboardModeSpec.mind,
           collapseProgress: 0,
           isRailExpanded: false,
-          modeContentExtraHeight: MindYearMonthCardLayout
-              .fourColumns
-              .requiredMindModeContentExtraHeight,
+          modeContentExtraHeight: 0,
         );
 
         expect(
@@ -406,17 +390,11 @@ void main() {
         );
         expect(
           mind.subheaderEnvelopeBounds.height,
-          balance.subheaderEnvelopeBounds.height +
-              MindYearMonthCardLayout
-                  .fourColumns
-                  .requiredMindModeContentExtraHeight,
+          balance.subheaderEnvelopeBounds.height,
         );
         expect(
           mind.subheaderEnvelopeBounds.height,
-          budget.subheaderEnvelopeBounds.height +
-              MindYearMonthCardLayout
-                  .fourColumns
-                  .requiredMindModeContentExtraHeight,
+          budget.subheaderEnvelopeBounds.height,
         );
         expect(mind.unifiedSubheaderBounds, mind.subheaderEnvelopeBounds);
         expect(balance.actionBounds, budget.actionBounds);
@@ -424,13 +402,7 @@ void main() {
         expect(balance.summaryBounds, budget.summaryBounds);
         expect(balance.summaryBounds, mind.summaryBounds);
         expect(balance.railBounds, budget.railBounds);
-        expect(
-          mind.railBounds.top,
-          balance.railBounds.top +
-              MindYearMonthCardLayout
-                  .fourColumns
-                  .requiredMindModeContentExtraHeight,
-        );
+        expect(mind.railBounds.top, balance.railBounds.top);
 
         for (final mode in DashboardModeSpec.values) {
           final collapsed = DashboardGeometryResolver.resolve(

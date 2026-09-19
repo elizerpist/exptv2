@@ -158,7 +158,6 @@ class _CoreDashboardState extends State<CoreDashboard>
   int _lastSummaryVariantTransitionLayoutEpoch = 0;
   int? _lastRejectedSummaryVariantCallbackEpoch;
   double _mindModeContentExtraHeight = 0;
-
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
 
@@ -452,10 +451,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.clearMindAmountRangePreview();
   }
 
-  /// Only the selected four-column annual presentation grows Mind's physical
-  /// envelope. The other Mind planes keep the established LogBox room.
-  /// Presentation controls remain the sole input; neither Query nor widgets
-  /// own this structural decision.
+  /// The two-footer fit guard is shared by all Year column layouts, so the
+  /// 3 × 4 and 4 × 3 cards keep one outer envelope.
   double _resolveMindModeContentExtraHeight() {
     if (modeController.committedMode != DashboardModeSpec.mind ||
         controller.navigation.state.plane != TimePlane.year) {
@@ -464,7 +461,6 @@ class _CoreDashboardState extends State<CoreDashboard>
     return controller
         .mindYearHeatmapPresentation
         .value
-        .monthCardLayout
         .requiredMindModeContentExtraHeight;
   }
 

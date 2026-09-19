@@ -317,7 +317,6 @@ void main() {
 
       settings
         ..setPaletteStyle(MindYearHeatmapPaletteStyle.meadowGreen)
-        ..setShowHeatmapLegend(false)
         ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.monthCards);
       await tester.pump();
       expect(

@@ -838,15 +838,23 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.scaleResolution, resolution);
     }
-    for (final placement in MindHeatmapLegendPlacement.values) {
-      final legendPlacement = find.byKey(
-        ValueKey('mind-heatmap-legend-placement-${placement.name}'),
-      );
-      await tester.ensureVisible(legendPlacement);
-      await tester.tap(legendPlacement);
-      await tester.pump();
-      expect(heatmapSettings.value.legendPlacement, placement);
-    }
+    expect(
+      find.byKey(const ValueKey('mind-heatmap-legend-toggle')),
+      findsNothing,
+      reason: 'The final Mind legend is permanently inline, not tunable.',
+    );
+    expect(
+      find.byKey(const ValueKey('mind-heatmap-legend-placement-aboveSlider')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+          'mind-heatmap-legend-placement-inlineBetweenRangeValues',
+        ),
+      ),
+      findsNothing,
+    );
     final fourColumns = find.byKey(
       const ValueKey('mind-heatmap-layout-fourColumns'),
     );
@@ -862,12 +870,6 @@ void main() {
     await tester.tap(net);
     await tester.pump();
     expect(heatmapSettings.value.showMonthlyNetClose, isTrue);
-    final legend = find.byKey(const ValueKey('mind-heatmap-legend-toggle'));
-    await tester.ensureVisible(legend);
-    tester.widget<SwitchListTile>(legend).onChanged!(false);
-    await tester.pump();
-    expect(heatmapSettings.value.showHeatmapLegend, isFalse);
-
     final directSurface = find.byKey(
       const ValueKey('mind-heatmap-annual-surface-directCells'),
     );

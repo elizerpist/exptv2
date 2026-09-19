@@ -1521,7 +1521,7 @@ void main() {
         reason: 'Day remains daily-score content, never an hourly heatmap.',
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-heatmap-palette-legend')),
+        find.byKey(const ValueKey<String>('mind-heatmap-inline-legend')),
         findsOneWidget,
       );
       expect(
@@ -1585,13 +1585,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(
-        tester.getRect(body).height,
-        baselineBounds.height +
-            MindYearMonthCardLayout
-                .fourColumns
-                .requiredMindModeContentExtraHeight,
-      );
+      expect(tester.getRect(body).height, baselineBounds.height);
       expect(
         find.byKey(const ValueKey<String>('mind-year-heatmap-fit-scroll')),
         findsOneWidget,

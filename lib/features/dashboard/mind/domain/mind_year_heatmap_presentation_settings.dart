@@ -35,19 +35,6 @@ enum MindHeatmapScaleResolution {
   };
 }
 
-/// Placement-only choice for Mind's existing palette legend. Visibility stays
-/// independent so a hidden legend reserves no placement-specific space.
-enum MindHeatmapLegendPlacement {
-  aboveSlider,
-  inlineBetweenRangeValues;
-
-  String get tunerLabel => switch (this) {
-    MindHeatmapLegendPlacement.aboveSlider => 'Slider felett',
-    MindHeatmapLegendPlacement.inlineBetweenRangeValues =>
-      'Slider alatt — Min/Max között',
-  };
-}
-
 /// Shell choice is independent from the annual column count. Both choices
 /// render the same admitted frame and calendar geometry.
 enum MindYearHeatmapAnnualSurfaceStyle {
@@ -78,32 +65,27 @@ enum MindYearMonthCardLayout {
   };
 
   bool get fitsAnnualViewport => this == fourColumns;
-
-  /// The four-column annual grid needs an additional physical Mind-body
-  /// envelope once it is actually selected. Keeping this on the presentation
-  /// choice prevents ordinary Sum/Month/Day and 2 × 6/3 × 4 Mind surfaces
-  /// from needlessly taking vertical room away from the LogBox.
-  double get requiredMindModeContentExtraHeight => switch (this) {
-    MindYearMonthCardLayout.fourColumns => 50,
-    MindYearMonthCardLayout.threeColumns ||
-    MindYearMonthCardLayout.twoColumns => 0,
-  };
 }
 
 /// Immutable user preferences for visualizing an admitted annual heatmap.
 /// None of these values changes financial membership, Query state or score.
 @immutable
 final class MindYearHeatmapPresentationSettings {
+  // The permanent inline legend makes the compact Mind viewport 15px shorter
+  // than the old external-lane topology. With both optional MonthCard footer
+  // rows visible, their fixed chrome needs that measured minimum back before
+  // a calendar cell can be laid out. This applies to every annual layout,
+  // never as a four-column-only envelope.
+  static const _twoFooterAnnualFitGuardHeight = 15.0;
+
   const MindYearHeatmapPresentationSettings({
     required this.paletteStyle,
     required this.monthCardLayout,
     required this.showMonthlyNetClose,
     required this.showMonthlyDirectionTotal,
     required this.revision,
-    this.showHeatmapLegend = true,
     this.annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
-    this.legendPlacement = MindHeatmapLegendPlacement.aboveSlider,
   });
 
   const MindYearHeatmapPresentationSettings.defaults()
@@ -111,31 +93,32 @@ final class MindYearHeatmapPresentationSettings {
       monthCardLayout = MindYearMonthCardLayout.threeColumns,
       showMonthlyNetClose = false,
       showMonthlyDirectionTotal = false,
-      showHeatmapLegend = true,
       annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
       scaleResolution = MindHeatmapScaleResolution.ten,
-      legendPlacement = MindHeatmapLegendPlacement.aboveSlider,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindYearMonthCardLayout monthCardLayout;
   final bool showMonthlyNetClose;
   final bool showMonthlyDirectionTotal;
-  final bool showHeatmapLegend;
   final MindYearHeatmapAnnualSurfaceStyle annualSurfaceStyle;
   final MindHeatmapScaleResolution scaleResolution;
-  final MindHeatmapLegendPlacement legendPlacement;
   final int revision;
+
+  /// A presentation-only annual fit guard. It has no Query, financial, or
+  /// navigation meaning and keeps every annual column layout in one envelope.
+  double get requiredMindModeContentExtraHeight =>
+      showMonthlyNetClose && showMonthlyDirectionTotal
+      ? _twoFooterAnnualFitGuardHeight
+      : 0;
 
   MindYearHeatmapPresentationSettings copyWith({
     MindYearHeatmapPaletteStyle? paletteStyle,
     MindYearMonthCardLayout? monthCardLayout,
     bool? showMonthlyNetClose,
     bool? showMonthlyDirectionTotal,
-    bool? showHeatmapLegend,
     MindYearHeatmapAnnualSurfaceStyle? annualSurfaceStyle,
     MindHeatmapScaleResolution? scaleResolution,
-    MindHeatmapLegendPlacement? legendPlacement,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
@@ -143,10 +126,8 @@ final class MindYearHeatmapPresentationSettings {
     showMonthlyNetClose: showMonthlyNetClose ?? this.showMonthlyNetClose,
     showMonthlyDirectionTotal:
         showMonthlyDirectionTotal ?? this.showMonthlyDirectionTotal,
-    showHeatmapLegend: showHeatmapLegend ?? this.showHeatmapLegend,
     annualSurfaceStyle: annualSurfaceStyle ?? this.annualSurfaceStyle,
     scaleResolution: scaleResolution ?? this.scaleResolution,
-    legendPlacement: legendPlacement ?? this.legendPlacement,
     revision: revision ?? this.revision,
   );
 
@@ -157,10 +138,8 @@ final class MindYearHeatmapPresentationSettings {
       other.monthCardLayout == monthCardLayout &&
       other.showMonthlyNetClose == showMonthlyNetClose &&
       other.showMonthlyDirectionTotal == showMonthlyDirectionTotal &&
-      other.showHeatmapLegend == showHeatmapLegend &&
       other.annualSurfaceStyle == annualSurfaceStyle &&
       other.scaleResolution == scaleResolution &&
-      other.legendPlacement == legendPlacement &&
       other.revision == revision;
 
   @override
@@ -169,10 +148,8 @@ final class MindYearHeatmapPresentationSettings {
     monthCardLayout,
     showMonthlyNetClose,
     showMonthlyDirectionTotal,
-    showHeatmapLegend,
     annualSurfaceStyle,
     scaleResolution,
-    legendPlacement,
     revision,
   );
 }
@@ -221,15 +198,6 @@ final class MindYearHeatmapPresentationController
     );
   }
 
-  void setShowHeatmapLegend(bool show) {
-    final current = value;
-    if (current.showHeatmapLegend == show) return;
-    value = current.copyWith(
-      showHeatmapLegend: show,
-      revision: current.revision + 1,
-    );
-  }
-
   void setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle style) {
     final current = value;
     if (current.annualSurfaceStyle == style) return;
@@ -244,15 +212,6 @@ final class MindYearHeatmapPresentationController
     if (current.scaleResolution == resolution) return;
     value = current.copyWith(
       scaleResolution: resolution,
-      revision: current.revision + 1,
-    );
-  }
-
-  void setLegendPlacement(MindHeatmapLegendPlacement placement) {
-    final current = value;
-    if (current.legendPlacement == placement) return;
-    value = current.copyWith(
-      legendPlacement: placement,
       revision: current.revision + 1,
     );
   }

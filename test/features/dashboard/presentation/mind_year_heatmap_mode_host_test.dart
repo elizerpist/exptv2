@@ -274,7 +274,7 @@ void main() {
   );
 
   testWidgets(
-    'LEG-04/FTR-01: a scrolling Sum grid never moves the one fixed legend or compact range lane',
+    'LEGEND-FINAL-04/FTR-01: a scrolling Sum grid never moves the inline legend or compact range footer',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -317,7 +317,7 @@ void main() {
         ),
       );
       final legend = find.byKey(
-        const ValueKey<String>('mind-heatmap-palette-legend'),
+        const ValueKey<String>('mind-heatmap-inline-legend'),
       );
       final footer = find.byKey(
         const ValueKey<String>('mind-year-heatmap-fixed-footer'),
@@ -380,7 +380,7 @@ void main() {
   );
 
   testWidgets(
-    'RED LEG-01/04: the fixed Mind legend has ten resolver swatches above the compact range',
+    'LEGEND-FINAL-05: the permanent inline Mind legend has ten or twenty resolver swatches',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -405,29 +405,29 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('mind-heatmap-palette-legend')),
+        find.byKey(const ValueKey('mind-heatmap-inline-legend')),
         findsOneWidget,
       );
       for (var index = 0; index < 10; index += 1) {
         expect(
-          find.byKey(ValueKey('mind-heatmap-palette-swatch-$index')),
+          find.byKey(ValueKey('mind-heatmap-inline-swatch-$index')),
           findsOneWidget,
         );
       }
       expect(
-        find.byKey(const ValueKey('mind-heatmap-palette-swatch-10')),
+        find.byKey(const ValueKey('mind-heatmap-inline-swatch-10')),
         findsNothing,
       );
       expect(
         tester
-            .getRect(find.byKey(const ValueKey('mind-heatmap-palette-legend')))
+            .getRect(find.byKey(const ValueKey('mind-heatmap-inline-legend')))
             .bottom,
         lessThanOrEqualTo(
           tester
               .getRect(
                 find.byKey(const ValueKey('mind-year-heatmap-fixed-footer')),
               )
-              .top,
+              .bottom,
         ),
       );
 
@@ -435,19 +435,19 @@ void main() {
       await tester.pump();
       for (var index = 0; index < 20; index += 1) {
         expect(
-          find.byKey(ValueKey('mind-heatmap-palette-swatch-$index')),
+          find.byKey(ValueKey('mind-heatmap-inline-swatch-$index')),
           findsOneWidget,
         );
       }
       expect(
-        find.byKey(const ValueKey('mind-heatmap-palette-swatch-20')),
+        find.byKey(const ValueKey('mind-heatmap-inline-swatch-20')),
         findsNothing,
       );
     },
   );
 
   testWidgets(
-    'LEGEND-GEOM-01/02: hiding the legend structurally returns its compact lane to four-column Year content',
+    'LEGEND-FINAL-01: four-column Year has no external legend lane and retains the inline legend',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -478,8 +478,8 @@ void main() {
           presentationSettings: settings,
         ),
       );
-      final legend = find.byKey(
-        const ValueKey<String>('mind-heatmap-palette-legend'),
+      final inline = find.byKey(
+        const ValueKey<String>('mind-heatmap-inline-legend'),
       );
       final footer = find.byKey(
         const ValueKey<String>('mind-year-heatmap-fixed-footer'),
@@ -495,34 +495,35 @@ void main() {
       final lastRowBefore = tester.getRect(
         find.byKey(const ValueKey<String>('mind-year-heatmap-annual-row-2')),
       );
-      expect(legend, findsOneWidget);
+      expect(inline, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('mind-heatmap-legend-lane')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-heatmap-palette-legend')),
+        findsNothing,
+      );
 
-      settings.setShowHeatmapLegend(false);
+      settings.setPaletteStyle(MindYearHeatmapPaletteStyle.meadowGreen);
       await tester.pump();
 
-      expect(legend, findsNothing);
       expect(tester.getRect(footer), footerBefore);
       final contentAfter = tester.getRect(content);
-      expect(contentAfter.bottom, contentBefore.bottom + 16);
-      expect(contentAfter.top, contentBefore.top);
+      expect(contentAfter, contentBefore);
       final cellsAfter = tester.getRect(
         find.byKey(const ValueKey<String>('mind-year-heatmap-month-cells-1')),
       );
       final lastRowAfter = tester.getRect(
         find.byKey(const ValueKey<String>('mind-year-heatmap-annual-row-2')),
       );
-      // Width is the maximum square-cell limit at this reference width. The
-      // reclaimed height must nevertheless reach the fit solver (never a
-      // stale legend-present envelope): it may increase cells when height
-      // limited and otherwise leaves the width-limited cells unchanged.
-      expect(cellsAfter.height, greaterThanOrEqualTo(cellsBefore.height));
-      expect(lastRowAfter.bottom, greaterThanOrEqualTo(lastRowBefore.bottom));
-      expect(lastRowAfter.bottom, lessThanOrEqualTo(contentAfter.bottom));
+      expect(cellsAfter, cellsBefore);
+      expect(lastRowAfter, lastRowBefore);
     },
   );
 
   testWidgets(
-    'LEGEND-POS-01/BODY-SPACE-01: above-slider legend uses a 16px lane and a 68px compact footer without clipping',
+    'LEGEND-FINAL-02: permanent inline legend leaves a 68px compact footer and returns the whole former lane to temporal content',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -549,9 +550,6 @@ void main() {
       final body = tester.getRect(
         find.byKey(const ValueKey<String>('mind-temporal-content-viewport')),
       );
-      final lane = tester.getRect(
-        find.byKey(const ValueKey<String>('mind-heatmap-legend-lane')),
-      );
       final footer = tester.getRect(
         find.byKey(const ValueKey<String>('mind-year-heatmap-fixed-footer')),
       );
@@ -560,38 +558,30 @@ void main() {
       );
       final minimum = tester.getRect(find.text('Min.').last);
       final maximum = tester.getRect(find.text('Max.').last);
+      final inline = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-heatmap-inline-legend')),
+      );
 
-      expect(lane.height, closeTo(16, .01));
       expect(footer.height, closeTo(68, .01));
-      expect(lane.top, closeTo(body.bottom, .01));
-      expect(footer.top, closeTo(lane.bottom, .01));
-      expect(lane.height + footer.height, closeTo(84, .01));
-      // The audited baseline reserved 28 + 74 = 102px. The same outer host
-      // therefore returns exactly 18px to this temporal viewport.
-      expect(102 - (lane.height + footer.height), closeTo(18, .01));
+      expect(footer.top, closeTo(body.bottom, .01));
+      // The audited original source reserved 28 + 74 = 102px. The permanent
+      // inline legend leaves only the 68px slider footer, returning 34px.
+      expect(102 - footer.height, closeTo(34, .01));
       expect(slider.height, greaterThan(0));
       expect(minimum.width, greaterThan(0));
       expect(maximum.width, greaterThan(0));
-
-      final rangeElement = tester.element(
-        find.byKey(const ValueKey<String>('mind-query-amount-range')),
-      );
-      settings.setLegendPlacement(
-        MindHeatmapLegendPlacement.inlineBetweenRangeValues,
-      );
-      await tester.pump();
-      final inlineBody = tester.getRect(
-        find.byKey(const ValueKey<String>('mind-temporal-content-viewport')),
-      );
-      expect(inlineBody.height, closeTo(body.height + 16, .01));
+      expect(inline.left, greaterThan(minimum.right));
+      expect(inline.right, lessThan(maximum.left));
       expect(
         find.byKey(const ValueKey<String>('mind-heatmap-legend-lane')),
         findsNothing,
       );
-      expect(
-        find.byKey(const ValueKey<String>('mind-heatmap-inline-legend')),
-        findsOneWidget,
+
+      final rangeElement = tester.element(
+        find.byKey(const ValueKey<String>('mind-query-amount-range')),
       );
+      settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
+      await tester.pump();
       expect(
         tester.element(
           find.byKey(const ValueKey<String>('mind-query-amount-range')),
@@ -603,7 +593,7 @@ void main() {
   );
 
   testWidgets(
-    'LEGEND-POS-02/03: inline legend owns no external lane, fits between Min./Max., and hidden reserves nothing',
+    'LEGEND-FINAL-03: inline legend owns no external lane and preserves 10/20 compact geometry',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -616,8 +606,6 @@ void main() {
           monthCardLayout: MindYearMonthCardLayout.threeColumns,
           showMonthlyNetClose: false,
           showMonthlyDirectionTotal: false,
-          showHeatmapLegend: true,
-          legendPlacement: MindHeatmapLegendPlacement.inlineBetweenRangeValues,
           revision: 0,
         ),
       );
@@ -679,9 +667,9 @@ void main() {
         expect(swatch.height, closeTo(4, .01));
       }
 
-      settings.setShowHeatmapLegend(false);
+      settings.setPaletteStyle(MindYearHeatmapPaletteStyle.meadowGreen);
       await tester.pump();
-      expect(inline, findsNothing);
+      expect(inline, findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('mind-heatmap-legend-lane')),
         findsNothing,
@@ -730,7 +718,6 @@ void main() {
         find.byKey(const ValueKey<String>('mind-query-amount-range')),
       );
       settings
-        ..setShowHeatmapLegend(false)
         ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.directCells)
         ..setPaletteStyle(MindYearHeatmapPaletteStyle.fluviStretched)
         ..setScaleResolution(MindHeatmapScaleResolution.twenty);
@@ -755,7 +742,7 @@ void main() {
   );
 
   testWidgets(
-    'RED FOOT-01/04: non-Year Mind uses the same fixed compact legend and range lanes',
+    'LEGEND-FINAL-06: non-Year Mind uses the same fixed inline legend and range footer',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -777,7 +764,7 @@ void main() {
       );
 
       expect(
-        find.byKey(const ValueKey('mind-heatmap-palette-legend')),
+        find.byKey(const ValueKey('mind-heatmap-inline-legend')),
         findsOneWidget,
       );
       expect(
@@ -792,7 +779,7 @@ void main() {
   );
 
   testWidgets(
-    'FOOT-01/11: Sum, Year, Month and Day retain identical fixed legend and compact slider bounds',
+    'LEGEND-FINAL-03 RED: Sum, Year, Month and Day retain one always-inline legend and compact slider bounds',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
@@ -827,7 +814,7 @@ void main() {
             find.byKey(const ValueKey('mind-year-heatmap-fixed-footer')),
           ),
           tester.getRect(
-            find.byKey(const ValueKey('mind-heatmap-palette-legend')),
+            find.byKey(const ValueKey('mind-heatmap-inline-legend')),
           ),
           tester.getRect(
             find.byKey(const ValueKey('query-amount-range-slider')),
@@ -874,6 +861,14 @@ void main() {
       expect(sumBounds.$4, yearBounds.$4);
       expect(monthBounds.$4, yearBounds.$4);
       expect(dayBounds.$4, yearBounds.$4);
+      expect(
+        find.byKey(const ValueKey('mind-heatmap-legend-lane')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-heatmap-palette-legend')),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey('mind-temporal-content-unavailable')),
         findsOneWidget,
@@ -1015,6 +1010,82 @@ void main() {
       );
       expect(scroll.position.maxScrollExtent, 0);
       expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'YEAR-HEIGHT-02 RED: 3 × 4 and 4 × 3 share one outer Mind envelope without shrinking the four-column card width',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final rangeChanges = ValueNotifier<int>(0);
+      final threeColumns = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.threeColumns,
+          showMonthlyNetClose: false,
+          showMonthlyDirectionTotal: false,
+          revision: 0,
+        ),
+      );
+      final fourColumns = MindYearHeatmapPresentationController(
+        initial: const MindYearHeatmapPresentationSettings(
+          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
+          monthCardLayout: MindYearMonthCardLayout.fourColumns,
+          showMonthlyNetClose: false,
+          showMonthlyDirectionTotal: false,
+          revision: 0,
+        ),
+      );
+      addTearDown(mode.dispose);
+      addTearDown(frame.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(threeColumns.dispose);
+      addTearDown(fourColumns.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          showYearHeatmap: true,
+          presentationSettings: threeColumns,
+        ),
+      );
+      final threeColumnContent = tester.getRect(
+        find.byKey(const ValueKey('mind-temporal-content-viewport')),
+      );
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: frame,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          showYearHeatmap: true,
+          presentationSettings: fourColumns,
+        ),
+      );
+      final fourColumnContent = tester.getRect(
+        find.byKey(const ValueKey('mind-temporal-content-viewport')),
+      );
+      final fourColumnCard = tester.getRect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+      );
+
+      expect(fourColumnContent.height, closeTo(threeColumnContent.height, .01));
+      expect(fourColumnCard.width, closeTo(83.5, .01));
+      expect(
+        MindYearHeatmapMonthCard.cellExtentFor(fourColumnCard.width),
+        closeTo(8.5, .01),
+        reason:
+            'Parity is an outer-envelope change; the MonthCard width and its '
+            'width-derived day-cell authority stay unchanged.',
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -1201,11 +1272,7 @@ final class _HostHarness extends StatelessWidget {
     final modeContentExtraHeight =
         mode.committedMode == DashboardModeSpec.mind &&
             resolvedPlane == TimePlane.year
-        ? presentationSettings
-                  ?.value
-                  .monthCardLayout
-                  .requiredMindModeContentExtraHeight ??
-              0.0
+        ? presentationSettings?.value.requiredMindModeContentExtraHeight ?? 0.0
         : 0.0;
     return MaterialApp(
       home: Scaffold(
