@@ -5,6 +5,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_proje
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports.dart';
+import 'package:fluvi/features/dashboard/mind/presentation/mind_aggregate_line_chart.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_palette_resolver.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -90,7 +91,62 @@ void main() {
   );
 
   testWidgets(
-    'SUM-PAGER-01/SUM-LINE-02 RED: a visual-only horizontal page reaches a real daily trend chart',
+    'SUM-PRESENT-02/03 and SUM-MONTH-TAP-01: one-row labels and a real month infocard are presentation-local',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = MindYearHeatmapPresentationController();
+      addTearDown(listenable.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 260,
+              child: MindSumHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      settings
+        ..setSumYearRowLayout(MindSumYearRowLayout.oneRowCompact)
+        ..setSumMonthLabelPlacement(
+          MindSumMonthLabelPlacement.insideMonthCells,
+        );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-year-header-2025')),
+        findsNothing,
+      );
+      expect(find.text('M'), findsWidgets);
+
+      await tester.tap(
+        find.byKey(const ValueKey('mind-sum-heatmap-tap-2025-5')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-sum-month-infocard')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('2025.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'SUM-CARDS-01/02/03: the exact annual chart is secondary and the real daily multi-line chart remains tertiary',
     (tester) async {
       final frame = MindSumHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
@@ -129,6 +185,35 @@ void main() {
         find.byKey(const ValueKey('mind-sum-heatmap-page-1')),
         findsOneWidget,
       );
+      expect(find.text('Többéves alakulás'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-aggregate-line-plot')),
+        findsOneWidget,
+      );
+      final exactChart = tester.widget<MindAggregateLineChart>(
+        find.byType(MindAggregateLineChart),
+      );
+      expect(
+        exactChart.points.map((point) => (point.ordinal, point.total)),
+        <(int, int)>[(2024, 100), (2025, 1500)],
+      );
+      await tester.tapAt(
+        tester.getCenter(
+          find.byKey(const ValueKey('mind-aggregate-line-plot')),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-aggregate-line-infocard')),
+        findsOneWidget,
+      );
+
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-page-2')),
+        findsOneWidget,
+      );
       final chart = tester.widget<CustomPaint>(
         find.byKey(const ValueKey('mind-sum-line-chart-2025')),
       );
@@ -136,7 +221,7 @@ void main() {
       expect(painter.points.map((point) => point.date.day), <int>[3, 4]);
       expect(painter.monthBoundaryFractions, hasLength(11));
 
-      await tester.drag(pager, const Offset(300, 0));
+      await tester.drag(pager, const Offset(600, 0));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('mind-sum-heatmap-page-0')),

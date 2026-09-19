@@ -15,9 +15,11 @@ import '../../time_navigation/domain/local_date.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_paged_vertical_boundary_handoff.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
+import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
+import 'mind_aggregate_line_chart.dart';
 
 /// Immutable paint input for the Year comparison page. Full values intentionally
 /// come from the unfiltered directional month authority; filtered values come
@@ -149,8 +151,8 @@ final class MindYearHeatmapViewport extends StatefulWidget {
       _MindYearHeatmapViewportState();
 }
 
-final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
-    with SingleTickerProviderStateMixin {
+final class _MindYearHeatmapViewportState
+    extends State<MindYearHeatmapViewport> {
   late bool _hasFrame;
   int? _geometryYear;
   MindYearHeatmapIdentity? _staticFrameIdentity;
@@ -162,14 +164,11 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
   late MindYearHeatmapPresentationSettings _presentationSettings;
   MindYearHeatmapIdentity? _lastVisibleIdentity;
   int? _lastLoggedGeometryYear;
-  late final AnimationController _inspectionController;
   late final PageController _pageController;
   late final ScrollController _ownedAnnualScrollController;
   late final ScrollController _barPageScrollController;
-  int? _inspectedYear;
-  int? _inspectedMonth;
-  int? _pendingInspectionMonth;
-  var _isClosingInspection = false;
+  late final ScrollController _linePageScrollController;
+  _MindYearDaySelection? _selectedDay;
 
   @override
   void initState() {
@@ -180,13 +179,10 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
     _presentationSettings =
         widget.presentationSettings?.value ??
         const MindYearHeatmapPresentationSettings.defaults();
-    _inspectionController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    )..addStatusListener(_onInspectionStatus);
     _pageController = PageController();
     _ownedAnnualScrollController = ScrollController();
     _barPageScrollController = ScrollController();
+    _linePageScrollController = ScrollController();
     widget.frameListenable.addListener(_onFrameChanged);
     widget.presentationSettings?.addListener(_onPresentationSettingsChanged);
     if (widget.frameListenable.value case final frame?) {
@@ -202,7 +198,7 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
       final nextFrame = widget.frameListenable.value;
       _hasFrame = nextFrame != null;
       _geometryYear = nextFrame?.identity.year;
-      _invalidateInspectionFor(nextFrame);
+      _invalidateDayInfoFor(nextFrame);
       _acceptStaticFrame(nextFrame);
       widget.frameListenable.addListener(_onFrameChanged);
     }
@@ -222,11 +218,10 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
 
   @override
   void dispose() {
-    _inspectionController.removeStatusListener(_onInspectionStatus);
-    _inspectionController.dispose();
     _pageController.dispose();
     _ownedAnnualScrollController.dispose();
     _barPageScrollController.dispose();
+    _linePageScrollController.dispose();
     widget.frameListenable.removeListener(_onFrameChanged);
     widget.presentationSettings?.removeListener(_onPresentationSettingsChanged);
     super.dispose();
@@ -237,9 +232,11 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
 
   ScrollController get _activePageScrollController {
     final page = _pageController.hasClients ? _pageController.page : 0;
-    return (page ?? 0).round() == 1
-        ? _barPageScrollController
-        : _annualScrollController;
+    return switch ((page ?? 0).round()) {
+      1 => _barPageScrollController,
+      2 => _linePageScrollController,
+      _ => _annualScrollController,
+    };
   }
 
   void _onPresentationSettingsChanged() {
@@ -281,7 +278,7 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
       });
       return;
     }
-    _invalidateInspectionFor(frame);
+    _invalidateDayInfoFor(frame);
     setState(() {
       _hasFrame = hasFrame;
       _geometryYear = geometryYear;
@@ -289,14 +286,9 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
     });
   }
 
-  void _invalidateInspectionFor(MindYearHeatmapFrame? frame) {
-    if (_inspectedYear != null && _inspectedYear != frame?.identity.year) {
-      _inspectionController.stop();
-      _inspectionController.value = 0;
-      _inspectedYear = null;
-      _inspectedMonth = null;
-      _pendingInspectionMonth = null;
-      _isClosingInspection = false;
+  void _invalidateDayInfoFor(MindYearHeatmapFrame? frame) {
+    if (_selectedDay?.day.date.year != frame?.identity.year) {
+      _selectedDay = null;
     }
   }
 
@@ -310,55 +302,8 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
         frame?.identity.upstreamScopeKey.startsWith('income|') ?? false;
   }
 
-  void _onMonthTapped({required int year, required int month}) {
-    if (_inspectedYear != year || _inspectedMonth == null) {
-      setState(() {
-        _inspectedYear = year;
-        _inspectedMonth = month;
-        _pendingInspectionMonth = null;
-      });
-      _isClosingInspection = false;
-      _inspectionController.forward(from: 0);
-      return;
-    }
-    if (_inspectedMonth == month) {
-      _pendingInspectionMonth = null;
-      _closeInspection();
-      return;
-    }
-    _pendingInspectionMonth = month;
-    _closeInspection();
-  }
-
-  void _closeInspection() {
-    _isClosingInspection = true;
-    if (_inspectionController.value <= 0) {
-      _completeInspectionDismissal();
-      return;
-    }
-    _inspectionController.reverse();
-  }
-
-  void _onInspectionStatus(AnimationStatus status) {
-    if (status != AnimationStatus.dismissed ||
-        !mounted ||
-        !_isClosingInspection ||
-        _inspectedMonth == null) {
-      return;
-    }
-    _completeInspectionDismissal();
-  }
-
-  void _completeInspectionDismissal() {
-    if (!mounted || _inspectedMonth == null) return;
-    _isClosingInspection = false;
-    final nextMonth = _pendingInspectionMonth;
-    setState(() {
-      _inspectedMonth = nextMonth;
-      _pendingInspectionMonth = null;
-      if (nextMonth == null) _inspectedYear = null;
-    });
-    if (nextMonth != null) _inspectionController.forward(from: 0);
+  void _onDayTapped(MindYearHeatmapDay day, Offset anchor) {
+    setState(() => _selectedDay = _MindYearDaySelection(day, anchor));
   }
 
   @override
@@ -467,16 +412,7 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
                                   inspectionScope: _inspectionScope,
                                   activeDirectionIsIncome:
                                       _activeDirectionIsIncome,
-                                  isInspected:
-                                      _inspectedYear == year &&
-                                      _inspectedMonth == month,
-                                  inspectionProgress:
-                                      _inspectedYear == year &&
-                                          _inspectedMonth == month
-                                      ? _inspectionController
-                                      : null,
-                                  onTap: () =>
-                                      _onMonthTapped(year: year, month: month),
+                                  onDayTap: _onDayTapped,
                                 ),
                               );
                             },
@@ -547,14 +483,7 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
                           scopedMonthlyAggregates: _scopedMonthlyAggregates,
                           inspectionScope: _inspectionScope,
                           activeDirectionIsIncome: _activeDirectionIsIncome,
-                          isInspected:
-                              _inspectedYear == year &&
-                              _inspectedMonth == month,
-                          inspectionProgress:
-                              _inspectedYear == year && _inspectedMonth == month
-                              ? _inspectionController
-                              : null,
-                          onTap: () => _onMonthTapped(year: year, month: month),
+                          onDayTap: _onDayTapped,
                         ),
                       );
                     }, growable: false),
@@ -573,12 +502,55 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
             children: <Widget>[
               KeyedSubtree(
                 key: const ValueKey<String>('mind-year-heatmap-page-0'),
-                child: heatmapPage,
+                child: Stack(
+                  children: <Widget>[
+                    heatmapPage,
+                    if (_selectedDay case final selection?)
+                      Builder(
+                        builder: (context) {
+                          final box = context.findRenderObject() as RenderBox?;
+                          final origin =
+                              box?.localToGlobal(Offset.zero) ?? Offset.zero;
+                          final anchor = selection.anchor - origin;
+                          final left = (anchor.dx - 62)
+                              .clamp(
+                                2.0,
+                                math.max(2.0, (box?.size.width ?? 128) - 126),
+                              )
+                              .toDouble();
+                          final top = anchor.dy < 68
+                              ? anchor.dy + 10
+                              : anchor.dy - 52;
+                          return Positioned(
+                            top: top
+                                .clamp(
+                                  2.0,
+                                  math.max(2.0, (box?.size.height ?? 64) - 48),
+                                )
+                                .toDouble(),
+                            left: left,
+                            child: _MindYearDayInfoCard(
+                              day: selection.day,
+                              onDismiss: () =>
+                                  setState(() => _selectedDay = null),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
               ),
               _MindYearPartialBarPage(
                 key: const ValueKey<String>('mind-year-heatmap-page-1'),
                 frameListenable: widget.frameListenable,
                 scrollController: _barPageScrollController,
+                paletteStyle: _presentationSettings.paletteStyle,
+                scaleResolution: _presentationSettings.scaleResolution,
+              ),
+              _MindYearMonthlyLinePage(
+                key: const ValueKey<String>('mind-year-heatmap-page-2'),
+                frameListenable: widget.frameListenable,
+                scrollController: _linePageScrollController,
                 paletteStyle: _presentationSettings.paletteStyle,
                 scaleResolution: _presentationSettings.scaleResolution,
               ),
@@ -652,6 +624,51 @@ final class _MindYearHeatmapViewportState extends State<MindYearHeatmapViewport>
       : identity.upstreamScopeKey.startsWith('expense|')
       ? 'expense'
       : null;
+}
+
+final class _MindYearDaySelection {
+  const _MindYearDaySelection(this.day, this.anchor);
+
+  final MindYearHeatmapDay day;
+  final Offset anchor;
+}
+
+final class _MindYearDayInfoCard extends StatelessWidget {
+  const _MindYearDayInfoCard({required this.day, required this.onDismiss});
+
+  final MindYearHeatmapDay day;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    key: const ValueKey<String>('mind-year-day-infocard'),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(10),
+      boxShadow: const <BoxShadow>[
+        BoxShadow(color: Color(0x22000000), blurRadius: 12),
+      ],
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(8, 5, 4, 5),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            '${day.date.year}. ${DashboardTimeLabelFormatter.monthName(day.date.month)} ${day.date.day}.\n${QueryMenuFormatters.money(day.total ?? 0)}',
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
+          ),
+          IconButton(
+            key: const ValueKey<String>('mind-year-day-infocard-dismiss'),
+            iconSize: 14,
+            visualDensity: VisualDensity.compact,
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// A constrained 4 × 3 annual arrangement. It does not change the heatmap
@@ -832,6 +849,73 @@ final class MindYearHeatmapPartialBarPainter extends CustomPainter {
       foreground != oldDelegate.foreground || series != oldDelegate.series;
 }
 
+/// The third annual Mind card uses only current immutable month aggregates.
+/// It is deliberately distinct from the full-vs-filtered comparison bars.
+final class _MindYearMonthlyLinePage extends StatelessWidget {
+  const _MindYearMonthlyLinePage({
+    super.key,
+    required this.frameListenable,
+    required this.scrollController,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final ValueListenable<MindYearHeatmapFrame?> frameListenable;
+  final ScrollController scrollController;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  static const _monthInitials = <String>[
+    'J',
+    'F',
+    'M',
+    'Á',
+    'M',
+    'J',
+    'J',
+    'A',
+    'S',
+    'O',
+    'N',
+    'D',
+  ];
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<MindYearHeatmapFrame?>(
+        valueListenable: frameListenable,
+        builder: (context, frame, _) {
+          if (frame == null) {
+            return const SizedBox.shrink();
+          }
+          final points = List<MindAggregateLinePoint>.generate(12, (index) {
+            final month = index + 1;
+            final total = frame
+                .month(month)
+                .fold<int>(0, (sum, day) => sum + (day.total ?? 0));
+            return MindAggregateLinePoint(
+              ordinal: month,
+              label: _monthInitials[index],
+              total: total,
+            );
+          }, growable: false);
+          return SingleChildScrollView(
+            controller: scrollController,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            child: MindAggregateLineChart(
+              key: const ValueKey<String>('mind-year-monthly-line-chart'),
+              points: points,
+              title: 'Havi alakulás',
+              subtitle: '${frame.identity.year} · 12 hónap',
+              lineColor: const Color(0xff7657c5),
+              monthDomain: true,
+            ),
+          );
+        },
+      );
+}
+
 final class _MindYearHeatmapFourColumnFit {
   const _MindYearHeatmapFourColumnFit._({
     required this.cellExtent,
@@ -923,6 +1007,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
     this.isInspected = false,
     this.inspectionProgress,
     this.onTap,
+    this.onDayTap,
   });
 
   static const _padding = 6.0;
@@ -952,6 +1037,7 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   final bool isInspected;
   final Animation<double>? inspectionProgress;
   final VoidCallback? onTap;
+  final void Function(MindYearHeatmapDay day, Offset anchor)? onDayTap;
 
   static double cellExtentFor(double width) {
     const totalHorizontalGaps =
@@ -1033,28 +1119,54 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
           const SizedBox(height: _titleBottomGap),
           SizedBox(
             height: gridHeight,
-            child: RepaintBoundary(
-              child: Semantics(
-                label:
-                    'Mind heatmap ${DashboardTimeLabelFormatter.monthName(month)}',
-                readOnly: true,
-                child: ExcludeSemantics(
-                  child: CustomPaint(
-                    key: ValueKey('mind-year-heatmap-month-cells-$month'),
-                    painter: MindYearHeatmapMonthPainter(
-                      month: month,
-                      geometry: geometry,
-                      frameListenable: frameListenable,
-                      paletteStyle: paletteStyle,
-                      scaleResolution: scaleResolution,
-                      cellExtent: cellExtent,
+            child: ValueListenableBuilder<MindYearHeatmapFrame?>(
+              valueListenable: frameListenable,
+              builder: (context, frame, _) {
+                final days =
+                    frame?.month(month) ?? const <MindYearHeatmapDay>[];
+                final extent = cellExtent ?? cellExtentFor(width);
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    RepaintBoundary(
+                      child: Semantics(
+                        label:
+                            'Mind heatmap ${DashboardTimeLabelFormatter.monthName(month)}',
+                        readOnly: true,
+                        child: ExcludeSemantics(
+                          child: CustomPaint(
+                            key: ValueKey(
+                              'mind-year-heatmap-month-cells-$month',
+                            ),
+                            painter: MindYearHeatmapMonthPainter(
+                              month: month,
+                              geometry: geometry,
+                              frameListenable: frameListenable,
+                              paletteStyle: paletteStyle,
+                              scaleResolution: scaleResolution,
+                              cellExtent: cellExtent,
+                            ),
+                            isComplex: false,
+                            willChange: true,
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                      ),
                     ),
-                    isComplex: false,
-                    willChange: true,
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
+                    if (onDayTap != null)
+                      for (final day in days.where((day) => !day.isEmpty))
+                        _MindYearDayCellTapTarget(
+                          key: ValueKey(
+                            'mind-year-heatmap-day-tap-${day.date.year}-${day.date.month}-${day.date.day}',
+                          ),
+                          geometry: geometry,
+                          day: day,
+                          extent: extent,
+                          onTap: onDayTap!,
+                        ),
+                  ],
+                );
+              },
             ),
           ),
           if (_footerRowCount > 0) ...<Widget>[
@@ -1102,16 +1214,10 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
         cellExtent: cellExtent,
       ),
       child: Semantics(
-        button: onTap != null,
-        toggled: isInspected,
+        readOnly: true,
         label:
-            '${DashboardTimeLabelFormatter.monthName(month)} ${geometry.year}'
-            '${isInspected ? ', részletek megnyitva' : ', részletek megnyitása'}',
-        child: _MindYearMonthCardTapRegion(
-          key: ValueKey('mind-year-heatmap-month-tap-$month'),
-          onTap: onTap,
-          child: surface,
-        ),
+            '${DashboardTimeLabelFormatter.monthName(month)} ${geometry.year}',
+        child: surface,
       ),
     );
   }
@@ -1151,77 +1257,51 @@ final class MindYearHeatmapMonthCard extends StatelessWidget {
   }
 }
 
-/// Observes a clean press without entering Flutter's gesture arena.
-///
-/// MonthCards live inside the annual scrollable, which already hands a real
-/// boundary overscroll to the one Header-expansion coordinator. A regular
-/// [GestureDetector] tap recognizer can win that sequence before the
-/// scrollable reports its overscroll. This listener deliberately owns no drag
-/// recognizer: it rejects a press once it moves beyond the ordinary touch
-/// slop and leaves scrolling/boundary handoff unchanged.
-final class _MindYearMonthCardTapRegion extends StatefulWidget {
-  const _MindYearMonthCardTapRegion({
+/// One colored annual day tile is a presentation-local clean-tap target. It
+/// enters no horizontal/vertical drag path: Flutter rejects its tap when the
+/// surrounding pager or annual scroll starts moving.
+final class _MindYearDayCellTapTarget extends StatelessWidget {
+  const _MindYearDayCellTapTarget({
     super.key,
-    required this.child,
-    this.onTap,
+    required this.geometry,
+    required this.day,
+    required this.extent,
+    required this.onTap,
   });
 
-  final Widget child;
-  final VoidCallback? onTap;
+  final MindYearHeatmapCalendarGeometry geometry;
+  final MindYearHeatmapDay day;
+  final double extent;
+  final void Function(MindYearHeatmapDay day, Offset anchor) onTap;
 
   @override
-  State<_MindYearMonthCardTapRegion> createState() =>
-      _MindYearMonthCardTapRegionState();
-}
-
-final class _MindYearMonthCardTapRegionState
-    extends State<_MindYearMonthCardTapRegion> {
-  static const _tapSlop = 12.0;
-
-  int? _pointer;
-  Offset? _downPosition;
-  var _moved = false;
-
-  void _onPointerDown(PointerDownEvent event) {
-    if (_pointer != null) return;
-    _pointer = event.pointer;
-    _downPosition = event.position;
-    _moved = false;
+  Widget build(BuildContext context) {
+    final slot = geometry.slotIndexForDay(day.date.day);
+    final row = slot ~/ MindYearHeatmapMonthPainter.columnCount;
+    final column = slot % MindYearHeatmapMonthPainter.columnCount;
+    return Positioned(
+      left: column * (extent + MindYearHeatmapMonthPainter.gap),
+      top: row * (extent + MindYearHeatmapMonthPainter.gap),
+      width: extent,
+      height: extent,
+      child: Semantics(
+        button: true,
+        label:
+            '${day.date.year}. ${DashboardTimeLabelFormatter.monthName(day.date.month)} ${day.date.day}. ${QueryMenuFormatters.money(day.total ?? 0)}',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            final box = context.findRenderObject() as RenderBox?;
+            final anchor = box == null
+                ? Offset.zero
+                : box.localToGlobal(box.size.center(Offset.zero));
+            onTap(day, anchor);
+          },
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
   }
-
-  void _onPointerMove(PointerMoveEvent event) {
-    if (event.pointer != _pointer || _moved) return;
-    final downPosition = _downPosition;
-    if (downPosition == null) return;
-    if ((event.position - downPosition).distance > _tapSlop) _moved = true;
-  }
-
-  void _reset() {
-    _pointer = null;
-    _downPosition = null;
-    _moved = false;
-  }
-
-  void _onPointerUp(PointerUpEvent event) {
-    if (event.pointer != _pointer) return;
-    final isTap = !_moved;
-    _reset();
-    if (isTap) widget.onTap?.call();
-  }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    if (event.pointer == _pointer) _reset();
-  }
-
-  @override
-  Widget build(BuildContext context) => Listener(
-    behavior: HitTestBehavior.opaque,
-    onPointerDown: _onPointerDown,
-    onPointerMove: _onPointerMove,
-    onPointerUp: _onPointerUp,
-    onPointerCancel: _onPointerCancel,
-    child: widget.child,
-  );
 }
 
 /// A local MonthCard inspection endpoint. The values are already admitted
