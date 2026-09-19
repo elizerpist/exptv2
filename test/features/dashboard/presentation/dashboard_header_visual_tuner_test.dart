@@ -824,6 +824,15 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.scaleResolution, resolution);
     }
+    for (final placement in MindHeatmapLegendPlacement.values) {
+      final legendPlacement = find.byKey(
+        ValueKey('mind-heatmap-legend-placement-${placement.name}'),
+      );
+      await tester.ensureVisible(legendPlacement);
+      await tester.tap(legendPlacement);
+      await tester.pump();
+      expect(heatmapSettings.value.legendPlacement, placement);
+    }
     final fourColumns = find.byKey(
       const ValueKey('mind-heatmap-layout-fourColumns'),
     );

@@ -35,6 +35,19 @@ enum MindHeatmapScaleResolution {
   };
 }
 
+/// Placement-only choice for Mind's existing palette legend. Visibility stays
+/// independent so a hidden legend reserves no placement-specific space.
+enum MindHeatmapLegendPlacement {
+  aboveSlider,
+  inlineBetweenRangeValues;
+
+  String get tunerLabel => switch (this) {
+    MindHeatmapLegendPlacement.aboveSlider => 'Slider felett',
+    MindHeatmapLegendPlacement.inlineBetweenRangeValues =>
+      'Slider alatt — Min/Max között',
+  };
+}
+
 /// Shell choice is independent from the annual column count. Both choices
 /// render the same admitted frame and calendar geometry.
 enum MindYearHeatmapAnnualSurfaceStyle {
@@ -90,6 +103,7 @@ final class MindYearHeatmapPresentationSettings {
     this.showHeatmapLegend = true,
     this.annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
+    this.legendPlacement = MindHeatmapLegendPlacement.aboveSlider,
   });
 
   const MindYearHeatmapPresentationSettings.defaults()
@@ -100,6 +114,7 @@ final class MindYearHeatmapPresentationSettings {
       showHeatmapLegend = true,
       annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
       scaleResolution = MindHeatmapScaleResolution.ten,
+      legendPlacement = MindHeatmapLegendPlacement.aboveSlider,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
@@ -109,6 +124,7 @@ final class MindYearHeatmapPresentationSettings {
   final bool showHeatmapLegend;
   final MindYearHeatmapAnnualSurfaceStyle annualSurfaceStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapLegendPlacement legendPlacement;
   final int revision;
 
   MindYearHeatmapPresentationSettings copyWith({
@@ -119,6 +135,7 @@ final class MindYearHeatmapPresentationSettings {
     bool? showHeatmapLegend,
     MindYearHeatmapAnnualSurfaceStyle? annualSurfaceStyle,
     MindHeatmapScaleResolution? scaleResolution,
+    MindHeatmapLegendPlacement? legendPlacement,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
@@ -129,6 +146,7 @@ final class MindYearHeatmapPresentationSettings {
     showHeatmapLegend: showHeatmapLegend ?? this.showHeatmapLegend,
     annualSurfaceStyle: annualSurfaceStyle ?? this.annualSurfaceStyle,
     scaleResolution: scaleResolution ?? this.scaleResolution,
+    legendPlacement: legendPlacement ?? this.legendPlacement,
     revision: revision ?? this.revision,
   );
 
@@ -142,6 +160,7 @@ final class MindYearHeatmapPresentationSettings {
       other.showHeatmapLegend == showHeatmapLegend &&
       other.annualSurfaceStyle == annualSurfaceStyle &&
       other.scaleResolution == scaleResolution &&
+      other.legendPlacement == legendPlacement &&
       other.revision == revision;
 
   @override
@@ -153,6 +172,7 @@ final class MindYearHeatmapPresentationSettings {
     showHeatmapLegend,
     annualSurfaceStyle,
     scaleResolution,
+    legendPlacement,
     revision,
   );
 }
@@ -224,6 +244,15 @@ final class MindYearHeatmapPresentationController
     if (current.scaleResolution == resolution) return;
     value = current.copyWith(
       scaleResolution: resolution,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setLegendPlacement(MindHeatmapLegendPlacement placement) {
+    final current = value;
+    if (current.legendPlacement == placement) return;
+    value = current.copyWith(
+      legendPlacement: placement,
       revision: current.revision + 1,
     );
   }

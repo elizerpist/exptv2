@@ -154,23 +154,6 @@ class MindDashboardCoreSurface extends StatelessWidget {
         onQueryAmountRangeCommitted == null) {
       return null;
     }
-    final range = _MindQueryAmountRangeListener(
-      valuesFor: queryAmountRange!,
-      valuesChanges: queryAmountRangeChanges!,
-      lifecycleChanges: queryAmountRangeLifecycleChanges,
-      stateFor: queryAmountRangeState,
-      errorFor: queryAmountRangeError,
-      onRetry: onQueryAmountRangeRetry,
-      onRangeCommitted: onQueryAmountRangeCommitted!,
-      onRangePreviewChanged: onQueryAmountRangePreviewChanged,
-      onInteractionStarted: onQueryAmountRangeInteractionStarted,
-      onInteractionEnded: onQueryAmountRangeInteractionEnded,
-      onInteractionSummary: onQueryAmountRangeInteractionSummary,
-      // Mind has one physical range owner across Sum/Year/Month/Day. The
-      // temporal content may vary, but its range must never fall back to the
-      // standard Query-menu geometry on another TimePlane.
-      compactPresentation: true,
-    );
     final heatmap = yearHeatmap;
     // Existing isolated Mind surface callers only supplied the Year flag.
     // Preserve that source-compatible Year default while CoreDashboard now
@@ -213,21 +196,58 @@ class MindDashboardCoreSurface extends StatelessWidget {
         key: ValueKey<String>('mind-temporal-content-unavailable'),
       ),
     };
-    return _MindTemporalBody(
-      temporalContent: temporalViewportOwnsVerticalDrag
-          ? temporalContent
-          : GestureDetector(
-              key: const ValueKey('dashboard-core-mode-content-gesture-region'),
-              behavior: HitTestBehavior.translucent,
-              dragStartBehavior: DragStartBehavior.down,
-              onVerticalDragStart: onContentVerticalDragStart,
-              onVerticalDragUpdate: onContentVerticalDragUpdate,
-              onVerticalDragEnd: onContentVerticalDragEnd,
-              onVerticalDragCancel: onContentVerticalDragCancel,
-              child: temporalContent,
-            ),
-      range: range,
-      presentationSettings: yearHeatmapPresentation,
+    final guardedTemporalContent = temporalViewportOwnsVerticalDrag
+        ? temporalContent
+        : GestureDetector(
+            key: const ValueKey('dashboard-core-mode-content-gesture-region'),
+            behavior: HitTestBehavior.translucent,
+            dragStartBehavior: DragStartBehavior.down,
+            onVerticalDragStart: onContentVerticalDragStart,
+            onVerticalDragUpdate: onContentVerticalDragUpdate,
+            onVerticalDragEnd: onContentVerticalDragEnd,
+            onVerticalDragCancel: onContentVerticalDragCancel,
+            child: temporalContent,
+          );
+    Widget bodyFor(MindYearHeatmapPresentationSettings? settings) {
+      final showInlineLegend =
+          settings?.showHeatmapLegend == true &&
+          settings?.legendPlacement ==
+              MindHeatmapLegendPlacement.inlineBetweenRangeValues;
+      final range = _MindQueryAmountRangeListener(
+        valuesFor: queryAmountRange!,
+        valuesChanges: queryAmountRangeChanges!,
+        lifecycleChanges: queryAmountRangeLifecycleChanges,
+        stateFor: queryAmountRangeState,
+        errorFor: queryAmountRangeError,
+        onRetry: onQueryAmountRangeRetry,
+        onRangeCommitted: onQueryAmountRangeCommitted!,
+        onRangePreviewChanged: onQueryAmountRangePreviewChanged,
+        onInteractionStarted: onQueryAmountRangeInteractionStarted,
+        onInteractionEnded: onQueryAmountRangeInteractionEnded,
+        onInteractionSummary: onQueryAmountRangeInteractionSummary,
+        // Mind has one physical range owner across Sum/Year/Month/Day. The
+        // temporal content may vary, but its range must never fall back to the
+        // standard Query-menu geometry on another TimePlane.
+        compactPresentation: true,
+        compactMindCenterAccessory: showInlineLegend
+            ? _MindHeatmapInlineLegend(
+                style: settings!.paletteStyle,
+                scaleResolution: settings.scaleResolution,
+              )
+            : null,
+      );
+      return _MindTemporalBody(
+        temporalContent: guardedTemporalContent,
+        range: range,
+        presentationSettings: settings,
+      );
+    }
+
+    final settings = yearHeatmapPresentation;
+    if (settings == null) return bodyFor(null);
+    return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => bodyFor(value),
     );
   }
 }
@@ -297,27 +317,38 @@ final class _MindTemporalBody extends StatelessWidget {
     this.presentationSettings,
   });
 
-  // The compact shared slider has a deliberately fixed footer lane.  It
-  // protects the annual scroll viewport from range-control intrinsic sizing
-  // and keeps the control reachable in the small Mind body card.
-  static const _footerHeight = 74.0;
-  static const _legendHeight = 28.0;
+  // The compact shared slider keeps its existing touch geometry inside this
+  // measured footer. The above-slider legend is intentionally a separate,
+  // smaller presentation lane; inline mode reserves none here.
+  static const _footerHeight = 68.0;
+  static const _legendHeight = 16.0;
 
   final Widget temporalContent;
   final Widget range;
-  final ValueListenable<MindYearHeatmapPresentationSettings>?
-  presentationSettings;
+  final MindYearHeatmapPresentationSettings? presentationSettings;
 
   @override
   Widget build(BuildContext context) {
-    Widget bodyFor(bool showLegend) => Column(
+    final settings = presentationSettings;
+    final showAboveLegend =
+        (settings?.showHeatmapLegend ?? true) &&
+        (settings?.legendPlacement ?? MindHeatmapLegendPlacement.aboveSlider) ==
+            MindHeatmapLegendPlacement.aboveSlider;
+    return Column(
       children: <Widget>[
-        Expanded(child: ClipRect(child: temporalContent)),
-        if (showLegend)
+        Expanded(
+          key: const ValueKey<String>('mind-temporal-content-viewport'),
+          child: ClipRect(child: temporalContent),
+        ),
+        if (showAboveLegend)
           SizedBox(
+            key: const ValueKey<String>('mind-heatmap-legend-lane'),
             height: _legendHeight,
             child: _MindHeatmapPaletteLegend(
-              presentationSettings: presentationSettings,
+              style:
+                  settings?.paletteStyle ?? MindYearHeatmapPaletteStyle.fluvi,
+              scaleResolution:
+                  settings?.scaleResolution ?? MindHeatmapScaleResolution.ten,
             ),
           ),
         KeyedSubtree(
@@ -326,12 +357,6 @@ final class _MindTemporalBody extends StatelessWidget {
         ),
       ],
     );
-    final settings = presentationSettings;
-    if (settings == null) return bodyFor(true);
-    return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
-      valueListenable: settings,
-      builder: (context, value, _) => bodyFor(value.showHeatmapLegend),
-    );
   }
 }
 
@@ -339,69 +364,109 @@ final class _MindTemporalBody extends StatelessWidget {
 /// It sits outside the temporal viewport and delegates every color choice to
 /// the same resolver that paints heatmap cells.
 final class _MindHeatmapPaletteLegend extends StatelessWidget {
-  const _MindHeatmapPaletteLegend({this.presentationSettings});
+  const _MindHeatmapPaletteLegend({
+    required this.style,
+    required this.scaleResolution,
+  });
 
-  final ValueListenable<MindYearHeatmapPresentationSettings>?
-  presentationSettings;
+  final MindYearHeatmapPaletteStyle style;
+  final MindHeatmapScaleResolution scaleResolution;
 
   @override
   Widget build(BuildContext context) {
-    Widget contentFor(
-      MindYearHeatmapPaletteStyle style,
-      MindHeatmapScaleResolution scaleResolution,
-    ) {
-      final samples = MindYearHeatmapPaletteResolver.legendSamples(
-        style,
-        scaleResolution: scaleResolution,
-      );
-      return Semantics(
-        label: 'Heatmap intenzitás, alacsonytól magasig',
-        readOnly: true,
-        child: ExcludeSemantics(
-          child: Align(
-            alignment: Alignment.center,
-            child: SizedBox(
-              key: const ValueKey<String>('mind-heatmap-palette-legend'),
-              height: 10,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List<Widget>.generate(
-                  samples.length,
-                  (index) => Padding(
-                    padding: EdgeInsets.only(
-                      right: index == samples.length - 1 ? 0 : 2,
-                    ),
-                    child: DecoratedBox(
-                      key: ValueKey<String>(
-                        'mind-heatmap-palette-swatch-$index',
-                      ),
-                      decoration: BoxDecoration(
-                        color: samples[index].background,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      child: const SizedBox(width: 12, height: 10),
-                    ),
+    final samples = MindYearHeatmapPaletteResolver.legendSamples(
+      style,
+      scaleResolution: scaleResolution,
+    );
+    return Semantics(
+      label: 'Heatmap intenzitás, alacsonytól magasig',
+      readOnly: true,
+      child: ExcludeSemantics(
+        child: Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            key: const ValueKey<String>('mind-heatmap-palette-legend'),
+            height: 10,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List<Widget>.generate(
+                samples.length,
+                (index) => Padding(
+                  padding: EdgeInsets.only(
+                    right: index == samples.length - 1 ? 0 : 2,
                   ),
-                  growable: false,
+                  child: DecoratedBox(
+                    key: ValueKey<String>('mind-heatmap-palette-swatch-$index'),
+                    decoration: BoxDecoration(
+                      color: samples[index].background,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: const SizedBox(width: 12, height: 10),
+                  ),
                 ),
+                growable: false,
               ),
             ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
+}
 
-    final settings = presentationSettings;
-    if (settings == null) {
-      return contentFor(
-        MindYearHeatmapPaletteStyle.fluvi,
-        MindHeatmapScaleResolution.ten,
-      );
-    }
-    return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
-      valueListenable: settings,
-      builder: (context, value, _) =>
-          contentFor(value.paletteStyle, value.scaleResolution),
+/// A Mind-supplied, read-only center accessory. QueryAmountRangeControl owns
+/// layout and all slider behavior; it receives no palette setting or legend
+/// decision, only this already-rendered presentation child.
+final class _MindHeatmapInlineLegend extends StatelessWidget {
+  const _MindHeatmapInlineLegend({
+    required this.style,
+    required this.scaleResolution,
+  });
+
+  final MindYearHeatmapPaletteStyle style;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  Widget build(BuildContext context) {
+    final samples = MindYearHeatmapPaletteResolver.legendSamples(
+      style,
+      scaleResolution: scaleResolution,
+    );
+    final extent = scaleResolution == MindHeatmapScaleResolution.ten
+        ? 6.0
+        : 4.0;
+    const gap = 1.0;
+    final width = extent * samples.length + gap * (samples.length - 1);
+    return Semantics(
+      label: 'Heatmap intenzitás, alacsonytól magasig',
+      readOnly: true,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          key: const ValueKey<String>('mind-heatmap-inline-legend'),
+          width: width,
+          height: extent,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List<Widget>.generate(
+              samples.length,
+              (index) => Padding(
+                padding: EdgeInsets.only(
+                  right: index == samples.length - 1 ? 0 : gap,
+                ),
+                child: DecoratedBox(
+                  key: ValueKey<String>('mind-heatmap-inline-swatch-$index'),
+                  decoration: BoxDecoration(
+                    color: samples[index].background,
+                    borderRadius: BorderRadius.circular(1),
+                  ),
+                  child: SizedBox(width: extent, height: extent),
+                ),
+              ),
+              growable: false,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -420,6 +485,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
     required this.onInteractionEnded,
     required this.onInteractionSummary,
     required this.compactPresentation,
+    this.compactMindCenterAccessory,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -434,6 +500,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
   final VoidCallback? onInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
   final bool compactPresentation;
+  final Widget? compactMindCenterAccessory;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +515,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
       onInteractionEnded: onInteractionEnded,
       onInteractionSummary: onInteractionSummary,
       compactPresentation: compactPresentation,
+      compactMindCenterAccessory: compactMindCenterAccessory,
     );
     final lifecycle = lifecycleChanges;
     if (lifecycle == null) {
@@ -478,6 +546,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
     required this.onInteractionEnded,
     required this.onInteractionSummary,
     required this.compactPresentation,
+    this.compactMindCenterAccessory,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -490,6 +559,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
   final VoidCallback? onInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
   final bool compactPresentation;
+  final Widget? compactMindCenterAccessory;
 
   @override
   State<_MindQueryAmountRangeBinding> createState() =>
@@ -561,6 +631,7 @@ final class _MindQueryAmountRangeBindingState
         presentation: widget.compactPresentation
             ? QueryAmountRangePresentation.compactMind
             : QueryAmountRangePresentation.standard,
+        compactMindCenterAccessory: widget.compactMindCenterAccessory,
         onRangeCommitted: widget.onRangeCommitted,
       ),
     );

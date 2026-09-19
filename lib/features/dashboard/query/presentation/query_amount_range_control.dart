@@ -65,6 +65,7 @@ final class QueryAmountRangeControl extends StatefulWidget {
     this.onInteractionEnded,
     this.onInteractionSummary,
     this.presentation = QueryAmountRangePresentation.standard,
+    this.compactMindCenterAccessory,
     this.enableInteractionDiagnostics = kFluviOnscreenDiagnosticsEnabled,
     this.previewScheduler,
   });
@@ -76,6 +77,10 @@ final class QueryAmountRangeControl extends StatefulWidget {
   final VoidCallback? onInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
   final QueryAmountRangePresentation presentation;
+
+  /// An inert Mind-owned visual placed between compact Min./Max. values.
+  /// Standard Query rendering deliberately ignores this presentation hook.
+  final Widget? compactMindCenterAccessory;
 
   /// The physical diagnostic APK opts in to the bounded pointer pipeline.
   /// A normal release keeps the established RangeSlider path free of its
@@ -322,6 +327,7 @@ final class _QueryAmountRangeControlState
             slider: slider,
             lower: local.start.round(),
             upper: local.end.round(),
+            centerAccessory: widget.compactMindCenterAccessory,
           ),
       },
     );
@@ -393,12 +399,14 @@ final class _CompactMindAmountRangeSurface extends StatelessWidget {
     required this.slider,
     required this.lower,
     required this.upper,
+    this.centerAccessory,
   });
 
   final SliderThemeData sliderTheme;
   final Widget slider;
   final int lower;
   final int upper;
+  final Widget? centerAccessory;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -424,7 +432,16 @@ final class _CompactMindAmountRangeSurface extends StatelessWidget {
                 value: QueryMenuFormatters.money(lower),
               ),
             ),
-            const SizedBox(width: 8),
+            if (centerAccessory case final accessory?)
+              Padding(
+                key: const ValueKey<String>(
+                  'mind-query-amount-range-center-accessory',
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: accessory,
+              )
+            else
+              const SizedBox(width: 8),
             Expanded(
               child: _CompactAmountValue(
                 label: 'Max.',

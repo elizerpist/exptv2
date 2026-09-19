@@ -68,6 +68,10 @@ void main() {
         reason:
             'The accepted MonthCard shell remains the conservative default.',
       );
+      expect(
+        controller.value.legendPlacement,
+        MindHeatmapLegendPlacement.aboveSlider,
+      );
       expect(controller.value.revision, 0);
     });
 
@@ -152,6 +156,34 @@ void main() {
 
         controller.setScaleResolution(MindHeatmapScaleResolution.twenty);
         expect(controller.value.revision, 1);
+      },
+    );
+
+    test(
+      'LEGEND-POS-SET-01 RED: legend placement defaults above the slider and is independently selectable',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.legendPlacement,
+          MindHeatmapLegendPlacement.aboveSlider,
+        );
+        controller.setLegendPlacement(
+          MindHeatmapLegendPlacement.inlineBetweenRangeValues,
+        );
+        expect(
+          controller.value.legendPlacement,
+          MindHeatmapLegendPlacement.inlineBetweenRangeValues,
+        );
+        expect(controller.value.revision, 1);
+
+        controller.setShowHeatmapLegend(false);
+        expect(controller.value.showHeatmapLegend, isFalse);
+        expect(
+          controller.value.legendPlacement,
+          MindHeatmapLegendPlacement.inlineBetweenRangeValues,
+        );
       },
     );
   });

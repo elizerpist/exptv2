@@ -532,6 +532,102 @@ void main() {
       expect(find.text('Max.'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'RANGE-GEOM-01: 68px compact Mind footer keeps slider bounds, values, and both labels readable',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 68,
+              child: QueryAmountRangeControl(
+                values: QueryAmountRangeValues(
+                  minimumScaled100: 100000,
+                  maximumScaled100: 26000000,
+                  lowerScaled100: 100000,
+                  upperScaled100: 26000000,
+                ),
+                presentation: QueryAmountRangePresentation.compactMind,
+                onRangeCommitted: _discardRange,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final slider = tester.getRect(
+        find.byKey(const ValueKey<String>('query-amount-range-slider')),
+      );
+      expect(slider.width, greaterThan(0));
+      expect(slider.height, greaterThan(0));
+      expect(tester.getRect(find.text('Min.')).width, greaterThan(0));
+      expect(tester.getRect(find.text('Max.')).width, greaterThan(0));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'RANGE-ACCESSORY-01: a Mind-only center accessory is compact-only and leaves standard Query byte-layout untouched',
+    (tester) async {
+      const accessoryKey = ValueKey<String>('test-mind-center-accessory');
+      const range = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 26000000,
+        lowerScaled100: 100000,
+        upperScaled100: 26000000,
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 146,
+              child: QueryAmountRangeControl(
+                values: range,
+                compactMindCenterAccessory: SizedBox(
+                  key: accessoryKey,
+                  width: 99,
+                  height: 4,
+                ),
+                onRangeCommitted: _discardRange,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(find.byKey(accessoryKey), findsNothing);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 68,
+              child: QueryAmountRangeControl(
+                values: range,
+                presentation: QueryAmountRangePresentation.compactMind,
+                compactMindCenterAccessory: SizedBox(
+                  key: accessoryKey,
+                  width: 99,
+                  height: 4,
+                ),
+                onRangeCommitted: _discardRange,
+              ),
+            ),
+          ),
+        ),
+      );
+      final accessory = tester.getRect(find.byKey(accessoryKey));
+      final minimum = tester.getRect(find.text('Min.'));
+      final maximum = tester.getRect(find.text('Max.'));
+      expect(accessory.left, greaterThan(minimum.right));
+      expect(accessory.right, lessThan(maximum.left));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 final class _PreviewFrameScheduler implements DashboardDisplayFrameScheduler {
