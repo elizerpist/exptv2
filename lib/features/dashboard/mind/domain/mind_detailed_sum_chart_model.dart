@@ -3,108 +3,133 @@ import 'dart:math' as math;
 import '../../time_navigation/domain/local_date.dart';
 import 'mind_temporal_heatmap_projection.dart';
 
-/// An immutable visible interval inside one calendar year's detailed Sum
-/// chart. The home domain stays available on every derived window so a local
-/// pinch may narrow time but can never expose days outside January–December.
+const _minutesPerDay = 24 * 60;
+
+/// An immutable visible minute interval inside one calendar year's detailed
+/// Sum chart. The home domain is always January through December; pinch zoom
+/// narrows real temporal extent rather than scaling a rendered bitmap.
 final class MindDetailedSumTimeWindow {
   const MindDetailedSumTimeWindow._({
-    required this.homeStartEpochDay,
-    required this.homeEndEpochDay,
-    required this.startEpochDay,
-    required this.endEpochDay,
+    required this.homeStartEpochMinute,
+    required this.homeEndEpochMinute,
+    required this.startEpochMinute,
+    required this.endEpochMinute,
   });
 
-  factory MindDetailedSumTimeWindow.fullYear(int year) =>
-      MindDetailedSumTimeWindow._(
-        homeStartEpochDay: LocalDate(year: year, month: 1, day: 1).epochDay,
-        homeEndEpochDay: LocalDate(year: year, month: 12, day: 31).epochDay,
-        startEpochDay: LocalDate(year: year, month: 1, day: 1).epochDay,
-        endEpochDay: LocalDate(year: year, month: 12, day: 31).epochDay,
-      );
+  factory MindDetailedSumTimeWindow.fullYear(int year) {
+    final firstDay = LocalDate(year: year, month: 1, day: 1).epochDay;
+    final lastDay = LocalDate(year: year, month: 12, day: 31).epochDay;
+    return MindDetailedSumTimeWindow._(
+      homeStartEpochMinute: firstDay * _minutesPerDay,
+      homeEndEpochMinute: lastDay * _minutesPerDay + _minutesPerDay - 1,
+      startEpochMinute: firstDay * _minutesPerDay,
+      endEpochMinute: lastDay * _minutesPerDay + _minutesPerDay - 1,
+    );
+  }
 
-  final int homeStartEpochDay;
-  final int homeEndEpochDay;
-  final int startEpochDay;
-  final int endEpochDay;
+  final int homeStartEpochMinute;
+  final int homeEndEpochMinute;
+  final int startEpochMinute;
+  final int endEpochMinute;
 
-  int get visibleDayCount => endEpochDay - startEpochDay + 1;
-  int get homeDayCount => homeEndEpochDay - homeStartEpochDay + 1;
+  int get homeStartEpochDay => homeStartEpochMinute ~/ _minutesPerDay;
+  int get homeEndEpochDay => homeEndEpochMinute ~/ _minutesPerDay;
+  int get startEpochDay => startEpochMinute ~/ _minutesPerDay;
+  int get endEpochDay => endEpochMinute ~/ _minutesPerDay;
+  int get visibleMinuteCount => endEpochMinute - startEpochMinute + 1;
+  int get homeMinuteCount => homeEndEpochMinute - homeStartEpochMinute + 1;
+  int get visibleDayCount => (visibleMinuteCount / _minutesPerDay).ceil();
+  int get homeDayCount => (homeMinuteCount / _minutesPerDay).ceil();
 
-  double normalizedPositionOf(int epochDay) {
-    if (visibleDayCount <= 1) return .5;
-    return ((epochDay - startEpochDay) / (visibleDayCount - 1))
+  double normalizedPositionOf(int epochDay) => normalizedPositionOfEpochMinute(
+    epochDay * _minutesPerDay + _minutesPerDay ~/ 2,
+  );
+
+  double normalizedPositionOfEpochMinute(int epochMinute) {
+    if (visibleMinuteCount <= 1) return .5;
+    return ((epochMinute - startEpochMinute) / (visibleMinuteCount - 1))
         .clamp(0.0, 1.0)
         .toDouble();
   }
 
-  /// Narrows/widens the actual visible calendar domain around [focalEpochDay].
-  /// The current focal fraction is retained when it fits; edge clamping is the
-  /// only reason it can move, and a factor below one never exceeds home.
+  /// Compatibility entry point for calendar-day tests and callers. The chart
+  /// itself uses [zoomAtMinute] so a pinch focal point preserves time within a
+  /// day as detail becomes available.
   MindDetailedSumTimeWindow zoom({
     required double scaleDelta,
     required int focalEpochDay,
+  }) => zoomAtMinute(
+    scaleDelta: scaleDelta,
+    focalEpochMinute: focalEpochDay * _minutesPerDay + _minutesPerDay ~/ 2,
+  );
+
+  MindDetailedSumTimeWindow zoomAtMinute({
+    required double scaleDelta,
+    required int focalEpochMinute,
   }) {
     if (!scaleDelta.isFinite || scaleDelta <= 0) return this;
-    final requested = (visibleDayCount / scaleDelta).round();
-    final nextCount = requested.clamp(1, homeDayCount);
-    if (nextCount == visibleDayCount) return this;
-    final focalFraction = normalizedPositionOf(focalEpochDay);
-    final proposedStart = (focalEpochDay - focalFraction * (nextCount - 1))
+    final requested = (visibleMinuteCount / scaleDelta).round();
+    final nextCount = requested.clamp(1, homeMinuteCount);
+    if (nextCount == visibleMinuteCount) return this;
+    final focalFraction = normalizedPositionOfEpochMinute(focalEpochMinute);
+    final proposedStart = (focalEpochMinute - focalFraction * (nextCount - 1))
         .round();
-    final latestStart = homeEndEpochDay - nextCount + 1;
+    final latestStart = homeEndEpochMinute - nextCount + 1;
     final nextStart = proposedStart
-        .clamp(homeStartEpochDay, latestStart)
+        .clamp(homeStartEpochMinute, latestStart)
         .toInt();
     return MindDetailedSumTimeWindow._(
-      homeStartEpochDay: homeStartEpochDay,
-      homeEndEpochDay: homeEndEpochDay,
-      startEpochDay: nextStart,
-      endEpochDay: nextStart + nextCount - 1,
+      homeStartEpochMinute: homeStartEpochMinute,
+      homeEndEpochMinute: homeEndEpochMinute,
+      startEpochMinute: nextStart,
+      endEpochMinute: nextStart + nextCount - 1,
     );
   }
 
-  MindDetailedSumTimeWindow panByDays(int days) {
-    if (days == 0 || visibleDayCount >= homeDayCount) return this;
-    final latestStart = homeEndEpochDay - visibleDayCount + 1;
-    final nextStart = (startEpochDay + days)
-        .clamp(homeStartEpochDay, latestStart)
+  MindDetailedSumTimeWindow panByDays(int days) =>
+      panByMinutes(days * _minutesPerDay);
+
+  MindDetailedSumTimeWindow panByMinutes(int minutes) {
+    if (minutes == 0 || visibleMinuteCount >= homeMinuteCount) return this;
+    final latestStart = homeEndEpochMinute - visibleMinuteCount + 1;
+    final nextStart = (startEpochMinute + minutes)
+        .clamp(homeStartEpochMinute, latestStart)
         .toInt();
-    if (nextStart == startEpochDay) return this;
+    if (nextStart == startEpochMinute) return this;
     return MindDetailedSumTimeWindow._(
-      homeStartEpochDay: homeStartEpochDay,
-      homeEndEpochDay: homeEndEpochDay,
-      startEpochDay: nextStart,
-      endEpochDay: nextStart + visibleDayCount - 1,
+      homeStartEpochMinute: homeStartEpochMinute,
+      homeEndEpochMinute: homeEndEpochMinute,
+      startEpochMinute: nextStart,
+      endEpochMinute: nextStart + visibleMinuteCount - 1,
     );
   }
 
   @override
   bool operator ==(Object other) =>
       other is MindDetailedSumTimeWindow &&
-      other.homeStartEpochDay == homeStartEpochDay &&
-      other.homeEndEpochDay == homeEndEpochDay &&
-      other.startEpochDay == startEpochDay &&
-      other.endEpochDay == endEpochDay;
+      other.homeStartEpochMinute == homeStartEpochMinute &&
+      other.homeEndEpochMinute == homeEndEpochMinute &&
+      other.startEpochMinute == startEpochMinute &&
+      other.endEpochMinute == endEpochMinute;
 
   @override
   int get hashCode => Object.hash(
-    homeStartEpochDay,
-    homeEndEpochDay,
-    startEpochDay,
-    endEpochDay,
+    homeStartEpochMinute,
+    homeEndEpochMinute,
+    startEpochMinute,
+    endEpochMinute,
   );
 }
 
-/// A pure bounded downsampler for the detailed Sum line. It never invents a
-/// financial point: every returned anchor is one of [points]. At low density
-/// it keeps each bucket's chronological endpoints plus extrema, preserving
-/// visible spikes; at higher pixels-per-day it naturally returns more source
-/// anchors until every in-window day is available.
+/// A source-only LOD sampler. Overview density uses a readable spatial budget
+/// instead of one bin per logical pixel. As visible time narrows the budget
+/// rises continuously; at a one-day-or-less window every supplied prepared
+/// transaction remains individually representable.
 final class MindDetailedSumLod {
   const MindDetailedSumLod._();
 
-  static List<MindSumHeatmapDailyPoint> sample({
-    required List<MindSumHeatmapDailyPoint> points,
+  static List<MindSumHeatmapDetailPoint> sample({
+    required List<MindSumHeatmapDetailPoint> points,
     required MindDetailedSumTimeWindow window,
     required double pixelWidth,
   }) {
@@ -112,23 +137,43 @@ final class MindDetailedSumLod {
         points
             .where(
               (point) =>
-                  point.date.epochDay >= window.startEpochDay &&
-                  point.date.epochDay <= window.endEpochDay,
+                  point.epochMinute >= window.startEpochMinute &&
+                  point.epochMinute <= window.endEpochMinute,
             )
             .toList(growable: false)
-          ..sort(
-            (left, right) => left.date.epochDay.compareTo(right.date.epochDay),
-          );
-    if (visible.length <= 2) return visible;
-    final binCount = math.max(1, pixelWidth.floor());
-    if (visible.length <= binCount) return visible;
+          ..sort((left, right) {
+            final byTime = left.epochMinute.compareTo(right.epochMinute);
+            return byTime != 0
+                ? byTime
+                : (left.ordinal ?? -1).compareTo(right.ordinal ?? -1);
+          });
+    if (visible.length <= 2 || window.visibleMinuteCount <= _minutesPerDay) {
+      return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
+    }
+
+    const minimumAnchorSpacing = 28.0;
+    final overviewBins = math.max(
+      1,
+      (pixelWidth / minimumAnchorSpacing).floor(),
+    );
+    final zoomProgress =
+        (1 - window.visibleMinuteCount / window.homeMinuteCount)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final binCount = math.max(
+      1,
+      (overviewBins * (1 + zoomProgress * 3)).round(),
+    );
+    if (visible.length <= binCount) {
+      return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
+    }
 
     final selectedIndices = <int>{};
     final buckets = <int, List<int>>{};
-    final denominator = math.max(1, window.visibleDayCount - 1);
+    final denominator = math.max(1, window.visibleMinuteCount - 1);
     for (var index = 0; index < visible.length; index += 1) {
       final fraction =
-          (visible[index].date.epochDay - window.startEpochDay) / denominator;
+          (visible[index].epochMinute - window.startEpochMinute) / denominator;
       final bucket = (fraction * binCount).floor().clamp(0, binCount - 1);
       buckets.putIfAbsent(bucket, () => <int>[]).add(index);
     }
@@ -146,7 +191,7 @@ final class MindDetailedSumLod {
         ..add(maximum);
     }
     final ordered = selectedIndices.toList()..sort();
-    return List<MindSumHeatmapDailyPoint>.unmodifiable(
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(
       ordered.map((index) => visible[index]),
     );
   }

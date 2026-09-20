@@ -156,6 +156,79 @@ void main() {
   );
 
   test(
+    'SUM-DETAIL-01 RED: a deep Sum detail window retains separately timed eligible transactions from resident prepared input',
+    () {
+      const date = LocalDate(year: 2025, month: 5, day: 3);
+      final projection = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _contribution(3, 100, date, localTimeMinutes: 20),
+          _contribution(7, 500, date, localTimeMinutes: 720),
+          _contribution(9, 900, date, localTimeMinutes: 720),
+          _contribution(
+            10,
+            400,
+            const LocalDate(year: 2025, month: 5, day: 4),
+            localTimeMinutes: 60,
+          ),
+        ],
+      );
+      final frame = projection.preview(fullRange);
+      final start = date.epochDay * 1440;
+
+      expect(
+        frame.detailPointsForYear(
+          year: 2025,
+          startEpochMinute: start,
+          endEpochMinute: start + 1439,
+        ),
+        <Matcher>[
+          isA<MindSumHeatmapDetailPoint>()
+              .having((point) => point.epochMinute, 'time', start + 20)
+              .having((point) => point.total, 'amount', 100)
+              .having((point) => point.ordinal, 'ordinal', 3),
+          isA<MindSumHeatmapDetailPoint>()
+              .having((point) => point.epochMinute, 'time', start + 720)
+              .having((point) => point.total, 'amount', 500)
+              .having((point) => point.ordinal, 'ordinal', 7),
+          isA<MindSumHeatmapDetailPoint>()
+              .having((point) => point.epochMinute, 'time', start + 720)
+              .having((point) => point.total, 'amount', 900)
+              .having((point) => point.ordinal, 'ordinal', 9),
+        ],
+        reason:
+            'Daily aggregation cannot satisfy deep zoom: same-day points must '
+            'retain their prepared local time and stable ordinal.',
+      );
+
+      final narrowed = projection.preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100,
+          maximumScaled100: 1000,
+          lowerScaled100: 450,
+          upperScaled100: 950,
+        ),
+      );
+      expect(
+        narrowed
+            .detailPointsForYear(
+              year: 2025,
+              startEpochMinute: start,
+              endEpochMinute: start + 1439,
+            )
+            .map((point) => point.ordinal),
+        <int>[7, 9],
+      );
+      expect(projection.preparedContributionTouches, 4);
+    },
+  );
+
+  test(
     'MONTH-RHYTHM-02 RED: Month keeps slider-before daily comparison bars resident beside the live preview',
     () {
       final projection = MindMonthHeatmapProjection.build(

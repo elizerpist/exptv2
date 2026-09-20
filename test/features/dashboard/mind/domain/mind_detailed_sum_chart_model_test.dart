@@ -37,18 +37,23 @@ void main() {
     'DSUM-03 RED: LOD retains real extrema and reveals more actual days as temporal density increases',
     () {
       final home = MindDetailedSumTimeWindow.fullYear(2025);
-      final points = <MindSumHeatmapDailyPoint>[
+      final points = <MindSumHeatmapDetailPoint>[
         for (var day = 1; day <= 24; day += 1)
-          MindSumHeatmapDailyPoint(
-            date: LocalDate(year: 2025, month: 1, day: day),
+          MindSumHeatmapDetailPoint(
+            epochMinute:
+                LocalDate(year: 2025, month: 1, day: day).epochDay * 1440 + 720,
             total: day == 2 ? 900 : 100 + day,
           ),
-        MindSumHeatmapDailyPoint(
-          date: const LocalDate(year: 2025, month: 8, day: 4),
+        MindSumHeatmapDetailPoint(
+          epochMinute:
+              const LocalDate(year: 2025, month: 8, day: 4).epochDay * 1440 +
+              720,
           total: 700,
         ),
-        MindSumHeatmapDailyPoint(
-          date: const LocalDate(year: 2025, month: 12, day: 31),
+        MindSumHeatmapDetailPoint(
+          epochMinute:
+              const LocalDate(year: 2025, month: 12, day: 31).epochDay * 1440 +
+              720,
           total: 300,
         ),
       ];
@@ -83,9 +88,47 @@ void main() {
       expect(close.length, greaterThanOrEqualTo(overview.length));
       expect(close.every(points.contains), isTrue);
       expect(
-        close.map((point) => point.date),
-        contains(const LocalDate(year: 2025, month: 1, day: 2)),
+        close.map((point) => point.epochMinute),
+        contains(
+          const LocalDate(year: 2025, month: 1, day: 2).epochDay * 1440 + 720,
+        ),
       );
+    },
+  );
+
+  test(
+    'DSUM-LOD-01 RED: a full-year overview is materially calmer and a deep day preserves every source transaction',
+    () {
+      final home = MindDetailedSumTimeWindow.fullYear(2025);
+      final points = <MindSumHeatmapDetailPoint>[
+        for (var day = 0; day < home.homeDayCount; day += 1)
+          for (var sample = 0; sample < 3; sample += 1)
+            MindSumHeatmapDetailPoint(
+              epochMinute: home.homeStartEpochMinute + day * 1440 + sample * 90,
+              total: sample == 2 && day == 120 ? 9000 : 100 + sample,
+              ordinal: day * 3 + sample,
+            ),
+      ];
+
+      final overview = MindDetailedSumLod.sample(
+        points: points,
+        window: home,
+        pixelWidth: 336,
+      );
+      final dayStart = home.homeStartEpochMinute + 120 * 1440;
+      final deep = MindDetailedSumLod.sample(
+        points: points,
+        window: home.zoomAtMinute(
+          scaleDelta: home.homeMinuteCount.toDouble() / 1440,
+          focalEpochMinute: dayStart + 90,
+        ),
+        pixelWidth: 336,
+      );
+
+      expect(overview.length, lessThan(points.length ~/ 4));
+      expect(overview.any((point) => point.total == 9000), isTrue);
+      expect(deep, hasLength(3));
+      expect(deep.map((point) => point.ordinal), <int>[360, 361, 362]);
     },
   );
 }

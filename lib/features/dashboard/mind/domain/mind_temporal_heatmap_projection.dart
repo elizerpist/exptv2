@@ -51,6 +51,7 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
     required Map<(int year, int month), MindSumHeatmapMonth> months,
     required Map<int, int> yearTotals,
     required Map<int, List<MindSumHeatmapDailyPoint>> dailyPointsByYear,
+    required Map<int, List<_MindSumPreparedDetail>> detailContributionsByYear,
     required this.minimumNonEmptyTotal,
     required this.maximumNonEmptyTotal,
   }) : years = List<int>.unmodifiable(years),
@@ -66,6 +67,15 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
                  List<MindSumHeatmapDailyPoint>.unmodifiable(points),
                ),
              ),
+           ),
+       _detailContributionsByYear =
+           Map<int, List<_MindSumPreparedDetail>>.unmodifiable(
+             detailContributionsByYear.map(
+               (year, points) => MapEntry(
+                 year,
+                 List<_MindSumPreparedDetail>.unmodifiable(points),
+               ),
+             ),
            );
 
   @override
@@ -76,6 +86,7 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
   final Map<(int year, int month), MindSumHeatmapMonth> _months;
   final Map<int, int> _yearTotals;
   final Map<int, List<MindSumHeatmapDailyPoint>> _dailyPointsByYear;
+  final Map<int, List<_MindSumPreparedDetail>> _detailContributionsByYear;
   final int? minimumNonEmptyTotal;
   final int? maximumNonEmptyTotal;
 
@@ -88,6 +99,113 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
   /// exposed. The chart may join them visually, but it cannot invent a day.
   List<MindSumHeatmapDailyPoint> dailyPointsForYear(int year) =>
       _dailyPointsByYear[year] ?? const <MindSumHeatmapDailyPoint>[];
+
+  /// Resolves the chart's current visible domain from the same admitted
+  /// prepared contribution set as the Sum heatmap. Broad windows use already
+  /// range-previewed daily aggregates; once the user has narrowed to a small
+  /// calendar window, individual prepared transactions retain their local
+  /// minute and ordinal. No repository or raw-ledger read is involved.
+  List<MindSumHeatmapDetailPoint> detailPointsForYear({
+    required int year,
+    required int startEpochMinute,
+    required int endEpochMinute,
+  }) {
+    if (endEpochMinute < startEpochMinute) {
+      return const <MindSumHeatmapDetailPoint>[];
+    }
+    final visibleMinutes = endEpochMinute - startEpochMinute + 1;
+    if (visibleMinutes <= _rawDetailWindowMinutes) {
+      final prepared = _detailContributionsByYear[year];
+      if (prepared == null || prepared.isEmpty) {
+        return const <MindSumHeatmapDetailPoint>[];
+      }
+      final start = _lowerBoundByMinute(prepared, startEpochMinute);
+      final points = <MindSumHeatmapDetailPoint>[];
+      for (var index = start; index < prepared.length; index += 1) {
+        final contribution = prepared[index];
+        if (contribution.epochMinute > endEpochMinute) break;
+        if (contribution.amountMinor < range.lowerScaled100 ||
+            contribution.amountMinor > range.upperScaled100) {
+          continue;
+        }
+        points.add(
+          MindSumHeatmapDetailPoint(
+            epochMinute: contribution.epochMinute,
+            total: contribution.amountMinor,
+            ordinal: contribution.ordinal,
+          ),
+        );
+      }
+      return List<MindSumHeatmapDetailPoint>.unmodifiable(points);
+    }
+
+    final startEpochDay = startEpochMinute ~/ _minutesPerDay;
+    final endEpochDay = endEpochMinute ~/ _minutesPerDay;
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(
+      dailyPointsForYear(year)
+          .where(
+            (point) =>
+                point.date.epochDay >= startEpochDay &&
+                point.date.epochDay <= endEpochDay,
+          )
+          .map(
+            (point) => MindSumHeatmapDetailPoint(
+              epochMinute: point.date.epochDay * _minutesPerDay + 720,
+              total: point.total,
+            ),
+          ),
+    );
+  }
+
+  static int _lowerBoundByMinute(
+    List<_MindSumPreparedDetail> points,
+    int epochMinute,
+  ) {
+    var low = 0;
+    var high = points.length;
+    while (low < high) {
+      final middle = low + ((high - low) >> 1);
+      if (points[middle].epochMinute < epochMinute) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return low;
+  }
+}
+
+const _minutesPerDay = 24 * 60;
+const _rawDetailWindowMinutes = 7 * _minutesPerDay;
+
+/// A renderer-facing immutable Sum detail anchor. A null [ordinal] is a
+/// range-previewed daily aggregate; a non-null ordinal is one exact prepared
+/// transaction at its local minute. The latter is intentionally not a new
+/// Query or repository authority.
+final class MindSumHeatmapDetailPoint {
+  const MindSumHeatmapDetailPoint({
+    required this.epochMinute,
+    required this.total,
+    this.ordinal,
+  });
+
+  final int epochMinute;
+  final int total;
+  final int? ordinal;
+
+  bool get isTransaction => ordinal != null;
+}
+
+final class _MindSumPreparedDetail {
+  const _MindSumPreparedDetail({
+    required this.ordinal,
+    required this.epochMinute,
+    required this.amountMinor,
+  });
+
+  final int ordinal;
+  final int epochMinute;
+  final int amountMinor;
 }
 
 /// One immutable Sum line-chart anchor. Its amount is derived from the same
@@ -202,6 +320,7 @@ final class MindSumHeatmapProjection {
     required this.identity,
     required Map<(int year, int month), MindHeatmapAmountRangeBucket> buckets,
     required Map<int, Map<int, MindHeatmapAmountRangeBucket>> dailyBuckets,
+    required Map<int, List<_MindSumPreparedDetail>> detailContributions,
     required List<int> years,
     required this.preparedContributionTouches,
   }) : _buckets =
@@ -218,6 +337,15 @@ final class MindSumHeatmapProjection {
                ),
              ),
            ),
+       _detailContributions =
+           Map<int, List<_MindSumPreparedDetail>>.unmodifiable(
+             detailContributions.map(
+               (year, values) => MapEntry(
+                 year,
+                 List<_MindSumPreparedDetail>.unmodifiable(values),
+               ),
+             ),
+           ),
        _years = List<int>.unmodifiable(years);
 
   factory MindSumHeatmapProjection.build({
@@ -226,6 +354,7 @@ final class MindSumHeatmapProjection {
   }) {
     final values = <(int year, int month), List<int>>{};
     final dailyValues = <int, Map<int, List<int>>>{};
+    final detailContributions = <int, List<_MindSumPreparedDetail>>{};
     var preparedContributionTouches = 0;
     for (final contribution in contributions) {
       preparedContributionTouches += 1;
@@ -237,6 +366,19 @@ final class MindSumHeatmapProjection {
           .putIfAbsent(date.year, () => <int, List<int>>{})
           .putIfAbsent(contribution.bookedLocalEpochDay, () => <int>[])
           .add(contribution.amountMinor);
+      final localTime = contribution.bookedLocalTimeMinutes
+          .clamp(0, _minutesPerDay - 1)
+          .toInt();
+      detailContributions
+          .putIfAbsent(date.year, () => <_MindSumPreparedDetail>[])
+          .add(
+            _MindSumPreparedDetail(
+              ordinal: contribution.ordinal,
+              epochMinute:
+                  contribution.bookedLocalEpochDay * _minutesPerDay + localTime,
+              amountMinor: contribution.amountMinor,
+            ),
+          );
     }
     final years = values.keys.map((key) => key.$1).toSet().toList()..sort();
     return MindSumHeatmapProjection._(
@@ -256,6 +398,13 @@ final class MindSumHeatmapProjection {
           ),
         ),
       ),
+      detailContributions: detailContributions.map((year, valuesForYear) {
+        valuesForYear.sort((left, right) {
+          final byTime = left.epochMinute.compareTo(right.epochMinute);
+          return byTime != 0 ? byTime : left.ordinal.compareTo(right.ordinal);
+        });
+        return MapEntry(year, valuesForYear);
+      }),
       years: years,
       preparedContributionTouches: preparedContributionTouches,
     );
@@ -264,6 +413,7 @@ final class MindSumHeatmapProjection {
   final MindTemporalHeatmapIdentity identity;
   final Map<(int year, int month), MindHeatmapAmountRangeBucket> _buckets;
   final Map<int, Map<int, MindHeatmapAmountRangeBucket>> _dailyBuckets;
+  final Map<int, List<_MindSumPreparedDetail>> _detailContributions;
   final List<int> _years;
   final int preparedContributionTouches;
 
@@ -338,6 +488,7 @@ final class MindSumHeatmapProjection {
       months: months,
       yearTotals: yearTotals,
       dailyPointsByYear: dailyPointsByYear,
+      detailContributionsByYear: _detailContributions,
       minimumNonEmptyTotal: minimum,
       maximumNonEmptyTotal: maximum,
     );

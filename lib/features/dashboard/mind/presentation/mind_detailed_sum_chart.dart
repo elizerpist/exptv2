@@ -112,8 +112,7 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
                   child: _MindDetailedSumYearBand(
                     key: ValueKey<String>('mind-sum-detailed-band-$year'),
                     year: year,
-                    frameIdentity: widget.frame.identity,
-                    points: widget.frame.dailyPointsForYear(year),
+                    frame: widget.frame,
                     lineColor: widget.lineColor,
                   ),
                 );
@@ -130,14 +129,12 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
   const _MindDetailedSumYearBand({
     super.key,
     required this.year,
-    required this.frameIdentity,
-    required this.points,
+    required this.frame,
     required this.lineColor,
   });
 
   final int year;
-  final MindTemporalHeatmapIdentity frameIdentity;
-  final List<MindSumHeatmapDailyPoint> points;
+  final MindSumHeatmapFrame frame;
   final Color lineColor;
 
   @override
@@ -160,13 +157,13 @@ final class _MindDetailedSumYearBandState
   void didUpdateWidget(covariant _MindDetailedSumYearBand oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.year != widget.year ||
-        oldWidget.frameIdentity != widget.frameIdentity) {
+        oldWidget.frame.identity != widget.frame.identity) {
       _window = MindDetailedSumTimeWindow.fullYear(widget.year);
       _scaleStartWindow = null;
     }
   }
 
-  bool get _isZoomed => _window.visibleDayCount < _window.homeDayCount;
+  bool get _isZoomed => _window.visibleMinuteCount < _window.homeMinuteCount;
 
   void _onScaleStart(ScaleStartDetails _) => _scaleStartWindow = _window;
 
@@ -180,11 +177,11 @@ final class _MindDetailedSumYearBandState
     final fraction = ((details.localFocalPoint.dx - plotLeft) / plotWidth)
         .clamp(0.0, 1.0)
         .toDouble();
-    final focalEpochDay =
-        start.startEpochDay + (start.visibleDayCount - 1) * fraction;
-    final next = start.zoom(
+    final focalEpochMinute =
+        start.startEpochMinute + (start.visibleMinuteCount - 1) * fraction;
+    final next = start.zoomAtMinute(
       scaleDelta: details.scale,
-      focalEpochDay: focalEpochDay.round(),
+      focalEpochMinute: focalEpochMinute.round(),
     );
     if (next == _window) return;
     setState(() => _window = next);
@@ -194,10 +191,10 @@ final class _MindDetailedSumYearBandState
 
   void _panBy(DragUpdateDetails details, double plotWidth) {
     if (plotWidth <= 0 || !_isZoomed) return;
-    final days = (-details.delta.dx / plotWidth * _window.visibleDayCount)
+    final minutes = (-details.delta.dx / plotWidth * _window.visibleMinuteCount)
         .round();
-    if (days == 0) return;
-    setState(() => _window = _window.panByDays(days));
+    if (minutes == 0) return;
+    setState(() => _window = _window.panByMinutes(minutes));
   }
 
   @override
@@ -207,8 +204,13 @@ final class _MindDetailedSumYearBandState
       const axisLeft = 34.0;
       const axisBottom = 18.0;
       final plotWidth = math.max(1.0, constraints.maxWidth - axisLeft - 3);
+      final source = widget.frame.detailPointsForYear(
+        year: widget.year,
+        startEpochMinute: _window.startEpochMinute,
+        endEpochMinute: _window.endEpochMinute,
+      );
       final lod = MindDetailedSumLod.sample(
-        points: widget.points,
+        points: source,
         window: _window,
         pixelWidth: plotWidth,
       );
@@ -255,6 +257,13 @@ final class _MindDetailedSumYearBandState
                     'mind-sum-detailed-window-${widget.year}',
                   ),
                   label: '${_window.startEpochDay}:${_window.endEpochDay}',
+                  child: const SizedBox(width: 0, height: 0),
+                ),
+                Semantics(
+                  key: ValueKey<String>(
+                    'mind-sum-detailed-anchor-count-${widget.year}',
+                  ),
+                  label: '${lod.length}',
                   child: const SizedBox(width: 0, height: 0),
                 ),
               ],
@@ -383,7 +392,7 @@ final class _MindDetailedSumPainter extends CustomPainter {
     required this.maximum,
   });
 
-  final List<MindSumHeatmapDailyPoint> points;
+  final List<MindSumHeatmapDetailPoint> points;
   final MindDetailedSumTimeWindow window;
   final Color lineColor;
   final double axisLeft;
@@ -407,8 +416,10 @@ final class _MindDetailedSumPainter extends CustomPainter {
       canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), guide);
     }
     if (points.isEmpty) return;
-    Offset pointAt(MindSumHeatmapDailyPoint point) {
-      final fraction = window.normalizedPositionOf(point.date.epochDay);
+    Offset pointAt(MindSumHeatmapDetailPoint point) {
+      final fraction = window.normalizedPositionOfEpochMinute(
+        point.epochMinute,
+      );
       final intensity = (point.total / maximum).clamp(0.0, 1.0).toDouble();
       return Offset(
         plot.left + plot.width * fraction,
