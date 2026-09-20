@@ -156,53 +156,6 @@ void main() {
   );
 
   test(
-    'SUM-YEAR-01 RED: Sum exposes continuous annual range-preview aggregates without daily anchors',
-    () {
-      final projection = MindSumHeatmapProjection.build(
-        identity: const MindTemporalHeatmapIdentity(
-          upstreamScopeKey: 'expense|all',
-          indexGeneration: 1,
-          coreRevision: 1,
-          timeScopeKey: 'all',
-        ),
-        contributions: <MindYearHeatmapPreparedContribution>[
-          _contribution(0, 100, const LocalDate(year: 2023, month: 1, day: 2)),
-          _contribution(1, 400, const LocalDate(year: 2025, month: 5, day: 3)),
-          _contribution(2, 900, const LocalDate(year: 2025, month: 6, day: 4)),
-        ],
-      );
-
-      final frame = projection.preview(
-        const QueryAmountRangeValues(
-          minimumScaled100: 100,
-          maximumScaled100: 1000,
-          lowerScaled100: 100,
-          upperScaled100: 500,
-        ),
-      );
-
-      expect(
-        frame.yearlyPoints,
-        <Matcher>[
-          isA<MindAggregateLinePoint>()
-              .having((point) => point.ordinal, 'ordinal', 2023)
-              .having((point) => point.total, 'total', 100),
-          isA<MindAggregateLinePoint>()
-              .having((point) => point.ordinal, 'ordinal', 2024)
-              .having((point) => point.total, 'total', 0),
-          isA<MindAggregateLinePoint>()
-              .having((point) => point.ordinal, 'ordinal', 2025)
-              .having((point) => point.total, 'total', 400),
-        ],
-        reason:
-            'One exact point represents one current range-preview annual total; '
-            'the internal empty year preserves timeline continuity.',
-      );
-      expect(projection.preparedContributionTouches, 3);
-    },
-  );
-
-  test(
     'MONTH-RHYTHM-02 RED: Month keeps slider-before daily comparison bars resident beside the live preview',
     () {
       final projection = MindMonthHeatmapProjection.build(

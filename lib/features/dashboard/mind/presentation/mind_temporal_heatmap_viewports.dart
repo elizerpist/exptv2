@@ -16,7 +16,6 @@ import '../domain/mind_year_heatmap_calendar_geometry.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
-import 'mind_aggregate_line_chart.dart';
 import 'mind_anchored_info_card.dart';
 import 'mind_detailed_sum_chart.dart';
 import 'mind_temporal_secondary_cards.dart';
@@ -122,15 +121,13 @@ String formatMindCompactForints(int forints) {
 }
 
 final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
-  late final PageController _pageController;
   late final ScrollController _heatmapScrollController;
   late final ScrollController _lineScrollController;
-  var _currentPage = 0;
+  var _visualization = _MindSumVisualization.heatmap;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
     _heatmapScrollController = ScrollController();
     _lineScrollController = ScrollController();
   }
@@ -139,38 +136,27 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   void didUpdateWidget(covariant _MindSumHeatmapContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     // A range preview keeps the same immutable identity and therefore keeps
-    // the visual page and both scroll positions. A new admitted identity
-    // starts on the heatmap without writing Query, Time or prepared data.
-    if (oldWidget.frame.identity != widget.frame.identity &&
-        _pageController.hasClients) {
-      _pageController.jumpToPage(0);
-      _currentPage = 0;
+    // the locally selected surface and both scroll positions. A new admitted
+    // identity starts on the heatmap without writing Query, Time or prepared
+    // data.
+    if (oldWidget.frame.identity != widget.frame.identity) {
+      _visualization = _MindSumVisualization.heatmap;
     }
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
     _heatmapScrollController.dispose();
     _lineScrollController.dispose();
     super.dispose();
   }
 
-  ScrollController get _activePageScrollController {
-    final page = _pageController.hasClients ? _pageController.page : 0;
-    return (page ?? 0).round() == 2
-        ? _lineScrollController
-        : _heatmapScrollController;
-  }
-
   void _selectDetailMode({required bool line}) {
-    final target = line ? 2 : 0;
-    if (!_pageController.hasClients || _currentPage == target) return;
-    _pageController.animateToPage(
-      target,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-    );
+    final target = line
+        ? _MindSumVisualization.detailed
+        : _MindSumVisualization.heatmap;
+    if (_visualization == target) return;
+    setState(() => _visualization = target);
   }
 
   @override
@@ -179,16 +165,6 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
     final period = years.isEmpty
         ? '— · 0 hónap'
         : '${years.first}–${years.last} · ${years.length * 12} hónap';
-    final pageTitle = switch (_currentPage) {
-      0 => 'Többéves aktivitás',
-      1 => 'Többéves alakulás',
-      _ => 'Többéves aktivitás',
-    };
-    final pagePeriod = _currentPage == 1
-        ? (years.isEmpty
-              ? '— · 0 év'
-              : '${years.first}–${years.last} · ${years.length} év')
-        : period;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
       child: Column(
@@ -202,7 +178,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      pageTitle,
+                      'Többéves aktivitás',
                       key: ValueKey<String>('mind-sum-heatmap-title'),
                       style: TextStyle(
                         color: FluviVisualTokens.textSecondary,
@@ -212,7 +188,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                     ),
                     const SizedBox(height: 1),
                     Text(
-                      pagePeriod,
+                      period,
                       key: const ValueKey<String>('mind-sum-heatmap-period'),
                       style: const TextStyle(
                         color: FluviVisualTokens.textSecondary,
@@ -222,43 +198,41 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                   ],
                 ),
               ),
-              if (_currentPage == 0 || _currentPage == 2)
-                ToggleButtons(
-                  key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
-                  constraints: const BoxConstraints.tightFor(
-                    width: 42,
-                    height: 22,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  isSelected: <bool>[_currentPage == 2, _currentPage == 0],
-                  onPressed: (index) => _selectDetailMode(line: index == 0),
-                  children: const <Widget>[
-                    Tooltip(
-                      key: ValueKey<String>('mind-sum-detail-toggle-line'),
-                      message: 'Vonal',
-                      child: Icon(Icons.show_chart, size: 13),
-                    ),
-                    Tooltip(
-                      key: ValueKey<String>('mind-sum-detail-toggle-heatmap'),
-                      message: 'Hőtérkép',
-                      child: Icon(Icons.grid_view_rounded, size: 13),
-                    ),
-                  ],
+              ToggleButtons(
+                key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
+                constraints: const BoxConstraints.tightFor(
+                  width: 42,
+                  height: 22,
                 ),
+                borderRadius: BorderRadius.circular(8),
+                isSelected: <bool>[
+                  _visualization == _MindSumVisualization.detailed,
+                  _visualization == _MindSumVisualization.heatmap,
+                ],
+                onPressed: (index) => _selectDetailMode(line: index == 0),
+                children: const <Widget>[
+                  Tooltip(
+                    key: ValueKey<String>('mind-sum-detail-toggle-line'),
+                    message: 'Vonal',
+                    child: Icon(Icons.show_chart, size: 13),
+                  ),
+                  Tooltip(
+                    key: ValueKey<String>('mind-sum-detail-toggle-heatmap'),
+                    message: 'Hőtérkép',
+                    child: Icon(Icons.grid_view_rounded, size: 13),
+                  ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 5),
           Expanded(
-            child: DashboardPagedVerticalBoundaryHandoff(
-              upperVerticalGestures: widget.upperVerticalGestures,
-              activePageScrollController: () => _activePageScrollController,
-              child: PageView(
-                key: const ValueKey<String>('mind-sum-heatmap-pager'),
-                controller: _pageController,
-                onPageChanged: (page) => setState(() => _currentPage = page),
-                children: <Widget>[
-                  _MindSumHeatmapPage(
-                    key: const ValueKey<String>('mind-sum-heatmap-page-0'),
+            child: switch (_visualization) {
+              _MindSumVisualization.heatmap =>
+                DashboardVerticalScrollBoundaryHandoff(
+                  upperVerticalGestures: widget.upperVerticalGestures,
+                  child: _MindSumHeatmapPage(
+                    key: const ValueKey<String>('mind-sum-heatmap-surface'),
                     frame: widget.frame,
                     paletteStyle: widget.paletteStyle,
                     scaleResolution: widget.scaleResolution,
@@ -266,28 +240,27 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                     labelPlacement: widget.sumMonthLabelPlacement,
                     scrollController: _heatmapScrollController,
                   ),
-                  _MindSumExactYearPage(
-                    key: const ValueKey<String>('mind-sum-heatmap-page-1'),
-                    frame: widget.frame,
-                    paletteStyle: widget.paletteStyle,
-                    scaleResolution: widget.scaleResolution,
-                  ),
-                  _MindSumLinePage(
-                    key: const ValueKey<String>('mind-sum-heatmap-page-2'),
+                ),
+              _MindSumVisualization.detailed =>
+                DashboardVerticalScrollBoundaryHandoff(
+                  upperVerticalGestures: widget.upperVerticalGestures,
+                  child: _MindSumLinePage(
+                    key: const ValueKey<String>('mind-sum-detailed-surface'),
                     frame: widget.frame,
                     paletteStyle: widget.paletteStyle,
                     scaleResolution: widget.scaleResolution,
                     scrollController: _lineScrollController,
                   ),
-                ],
-              ),
-            ),
+                ),
+            },
           ),
         ],
       ),
     );
   }
 }
+
+enum _MindSumVisualization { heatmap, detailed }
 
 final class _MindSumHeatmapPage extends StatefulWidget {
   const _MindSumHeatmapPage({
@@ -590,32 +563,6 @@ const _monthInitials = <String>[
   'N',
   'D',
 ];
-
-final class _MindSumExactYearPage extends StatelessWidget {
-  const _MindSumExactYearPage({
-    super.key,
-    required this.frame,
-    required this.paletteStyle,
-    required this.scaleResolution,
-  });
-  final MindSumHeatmapFrame frame;
-  final MindYearHeatmapPaletteStyle paletteStyle;
-  final MindHeatmapScaleResolution scaleResolution;
-  @override
-  Widget build(BuildContext context) {
-    final points = frame.yearlyPoints;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: MindAggregateLineChart(
-        points: points,
-        title: '',
-        subtitle: '',
-        lineColor: const Color(0xff7657c5),
-        relativeLabel: 'az előző évhez képest',
-      ),
-    );
-  }
-}
 
 final class _MindSumMonthInfoCard extends StatelessWidget {
   const _MindSumMonthInfoCard({required this.month});

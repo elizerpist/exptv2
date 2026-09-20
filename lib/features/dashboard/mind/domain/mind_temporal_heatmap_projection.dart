@@ -84,24 +84,6 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
 
   int yearTotal(int year) => _yearTotals[year] ?? 0;
 
-  /// One exact annual aggregate per continuous represented calendar year.
-  /// Internal years without prepared membership deliberately remain zero so the
-  /// aggregate chart preserves a truthful temporal domain without inventing
-  /// transactions or a second aggregation authority.
-  List<MindAggregateLinePoint> get yearlyPoints {
-    if (years.isEmpty) return const <MindAggregateLinePoint>[];
-    return List<MindAggregateLinePoint>.generate(years.last - years.first + 1, (
-      index,
-    ) {
-      final year = years.first + index;
-      return MindAggregateLinePoint(
-        ordinal: year,
-        label: '$year',
-        total: yearTotal(year),
-      );
-    }, growable: false);
-  }
-
   /// Only real local calendar days with a non-empty current range total are
   /// exposed. The chart may join them visually, but it cannot invent a day.
   List<MindSumHeatmapDailyPoint> dailyPointsForYear(int year) =>

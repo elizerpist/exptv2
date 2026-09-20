@@ -6,8 +6,9 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentat
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports.dart';
-import 'package:fluvi/features/dashboard/mind/presentation/mind_aggregate_line_chart.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_palette_resolver.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
@@ -56,7 +57,7 @@ void main() {
       expect(find.text('2024–2025 · 24 hónap'), findsOneWidget);
       expect(find.text('Éves aktivitás'), findsNothing);
       expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
+        find.byKey(const ValueKey('mind-sum-heatmap-surface')),
         findsOneWidget,
       );
       expect(
@@ -88,6 +89,147 @@ void main() {
     () {
       expect(formatMindCompactForints(7728364), '7,73 M Ft');
       expect(formatMindCompactForints(645560), '646 k Ft');
+    },
+  );
+
+  testWidgets(
+    'SUM-TOPO-01 RED: Sum has only heatmap/detail surfaces and no visualization PageView swipe',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 260,
+              child: MindSumHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(PageView), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-page-1')),
+        findsNothing,
+      );
+      expect(
+        find.text('Többéves alakulás'),
+        findsNothing,
+        reason: 'The obsolete exact annual Sum surface is not reachable.',
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        findsOneWidget,
+      );
+      expect(identical(listenable.value, frame), isTrue);
+
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        const Offset(-180, 0),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        findsOneWidget,
+        reason: 'One-finger horizontal input cannot switch a Sum surface.',
+      );
+    },
+  );
+
+  testWidgets(
+    'SUM-GEST-01 RED: a noisy production-parent pinch never begins Dashboard expansion',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          for (var day = 1; day <= 31; day += 1)
+            _entry(
+              day,
+              100 + day,
+              LocalDate(year: 2025, month: 1, day: day),
+              localTimeMinutes: day * 10,
+            ),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final expansion = DashboardExpansionController();
+      final upper = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      addTearDown(listenable.dispose);
+      addTearDown(expansion.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindSumHeatmapViewport(
+                frameListenable: listenable,
+                upperVerticalGestures: upper,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pumpAndSettle();
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2025')),
+      );
+      final first = await tester.startGesture(
+        Offset(plot.center.dx - 18, plot.center.dy - 4),
+        pointer: 1,
+      );
+      final second = await tester.startGesture(
+        Offset(plot.center.dx + 23, plot.center.dy + 7),
+        pointer: 2,
+      );
+      await first.moveTo(Offset(plot.center.dx - 52, plot.center.dy - 46));
+      await second.moveTo(Offset(plot.center.dx + 68, plot.center.dy + 102));
+      await tester.pump();
+
+      expect(
+        expansion.progress,
+        0,
+        reason: 'A live two-pointer pinch must not begin collapse before it ends.',
+      );
+      expect(expansion.isDragging, isFalse);
+      await first.up();
+      await second.up();
+
+      expect(expansion.progress, 0);
+      expect(expansion.isDragging, isFalse);
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        findsOneWidget,
+      );
+      expect(identical(listenable.value, frame), isTrue);
     },
   );
 
@@ -213,153 +355,6 @@ void main() {
             .abs(),
         lessThan(80),
         reason: 'A second tap moves the anchored infocard to its own cell.',
-      );
-    },
-  );
-
-  testWidgets(
-    'SUM-CARDS-01/02/03: the exact annual chart is secondary and the real daily multi-line chart remains tertiary',
-    (tester) async {
-      final frame = MindSumHeatmapProjection.build(
-        identity: const MindTemporalHeatmapIdentity(
-          upstreamScopeKey: 'expense|all',
-          indexGeneration: 1,
-          coreRevision: 1,
-          timeScopeKey: 'all',
-        ),
-        contributions: contributions,
-      ).preview(range);
-      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
-      addTearDown(listenable.dispose);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 360,
-              height: 260,
-              child: MindSumHeatmapViewport(frameListenable: listenable),
-            ),
-          ),
-        ),
-      );
-
-      final pager = find.byKey(const ValueKey('mind-sum-heatmap-pager'));
-      expect(pager, findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
-        findsOneWidget,
-      );
-      await tester.drag(pager, const Offset(-300, 0));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-1')),
-        findsOneWidget,
-      );
-      expect(find.text('Többéves alakulás'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('mind-aggregate-line-plot')),
-        findsOneWidget,
-      );
-      final exactChart = tester.widget<MindAggregateLineChart>(
-        find.byType(MindAggregateLineChart),
-      );
-      expect(
-        exactChart.points.map((point) => (point.ordinal, point.total)),
-        <(int, int)>[(2024, 100), (2025, 1500)],
-      );
-      await tester.tapAt(
-        tester.getCenter(
-          find.byKey(const ValueKey('mind-aggregate-line-plot')),
-        ),
-      );
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('mind-aggregate-line-infocard')),
-        findsOneWidget,
-      );
-
-      await tester.drag(pager, const Offset(-300, 0));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-2')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-sum-detailed-plot-2025')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-sum-detailed-axis-month-2025-1')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-sum-detailed-axis-y-2025-0')),
-        findsOneWidget,
-      );
-      expect(
-        frame.dailyPointsForYear(2025).map((point) => point.date.day),
-        <int>[3, 4],
-      );
-
-      await tester.drag(pager, const Offset(600, 0));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'SUM-GESTURE-01: a deliberately dragged wide annual chart scrolls its own year domain without changing the visual card',
-    (tester) async {
-      final wideContributions =
-          List<MindYearHeatmapPreparedContribution>.generate(
-            15,
-            (index) => _entry(
-              index,
-              500,
-              LocalDate(year: 2010 + index, month: 1, day: 2),
-            ),
-            growable: false,
-          );
-      final frame = MindSumHeatmapProjection.build(
-        identity: const MindTemporalHeatmapIdentity(
-          upstreamScopeKey: 'expense|all',
-          indexGeneration: 1,
-          coreRevision: 1,
-          timeScopeKey: 'all',
-        ),
-        contributions: wideContributions,
-      ).preview(range);
-      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
-      addTearDown(listenable.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 360,
-              height: 260,
-              child: MindSumHeatmapViewport(frameListenable: listenable),
-            ),
-          ),
-        ),
-      );
-      final pager = find.byKey(const ValueKey('mind-sum-heatmap-pager'));
-      await tester.drag(pager, const Offset(-300, 0));
-      await tester.pumpAndSettle();
-      final scroll = find.byKey(const ValueKey('mind-aggregate-line-scroll'));
-      final position = tester.state<ScrollableState>(
-        find.descendant(of: scroll, matching: find.byType(Scrollable)),
-      );
-      await tester.drag(scroll, const Offset(-220, 0));
-      await tester.pumpAndSettle();
-      expect(position.position.pixels, greaterThan(0));
-      expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-1')),
-        findsOneWidget,
       );
     },
   );
@@ -942,7 +937,7 @@ void main() {
   );
 
   testWidgets(
-    'DSUM-04/05/06 RED: detailed Sum keeps its third page, uses adaptive bands and switches to the existing heatmap page',
+    'DSUM-04/05/06: detailed Sum is toggle-selected, uses adaptive bands, and returns to heatmap locally',
     (tester) async {
       final detailedContributions = <MindYearHeatmapPreparedContribution>[
         for (var year = 2024; year <= 2026; year += 1)
@@ -976,14 +971,13 @@ void main() {
         ),
       );
 
-      final pager = find.byKey(const ValueKey('mind-sum-heatmap-pager'));
-      await tester.drag(pager, const Offset(-350, 0));
-      await tester.pumpAndSettle();
-      await tester.drag(pager, const Offset(-350, 0));
+      await tester.tap(
+        find.byKey(const ValueKey('mind-sum-detail-toggle-line')),
+      );
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-2')),
+        find.byKey(const ValueKey('mind-sum-detailed-surface')),
         findsOneWidget,
       );
       expect(
@@ -1011,18 +1005,15 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.drag(pager, const Offset(350, 0));
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-1')),
-        findsOneWidget,
-        reason: 'An unzoomed one-finger chart drag remains a page gesture.',
+      await tester.drag(
+        find.byKey(const ValueKey('mind-sum-detailed-plot-2024')),
+        const Offset(350, 0),
       );
-      await tester.drag(pager, const Offset(-350, 0));
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-2')),
+        find.byKey(const ValueKey('mind-sum-detailed-surface')),
         findsOneWidget,
+        reason: 'An unzoomed one-finger chart drag cannot page Sum.',
       );
 
       await tester.tap(
@@ -1030,7 +1021,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-0')),
+        find.byKey(const ValueKey('mind-sum-heatmap-surface')),
         findsOneWidget,
       );
       expect(
@@ -1074,10 +1065,9 @@ void main() {
           ),
         ),
       );
-      final pager = find.byKey(const ValueKey('mind-sum-heatmap-pager'));
-      await tester.drag(pager, const Offset(-350, 0));
-      await tester.pumpAndSettle();
-      await tester.drag(pager, const Offset(-350, 0));
+      await tester.tap(
+        find.byKey(const ValueKey('mind-sum-detail-toggle-line')),
+      );
       await tester.pumpAndSettle();
 
       final window = find.byKey(
@@ -1121,7 +1111,7 @@ void main() {
       );
       await tester.pump();
       expect(
-        find.byKey(const ValueKey('mind-sum-heatmap-page-2')),
+        find.byKey(const ValueKey('mind-sum-detailed-surface')),
         findsOneWidget,
         reason: 'A zoomed detailed-chart pan stays local and must not page.',
       );
