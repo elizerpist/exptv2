@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
-import '../../presentation/dashboard_paged_vertical_boundary_handoff.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';

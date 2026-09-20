@@ -44,7 +44,7 @@ final class MindTemporalHeatmapIdentity {
 /// A compact all-time month-cell frame. Every represented year owns exactly
 /// twelve calendar cells; null totals are real empty months, not fake data.
 final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
-  MindSumHeatmapFrame({
+  MindSumHeatmapFrame._({
     required this.identity,
     required this.range,
     required List<int> years,
@@ -481,7 +481,7 @@ final class MindSumHeatmapProjection {
       }
       dailyPointsByYear[year] = points;
     }
-    return MindSumHeatmapFrame(
+    return MindSumHeatmapFrame._(
       identity: identity,
       range: range,
       years: _years,
