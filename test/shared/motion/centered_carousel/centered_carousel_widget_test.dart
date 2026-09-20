@@ -364,41 +364,42 @@ void main() {
     },
   );
 
-  testWidgets('a persistent terminal hold receives only one retry frame', (
-    tester,
-  ) async {
-    final controller = CenteredCarouselController(initialIndex: 2);
-    addTearDown(controller.dispose);
-    final settled = <int>[];
+  testWidgets(
+    'a persistent terminal hold regains liveness after one retry frame',
+    (tester) async {
+      final controller = CenteredCarouselController(initialIndex: 2);
+      addTearDown(controller.dispose);
+      final settled = <int>[];
 
-    await tester.pumpWidget(
-      _host(
-        CenteredCarousel<int>(
-          items: const [0, 1, 2, 3, 4],
-          controller: controller,
-          spec: CenteredCarouselSpec(itemExtent: 72),
-          height: 80,
-          onSelectionSettled: settled.add,
-          itemBuilder: (context, item, metrics) =>
-              SizedBox(width: 48, height: 48, child: Text('$item')),
+      await tester.pumpWidget(
+        _host(
+          CenteredCarousel<int>(
+            items: const [0, 1, 2, 3, 4],
+            controller: controller,
+            spec: CenteredCarouselSpec(itemExtent: 72),
+            height: 80,
+            onSelectionSettled: settled.add,
+            itemBuilder: (context, item, metrics) =>
+                SizedBox(width: 48, height: 48, child: Text('$item')),
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    controller
-      ..beginUserMotionCommand()
-      ..noteDirectPointerDown();
-    final hold = controller.scrollController.position.hold(() {});
-    controller.noteDirectPointerEnded();
+      controller
+        ..beginUserMotionCommand()
+        ..noteDirectPointerDown();
+      final hold = controller.scrollController.position.hold(() {});
+      controller.noteDirectPointerEnded();
 
-    final frameCount = await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
 
-    expect(frameCount, lessThanOrEqualTo(2));
-    expect(controller.hasActiveScrollActivity, isTrue);
-    expect(settled, isEmpty);
-    hold.cancel();
-  });
+      expect(controller.hasActiveScrollActivity, isFalse);
+      expect(settled, [2]);
+      hold.cancel();
+    },
+  );
 
   testWidgets(
     'a ScrollEnd notification settles the current command without a frame',

@@ -699,11 +699,40 @@ class CenteredCarouselController extends ChangeNotifier {
             _terminalHoldRetryCommandId != commandId) {
           _terminalHoldRetryCommandId = commandId;
           _scheduleTerminalActivityCheck();
+          return;
+        }
+        if (activity is HoldScrollActivity) {
+          _recoverOrphanedTerminalHold(commandId);
         }
         return;
       }
       _settleCurrentMotionCommandIfIdle(commandId);
     });
+  }
+
+  /// A Hold is normally the framework's short handoff from an interrupted
+  /// ballistic activity to a new drag.  After the raw pointer has ended and
+  /// one frame-local retry still observes the same Hold, there is no user
+  /// drag, ballistic or driven command left to own it.  Let ScrollPosition
+  /// install its normal zero-velocity terminal activity, then pass through
+  /// the existing current-command idle gate.  This is deliberately bounded:
+  /// it is neither a timer nor an unbounded frame retry and cannot settle a
+  /// stale command.
+  void _recoverOrphanedTerminalHold(int commandId) {
+    if (_disposed ||
+        _directPointerIsDown ||
+        _isScrolling ||
+        !_scrollController.hasClients ||
+        _activeMotionCommandId != commandId ||
+        !isCurrentMotionCommand(commandId) ||
+        _scrollController.position.activity is! HoldScrollActivity) {
+      return;
+    }
+    // `jumpTo` at the exact current pixel is ScrollPosition's public
+    // structural handoff. It ends the orphan Hold without changing the
+    // controller, position, selected index or physical location.
+    _scrollController.jumpTo(_scrollController.position.pixels);
+    scheduleMicrotask(() => _settleCurrentMotionCommandIfIdle(commandId));
   }
 
   /// Publishes the one semantic idle/settle handoff for a still-current

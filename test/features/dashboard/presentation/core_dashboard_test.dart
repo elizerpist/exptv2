@@ -21,6 +21,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
@@ -893,6 +894,87 @@ void main() {
               'the stable carousel controller without a cooldown.',
         );
       }
+    },
+  );
+
+  testWidgets(
+    'SUMMARY-HOLD-01 RED: an accepted segmented mode drag must recover from a completed persistent Hold without changing controller identity',
+    (tester) async {
+      final controller = DashboardCoreController(
+        initialCoreRevision: 1,
+        initialDate: DateTime(2026, 7, 22),
+        initialPlane: TimePlane.sum,
+      );
+      addTearDown(controller.dispose);
+      await controller.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.balance),
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+
+      final selector = find.byKey(
+        const ValueKey<String>('summary-pill-segmented-mode-selector'),
+      );
+      final carouselFinder = find.descendant(
+        of: selector,
+        matching: find.byType(CenteredCarousel<SummaryPillExperimentLevel>),
+      );
+      final carousel = tester
+          .widget<CenteredCarousel<SummaryPillExperimentLevel>>(carouselFinder);
+      final physicalController = carousel.controller;
+      final originalPosition = physicalController.scrollController.position;
+      final originalPhysics = physicalController.physicsCreationCount;
+      FluviDiagnosticLogger.clear();
+
+      physicalController
+        ..beginUserMotionCommand()
+        ..noteDirectPointerDown();
+      final hold = physicalController.scrollController.position.hold(() {});
+      physicalController.noteDirectPointerEnded();
+      await tester.pump();
+      await tester.pump();
+      expect(physicalController.hasActiveScrollActivity, isFalse);
+      expect(
+        controller.isMotionLaneActive(DashboardMotionLane.summaryShell),
+        isFalse,
+        reason:
+            'A completed selector pointer cannot strand the production '
+            'Summary lane in terminal Hold.',
+      );
+
+      final drag = await tester.startGesture(tester.getCenter(selector));
+      await drag.moveBy(const Offset(0, -20));
+      await tester.pump(const Duration(milliseconds: 16));
+      await drag.moveBy(const Offset(0, -70));
+      await tester.pump(const Duration(milliseconds: 16));
+      await drag.up();
+      await tester.pump();
+      hold.cancel();
+      await tester.pumpAndSettle();
+
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) => event.stage == 'SUMMARY_POINTER_ACCEPTED',
+        ),
+        isTrue,
+      );
+      expect(controller.navigation.state.plane, TimePlane.year);
+      expect(
+        identical(
+          physicalController.scrollController.position,
+          originalPosition,
+        ),
+        isTrue,
+      );
+      expect(physicalController.physicsCreationCount, originalPhysics);
+      expect(
+        controller.isMotionLaneActive(DashboardMotionLane.summaryShell),
+        isFalse,
+      );
     },
   );
 
