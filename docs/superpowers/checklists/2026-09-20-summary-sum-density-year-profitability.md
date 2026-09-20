@@ -71,5 +71,5 @@
 | YEAR-PROFIT-03 | settings request | settings/controller/tuner | enabled/disabled and opacity slider update only MonthCard tint live | settings and mounted slider tests | DONE |
 | YEAR-PROFIT-04 | scope lock | palette/day painter/Year 4×3 | tint never changes cell/text/border/shadow/icon opacity or financial values; 4×3 unchanged | color/semantics + 4×3 regression | DONE |
 | ARC-01 | structuring-apps / milestone | all changed paths | one owner/write path; no Query/repository/Room/gesture duplication | source audit + boundary suite | DONE |
-| DELIV-01 | user workflow | branch/build/graph | each app commit has journal child; final exact source has CI/APK/SCIP | GitHub + artifact/graph audit | PARTIAL — app commits and journal children are complete; final CI/APK/SCIP is pending |
+| DELIV-01 | user workflow | branch/build/graph | each app commit has journal child; final exact source has CI/APK/SCIP | GitHub + artifact/graph audit | DONE — exact `c74bfa56` Actions/APK/SCIP evidence is recorded; the known profile lane remains FAIL and is reported, not hidden |
 | PHYS-01 | user workflow | Android | exact resulting APK is physically checked by user | user only | BLOCKED |
