@@ -7,8 +7,8 @@
 | DSUM-03 | User final prompt | detail model/widget | Low zoom aggregates; closer zoom exposes increasingly real frame detail without data/query writes | Domain + widget test | DONE |
 | DSUM-04 | User final prompt | detailed chart widget | One year fills available plot; two share; 3+ uses vertical scrolling at the two-year minimum | Mounted geometry test | DONE |
 | DSUM-05 | User final prompt | detailed chart widget | Every detailed band has Hungarian month initials and monetary Y ticks | Mounted widget test | DONE |
-| DSUM-06 | Superseded by physical feedback | detailed chart widget | Historical toggle through PageView | Physical feedback rejects it | NOT DONE — toggle must become direct two-state local presentation state |
-| DSUM-07 | Physical Android feedback | pager/chart gesture layer | Pinch/pan, page swipe, vertical band scroll and slider drag have a single effective owner | Production-parent noisy pinch test | NOT DONE — prior leaf-widget test is false-green |
+| DSUM-06 | Physical Android feedback | detailed chart widget | Toggle is direct two-state local presentation state | Mounted topology test | DONE |
+| DSUM-07 | Physical Android feedback | pager/chart gesture layer | Pinch/pan, vertical band scroll and slider drag have a single effective owner | Production-parent noisy pinch test | PARTIAL — production-parent noisy pinch/pan/scroll controls are GREEN; Android recognizer cadence remains user-only |
 | POP-01 | User final prompt | `mind_anchored_info_card.dart` | Sum month and Year day popup uses actual cell anchor, moves with a new tap and clamps to page bounds | Mounted Sum/Year tests | DONE |
 | LINE-01 | User final prompt/reference | aggregate/detail chart layout | Sum exact and Year monthly charts retain constraint-derived useful plot height with no added fixed dead space | Mounted bounds test | DONE |
 | KEEP-01 | Prior approved feature contract | Mind temporal viewports | Year bar/line, Month rhythm, Day timeline, permanent inline legend and contained BottomNav remain intact | Focused regression suite | DONE |
@@ -40,15 +40,15 @@
 
 | ID | Source | Intended area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| SUM-TOPO-01 | Physical feedback | `mind_temporal_heatmap_viewports.dart` | Sum exposes exactly heatmap and detailed surfaces; exact annual page, PageView, controller, dots and swipe affordance are absent | Mounted topology RED→GREEN | NOT DONE |
-| SUM-TOPO-02 | Physical feedback | Sum content state | Only the top-right toggle writes the surface; a toggle retains the admitted frame/range identity | Mounted interaction test | NOT DONE |
-| SUM-GEST-01 | Physical feedback | Sum surface/detail chart | Production-parent noisy two-pointer pinch changes only detail time window; collapse progress, visual surface and frame identity stay fixed | Production-parent widget RED→GREEN | NOT DONE |
-| SUM-GEST-02 | Protected interaction contract | detail chart/scroll boundary | Zoomed horizontal one-pointer drag pans; home horizontal drag does nothing; 3+ year vertical scroll and genuine one-pointer outward handoff remain valid | Mounted gesture controls | NOT DONE |
-| SUM-DATA-01 | Physical feedback | Sum projection/frame | Frame retains range-filtered transaction-time observations, including multiple same-day times, with no repository/Room query | Domain projection RED→GREEN | NOT DONE |
-| SUM-LOD-01 | Physical feedback | detail domain model | Home overview has an explicit coarse anchor budget; zoom progressively shrinks bucket span; deep window represents every eligible transaction and preserves extrema without fabrication | Dense pure-model RED→GREEN | NOT DONE |
-| SUM-RANGE-01 | Scope/performance lock | Sum projection/detail renderer | Range preview refreshes immutable detail series without repository, Room, Query mutation or index rebuild | Projection hot-path test | NOT DONE |
-| SUM-LAYOUT-01 | Existing accepted feature | detail renderer | 1-year expanded, 2-year split, 3+-year minimum band/vertical scrolling and axes remain | Mounted regression test | NOT DONE |
-| SUM-NOREG-01 | Scope lock | Year/Month/Day/range | Year pager, Month rhythm, Day timeline and one range owner remain intact | Focused smoke suites | NOT DONE |
-| ARC-03 | structuring-apps | affected domain/presentation files | One read-model and one LOD policy; no UI data workflow or duplicate gesture/handoff engine | Boundary/source review + focused test | NOT DONE |
+| SUM-TOPO-01 | Physical feedback | `mind_temporal_heatmap_viewports.dart` | Sum exposes exactly heatmap and detailed surfaces; exact annual page, PageView, controller and swipe affordance are absent; generic Mind placeholder dots are not a Sum page indicator | Mounted topology RED→GREEN + source review | DONE |
+| SUM-TOPO-02 | Physical feedback | Sum content state | Only the top-right toggle writes the surface; a toggle retains the admitted frame/range identity | Mounted interaction test | DONE |
+| SUM-GEST-01 | Physical feedback | Sum surface/detail chart | Production-parent noisy two-pointer pinch changes only detail time window; collapse progress, visual surface and frame identity stay fixed | Production-parent widget RED→GREEN | DONE |
+| SUM-GEST-02 | Protected interaction contract | detail chart/scroll boundary | Zoomed horizontal one-pointer drag pans; home horizontal drag does nothing; 3+ year vertical scroll and genuine one-pointer outward handoff remain valid | Mounted gesture controls | DONE |
+| SUM-DATA-01 | Physical feedback | Sum projection/frame | Frame retains range-filtered transaction-time observations, including multiple same-day times, with no repository/Room query | Domain projection RED→GREEN | DONE |
+| SUM-LOD-01 | Physical feedback | detail domain model | Home overview has an explicit coarse anchor budget; zoom progressively shrinks bucket span; deep window represents every eligible transaction and preserves extrema without fabrication | Dense pure-model RED→GREEN | DONE |
+| SUM-RANGE-01 | Scope/performance lock | Sum projection/detail renderer | Range preview refreshes immutable detail series without repository, Room, Query mutation or index rebuild | Projection hot-path test | DONE |
+| SUM-LAYOUT-01 | Existing accepted feature | detail renderer | 1-year expanded, 2-year split, 3+-year minimum band/vertical scrolling and axes remain | Mounted regression test | DONE |
+| SUM-NOREG-01 | Scope lock | Year/Month/Day/range | Year pager, Month rhythm, Day timeline and one range owner remain intact | Focused smoke suites | DONE |
+| ARC-03 | structuring-apps | affected domain/presentation files | One read-model and one LOD policy; no UI data workflow or duplicate gesture/handoff engine | Boundary/source review + focused test | DONE |
 | DELIV-02 | User workflow | GitHub/SCIP/journal | Exact final application CI/APK/SCIP and journal evidence | Actions/artifact/graph audit | NOT DONE |
 | PHYS-02 | User workflow | Android | User accepts the exact next APK | User-only | BLOCKED |
