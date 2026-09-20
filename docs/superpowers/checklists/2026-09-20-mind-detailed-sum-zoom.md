@@ -15,5 +15,5 @@
 | ARC-01 | structuring-apps | all changed paths | One immutable data source; local state has one owner/write path | Boundary/direct source review | DONE |
 | ARC-02 | structuring-apps | detail/popup modules | Shared LOD and popup policy are each single implementations | Domain/widget tests + source review | DONE |
 | PERF-01 | User prompt/milestone | projection/chart | Zoom/toggle/selection causes no repository, Room, Query, Time or score work | Instrumented widget/domain assertions | DONE |
-| DELIV-01 | User workflow | GitHub/SCIP/journal | Application commit, journal-only child, exact CI/APK/SCIP evidence | Git/Actions/artifact audit | NOT DONE |
-| PHYS-01 | User workflow | Android | Physical validation | User-only | BLOCKED |
+| DELIV-01 | User workflow | GitHub/SCIP/journal | Application commit, journal-only child, exact CI/APK/SCIP evidence | Git/Actions/artifact audit | DONE — workflow `35476787935` is recorded as profile-gate FAIL; APK and exact-source SCIP are present |
+| PHYS-01 | User workflow | Android | Physical validation | User-only | BLOCKED — explicitly reserved for the user |
