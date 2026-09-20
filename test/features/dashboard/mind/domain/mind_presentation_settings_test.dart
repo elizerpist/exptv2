@@ -150,5 +150,34 @@ void main() {
       },
     );
 
+    test(
+      'YEAR-PROFIT-SETTINGS RED: the 3x4 MonthCard tint preferences are revisioned presentation-only values',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.yearThreeColumnProfitabilityTintEnabled,
+          isFalse,
+        );
+        expect(
+          controller.value.yearThreeColumnProfitabilityTintOpacity,
+          closeTo(.16, .0001),
+        );
+
+        controller.setYearThreeColumnProfitabilityTintEnabled(true);
+        controller.setYearThreeColumnProfitabilityTintOpacity(.34);
+
+        expect(
+          controller.value.yearThreeColumnProfitabilityTintEnabled,
+          isTrue,
+        );
+        expect(
+          controller.value.yearThreeColumnProfitabilityTintOpacity,
+          closeTo(.34, .0001),
+        );
+        expect(controller.value.revision, 2);
+      },
+    );
   });
 }

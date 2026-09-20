@@ -1119,100 +1119,102 @@ void main() {
     },
   );
 
-  testWidgets('YEAR-DIRECT-04: three-by-four direct groups show scope and monthly close', (
-    tester,
-  ) async {
-    final noFooterHeight = MindYearHeatmapMonthGroup.heightFor(
-      width: 100,
-      calendarRowCount: 5,
-    );
-    final oneFooterHeight = MindYearHeatmapMonthGroup.heightFor(
-      width: 100,
-      calendarRowCount: 5,
-      footerRowCount: 1,
-    );
-    final bothFooterHeight = MindYearHeatmapMonthGroup.heightFor(
-      width: 100,
-      calendarRowCount: 5,
-      footerRowCount: 2,
-    );
-    expect(oneFooterHeight, greaterThan(noFooterHeight));
-    expect(bothFooterHeight, greaterThan(oneFooterHeight));
-    final aggregates = MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
-      year: 2025,
-      incomeEntries: <DashboardLedgerEntry>[
-        DashboardLedgerEntry(
-          id: 'income',
-          partnerId: 'salary',
-          categoryId: 'income',
-          direction: 'income',
-          amountMinor: 500000,
-          bookedLocalEpochDay: const LocalDate(
+  testWidgets(
+    'YEAR-DIRECT-04: three-by-four direct groups show scope and monthly close',
+    (tester) async {
+      final noFooterHeight = MindYearHeatmapMonthGroup.heightFor(
+        width: 100,
+        calendarRowCount: 5,
+      );
+      final oneFooterHeight = MindYearHeatmapMonthGroup.heightFor(
+        width: 100,
+        calendarRowCount: 5,
+        footerRowCount: 1,
+      );
+      final bothFooterHeight = MindYearHeatmapMonthGroup.heightFor(
+        width: 100,
+        calendarRowCount: 5,
+        footerRowCount: 2,
+      );
+      expect(oneFooterHeight, greaterThan(noFooterHeight));
+      expect(bothFooterHeight, greaterThan(oneFooterHeight));
+      final aggregates =
+          MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
             year: 2025,
-            month: 1,
-            day: 1,
-          ).epochDay,
-          bookedLocalTimeMinutes: 0,
+            incomeEntries: <DashboardLedgerEntry>[
+              DashboardLedgerEntry(
+                id: 'income',
+                partnerId: 'salary',
+                categoryId: 'income',
+                direction: 'income',
+                amountMinor: 500000,
+                bookedLocalEpochDay: const LocalDate(
+                  year: 2025,
+                  month: 1,
+                  day: 1,
+                ).epochDay,
+                bookedLocalTimeMinutes: 0,
+              ),
+            ],
+            expenseEntries: <DashboardLedgerEntry>[
+              _entry(
+                'expense',
+                120000,
+                const LocalDate(year: 2025, month: 1, day: 2),
+              ),
+            ],
+          );
+      final projection = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'expense|year:2025',
+          indexGeneration: 1,
+          coreRevision: 1,
+          year: 2025,
+          navigationEpoch: 1,
         ),
-      ],
-      expenseEntries: <DashboardLedgerEntry>[
-        _entry(
-          'expense',
-          120000,
-          const LocalDate(year: 2025, month: 1, day: 2),
-        ),
-      ],
-    );
-    final projection = MindYearHeatmapProjection.build(
-      identity: const MindYearHeatmapIdentity(
-        upstreamScopeKey: 'expense|year:2025',
-        indexGeneration: 1,
-        coreRevision: 1,
-        year: 2025,
-        navigationEpoch: 1,
-      ),
-      entries: <DashboardLedgerEntry>[
-        _entry(
-          'focused',
-          100000,
-          const LocalDate(year: 2025, month: 1, day: 2),
-        ),
-      ],
-      monthlyAggregates: aggregates,
-    );
-    final frame = ValueNotifier(projection.preview(range));
-    addTearDown(frame.dispose);
+        entries: <DashboardLedgerEntry>[
+          _entry(
+            'focused',
+            100000,
+            const LocalDate(year: 2025, month: 1, day: 2),
+          ),
+        ],
+        monthlyAggregates: aggregates,
+      );
+      final frame = ValueNotifier(projection.preview(range));
+      addTearDown(frame.dispose);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox(
-          width: 360,
-          height: 500,
-          child: MindYearHeatmapViewport(frameListenable: frame),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 500,
+            child: MindYearHeatmapViewport(frameListenable: frame),
+          ),
         ),
-      ),
-    );
-    expect(find.text('Zárás'), findsAtLeastNWidgets(1));
-    expect(find.text('Scope'), findsAtLeastNWidgets(1));
-    expect(find.text('3 800 Ft'), findsAtLeastNWidgets(1));
-    expect(find.text('1 000 Ft'), findsAtLeastNWidgets(1));
+      );
+      expect(find.text('Zárás'), findsAtLeastNWidgets(1));
+      expect(find.text('Scope'), findsAtLeastNWidgets(1));
+      expect(find.text('3 800 Ft'), findsAtLeastNWidgets(1));
+      expect(find.text('1 000 Ft'), findsAtLeastNWidgets(1));
 
-    final incomeProjection = MindYearHeatmapProjection.build(
-      identity: const MindYearHeatmapIdentity(
-        upstreamScopeKey: 'income|year:2025',
-        indexGeneration: 1,
-        coreRevision: 2,
-        year: 2025,
-        navigationEpoch: 2,
-      ),
-      entries: const <DashboardLedgerEntry>[],
-      monthlyAggregates: aggregates,
-    );
-    frame.value = incomeProjection.preview(range);
-    await tester.pump();
-    expect(find.text('Scope'), findsAtLeastNWidgets(1));
-    expect(find.text('0 Ft'), findsAtLeastNWidgets(1));
-  });
+      final incomeProjection = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'income|year:2025',
+          indexGeneration: 1,
+          coreRevision: 2,
+          year: 2025,
+          navigationEpoch: 2,
+        ),
+        entries: const <DashboardLedgerEntry>[],
+        monthlyAggregates: aggregates,
+      );
+      frame.value = incomeProjection.preview(range);
+      await tester.pump();
+      expect(find.text('Scope'), findsAtLeastNWidgets(1));
+      expect(find.text('0 Ft'), findsAtLeastNWidgets(1));
+    },
+  );
 
   testWidgets(
     'YEAR-DIRECT-05: four-by-three direct grid solves one non-scrolling viewport',
@@ -1418,13 +1420,197 @@ void main() {
       final annualScroll = tester.state<ScrollableState>(
         find
             .descendant(
-              of: find.byKey(const ValueKey<String>('mind-year-heatmap-scroll')),
+              of: find.byKey(
+                const ValueKey<String>('mind-year-heatmap-scroll'),
+              ),
               matching: find.byType(Scrollable),
             )
             .first,
       );
       expect(annualScroll.position.maxScrollExtent, 0);
       expect(find.text('Scope'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'YEAR-PROFIT-01 RED: 3x4 keeps a rounded MonthCard surface while 4x3 remains untouched',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 440,
+            child: MindYearHeatmapViewport(frameListenable: frame),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
+        findsOneWidget,
+        reason: 'Every 3x4 month must remain inside its own rounded card.',
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
+        findsNothing,
+        reason: 'Profitability MonthCards are strictly a 3x4 presentation.',
+      );
+    },
+  );
+
+  testWidgets(
+    'YEAR-PROFIT-02/03/04: the 3x4 card tint uses only monthly net and its opacity leaves cells unchanged',
+    (tester) async {
+      final settings = MindYearHeatmapPresentationController();
+      final aggregates =
+          MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+            year: 2025,
+            incomeEntries: <DashboardLedgerEntry>[
+              _directionEntry(
+                'income-jan',
+                500000,
+                const LocalDate(year: 2025, month: 1, day: 2),
+                'income',
+              ),
+              _directionEntry(
+                'income-feb',
+                100000,
+                const LocalDate(year: 2025, month: 2, day: 2),
+                'income',
+              ),
+            ],
+            expenseEntries: <DashboardLedgerEntry>[
+              _entry(
+                'expense-jan',
+                100000,
+                const LocalDate(year: 2025, month: 1, day: 3),
+              ),
+              _entry(
+                'expense-feb',
+                500000,
+                const LocalDate(year: 2025, month: 2, day: 3),
+              ),
+            ],
+          );
+      final projection = MindYearHeatmapProjection.build(
+        identity: const MindYearHeatmapIdentity(
+          upstreamScopeKey: 'expense|year:2025',
+          indexGeneration: 4,
+          coreRevision: 6,
+          year: 2025,
+          navigationEpoch: 8,
+        ),
+        entries: <DashboardLedgerEntry>[
+          _entry(
+            'focused-jan',
+            100000,
+            const LocalDate(year: 2025, month: 1, day: 3),
+          ),
+          _entry(
+            'focused-feb',
+            500000,
+            const LocalDate(year: 2025, month: 2, day: 3),
+          ),
+        ],
+        monthlyAggregates: aggregates,
+      );
+      final frame = ValueNotifier(projection.preview(range));
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 440,
+            child: MindYearHeatmapViewport(
+              frameListenable: frame,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+
+      BoxDecoration cardDecoration(int month) =>
+          tester
+                  .widget<DecoratedBox>(
+                    find.byKey(
+                      ValueKey<String>('mind-year-month-card-surface-$month'),
+                    ),
+                  )
+                  .decoration
+              as BoxDecoration;
+      final januaryPainter =
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(
+                      const ValueKey<String>('mind-year-heatmap-month-cells-1'),
+                    ),
+                  )
+                  .painter!
+              as MindYearHeatmapMonthPainter;
+      final januaryCellBefore = januaryPainter.colorForDate(
+        const LocalDate(year: 2025, month: 1, day: 3),
+      );
+
+      expect(cardDecoration(1).color, FluviVisualTokens.surface);
+      expect(cardDecoration(2).color, FluviVisualTokens.surface);
+      expect(cardDecoration(3).color, FluviVisualTokens.surface);
+
+      settings
+        ..setYearThreeColumnProfitabilityTintEnabled(true)
+        ..setYearThreeColumnProfitabilityTintOpacity(.30);
+      await tester.pump();
+
+      expect(
+        cardDecoration(1).color,
+        mindYearThreeColumnMonthCardBackground(
+          monthlyNetMinor: aggregates.netForMonth(1),
+          profitabilityTintEnabled: true,
+          tintOpacity: .30,
+        ),
+      );
+      expect(
+        cardDecoration(2).color,
+        mindYearThreeColumnMonthCardBackground(
+          monthlyNetMinor: aggregates.netForMonth(2),
+          profitabilityTintEnabled: true,
+          tintOpacity: .30,
+        ),
+      );
+      expect(cardDecoration(3).color, FluviVisualTokens.surface);
+      expect(cardDecoration(1).color, isNot(cardDecoration(2).color));
+      expect(cardDecoration(1).border, isNotNull);
+      expect(
+        (tester
+                    .widget<CustomPaint>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'mind-year-heatmap-month-cells-1',
+                        ),
+                      ),
+                    )
+                    .painter!
+                as MindYearHeatmapMonthPainter)
+            .colorForDate(const LocalDate(year: 2025, month: 1, day: 3)),
+        januaryCellBefore,
+        reason: 'Tint opacity cannot reach the day-cell palette authority.',
+      );
+      expect(frame.value.identity, projection.preview(range).identity);
+
+      settings.setYearThreeColumnProfitabilityTintEnabled(false);
+      await tester.pump();
+      expect(cardDecoration(1).color, FluviVisualTokens.surface);
+      expect(cardDecoration(2).color, FluviVisualTokens.surface);
     },
   );
 }

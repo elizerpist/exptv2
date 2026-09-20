@@ -360,6 +360,7 @@ final class _MindYearHeatmapViewportState
                                   showScopeAmount:
                                       _directGridLayout ==
                                       _MindYearDirectGridLayout.threeByFour,
+                                  showMonthCard: false,
                                   monthlyAggregates: _monthlyAggregates,
                                   scopedMonthlyAggregates:
                                       _scopedMonthlyAggregates,
@@ -433,6 +434,11 @@ final class _MindYearHeatmapViewportState
                           showScopeAmount:
                               _directGridLayout ==
                               _MindYearDirectGridLayout.threeByFour,
+                          showMonthCard: true,
+                          profitabilityTintEnabled: _presentationSettings
+                              .yearThreeColumnProfitabilityTintEnabled,
+                          profitabilityTintOpacity: _presentationSettings
+                              .yearThreeColumnProfitabilityTintOpacity,
                           monthlyAggregates: _monthlyAggregates,
                           scopedMonthlyAggregates: _scopedMonthlyAggregates,
                           inspectionScope: _inspectionScope,
@@ -957,6 +963,30 @@ final class _MindYearHeatmapFourColumnFit {
   }
 }
 
+/// Resolves only the 3×4 MonthCard surface paint.  Monthly closing semantics
+/// stay in [MindYearHeatmapMonthlyAggregates]; this function intentionally
+/// does not feed the heatmap painter, text, border, shadow or any value.
+@visibleForTesting
+Color mindYearThreeColumnMonthCardBackground({
+  required int? monthlyNetMinor,
+  required bool profitabilityTintEnabled,
+  required double tintOpacity,
+}) {
+  const neutral = FluviVisualTokens.surface;
+  if (!profitabilityTintEnabled ||
+      monthlyNetMinor == null ||
+      monthlyNetMinor == 0) {
+    return neutral;
+  }
+  final tint = monthlyNetMinor > 0
+      ? FluviVisualTokens.mindYearProfitabilityPositive
+      : FluviVisualTokens.mindYearProfitabilityNegative;
+  return Color.alphaBlend(
+    tint.withValues(alpha: tintOpacity.clamp(0.0, 1.0).toDouble()),
+    neutral,
+  );
+}
+
 /// A direct annual month group. Its title is static across amount-only
 /// previews; only the bounded day-tile field listens to the live frame.
 final class MindYearHeatmapMonthGroup extends StatelessWidget {
@@ -972,6 +1002,9 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.showMonthlyClosing = false,
     this.showScopeAmount = false,
+    this.showMonthCard = false,
+    this.profitabilityTintEnabled = false,
+    this.profitabilityTintOpacity = .16,
     this.monthlyAggregates,
     this.scopedMonthlyAggregates,
     this.inspectionScope = const MindYearHeatmapInspectionScope(),
@@ -1002,6 +1035,9 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
   final MindHeatmapScaleResolution scaleResolution;
   final bool showMonthlyClosing;
   final bool showScopeAmount;
+  final bool showMonthCard;
+  final bool profitabilityTintEnabled;
+  final double profitabilityTintOpacity;
   final MindYearHeatmapMonthlyAggregates? monthlyAggregates;
   final MindYearHeatmapScopedMonthlyAggregates? scopedMonthlyAggregates;
   final MindYearHeatmapInspectionScope inspectionScope;
@@ -1187,6 +1223,21 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         ],
       ),
     );
+    final surface = showMonthCard
+        ? DecoratedBox(
+            key: ValueKey<String>('mind-year-month-card-surface-$month'),
+            decoration: BoxDecoration(
+              color: mindYearThreeColumnMonthCardBackground(
+                monthlyNetMinor: monthlyAggregates?.netForMonth(month),
+                profitabilityTintEnabled: profitabilityTintEnabled,
+                tintOpacity: profitabilityTintOpacity,
+              ),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: FluviVisualTokens.border),
+            ),
+            child: heatmapContent,
+          )
+        : heatmapContent;
     return SizedBox(
       key: ValueKey<String>('mind-year-direct-month-$month'),
       width: width,
@@ -1201,7 +1252,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         readOnly: true,
         label:
             '${DashboardTimeLabelFormatter.monthName(month)} ${geometry.year}',
-        child: _contentFor(heatmapContent),
+        child: _contentFor(surface),
       ),
     );
   }

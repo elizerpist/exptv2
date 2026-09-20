@@ -18,6 +18,12 @@ abstract final class FluviVisualTokens {
   static const logBoxIncomeAmount = Color(0xFF0F766E);
   static const logBoxExpenseAmount = Color(0xFFB42318);
 
+  /// Semantic background sources for the optional Year 3×4 MonthCard result
+  /// tint.  The renderer alone controls their alpha over a neutral card;
+  /// heatmap day-cell palettes do not consume these tokens.
+  static const mindYearProfitabilityPositive = Color(0xFF16A34A);
+  static const mindYearProfitabilityNegative = Color(0xFFDC2626);
+
   /// Mind's annual heatmap uses the established application highlight family.
   /// The named endpoints ensure empty days and a numeric 0% non-empty day
   /// cannot collapse to the same visual state.

@@ -69,6 +69,8 @@ final class MindYearHeatmapPresentationSettings {
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
+    this.yearThreeColumnProfitabilityTintEnabled = false,
+    this.yearThreeColumnProfitabilityTintOpacity = .16,
   });
 
   const MindYearHeatmapPresentationSettings.defaults()
@@ -76,12 +78,19 @@ final class MindYearHeatmapPresentationSettings {
       scaleResolution = MindHeatmapScaleResolution.ten,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
+      yearThreeColumnProfitabilityTintEnabled = false,
+      yearThreeColumnProfitabilityTintOpacity = .16,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
+
+  /// 3×4 Year MonthCard background only. This never affects cell palette
+  /// inputs, financial data or the 4×3 presentation.
+  final bool yearThreeColumnProfitabilityTintEnabled;
+  final double yearThreeColumnProfitabilityTintOpacity;
   final int revision;
 
   MindYearHeatmapPresentationSettings copyWith({
@@ -89,6 +98,8 @@ final class MindYearHeatmapPresentationSettings {
     MindHeatmapScaleResolution? scaleResolution,
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
+    bool? yearThreeColumnProfitabilityTintEnabled,
+    double? yearThreeColumnProfitabilityTintOpacity,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
@@ -96,6 +107,12 @@ final class MindYearHeatmapPresentationSettings {
     sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
+    yearThreeColumnProfitabilityTintEnabled:
+        yearThreeColumnProfitabilityTintEnabled ??
+        this.yearThreeColumnProfitabilityTintEnabled,
+    yearThreeColumnProfitabilityTintOpacity:
+        yearThreeColumnProfitabilityTintOpacity ??
+        this.yearThreeColumnProfitabilityTintOpacity,
     revision: revision ?? this.revision,
   );
 
@@ -106,6 +123,10 @@ final class MindYearHeatmapPresentationSettings {
       other.scaleResolution == scaleResolution &&
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
+      other.yearThreeColumnProfitabilityTintEnabled ==
+          yearThreeColumnProfitabilityTintEnabled &&
+      other.yearThreeColumnProfitabilityTintOpacity ==
+          yearThreeColumnProfitabilityTintOpacity &&
       other.revision == revision;
 
   @override
@@ -114,6 +135,8 @@ final class MindYearHeatmapPresentationSettings {
     scaleResolution,
     sumYearRowLayout,
     sumMonthLabelPlacement,
+    yearThreeColumnProfitabilityTintEnabled,
+    yearThreeColumnProfitabilityTintOpacity,
     revision,
   );
 }
@@ -158,6 +181,25 @@ final class MindYearHeatmapPresentationController
     if (current.sumMonthLabelPlacement == placement) return;
     value = current.copyWith(
       sumMonthLabelPlacement: placement,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setYearThreeColumnProfitabilityTintEnabled(bool enabled) {
+    final current = value;
+    if (current.yearThreeColumnProfitabilityTintEnabled == enabled) return;
+    value = current.copyWith(
+      yearThreeColumnProfitabilityTintEnabled: enabled,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setYearThreeColumnProfitabilityTintOpacity(double opacity) {
+    final normalized = opacity.clamp(0.0, 1.0).toDouble();
+    final current = value;
+    if (current.yearThreeColumnProfitabilityTintOpacity == normalized) return;
+    value = current.copyWith(
+      yearThreeColumnProfitabilityTintOpacity: normalized,
       revision: current.revision + 1,
     );
   }

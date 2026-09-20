@@ -879,6 +879,33 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.scaleResolution, resolution);
     }
+    final profitabilityToggle = find.byKey(
+      const ValueKey<String>('mind-year-profitability-tint-enabled'),
+    );
+    await tester.ensureVisible(profitabilityToggle);
+    await tester.tap(profitabilityToggle);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.yearThreeColumnProfitabilityTintEnabled,
+      isTrue,
+    );
+    final profitabilityOpacity = find.byKey(
+      const ValueKey<String>('mind-year-profitability-tint-opacity'),
+    );
+    await tester.ensureVisible(profitabilityOpacity);
+    tester
+        .widget<Slider>(
+          find.descendant(
+            of: profitabilityOpacity,
+            matching: find.byType(Slider),
+          ),
+        )
+        .onChanged!(.38);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.yearThreeColumnProfitabilityTintOpacity,
+      closeTo(.38, .0001),
+    );
     expect(
       find.byKey(const ValueKey('mind-heatmap-legend-toggle')),
       findsNothing,

@@ -457,111 +457,144 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
   final MindYearHeatmapPresentationController controller;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
-        valueListenable: controller,
-        builder: (context, settings, _) => _TunerSection(
-          title: 'Mind hőtérkép',
-          children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text('Színezés'),
-            ),
-            RadioGroup<MindYearHeatmapPaletteStyle>(
-              groupValue: settings.paletteStyle,
-              onChanged: (style) {
-                if (style != null) controller.setPaletteStyle(style);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final style in MindYearHeatmapPaletteStyle.values)
-                    RadioListTile<MindYearHeatmapPaletteStyle>(
-                      key: ValueKey('mind-heatmap-palette-${style.name}'),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(style.tunerLabel),
-                      value: style,
-                    ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text('Színfelbontás'),
-            ),
-            RadioGroup<MindHeatmapScaleResolution>(
-              groupValue: settings.scaleResolution,
-              onChanged: (resolution) {
-                if (resolution != null) {
-                  controller.setScaleResolution(resolution);
-                }
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final resolution in MindHeatmapScaleResolution.values)
-                    RadioListTile<MindHeatmapScaleResolution>(
-                      key: ValueKey(
-                        'mind-heatmap-scale-resolution-${resolution.name}',
-                      ),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(resolution.tunerLabel),
-                      value: resolution,
-                    ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text('Sum évblokk'),
-            ),
-            RadioGroup<MindSumYearRowLayout>(
-              groupValue: settings.sumYearRowLayout,
-              onChanged: (layout) {
-                if (layout != null) controller.setSumYearRowLayout(layout);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final layout in MindSumYearRowLayout.values)
-                    RadioListTile<MindSumYearRowLayout>(
-                      key: ValueKey('mind-sum-row-layout-${layout.name}'),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(layout.tunerLabel),
-                      value: layout,
-                    ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text('Sum hónapjelölés'),
-            ),
-            RadioGroup<MindSumMonthLabelPlacement>(
-              groupValue: settings.sumMonthLabelPlacement,
-              onChanged: (placement) {
-                if (placement != null) {
-                  controller.setSumMonthLabelPlacement(placement);
-                }
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final placement in MindSumMonthLabelPlacement.values)
-                    RadioListTile<MindSumMonthLabelPlacement>(
-                      key: ValueKey(
-                        'mind-sum-month-label-placement-${placement.name}',
-                      ),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(placement.tunerLabel),
-                      value: placement,
-                    ),
-                ],
-              ),
-            ),
-          ],
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+    valueListenable: controller,
+    builder: (context, settings, _) => _TunerSection(
+      title: 'Mind hőtérkép',
+      children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Színezés'),
         ),
-      );
+        RadioGroup<MindYearHeatmapPaletteStyle>(
+          groupValue: settings.paletteStyle,
+          onChanged: (style) {
+            if (style != null) controller.setPaletteStyle(style);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final style in MindYearHeatmapPaletteStyle.values)
+                RadioListTile<MindYearHeatmapPaletteStyle>(
+                  key: ValueKey('mind-heatmap-palette-${style.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(style.tunerLabel),
+                  value: style,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Színfelbontás'),
+        ),
+        RadioGroup<MindHeatmapScaleResolution>(
+          groupValue: settings.scaleResolution,
+          onChanged: (resolution) {
+            if (resolution != null) {
+              controller.setScaleResolution(resolution);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final resolution in MindHeatmapScaleResolution.values)
+                RadioListTile<MindHeatmapScaleResolution>(
+                  key: ValueKey(
+                    'mind-heatmap-scale-resolution-${resolution.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(resolution.tunerLabel),
+                  value: resolution,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Sum évblokk'),
+        ),
+        RadioGroup<MindSumYearRowLayout>(
+          groupValue: settings.sumYearRowLayout,
+          onChanged: (layout) {
+            if (layout != null) controller.setSumYearRowLayout(layout);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final layout in MindSumYearRowLayout.values)
+                RadioListTile<MindSumYearRowLayout>(
+                  key: ValueKey('mind-sum-row-layout-${layout.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(layout.tunerLabel),
+                  value: layout,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Sum hónapjelölés'),
+        ),
+        RadioGroup<MindSumMonthLabelPlacement>(
+          groupValue: settings.sumMonthLabelPlacement,
+          onChanged: (placement) {
+            if (placement != null) {
+              controller.setSumMonthLabelPlacement(placement);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final placement in MindSumMonthLabelPlacement.values)
+                RadioListTile<MindSumMonthLabelPlacement>(
+                  key: ValueKey(
+                    'mind-sum-month-label-placement-${placement.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(placement.tunerLabel),
+                  value: placement,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('Éves 3×4 profitabilitás'),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('mind-year-profitability-tint-enabled'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Hónapkártya háttér'),
+          subtitle: const Text('Nyereség/zárás szerint'),
+          value: settings.yearThreeColumnProfitabilityTintEnabled,
+          onChanged: controller.setYearThreeColumnProfitabilityTintEnabled,
+        ),
+        Semantics(
+          label:
+              'Profitabilitás háttér erőssége ${(settings.yearThreeColumnProfitabilityTintOpacity * 100).round()}%',
+          child: Column(
+            key: const ValueKey<String>('mind-year-profitability-tint-opacity'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                'Háttér erőssége ${(settings.yearThreeColumnProfitabilityTintOpacity * 100).round()}%',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Slider(
+                value: settings.yearThreeColumnProfitabilityTintOpacity,
+                onChanged:
+                    controller.setYearThreeColumnProfitabilityTintOpacity,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 String _formatControlValue(double value, double step) {
