@@ -1774,3 +1774,9 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 ### Production-parent pinch assertion follow-up
 
 - Test-only commit `4221870f` strengthens `SUM-GEST-01`: the realistic noisy two-pointer sequence now proves the detail time-window changes as well as proving active local pinch ownership, unchanged expansion state, unchanged Sum surface and unchanged admitted frame. The source is unchanged by this test follow-up; Android recognizer cadence remains user-only evidence.
+
+## 2026-09-20 — Sum detail API boundary cleanup
+
+- Application commit `f311241b` completes the narrow static-analysis cleanup after the toggle-only, multi-touch and transaction-detail repair units. `MindSumHeatmapFrame` construction is now projection-internal, so the private prepared-detail representation cannot leak through a public constructor; the Sum viewport also removes the obsolete paged-boundary import after PageView removal. This does not change product behavior or introduce another data/gesture owner.
+- **Validation:** Ubuntu/proot focused Sum projection, detail-model, temporal viewport and production Mind-host command is PASS (**54 tests**); changed-Dart formatter and `git diff --check` are PASS; full Ubuntu/proot `flutter analyze --no-pub` is PASS (`No issues found!`, 129.5s).
+- The remaining work is final fast/boundary regression, CI/human APK, exact-source SCIP and Android revalidation. The screenshot still lacks a build marker, so its exact source identity remains missing evidence. Physical validation: `PENDING — USER ONLY`.
