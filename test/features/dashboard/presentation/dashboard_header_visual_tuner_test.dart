@@ -879,6 +879,15 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.scaleResolution, resolution);
     }
+    for (final count in MindSumVisibleChartCount.values) {
+      final density = find.byKey(
+        ValueKey('mind-sum-visible-chart-count-${count.name}'),
+      );
+      await tester.ensureVisible(density);
+      await tester.tap(density);
+      await tester.pump();
+      expect(heatmapSettings.value.sumVisibleChartCount, count);
+    }
     final profitabilityToggle = find.byKey(
       const ValueKey<String>('mind-year-profitability-tint-enabled'),
     );

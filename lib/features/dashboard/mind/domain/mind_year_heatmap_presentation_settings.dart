@@ -59,6 +59,18 @@ enum MindSumMonthLabelPlacement {
   };
 }
 
+/// The maximum number of annual Sum chart bands the presentation exposes at
+/// once. It changes only viewport density, never the admitted years or data.
+enum MindSumVisibleChartCount {
+  one,
+  two;
+
+  String get tunerLabel => switch (this) {
+    MindSumVisibleChartCount.one => '1 grafikon',
+    MindSumVisibleChartCount.two => '2 grafikon',
+  };
+}
+
 /// Immutable user preferences for visualizing an admitted annual heatmap.
 /// None of these values changes financial membership, Query state or score.
 @immutable
@@ -69,6 +81,7 @@ final class MindYearHeatmapPresentationSettings {
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
+    this.sumVisibleChartCount = MindSumVisibleChartCount.two,
     this.yearThreeColumnProfitabilityTintEnabled = false,
     this.yearThreeColumnProfitabilityTintOpacity = .16,
   });
@@ -78,6 +91,7 @@ final class MindYearHeatmapPresentationSettings {
       scaleResolution = MindHeatmapScaleResolution.ten,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
+      sumVisibleChartCount = MindSumVisibleChartCount.two,
       yearThreeColumnProfitabilityTintEnabled = false,
       yearThreeColumnProfitabilityTintOpacity = .16,
       revision = 0;
@@ -86,6 +100,7 @@ final class MindYearHeatmapPresentationSettings {
   final MindHeatmapScaleResolution scaleResolution;
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
+  final MindSumVisibleChartCount sumVisibleChartCount;
 
   /// 3×4 Year MonthCard background only. This never affects cell palette
   /// inputs, financial data or the 4×3 presentation.
@@ -98,6 +113,7 @@ final class MindYearHeatmapPresentationSettings {
     MindHeatmapScaleResolution? scaleResolution,
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
+    MindSumVisibleChartCount? sumVisibleChartCount,
     bool? yearThreeColumnProfitabilityTintEnabled,
     double? yearThreeColumnProfitabilityTintOpacity,
     int? revision,
@@ -107,6 +123,7 @@ final class MindYearHeatmapPresentationSettings {
     sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
+    sumVisibleChartCount: sumVisibleChartCount ?? this.sumVisibleChartCount,
     yearThreeColumnProfitabilityTintEnabled:
         yearThreeColumnProfitabilityTintEnabled ??
         this.yearThreeColumnProfitabilityTintEnabled,
@@ -123,6 +140,7 @@ final class MindYearHeatmapPresentationSettings {
       other.scaleResolution == scaleResolution &&
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
+      other.sumVisibleChartCount == sumVisibleChartCount &&
       other.yearThreeColumnProfitabilityTintEnabled ==
           yearThreeColumnProfitabilityTintEnabled &&
       other.yearThreeColumnProfitabilityTintOpacity ==
@@ -135,6 +153,7 @@ final class MindYearHeatmapPresentationSettings {
     scaleResolution,
     sumYearRowLayout,
     sumMonthLabelPlacement,
+    sumVisibleChartCount,
     yearThreeColumnProfitabilityTintEnabled,
     yearThreeColumnProfitabilityTintOpacity,
     revision,
@@ -181,6 +200,15 @@ final class MindYearHeatmapPresentationController
     if (current.sumMonthLabelPlacement == placement) return;
     value = current.copyWith(
       sumMonthLabelPlacement: placement,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumVisibleChartCount(MindSumVisibleChartCount count) {
+    final current = value;
+    if (current.sumVisibleChartCount == count) return;
+    value = current.copyWith(
+      sumVisibleChartCount: count,
       revision: current.revision + 1,
     );
   }

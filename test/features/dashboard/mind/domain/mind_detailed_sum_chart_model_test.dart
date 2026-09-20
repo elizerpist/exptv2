@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_detailed_sum_chart_model.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
@@ -208,6 +209,100 @@ void main() {
             'At a fixed zoom level, a pan may crop or translate the '
             'line but may not re-bucket the overlapping financial anchors.',
       );
+    },
+  );
+
+  test(
+    'SUM-PAN-EDGE-01 RED: paint continuity keeps real neighbour anchors without making them inspectable',
+    () {
+      final home = MindDetailedSumTimeWindow.fullYear(2027);
+      final window = home.zoomAtMinute(
+        scaleDelta: home.homeMinuteCount / (12 * 1440),
+        focalEpochMinute: home.homeStartEpochMinute + 180 * 1440,
+      );
+      final leftNeighbour = MindSumHeatmapDetailPoint(
+        epochMinute: window.startEpochMinute - 120,
+        total: 90,
+        ordinal: 1,
+      );
+      final firstVisible = MindSumHeatmapDetailPoint(
+        epochMinute: window.startEpochMinute + 120,
+        total: 100,
+        ordinal: 2,
+      );
+      final lastVisible = MindSumHeatmapDetailPoint(
+        epochMinute: window.endEpochMinute - 120,
+        total: 300,
+        ordinal: 3,
+      );
+      final rightNeighbour = MindSumHeatmapDetailPoint(
+        epochMinute: window.endEpochMinute + 120,
+        total: 80,
+        ordinal: 4,
+      );
+
+      final selection = MindDetailedSumLod.select(
+        points: <MindSumHeatmapDetailPoint>[
+          leftNeighbour,
+          firstVisible,
+          lastVisible,
+          rightNeighbour,
+        ],
+        window: window,
+        pixelWidth: 280,
+      );
+
+      expect(selection.inspectablePoints, <MindSumHeatmapDetailPoint>[
+        firstVisible,
+        lastVisible,
+      ]);
+      expect(selection.paintPoints, <MindSumHeatmapDetailPoint>[
+        leftNeighbour,
+        firstVisible,
+        lastVisible,
+        rightNeighbour,
+      ]);
+      expect(selection.hasLeftPaintContinuation, isTrue);
+      expect(selection.hasRightPaintContinuation, isTrue);
+      expect(
+        selection.paintPoints.where(
+          (point) =>
+              point.epochMinute < window.startEpochMinute ||
+              point.epochMinute > window.endEpochMinute,
+        ),
+        isNotEmpty,
+        reason:
+            'The real outside anchors are painter context only, not fake '
+            'in-window financial observations.',
+      );
+    },
+  );
+
+  test(
+    'SUM-DENSITY-GEOMETRY: one pure resolver shares the one/two-band viewport contract',
+    () {
+      final two = MindSumChartDensityGeometry.resolve(
+        availableHeight: 260,
+        yearCount: 3,
+        preference: MindSumVisibleChartCount.two,
+      );
+      final one = MindSumChartDensityGeometry.resolve(
+        availableHeight: 260,
+        yearCount: 3,
+        preference: MindSumVisibleChartCount.one,
+      );
+      final singleYear = MindSumChartDensityGeometry.resolve(
+        availableHeight: 260,
+        yearCount: 1,
+        preference: MindSumVisibleChartCount.two,
+      );
+
+      expect(two.visibleBandCount, 2);
+      expect(two.bandHeight, closeTo(126, .001));
+      expect(one.visibleBandCount, 1);
+      expect(one.bandHeight, 260);
+      expect(singleYear.visibleBandCount, 1);
+      expect(singleYear.bandHeight, 260);
     },
   );
 }

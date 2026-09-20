@@ -1537,6 +1537,7 @@ void main() {
   testWidgets(
     'XR-SUM-03 RED: horizontal pan keeps the detailed yearly Y domain stable',
     (tester) async {
+      FluviDiagnosticLogger.clear();
       final frame = MindSumHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
           upstreamScopeKey: 'expense|all',
@@ -1609,6 +1610,19 @@ void main() {
             'horizontal pan alone must not vertically re-normalize the same '
             'admitted year.',
       );
+      final panSnapshot = FluviDiagnosticLogger.entries.lastWhere(
+        (event) =>
+            event.stage == 'MIND_SUM|BAND_SNAPSHOT' &&
+            (event.scope?.contains('reason=PAN_END year=2025') ?? false),
+      );
+      expect(panSnapshot.scope, contains('sourcePoints='));
+      expect(panSnapshot.scope, contains('visibleSourcePoints='));
+      expect(panSnapshot.scope, contains('anchors='));
+      expect(panSnapshot.scope, contains('paintAnchors='));
+      expect(panSnapshot.scope, contains('bucketMinutes='));
+      expect(panSnapshot.scope, contains('stableYMaximum='));
+      expect(panSnapshot.scope, contains('anchorDigest='));
+      expect(panSnapshot.scope, contains('leftPaintContinuation='));
     },
   );
 
@@ -1708,6 +1722,22 @@ void main() {
         isTrue,
         reason: 'The debug console records the live shared-pinch path.',
       );
+      final bandSnapshots = FluviDiagnosticLogger.entries
+          .where(
+            (event) =>
+                event.stage == 'MIND_SUM|BAND_SNAPSHOT' &&
+                (event.scope?.contains('reason=SCALE_END') ?? false),
+          )
+          .toList(growable: false);
+      expect(bandSnapshots, hasLength(4));
+      for (final snapshot in bandSnapshots) {
+        expect(snapshot.scope, contains('visibleSourcePoints='));
+        expect(snapshot.scope, contains('bucketMinutes='));
+        expect(snapshot.scope, contains('stableYMaximum='));
+        expect(snapshot.scope, contains('anchorDigest='));
+        expect(snapshot.scope, contains('leftNeighbours='));
+        expect(snapshot.scope, contains('leftPaintContinuation='));
+      }
     },
   );
 
@@ -1835,8 +1865,14 @@ void main() {
       final threeYearHeight = await mountAndMeasure(<int>[2024, 2025, 2026]);
 
       expect(oneYearHeight, greaterThan(twoYearHeight));
-      expect(twoYearHeight, greaterThanOrEqualTo(118));
-      expect(threeYearHeight, closeTo(118, .1));
+      expect(twoYearHeight, greaterThan(1));
+      expect(
+        threeYearHeight,
+        closeTo(twoYearHeight, .1),
+        reason:
+            'The default two-band density keeps every additional year at the '
+            'same complete-band height and reaches it through vertical scroll.',
+      );
       expect(
         find.byKey(const ValueKey('mind-sum-detailed-scroll')),
         findsOneWidget,
@@ -1888,6 +1924,194 @@ void main() {
       );
       expect(secondBand.bottom, lessThanOrEqualTo(viewport.bottom + .01));
       expect(secondAxis.bottom, lessThanOrEqualTo(secondBand.bottom + .01));
+    },
+  );
+
+  testWidgets(
+    'SUM-DENSITY-01/02 RED: one presentation preference sizes detailed and overlay yearly bands without changing the Sum frame',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          for (final year in <int>[2024, 2025, 2026])
+            for (var month = 1; month <= 12; month += 1)
+              _entry(
+                year * 100 + month,
+                100 + month,
+                LocalDate(year: year, month: month, day: 15),
+              ),
+        ],
+      ).preview(range);
+      final frameListenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = MindYearHeatmapPresentationController();
+      addTearDown(frameListenable.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindSumHeatmapViewport(
+                frameListenable: frameListenable,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-surface')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pumpAndSettle();
+      final detailedScroll = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+      );
+      final detailed2024 = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2024')),
+      );
+      final detailed2025 = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2025')),
+      );
+      expect(detailed2024.height, closeTo((detailedScroll.height - 8) / 2, .1));
+      expect(
+        detailed2025.bottom,
+        lessThanOrEqualTo(detailedScroll.bottom + .1),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2026')),
+        findsNothing,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2026')),
+        findsOneWidget,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        const Offset(0, 300),
+      );
+      await tester.pumpAndSettle();
+
+      settings.setSumVisibleChartCount(MindSumVisibleChartCount.one);
+      await tester.pumpAndSettle();
+      final oneDetailed2024 = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2024')),
+      );
+      expect(oneDetailed2024.height, closeTo(detailedScroll.height, .1));
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2025')),
+        findsNothing,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-band-2025')),
+        findsOneWidget,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-scroll')),
+        const Offset(0, 300),
+      );
+      await tester.pumpAndSettle();
+
+      settings.setSumVisibleChartCount(MindSumVisibleChartCount.two);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-bars')),
+      );
+      await tester.pumpAndSettle();
+      final overlayScroll = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-monthly-overlay-scroll')),
+      );
+      final overlay2024 = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2024'),
+        ),
+      );
+      final overlay2025 = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2025'),
+        ),
+      );
+      expect(overlay2024.height, closeTo((overlayScroll.height - 13) / 2, .1));
+      expect(overlay2025.bottom, lessThanOrEqualTo(overlayScroll.bottom + .1));
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2026'),
+        ),
+        findsNothing,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-monthly-overlay-scroll')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2026'),
+        ),
+        findsOneWidget,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-monthly-overlay-scroll')),
+        const Offset(0, 300),
+      );
+      await tester.pumpAndSettle();
+
+      settings.setSumVisibleChartCount(MindSumVisibleChartCount.one);
+      await tester.pumpAndSettle();
+      final oneOverlay2024 = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2024'),
+        ),
+      );
+      expect(oneOverlay2024.height, closeTo(overlayScroll.height - 5, .1));
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2025'),
+        ),
+        findsNothing,
+      );
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-monthly-overlay-scroll')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-band-2025'),
+        ),
+        findsOneWidget,
+      );
+      expect(identical(frameListenable.value, frame), isTrue);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-heatmap')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-surface')),
+        findsOneWidget,
+        reason: 'The density choice is ignored by the Sum heatmap surface.',
+      );
+      expect(identical(frameListenable.value, frame), isTrue);
     },
   );
 }

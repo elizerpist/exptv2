@@ -2,8 +2,46 @@ import 'dart:math' as math;
 
 import '../../time_navigation/domain/local_date.dart';
 import 'mind_temporal_heatmap_projection.dart';
+import 'mind_year_heatmap_presentation_settings.dart';
 
 const _minutesPerDay = 24 * 60;
+
+/// One shared layout calculation for the two Sum annual-band chart renderers.
+/// It owns presentation density only: every year stays in the ListView and
+/// the current immutable financial frame remains untouched.
+final class MindSumChartDensityGeometry {
+  const MindSumChartDensityGeometry._({
+    required this.bandHeight,
+    required this.visibleBandCount,
+    required this.interBandGap,
+  });
+
+  static const defaultInterBandGap = 8.0;
+
+  final double bandHeight;
+  final int visibleBandCount;
+  final double interBandGap;
+
+  static MindSumChartDensityGeometry resolve({
+    required double availableHeight,
+    required int yearCount,
+    required MindSumVisibleChartCount preference,
+  }) {
+    final visibleBandCount = yearCount <= 0
+        ? 1
+        : math.min(
+            yearCount,
+            preference == MindSumVisibleChartCount.one ? 1 : 2,
+          );
+    final safeHeight = math.max(1.0, availableHeight);
+    final totalGap = defaultInterBandGap * math.max(0, visibleBandCount - 1);
+    return MindSumChartDensityGeometry._(
+      bandHeight: math.max(1.0, (safeHeight - totalGap) / visibleBandCount),
+      visibleBandCount: visibleBandCount,
+      interBandGap: defaultInterBandGap,
+    );
+  }
+}
 
 /// An immutable visible minute interval inside one calendar year's detailed
 /// Sum chart. The home domain is always January through December; pinch zoom
@@ -234,6 +272,27 @@ final class MindDetailedSumNormalizedViewport {
 /// instead of one bin per logical pixel. As visible time narrows the budget
 /// rises continuously; at a one-day-or-less window every supplied prepared
 /// transaction remains individually representable.
+final class MindDetailedSumLodSelection {
+  const MindDetailedSumLodSelection({
+    required this.inspectablePoints,
+    required this.paintPoints,
+    required this.bucketSpanMinutes,
+    required this.hasLeftPaintContinuation,
+    required this.hasRightPaintContinuation,
+  });
+
+  /// Real selected anchors inside the visible domain. These are the only
+  /// anchors that tap inspection may choose.
+  final List<MindSumHeatmapDetailPoint> inspectablePoints;
+
+  /// [inspectablePoints] plus at most one real source neighbour on each side
+  /// when a visible path needs clipping continuity at the plot boundary.
+  final List<MindSumHeatmapDetailPoint> paintPoints;
+  final int bucketSpanMinutes;
+  final bool hasLeftPaintContinuation;
+  final bool hasRightPaintContinuation;
+}
+
 final class MindDetailedSumLod {
   const MindDetailedSumLod._();
 
@@ -249,84 +308,137 @@ final class MindDetailedSumLod {
     required List<MindSumHeatmapDetailPoint> points,
     required MindDetailedSumTimeWindow window,
     required double pixelWidth,
+  }) => select(
+    points: points,
+    window: window,
+    pixelWidth: pixelWidth,
+  ).inspectablePoints;
+
+  /// Resolves the truthful selectable LOD anchors and the separate clipped
+  /// paint context. The latter prevents a real segment just outside the
+  /// viewport from disappearing at a crop edge while keeping that outside
+  /// source observation unavailable to tap inspection.
+  static MindDetailedSumLodSelection select({
+    required List<MindSumHeatmapDetailPoint> points,
+    required MindDetailedSumTimeWindow window,
+    required double pixelWidth,
   }) {
-    final visible =
-        points
-            .where(
-              (point) =>
-                  point.epochMinute >= window.startEpochMinute &&
-                  point.epochMinute <= window.endEpochMinute,
-            )
-            .toList(growable: false)
-          ..sort((left, right) {
-            final byTime = left.epochMinute.compareTo(right.epochMinute);
-            return byTime != 0
-                ? byTime
-                : (left.ordinal ?? -1).compareTo(right.ordinal ?? -1);
-          });
-    if (visible.length <= 2 || window.visibleMinuteCount <= _minutesPerDay) {
-      return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
-    }
-
-    final binCount = _visibleBinCount(window: window, pixelWidth: pixelWidth);
-    if (visible.length <= binCount) {
-      return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
-    }
-
-    final selectedIndices = <int>{};
-    final buckets = <int, List<int>>{};
+    final ordered = _ordered(points);
+    final visible = ordered
+        .where(
+          (point) =>
+              point.epochMinute >= window.startEpochMinute &&
+              point.epochMinute <= window.endEpochMinute,
+        )
+        .toList(growable: false);
     final bucketSpan = _bucketSpanMinutes(
       window: window,
       pixelWidth: pixelWidth,
     );
-    // Deliberately anchor the grid at the calendar-year home domain, never at
-    // the current viewport edge. At fixed zoom an overlapping interval is
-    // therefore sampled by the same immutable buckets after a horizontal pan.
-    final paddedStart = window.startEpochMinute - bucketSpan;
-    final paddedEnd = window.endEpochMinute + bucketSpan;
-    for (var index = 0; index < points.length; index += 1) {
-      final point = points[index];
-      if (point.epochMinute < paddedStart || point.epochMinute > paddedEnd) {
-        continue;
-      }
-      final bucket =
-          ((point.epochMinute - window.homeStartEpochMinute) / bucketSpan)
-              .floor();
-      buckets.putIfAbsent(bucket, () => <int>[]).add(index);
-    }
-    for (final indices in buckets.values) {
-      selectedIndices.add(indices.first);
-      selectedIndices.add(indices.last);
-      var minimum = indices.first;
-      var maximum = indices.first;
-      for (final index in indices.skip(1)) {
-        if (points[index].total < points[minimum].total) minimum = index;
-        if (points[index].total > points[maximum].total) maximum = index;
-      }
-      selectedIndices
-        ..add(minimum)
-        ..add(maximum);
-    }
-    final ordered = selectedIndices.toList()
-      ..sort((left, right) {
-        final byTime = points[left].epochMinute.compareTo(
-          points[right].epochMinute,
+    final inspectable = <MindSumHeatmapDetailPoint>[];
+    if (visible.length <= 2 || window.visibleMinuteCount <= _minutesPerDay) {
+      inspectable.addAll(visible);
+    } else {
+      final binCount = _visibleBinCount(window: window, pixelWidth: pixelWidth);
+      if (visible.length <= binCount) {
+        inspectable.addAll(visible);
+      } else {
+        final selectedIndices = <int>{};
+        final buckets = <int, List<int>>{};
+        // Deliberately anchor the grid at the calendar-year home domain,
+        // never at the current viewport edge. At fixed zoom an overlapping
+        // interval is therefore sampled by the same immutable buckets after a
+        // horizontal pan.
+        final paddedStart = window.startEpochMinute - bucketSpan;
+        final paddedEnd = window.endEpochMinute + bucketSpan;
+        for (var index = 0; index < ordered.length; index += 1) {
+          final point = ordered[index];
+          if (point.epochMinute < paddedStart ||
+              point.epochMinute > paddedEnd) {
+            continue;
+          }
+          final bucket =
+              ((point.epochMinute - window.homeStartEpochMinute) / bucketSpan)
+                  .floor();
+          buckets.putIfAbsent(bucket, () => <int>[]).add(index);
+        }
+        for (final indices in buckets.values) {
+          selectedIndices.add(indices.first);
+          selectedIndices.add(indices.last);
+          var minimum = indices.first;
+          var maximum = indices.first;
+          for (final index in indices.skip(1)) {
+            if (ordered[index].total < ordered[minimum].total) minimum = index;
+            if (ordered[index].total > ordered[maximum].total) maximum = index;
+          }
+          selectedIndices
+            ..add(minimum)
+            ..add(maximum);
+        }
+        inspectable.addAll(
+          selectedIndices
+              .map((index) => ordered[index])
+              .where(
+                (point) =>
+                    point.epochMinute >= window.startEpochMinute &&
+                    point.epochMinute <= window.endEpochMinute,
+              ),
         );
-        return byTime != 0
-            ? byTime
-            : (points[left].ordinal ?? -1).compareTo(
-                points[right].ordinal ?? -1,
-              );
-      });
-    return List<MindSumHeatmapDetailPoint>.unmodifiable(
-      ordered
-          .map((index) => points[index])
-          .where(
-            (point) =>
-                point.epochMinute >= window.startEpochMinute &&
-                point.epochMinute <= window.endEpochMinute,
-          ),
+        inspectable.sort(_comparePoints);
+      }
+    }
+
+    final before = inspectable.isEmpty
+        ? null
+        : _nearestBefore(ordered, window.startEpochMinute);
+    final after = inspectable.isEmpty
+        ? null
+        : _nearestAfter(ordered, window.endEpochMinute);
+    final paint = <MindSumHeatmapDetailPoint>[?before, ...inspectable, ?after];
+    return MindDetailedSumLodSelection(
+      inspectablePoints: List<MindSumHeatmapDetailPoint>.unmodifiable(
+        inspectable,
+      ),
+      paintPoints: List<MindSumHeatmapDetailPoint>.unmodifiable(paint),
+      bucketSpanMinutes: bucketSpan,
+      hasLeftPaintContinuation: before != null,
+      hasRightPaintContinuation: after != null,
     );
+  }
+
+  static List<MindSumHeatmapDetailPoint> _ordered(
+    List<MindSumHeatmapDetailPoint> points,
+  ) => List<MindSumHeatmapDetailPoint>.of(points)..sort(_comparePoints);
+
+  static int _comparePoints(
+    MindSumHeatmapDetailPoint left,
+    MindSumHeatmapDetailPoint right,
+  ) {
+    final byTime = left.epochMinute.compareTo(right.epochMinute);
+    return byTime != 0
+        ? byTime
+        : (left.ordinal ?? -1).compareTo(right.ordinal ?? -1);
+  }
+
+  static MindSumHeatmapDetailPoint? _nearestBefore(
+    List<MindSumHeatmapDetailPoint> ordered,
+    int exclusiveMinute,
+  ) {
+    for (var index = ordered.length - 1; index >= 0; index -= 1) {
+      final point = ordered[index];
+      if (point.epochMinute < exclusiveMinute) return point;
+    }
+    return null;
+  }
+
+  static MindSumHeatmapDetailPoint? _nearestAfter(
+    List<MindSumHeatmapDetailPoint> ordered,
+    int exclusiveMinute,
+  ) {
+    for (final point in ordered) {
+      if (point.epochMinute > exclusiveMinute) return point;
+    }
+    return null;
   }
 
   static int _visibleBinCount({

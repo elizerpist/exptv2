@@ -151,6 +151,35 @@ void main() {
     );
 
     test(
+      'SUM-DENSITY-SETTINGS RED: visible Sum yearly chart count defaults to two and stays presentation-only',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.sumVisibleChartCount,
+          MindSumVisibleChartCount.two,
+        );
+        expect(controller.value.revision, 0);
+
+        controller.setSumVisibleChartCount(MindSumVisibleChartCount.one);
+        expect(
+          controller.value.sumVisibleChartCount,
+          MindSumVisibleChartCount.one,
+        );
+        expect(controller.value.revision, 1);
+
+        controller.setSumVisibleChartCount(MindSumVisibleChartCount.one);
+        expect(
+          controller.value.revision,
+          1,
+          reason:
+              'A repeated visual preference writes neither Query nor frame.',
+        );
+      },
+    );
+
+    test(
       'YEAR-PROFIT-SETTINGS RED: the 3x4 MonthCard tint preferences are revisioned presentation-only values',
       () {
         final controller = MindYearHeatmapPresentationController();

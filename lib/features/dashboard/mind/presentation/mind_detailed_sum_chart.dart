@@ -13,6 +13,7 @@ import '../../time_navigation/domain/local_date.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_detailed_sum_chart_model.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
+import '../domain/mind_year_heatmap_presentation_settings.dart';
 import 'mind_anchored_info_card.dart';
 
 const _detailMinutesPerDay = 24 * 60;
@@ -26,14 +27,14 @@ final class MindDetailedSumChart extends StatefulWidget {
     required this.frame,
     required this.lineColor,
     required this.scrollController,
+    this.visibleChartCount = MindSumVisibleChartCount.two,
     this.upperVerticalGestures,
   });
-
-  static const _minimumTwoYearBandHeight = 118.0;
 
   final MindSumHeatmapFrame frame;
   final Color lineColor;
   final ScrollController scrollController;
+  final MindSumVisibleChartCount visibleChartCount;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -155,6 +156,7 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
       'mode=detailed owner=parent pointers=${_activePointers.length} '
           '${_viewportScope(plotWidth: _parentPlotWidth)}',
     );
+    _logBandDiagnostics(reason: 'SCALE_END');
   }
 
   (Offset, Offset)? get _pointerPair {
@@ -182,6 +184,80 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
       'PAN',
       'mode=detailed deltaX=${deltaX.toStringAsFixed(1)} ${_viewportScope()}',
     );
+  }
+
+  void _logBandDiagnostics({required String reason}) {
+    for (final year in widget.frame.years) {
+      final window = _viewport.windowForYear(year);
+      final source = _detailSourceForWindow(
+        frame: widget.frame,
+        year: year,
+        window: window,
+        plotWidth: _parentPlotWidth,
+      );
+      final selection = MindDetailedSumLod.select(
+        points: source,
+        window: window,
+        pixelWidth: _parentPlotWidth,
+      );
+      final stableDomain = _stableYearDomain(frame: widget.frame, year: year);
+      final visibleSourceCount = source
+          .where(
+            (point) =>
+                point.epochMinute >= window.startEpochMinute &&
+                point.epochMinute <= window.endEpochMinute,
+          )
+          .length;
+      final leftNeighbours = source
+          .where((point) => point.epochMinute < window.startEpochMinute)
+          .length;
+      final rightNeighbours = source
+          .where((point) => point.epochMinute > window.endEpochMinute)
+          .length;
+      final maximum = math.max(
+        1,
+        stableDomain.fold<int>(
+          0,
+          (value, point) => math.max(value, point.total),
+        ),
+      );
+      final first = selection.inspectablePoints.firstOrNull;
+      final last = selection.inspectablePoints.lastOrNull;
+      _log(
+        'BAND_SNAPSHOT',
+        'reason=$reason year=$year '
+            'viewportStart=${_viewport.startFraction.toStringAsFixed(5)} '
+            'viewportSpan=${_viewport.visibleFraction.toStringAsFixed(5)} '
+            'startEpochDay=${window.startEpochDay} endEpochDay=${window.endEpochDay} '
+            'sourcePoints=${source.length} visibleSourcePoints=$visibleSourceCount '
+            'anchors=${selection.inspectablePoints.length} '
+            'paintAnchors=${selection.paintPoints.length} '
+            'bucketMinutes=${selection.bucketSpanMinutes} stableYMaximum=$maximum '
+            'first=${_pointSummary(first)} last=${_pointSummary(last)} '
+            'anchorDigest=${_anchorDigest(selection.inspectablePoints)} '
+            'leftNeighbours=$leftNeighbours rightNeighbours=$rightNeighbours '
+            'leftPaintContinuation=${selection.hasLeftPaintContinuation} '
+            'rightPaintContinuation=${selection.hasRightPaintContinuation}',
+      );
+    }
+  }
+
+  String _pointSummary(MindSumHeatmapDetailPoint? point) => point == null
+      ? '-'
+      : '${point.epochMinute}/${point.total}/${point.ordinal ?? '-'}';
+
+  String _anchorDigest(Iterable<MindSumHeatmapDetailPoint> points) {
+    var digest = 0x811c9dc5;
+    for (final point in points) {
+      for (final value in <int>[
+        point.epochMinute,
+        point.total,
+        point.ordinal ?? -1,
+      ]) {
+        digest = ((digest ^ value) * 0x01000193) & 0x7fffffff;
+      }
+    }
+    return digest.toRadixString(16);
   }
 
   void _onPointSelected(int year, MindSumHeatmapDetailPoint? point) {
@@ -231,23 +307,12 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
       final years = widget.frame.years;
       final availableHeight = constraints.maxHeight.isFinite
           ? constraints.maxHeight
-          : MindDetailedSumChart._minimumTwoYearBandHeight * 2;
-      final bandHeight = switch (years.length) {
-        0 => MindDetailedSumChart._minimumTwoYearBandHeight,
-        1 => math.max(
-          MindDetailedSumChart._minimumTwoYearBandHeight,
-          availableHeight,
-        ),
-        2 =>
-          availableHeight >=
-                  MindDetailedSumChart._minimumTwoYearBandHeight * 2 + 8
-              ? math.max(
-                  MindDetailedSumChart._minimumTwoYearBandHeight,
-                  (availableHeight - 8) / 2,
-                )
-              : math.max(1.0, (availableHeight - 8) / 2),
-        _ => MindDetailedSumChart._minimumTwoYearBandHeight,
-      };
+          : 236.0;
+      final density = MindSumChartDensityGeometry.resolve(
+        availableHeight: availableHeight,
+        yearCount: years.length,
+        preference: widget.visibleChartCount,
+      );
       return Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: _trackPointerDown,
@@ -268,11 +333,12 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
                   : const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.zero,
               itemCount: years.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) =>
+                  SizedBox(height: density.interBandGap),
               itemBuilder: (context, index) {
                 final year = years[index];
                 return SizedBox(
-                  height: bandHeight,
+                  height: density.bandHeight,
                   child: _MindDetailedSumYearBand(
                     key: ValueKey<String>('mind-sum-detailed-band-$year'),
                     year: year,
@@ -281,6 +347,7 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
                     viewport: _viewport,
                     pinchActive: _pinchActive,
                     onPanBy: _panBy,
+                    onPanEnd: () => _logBandDiagnostics(reason: 'PAN_END'),
                     onPointSelected: _onPointSelected,
                   ),
                 );
@@ -346,6 +413,7 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
     required this.viewport,
     required this.pinchActive,
     required this.onPanBy,
+    required this.onPanEnd,
     required this.onPointSelected,
   });
 
@@ -355,6 +423,7 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
   final MindDetailedSumNormalizedViewport viewport;
   final ValueListenable<bool> pinchActive;
   final void Function(double deltaX, double plotWidth) onPanBy;
+  final VoidCallback onPanEnd;
   final void Function(int year, MindSumHeatmapDetailPoint? point)
   onPointSelected;
 
@@ -436,11 +505,12 @@ final class _MindDetailedSumYearBandState
         window: _window,
         plotWidth: plotWidth,
       );
-      final lod = MindDetailedSumLod.sample(
+      final selection = MindDetailedSumLod.select(
         points: source,
         window: _window,
         pixelWidth: plotWidth,
       );
+      final lod = selection.inspectablePoints;
       final maximum = math.max(
         1,
         _stableYearDomain(
@@ -459,7 +529,7 @@ final class _MindDetailedSumYearBandState
         child: CustomPaint(
           key: ValueKey<String>('mind-sum-detailed-plot-${widget.year}'),
           painter: _MindDetailedSumPainter(
-            points: lod,
+            points: selection.paintPoints,
             window: _window,
             lineColor: widget.lineColor,
             axisLeft: axisLeft,
@@ -498,6 +568,13 @@ final class _MindDetailedSumYearBandState
                     ),
                     Semantics(
                       key: ValueKey<String>(
+                        'mind-sum-detailed-paint-anchor-count-${widget.year}',
+                      ),
+                      label: '${selection.paintPoints.length}',
+                      child: const SizedBox(width: 0, height: 0),
+                    ),
+                    Semantics(
+                      key: ValueKey<String>(
                         'mind-sum-detailed-anchor-count-${widget.year}',
                       ),
                       label: '${lod.length}',
@@ -523,6 +600,7 @@ final class _MindDetailedSumYearBandState
                               behavior: HitTestBehavior.opaque,
                               onHorizontalDragUpdate: (details) =>
                                   _panBy(details, plotWidth),
+                              onHorizontalDragEnd: (_) => widget.onPanEnd(),
                               child: chart,
                             )
                           : chart,
@@ -702,9 +780,9 @@ final class _MindDetailedSumPainter extends CustomPainter {
     }
     if (points.isEmpty) return;
     Offset pointAt(MindSumHeatmapDetailPoint point) {
-      final fraction = window.normalizedPositionOfEpochMinute(
-        point.epochMinute,
-      );
+      final fraction =
+          (point.epochMinute - window.startEpochMinute) /
+          math.max(1, window.visibleMinuteCount - 1);
       final intensity = (point.total / maximum).clamp(0.0, 1.0).toDouble();
       return Offset(
         plot.left + plot.width * fraction,
@@ -721,6 +799,8 @@ final class _MindDetailedSumPainter extends CustomPainter {
       ..lineTo(offsets.last.dx, plot.bottom)
       ..lineTo(offsets.first.dx, plot.bottom)
       ..close();
+    canvas.save();
+    canvas.clipRect(plot);
     canvas.drawPath(
       fill,
       Paint()
@@ -746,6 +826,7 @@ final class _MindDetailedSumPainter extends CustomPainter {
     for (final offset in offsets) {
       canvas.drawCircle(offset, 1.5, marker);
     }
+    canvas.restore();
   }
 
   @override

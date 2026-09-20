@@ -561,6 +561,28 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
           ),
         ),
         const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Sum grafikonok egyszerre'),
+        ),
+        RadioGroup<MindSumVisibleChartCount>(
+          groupValue: settings.sumVisibleChartCount,
+          onChanged: (count) {
+            if (count != null) controller.setSumVisibleChartCount(count);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final count in MindSumVisibleChartCount.values)
+                RadioListTile<MindSumVisibleChartCount>(
+                  key: ValueKey('mind-sum-visible-chart-count-${count.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(count.tunerLabel),
+                  value: count,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
           padding: EdgeInsets.only(top: 8),
           child: Text('Éves 3×4 profitabilitás'),
         ),

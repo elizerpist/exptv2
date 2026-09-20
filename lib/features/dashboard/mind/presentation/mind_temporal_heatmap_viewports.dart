@@ -12,6 +12,7 @@ import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/domain/year_month.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_frame.dart';
+import '../domain/mind_detailed_sum_chart_model.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_monthly_overlay_series.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
@@ -67,6 +68,9 @@ final class MindSumHeatmapViewport extends StatelessWidget {
             sumMonthLabelPlacement:
                 presentationSettings?.value.sumMonthLabelPlacement ??
                 MindSumMonthLabelPlacement.none,
+            sumVisibleChartCount:
+                presentationSettings?.value.sumVisibleChartCount ??
+                MindSumVisibleChartCount.two,
             upperVerticalGestures: upperVerticalGestures,
           );
           final settings = presentationSettings;
@@ -79,6 +83,7 @@ final class MindSumHeatmapViewport extends StatelessWidget {
               scaleResolution: value.scaleResolution,
               sumYearRowLayout: value.sumYearRowLayout,
               sumMonthLabelPlacement: value.sumMonthLabelPlacement,
+              sumVisibleChartCount: value.sumVisibleChartCount,
               upperVerticalGestures: upperVerticalGestures,
             ),
           );
@@ -93,6 +98,7 @@ final class _MindSumHeatmapContent extends StatefulWidget {
     required this.scaleResolution,
     required this.sumYearRowLayout,
     required this.sumMonthLabelPlacement,
+    required this.sumVisibleChartCount,
     this.upperVerticalGestures,
   });
 
@@ -101,6 +107,7 @@ final class _MindSumHeatmapContent extends StatefulWidget {
   final MindHeatmapScaleResolution scaleResolution;
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
+  final MindSumVisibleChartCount sumVisibleChartCount;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -275,6 +282,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                 paletteStyle: widget.paletteStyle,
                 scaleResolution: widget.scaleResolution,
                 scrollController: _lineScrollController,
+                visibleChartCount: widget.sumVisibleChartCount,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
               _MindSumVisualization.monthlyOverlay =>
@@ -286,6 +294,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                   paletteStyle: widget.paletteStyle,
                   scaleResolution: widget.scaleResolution,
                   scrollController: _barScrollController,
+                  visibleChartCount: widget.sumVisibleChartCount,
                   upperVerticalGestures: widget.upperVerticalGestures,
                 ),
             },
@@ -639,6 +648,7 @@ final class _MindSumLinePage extends StatelessWidget {
     required this.paletteStyle,
     required this.scaleResolution,
     required this.scrollController,
+    required this.visibleChartCount,
     this.upperVerticalGestures,
   });
 
@@ -646,6 +656,7 @@ final class _MindSumLinePage extends StatelessWidget {
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final ScrollController scrollController;
+  final MindSumVisibleChartCount visibleChartCount;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -659,6 +670,7 @@ final class _MindSumLinePage extends StatelessWidget {
       scaleResolution: scaleResolution,
     ).background,
     scrollController: scrollController,
+    visibleChartCount: visibleChartCount,
     upperVerticalGestures: upperVerticalGestures,
   );
 }
@@ -674,6 +686,7 @@ final class _MindSumMonthlyOverlayPage extends StatelessWidget {
     required this.paletteStyle,
     required this.scaleResolution,
     required this.scrollController,
+    required this.visibleChartCount,
     this.upperVerticalGestures,
   });
 
@@ -681,25 +694,38 @@ final class _MindSumMonthlyOverlayPage extends StatelessWidget {
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final ScrollController scrollController;
+  final MindSumVisibleChartCount visibleChartCount;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   Widget build(BuildContext context) => DashboardVerticalScrollBoundaryHandoff(
     upperVerticalGestures: upperVerticalGestures,
-    child: ListView.separated(
-      key: const ValueKey<String>('mind-sum-monthly-overlay-scroll'),
-      controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(2, 1, 2, 4),
-      itemCount: frame.years.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final year = frame.years[index];
-        return _MindSumMonthlyOverlayYear(
-          key: ValueKey<String>('mind-sum-monthly-overlay-year-$year'),
-          frame: frame,
-          year: year,
-          paletteStyle: paletteStyle,
-          scaleResolution: scaleResolution,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final density = MindSumChartDensityGeometry.resolve(
+          availableHeight: constraints.maxHeight.isFinite
+              ? constraints.maxHeight - 5
+              : 236.0,
+          yearCount: frame.years.length,
+          preference: visibleChartCount,
+        );
+        return ListView.separated(
+          key: const ValueKey<String>('mind-sum-monthly-overlay-scroll'),
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(2, 1, 2, 4),
+          itemCount: frame.years.length,
+          separatorBuilder: (_, _) => SizedBox(height: density.interBandGap),
+          itemBuilder: (context, index) {
+            final year = frame.years[index];
+            return _MindSumMonthlyOverlayYear(
+              key: ValueKey<String>('mind-sum-monthly-overlay-year-$year'),
+              frame: frame,
+              year: year,
+              paletteStyle: paletteStyle,
+              scaleResolution: scaleResolution,
+              bandHeight: density.bandHeight,
+            );
+          },
         );
       },
     ),
@@ -713,12 +739,14 @@ final class _MindSumMonthlyOverlayYear extends StatelessWidget {
     required this.year,
     required this.paletteStyle,
     required this.scaleResolution,
+    required this.bandHeight,
   });
 
   final MindSumHeatmapFrame frame;
   final int year;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final double bandHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -735,7 +763,8 @@ final class _MindSumMonthlyOverlayYear extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 144,
+      key: ValueKey<String>('mind-sum-monthly-overlay-band-$year'),
+      height: bandHeight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
