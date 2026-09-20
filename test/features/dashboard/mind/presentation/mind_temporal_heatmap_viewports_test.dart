@@ -202,6 +202,10 @@ void main() {
       final plot = tester.getRect(
         find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2025')),
       );
+      final window = find.byKey(
+        const ValueKey<String>('mind-sum-detailed-window-2025'),
+      );
+      final beforeWindow = tester.widget<Semantics>(window).properties.label;
       final first = await tester.startGesture(
         Offset(plot.center.dx - 18, plot.center.dy - 4),
         pointer: 1,
@@ -226,6 +230,11 @@ void main() {
         'active',
         reason:
             'The local detailed surface explicitly owns active pinch state.',
+      );
+      expect(
+        tester.widget<Semantics>(window).properties.label,
+        isNot(beforeWindow),
+        reason: 'The scale recognizer narrows the real detailed time window.',
       );
       expect(
         expansion.progress,
