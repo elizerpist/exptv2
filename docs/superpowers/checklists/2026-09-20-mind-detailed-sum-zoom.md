@@ -2,7 +2,7 @@
 
 | ID | Source/reference | Intended code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| DSUM-01 | Superseded by physical feedback | `mind_temporal_heatmap_viewports.dart` | Historical three-page Sum contract | Physical feedback rejects it | NOT DONE — superseded; exact annual Sum page and PageView must be removed |
+| DSUM-01 | Superseded by physical feedback | `mind_temporal_heatmap_viewports.dart` | Historical three-page Sum contract | Physical feedback rejects it | DONE — superseded exact annual Sum page and PageView are removed |
 | DSUM-02 | User final prompt | new pure detail model | Home zoom is Jan–Dec, focal zoom changes temporal range and never zooms farther out | RED/GREEN domain test | DONE |
 | DSUM-03 | User final prompt | detail model/widget | Low zoom aggregates; closer zoom exposes increasingly real frame detail without data/query writes | Domain + widget test | DONE |
 | DSUM-04 | User final prompt | detailed chart widget | One year fills available plot; two share; 3+ uses vertical scrolling at the two-year minimum | Mounted geometry test | DONE |
@@ -50,5 +50,5 @@
 | SUM-LAYOUT-01 | Existing accepted feature | detail renderer | 1-year expanded, 2-year split, 3+-year minimum band/vertical scrolling and axes remain | Mounted regression test | DONE |
 | SUM-NOREG-01 | Scope lock | Year/Month/Day/range | Year pager, Month rhythm, Day timeline and one range owner remain intact | Focused smoke suites | DONE |
 | ARC-03 | structuring-apps | affected domain/presentation files | One read-model and one LOD policy; no UI data workflow or duplicate gesture/handoff engine | Boundary/source review + focused test | DONE |
-| DELIV-02 | User workflow | GitHub/SCIP/journal | Exact final application CI/APK/SCIP and journal evidence | Actions/artifact/graph audit | NOT DONE |
+| DELIV-02 | User workflow | GitHub/SCIP/journal | Exact final application CI/APK/SCIP and journal evidence | Actions/artifact/graph audit | DONE — application `f311241b`; Actions `35491099076`; human APK and matching SCIP recorded; profile lane remains inherited failure |
 | PHYS-02 | User workflow | Android | User accepts the exact next APK | User-only | BLOCKED |
