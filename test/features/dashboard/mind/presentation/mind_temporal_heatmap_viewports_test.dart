@@ -215,14 +215,40 @@ void main() {
       await tester.pump();
 
       expect(
+        tester
+            .widget<Semantics>(
+              find.byKey(
+                const ValueKey<String>('mind-sum-detailed-pinch-state'),
+              ),
+            )
+            .properties
+            .label,
+        'active',
+        reason:
+            'The local detailed surface explicitly owns active pinch state.',
+      );
+      expect(
         expansion.progress,
         0,
-        reason: 'A live two-pointer pinch must not begin collapse before it ends.',
+        reason:
+            'A live two-pointer pinch must not begin collapse before it ends.',
       );
       expect(expansion.isDragging, isFalse);
       await first.up();
       await second.up();
+      await tester.pump();
 
+      expect(
+        tester
+            .widget<Semantics>(
+              find.byKey(
+                const ValueKey<String>('mind-sum-detailed-pinch-state'),
+              ),
+            )
+            .properties
+            .label,
+        'idle',
+      );
       expect(expansion.progress, 0);
       expect(expansion.isDragging, isFalse);
       expect(

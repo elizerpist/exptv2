@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
+import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/domain/local_date.dart';
 import '../domain/mind_detailed_sum_chart_model.dart';
@@ -11,12 +13,13 @@ import '../domain/mind_temporal_heatmap_projection.dart';
 /// The preserved third Sum card. It owns only its local time-window gesture
 /// state and renders the immutable range-preview day series supplied by the
 /// admitted Sum frame. It has no Core, Query or repository write path.
-final class MindDetailedSumChart extends StatelessWidget {
+final class MindDetailedSumChart extends StatefulWidget {
   const MindDetailedSumChart({
     super.key,
     required this.frame,
     required this.lineColor,
     required this.scrollController,
+    this.upperVerticalGestures,
   });
 
   static const _minimumTwoYearBandHeight = 118.0;
@@ -24,39 +27,100 @@ final class MindDetailedSumChart extends StatelessWidget {
   final MindSumHeatmapFrame frame;
   final Color lineColor;
   final ScrollController scrollController;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
+
+  @override
+  State<MindDetailedSumChart> createState() => _MindDetailedSumChartState();
+}
+
+final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
+  final _activePointers = <int>{};
+  late final ValueNotifier<bool> _pinchActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _pinchActive = ValueNotifier<bool>(false);
+  }
+
+  @override
+  void dispose() {
+    _pinchActive.dispose();
+    super.dispose();
+  }
+
+  void _trackPointerDown(PointerDownEvent event) {
+    if (!_activePointers.add(event.pointer)) return;
+    _syncPointerMode();
+  }
+
+  void _trackPointerEnd(PointerEvent event) {
+    if (!_activePointers.remove(event.pointer)) return;
+    _syncPointerMode();
+  }
+
+  void _syncPointerMode() {
+    final next = _activePointers.length >= 2;
+    if (_pinchActive.value == next) return;
+    _pinchActive.value = next;
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final years = frame.years;
+      final years = widget.frame.years;
       final availableHeight = constraints.maxHeight.isFinite
           ? constraints.maxHeight
-          : _minimumTwoYearBandHeight * 2;
+          : MindDetailedSumChart._minimumTwoYearBandHeight * 2;
       final bandHeight = switch (years.length) {
-        0 => _minimumTwoYearBandHeight,
-        1 => math.max(_minimumTwoYearBandHeight, availableHeight),
-        2 => math.max(_minimumTwoYearBandHeight, (availableHeight - 8) / 2),
-        _ => _minimumTwoYearBandHeight,
+        0 => MindDetailedSumChart._minimumTwoYearBandHeight,
+        1 => math.max(
+          MindDetailedSumChart._minimumTwoYearBandHeight,
+          availableHeight,
+        ),
+        2 => math.max(
+          MindDetailedSumChart._minimumTwoYearBandHeight,
+          (availableHeight - 8) / 2,
+        ),
+        _ => MindDetailedSumChart._minimumTwoYearBandHeight,
       };
-      return ListView.separated(
-        key: const ValueKey<String>('mind-sum-detailed-scroll'),
-        controller: scrollController,
-        padding: EdgeInsets.zero,
-        itemCount: years.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final year = years[index];
-          return SizedBox(
-            height: bandHeight,
-            child: _MindDetailedSumYearBand(
-              key: ValueKey<String>('mind-sum-detailed-band-$year'),
-              year: year,
-              frameIdentity: frame.identity,
-              points: frame.dailyPointsForYear(year),
-              lineColor: lineColor,
+      return Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _trackPointerDown,
+        onPointerUp: _trackPointerEnd,
+        onPointerCancel: _trackPointerEnd,
+        child: Semantics(
+          key: const ValueKey<String>('mind-sum-detailed-pinch-state'),
+          label: _pinchActive.value ? 'active' : 'idle',
+          child: DashboardVerticalScrollBoundaryHandoff(
+            upperVerticalGestures: widget.upperVerticalGestures,
+            suppressHandoff: _pinchActive,
+            child: ListView.separated(
+              key: const ValueKey<String>('mind-sum-detailed-scroll'),
+              controller: widget.scrollController,
+              physics: _pinchActive.value
+                  ? const NeverScrollableScrollPhysics()
+                  : const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemCount: years.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final year = years[index];
+                return SizedBox(
+                  height: bandHeight,
+                  child: _MindDetailedSumYearBand(
+                    key: ValueKey<String>('mind-sum-detailed-band-$year'),
+                    year: year,
+                    frameIdentity: widget.frame.identity,
+                    points: widget.frame.dailyPointsForYear(year),
+                    lineColor: widget.lineColor,
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ),
       );
     },
   );

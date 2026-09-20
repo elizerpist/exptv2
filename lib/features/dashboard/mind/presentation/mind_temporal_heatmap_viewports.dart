@@ -241,17 +241,14 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                     scrollController: _heatmapScrollController,
                   ),
                 ),
-              _MindSumVisualization.detailed =>
-                DashboardVerticalScrollBoundaryHandoff(
-                  upperVerticalGestures: widget.upperVerticalGestures,
-                  child: _MindSumLinePage(
-                    key: const ValueKey<String>('mind-sum-detailed-surface'),
-                    frame: widget.frame,
-                    paletteStyle: widget.paletteStyle,
-                    scaleResolution: widget.scaleResolution,
-                    scrollController: _lineScrollController,
-                  ),
-                ),
+              _MindSumVisualization.detailed => _MindSumLinePage(
+                key: const ValueKey<String>('mind-sum-detailed-surface'),
+                frame: widget.frame,
+                paletteStyle: widget.paletteStyle,
+                scaleResolution: widget.scaleResolution,
+                scrollController: _lineScrollController,
+                upperVerticalGestures: widget.upperVerticalGestures,
+              ),
             },
           ),
         ],
@@ -303,6 +300,7 @@ final class _MindSumHeatmapPageState extends State<_MindSumHeatmapPage> {
       ListView.separated(
         key: const ValueKey<String>('mind-sum-heatmap-scroll'),
         controller: widget.scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.zero,
         itemCount: widget.frame.years.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -601,12 +599,14 @@ final class _MindSumLinePage extends StatelessWidget {
     required this.paletteStyle,
     required this.scaleResolution,
     required this.scrollController,
+    this.upperVerticalGestures,
   });
 
   final MindSumHeatmapFrame frame;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final ScrollController scrollController;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   Widget build(BuildContext context) => MindDetailedSumChart(
@@ -619,6 +619,7 @@ final class _MindSumLinePage extends StatelessWidget {
       scaleResolution: scaleResolution,
     ).background,
     scrollController: scrollController,
+    upperVerticalGestures: upperVerticalGestures,
   );
 }
 

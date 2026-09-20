@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'dashboard_upper_vertical_gesture_coordinator.dart';
@@ -14,11 +15,17 @@ final class DashboardVerticalScrollBoundaryHandoff extends StatefulWidget {
     required this.child,
     this.upperVerticalGestures,
     this.handoffOnDirectVerticalDrag = false,
+    this.suppressHandoff,
   });
 
   final Widget child;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
   final bool handoffOnDirectVerticalDrag;
+
+  /// A local multi-pointer surface may temporarily suppress only its own
+  /// boundary handoff. The child keeps its normal scroll owner and unrelated
+  /// dashboard surfaces retain their existing collapse behavior.
+  final ValueListenable<bool>? suppressHandoff;
 
   @override
   State<DashboardVerticalScrollBoundaryHandoff> createState() =>
@@ -30,8 +37,38 @@ final class _DashboardVerticalScrollBoundaryHandoffState
   bool _isBoundaryHandoff = false;
   bool _isDirectHandoff = false;
 
+  bool get _isSuppressed => widget.suppressHandoff?.value ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.suppressHandoff?.addListener(_handleSuppressionChanged);
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant DashboardVerticalScrollBoundaryHandoff oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.suppressHandoff != widget.suppressHandoff) {
+      oldWidget.suppressHandoff?.removeListener(_handleSuppressionChanged);
+      widget.suppressHandoff?.addListener(_handleSuppressionChanged);
+    }
+    _handleSuppressionChanged();
+  }
+
+  void _handleSuppressionChanged() {
+    if (!_isSuppressed) return;
+    if (_isBoundaryHandoff || _isDirectHandoff) {
+      widget.upperVerticalGestures?.cancel();
+    }
+    _isBoundaryHandoff = false;
+    _isDirectHandoff = false;
+  }
+
   @override
   void dispose() {
+    widget.suppressHandoff?.removeListener(_handleSuppressionChanged);
     if (_isBoundaryHandoff || _isDirectHandoff) {
       widget.upperVerticalGestures?.end();
     }
@@ -39,6 +76,7 @@ final class _DashboardVerticalScrollBoundaryHandoffState
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
+    if (_isSuppressed) return false;
     final coordinator = widget.upperVerticalGestures;
     if (coordinator == null) return false;
     if (notification is ScrollStartNotification &&
@@ -62,12 +100,14 @@ final class _DashboardVerticalScrollBoundaryHandoffState
   }
 
   void _onDirectVerticalStart(DragStartDetails _) {
+    if (_isSuppressed) return;
     _isDirectHandoff = true;
     widget.upperVerticalGestures?.begin();
   }
 
-  void _onDirectVerticalUpdate(DragUpdateDetails details) =>
-      widget.upperVerticalGestures?.dragByViewport(details.delta.dy);
+  void _onDirectVerticalUpdate(DragUpdateDetails details) => _isSuppressed
+      ? null
+      : widget.upperVerticalGestures?.dragByViewport(details.delta.dy);
 
   void _endDirectHandoff() {
     if (!_isDirectHandoff) return;

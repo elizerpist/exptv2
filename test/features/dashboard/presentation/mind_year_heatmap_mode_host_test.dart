@@ -344,7 +344,7 @@ void main() {
   );
 
   testWidgets(
-    'SUM-PAGER-02: the Sum visual pager never claims the one compact range slider or mutates its admitted frame',
+    'SUM-TOGGLE-02: the Sum visualization toggle never claims the compact range slider or mutates its admitted frame',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -381,24 +381,22 @@ void main() {
         const ValueKey<String>('query-amount-range-slider'),
       );
       final sliderBounds = tester.getRect(slider);
-      final pager = find.byKey(
-        const ValueKey<String>('mind-sum-heatmap-pager'),
-      );
-
       await tester.drag(slider, Offset(-sliderBounds.width * .25, 0));
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('mind-sum-heatmap-page-0')),
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-surface')),
         findsOneWidget,
       );
       expect(temporal.value, same(admitted));
       expect(tester.element(range), same(rangeElement));
       expect(expansion.starts, 0);
 
-      await tester.drag(pager, const Offset(-260, 0));
-      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('mind-sum-heatmap-page-1')),
+        find.byKey(const ValueKey<String>('mind-sum-detailed-surface')),
         findsOneWidget,
       );
       expect(temporal.value, same(admitted));
