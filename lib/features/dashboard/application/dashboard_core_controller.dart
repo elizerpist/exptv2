@@ -4953,11 +4953,19 @@ final class DashboardCoreController {
       partnerId: activeFocus?.partner?.id,
       normalizedSearch: activeFocus?.normalizedSearch,
     );
+    // Sum's overlay comparison is presentation-only, but its gray bars need
+    // the whole selected-direction month total. Keep both memberships resident
+    // and immutable at this one existing projection admission; range previews
+    // continue to visit only the selected scope's bounded month buckets.
+    final fullDirection = seed.select();
     final stopwatch = Stopwatch()..start();
     final projection = MindSumHeatmapProjection.build(
       identity: identity,
       contributions: membership.contributionsForMembership(
         membership: selected.entryIndices,
+      ),
+      fullContributions: membership.contributionsForMembership(
+        membership: fullDirection.entryIndices,
       ),
     );
     stopwatch.stop();

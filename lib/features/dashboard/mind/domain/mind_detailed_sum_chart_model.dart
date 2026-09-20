@@ -86,6 +86,22 @@ final class MindDetailedSumTimeWindow {
     );
   }
 
+  /// Converts Flutter's relatively conservative cumulative pinch scale into
+  /// the chart's temporal zoom response. The exponent preserves analog input
+  /// and focal-time math, while making a normal physical pinch materially
+  /// narrow the full-year domain instead of merely changing it by a few days.
+  MindDetailedSumTimeWindow zoomForGesture({
+    required double scaleDelta,
+    required int focalEpochMinute,
+  }) {
+    if (!scaleDelta.isFinite || scaleDelta <= 0) return this;
+    const gestureZoomExponent = 3.2;
+    return zoomAtMinute(
+      scaleDelta: math.pow(scaleDelta, gestureZoomExponent).toDouble(),
+      focalEpochMinute: focalEpochMinute,
+    );
+  }
+
   MindDetailedSumTimeWindow panByDays(int days) =>
       panByMinutes(days * _minutesPerDay);
 

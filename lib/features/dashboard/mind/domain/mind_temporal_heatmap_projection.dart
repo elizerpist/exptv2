@@ -50,6 +50,7 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
     required List<int> years,
     required Map<(int year, int month), MindSumHeatmapMonth> months,
     required Map<int, int> yearTotals,
+    required Map<(int year, int month), int> fullMonthTotals,
     required Map<int, List<MindSumHeatmapDailyPoint>> dailyPointsByYear,
     required Map<int, List<_MindSumPreparedDetail>> detailContributionsByYear,
     required this.minimumNonEmptyTotal,
@@ -59,6 +60,9 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
          months,
        ),
        _yearTotals = Map<int, int>.unmodifiable(yearTotals),
+       _fullMonthTotals = Map<(int year, int month), int>.unmodifiable(
+         fullMonthTotals,
+       ),
        _dailyPointsByYear =
            Map<int, List<MindSumHeatmapDailyPoint>>.unmodifiable(
              dailyPointsByYear.map(
@@ -85,6 +89,7 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
   final List<int> years;
   final Map<(int year, int month), MindSumHeatmapMonth> _months;
   final Map<int, int> _yearTotals;
+  final Map<(int year, int month), int> _fullMonthTotals;
   final Map<int, List<MindSumHeatmapDailyPoint>> _dailyPointsByYear;
   final Map<int, List<_MindSumPreparedDetail>> _detailContributionsByYear;
   final int? minimumNonEmptyTotal;
@@ -94,6 +99,12 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
       _months[(year, month)]!;
 
   int yearTotal(int year) => _yearTotals[year] ?? 0;
+
+  /// Full directional month amount before focus/search membership and live
+  /// range refinement. It is a comparison-only read model captured from the
+  /// same prepared Sum admission, never a second Query authority.
+  int fullMonthTotal({required int year, required int month}) =>
+      _fullMonthTotals[(year, month)] ?? 0;
 
   /// Only real local calendar days with a non-empty current range total are
   /// exposed. The chart may join them visually, but it cannot invent a day.
@@ -321,6 +332,7 @@ final class MindSumHeatmapProjection {
     required Map<(int year, int month), MindHeatmapAmountRangeBucket> buckets,
     required Map<int, Map<int, MindHeatmapAmountRangeBucket>> dailyBuckets,
     required Map<int, List<_MindSumPreparedDetail>> detailContributions,
+    required Map<(int year, int month), int> fullMonthTotals,
     required List<int> years,
     required this.preparedContributionTouches,
   }) : _buckets =
@@ -346,17 +358,24 @@ final class MindSumHeatmapProjection {
                ),
              ),
            ),
+       _fullMonthTotals = Map<(int year, int month), int>.unmodifiable(
+         fullMonthTotals,
+       ),
        _years = List<int>.unmodifiable(years);
 
   factory MindSumHeatmapProjection.build({
     required MindTemporalHeatmapIdentity identity,
     required Iterable<MindYearHeatmapPreparedContribution> contributions,
+    Iterable<MindYearHeatmapPreparedContribution>? fullContributions,
   }) {
+    final selectedContributions = contributions.toList(growable: false);
+    final fullSource =
+        fullContributions?.toList(growable: false) ?? selectedContributions;
     final values = <(int year, int month), List<int>>{};
     final dailyValues = <int, Map<int, List<int>>>{};
     final detailContributions = <int, List<_MindSumPreparedDetail>>{};
     var preparedContributionTouches = 0;
-    for (final contribution in contributions) {
+    for (final contribution in selectedContributions) {
       preparedContributionTouches += 1;
       final date = _dateForEpochDay(contribution.bookedLocalEpochDay);
       values
@@ -380,7 +399,17 @@ final class MindSumHeatmapProjection {
             ),
           );
     }
-    final years = values.keys.map((key) => key.$1).toSet().toList()..sort();
+    final fullMonthTotals = <(int year, int month), int>{};
+    for (final contribution in fullSource) {
+      final date = _dateForEpochDay(contribution.bookedLocalEpochDay);
+      final key = (date.year, date.month);
+      fullMonthTotals[key] =
+          (fullMonthTotals[key] ?? 0) + contribution.amountMinor;
+    }
+    final years = <int>{
+      ...values.keys.map((key) => key.$1),
+      ...fullMonthTotals.keys.map((key) => key.$1),
+    }.toList()..sort();
     return MindSumHeatmapProjection._(
       identity: identity,
       buckets: values.map(
@@ -405,6 +434,7 @@ final class MindSumHeatmapProjection {
         });
         return MapEntry(year, valuesForYear);
       }),
+      fullMonthTotals: fullMonthTotals,
       years: years,
       preparedContributionTouches: preparedContributionTouches,
     );
@@ -414,6 +444,7 @@ final class MindSumHeatmapProjection {
   final Map<(int year, int month), MindHeatmapAmountRangeBucket> _buckets;
   final Map<int, Map<int, MindHeatmapAmountRangeBucket>> _dailyBuckets;
   final Map<int, List<_MindSumPreparedDetail>> _detailContributions;
+  final Map<(int year, int month), int> _fullMonthTotals;
   final List<int> _years;
   final int preparedContributionTouches;
 
@@ -487,6 +518,7 @@ final class MindSumHeatmapProjection {
       years: _years,
       months: months,
       yearTotals: yearTotals,
+      fullMonthTotals: _fullMonthTotals,
       dailyPointsByYear: dailyPointsByYear,
       detailContributionsByYear: _detailContributions,
       minimumNonEmptyTotal: minimum,

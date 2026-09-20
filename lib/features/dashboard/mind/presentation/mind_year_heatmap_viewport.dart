@@ -16,117 +16,58 @@ import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_paged_vertical_boundary_handoff.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
+import '../domain/mind_monthly_overlay_series.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_aggregate_line_chart.dart';
 import 'mind_anchored_info_card.dart';
+import 'mind_monthly_overlay_bar_chart.dart';
 
 /// Immutable paint input for the Year comparison page. Full values intentionally
 /// come from the unfiltered directional month authority; filtered values come
 /// from the current range-preview frame days, so no second Query path exists.
 @visibleForTesting
 final class MindYearHeatmapPartialBarSeries {
-  MindYearHeatmapPartialBarSeries._({
-    required List<MindYearHeatmapPartialBarValue> values,
-    required this.scale,
-  }) : values = List<MindYearHeatmapPartialBarValue>.unmodifiable(values);
+  MindYearHeatmapPartialBarSeries._(this._shared);
 
   factory MindYearHeatmapPartialBarSeries.fromFrame(
     MindYearHeatmapFrame frame,
   ) {
     final isIncome = frame.identity.upstreamScopeKey.startsWith('income|');
-    final values = List<MindYearHeatmapPartialBarValue>.generate(12, (index) {
+    final fullAmounts = List<int>.generate(12, (index) {
       final month = index + 1;
-      final full = isIncome
+      return isIncome
           ? frame.monthlyAggregates.incomeForMonth(month)
           : frame.monthlyAggregates.expenseForMonth(month);
+    }, growable: false);
+    final filteredAmounts = List<int>.generate(12, (index) {
+      final month = index + 1;
       final filtered = frame
           .month(month)
           .fold<int>(0, (sum, day) => sum + (day.total ?? 0));
-      assert(() {
-        if (filtered > full) {
-          debugPrint(
-            'Mind Year partial bar filtered amount exceeds its full '
-            'directional aggregate for month $month; paint is clamped.',
-          );
-        }
-        return true;
-      }());
-      return MindYearHeatmapPartialBarValue(
-        month: month,
-        fullAmount: full,
-        filteredAmount: filtered.clamp(0, full).toInt(),
-      );
+      return filtered;
     }, growable: false);
     return MindYearHeatmapPartialBarSeries._(
-      values: values,
-      scale: MindYearHeatmapPartialBarScale.forMaximum(
-        values.fold<int>(
-          0,
-          (maximum, value) => math.max(maximum, value.fullAmount),
-        ),
+      MindMonthlyOverlaySeries.fromAmounts(
+        fullAmounts: fullAmounts,
+        filteredAmounts: filteredAmounts,
       ),
     );
   }
 
-  final List<MindYearHeatmapPartialBarValue> values;
-  final MindYearHeatmapPartialBarScale scale;
+  final MindMonthlyOverlaySeries _shared;
+
+  List<MindMonthlyOverlayValue> get values => _shared.values;
+  MindMonthlyOverlayScale get scale => _shared.scale;
+  MindMonthlyOverlaySeries get shared => _shared;
 }
 
 @visibleForTesting
-final class MindYearHeatmapPartialBarValue {
-  const MindYearHeatmapPartialBarValue({
-    required this.month,
-    required this.fullAmount,
-    required this.filteredAmount,
-  });
-
-  final int month;
-  final int fullAmount;
-  final int filteredAmount;
-}
+typedef MindYearHeatmapPartialBarValue = MindMonthlyOverlayValue;
 
 @visibleForTesting
-final class MindYearHeatmapPartialBarScale {
-  MindYearHeatmapPartialBarScale._({
-    required this.top,
-    required this.step,
-    required List<int> levels,
-  }) : levels = List<int>.unmodifiable(levels);
-
-  factory MindYearHeatmapPartialBarScale.forMaximum(int maximum) {
-    if (maximum <= 0) {
-      return MindYearHeatmapPartialBarScale._(
-        top: 0,
-        step: 1,
-        levels: const <int>[0],
-      );
-    }
-    const targetIntervals = 5;
-    final rawStep = maximum / targetIntervals;
-    final exponent = math.pow(10, (math.log(rawStep) / math.ln10).floor());
-    final normalized = rawStep / exponent;
-    final factor = normalized <= 1
-        ? 1
-        : normalized <= 2
-        ? 2
-        : normalized <= 5
-        ? 5
-        : 10;
-    final step = (factor * exponent).round();
-    final top = ((maximum + step - 1) ~/ step) * step;
-    return MindYearHeatmapPartialBarScale._(
-      top: top,
-      step: step,
-      levels: List<int>.generate(top ~/ step + 1, (index) => index * step),
-    );
-  }
-
-  final int top;
-  final int step;
-  final List<int> levels;
-}
+typedef MindYearHeatmapPartialBarScale = MindMonthlyOverlayScale;
 
 /// The one scroll owner for the Mind annual MonthCard region.
 ///
@@ -753,85 +694,20 @@ final class _MindYearPartialBarPage extends StatelessWidget {
 }
 
 @visibleForTesting
-final class MindYearHeatmapPartialBarPainter extends CustomPainter {
+final class MindYearHeatmapPartialBarPainter
+    extends MindMonthlyOverlayBarPainter {
   MindYearHeatmapPartialBarPainter({
-    required this.series,
+    required MindYearHeatmapPartialBarSeries series,
     required this.foreground,
-  });
+  }) : yearSeries = series,
+       super(
+         series: series.shared,
+         foregroundForValue: (_) => foreground,
+         paintIdentity: foreground,
+       );
 
-  final MindYearHeatmapPartialBarSeries series;
+  final MindYearHeatmapPartialBarSeries yearSeries;
   final Color foreground;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const left = 30.0;
-    const top = 6.0;
-    const right = 4.0;
-    const bottom = 4.0;
-    final plot = Rect.fromLTWH(
-      left,
-      top,
-      math.max(0, size.width - left - right),
-      math.max(0, size.height - top - bottom),
-    );
-    final grid = Paint()
-      ..color = FluviVisualTokens.surfaceMuted
-      ..strokeWidth = .75;
-    final labelStyle = const TextStyle(
-      color: FluviVisualTokens.textSecondary,
-      fontSize: 7,
-    );
-    for (final level in series.scale.levels) {
-      final fraction = series.scale.top == 0 ? 0.0 : level / series.scale.top;
-      final y = plot.bottom - plot.height * fraction;
-      canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), grid);
-      final text = TextPainter(
-        text: TextSpan(
-          text: QueryMenuFormatters.money(level),
-          style: labelStyle,
-        ),
-        textDirection: TextDirection.ltr,
-        maxLines: 1,
-      )..layout(maxWidth: left - 3);
-      text.paint(canvas, Offset(0, y - text.height / 2));
-    }
-    if (series.scale.top == 0 || plot.width <= 0 || plot.height <= 0) return;
-    final unit = plot.width / series.values.length;
-    final barWidth = math.min(14, unit * .56).toDouble();
-    final background = Paint()..color = const Color(0xFFD4D7DC);
-    final foregroundPaint = Paint()..color = foreground;
-    for (var index = 0; index < series.values.length; index += 1) {
-      final value = series.values[index];
-      final x = plot.left + unit * index + (unit - barWidth) / 2;
-      final fullHeight = plot.height * value.fullAmount / series.scale.top;
-      final filteredHeight =
-          plot.height * value.filteredAmount / series.scale.top;
-      final fullRect = Rect.fromLTWH(
-        x,
-        plot.bottom - fullHeight,
-        barWidth,
-        fullHeight,
-      );
-      final filteredRect = Rect.fromLTWH(
-        x,
-        plot.bottom - filteredHeight,
-        barWidth,
-        filteredHeight,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(fullRect, const Radius.circular(2)),
-        background,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(filteredRect, const Radius.circular(2)),
-        foregroundPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant MindYearHeatmapPartialBarPainter oldDelegate) =>
-      foreground != oldDelegate.foreground || series != oldDelegate.series;
 }
 
 /// The third annual Mind card uses only current immutable month aggregates.

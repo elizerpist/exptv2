@@ -5,6 +5,38 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 
 void main() {
   test(
+    'SUM3-ZOOM-01 RED: a normal cumulative pinch reaches a useful half-year window',
+    () {
+      final home = MindDetailedSumTimeWindow.fullYear(2025);
+      final focal =
+          const LocalDate(year: 2025, month: 7, day: 1).epochDay * 1440 + 720;
+
+      final first = home.zoomForGesture(
+        scaleDelta: 1.12,
+        focalEpochMinute: focal,
+      );
+      final second = first.zoomForGesture(
+        scaleDelta: 1.12,
+        focalEpochMinute: focal,
+      );
+
+      expect(first.visibleDayCount, lessThan(home.visibleDayCount));
+      expect(
+        second.visibleDayCount,
+        lessThanOrEqualTo(184),
+        reason:
+            'Two ordinary pinch sessions must reach a materially useful '
+            'half-year-or-less temporal extent, rather than 12→11 months.',
+      );
+      expect(
+        second.normalizedPositionOfEpochMinute(focal),
+        closeTo(home.normalizedPositionOfEpochMinute(focal), .03),
+        reason: 'Gesture amplification cannot make the focal time jump.',
+      );
+    },
+  );
+
+  test(
     'DSUM-02 RED: full-year is the minimum zoom and focal time stays stable while zooming',
     () {
       final home = MindDetailedSumTimeWindow.fullYear(2025);

@@ -11,12 +11,14 @@ import '../../time_navigation/domain/year_month.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_frame.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
+import '../domain/mind_monthly_overlay_series.dart';
 import '../domain/mind_year_heatmap_calendar_geometry.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_anchored_info_card.dart';
 import 'mind_detailed_sum_chart.dart';
+import 'mind_monthly_overlay_bar_chart.dart';
 import 'mind_temporal_secondary_cards.dart';
 
 @visibleForTesting
@@ -122,6 +124,7 @@ String formatMindCompactForints(int forints) {
 final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   late final ScrollController _heatmapScrollController;
   late final ScrollController _lineScrollController;
+  late final ScrollController _barScrollController;
   var _visualization = _MindSumVisualization.heatmap;
 
   @override
@@ -129,6 +132,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
     super.initState();
     _heatmapScrollController = ScrollController();
     _lineScrollController = ScrollController();
+    _barScrollController = ScrollController();
   }
 
   @override
@@ -147,13 +151,11 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   void dispose() {
     _heatmapScrollController.dispose();
     _lineScrollController.dispose();
+    _barScrollController.dispose();
     super.dispose();
   }
 
-  void _selectDetailMode({required bool line}) {
-    final target = line
-        ? _MindSumVisualization.detailed
-        : _MindSumVisualization.heatmap;
+  void _selectVisualization(_MindSumVisualization target) {
     if (_visualization == target) return;
     setState(() => _visualization = target);
   }
@@ -205,20 +207,30 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                 ),
                 borderRadius: BorderRadius.circular(8),
                 isSelected: <bool>[
-                  _visualization == _MindSumVisualization.detailed,
                   _visualization == _MindSumVisualization.heatmap,
+                  _visualization == _MindSumVisualization.detailed,
+                  _visualization == _MindSumVisualization.monthlyOverlay,
                 ],
-                onPressed: (index) => _selectDetailMode(line: index == 0),
+                onPressed: (index) => _selectVisualization(switch (index) {
+                  0 => _MindSumVisualization.heatmap,
+                  1 => _MindSumVisualization.detailed,
+                  _ => _MindSumVisualization.monthlyOverlay,
+                }),
                 children: const <Widget>[
+                  Tooltip(
+                    key: ValueKey<String>('mind-sum-detail-toggle-heatmap'),
+                    message: 'Hőtérkép',
+                    child: Icon(Icons.grid_view_rounded, size: 13),
+                  ),
                   Tooltip(
                     key: ValueKey<String>('mind-sum-detail-toggle-line'),
                     message: 'Vonal',
                     child: Icon(Icons.show_chart, size: 13),
                   ),
                   Tooltip(
-                    key: ValueKey<String>('mind-sum-detail-toggle-heatmap'),
-                    message: 'Hőtérkép',
-                    child: Icon(Icons.grid_view_rounded, size: 13),
+                    key: ValueKey<String>('mind-sum-detail-toggle-bars'),
+                    message: 'Havi összevetés',
+                    child: Icon(Icons.bar_chart_rounded, size: 13),
                   ),
                 ],
               ),
@@ -248,6 +260,17 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                 scrollController: _lineScrollController,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
+              _MindSumVisualization.monthlyOverlay =>
+                _MindSumMonthlyOverlayPage(
+                  key: const ValueKey<String>(
+                    'mind-sum-monthly-overlay-surface',
+                  ),
+                  frame: widget.frame,
+                  paletteStyle: widget.paletteStyle,
+                  scaleResolution: widget.scaleResolution,
+                  scrollController: _barScrollController,
+                  upperVerticalGestures: widget.upperVerticalGestures,
+                ),
             },
           ),
         ],
@@ -256,7 +279,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   }
 }
 
-enum _MindSumVisualization { heatmap, detailed }
+enum _MindSumVisualization { heatmap, detailed, monthlyOverlay }
 
 final class _MindSumHeatmapPage extends StatefulWidget {
   const _MindSumHeatmapPage({
@@ -471,8 +494,9 @@ final class _MindSumMonthCells extends StatelessWidget {
               child: Padding(
                 padding: EdgeInsets.only(right: month == 12 ? 0 : 2),
                 child: Builder(
-                  builder: (cellContext) => InkWell(
+                  builder: (cellContext) => GestureDetector(
                     key: ValueKey<String>('mind-sum-heatmap-tap-$year-$month'),
+                    behavior: HitTestBehavior.opaque,
                     onTap: item.isEmpty
                         ? null
                         : () {
@@ -621,6 +645,162 @@ final class _MindSumLinePage extends StatelessWidget {
     upperVerticalGestures: upperVerticalGestures,
   );
 }
+
+/// Sum's third presentation surface compares the already-admitted selected
+/// scope/range against its full selected-direction months. It is deliberately
+/// stacked by year like the detailed chart, but has no separate query or range
+/// authority.
+final class _MindSumMonthlyOverlayPage extends StatelessWidget {
+  const _MindSumMonthlyOverlayPage({
+    super.key,
+    required this.frame,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    required this.scrollController,
+    this.upperVerticalGestures,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final ScrollController scrollController;
+  final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
+
+  @override
+  Widget build(BuildContext context) => DashboardVerticalScrollBoundaryHandoff(
+    upperVerticalGestures: upperVerticalGestures,
+    child: ListView.separated(
+      key: const ValueKey<String>('mind-sum-monthly-overlay-scroll'),
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(2, 1, 2, 4),
+      itemCount: frame.years.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final year = frame.years[index];
+        return _MindSumMonthlyOverlayYear(
+          key: ValueKey<String>('mind-sum-monthly-overlay-year-$year'),
+          frame: frame,
+          year: year,
+          paletteStyle: paletteStyle,
+          scaleResolution: scaleResolution,
+        );
+      },
+    ),
+  );
+}
+
+final class _MindSumMonthlyOverlayYear extends StatelessWidget {
+  const _MindSumMonthlyOverlayYear({
+    super.key,
+    required this.frame,
+    required this.year,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final MindSumHeatmapFrame frame;
+  final int year;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  Widget build(BuildContext context) {
+    final series = mindSumMonthlyOverlaySeries(frame: frame, year: year);
+    Color colorFor(MindMonthlyOverlayValue value) {
+      final month = frame.month(year: year, month: value.month);
+      return MindYearHeatmapPaletteResolver.resolveTile(
+        style: paletteStyle,
+        isEmpty: month.isEmpty,
+        intensity: month.intensity,
+        paletteIntensity: month.paletteIntensity,
+        scaleResolution: scaleResolution,
+      ).background;
+    }
+
+    return SizedBox(
+      height: 144,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _MindSumYearHeader(frame: frame, year: year, page: 'monthly-overlay'),
+          const SizedBox(height: 2),
+          Expanded(
+            child: CustomPaint(
+              key: ValueKey<String>('mind-sum-monthly-overlay-chart-$year'),
+              painter: MindMonthlyOverlayBarPainter(
+                series: series,
+                foregroundForValue: colorFor,
+                paintIdentity: Object.hash(
+                  frame,
+                  paletteStyle,
+                  scaleResolution,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          const _MindSumMonthlyOverlayAxis(),
+        ],
+      ),
+    );
+  }
+}
+
+@visibleForTesting
+MindMonthlyOverlaySeries mindSumMonthlyOverlaySeries({
+  required MindSumHeatmapFrame frame,
+  required int year,
+}) => MindMonthlyOverlaySeries.fromTotals(
+  fullAmounts: List<int>.generate(
+    12,
+    (index) => frame.fullMonthTotal(year: year, month: index + 1),
+    growable: false,
+  ),
+  filteredAmounts: List<int>.generate(
+    12,
+    (index) => frame.month(year: year, month: index + 1).total ?? 0,
+    growable: false,
+  ),
+);
+
+final class _MindSumMonthlyOverlayAxis extends StatelessWidget {
+  const _MindSumMonthlyOverlayAxis();
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      const SizedBox(width: 30),
+      for (final initial in _mindMonthInitials)
+        Expanded(
+          child: Center(
+            child: Text(
+              initial,
+              style: TextStyle(
+                color: FluviVisualTokens.textSecondary,
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+    ],
+  );
+}
+
+const _mindMonthInitials = <String>[
+  'J',
+  'F',
+  'M',
+  'Á',
+  'M',
+  'J',
+  'J',
+  'A',
+  'S',
+  'O',
+  'N',
+  'D',
+];
 
 final class _MindSumYearHeader extends StatelessWidget {
   const _MindSumYearHeader({
