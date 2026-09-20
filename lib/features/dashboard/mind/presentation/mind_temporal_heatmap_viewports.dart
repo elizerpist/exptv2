@@ -20,9 +20,13 @@ import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_anchored_info_card.dart';
+import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_detailed_sum_chart.dart';
 import 'mind_monthly_overlay_bar_chart.dart';
+import 'mind_sum_year_band_header.dart';
 import 'mind_temporal_secondary_cards.dart';
+
+export 'mind_sum_year_band_header.dart' show formatMindCompactForints;
 
 @visibleForTesting
 const mindMonthHeatmapCellCornerRadius = 6.0;
@@ -44,51 +48,73 @@ final class MindSumHeatmapViewport extends StatelessWidget {
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<MindTemporalHeatmapFrame?>(
-        valueListenable: frameListenable,
-        builder: (context, current, _) {
-          final frame = current is MindSumHeatmapFrame ? current : null;
-          if (frame == null) {
-            return const SizedBox(
-              key: ValueKey<String>('mind-sum-heatmap-unavailable'),
-            );
-          }
-          final content = _MindSumHeatmapContent(
-            frame: frame,
-            paletteStyle:
-                presentationSettings?.value.paletteStyle ??
-                MindYearHeatmapPaletteStyle.fluvi,
-            scaleResolution:
-                presentationSettings?.value.scaleResolution ??
-                MindHeatmapScaleResolution.ten,
-            sumYearRowLayout:
-                presentationSettings?.value.sumYearRowLayout ??
-                MindSumYearRowLayout.twoRowExpanded,
-            sumMonthLabelPlacement:
-                presentationSettings?.value.sumMonthLabelPlacement ??
-                MindSumMonthLabelPlacement.none,
-            sumVisibleChartCount:
-                presentationSettings?.value.sumVisibleChartCount ??
-                MindSumVisibleChartCount.two,
-            upperVerticalGestures: upperVerticalGestures,
-          );
-          final settings = presentationSettings;
-          if (settings == null) return content;
-          return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
-            valueListenable: settings,
-            builder: (context, value, _) => _MindSumHeatmapContent(
-              frame: frame,
-              paletteStyle: value.paletteStyle,
-              scaleResolution: value.scaleResolution,
-              sumYearRowLayout: value.sumYearRowLayout,
-              sumMonthLabelPlacement: value.sumMonthLabelPlacement,
-              sumVisibleChartCount: value.sumVisibleChartCount,
-              upperVerticalGestures: upperVerticalGestures,
-            ),
-          );
-        },
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindTemporalHeatmapFrame?>(
+    valueListenable: frameListenable,
+    builder: (context, current, _) {
+      final frame = current is MindSumHeatmapFrame ? current : null;
+      if (frame == null) {
+        return const SizedBox(
+          key: ValueKey<String>('mind-sum-heatmap-unavailable'),
+        );
+      }
+      final content = _MindSumHeatmapContent(
+        frame: frame,
+        paletteStyle:
+            presentationSettings?.value.paletteStyle ??
+            MindYearHeatmapPaletteStyle.fluvi,
+        scaleResolution:
+            presentationSettings?.value.scaleResolution ??
+            MindHeatmapScaleResolution.ten,
+        sumYearRowLayout:
+            presentationSettings?.value.sumYearRowLayout ??
+            MindSumYearRowLayout.twoRowExpanded,
+        sumMonthLabelPlacement:
+            presentationSettings?.value.sumMonthLabelPlacement ??
+            MindSumMonthLabelPlacement.none,
+        sumVisibleChartCount:
+            presentationSettings?.value.sumVisibleChartCount ??
+            MindSumVisibleChartCount.two,
+        sumLineInterpolationMode:
+            presentationSettings?.value.sumLineInterpolationMode ??
+            MindSumLineInterpolationMode.linear,
+        sumLineCatmullRomTension:
+            presentationSettings?.value.sumLineCatmullRomTension ?? .5,
+        sumLineTemporalSmoothingEnabled:
+            presentationSettings?.value.sumLineTemporalSmoothingEnabled ??
+            false,
+        sumLineSmoothingWindow:
+            presentationSettings?.value.sumLineSmoothingWindow ??
+            MindSumSmoothingWindow.days3,
+        sumLineZoomAdaptiveSmoothingEnabled:
+            presentationSettings?.value.sumLineZoomAdaptiveSmoothingEnabled ??
+            false,
+        upperVerticalGestures: upperVerticalGestures,
       );
+      final settings = presentationSettings;
+      if (settings == null) return content;
+      return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
+        valueListenable: settings,
+        builder: (context, value, _) => _MindSumHeatmapContent(
+          frame: frame,
+          paletteStyle: value.paletteStyle,
+          scaleResolution: value.scaleResolution,
+          sumYearRowLayout: value.sumYearRowLayout,
+          sumMonthLabelPlacement: value.sumMonthLabelPlacement,
+          sumVisibleChartCount: value.sumVisibleChartCount,
+          sumLineInterpolationMode: value.sumLineInterpolationMode,
+          sumLineCatmullRomTension: value.sumLineCatmullRomTension,
+          sumLineTemporalSmoothingEnabled:
+              value.sumLineTemporalSmoothingEnabled,
+          sumLineSmoothingWindow: value.sumLineSmoothingWindow,
+          sumLineZoomAdaptiveSmoothingEnabled:
+              value.sumLineZoomAdaptiveSmoothingEnabled,
+          upperVerticalGestures: upperVerticalGestures,
+        ),
+      );
+    },
+  );
 }
 
 final class _MindSumHeatmapContent extends StatefulWidget {
@@ -99,6 +125,11 @@ final class _MindSumHeatmapContent extends StatefulWidget {
     required this.sumYearRowLayout,
     required this.sumMonthLabelPlacement,
     required this.sumVisibleChartCount,
+    required this.sumLineInterpolationMode,
+    required this.sumLineCatmullRomTension,
+    required this.sumLineTemporalSmoothingEnabled,
+    required this.sumLineSmoothingWindow,
+    required this.sumLineZoomAdaptiveSmoothingEnabled,
     this.upperVerticalGestures,
   });
 
@@ -108,26 +139,15 @@ final class _MindSumHeatmapContent extends StatefulWidget {
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
+  final MindSumLineInterpolationMode sumLineInterpolationMode;
+  final double sumLineCatmullRomTension;
+  final bool sumLineTemporalSmoothingEnabled;
+  final MindSumSmoothingWindow sumLineSmoothingWindow;
+  final bool sumLineZoomAdaptiveSmoothingEnabled;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
   State<_MindSumHeatmapContent> createState() => _MindSumHeatmapContentState();
-}
-
-/// Format a whole-forint annual total for the compact, read-only Mind year
-/// chip. Query's canonical full-money formatter remains the owner for Query.
-@visibleForTesting
-String formatMindCompactForints(int forints) {
-  final absolute = forints.abs();
-  final sign = forints < 0 ? '-' : '';
-  if (absolute >= 1000000) {
-    final millions = (absolute / 1000000)
-        .toStringAsFixed(2)
-        .replaceAll('.', ',');
-    return '$sign$millions M Ft';
-  }
-  if (absolute >= 1000) return '$sign${(absolute / 1000).round()} k Ft';
-  return '$forints Ft';
 }
 
 final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
@@ -283,6 +303,13 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                 scaleResolution: widget.scaleResolution,
                 scrollController: _lineScrollController,
                 visibleChartCount: widget.sumVisibleChartCount,
+                interpolationMode: widget.sumLineInterpolationMode,
+                catmullRomTension: widget.sumLineCatmullRomTension,
+                temporalSmoothingEnabled:
+                    widget.sumLineTemporalSmoothingEnabled,
+                smoothingWindow: widget.sumLineSmoothingWindow,
+                zoomAdaptiveSmoothingEnabled:
+                    widget.sumLineZoomAdaptiveSmoothingEnabled,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
               _MindSumVisualization.monthlyOverlay =>
@@ -471,7 +498,7 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
       key: ValueKey<String>('mind-sum-heatmap-year-$year'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _MindSumYearHeader(frame: frame, year: year, page: 'heatmap'),
+        MindSumYearBandHeader(frame: frame, year: year, surface: 'heatmap'),
         const SizedBox(height: 4),
         cells,
       ],
@@ -649,6 +676,11 @@ final class _MindSumLinePage extends StatelessWidget {
     required this.scaleResolution,
     required this.scrollController,
     required this.visibleChartCount,
+    required this.interpolationMode,
+    required this.catmullRomTension,
+    required this.temporalSmoothingEnabled,
+    required this.smoothingWindow,
+    required this.zoomAdaptiveSmoothingEnabled,
     this.upperVerticalGestures,
   });
 
@@ -657,6 +689,11 @@ final class _MindSumLinePage extends StatelessWidget {
   final MindHeatmapScaleResolution scaleResolution;
   final ScrollController scrollController;
   final MindSumVisibleChartCount visibleChartCount;
+  final MindSumLineInterpolationMode interpolationMode;
+  final double catmullRomTension;
+  final bool temporalSmoothingEnabled;
+  final MindSumSmoothingWindow smoothingWindow;
+  final bool zoomAdaptiveSmoothingEnabled;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -671,6 +708,11 @@ final class _MindSumLinePage extends StatelessWidget {
     ).background,
     scrollController: scrollController,
     visibleChartCount: visibleChartCount,
+    interpolationMode: interpolationMode,
+    catmullRomTension: catmullRomTension,
+    temporalSmoothingEnabled: temporalSmoothingEnabled,
+    smoothingWindow: smoothingWindow,
+    zoomAdaptiveSmoothingEnabled: zoomAdaptiveSmoothingEnabled,
     upperVerticalGestures: upperVerticalGestures,
   );
 }
@@ -768,7 +810,11 @@ final class _MindSumMonthlyOverlayYear extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _MindSumYearHeader(frame: frame, year: year, page: 'monthly-overlay'),
+          MindSumYearBandHeader(
+            frame: frame,
+            year: year,
+            surface: 'monthly-overlay',
+          ),
           const SizedBox(height: 2),
           Expanded(
             child: CustomPaint(
@@ -847,59 +893,6 @@ const _mindMonthInitials = <String>[
   'N',
   'D',
 ];
-
-final class _MindSumYearHeader extends StatelessWidget {
-  const _MindSumYearHeader({
-    required this.frame,
-    required this.year,
-    required this.page,
-  });
-
-  final MindSumHeatmapFrame frame;
-  final int year;
-  final String page;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    key: ValueKey<String>('mind-sum-$page-year-header-$year'),
-    height: 18,
-    child: Row(
-      children: <Widget>[
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '$year',
-              style: const TextStyle(
-                color: FluviVisualTokens.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: FluviVisualTokens.surfaceMuted,
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: Text(
-              formatMindCompactForints(frame.yearTotal(year) ~/ 100),
-              key: ValueKey<String>('mind-sum-heatmap-total-$year'),
-              style: const TextStyle(
-                color: FluviVisualTokens.textSecondary,
-                fontSize: 8,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
 
 /// B3M-MYM-inspired selected-month day grid. The dynamic tile field repaints
 /// from the immutable frame while day numbers remain static semantic widgets;
@@ -1165,39 +1158,25 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                           ),
                         ),
                       ),
-                      ...frame.days.map((day) {
-                        final slot = geometry.slotIndexForDay(day.date.day);
-                        final row = slot ~/ 7;
-                        final column = slot % 7;
-                        final palette = MindYearHeatmapPaletteResolver.resolve(
-                          style: paletteStyle,
-                          day: day,
-                          scaleResolution: scaleResolution,
-                        );
-                        return Positioned(
-                          left: column * (cellExtent + gap),
-                          top: row * (cellExtent + gap),
-                          width: cellExtent,
-                          height: cellExtent,
-                          child: IgnorePointer(
-                            child: Padding(
-                              padding: const EdgeInsets.all(3),
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: Text(
-                                  '${day.date.day}',
-                                  style: TextStyle(
-                                    color: palette.foreground,
-                                    fontSize: 7,
-                                    fontWeight: FontWeight.w900,
-                                    height: 1,
-                                  ),
-                                ),
+                      MindHeatmapDayNumberOverlay(
+                        geometry: geometry,
+                        cellExtent: cellExtent,
+                        gap: gap,
+                        keyPrefix: 'mind-month-heatmap-day-number',
+                        dayNumbers: frame.days
+                            .map(
+                              (day) => MindHeatmapDayNumber(
+                                date: day.date,
+                                foreground:
+                                    MindYearHeatmapPaletteResolver.resolve(
+                                      style: paletteStyle,
+                                      day: day,
+                                      scaleResolution: scaleResolution,
+                                    ).foreground,
                               ),
-                            ),
-                          ),
-                        );
-                      }),
+                            )
+                            .toList(growable: false),
+                      ),
                     ],
                   ),
                 ),

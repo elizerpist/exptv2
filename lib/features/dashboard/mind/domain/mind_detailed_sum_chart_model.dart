@@ -43,6 +43,72 @@ final class MindSumChartDensityGeometry {
   }
 }
 
+/// Paint-only weighted smoothing for detailed Sum curve anchors. It never
+/// enters hit testing, filtering, totals or the immutable financial frame.
+/// Local extrema are retained verbatim so a spike cannot disappear merely
+/// because a user selected a softer presentation.
+final class MindDetailedSumVisualSmoothing {
+  const MindDetailedSumVisualSmoothing._();
+
+  static List<MindSumHeatmapDetailPoint> apply({
+    required List<MindSumHeatmapDetailPoint> points,
+    required MindSumSmoothingWindow window,
+    required double strength,
+  }) {
+    final normalizedStrength = strength.clamp(0.0, 1.0).toDouble();
+    if (points.length < 3 || normalizedStrength <= 0) return points;
+    final ordered = List<MindSumHeatmapDetailPoint>.of(points)
+      ..sort(_comparePoint);
+    final radiusMinutes = window.dayCount * _minutesPerDay ~/ 2;
+    final result = List<MindSumHeatmapDetailPoint>.generate(ordered.length, (
+      index,
+    ) {
+      if (index == 0 || index == ordered.length - 1) return ordered[index];
+      final current = ordered[index];
+      final before = ordered[index - 1];
+      final after = ordered[index + 1];
+      final isExtremum =
+          (current.total >= before.total && current.total >= after.total) ||
+          (current.total <= before.total && current.total <= after.total);
+      if (isExtremum) return current;
+
+      var weightedTotal = 0.0;
+      var totalWeight = 0.0;
+      for (final neighbour in ordered) {
+        final distance = (neighbour.epochMinute - current.epochMinute).abs();
+        if (distance > radiusMinutes) continue;
+        // Triangular temporal weights favour the real anchor under the curve
+        // and taper continuously to the configured window edge.
+        final weight = 1 - distance / (radiusMinutes + 1);
+        weightedTotal += neighbour.total * weight;
+        totalWeight += weight;
+      }
+      if (totalWeight <= 0) return current;
+      final weighted = (weightedTotal / totalWeight).round();
+      final blended =
+          (current.total * (1 - normalizedStrength) +
+                  weighted * normalizedStrength)
+              .round();
+      return MindSumHeatmapDetailPoint(
+        epochMinute: current.epochMinute,
+        total: blended,
+        ordinal: current.ordinal,
+      );
+    }, growable: false);
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(result);
+  }
+
+  static int _comparePoint(
+    MindSumHeatmapDetailPoint left,
+    MindSumHeatmapDetailPoint right,
+  ) {
+    final byTime = left.epochMinute.compareTo(right.epochMinute);
+    return byTime != 0
+        ? byTime
+        : (left.ordinal ?? -1).compareTo(right.ordinal ?? -1);
+  }
+}
+
 /// An immutable visible minute interval inside one calendar year's detailed
 /// Sum chart. The home domain is always January through December; pinch zoom
 /// narrows real temporal extent rather than scaling a rendered bitmap.

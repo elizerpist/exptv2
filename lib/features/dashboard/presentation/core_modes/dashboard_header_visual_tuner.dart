@@ -584,7 +584,16 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('Éves 3×4 profitabilitás'),
+          child: Text('Éves hónapkártyák'),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('mind-year-month-card-border-enabled'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Hónapkártya keret'),
+          subtitle: const Text('Csak a 3×4 és 2×6 kártyás nézetben'),
+          value: settings.yearMonthCardBorderEnabled,
+          onChanged: controller.setYearMonthCardBorderEnabled,
         ),
         SwitchListTile(
           key: const ValueKey<String>('mind-year-profitability-tint-enabled'),
@@ -592,27 +601,107 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           title: const Text('Hónapkártya háttér'),
           subtitle: const Text('Nyereség/zárás szerint'),
-          value: settings.yearThreeColumnProfitabilityTintEnabled,
-          onChanged: controller.setYearThreeColumnProfitabilityTintEnabled,
+          value: settings.yearMonthCardProfitabilityTintEnabled,
+          onChanged: controller.setYearMonthCardProfitabilityTintEnabled,
         ),
         Semantics(
           label:
-              'Profitabilitás háttér erőssége ${(settings.yearThreeColumnProfitabilityTintOpacity * 100).round()}%',
+              'Profitabilitás háttér erőssége ${(settings.yearMonthCardProfitabilityTintOpacity * 100).round()}%',
           child: Column(
             key: const ValueKey<String>('mind-year-profitability-tint-opacity'),
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
-                'Háttér erőssége ${(settings.yearThreeColumnProfitabilityTintOpacity * 100).round()}%',
+                'Háttér erőssége ${(settings.yearMonthCardProfitabilityTintOpacity * 100).round()}%',
                 style: const TextStyle(fontSize: 12),
               ),
               Slider(
-                value: settings.yearThreeColumnProfitabilityTintOpacity,
-                onChanged:
-                    controller.setYearThreeColumnProfitabilityTintOpacity,
+                value: settings.yearMonthCardProfitabilityTintOpacity,
+                onChanged: controller.setYearMonthCardProfitabilityTintOpacity,
               ),
             ],
           ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('Sum részletes vonal'),
+        ),
+        RadioGroup<MindSumLineInterpolationMode>(
+          groupValue: settings.sumLineInterpolationMode,
+          onChanged: (mode) {
+            if (mode != null) controller.setSumLineInterpolationMode(mode);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final mode in MindSumLineInterpolationMode.values)
+                RadioListTile<MindSumLineInterpolationMode>(
+                  key: ValueKey('mind-sum-line-interpolation-${mode.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(mode.tunerLabel),
+                  value: mode,
+                ),
+            ],
+          ),
+        ),
+        Semantics(
+          label:
+              'Catmull–Rom feszesség ${(settings.sumLineCatmullRomTension * 100).round()}%',
+          child: Column(
+            key: const ValueKey<String>('mind-sum-line-catmull-rom-tension'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                'Catmull–Rom feszesség ${(settings.sumLineCatmullRomTension * 100).round()}%',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Slider(
+                value: settings.sumLineCatmullRomTension,
+                onChanged: controller.setSumLineCatmullRomTension,
+              ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('mind-sum-line-smoothing-enabled'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Súlyozott időbeli simítás'),
+          value: settings.sumLineTemporalSmoothingEnabled,
+          onChanged: controller.setSumLineTemporalSmoothingEnabled,
+        ),
+        RadioGroup<MindSumSmoothingWindow>(
+          groupValue: settings.sumLineSmoothingWindow,
+          onChanged: (window) {
+            if (window != null) controller.setSumLineSmoothingWindow(window);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final window in MindSumSmoothingWindow.values)
+                RadioListTile<MindSumSmoothingWindow>(
+                  key: ValueKey(
+                    'mind-sum-line-smoothing-window-${window.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(window.tunerLabel),
+                  value: window,
+                ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>(
+            'mind-sum-line-zoom-adaptive-smoothing-enabled',
+          ),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Zoom-adaptív simítás'),
+          subtitle: const Text(
+            'Részletnél fokozatosan nyers adatra tér vissza',
+          ),
+          value: settings.sumLineZoomAdaptiveSmoothingEnabled,
+          onChanged: controller.setSumLineZoomAdaptiveSmoothingEnabled,
         ),
       ],
     ),

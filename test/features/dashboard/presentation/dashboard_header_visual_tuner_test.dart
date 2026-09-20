@@ -915,6 +915,58 @@ void main() {
       heatmapSettings.value.yearThreeColumnProfitabilityTintOpacity,
       closeTo(.38, .0001),
     );
+    final cardBorder = find.byKey(
+      const ValueKey<String>('mind-year-month-card-border-enabled'),
+    );
+    tester
+        .widget<Switch>(
+          find.descendant(of: cardBorder, matching: find.byType(Switch)),
+        )
+        .onChanged!(false);
+    await tester.pump();
+    expect(heatmapSettings.value.yearMonthCardBorderEnabled, isFalse);
+    final catmull = find.byKey(
+      const ValueKey<String>('mind-sum-line-interpolation-catmullRom'),
+    );
+    await tester.ensureVisible(catmull);
+    await tester.tap(catmull);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.sumLineInterpolationMode,
+      MindSumLineInterpolationMode.catmullRom,
+    );
+    final tension = find.byKey(
+      const ValueKey<String>('mind-sum-line-catmull-rom-tension'),
+    );
+    await tester.ensureVisible(tension);
+    tester
+        .widget<Slider>(
+          find.descendant(of: tension, matching: find.byType(Slider)),
+        )
+        .onChanged!(.61);
+    final smoothing = find.byKey(
+      const ValueKey<String>('mind-sum-line-smoothing-enabled'),
+    );
+    await tester.ensureVisible(smoothing);
+    await tester.tap(smoothing);
+    final window = find.byKey(
+      const ValueKey<String>('mind-sum-line-smoothing-window-days7'),
+    );
+    await tester.ensureVisible(window);
+    await tester.tap(window);
+    final adaptive = find.byKey(
+      const ValueKey<String>('mind-sum-line-zoom-adaptive-smoothing-enabled'),
+    );
+    await tester.ensureVisible(adaptive);
+    await tester.tap(adaptive);
+    await tester.pump();
+    expect(heatmapSettings.value.sumLineCatmullRomTension, closeTo(.61, .0001));
+    expect(heatmapSettings.value.sumLineTemporalSmoothingEnabled, isTrue);
+    expect(
+      heatmapSettings.value.sumLineSmoothingWindow,
+      MindSumSmoothingWindow.days7,
+    );
+    expect(heatmapSettings.value.sumLineZoomAdaptiveSmoothingEnabled, isTrue);
     expect(
       find.byKey(const ValueKey('mind-heatmap-legend-toggle')),
       findsNothing,

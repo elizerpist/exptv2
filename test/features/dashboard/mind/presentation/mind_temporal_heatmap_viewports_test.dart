@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -1357,6 +1359,121 @@ void main() {
         isTrue,
         reason: 'The visualization toggle is local presentation state only.',
       );
+    },
+  );
+
+  testWidgets(
+    'SUM-HEADER/CURVE-01 RED: detailed bands share the overlay header and receive independent curve presentation settings',
+    (tester) async {
+      final settings = MindYearHeatmapPresentationController()
+        ..setSumLineInterpolationMode(MindSumLineInterpolationMode.catmullRom)
+        ..setSumLineCatmullRomTension(.63)
+        ..setSumLineTemporalSmoothingEnabled(true)
+        ..setSumLineSmoothingWindow(MindSumSmoothingWindow.days7)
+        ..setSumLineZoomAdaptiveSmoothingEnabled(true);
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 4,
+          coreRevision: 4,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _entry(1, 100000, const LocalDate(year: 2025, month: 1, day: 2)),
+          _entry(2, 250000, const LocalDate(year: 2025, month: 2, day: 2)),
+          _entry(3, 180000, const LocalDate(year: 2025, month: 3, day: 2)),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(settings.dispose);
+      addTearDown(listenable.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 280,
+              child: MindSumHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pump();
+      final detailedYear = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-year-label-2025')),
+      );
+      final detailedTotal = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-year-total-2025')),
+      );
+      expect(
+        detailedTotal.data,
+        formatMindCompactForints(frame.yearTotal(2025) ~/ 100),
+      );
+      expect(
+        tester
+            .widget<Semantics>(
+              find.byKey(
+                const ValueKey<String>('mind-sum-detailed-presentation-2025'),
+              ),
+            )
+            .properties
+            .label,
+        contains('catmullRom|days7'),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-bars')),
+      );
+      await tester.pump();
+      final overlayYear = tester.widget<Text>(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-year-label-2025'),
+        ),
+      );
+      final overlayTotal = tester.widget<Text>(
+        find.byKey(
+          const ValueKey<String>('mind-sum-monthly-overlay-year-total-2025'),
+        ),
+      );
+      expect(overlayYear.style, detailedYear.style);
+      expect(overlayTotal.style, detailedTotal.style);
+      expect(overlayTotal.data, detailedTotal.data);
+    },
+  );
+
+  test(
+    'SUM-CURVE-02 RED: cubic interpolation controls cannot create endpoint-range overshoot',
+    () {
+      const points = <Offset>[
+        Offset(0, 50),
+        Offset(20, 5),
+        Offset(40, 80),
+        Offset(60, 30),
+      ];
+      for (final mode in <MindSumLineInterpolationMode>[
+        MindSumLineInterpolationMode.monotoneCubic,
+        MindSumLineInterpolationMode.catmullRom,
+      ]) {
+        final segments = mindDetailedSumCurveSegments(
+          points: points,
+          interpolationMode: mode,
+          catmullRomTension: .35,
+        );
+        expect(segments, hasLength(points.length - 1));
+        for (final segment in segments) {
+          final lower = [segment.start.dy, segment.end.dy].reduce(math.min);
+          final upper = [segment.start.dy, segment.end.dy].reduce(math.max);
+          expect(segment.controlOne.dy, inInclusiveRange(lower, upper));
+          expect(segment.controlTwo.dy, inInclusiveRange(lower, upper));
+        }
+      }
     },
   );
 

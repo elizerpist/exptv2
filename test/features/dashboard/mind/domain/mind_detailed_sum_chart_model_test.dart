@@ -305,4 +305,43 @@ void main() {
       expect(singleYear.bandHeight, 260);
     },
   );
+
+  test(
+    'SUM-CURVE-01 RED: weighted presentation smoothing preserves raw extrema and deep strength returns raw points',
+    () {
+      const points = <MindSumHeatmapDetailPoint>[
+        MindSumHeatmapDetailPoint(epochMinute: 0, total: 100, ordinal: 1),
+        MindSumHeatmapDetailPoint(epochMinute: 1440, total: 120, ordinal: 2),
+        MindSumHeatmapDetailPoint(epochMinute: 2880, total: 900, ordinal: 3),
+        MindSumHeatmapDetailPoint(epochMinute: 4320, total: 140, ordinal: 4),
+        MindSumHeatmapDetailPoint(epochMinute: 5760, total: 160, ordinal: 5),
+      ];
+
+      final raw = MindDetailedSumVisualSmoothing.apply(
+        points: points,
+        window: MindSumSmoothingWindow.days7,
+        strength: 0,
+      );
+      final smooth = MindDetailedSumVisualSmoothing.apply(
+        points: points,
+        window: MindSumSmoothingWindow.days7,
+        strength: 1,
+      );
+      final deep = MindDetailedSumVisualSmoothing.apply(
+        points: points,
+        window: MindSumSmoothingWindow.days7,
+        strength: .003,
+      );
+
+      expect(raw, same(points));
+      expect(smooth[2].total, 900, reason: 'Real spike stays a real spike.');
+      expect(smooth[1].total, isNot(points[1].total));
+      expect(deep[1].total, closeTo(points[1].total, 2));
+      expect(
+        smooth.map((point) => point.ordinal),
+        points.map((point) => point.ordinal),
+        reason: 'Paint smoothing does not discard eligible anchors.',
+      );
+    },
+  );
 }

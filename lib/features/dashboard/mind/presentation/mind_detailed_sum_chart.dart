@@ -15,6 +15,7 @@ import '../domain/mind_detailed_sum_chart_model.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import 'mind_anchored_info_card.dart';
+import 'mind_sum_year_band_header.dart';
 
 const _detailMinutesPerDay = 24 * 60;
 
@@ -28,6 +29,11 @@ final class MindDetailedSumChart extends StatefulWidget {
     required this.lineColor,
     required this.scrollController,
     this.visibleChartCount = MindSumVisibleChartCount.two,
+    this.interpolationMode = MindSumLineInterpolationMode.linear,
+    this.catmullRomTension = .5,
+    this.temporalSmoothingEnabled = false,
+    this.smoothingWindow = MindSumSmoothingWindow.days3,
+    this.zoomAdaptiveSmoothingEnabled = false,
     this.upperVerticalGestures,
   });
 
@@ -35,6 +41,11 @@ final class MindDetailedSumChart extends StatefulWidget {
   final Color lineColor;
   final ScrollController scrollController;
   final MindSumVisibleChartCount visibleChartCount;
+  final MindSumLineInterpolationMode interpolationMode;
+  final double catmullRomTension;
+  final bool temporalSmoothingEnabled;
+  final MindSumSmoothingWindow smoothingWindow;
+  final bool zoomAdaptiveSmoothingEnabled;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -349,6 +360,12 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
                     onPanBy: _panBy,
                     onPanEnd: () => _logBandDiagnostics(reason: 'PAN_END'),
                     onPointSelected: _onPointSelected,
+                    interpolationMode: widget.interpolationMode,
+                    catmullRomTension: widget.catmullRomTension,
+                    temporalSmoothingEnabled: widget.temporalSmoothingEnabled,
+                    smoothingWindow: widget.smoothingWindow,
+                    zoomAdaptiveSmoothingEnabled:
+                        widget.zoomAdaptiveSmoothingEnabled,
                   ),
                 );
               },
@@ -415,6 +432,11 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
     required this.onPanBy,
     required this.onPanEnd,
     required this.onPointSelected,
+    required this.interpolationMode,
+    required this.catmullRomTension,
+    required this.temporalSmoothingEnabled,
+    required this.smoothingWindow,
+    required this.zoomAdaptiveSmoothingEnabled,
   });
 
   final int year;
@@ -426,6 +448,11 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
   final VoidCallback onPanEnd;
   final void Function(int year, MindSumHeatmapDetailPoint? point)
   onPointSelected;
+  final MindSumLineInterpolationMode interpolationMode;
+  final double catmullRomTension;
+  final bool temporalSmoothingEnabled;
+  final MindSumSmoothingWindow smoothingWindow;
+  final bool zoomAdaptiveSmoothingEnabled;
 
   @override
   State<_MindDetailedSumYearBand> createState() =>
@@ -495,7 +522,7 @@ final class _MindDetailedSumYearBandState
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      const headerHeight = 16.0;
+      const headerHeight = 18.0;
       const axisLeft = 34.0;
       const axisBottom = 18.0;
       final plotWidth = math.max(1.0, constraints.maxWidth - axisLeft - 3);
@@ -518,6 +545,20 @@ final class _MindDetailedSumYearBandState
           year: widget.year,
         ).fold<int>(0, (value, point) => math.max(value, point.total)),
       );
+      final smoothingStrength =
+          !widget.temporalSmoothingEnabled &&
+              !widget.zoomAdaptiveSmoothingEnabled
+          ? 0.0
+          : widget.zoomAdaptiveSmoothingEnabled
+          ? (_window.visibleMinuteCount / _window.homeMinuteCount)
+                .clamp(0.0, 1.0)
+                .toDouble()
+          : 1.0;
+      final curvePoints = MindDetailedSumVisualSmoothing.apply(
+        points: selection.paintPoints,
+        window: widget.smoothingWindow,
+        strength: smoothingStrength,
+      );
       final chart = GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: (details) => _selectNearestPoint(
@@ -529,13 +570,16 @@ final class _MindDetailedSumYearBandState
         child: CustomPaint(
           key: ValueKey<String>('mind-sum-detailed-plot-${widget.year}'),
           painter: _MindDetailedSumPainter(
-            points: selection.paintPoints,
+            curvePoints: curvePoints,
+            markerPoints: selection.paintPoints,
             window: _window,
             lineColor: widget.lineColor,
             axisLeft: axisLeft,
             axisBottom: axisBottom,
             maximum: maximum,
             year: widget.year,
+            interpolationMode: widget.interpolationMode,
+            catmullRomTension: widget.catmullRomTension,
           ),
           child: const SizedBox.expand(),
         ),
@@ -549,15 +593,21 @@ final class _MindDetailedSumYearBandState
             children: <Widget>[
               SizedBox(
                 height: headerHeight,
-                child: Row(
+                child: Stack(
+                  fit: StackFit.expand,
                   children: <Widget>[
-                    Text(
-                      '${widget.year}',
-                      style: const TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
+                    MindSumYearBandHeader(
+                      frame: widget.frame,
+                      year: widget.year,
+                      surface: 'detailed',
+                    ),
+                    Semantics(
+                      key: ValueKey<String>(
+                        'mind-sum-detailed-presentation-${widget.year}',
                       ),
+                      label:
+                          '${widget.interpolationMode.name}|${widget.smoothingWindow.name}|${smoothingStrength.toStringAsFixed(3)}|${widget.zoomAdaptiveSmoothingEnabled}',
+                      child: const SizedBox(width: 0, height: 0),
                     ),
                     Semantics(
                       key: ValueKey<String>(
@@ -723,22 +773,28 @@ final class _MindDetailedSumMonthAxis extends StatelessWidget {
 
 final class _MindDetailedSumPainter extends CustomPainter {
   const _MindDetailedSumPainter({
-    required this.points,
+    required this.curvePoints,
+    required this.markerPoints,
     required this.window,
     required this.lineColor,
     required this.axisLeft,
     required this.axisBottom,
     required this.maximum,
     required this.year,
+    required this.interpolationMode,
+    required this.catmullRomTension,
   });
 
-  final List<MindSumHeatmapDetailPoint> points;
+  final List<MindSumHeatmapDetailPoint> curvePoints;
+  final List<MindSumHeatmapDetailPoint> markerPoints;
   final MindDetailedSumTimeWindow window;
   final Color lineColor;
   final double axisLeft;
   final double axisBottom;
   final int maximum;
   final int year;
+  final MindSumLineInterpolationMode interpolationMode;
+  final double catmullRomTension;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -778,7 +834,7 @@ final class _MindDetailedSumPainter extends CustomPainter {
         );
       }
     }
-    if (points.isEmpty) return;
+    if (curvePoints.isEmpty) return;
     Offset pointAt(MindSumHeatmapDetailPoint point) {
       final fraction =
           (point.epochMinute - window.startEpochMinute) /
@@ -790,10 +846,25 @@ final class _MindDetailedSumPainter extends CustomPainter {
       );
     }
 
-    final offsets = points.map(pointAt).toList(growable: false);
+    final offsets = curvePoints.map(pointAt).toList(growable: false);
     final line = Path()..moveTo(offsets.first.dx, offsets.first.dy);
-    for (final offset in offsets.skip(1)) {
-      line.lineTo(offset.dx, offset.dy);
+    for (final segment in mindDetailedSumCurveSegments(
+      points: offsets,
+      interpolationMode: interpolationMode,
+      catmullRomTension: catmullRomTension,
+    )) {
+      if (segment.isLinear) {
+        line.lineTo(segment.end.dx, segment.end.dy);
+      } else {
+        line.cubicTo(
+          segment.controlOne.dx,
+          segment.controlOne.dy,
+          segment.controlTwo.dx,
+          segment.controlTwo.dy,
+          segment.end.dx,
+          segment.end.dy,
+        );
+      }
     }
     final fill = Path.from(line)
       ..lineTo(offsets.last.dx, plot.bottom)
@@ -823,19 +894,153 @@ final class _MindDetailedSumPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round,
     );
     final marker = Paint()..color = lineColor;
-    for (final offset in offsets) {
-      canvas.drawCircle(offset, 1.5, marker);
+    for (final point in markerPoints) {
+      canvas.drawCircle(pointAt(point), 1.5, marker);
     }
     canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _MindDetailedSumPainter oldDelegate) =>
-      oldDelegate.points != points ||
+      oldDelegate.curvePoints != curvePoints ||
+      oldDelegate.markerPoints != markerPoints ||
       oldDelegate.window != window ||
       oldDelegate.lineColor != lineColor ||
       oldDelegate.maximum != maximum ||
-      oldDelegate.year != year;
+      oldDelegate.year != year ||
+      oldDelegate.interpolationMode != interpolationMode ||
+      oldDelegate.catmullRomTension != catmullRomTension;
+}
+
+@immutable
+final class MindDetailedSumCurveSegment {
+  const MindDetailedSumCurveSegment({
+    required this.start,
+    required this.controlOne,
+    required this.controlTwo,
+    required this.end,
+    required this.isLinear,
+  });
+
+  final Offset start;
+  final Offset controlOne;
+  final Offset controlTwo;
+  final Offset end;
+  final bool isLinear;
+}
+
+/// Converts already scaled visual anchors into bounded curve controls. Cubic
+/// control Y values are clamped to each segment's endpoint range, preventing
+/// an interpolation-only financial peak or trough.
+@visibleForTesting
+List<MindDetailedSumCurveSegment> mindDetailedSumCurveSegments({
+  required List<Offset> points,
+  required MindSumLineInterpolationMode interpolationMode,
+  required double catmullRomTension,
+}) {
+  if (points.length < 2) return const <MindDetailedSumCurveSegment>[];
+  return switch (interpolationMode) {
+    MindSumLineInterpolationMode.linear =>
+      List<MindDetailedSumCurveSegment>.generate(
+        points.length - 1,
+        (index) => MindDetailedSumCurveSegment(
+          start: points[index],
+          controlOne: points[index],
+          controlTwo: points[index + 1],
+          end: points[index + 1],
+          isLinear: true,
+        ),
+        growable: false,
+      ),
+    MindSumLineInterpolationMode.monotoneCubic => _monotoneCubicSegments(
+      points,
+    ),
+    MindSumLineInterpolationMode.catmullRom => _catmullRomSegments(
+      points,
+      catmullRomTension,
+    ),
+  };
+}
+
+List<MindDetailedSumCurveSegment> _monotoneCubicSegments(List<Offset> points) {
+  final slopes = List<double>.filled(points.length, 0);
+  final segments = List<double>.filled(points.length - 1, 0);
+  for (var index = 0; index < segments.length; index += 1) {
+    final dx = points[index + 1].dx - points[index].dx;
+    segments[index] = dx <= 0
+        ? 0
+        : (points[index + 1].dy - points[index].dy) / dx;
+  }
+  slopes[0] = segments.first;
+  slopes[slopes.length - 1] = segments.last;
+  for (var index = 1; index < slopes.length - 1; index += 1) {
+    final previous = segments[index - 1];
+    final next = segments[index];
+    slopes[index] = previous * next <= 0 ? 0 : (previous + next) / 2;
+  }
+  return List<MindDetailedSumCurveSegment>.generate(points.length - 1, (index) {
+    final start = points[index];
+    final end = points[index + 1];
+    final dx = end.dx - start.dx;
+    if (dx <= 0) {
+      return MindDetailedSumCurveSegment(
+        start: start,
+        controlOne: start,
+        controlTwo: end,
+        end: end,
+        isLinear: true,
+      );
+    }
+    final lower = math.min(start.dy, end.dy);
+    final upper = math.max(start.dy, end.dy);
+    final controlOneY = (start.dy + slopes[index] * dx / 3)
+        .clamp(lower, upper)
+        .toDouble();
+    final controlTwoY = (end.dy - slopes[index + 1] * dx / 3)
+        .clamp(lower, upper)
+        .toDouble();
+    return MindDetailedSumCurveSegment(
+      start: start,
+      controlOne: Offset(start.dx + dx / 3, controlOneY),
+      controlTwo: Offset(end.dx - dx / 3, controlTwoY),
+      end: end,
+      isLinear: false,
+    );
+  }, growable: false);
+}
+
+List<MindDetailedSumCurveSegment> _catmullRomSegments(
+  List<Offset> points,
+  double tension,
+) {
+  final scale = (1 - tension.clamp(0.0, 1.0).toDouble()) / 2;
+  return List<MindDetailedSumCurveSegment>.generate(points.length - 1, (index) {
+    final before = points[index == 0 ? index : index - 1];
+    final start = points[index];
+    final end = points[index + 1];
+    final after = points[index + 2 < points.length ? index + 2 : index + 1];
+    final lower = math.min(start.dy, end.dy);
+    final upper = math.max(start.dy, end.dy);
+    final controlOneX = (start.dx + (end.dx - before.dx) * scale / 3)
+        .clamp(start.dx, end.dx)
+        .toDouble();
+    final controlOneY = (start.dy + (end.dy - before.dy) * scale / 3)
+        .clamp(lower, upper)
+        .toDouble();
+    final controlTwoX = (end.dx - (after.dx - start.dx) * scale / 3)
+        .clamp(start.dx, end.dx)
+        .toDouble();
+    final controlTwoY = (end.dy - (after.dy - start.dy) * scale / 3)
+        .clamp(lower, upper)
+        .toDouble();
+    return MindDetailedSumCurveSegment(
+      start: start,
+      controlOne: Offset(controlOneX, controlOneY),
+      controlTwo: Offset(controlTwoX, controlTwoY),
+      end: end,
+      isLinear: false,
+    );
+  }, growable: false);
 }
 
 int _visibleMonthSeparatorCount(int year, MindDetailedSumTimeWindow window) =>

@@ -1378,7 +1378,124 @@ void main() {
   );
 
   testWidgets(
-    'RED YEAR-DIRECT-01/02/04: Year uses a direct-cell header selector and only 3x4/4x3 layouts',
+    'Y26-01/02/03/04/05 RED: 2x6 renders card-only chrome, monthly values and Month-style day numbers',
+    (tester) async {
+      final settings = MindYearHeatmapPresentationController();
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      addTearDown(settings.dispose);
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 520,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-2x6')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-2x6')),
+      );
+      await tester.pump();
+
+      expect(find.byType(MindYearHeatmapMonthGroup), findsAtLeastNWidgets(4));
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Scope'), findsAtLeastNWidgets(1));
+      expect(find.text('Zárás'), findsAtLeastNWidgets(1));
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-year-heatmap-day-number-2025-1-1'),
+        ),
+        findsOneWidget,
+      );
+      final cellColorBefore =
+          (tester
+                      .widget<CustomPaint>(
+                        find.byKey(
+                          const ValueKey<String>(
+                            'mind-year-heatmap-month-cells-1',
+                          ),
+                        ),
+                      )
+                      .painter!
+                  as MindYearHeatmapMonthPainter)
+              .colorForDate(const LocalDate(year: 2025, month: 1, day: 2));
+      settings.setYearMonthCardBorderEnabled(false);
+      settings.setYearMonthCardProfitabilityTintEnabled(true);
+      settings.setYearMonthCardProfitabilityTintOpacity(.42);
+      await tester.pump();
+      final card = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
+      );
+      final decoration = card.decoration! as BoxDecoration;
+      expect(decoration.border, isNull);
+      expect(decoration.color, isNot(FluviVisualTokens.surface));
+      expect(
+        (tester
+                    .widget<CustomPaint>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'mind-year-heatmap-month-cells-1',
+                        ),
+                      ),
+                    )
+                    .painter!
+                as MindYearHeatmapMonthPainter)
+            .colorForDate(const LocalDate(year: 2025, month: 1, day: 2)),
+        cellColorBefore,
+        reason: 'Card tint never reaches the heatmap palette authority.',
+      );
+
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-grid')),
+        const Offset(0, -1000),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-card-surface-12')),
+        findsOneWidget,
+        reason:
+            'The sixth 2x6 row remains reachable through the sole vertical owner.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-annual-row-5')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
+        findsNothing,
+        reason: 'Direct 4x3 never receives MonthCard chrome.',
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('mind-year-heatmap-day-number-2025-1-1'),
+        ),
+        findsNothing,
+        reason: 'Date labels are a 2x6 card-only treatment.',
+      );
+    },
+  );
+
+  testWidgets(
+    'YEAR-DIRECT-01/02/04: Year header selector exposes 3x4/4x3/2x6 without restoring settings ownership',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
       addTearDown(frame.dispose);
@@ -1404,6 +1521,10 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-2x6')),
         findsOneWidget,
       );
       expect(

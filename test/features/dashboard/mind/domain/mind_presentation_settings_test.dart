@@ -208,5 +208,64 @@ void main() {
         expect(controller.value.revision, 2);
       },
     );
+
+    test(
+      'Y26-04/SUM-02 RED: MonthCard chrome and Sum curve choices are independently revisioned presentation state',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(controller.value.yearMonthCardBorderEnabled, isTrue);
+        expect(controller.value.yearMonthCardProfitabilityTintEnabled, isFalse);
+        expect(
+          controller.value.yearMonthCardProfitabilityTintOpacity,
+          closeTo(.16, .0001),
+        );
+        expect(
+          controller.value.sumLineInterpolationMode,
+          MindSumLineInterpolationMode.linear,
+        );
+        expect(controller.value.sumLineTemporalSmoothingEnabled, isFalse);
+        expect(controller.value.sumLineZoomAdaptiveSmoothingEnabled, isFalse);
+        expect(
+          controller.value.sumLineSmoothingWindow,
+          MindSumSmoothingWindow.days3,
+        );
+
+        controller.setYearMonthCardBorderEnabled(false);
+        controller.setYearMonthCardProfitabilityTintEnabled(true);
+        controller.setYearMonthCardProfitabilityTintOpacity(.37);
+        controller.setSumLineInterpolationMode(
+          MindSumLineInterpolationMode.catmullRom,
+        );
+        controller.setSumLineCatmullRomTension(.62);
+        controller.setSumLineTemporalSmoothingEnabled(true);
+        controller.setSumLineSmoothingWindow(MindSumSmoothingWindow.days7);
+        controller.setSumLineZoomAdaptiveSmoothingEnabled(true);
+
+        expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+        expect(controller.value.yearMonthCardProfitabilityTintEnabled, isTrue);
+        expect(
+          controller.value.yearMonthCardProfitabilityTintOpacity,
+          closeTo(.37, .0001),
+        );
+        expect(
+          controller.value.sumLineInterpolationMode,
+          MindSumLineInterpolationMode.catmullRom,
+        );
+        expect(controller.value.sumLineCatmullRomTension, closeTo(.62, .0001));
+        expect(controller.value.sumLineTemporalSmoothingEnabled, isTrue);
+        expect(
+          controller.value.sumLineSmoothingWindow,
+          MindSumSmoothingWindow.days7,
+        );
+        expect(controller.value.sumLineZoomAdaptiveSmoothingEnabled, isTrue);
+        expect(
+          controller.value.revision,
+          8,
+          reason: 'Each visual choice is independently revisioned only.',
+        );
+      },
+    );
   });
 }
