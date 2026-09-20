@@ -1892,3 +1892,13 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **UNPROVEN:** exact framework activity transition that first creates/retains the orphaned Hold in this physical sequence; whether the remaining 2027 line-detail difference is a true LOD/crop defect or only sparse-data visibility without better per-band evidence; exact desired pixel height beyond the relational one-chart≈full-view/two-chart≈half-view contract.
 - **MISSING EVIDENCE:** production-parent RED reproducer for Summary persistent-Hold freeze; activity-lifecycle diagnostics around pointer down/end/ScrollStart/ScrollEnd/Hold→Idle; stale/superseded-settle positive controls; per-band Sum source/LOD/painter diagnostics during same-span pan; overlap-anchor invariance test using a controlled 2027 series; 1-vs-2 chart-density mounted tests for detailed line + monthly overlay; final CI/APK/final-source SCIP; user Android revalidation.
 - Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No application source, test, workflow, tooling graph or milestone file is modified by this record. Physical validation of the next candidate remains `PENDING — USER ONLY`.
+
+## 2026-09-20 — Year 3-column month-card profitability tint option
+
+- New presentation-only product request for the Mind Year heatmap in the **3-column layout only**. In this layout, each month must always render inside a month card.
+- Add an optional profitability tint for those month cards: **light red** when the month is loss-making and **light green** when the month is profitable. The tint is a visual background treatment only; it must not replace or recolor the existing heatmap day-cell encoding.
+- This treatment must be user-configurable in Settings: the profitability background can be enabled/disabled independently, and its card-background opacity must be adjustable with a slider.
+- The opacity control affects only the red/green month-card background tint, not text, heatmap cells, borders, shadows, or the financial calculation itself.
+- Profit/loss classification must use the app's existing monthly financial result/balance semantics rather than inventing a second calculation path. Break-even/zero should remain visually neutral unless an existing product semantic already defines it otherwise.
+- Scope lock: this feature applies only to the Year heatmap's 3-column month-card presentation. The 4-column direct-cell layout must remain unchanged.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, tooling graph or milestone file is modified by this record.
