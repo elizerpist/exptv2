@@ -59,17 +59,17 @@
 
 | ID | Source | Code area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| SUMM-01 | exact physical Summary log | centered carousel / Summary host | production-parent test reproduces the accepted-pointer + persistent-Hold liveness boundary before shared production mutation | RED test | NOT DONE |
-| SUMM-02 | Summary repair contract | centered carousel | completed orphan Hold cannot strand selector; active pointer/ballistic/stale controls remain correct | GREEN shared + Summary tests | NOT DONE |
-| SUM-FORENSICS-01 | paired 2027 screenshots/log | detailed Sum chart | bounded per-band counts/digests/edge-neighbour diagnostics reach existing Mind debug filter | mounted diagnostics test | NOT DONE |
-| SUM-FORENSICS-02 | pan-detail contract | LOD/chart | sparse fixture distinguishes legitimate calendar sparsity from origin-dependent source/LOD loss | fixed-span overlap and edge-continuity RED/GREEN | NOT DONE |
-| SUM-DENSITY-01 | 1/2 request | Mind presentation settings/controller/tuner | default is two; single settings choice writes presentation revision only | domain/tuner tests | NOT DONE |
-| SUM-DENSITY-02 | density geometry contract | shared Sum presentation geometry | one resolver drives detailed and overlay bands; 1 fits one full band, 2 fits two incl. X axis, overflow scrolls | mounted renderer tests | NOT DONE |
-| SUM-DENSITY-03 | scope lock | Sum heatmap | density has no heatmap, Query, frame or financial semantic effect | heatmap/frame identity regression | NOT DONE |
-| YEAR-PROFIT-01 | profitability request | Year 3×4 MonthCard | every 3-column month remains rounded MonthCard; 4×3 remains unchanged | mounted layout/isolation test | NOT DONE |
-| YEAR-PROFIT-02 | profitability request | existing monthly aggregates + Year renderer | positive net green, negative net red, zero neutral; no second calculation | model/widget fixture test | NOT DONE |
-| YEAR-PROFIT-03 | settings request | settings/controller/tuner | enabled/disabled and opacity slider update only MonthCard tint live | settings and mounted slider tests | NOT DONE |
-| YEAR-PROFIT-04 | scope lock | palette/day painter/Year 4×3 | tint never changes cell/text/border/shadow/icon opacity or financial values; 4×3 unchanged | color/semantics + 4×3 regression | NOT DONE |
-| ARC-01 | structuring-apps / milestone | all changed paths | one owner/write path; no Query/repository/Room/gesture duplication | source audit + boundary suite | NOT DONE |
-| DELIV-01 | user workflow | branch/build/graph | each app commit has journal child; final exact source has CI/APK/SCIP | GitHub + artifact/graph audit | NOT DONE |
+| SUMM-01 | exact physical Summary log | centered carousel / Summary host | production-parent test reproduces the accepted-pointer + persistent-Hold liveness boundary before shared production mutation | `SUMMARY-HOLD-01` RED then GREEN | DONE |
+| SUMM-02 | Summary repair contract | centered carousel | completed orphan Hold cannot strand selector; active pointer/ballistic/stale controls remain correct | shared + Summary + Avatar/Time regressions | DONE |
+| SUM-FORENSICS-01 | paired 2027 screenshots/log | detailed Sum chart | bounded per-band counts/digests/edge-neighbour diagnostics reach existing Mind debug filter | SCALE/PAN-end diagnostics regression | DONE |
+| SUM-FORENSICS-02 | pan-detail contract | LOD/chart | sparse fixture distinguishes legitimate calendar sparsity from origin-dependent source/LOD loss | fixed-span overlap and edge-continuity RED/GREEN | PARTIAL — crop-edge loss is repaired; physical sparse-2027 log still needed to classify the remaining screenshot behavior |
+| SUM-DENSITY-01 | 1/2 request | Mind presentation settings/controller/tuner | default is two; single settings choice writes presentation revision only | domain/tuner tests | DONE |
+| SUM-DENSITY-02 | density geometry contract | shared Sum presentation geometry | one resolver drives detailed and overlay bands; 1 fits one full band, 2 fits two incl. X axis, overflow scrolls | mounted renderer tests | DONE |
+| SUM-DENSITY-03 | scope lock | Sum heatmap | density has no heatmap, Query, frame or financial semantic effect | heatmap/frame identity regression | DONE |
+| YEAR-PROFIT-01 | profitability request | Year 3×4 MonthCard | every 3-column month remains rounded MonthCard; 4×3 remains unchanged | mounted layout/isolation test | DONE |
+| YEAR-PROFIT-02 | profitability request | existing monthly aggregates + Year renderer | positive net green, negative net red, zero neutral; no second calculation | model/widget fixture test | DONE |
+| YEAR-PROFIT-03 | settings request | settings/controller/tuner | enabled/disabled and opacity slider update only MonthCard tint live | settings and mounted slider tests | DONE |
+| YEAR-PROFIT-04 | scope lock | palette/day painter/Year 4×3 | tint never changes cell/text/border/shadow/icon opacity or financial values; 4×3 unchanged | color/semantics + 4×3 regression | DONE |
+| ARC-01 | structuring-apps / milestone | all changed paths | one owner/write path; no Query/repository/Room/gesture duplication | source audit + boundary suite | DONE |
+| DELIV-01 | user workflow | branch/build/graph | each app commit has journal child; final exact source has CI/APK/SCIP | GitHub + artifact/graph audit | PARTIAL — app commits and journal children are complete; final CI/APK/SCIP is pending |
 | PHYS-01 | user workflow | Android | exact resulting APK is physically checked by user | user only | BLOCKED |
