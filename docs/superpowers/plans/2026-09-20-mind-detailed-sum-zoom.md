@@ -1,77 +1,78 @@
-# Mind Detailed Sum Zoom Implementation Plan
+# Mind Sum Three-Mode Refinement Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to execute this plan task-by-task. Steps use checkbox syntax for tracking.
+> **For agentic workers:** Execute in this worktree with test-first steps and
+> update `2026-09-20-mind-detailed-sum-zoom.md` after every verified unit.
 
-**Goal:** Upgrade the preserved detailed Sum page with analog temporal zoom,
-adaptive LOD/bands/axes and a line/heatmap toggle while retaining existing
-Mind cards and their one financial authority.
+**Goal:** Give Mind/Sum three button-selected surfaces while making detailed
+zoom usefully deep, inspectable and vertically complete.
 
-**Architecture:** Pure time-window and LOD calculations live in Mind domain
-code and consume immutable Sum frame values. The detailed chart owns only
-local interactive state; existing pager, range footer, palette resolver and
-popup primitive are extended rather than duplicated.
+**Architecture:** Core continues to publish one immutable Sum frame. A local
+Sum visualization enum selects its renderer; a pure temporal model defines
+zoom reachability, and a neutral monthly comparison read model is supplied by
+Sum and Year adapters without changing Query ownership.
 
-**Tech Stack:** Flutter/Dart, existing Mind immutable projections, widget and
-domain tests.
+**Tech Stack:** Flutter/Dart, immutable Mind projections, Flutter widget tests.
 
-## Global Constraints
+## Global constraints
 
-- Do not read Drive logs for this feature delivery.
-- Keep exactly one Query/prepared-data/range owner.
-- Preserve Sum page order 0 heatmap, 1 exact annual chart, 2 detailed chart.
-- Preserve Time/Avatar controller, ScrollPosition and physics identities.
-- Use the inspected reference images; physical approval remains user-only.
+- Do not read Drive logs for this delivery.
+- No Sum PageView, PageController, page dots or horizontal mode swipe.
+- Do not restore the removed exact yearly Sum page.
+- Keep the existing `QueryAmountRangeControl` outside chart gesture owners.
+- Preserve the `6e96218` Avatar/Time interaction floor.
 
----
-
-### Task 1: Detail temporal-window and LOD model
-
-**Files:**
-- Create: `lib/features/dashboard/mind/domain/mind_detailed_sum_chart_model.dart`
-- Test: `test/features/dashboard/mind/domain/mind_detailed_sum_chart_model_test.dart`
-
-- [ ] Write a failing test for January–December home extent, focal-point-stable
-  zoom and clamp to the home minimum.
-- [ ] Run the domain test and observe the missing-model failure.
-- [ ] Implement immutable `MindDetailedSumTimeWindow` and a pure LOD sampler
-  over real `MindSumHeatmapDailyPoint` values.
-- [ ] Run the domain test green.
-
-### Task 2: Detailed Sum widget and gestures
+### Task 1: Three-mode topology and neutral overlay model
 
 **Files:**
 - Modify: `lib/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports.dart`
-- Create: `lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart`
+- Create: `lib/features/dashboard/mind/domain/mind_monthly_overlay_series.dart`
+- Modify: `lib/features/dashboard/mind/presentation/mind_year_heatmap_viewport.dart`
 - Test: `test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart`
+- Test: `test/features/dashboard/mind/domain/mind_monthly_overlay_series_test.dart`
 
-- [ ] Write failing mounted tests for mini toggle, home-scale month labels,
-  scale window change, 1/2/3-year band rules, and retained page-two identity.
-- [ ] Run them RED.
-- [ ] Implement the page-local chart using the pure model and existing palette
-  resolver; route three-or-more year vertical overflow to the existing scroll
-  owner.
-- [ ] Run focused widget suite green.
+1. Add failing tests for three toggle choices, no Sum PageView, bar rendering,
+   full/filtered values, palette-resolved foreground and range update.
+2. Run them RED in Ubuntu proot.
+3. Extract only generic monthly overlay values/scale/painter geometry; adapt
+   Year from its existing frame and Sum from its immutable preview frame.
+4. Add the third top-right toggle and direct bar composition, then run GREEN.
 
-### Task 3: Popup bound correctness and regression evidence
+### Task 2: Useful cumulative detailed zoom and tap inspection
 
 **Files:**
-- Modify: `lib/features/dashboard/mind/presentation/mind_anchored_info_card.dart`
+- Modify: `lib/features/dashboard/mind/domain/mind_detailed_sum_chart_model.dart`
+- Modify: `lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart`
+- Test: `test/features/dashboard/mind/domain/mind_detailed_sum_chart_model_test.dart`
 - Test: `test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart`
-- Test: `test/features/dashboard/mind/presentation/mind_year_heatmap_viewport_test.dart`
 
-- [ ] Write failing edge-cell tests that assert popup position follows the
-  individual cell and is clamped within the actual page rect.
-- [ ] Run RED.
-- [ ] Strengthen the one shared popup primitive using its containing Stack
-  bounds, without putting geometry policy into feature pages.
-- [ ] Run both Sum and Year popup tests green.
+1. Add domain RED tests for a six-month-or-less reachable window and
+   compounded scale sessions.
+2. Add mounted RED test tapping between anchors and asserting the nearest
+   actual anchor's local date/amount infocard.
+3. Define a bounded zoom sensitivity in the pure time-window model and route
+   scale updates through it; keep focal point temporal position stable.
+4. Reuse `MindAnchoredInfoCard` for the selected anchor, make selection
+   local/identity-reset, then run tests GREEN.
 
-### Task 4: Verify and deliver
+### Task 3: Detailed band completeness and separators
 
-- [ ] Run Dart formatting, focused domain/widget tests, analyzer, fast suite,
-  boundary checks and `git diff --check` in Ubuntu proot.
-- [ ] Re-read this plan and its acceptance checklist; mark only verified items
-  DONE.
-- [ ] Commit application code, append a journal-only `[skip ci]` commit, push
-  the application SHA, monitor CI, download/hash its normal APK, and generate
-  matching SCIP before final report.
+**Files:**
+- Modify: `lib/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart`
+- Test: `test/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports_test.dart`
+
+1. Add RED geometry test for two full bands and their second X-axis labels.
+2. Add RED painter/semantics test for visible dashed month separators.
+3. Allocate two-band height only after allowing the axis footer, retain the
+   minimum band for 3+ scrolling, and restore calendar-boundary dashes.
+4. Run the focused suite GREEN.
+
+### Task 4: Full verification and delivery
+
+1. Format changed Dart files in Ubuntu proot.
+2. Run focused Mind domain/viewport/host/range/Year smoke tests, analyzer,
+   fast and boundary suites, and `git diff --check`.
+3. Re-read this checklist, mark only verified rows DONE, commit each logical
+   application unit, and append separate `[skip ci]` journal-only evidence.
+4. Push the final application SHA, audit each CI lane, download/hash the
+   normal human APK, regenerate exact-source SCIP, then append final journal
+   evidence without changing application source.
