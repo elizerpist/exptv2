@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
@@ -133,6 +135,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
     _heatmapScrollController = ScrollController();
     _lineScrollController = ScrollController();
     _barScrollController = ScrollController();
+    _logVisualization(reason: 'initial');
   }
 
   @override
@@ -144,6 +147,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
     // data.
     if (oldWidget.frame.identity != widget.frame.identity) {
       _visualization = _MindSumVisualization.heatmap;
+      _logVisualization(reason: 'frameIdentityReset');
     }
   }
 
@@ -158,6 +162,19 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   void _selectVisualization(_MindSumVisualization target) {
     if (_visualization == target) return;
     setState(() => _visualization = target);
+    _logVisualization(reason: 'topToggle');
+  }
+
+  void _logVisualization({required String reason}) {
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_SUM|MODE',
+        scope:
+            'mode=${_visualization.name} reason=$reason '
+            'visibleYears=${widget.frame.years.length} '
+            'renderedBands=${widget.frame.years.length}',
+      ),
+    );
   }
 
   @override

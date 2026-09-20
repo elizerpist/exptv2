@@ -128,6 +128,62 @@ void main() {
     },
   );
 
+  testWidgets(
+    'RED SUMD-01: the Mind Heatmap dropdown exposes copyable scoped Sum zoom diagnostics',
+    (tester) async {
+      String? clipboardText;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              clipboardText =
+                  (call.arguments as Map<Object?, Object?>)['text'] as String?;
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(
+          stage: 'MIND_SUM|SCALE_UPDATE',
+          scope:
+              'mode=detailed pointers=2 focal=180,72 scale=1.12 '
+              'windowBefore=365d windowAfter=182d anchors=13 synced=true',
+        ),
+      );
+      FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'AVATAR|X'));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('debug-console-log-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mind Heatmap').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('[FLOW][MIND_SUM|SCALE_UPDATE]'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('[FLOW][AVATAR|X]'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('debug-console-copy')),
+        findsOneWidget,
+        reason: 'The existing bounded console copy affordance exports the '
+            'currently selected Mind diagnostic view.',
+      );
+      await tester.tap(find.byKey(const ValueKey('debug-console-copy')));
+      await tester.pump();
+      expect(clipboardText, contains('[FLOW][MIND_SUM|SCALE_UPDATE]'));
+      expect(clipboardText, isNot(contains('[FLOW][AVATAR|X]')));
+    },
+  );
+
   testWidgets('manual review pauses follow and jump-to-live clears unseen', (
     tester,
   ) async {

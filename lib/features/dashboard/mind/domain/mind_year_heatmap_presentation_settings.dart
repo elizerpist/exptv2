@@ -35,38 +35,6 @@ enum MindHeatmapScaleResolution {
   };
 }
 
-/// Shell choice is independent from the annual column count. Both choices
-/// render the same admitted frame and calendar geometry.
-enum MindYearHeatmapAnnualSurfaceStyle {
-  monthCards,
-  directCells;
-
-  String get tunerLabel => switch (this) {
-    MindYearHeatmapAnnualSurfaceStyle.monthCards => 'MonthCard felület',
-    MindYearHeatmapAnnualSurfaceStyle.directCells => 'Közvetlen cellák',
-  };
-}
-
-enum MindYearMonthCardLayout {
-  threeColumns,
-  twoColumns,
-  fourColumns;
-
-  String get tunerLabel => switch (this) {
-    MindYearMonthCardLayout.threeColumns => '3 × 4',
-    MindYearMonthCardLayout.twoColumns => '2 × 6',
-    MindYearMonthCardLayout.fourColumns => '4 × 3',
-  };
-
-  int get columnCount => switch (this) {
-    MindYearMonthCardLayout.threeColumns => 3,
-    MindYearMonthCardLayout.twoColumns => 2,
-    MindYearMonthCardLayout.fourColumns => 4,
-  };
-
-  bool get fitsAnnualViewport => this == fourColumns;
-}
-
 /// Sum-only visual density alternative over the unchanged month frame.
 enum MindSumYearRowLayout {
   twoRowExpanded,
@@ -95,20 +63,9 @@ enum MindSumMonthLabelPlacement {
 /// None of these values changes financial membership, Query state or score.
 @immutable
 final class MindYearHeatmapPresentationSettings {
-  // The permanent inline legend makes the compact Mind viewport 15px shorter
-  // than the old external-lane topology. With both optional MonthCard footer
-  // rows visible, their fixed chrome needs that measured minimum back before
-  // a calendar cell can be laid out. This applies to every annual layout,
-  // never as a four-column-only envelope.
-  static const _twoFooterAnnualFitGuardHeight = 15.0;
-
   const MindYearHeatmapPresentationSettings({
     required this.paletteStyle,
-    required this.monthCardLayout,
-    required this.showMonthlyNetClose,
-    required this.showMonthlyDirectionTotal,
     required this.revision,
-    this.annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
@@ -116,49 +73,25 @@ final class MindYearHeatmapPresentationSettings {
 
   const MindYearHeatmapPresentationSettings.defaults()
     : paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
-      monthCardLayout = MindYearMonthCardLayout.threeColumns,
-      showMonthlyNetClose = false,
-      showMonthlyDirectionTotal = false,
-      annualSurfaceStyle = MindYearHeatmapAnnualSurfaceStyle.monthCards,
       scaleResolution = MindHeatmapScaleResolution.ten,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
-  final MindYearMonthCardLayout monthCardLayout;
-  final bool showMonthlyNetClose;
-  final bool showMonthlyDirectionTotal;
-  final MindYearHeatmapAnnualSurfaceStyle annualSurfaceStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final int revision;
 
-  /// A presentation-only annual fit guard. It has no Query, financial, or
-  /// navigation meaning and keeps every annual column layout in one envelope.
-  double get requiredMindModeContentExtraHeight =>
-      showMonthlyNetClose && showMonthlyDirectionTotal
-      ? _twoFooterAnnualFitGuardHeight
-      : 0;
-
   MindYearHeatmapPresentationSettings copyWith({
     MindYearHeatmapPaletteStyle? paletteStyle,
-    MindYearMonthCardLayout? monthCardLayout,
-    bool? showMonthlyNetClose,
-    bool? showMonthlyDirectionTotal,
-    MindYearHeatmapAnnualSurfaceStyle? annualSurfaceStyle,
     MindHeatmapScaleResolution? scaleResolution,
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
-    monthCardLayout: monthCardLayout ?? this.monthCardLayout,
-    showMonthlyNetClose: showMonthlyNetClose ?? this.showMonthlyNetClose,
-    showMonthlyDirectionTotal:
-        showMonthlyDirectionTotal ?? this.showMonthlyDirectionTotal,
-    annualSurfaceStyle: annualSurfaceStyle ?? this.annualSurfaceStyle,
     scaleResolution: scaleResolution ?? this.scaleResolution,
     sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
     sumMonthLabelPlacement:
@@ -170,10 +103,6 @@ final class MindYearHeatmapPresentationSettings {
   bool operator ==(Object other) =>
       other is MindYearHeatmapPresentationSettings &&
       other.paletteStyle == paletteStyle &&
-      other.monthCardLayout == monthCardLayout &&
-      other.showMonthlyNetClose == showMonthlyNetClose &&
-      other.showMonthlyDirectionTotal == showMonthlyDirectionTotal &&
-      other.annualSurfaceStyle == annualSurfaceStyle &&
       other.scaleResolution == scaleResolution &&
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
@@ -182,10 +111,6 @@ final class MindYearHeatmapPresentationSettings {
   @override
   int get hashCode => Object.hash(
     paletteStyle,
-    monthCardLayout,
-    showMonthlyNetClose,
-    showMonthlyDirectionTotal,
-    annualSurfaceStyle,
     scaleResolution,
     sumYearRowLayout,
     sumMonthLabelPlacement,
@@ -206,42 +131,6 @@ final class MindYearHeatmapPresentationController
     if (current.paletteStyle == style) return;
     value = current.copyWith(
       paletteStyle: style,
-      revision: current.revision + 1,
-    );
-  }
-
-  void setMonthCardLayout(MindYearMonthCardLayout layout) {
-    final current = value;
-    if (current.monthCardLayout == layout) return;
-    value = current.copyWith(
-      monthCardLayout: layout,
-      revision: current.revision + 1,
-    );
-  }
-
-  void setShowMonthlyNetClose(bool show) {
-    final current = value;
-    if (current.showMonthlyNetClose == show) return;
-    value = current.copyWith(
-      showMonthlyNetClose: show,
-      revision: current.revision + 1,
-    );
-  }
-
-  void setShowMonthlyDirectionTotal(bool show) {
-    final current = value;
-    if (current.showMonthlyDirectionTotal == show) return;
-    value = current.copyWith(
-      showMonthlyDirectionTotal: show,
-      revision: current.revision + 1,
-    );
-  }
-
-  void setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle style) {
-    final current = value;
-    if (current.annualSurfaceStyle == style) return;
-    value = current.copyWith(
-      annualSurfaceStyle: style,
       revision: current.revision + 1,
     );
   }

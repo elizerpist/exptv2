@@ -580,15 +580,7 @@ void main() {
       );
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.fourColumns,
-          showMonthlyNetClose: true,
-          showMonthlyDirectionTotal: true,
-          revision: 0,
-        ),
-      );
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
@@ -604,6 +596,10 @@ void main() {
           presentationSettings: settings,
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
       final inline = find.byKey(
         const ValueKey<String>('mind-heatmap-inline-legend'),
       );
@@ -726,15 +722,7 @@ void main() {
       );
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.threeColumns,
-          showMonthlyNetClose: false,
-          showMonthlyDirectionTotal: false,
-          revision: 0,
-        ),
-      );
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
@@ -844,7 +832,6 @@ void main() {
         find.byKey(const ValueKey<String>('mind-query-amount-range')),
       );
       settings
-        ..setAnnualSurfaceStyle(MindYearHeatmapAnnualSurfaceStyle.directCells)
         ..setPaletteStyle(MindYearHeatmapPaletteStyle.fluviStretched)
         ..setScaleResolution(MindHeatmapScaleResolution.twenty);
       await tester.pump();
@@ -1095,22 +1082,14 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-6R-09/10: four-column Year remains zero-scroll inside the real shared legend and footer envelope',
+    'YEAR-DIRECT-07: four-by-three Year remains zero-scroll inside the shared legend and footer envelope',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
       );
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.fourColumns,
-          showMonthlyNetClose: true,
-          showMonthlyDirectionTotal: true,
-          revision: 0,
-        ),
-      );
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
@@ -1126,6 +1105,10 @@ void main() {
           presentationSettings: settings,
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
       final scroll = tester.state<ScrollableState>(
         find
             .descendant(
@@ -1135,42 +1118,24 @@ void main() {
             .first,
       );
       expect(scroll.position.maxScrollExtent, 0);
-      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(find.byType(MindYearHeatmapMonthGroup), findsNWidgets(12));
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'YEAR-HEIGHT-02 RED: 3 × 4 and 4 × 3 share one outer Mind envelope without shrinking the four-column card width',
+    'YEAR-HEIGHT-02: local 3x4 and 4x3 selector keeps one outer Mind envelope',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
       );
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
-      final threeColumns = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.threeColumns,
-          showMonthlyNetClose: false,
-          showMonthlyDirectionTotal: false,
-          revision: 0,
-        ),
-      );
-      final fourColumns = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.fourColumns,
-          showMonthlyNetClose: false,
-          showMonthlyDirectionTotal: false,
-          revision: 0,
-        ),
-      );
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
-      addTearDown(threeColumns.dispose);
-      addTearDown(fourColumns.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         _HostHarness(
@@ -1179,38 +1144,32 @@ void main() {
           rangeChanges: rangeChanges,
           expansion: _ExpansionRecorder(),
           showYearHeatmap: true,
-          presentationSettings: threeColumns,
+          presentationSettings: settings,
         ),
       );
       final threeColumnContent = tester.getRect(
         find.byKey(const ValueKey('mind-temporal-content-viewport')),
       );
 
-      await tester.pumpWidget(
-        _HostHarness(
-          mode: mode,
-          frame: frame,
-          rangeChanges: rangeChanges,
-          expansion: _ExpansionRecorder(),
-          showYearHeatmap: true,
-          presentationSettings: fourColumns,
-        ),
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
       );
+      await tester.pump();
       final fourColumnContent = tester.getRect(
         find.byKey(const ValueKey('mind-temporal-content-viewport')),
       );
       final fourColumnCard = tester.getRect(
-        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+        find.byKey(const ValueKey('mind-year-direct-month-1')),
       );
 
       expect(fourColumnContent.height, closeTo(threeColumnContent.height, .01));
-      expect(fourColumnCard.width, closeTo(83.5, .01));
+      expect(fourColumnCard.width, greaterThanOrEqualTo(83.5));
       expect(
-        MindYearHeatmapMonthCard.cellExtentFor(fourColumnCard.width),
-        closeTo(8.5, .01),
+        MindYearHeatmapMonthGroup.cellExtentFor(fourColumnCard.width),
+        greaterThanOrEqualTo(8.5),
         reason:
-            'Parity is an outer-envelope change; the MonthCard width and its '
-            'width-derived day-cell authority stay unchanged.',
+            'Parity is an outer-envelope change; direct-group width and its '
+            'width-derived day-cell authority may not shrink.',
       );
       expect(tester.takeException(), isNull);
     },
@@ -1393,13 +1352,9 @@ final class _HostHarness extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedPlane =
-        temporalPlane ?? (showYearHeatmap ? TimePlane.year : null);
-    final modeContentExtraHeight =
-        mode.committedMode == DashboardModeSpec.mind &&
-            resolvedPlane == TimePlane.year
-        ? presentationSettings?.value.requiredMindModeContentExtraHeight ?? 0.0
-        : 0.0;
+    // The direct Year grid owns its 3x4/4x3 fit locally. It no longer
+    // changes the Core-mode physical envelope through presentation settings.
+    const modeContentExtraHeight = 0.0;
     return MaterialApp(
       home: Scaffold(
         body: Align(

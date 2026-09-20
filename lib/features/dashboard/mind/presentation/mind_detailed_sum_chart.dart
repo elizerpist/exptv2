@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
@@ -40,11 +42,25 @@ final class MindDetailedSumChart extends StatefulWidget {
 final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
   final _activePointers = <int>{};
   late final ValueNotifier<bool> _pinchActive;
+  MindDetailedSumNormalizedViewport _viewport =
+      const MindDetailedSumNormalizedViewport.fullYear();
+  MindDetailedSumNormalizedViewport? _scaleStartViewport;
 
   @override
   void initState() {
     super.initState();
     _pinchActive = ValueNotifier<bool>(false);
+    _log('DETAIL_SURFACE', 'mode=detailed ${_viewportScope()}');
+  }
+
+  @override
+  void didUpdateWidget(covariant MindDetailedSumChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.frame.identity != widget.frame.identity) {
+      _viewport = const MindDetailedSumNormalizedViewport.fullYear();
+      _scaleStartViewport = null;
+      _log('VIEWPORT_RESET', 'reason=frameIdentity ${_viewportScope()}');
+    }
   }
 
   @override
@@ -67,8 +83,102 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
     final next = _activePointers.length >= 2;
     if (_pinchActive.value == next) return;
     _pinchActive.value = next;
+    _log(
+      'PINCH_OWNERSHIP',
+      'mode=detailed pointers=${_activePointers.length} '
+      'pinchActive=$next competing=verticalBoundarySuppressed '
+      '${_viewportScope()}',
+    );
     setState(() {});
   }
+
+  void _onScaleStart(int year, double plotWidth) {
+    _scaleStartViewport = _viewport;
+    _log(
+      'SCALE_START',
+      'mode=detailed year=$year pointers=${_activePointers.length} '
+      'plotWidth=${plotWidth.toStringAsFixed(1)} '
+      '${_viewportScope(year: year, plotWidth: plotWidth)}',
+    );
+  }
+
+  void _onScaleUpdate({
+    required int year,
+    required double scaleDelta,
+    required double focalFraction,
+    required double plotWidth,
+  }) {
+    final start = _scaleStartViewport;
+    if (start == null) return;
+    final next = start.zoomForGesture(
+      scaleDelta: scaleDelta,
+      focalFraction: focalFraction,
+    );
+    if (next == _viewport) return;
+    final before = _viewportScope(year: year, plotWidth: plotWidth);
+    setState(() => _viewport = next);
+    _log(
+      'SCALE_UPDATE',
+      'mode=detailed year=$year pointers=${_activePointers.length} '
+      'focal=${focalFraction.toStringAsFixed(3)} '
+      'scale=${scaleDelta.toStringAsFixed(3)} accepted=true '
+      'windowBefore={$before} windowAfter={${_viewportScope(year: year, plotWidth: plotWidth)}} '
+      'synced=true competing=verticalBoundarySuppressed',
+    );
+  }
+
+  void _onScaleEnd(int year, double plotWidth) {
+    _scaleStartViewport = null;
+    _log(
+      'SCALE_END',
+      'mode=detailed year=$year pointers=${_activePointers.length} '
+      '${_viewportScope(year: year, plotWidth: plotWidth)}',
+    );
+  }
+
+  void _panBy(double deltaX, double plotWidth) {
+    if (!_viewport.isZoomed || plotWidth <= 0) return;
+    final next = _viewport.panByFraction(-deltaX / plotWidth * _viewport.visibleFraction);
+    if (next == _viewport) return;
+    setState(() => _viewport = next);
+    _log('PAN', 'mode=detailed deltaX=${deltaX.toStringAsFixed(1)} ${_viewportScope()}');
+  }
+
+  void _onPointSelected(int year, MindSumHeatmapDetailPoint? point) {
+    if (point == null) return;
+    final day = point.epochMinute ~/ _detailMinutesPerDay;
+    _log(
+      'TAP_INSPECT',
+      'mode=detailed year=$year nearestEpochDay=$day '
+      'nearestAmount=${point.total} ${_viewportScope(year: year)}',
+    );
+  }
+
+  String _viewportScope({int? year, double? plotWidth}) {
+    final effectiveYear = year ?? (widget.frame.years.isEmpty ? 0 : widget.frame.years.first);
+    final window = effectiveYear == 0 ? null : _viewport.windowForYear(effectiveYear);
+    final anchors = window == null || plotWidth == null
+        ? 0
+        : MindDetailedSumLod.sample(
+            points: widget.frame.detailPointsForYear(
+              year: effectiveYear,
+              startEpochMinute: window.startEpochMinute,
+              endEpochMinute: window.endEpochMinute,
+            ),
+            window: window,
+            pixelWidth: plotWidth,
+          ).length;
+    return 'visibleYears=${widget.frame.years.length} renderedBands=${widget.frame.years.length} '
+        'window=${window?.startEpochDay ?? '-'}:${window?.endEpochDay ?? '-'} '
+        'spanDays=${window?.visibleDayCount ?? 0} '
+        'homeWindow=fullYear minimumWindow=1m anchors=$anchors '
+        'viewportStart=${_viewport.startFraction.toStringAsFixed(3)} '
+        'viewportSpan=${_viewport.visibleFraction.toStringAsFixed(3)}';
+  }
+
+  void _log(String suffix, String scope) => FluviDiagnosticLogger.log(
+    FluviDiagnosticEvent(stage: 'MIND_SUM|$suffix', scope: scope),
+  );
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -122,6 +232,12 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
                     year: year,
                     frame: widget.frame,
                     lineColor: widget.lineColor,
+                    viewport: _viewport,
+                    onScaleStart: _onScaleStart,
+                    onScaleUpdate: _onScaleUpdate,
+                    onScaleEnd: _onScaleEnd,
+                    onPanBy: _panBy,
+                    onPointSelected: _onPointSelected,
                   ),
                 );
               },
@@ -139,11 +255,29 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
     required this.year,
     required this.frame,
     required this.lineColor,
+    required this.viewport,
+    required this.onScaleStart,
+    required this.onScaleUpdate,
+    required this.onScaleEnd,
+    required this.onPanBy,
+    required this.onPointSelected,
   });
 
   final int year;
   final MindSumHeatmapFrame frame;
   final Color lineColor;
+  final MindDetailedSumNormalizedViewport viewport;
+  final void Function(int year, double plotWidth) onScaleStart;
+  final void Function({
+    required int year,
+    required double scaleDelta,
+    required double focalFraction,
+    required double plotWidth,
+  }) onScaleUpdate;
+  final void Function(int year, double plotWidth) onScaleEnd;
+  final void Function(double deltaX, double plotWidth) onPanBy;
+  final void Function(int year, MindSumHeatmapDetailPoint? point)
+  onPointSelected;
 
   @override
   State<_MindDetailedSumYearBand> createState() =>
@@ -153,61 +287,48 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
 final class _MindDetailedSumYearBandState
     extends State<_MindDetailedSumYearBand> {
   final _cardKey = GlobalKey();
-  late MindDetailedSumTimeWindow _window;
-  MindDetailedSumTimeWindow? _scaleStartWindow;
   MindSumHeatmapDetailPoint? _selectedPoint;
   Offset? _selectionAnchor;
 
-  @override
-  void initState() {
-    super.initState();
-    _window = MindDetailedSumTimeWindow.fullYear(widget.year);
-  }
+  MindDetailedSumTimeWindow get _window => widget.viewport.windowForYear(widget.year);
 
   @override
   void didUpdateWidget(covariant _MindDetailedSumYearBand oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.year != widget.year ||
         oldWidget.frame.identity != widget.frame.identity) {
-      _window = MindDetailedSumTimeWindow.fullYear(widget.year);
-      _scaleStartWindow = null;
       _selectedPoint = null;
       _selectionAnchor = null;
     }
   }
 
-  bool get _isZoomed => _window.visibleMinuteCount < _window.homeMinuteCount;
+  bool get _isZoomed => widget.viewport.isZoomed;
 
-  void _onScaleStart(ScaleStartDetails _) => _scaleStartWindow = _window;
+  void _onScaleStart(double plotWidth) =>
+      widget.onScaleStart(widget.year, plotWidth);
 
   void _onScaleUpdate(
     ScaleUpdateDetails details,
     double plotLeft,
     double plotWidth,
   ) {
-    final start = _scaleStartWindow;
-    if (details.pointerCount < 2 || start == null || plotWidth <= 0) return;
+    if (details.pointerCount < 2 || plotWidth <= 0) return;
     final fraction = ((details.localFocalPoint.dx - plotLeft) / plotWidth)
         .clamp(0.0, 1.0)
         .toDouble();
-    final focalEpochMinute =
-        start.startEpochMinute + (start.visibleMinuteCount - 1) * fraction;
-    final next = start.zoomForGesture(
+    widget.onScaleUpdate(
+      year: widget.year,
       scaleDelta: details.scale,
-      focalEpochMinute: focalEpochMinute.round(),
+      focalFraction: fraction,
+      plotWidth: plotWidth,
     );
-    if (next == _window) return;
-    setState(() => _window = next);
   }
 
-  void _onScaleEnd(ScaleEndDetails _) => _scaleStartWindow = null;
+  void _onScaleEnd(double plotWidth) => widget.onScaleEnd(widget.year, plotWidth);
 
   void _panBy(DragUpdateDetails details, double plotWidth) {
     if (plotWidth <= 0 || !_isZoomed) return;
-    final minutes = (-details.delta.dx / plotWidth * _window.visibleMinuteCount)
-        .round();
-    if (minutes == 0) return;
-    setState(() => _window = _window.panByMinutes(minutes));
+    widget.onPanBy(details.delta.dx, plotWidth);
   }
 
   void _selectNearestPoint({
@@ -241,6 +362,7 @@ final class _MindDetailedSumYearBandState
       _selectedPoint = samePoint ? null : nearest;
       _selectionAnchor = samePoint ? null : details.globalPosition;
     });
+    widget.onPointSelected(widget.year, samePoint ? null : nearest);
   }
 
   @override
@@ -266,10 +388,10 @@ final class _MindDetailedSumYearBandState
       );
       final chart = GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onScaleStart: _onScaleStart,
+        onScaleStart: (_) => _onScaleStart(plotWidth),
         onScaleUpdate: (details) =>
             _onScaleUpdate(details, axisLeft, plotWidth),
-        onScaleEnd: _onScaleEnd,
+        onScaleEnd: (_) => _onScaleEnd(plotWidth),
         onTapUp: (details) => _selectNearestPoint(
           details: details,
           points: lod,

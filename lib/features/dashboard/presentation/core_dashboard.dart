@@ -451,17 +451,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.clearMindAmountRangePreview();
   }
 
-  /// The two-footer fit guard is shared by all Year column layouts, so the
-  /// 3 × 4 and 4 × 3 cards keep one outer envelope.
+  /// Year direct-grid layout owns its own finite in-card fit; it no longer
+  /// reserves a global MonthCard/footer envelope through presentation state.
   double _resolveMindModeContentExtraHeight() {
-    if (modeController.committedMode != DashboardModeSpec.mind ||
-        controller.navigation.state.plane != TimePlane.year) {
-      return 0;
-    }
-    return controller
-        .mindYearHeatmapPresentation
-        .value
-        .requiredMindModeContentExtraHeight;
+    return 0;
   }
 
   void _syncMindModeContentGeometry() {

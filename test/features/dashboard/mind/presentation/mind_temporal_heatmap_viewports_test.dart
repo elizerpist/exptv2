@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_frame.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -157,6 +158,7 @@ void main() {
   testWidgets(
     'SUM3-TOPO-01 RED: the top control selects the third monthly overlay surface without a Sum pager',
     (tester) async {
+      FluviDiagnosticLogger.clear();
       final frame = MindSumHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
           upstreamScopeKey: 'expense|all',
@@ -202,6 +204,16 @@ void main() {
         findsOneWidget,
       );
       expect(identical(listenable.value, frame), isTrue);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_SUM|MODE' &&
+              (event.scope?.contains('mode=monthlyOverlay') ?? false) &&
+              (event.scope?.contains('reason=topToggle') ?? false),
+        ),
+        isTrue,
+        reason: 'The user-copyable Mind panel receives the actual mode writer.',
+      );
     },
   );
 
@@ -1519,6 +1531,104 @@ void main() {
             'not merely a technically non-zero annual zoom.',
       );
       expect(identical(listenable.value, frame), isTrue);
+    },
+  );
+
+  testWidgets(
+    'RED SUMD-02: a pinch in one visible detailed-year band synchronizes every visible yearly window',
+    (tester) async {
+      FluviDiagnosticLogger.clear();
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          for (final year in <int>[2024, 2025])
+            for (var month = 1; month <= 12; month += 1)
+              _entry(
+                year * 100 + month,
+                100 + month,
+                LocalDate(year: year, month: month, day: 15),
+              ),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindSumHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pumpAndSettle();
+
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2024')),
+      );
+      final center = Offset(
+        plot.left + 34 + (plot.width - 34 - 3) / 2,
+        plot.center.dy,
+      );
+      Future<void> pinch(int firstPointer, int secondPointer) async {
+        final first = await tester.startGesture(
+          Offset(center.dx - 18, center.dy - 2),
+          pointer: firstPointer,
+        );
+        final second = await tester.startGesture(
+          Offset(center.dx + 18, center.dy + 3),
+          pointer: secondPointer,
+        );
+        await first.moveTo(Offset(center.dx - 56, center.dy - 5));
+        await second.moveTo(Offset(center.dx + 56, center.dy + 7));
+        await tester.pump();
+        await first.up();
+        await second.up();
+        await tester.pump();
+      }
+
+      await pinch(1, 2);
+      await pinch(1, 2);
+
+      int spanFor(int year) {
+        final label = tester
+            .widget<Semantics>(
+              find.byKey(ValueKey<String>('mind-sum-detailed-window-$year')),
+            )
+            .properties
+            .label!;
+        final bounds = label.split(':').map(int.parse).toList();
+        return bounds[1] - bounds[0] + 1;
+      }
+
+      expect(spanFor(2024), lessThanOrEqualTo(184));
+      expect(
+        spanFor(2025),
+        lessThanOrEqualTo(184),
+        reason: 'The detailed Sum owns one shared temporal viewport; a '
+            'multi-year pinch must not leave the untouched band at home.',
+      );
+      expect(identical(listenable.value, frame), isTrue);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_SUM|SCALE_UPDATE' &&
+              (event.scope?.contains('pointers=2') ?? false) &&
+              (event.scope?.contains('synced=true') ?? false),
+        ),
+        isTrue,
+        reason: 'The debug console records the live shared-pinch path.',
+      );
     },
   );
 

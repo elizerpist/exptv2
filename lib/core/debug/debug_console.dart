@@ -133,10 +133,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   }
 
   Future<void> _copyAll() async {
-    if (FluviDiagnosticLogger.retainedEntryCount == 0) return;
+    final entries = _filteredEntries();
+    if (entries.isEmpty) return;
     try {
       await Clipboard.setData(
-        ClipboardData(text: FluviDiagnosticLogger.latestText()),
+        ClipboardData(text: entries.map((entry) => entry.toLine()).join('\n')),
       );
       if (mounted) setState(() => _copied = true);
     } on Object catch (_) {
@@ -656,7 +657,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     final entries = FluviDiagnosticLogger.entries;
     if (_logFilter == _DebugConsoleLogFilter.all) return entries;
     return List<FluviDiagnosticEvent>.unmodifiable(
-      entries.where((entry) => entry.stage.startsWith('MIND_HEATMAP|')),
+      entries.where(
+        (entry) =>
+            entry.stage.startsWith('MIND_HEATMAP|') ||
+            entry.stage.startsWith('MIND_SUM|'),
+      ),
     );
   }
 

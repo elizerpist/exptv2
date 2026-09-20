@@ -1536,7 +1536,7 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-6R-09: only the selected four-column Year layout expands the real Mind body',
+    'YEAR-DIRECT-08: local Year layout selection preserves the real Mind body envelope',
     (tester) async {
       final core = DashboardCoreController(
         dataRepository: _FocusSeedRepository(
@@ -1580,8 +1580,8 @@ void main() {
         const ValueKey<String>('dashboard-core-mode-mind-body'),
       );
       final baselineBounds = tester.getRect(body);
-      core.mindYearHeatmapPresentation.setMonthCardLayout(
-        MindYearMonthCardLayout.fourColumns,
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
       );
       await tester.pump();
 
@@ -1591,8 +1591,8 @@ void main() {
         findsOneWidget,
       );
 
-      core.mindYearHeatmapPresentation.setMonthCardLayout(
-        MindYearMonthCardLayout.threeColumns,
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-3x4')),
       );
       await tester.pump();
       expect(tester.getRect(body).height, baselineBounds.height);
@@ -1872,49 +1872,40 @@ void main() {
         expect(frame.point, frame.chartSeries!.points.last);
       }
 
-      // Matrix 1: HTML centered + Fluvi + 3x4 + no footers.
+      // Matrix 1: HTML centered + Fluvi. Year grid geometry is now local to
+      // the Year card, so it deliberately has no Core presentation setting.
       core.mindBehavioralScoreSettings.setExpenseAlgorithm(
         MindExpenseScoreAlgorithm.htmlCentered,
       );
       core.mindYearHeatmapPresentation.setPaletteStyle(
         MindYearHeatmapPaletteStyle.fluvi,
       );
-      core.mindYearHeatmapPresentation.setMonthCardLayout(
-        MindYearMonthCardLayout.threeColumns,
-      );
-      core.mindYearHeatmapPresentation.setShowMonthlyNetClose(false);
-      core.mindYearHeatmapPresentation.setShowMonthlyDirectionTotal(false);
       expectCoherentScore(MindExpenseScoreAlgorithm.htmlCentered);
       expect(
         core.mindYearHeatmapPresentation.value,
         const MindYearHeatmapPresentationSettings.defaults(),
       );
 
-      // Matrix 2: HTML trailing + B3M + 3x4 + net.
+      // Matrix 2: HTML trailing + B3M.
       core.mindBehavioralScoreSettings.setExpenseAlgorithm(
         MindExpenseScoreAlgorithm.htmlTrailing,
       );
       core.mindYearHeatmapPresentation.setPaletteStyle(
         MindYearHeatmapPaletteStyle.b3mMy3,
       );
-      core.mindYearHeatmapPresentation.setShowMonthlyNetClose(true);
       expectCoherentScore(MindExpenseScoreAlgorithm.htmlTrailing);
       expect(
-        core.mindYearHeatmapPresentation.value.showMonthlyNetClose,
-        isTrue,
+        core.mindYearHeatmapPresentation.value.paletteStyle,
+        MindYearHeatmapPaletteStyle.b3mMy3,
       );
 
-      // Matrix 3: causal/full history + B3M + 2x6 + both footers.
+      // Matrix 3: causal/full history + B3M.
       core.mindBehavioralScoreSettings.setExpenseAlgorithm(
         MindExpenseScoreAlgorithm.causalTrailing,
       );
       core.mindBehavioralScoreSettings.setCausalHistoryOrigin(
         MindCausalHistoryOrigin.fullFilteredHistory,
       );
-      core.mindYearHeatmapPresentation.setMonthCardLayout(
-        MindYearMonthCardLayout.twoColumns,
-      );
-      core.mindYearHeatmapPresentation.setShowMonthlyDirectionTotal(true);
       expectCoherentScore(MindExpenseScoreAlgorithm.causalTrailing);
       expect(
         core.mindYearHeatmapPresentation.value,
@@ -1925,33 +1916,26 @@ void main() {
               MindYearHeatmapPaletteStyle.b3mMy3,
             )
             .having(
-              (settings) => settings.monthCardLayout,
-              'layout',
-              MindYearMonthCardLayout.twoColumns,
-            )
-            .having((settings) => settings.showMonthlyNetClose, 'net', isTrue)
-            .having(
-              (settings) => settings.showMonthlyDirectionTotal,
-              'direction total',
-              isTrue,
+              (settings) => settings.scaleResolution,
+              'resolution',
+              MindHeatmapScaleResolution.ten,
             ),
       );
 
-      // Matrix 4: causal/scope start + Fluvi + 2x6 + direction total.
+      // Matrix 4: causal/scope start + Fluvi.
       core.mindBehavioralScoreSettings.setCausalHistoryOrigin(
         MindCausalHistoryOrigin.selectedScopeStart,
       );
       core.mindYearHeatmapPresentation.setPaletteStyle(
         MindYearHeatmapPaletteStyle.fluvi,
       );
-      core.mindYearHeatmapPresentation.setShowMonthlyNetClose(false);
       expectCoherentScore(MindExpenseScoreAlgorithm.causalTrailing);
       expect(
-        core.mindYearHeatmapPresentation.value.showMonthlyDirectionTotal,
-        isTrue,
+        core.mindYearHeatmapPresentation.value.paletteStyle,
+        MindYearHeatmapPaletteStyle.fluvi,
       );
 
-      // Rapid final state: algorithm -> live preview -> direction -> layout.
+      // Rapid final state: algorithm -> live preview -> direction.
       core.mindBehavioralScoreSettings.setExpenseAlgorithm(
         MindExpenseScoreAlgorithm.htmlTrailing,
       );
@@ -1965,9 +1949,6 @@ void main() {
         ),
       );
       core.selectDirection(TransactionDirection.income);
-      core.mindYearHeatmapPresentation.setMonthCardLayout(
-        MindYearMonthCardLayout.threeColumns,
-      );
       await pumpEventQueue(times: 12);
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
       expect(core.ensureMindBehavioralScoreProjection(), isTrue);
@@ -1981,8 +1962,8 @@ void main() {
       );
       expect(finalFrame.point, finalFrame.chartSeries!.points.last);
       expect(
-        core.mindYearHeatmapPresentation.value.monthCardLayout,
-        MindYearMonthCardLayout.threeColumns,
+        core.mindYearHeatmapPresentation.value.paletteStyle,
+        MindYearHeatmapPaletteStyle.fluvi,
       );
       core.endMindAmountRangeInteraction(committed: false);
     },

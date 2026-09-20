@@ -45,22 +45,18 @@ void main() {
   });
 
   group('Mind Year heatmap presentation settings', () {
-    test('defaults preserve the accepted Fluvi three-by-four presentation', () {
+    test('defaults retain only data-independent Mind presentation choices', () {
       final controller = MindYearHeatmapPresentationController();
       addTearDown(controller.dispose);
 
       expect(controller.value.paletteStyle, MindYearHeatmapPaletteStyle.fluvi);
       expect(
-        controller.value.monthCardLayout,
-        MindYearMonthCardLayout.threeColumns,
+        controller.value.sumYearRowLayout,
+        MindSumYearRowLayout.twoRowExpanded,
       );
-      expect(controller.value.showMonthlyNetClose, isFalse);
-      expect(controller.value.showMonthlyDirectionTotal, isFalse);
       expect(
-        controller.value.annualSurfaceStyle,
-        MindYearHeatmapAnnualSurfaceStyle.monthCards,
-        reason:
-            'The accepted MonthCard shell remains the conservative default.',
+        controller.value.sumMonthLabelPlacement,
+        MindSumMonthLabelPlacement.none,
       );
       expect(controller.value.revision, 0);
     });
@@ -70,40 +66,19 @@ void main() {
       addTearDown(controller.dispose);
 
       controller.setPaletteStyle(MindYearHeatmapPaletteStyle.b3mMy3);
-      controller.setMonthCardLayout(MindYearMonthCardLayout.twoColumns);
-      controller.setShowMonthlyNetClose(true);
-      controller.setShowMonthlyDirectionTotal(true);
+      controller.setScaleResolution(MindHeatmapScaleResolution.twenty);
+      controller.setSumYearRowLayout(MindSumYearRowLayout.oneRowCompact);
+      controller.setSumMonthLabelPlacement(
+        MindSumMonthLabelPlacement.insideMonthCells,
+      );
 
       expect(controller.value.revision, 4);
       expect(controller.value.paletteStyle, MindYearHeatmapPaletteStyle.b3mMy3);
       expect(
-        controller.value.monthCardLayout,
-        MindYearMonthCardLayout.twoColumns,
+        controller.value.scaleResolution,
+        MindHeatmapScaleResolution.twenty,
       );
-      expect(controller.value.showMonthlyNetClose, isTrue);
-      expect(controller.value.showMonthlyDirectionTotal, isTrue);
     });
-
-    test(
-      'HMP-SET-01: annual surface remains an independent presentation preference',
-      () {
-        final controller = MindYearHeatmapPresentationController();
-        addTearDown(controller.dispose);
-        controller.setAnnualSurfaceStyle(
-          MindYearHeatmapAnnualSurfaceStyle.directCells,
-        );
-        expect(
-          controller.value.annualSurfaceStyle,
-          MindYearHeatmapAnnualSurfaceStyle.directCells,
-        );
-        expect(controller.value.revision, 1);
-
-        controller.setAnnualSurfaceStyle(
-          MindYearHeatmapAnnualSurfaceStyle.directCells,
-        );
-        expect(controller.value.revision, 1);
-      },
-    );
 
     test(
       'PAL-REDUCE-01: exactly five approved product palettes are selectable',
@@ -175,28 +150,5 @@ void main() {
       },
     );
 
-    test(
-      'YEAR-HEIGHT-01 RED: the two-footer annual fit guard is shared by every column layout',
-      () {
-        const base = MindYearHeatmapPresentationSettings.defaults();
-        expect(base.requiredMindModeContentExtraHeight, 0);
-
-        for (final layout in MindYearMonthCardLayout.values) {
-          final twoFooter = base.copyWith(
-            monthCardLayout: layout,
-            showMonthlyNetClose: true,
-            showMonthlyDirectionTotal: true,
-          );
-          expect(
-            twoFooter.requiredMindModeContentExtraHeight,
-            15,
-            reason:
-                'The measured compact Mind viewport lacks exactly 15px for '
-                'the fixed two-footer MonthCard chrome; this must never be a '
-                'four-column-only envelope.',
-          );
-        }
-      },
-    );
   });
 }

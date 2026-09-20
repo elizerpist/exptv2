@@ -513,28 +513,6 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.only(top: 4),
-              child: Text('MonthCard elrendezés'),
-            ),
-            RadioGroup<MindYearMonthCardLayout>(
-              groupValue: settings.monthCardLayout,
-              onChanged: (layout) {
-                if (layout != null) controller.setMonthCardLayout(layout);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final layout in MindYearMonthCardLayout.values)
-                    RadioListTile<MindYearMonthCardLayout>(
-                      key: ValueKey('mind-heatmap-layout-${layout.name}'),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(layout.tunerLabel),
-                      value: layout,
-                    ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
               child: Text('Sum évblokk'),
             ),
             RadioGroup<MindSumYearRowLayout>(
@@ -580,46 +558,6 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
                     ),
                 ],
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: Text('Éves cella stílus'),
-            ),
-            RadioGroup<MindYearHeatmapAnnualSurfaceStyle>(
-              groupValue: settings.annualSurfaceStyle,
-              onChanged: (style) {
-                if (style != null) controller.setAnnualSurfaceStyle(style);
-              },
-              child: Column(
-                children: <Widget>[
-                  for (final style in MindYearHeatmapAnnualSurfaceStyle.values)
-                    RadioListTile<MindYearHeatmapAnnualSurfaceStyle>(
-                      key: ValueKey(
-                        'mind-heatmap-annual-surface-${style.name}',
-                      ),
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(style.tunerLabel),
-                      value: style,
-                    ),
-                ],
-              ),
-            ),
-            SwitchListTile.adaptive(
-              key: const ValueKey('mind-heatmap-monthly-net-toggle'),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Havi nettó zárás'),
-              value: settings.showMonthlyNetClose,
-              onChanged: controller.setShowMonthlyNetClose,
-            ),
-            SwitchListTile.adaptive(
-              key: const ValueKey('mind-heatmap-monthly-direction-toggle'),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Havi irányösszeg'),
-              value: settings.showMonthlyDirectionTotal,
-              onChanged: controller.setShowMonthlyDirectionTotal,
             ),
           ],
         ),

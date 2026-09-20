@@ -896,41 +896,18 @@ void main() {
       ),
       findsNothing,
     );
-    final fourColumns = find.byKey(
-      const ValueKey('mind-heatmap-layout-fourColumns'),
-    );
-    await tester.ensureVisible(fourColumns);
-    await tester.tap(fourColumns);
-    await tester.pump();
     expect(
-      heatmapSettings.value.monthCardLayout,
-      MindYearMonthCardLayout.fourColumns,
+      find.byKey(const ValueKey('mind-heatmap-layout-fourColumns')),
+      findsNothing,
+      reason: 'Annual grid layout is now local to the Year card header.',
     );
-    final net = find.byKey(const ValueKey('mind-heatmap-monthly-net-toggle'));
-    await tester.ensureVisible(net);
-    await tester.tap(net);
-    await tester.pump();
-    expect(heatmapSettings.value.showMonthlyNetClose, isTrue);
-    final directSurface = find.byKey(
-      const ValueKey('mind-heatmap-annual-surface-directCells'),
-    );
-    final tunerScroll = tester.state<ScrollableState>(
-      find
-          .descendant(
-            of: find.byKey(
-              const ValueKey<String>('dashboard-header-visual-tuner-list'),
-            ),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    tunerScroll.position.jumpTo(0);
-    await tester.pump();
-    await tester.tap(directSurface);
-    await tester.pump();
     expect(
-      heatmapSettings.value.annualSurfaceStyle,
-      MindYearHeatmapAnnualSurfaceStyle.directCells,
+      find.byKey(const ValueKey('mind-heatmap-monthly-net-toggle')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('mind-heatmap-annual-surface-directCells')),
+      findsNothing,
     );
     expect(controller.tuning.value.mindScore.windowWidthPercent, 28);
 

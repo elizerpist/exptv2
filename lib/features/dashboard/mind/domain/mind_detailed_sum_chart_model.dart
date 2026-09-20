@@ -137,6 +137,97 @@ final class MindDetailedSumTimeWindow {
   );
 }
 
+/// One normalized viewport for every annual band in the detailed Sum chart.
+///
+/// It deliberately stores a fraction of a calendar year rather than an epoch
+/// interval. Each band can therefore project the exact same visible temporal
+/// portion onto its own leap/non-leap year without creating one gesture state
+/// machine per band.
+final class MindDetailedSumNormalizedViewport {
+  const MindDetailedSumNormalizedViewport._({
+    required this.startFraction,
+    required this.visibleFraction,
+  });
+
+  const MindDetailedSumNormalizedViewport.fullYear()
+    : startFraction = 0,
+      visibleFraction = 1;
+
+  final double startFraction;
+  final double visibleFraction;
+
+  bool get isZoomed => visibleFraction < 1;
+
+  MindDetailedSumTimeWindow windowForYear(int year) {
+    final home = MindDetailedSumTimeWindow.fullYear(year);
+    final visibleCount = (home.homeMinuteCount * visibleFraction)
+        .round()
+        .clamp(1, home.homeMinuteCount)
+        .toInt();
+    final remaining = home.homeMinuteCount - visibleCount;
+    // [startFraction] is measured against the whole year, matching the
+    // focal-point zoom calculation below; it is not a fraction of the
+    // remaining post-zoom travel.  Using the latter shifts the date under a
+    // centred pinch toward the start of the year.
+    final start = home.homeStartEpochMinute +
+        (home.homeMinuteCount * startFraction)
+            .round()
+            .clamp(0, remaining)
+            .toInt();
+    return MindDetailedSumTimeWindow._(
+      homeStartEpochMinute: home.homeStartEpochMinute,
+      homeEndEpochMinute: home.homeEndEpochMinute,
+      startEpochMinute: start,
+      endEpochMinute: start + visibleCount - 1,
+    );
+  }
+
+  /// Applies a continuous physical scale around [focalFraction] while keeping
+  /// the same normalized calendar location under the user's fingers.
+  MindDetailedSumNormalizedViewport zoomForGesture({
+    required double scaleDelta,
+    required double focalFraction,
+  }) {
+    if (!scaleDelta.isFinite || scaleDelta <= 0) return this;
+    const gestureZoomExponent = 3.2;
+    final effectiveScale = math.pow(scaleDelta, gestureZoomExponent).toDouble();
+    final nextVisible = (visibleFraction / effectiveScale)
+        .clamp(1 / (366 * _minutesPerDay), 1.0)
+        .toDouble();
+    if ((nextVisible - visibleFraction).abs() < 1e-9) return this;
+    final focal = startFraction + focalFraction.clamp(0.0, 1.0) * visibleFraction;
+    final requestedStart = focal - focalFraction.clamp(0.0, 1.0) * nextVisible;
+    final nextStart = requestedStart
+        .clamp(0.0, math.max(0.0, 1.0 - nextVisible))
+        .toDouble();
+    return MindDetailedSumNormalizedViewport._(
+      startFraction: nextStart,
+      visibleFraction: nextVisible,
+    );
+  }
+
+  MindDetailedSumNormalizedViewport panByFraction(double delta) {
+    if (!isZoomed || delta == 0) return this;
+    final nextStart = (startFraction + delta)
+        .clamp(0.0, math.max(0.0, 1.0 - visibleFraction))
+        .toDouble();
+    if (nextStart == startFraction) return this;
+    return MindDetailedSumNormalizedViewport._(
+      startFraction: nextStart,
+      visibleFraction: visibleFraction,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is MindDetailedSumNormalizedViewport &&
+      other.startFraction == startFraction &&
+      other.visibleFraction == visibleFraction;
+
+  @override
+  int get hashCode => Object.hash(startFraction, visibleFraction);
+}
+
 /// A source-only LOD sampler. Overview density uses a readable spatial budget
 /// instead of one bin per logical pixel. As visible time narrows the budget
 /// rises continuously; at a one-day-or-less window every supplied prepared

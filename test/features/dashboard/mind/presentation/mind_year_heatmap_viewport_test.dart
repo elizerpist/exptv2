@@ -59,7 +59,7 @@ void main() {
         find.byKey(const ValueKey('mind-year-heatmap-annual-row-3')),
         findsOneWidget,
       );
-      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(find.byType(MindYearHeatmapMonthGroup), findsNWidgets(12));
       expect(find.text('szeptember'), findsOneWidget);
       expect(find.byType(GridView), findsNothing);
       expect(tester.takeException(), isNull);
@@ -448,10 +448,10 @@ void main() {
       );
 
       final january = tester.getSize(
-        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+        find.byKey(const ValueKey('mind-year-direct-month-1')),
       );
       final march = tester.getSize(
-        find.byKey(const ValueKey('mind-year-heatmap-month-3')),
+        find.byKey(const ValueKey('mind-year-direct-month-3')),
       );
       expect(
         january.height,
@@ -495,7 +495,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('2025.'), findsOneWidget);
-      expect(find.textContaining('1 000 Ft'), findsOneWidget);
+      expect(find.textContaining('1 000 Ft'), findsAtLeastNWidgets(1));
       final dismiss = find.byKey(
         const ValueKey('mind-year-day-infocard-dismiss'),
       );
@@ -785,8 +785,8 @@ void main() {
       final gridBefore = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
       );
-      final januaryBefore = tester.widget<MindYearHeatmapMonthCard>(
-        find.byType(MindYearHeatmapMonthCard).first,
+      final januaryBefore = tester.widget<MindYearHeatmapMonthGroup>(
+        find.byType(MindYearHeatmapMonthGroup).first,
       );
       frame.value = projection.preview(
         const QueryAmountRangeValues(
@@ -805,8 +805,8 @@ void main() {
         same(gridBefore),
       );
       expect(
-        tester.widget<MindYearHeatmapMonthCard>(
-          find.byType(MindYearHeatmapMonthCard).first,
+        tester.widget<MindYearHeatmapMonthGroup>(
+          find.byType(MindYearHeatmapMonthGroup).first,
         ),
         same(januaryBefore),
       );
@@ -837,7 +837,7 @@ void main() {
       );
       expect(
         find.descendant(
-          of: find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+          of: find.byKey(const ValueKey('mind-year-direct-month-1')),
           matching: find.byType(GridView),
         ),
         findsNothing,
@@ -890,7 +890,7 @@ void main() {
       // has no slots there at all, so it cannot render fake no-data cells.
       expect(painter.geometry.rowCount, 5);
       expect(painter.geometry.slotCount, 35);
-      expect(MindYearHeatmapMonthCard.displayCalendarRowCount, 6);
+      expect(MindYearHeatmapMonthGroup.displayCalendarRowCount, 6);
       expect(
         painter.colorForDate(const LocalDate(year: 2025, month: 1, day: 1)),
         FluviVisualTokens.mindHeatmapEmpty,
@@ -901,12 +901,18 @@ void main() {
       );
 
       final monthCard = tester.getSize(
-        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
+        find.byKey(const ValueKey('mind-year-direct-month-1')),
       );
       final cells = tester.getSize(
         find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
       );
-      expect(monthCard.height - cells.height, lessThanOrEqualTo(32));
+      expect(
+        monthCard.height,
+        greaterThan(cells.height),
+        reason:
+            'The direct annual group reserves only its title and 3x4 footer '
+            'content; it no longer relies on a painted MonthCard surface.',
+      );
     },
   );
 
@@ -973,21 +979,11 @@ void main() {
   );
 
   testWidgets(
-    'HMP-06/08 two-column layout fills width and keeps one scroll owner',
+    'YEAR-DIRECT-03: three-by-four direct groups retain one scroll owner',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.b3mMy3,
-          monthCardLayout: MindYearMonthCardLayout.twoColumns,
-          showMonthlyNetClose: false,
-          showMonthlyDirectionTotal: false,
-          revision: 0,
-        ),
-      );
       final scrollController = ScrollController();
       addTearDown(frame.dispose);
-      addTearDown(settings.dispose);
       addTearDown(scrollController.dispose);
 
       await tester.pumpWidget(
@@ -998,7 +994,6 @@ void main() {
               height: 500,
               child: MindYearHeatmapViewport(
                 frameListenable: frame,
-                presentationSettings: settings,
                 scrollController: scrollController,
               ),
             ),
@@ -1009,26 +1004,14 @@ void main() {
       final grid = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
       );
-      // ListView.separated contributes one separator between each annual row.
-      expect(grid.childrenDelegate.estimatedChildCount, 11);
-      // The fixed six-row envelope deliberately makes each two-card row
-      // taller than the former variable-height card. The one ListView still
-      // structurally owns all six rows (estimatedChildCount == 11 above),
-      // while this constrained viewport only has to build its first three.
-      expect(find.byType(MindYearHeatmapMonthCard), findsAtLeastNWidgets(6));
-      final twoColumnWidth = tester
-          .getSize(find.byKey(const ValueKey('mind-year-heatmap-month-1')))
+      expect(grid.childrenDelegate.estimatedChildCount, 7);
+      expect(find.byType(MindYearHeatmapMonthGroup), findsAtLeastNWidgets(6));
+      final threeColumnWidth = tester
+          .getSize(find.byKey(const ValueKey('mind-year-direct-month-1')))
           .width;
-      expect(twoColumnWidth, greaterThan(150));
+      expect(threeColumnWidth, greaterThan(80));
 
       scrollController.jumpTo(scrollController.position.maxScrollExtent);
-      settings.setMonthCardLayout(MindYearMonthCardLayout.threeColumns);
-      await tester.pump();
-      await tester.pump();
-      final threeColumnWidth = tester
-          .getSize(find.byKey(const ValueKey('mind-year-heatmap-month-1')))
-          .width;
-      expect(threeColumnWidth, lessThan(twoColumnWidth));
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
         findsOneWidget,
@@ -1109,42 +1092,24 @@ void main() {
   );
 
   testWidgets(
-    'RED YEAR-SURFACE-01: direct annual cells use the same frame without a muted MonthCard shell',
+    'YEAR-DIRECT-01: default annual cells use the same frame without a muted surface shell',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.threeColumns,
-          showMonthlyNetClose: false,
-          showMonthlyDirectionTotal: false,
-          annualSurfaceStyle: MindYearHeatmapAnnualSurfaceStyle.directCells,
-          revision: 0,
-        ),
-      );
       addTearDown(frame.dispose);
-      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
           home: SizedBox(
             width: 360,
             height: 500,
-            child: MindYearHeatmapViewport(
-              frameListenable: frame,
-              presentationSettings: settings,
-            ),
+            child: MindYearHeatmapViewport(frameListenable: frame),
           ),
         ),
       );
 
       expect(
-        find.byKey(const ValueKey('mind-year-heatmap-month-direct-1')),
+        find.byKey(const ValueKey('mind-year-direct-month-1')),
         findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
-        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
@@ -1154,19 +1119,19 @@ void main() {
     },
   );
 
-  testWidgets('HMP-09/12 MonthCard footers use admitted full-month totals', (
+  testWidgets('YEAR-DIRECT-04: three-by-four direct groups show scope and monthly close', (
     tester,
   ) async {
-    final noFooterHeight = MindYearHeatmapMonthCard.heightFor(
+    final noFooterHeight = MindYearHeatmapMonthGroup.heightFor(
       width: 100,
       calendarRowCount: 5,
     );
-    final oneFooterHeight = MindYearHeatmapMonthCard.heightFor(
+    final oneFooterHeight = MindYearHeatmapMonthGroup.heightFor(
       width: 100,
       calendarRowCount: 5,
       footerRowCount: 1,
     );
-    final bothFooterHeight = MindYearHeatmapMonthCard.heightFor(
+    final bothFooterHeight = MindYearHeatmapMonthGroup.heightFor(
       width: 100,
       calendarRowCount: 5,
       footerRowCount: 2,
@@ -1216,34 +1181,21 @@ void main() {
       monthlyAggregates: aggregates,
     );
     final frame = ValueNotifier(projection.preview(range));
-    final settings = MindYearHeatmapPresentationController(
-      initial: const MindYearHeatmapPresentationSettings(
-        paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-        monthCardLayout: MindYearMonthCardLayout.threeColumns,
-        showMonthlyNetClose: true,
-        showMonthlyDirectionTotal: true,
-        revision: 0,
-      ),
-    );
     addTearDown(frame.dispose);
-    addTearDown(settings.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         home: SizedBox(
           width: 360,
           height: 500,
-          child: MindYearHeatmapViewport(
-            frameListenable: frame,
-            presentationSettings: settings,
-          ),
+          child: MindYearHeatmapViewport(frameListenable: frame),
         ),
       ),
     );
     expect(find.text('Zárás'), findsAtLeastNWidgets(1));
-    expect(find.text('Kiadás'), findsAtLeastNWidgets(1));
+    expect(find.text('Scope'), findsAtLeastNWidgets(1));
     expect(find.text('3 800 Ft'), findsAtLeastNWidgets(1));
-    expect(find.text('1 200 Ft'), findsAtLeastNWidgets(1));
+    expect(find.text('1 000 Ft'), findsAtLeastNWidgets(1));
 
     final incomeProjection = MindYearHeatmapProjection.build(
       identity: const MindYearHeatmapIdentity(
@@ -1258,26 +1210,16 @@ void main() {
     );
     frame.value = incomeProjection.preview(range);
     await tester.pump();
-    expect(find.text('Bevétel'), findsAtLeastNWidgets(1));
-    expect(find.text('5 000 Ft'), findsAtLeastNWidgets(1));
+    expect(find.text('Scope'), findsAtLeastNWidgets(1));
+    expect(find.text('0 Ft'), findsAtLeastNWidgets(1));
   });
 
   testWidgets(
-    'RED H43-01/04: four-column Year mode solves one non-scrolling 4 × 3 viewport including both footer rows',
+    'YEAR-DIRECT-05: four-by-three direct grid solves one non-scrolling viewport',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.fourColumns,
-          showMonthlyNetClose: true,
-          showMonthlyDirectionTotal: true,
-          revision: 0,
-        ),
-      );
       final scrollController = ScrollController();
       addTearDown(frame.dispose);
-      addTearDown(settings.dispose);
       addTearDown(scrollController.dispose);
 
       await tester.pumpWidget(
@@ -1288,15 +1230,18 @@ void main() {
               height: 420,
               child: MindYearHeatmapViewport(
                 frameListenable: frame,
-                presentationSettings: settings,
                 scrollController: scrollController,
               ),
             ),
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
 
-      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(find.byType(MindYearHeatmapMonthGroup), findsNWidgets(12));
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-annual-row-0')),
         findsOneWidget,
@@ -1317,23 +1262,23 @@ void main() {
       );
       expect(
         find.descendant(
-          of: find.byType(MindYearHeatmapMonthCard),
+          of: find.byType(MindYearHeatmapMonthGroup),
           matching: find.byType(Scrollable),
         ),
         findsNothing,
         reason:
             'Only the single viewport owner may exist; MonthCards never scroll.',
       );
-      final january = tester.widget<MindYearHeatmapMonthCard>(
-        find.byType(MindYearHeatmapMonthCard).first,
+      final january = tester.widget<MindYearHeatmapMonthGroup>(
+        find.byType(MindYearHeatmapMonthGroup).first,
       );
-      final april = tester.widget<MindYearHeatmapMonthCard>(
-        find.byType(MindYearHeatmapMonthCard).at(3),
+      final april = tester.widget<MindYearHeatmapMonthGroup>(
+        find.byType(MindYearHeatmapMonthGroup).at(3),
       );
       expect(january.width, closeTo(april.width, .001));
       expect(
         tester
-            .getRect(find.byKey(const ValueKey('mind-year-heatmap-month-12')))
+            .getRect(find.byKey(const ValueKey('mind-year-direct-month-12')))
             .bottom,
         lessThanOrEqualTo(
           tester
@@ -1344,45 +1289,6 @@ void main() {
         ),
       );
 
-      // The solver accounts for every optional footer configuration. Each
-      // setting still consumes the same one viewport controller and keeps the
-      // annual content physically within its finite bounds.
-      final sameController = scrollController;
-      for (final (showNet, showDirection) in <(bool, bool)>[
-        (true, false),
-        (false, true),
-        (false, false),
-      ]) {
-        settings.setShowMonthlyNetClose(showNet);
-        settings.setShowMonthlyDirectionTotal(showDirection);
-        await tester.pump();
-        expect(scrollController, same(sameController));
-        expect(scrollController.position.maxScrollExtent, 0);
-        expect(
-          tester
-              .getRect(find.byKey(const ValueKey('mind-year-heatmap-month-12')))
-              .bottom,
-          lessThanOrEqualTo(
-            tester
-                .getRect(
-                  find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
-                )
-                .bottom,
-          ),
-        );
-        expect(tester.takeException(), isNull);
-      }
-
-      // Changing the presentation back to a scrolling layout and then to the
-      // fit layout preserves the one controller object; no new scroll owner
-      // is introduced for 4 × 3.
-      settings.setMonthCardLayout(MindYearMonthCardLayout.threeColumns);
-      await tester.pump();
-      expect(scrollController, same(sameController));
-      settings.setMonthCardLayout(MindYearMonthCardLayout.fourColumns);
-      await tester.pump();
-      expect(scrollController, same(sameController));
-      expect(scrollController.position.maxScrollExtent, 0);
       expect(tester.takeException(), isNull);
     },
   );
@@ -1391,17 +1297,7 @@ void main() {
     'YEAR-DAY-INFO-06: four-column colored-day inspection stays inside the annual card at supported mobile widths',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.fluvi,
-          monthCardLayout: MindYearMonthCardLayout.fourColumns,
-          showMonthlyNetClose: true,
-          showMonthlyDirectionTotal: true,
-          revision: 0,
-        ),
-      );
       addTearDown(frame.dispose);
-      addTearDown(settings.dispose);
 
       for (final width in <double>[360, 390, 412, 430]) {
         await tester.pumpWidget(
@@ -1413,12 +1309,15 @@ void main() {
                 child: MindYearHeatmapViewport(
                   key: ValueKey<String>('mind-year-info-width-$width'),
                   frameListenable: frame,
-                  presentationSettings: settings,
                 ),
               ),
             ),
           ),
         );
+        await tester.tap(
+          find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
+        );
+        await tester.pump();
         await tester.tap(
           find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
         );
@@ -1442,22 +1341,11 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-SURFACE-02: direct four-column annual groups retain zero-scroll fit without MonthCard shells',
+    'YEAR-DIRECT-06: direct four-by-three annual groups retain zero-scroll fit',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings(
-          paletteStyle: MindYearHeatmapPaletteStyle.b3mMy3,
-          monthCardLayout: MindYearMonthCardLayout.fourColumns,
-          showMonthlyNetClose: true,
-          showMonthlyDirectionTotal: true,
-          annualSurfaceStyle: MindYearHeatmapAnnualSurfaceStyle.directCells,
-          revision: 0,
-        ),
-      );
       final scrollController = ScrollController();
       addTearDown(frame.dispose);
-      addTearDown(settings.dispose);
       addTearDown(scrollController.dispose);
 
       await tester.pumpWidget(
@@ -1468,23 +1356,75 @@ void main() {
               height: 420,
               child: MindYearHeatmapViewport(
                 frameListenable: frame,
-                presentationSettings: settings,
                 scrollController: scrollController,
               ),
             ),
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
       expect(scrollController.position.maxScrollExtent, 0);
       expect(
-        find.byKey(const ValueKey('mind-year-heatmap-month-direct-1')),
+        find.byKey(const ValueKey('mind-year-direct-month-1')),
+        findsOneWidget,
+      );
+      expect(find.byType(MindYearHeatmapMonthGroup), findsNWidgets(12));
+    },
+  );
+
+  testWidgets(
+    'RED YEAR-DIRECT-01/02/04: Year uses a direct-cell header selector and only 3x4/4x3 layouts',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 440,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-direct-title')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('mind-year-heatmap-month-1')),
-        findsNothing,
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-3x4')),
+        findsOneWidget,
       );
-      expect(find.byType(MindYearHeatmapMonthCard), findsNWidgets(12));
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-direct-month-1')),
+        findsOneWidget,
+      );
+      expect(find.text('Scope'), findsAtLeastNWidgets(1));
+      expect(find.text('Zárás'), findsAtLeastNWidgets(1));
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
+      );
+      await tester.pump();
+      final annualScroll = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey<String>('mind-year-heatmap-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(annualScroll.position.maxScrollExtent, 0);
+      expect(find.text('Scope'), findsNothing);
     },
   );
 }
