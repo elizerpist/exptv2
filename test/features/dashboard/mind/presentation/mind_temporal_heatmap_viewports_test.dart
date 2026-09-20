@@ -1039,6 +1039,18 @@ void main() {
         find.byKey(const ValueKey('mind-sum-detailed-window-2024')),
         findsOneWidget,
       );
+      final detailedScroll = find.byKey(
+        const ValueKey<String>('mind-sum-detailed-scroll'),
+      );
+      final detailedScrollState = tester.state<ScrollableState>(
+        find
+            .descendant(of: detailedScroll, matching: find.byType(Scrollable))
+            .first,
+      );
+      expect(detailedScrollState.position.maxScrollExtent, greaterThan(0));
+      await tester.drag(detailedScroll, const Offset(0, -80));
+      await tester.pump();
+      expect(detailedScrollState.position.pixels, greaterThan(0));
 
       await tester.drag(
         find.byKey(const ValueKey('mind-sum-detailed-plot-2024')),
@@ -1145,6 +1157,11 @@ void main() {
         const Offset(-96, 0),
       );
       await tester.pump();
+      expect(
+        tester.widget<Semantics>(window).properties.label,
+        isNot(after),
+        reason: 'At a narrowed window, one pointer pans only local time.',
+      );
       expect(
         find.byKey(const ValueKey('mind-sum-detailed-surface')),
         findsOneWidget,
