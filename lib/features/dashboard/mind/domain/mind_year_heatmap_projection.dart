@@ -169,6 +169,7 @@ final class MindYearHeatmapPreparedMembership {
               bookedLocalEpochDay: entry.bookedLocalEpochDay,
               bookedLocalTimeMinutes: entry.bookedLocalTimeMinutes,
               amountMinor: entry.amountMinor,
+              partnerLabel: _partnerLabelFor(entry),
             ),
           );
     }
@@ -183,6 +184,13 @@ final class MindYearHeatmapPreparedMembership {
         ),
       ),
     );
+  }
+
+  static String _partnerLabelFor(DashboardLedgerEntry entry) {
+    final displayName = entry.partnerDisplayName?.trim();
+    return displayName == null || displayName.isEmpty
+        ? entry.partnerId
+        : displayName;
   }
 
   final Map<int, List<MindYearHeatmapPreparedContribution>>
@@ -229,12 +237,14 @@ final class MindYearHeatmapPreparedContribution {
     required this.bookedLocalEpochDay,
     this.bookedLocalTimeMinutes = 0,
     required this.amountMinor,
+    this.partnerLabel = '',
   });
 
   final int ordinal;
   final int bookedLocalEpochDay;
   final int bookedLocalTimeMinutes;
   final int amountMinor;
+  final String partnerLabel;
 }
 
 /// Rendering categories are named so a zero-normalized non-empty tile cannot

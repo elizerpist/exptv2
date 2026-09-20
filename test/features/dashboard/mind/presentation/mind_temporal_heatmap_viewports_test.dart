@@ -957,6 +957,29 @@ void main() {
         find.byKey(const ValueKey('mind-month-rhythm-stat-strongest')),
         findsOneWidget,
       );
+
+      await tester.drag(pager, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('mind-month-heatmap-page-2')),
+        findsOneWidget,
+        reason: 'The original rhythm stays intact; comparison is additive.',
+      );
+      expect(find.text('Összehasonlító költési ritmus'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('mind-month-comparison-rhythm-chart')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-month-comparison-rhythm-bar-02')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-month-comparison-rhythm-bar-01')),
+        findsNothing,
+        reason: 'Zero days have neither an outline/track nor an empty bar.',
+      );
     },
   );
 

@@ -43,6 +43,44 @@ final class MindSumChartDensityGeometry {
   }
 }
 
+/// The detailed chart owns a compact annual overview but can use the shared
+/// Hungarian full month labels once zoom and real label slots make them
+/// readable. This is presentation geometry only; it never changes separators
+/// or the temporal viewport.
+enum MindDetailedSumAxisLabelDensity {
+  initials,
+  fullNames;
+
+  static const _minimumFullNameSlotWidth = 44.0;
+  static const _maximumFullNameSpanDays = 184;
+
+  static MindDetailedSumAxisLabelDensity forWindow({
+    required int year,
+    required MindDetailedSumTimeWindow window,
+    required double availableWidth,
+  }) {
+    if (window.visibleDayCount > _maximumFullNameSpanDays ||
+        !availableWidth.isFinite ||
+        availableWidth <= 0) {
+      return MindDetailedSumAxisLabelDensity.initials;
+    }
+    final visibleMonthStarts = List<int>.generate(12, (index) => index + 1)
+        .where((month) {
+          final epochDay = LocalDate(year: year, month: month, day: 1).epochDay;
+          return epochDay >= window.startEpochDay &&
+              epochDay <= window.endEpochDay;
+        })
+        .length;
+    if (visibleMonthStarts <= 1) {
+      return MindDetailedSumAxisLabelDensity.fullNames;
+    }
+    final slotWidth = availableWidth / (visibleMonthStarts - 1);
+    return slotWidth >= _minimumFullNameSlotWidth
+        ? MindDetailedSumAxisLabelDensity.fullNames
+        : MindDetailedSumAxisLabelDensity.initials;
+  }
+}
+
 /// Paint-only weighted smoothing for detailed Sum curve anchors. It never
 /// enters hit testing, filtering, totals or the immutable financial frame.
 /// Local extrema are retained verbatim so a spike cannot disappear merely

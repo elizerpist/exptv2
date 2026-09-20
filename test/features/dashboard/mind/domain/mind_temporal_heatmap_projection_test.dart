@@ -526,7 +526,13 @@ void main() {
         ),
         date: selected,
         contributions: <MindYearHeatmapPreparedContribution>[
-          _contribution(8, 100, selected, localTimeMinutes: 15),
+          MindYearHeatmapPreparedContribution(
+            ordinal: 8,
+            bookedLocalEpochDay: selected.epochDay,
+            bookedLocalTimeMinutes: 15,
+            amountMinor: 100,
+            partnerLabel: 'McDonald\'s',
+          ),
           _contribution(2, 700, selected, localTimeMinutes: 721),
           _contribution(5, 400, selected, localTimeMinutes: 721),
           _contribution(9, 900, selected, localTimeMinutes: 1438),
@@ -558,6 +564,7 @@ void main() {
             .having((event) => event.total, 'total', 400)
             .having((event) => event.ordinal, 'ordinal', 5),
       ]);
+      expect(frame.fullTimelineEvents.first.partnerLabel, 'McDonald\'s');
       expect(projection.preparedContributionTouches, 5);
     },
   );

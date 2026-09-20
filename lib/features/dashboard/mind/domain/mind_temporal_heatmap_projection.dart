@@ -839,11 +839,13 @@ final class MindDayTimelineEvent {
     required this.ordinal,
     required this.timeMinutes,
     required this.total,
+    this.partnerLabel = '',
   });
 
   final int ordinal;
   final int timeMinutes;
   final int total;
+  final String partnerLabel;
 }
 
 final class MindDayHeatmapHour {
@@ -898,6 +900,7 @@ final class MindDayHeatmapProjection {
           ordinal: contribution.ordinal,
           timeMinutes: minutes,
           total: contribution.amountMinor,
+          partnerLabel: contribution.partnerLabel,
         ),
       );
     }
@@ -948,6 +951,7 @@ final class MindDayHeatmapProjection {
                 ordinal: event.ordinal,
                 timeMinutes: event.timeMinutes,
                 total: event.total,
+                partnerLabel: event.partnerLabel,
               ),
             )
             .toList(growable: false)
@@ -962,6 +966,7 @@ final class MindDayHeatmapProjection {
                 ordinal: event.ordinal,
                 timeMinutes: event.timeMinutes,
                 total: event.total,
+                partnerLabel: event.partnerLabel,
               ),
             )
             .toList(growable: false)
@@ -1006,11 +1011,13 @@ final class _MindDayTimelinePreparedEvent {
     required this.ordinal,
     required this.timeMinutes,
     required this.total,
+    required this.partnerLabel,
   });
 
   final int ordinal;
   final int timeMinutes;
   final int total;
+  final String partnerLabel;
 }
 
 MindYearHeatmapTileKind _kindFor({

@@ -741,18 +741,30 @@ final class _MindDetailedSumMonthAxis extends StatelessWidget {
     builder: (context, constraints) {
       final start = window.startEpochDay;
       final span = math.max(1, window.visibleDayCount - 1);
+      final density = MindDetailedSumAxisLabelDensity.forWindow(
+        year: year,
+        window: window,
+        availableWidth: constraints.maxWidth,
+      );
+      final useFullNames = density == MindDetailedSumAxisLabelDensity.fullNames;
+      final labelWidth = useFullNames ? 44.0 : 7.0;
       return Stack(
         clipBehavior: Clip.none,
         children: <Widget>[
           for (var month = 1; month <= 12; month += 1)
             if (_positionFor(month, start, span) case final fraction?)
               Positioned(
-                left: (constraints.maxWidth * fraction - 3)
-                    .clamp(0.0, math.max(0.0, constraints.maxWidth - 7))
+                left: (constraints.maxWidth * fraction - labelWidth / 2)
+                    .clamp(
+                      0.0,
+                      math.max(0.0, constraints.maxWidth - labelWidth),
+                    )
                     .toDouble(),
                 top: 2,
                 child: Text(
-                  _monthInitials[month - 1],
+                  useFullNames
+                      ? DashboardTimeLabelFormatter.monthName(month)
+                      : _monthInitials[month - 1],
                   key: ValueKey<String>(
                     'mind-sum-detailed-axis-month-$year-$month',
                   ),

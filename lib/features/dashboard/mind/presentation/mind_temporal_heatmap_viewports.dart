@@ -1017,6 +1017,14 @@ final class _MindMonthHeatmapContentState
             scaleResolution: widget.scaleResolution,
           ),
         ),
+        KeyedSubtree(
+          key: const ValueKey<String>('mind-month-heatmap-page-2'),
+          child: MindMonthComparisonRhythmCard(
+            frame: widget.frame,
+            paletteStyle: widget.paletteStyle,
+            scaleResolution: widget.scaleResolution,
+          ),
+        ),
       ],
     ),
   );

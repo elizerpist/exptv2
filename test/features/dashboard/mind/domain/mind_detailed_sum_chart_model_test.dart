@@ -307,6 +307,44 @@ void main() {
   );
 
   test(
+    'SUM-AXIS-01 RED: detailed Sum uses full Hungarian month names only when the zoomed viewport has room for them',
+    () {
+      final home = MindDetailedSumTimeWindow.fullYear(2027);
+      final sixMonthWindow = home.zoomAtMinute(
+        scaleDelta: home.homeMinuteCount / (180 * 1440),
+        focalEpochMinute:
+            LocalDate(year: 2027, month: 6, day: 15).epochDay * 1440 + 720,
+      );
+
+      expect(
+        MindDetailedSumAxisLabelDensity.forWindow(
+          year: 2027,
+          window: home,
+          availableWidth: 280,
+        ),
+        MindDetailedSumAxisLabelDensity.initials,
+      );
+      expect(
+        MindDetailedSumAxisLabelDensity.forWindow(
+          year: 2027,
+          window: sixMonthWindow,
+          availableWidth: 280,
+        ),
+        MindDetailedSumAxisLabelDensity.fullNames,
+      );
+      expect(
+        MindDetailedSumAxisLabelDensity.forWindow(
+          year: 2027,
+          window: sixMonthWindow,
+          availableWidth: 120,
+        ),
+        MindDetailedSumAxisLabelDensity.initials,
+        reason: 'Full labels never win if their actual slot width would clash.',
+      );
+    },
+  );
+
+  test(
     'SUM-CURVE-01 RED: weighted presentation smoothing preserves raw extrema and deep strength returns raw points',
     () {
       const points = <MindSumHeatmapDetailPoint>[

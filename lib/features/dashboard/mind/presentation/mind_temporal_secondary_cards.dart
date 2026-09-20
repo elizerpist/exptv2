@@ -65,7 +65,7 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final chartHeight = math.max(62.0, constraints.maxHeight - 48);
+                final chartHeight = math.max(58.0, constraints.maxHeight - 76);
                 return Column(
                   children: <Widget>[
                     SizedBox(
@@ -292,6 +292,233 @@ final class _MindMonthRhythmPainter extends CustomPainter {
       oldDelegate.barColor != barColor;
 }
 
+/// Additive Month comparison card. Unlike the original rhythm chart, its
+/// Budget-style silhouette intentionally paints only real current-scope value
+/// segments: no full-total background, empty track, outline or remainder.
+final class MindMonthComparisonRhythmCard extends StatelessWidget {
+  const MindMonthComparisonRhythmCard({
+    super.key,
+    required this.frame,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final MindMonthHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  Widget build(BuildContext context) {
+    final points = frame.dailyRhythmPoints;
+    final strongest = points.fold<MindAggregateLinePoint>(
+      points.first,
+      (current, point) => point.total > current.total ? point : current,
+    );
+    final average = points.isEmpty ? 0.0 : frame.total / points.length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Text(
+            'Összehasonlító költési ritmus',
+            style: TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            '${frame.year}. ${DashboardTimeLabelFormatter.monthName(frame.month)} · aktuális szűrő',
+            style: const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 8,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final chartHeight = math.max(58.0, constraints.maxHeight - 76);
+                return Column(
+                  children: <Widget>[
+                    SizedBox(
+                      height: chartHeight,
+                      child: _MindMonthComparisonRhythmPlot(
+                        points: points,
+                        paletteStyle: paletteStyle,
+                        scaleResolution: scaleResolution,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _MindTemporalStats(
+                      values: <_MindTemporalStatValue>[
+                        _MindTemporalStatValue(
+                          keyName: 'mind-month-comparison-rhythm-stat-total',
+                          label: 'Aktuális összeg',
+                          value: QueryMenuFormatters.money(frame.total),
+                        ),
+                        _MindTemporalStatValue(
+                          keyName: 'mind-month-comparison-rhythm-stat-active',
+                          label: 'Aktív nap',
+                          value: '${frame.activeDayCount} nap',
+                        ),
+                        _MindTemporalStatValue(
+                          keyName: 'mind-month-comparison-rhythm-stat-average',
+                          label: 'Napi átlag',
+                          value: QueryMenuFormatters.money(average.round()),
+                        ),
+                        _MindTemporalStatValue(
+                          keyName:
+                              'mind-month-comparison-rhythm-stat-strongest',
+                          label: 'Legerősebb nap',
+                          value: strongest.total == 0
+                              ? '—'
+                              : '${strongest.ordinal}. · ${QueryMenuFormatters.money(strongest.total)}',
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _MindMonthComparisonRhythmPlot extends StatelessWidget {
+  const _MindMonthComparisonRhythmPlot({
+    required this.points,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final List<MindAggregateLinePoint> points;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const left = 12.0;
+      const right = 4.0;
+      const top = 5.0;
+      const bottom = 15.0;
+      final plotWidth = math.max(0.0, constraints.maxWidth - left - right);
+      final plotHeight = math.max(0.0, constraints.maxHeight - top - bottom);
+      return Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          CustomPaint(
+            key: const ValueKey<String>('mind-month-comparison-rhythm-chart'),
+            painter: _MindMonthComparisonRhythmPainter(
+              points: points,
+              paletteStyle: paletteStyle,
+              scaleResolution: scaleResolution,
+            ),
+          ),
+          for (var index = 0; index < points.length; index += 1)
+            if (points[index].total > 0)
+              Positioned(
+                key: ValueKey<String>(
+                  'mind-month-comparison-rhythm-bar-${points[index].ordinal.toString().padLeft(2, '0')}',
+                ),
+                left: left + plotWidth * index / math.max(1, points.length),
+                top: top,
+                width: math.max(1, plotWidth / math.max(1, points.length)),
+                height: plotHeight,
+                child: const IgnorePointer(),
+              ),
+        ],
+      );
+    },
+  );
+}
+
+final class _MindMonthComparisonRhythmPainter extends CustomPainter {
+  _MindMonthComparisonRhythmPainter({
+    required this.points,
+    required this.paletteStyle,
+    required this.scaleResolution,
+  });
+
+  final List<MindAggregateLinePoint> points;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const left = 12.0;
+    const right = 4.0;
+    const top = 5.0;
+    const bottom = 15.0;
+    final plot = Rect.fromLTWH(
+      left,
+      top,
+      math.max(0, size.width - left - right),
+      math.max(0, size.height - top - bottom),
+    );
+    final maximum = points.fold<int>(
+      0,
+      (current, point) => math.max(current, point.total),
+    );
+    if (maximum <= 0 || plot.width <= 0 || plot.height <= 0) return;
+    final unit = plot.width / points.length;
+    final barWidth = math.max(2.0, unit * .52);
+    for (var index = 0; index < points.length; index += 1) {
+      final point = points[index];
+      if (point.total <= 0) continue;
+      final intensity = (point.total / maximum).clamp(0.0, 1.0).toDouble();
+      final color = MindYearHeatmapPaletteResolver.resolveTile(
+        style: paletteStyle,
+        isEmpty: false,
+        intensity: intensity,
+        paletteIntensity: intensity >= 1
+            ? MindYearHeatmapPaletteIntensity.maximum
+            : MindYearHeatmapPaletteIntensity.interpolated,
+        scaleResolution: scaleResolution,
+      ).background;
+      final height = plot.height * intensity;
+      final rect = Rect.fromLTWH(
+        plot.left + index * unit + (unit - barWidth) / 2,
+        plot.bottom - height,
+        barWidth,
+        height,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+        Paint()..color = color,
+      );
+    }
+    final labelPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (final day in <int>[1, 8, 15, 22, points.length]) {
+      if (day <= 0 || day > points.length) continue;
+      labelPainter.text = TextSpan(
+        text: '$day',
+        style: const TextStyle(
+          color: FluviVisualTokens.textSecondary,
+          fontSize: 7,
+        ),
+      );
+      labelPainter.layout();
+      final x = plot.left + (day - .5) * unit - labelPainter.width / 2;
+      labelPainter.paint(
+        canvas,
+        Offset(x.clamp(plot.left, plot.right), plot.bottom + 3),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MindMonthComparisonRhythmPainter oldDelegate) =>
+      oldDelegate.points != points ||
+      oldDelegate.paletteStyle != paletteStyle ||
+      oldDelegate.scaleResolution != scaleResolution;
+}
+
 /// Presentation-only Day secondary card. It plots the exact local time and
 /// amount of current resident prepared events, not synthetic hourly values.
 final class MindDayTransactionTimelineCard extends StatelessWidget {
@@ -344,7 +571,7 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final chartHeight = math.max(62.0, constraints.maxHeight - 52);
+                final chartHeight = math.max(54.0, constraints.maxHeight - 86);
                 return Column(
                   children: <Widget>[
                     SizedBox(
@@ -396,7 +623,7 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
                           label: 'Legnagyobb tétel',
                           value: strongest == null
                               ? '—'
-                              : '${_timeLabel(strongest.timeMinutes)} · ${QueryMenuFormatters.money(strongest.total)}',
+                              : _timelinePrimaryLabel(strongest),
                         ),
                       ],
                     ),
@@ -413,6 +640,14 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
 
 String _timeLabel(int minutes) =>
     '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
+
+String _timelinePrimaryLabel(MindDayTimelineEvent event) {
+  final partner = event.partnerLabel.trim();
+  final amount = QueryMenuFormatters.money(event.total);
+  return partner.isEmpty
+      ? '${_timeLabel(event.timeMinutes)} · $amount'
+      : '$partner · $amount';
+}
 
 final class _MindDayTimelinePlot extends StatelessWidget {
   const _MindDayTimelinePlot({
@@ -454,7 +689,10 @@ final class _MindDayTimelinePlot extends StatelessWidget {
               top: top,
               width: 10,
               height: plotHeight,
-              child: const IgnorePointer(),
+              child: Semantics(
+                label: _timelinePrimaryLabel(event),
+                child: const IgnorePointer(),
+              ),
             ),
         ],
       );
@@ -529,7 +767,7 @@ final class _MindDayTimelinePainter extends CustomPainter {
       canvas.drawCircle(Offset(x, y), selected ? 3.5 : 2.6, paint);
       if (!selected) return;
       label.text = TextSpan(
-        text: _timeLabel(event.timeMinutes),
+        text: _timelinePrimaryLabel(event),
         style: TextStyle(
           color: markerColor,
           fontSize: 7,
@@ -599,9 +837,9 @@ final class _MindTemporalStats extends StatelessWidget {
               borderRadius: BorderRadius.circular(7),
             ),
             child: SizedBox(
-              width: 78,
+              width: 104,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -612,7 +850,7 @@ final class _MindTemporalStats extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: FluviVisualTokens.textSecondary,
-                        fontSize: 6,
+                        fontSize: 7,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -621,7 +859,7 @@ final class _MindTemporalStats extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 7,
+                        fontSize: 9,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
