@@ -99,7 +99,7 @@ enum MindSumSmoothingWindow {
     MindSumSmoothingWindow.days7 => 7,
   };
 
-  String get tunerLabel => '${dayCount} nap';
+  String get tunerLabel => '$dayCount nap';
 }
 
 /// Immutable user preferences for visualizing an admitted annual heatmap.

@@ -1440,7 +1440,7 @@ void main() {
       final card = tester.widget<DecoratedBox>(
         find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
       );
-      final decoration = card.decoration! as BoxDecoration;
+      final decoration = card.decoration as BoxDecoration;
       expect(decoration.border, isNull);
       expect(decoration.color, isNot(FluviVisualTokens.surface));
       expect(

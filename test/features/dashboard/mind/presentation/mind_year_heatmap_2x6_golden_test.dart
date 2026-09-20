@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_viewport.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
