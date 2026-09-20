@@ -14,6 +14,6 @@
 | SUM-04 | User §6/8 | detailed Sum painter | Monotone/Catmull controls cannot overshoot endpoint extrema; focused renderer/model test | DONE |
 | REG-01 | User §8 | affected viewports | 4x3 / Query / filters / range semantics unaffected; focused regression tests | DONE |
 | VIS-01 | AGENTS UI evidence | Year 2x6 golden | 2x6 card/date-label composition has golden evidence | DONE |
-| VAL-01 | User deliverable | tests/analyze/diff | Focused test, format, analyze, boundaries, diff reported | PARTIAL — final analyzer/fast/boundary run pending |
-| APK-01 | Global Flutter delivery | GitHub Actions | After app commit push, normal human APK downloaded/hash verified | NOT DONE |
+| VAL-01 | User deliverable | tests/analyze/diff | Focused test, format, analyze, boundaries, diff reported | DONE — focused suite 91/91, analyzer clean, fast 431/431, boundaries and diff check pass |
+| APK-01 | Global Flutter delivery | GitHub Actions | After app commit push, normal human APK downloaded/hash verified | DONE — exact `19c1d69a` release asset downloaded, archive/embedded SHA/hash verified |
 | PHYS-01 | User/AGENTS | device | Physical validation is user-only | BLOCKED — USER ONLY |
