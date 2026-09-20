@@ -34,3 +34,26 @@
 | ARC-05 | `structuring-apps`, milestone 6e96218 | all changed paths | No duplicate state/query/gesture/cache/palette authority and no Avatar/Time/RangeSlider physics change | source review + boundary tests | DONE — `verify-fluvi-boundaries.sh` and the 431-assertion fast suite pass; device behavior remains physical-only |
 | DELIV-04 | user workflow | GitHub/SCIP/journal | App commit is followed by a file-only `[skip ci]` journal commit; exact final app SHA has Actions human APK and exact matching SCIP | Git/Actions/artifact/graph audit | PARTIAL — app `f6d6da72` has exact APK and deterministic SCIP; Actions profile is inherited-red, and Android validation is user-only |
 | PHYS-04 | user workflow | Android | User validates exact produced APK | user only | BLOCKED |
+
+## 2026-09-20 — fresh physical Sum pan / Year geometry repair inventory
+
+The frozen `Fluvi mind heatmap` export recorded in journal commit
+`aa2c0185cc7277509e4e9c60cc066feea13cf9be` is an additional evidence source
+for this repair. It proves a captured `276`-day Sum viewport and a two-pointer
+interval without an accepted scale lifecycle; it does not identify the exact
+APK used for the screenshot.
+
+| ID | Source / reference | Intended area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| XR-SUM-01 | fresh Android log + screenshots | `mind_detailed_sum_chart.dart` | One parent-wide two-pointer zoom owner accepts a noisy pinch whose fingers land in different visible annual bands; all bands consume the same normalized viewport | production-parent cross-band widget test, lifecycle diagnostic assertions | NOT DONE |
+| XR-SUM-02 | fresh Android log | detailed Sum gesture/model | A realistic cross-band cumulative pinch reaches `<=184` visible days, emits `SCALE_START/UPDATE/END`, leaves expansion/list/frame identity unchanged | RED→GREEN production-parent gesture test | NOT DONE |
+| XR-SUM-03 | paired pan screenshots | detailed Sum Y domain | At one zoom level, an overlapping financial point keeps the same normalized/painter Y coordinate when horizontally panned; pan does not rescale to the visible maximum | deterministic model/painter regression | NOT DONE |
+| XR-SUM-04 | paired pan screenshots | `MindDetailedSumLod` | At one zoom resolution, overlapping interior detail-anchor identities are selected from an absolute calendar grid; pan only crops/translates them | deterministic LOD overlap regression | NOT DONE |
+| XR-SUM-05 | protected Sum product contract | Sum chart | Three top-toggle modes, no Sum PageView/exact annual page, nearest-real tap inspection and month separators remain intact | focused Sum viewport regression | NOT DONE |
+| XR-YEAR-01 | pre-selector `bda65eb9` + current screenshot | Year 4×3 fit | Freeze actual mounted/painted pre-selector 4×3 day-cell extent at representative host geometry; final 4×3 extent is not smaller | baseline measurement evidence + mounted current regression | NOT DONE |
+| XR-YEAR-02 | current 4×3 screenshot | Year direct grid | Header title and local selector remain; whitespace/gaps are reclaimed, final grid is lower, 12 months fit in 4×3 with zero scroll and no clipping | mounted bounds/scroll/cell-extent regression | NOT DONE |
+| XR-YEAR-03 | protected Year contract | Year primary | 3×4 direct-cell Scope/Zárás and day-cell inspection, plus Year secondary pages, remain unchanged | focused Year/host smoke regressions | NOT DONE |
+| XR-ARC-01 | `structuring-apps`, milestone `6e96218` | all changed paths | Existing normalized viewport, range/frame authority, palette, scroll/handoff and renderer primitives are extended; no duplicate Query/repository/Room/gesture owner is introduced | source review + boundary suite | NOT DONE |
+| XR-DELIV-01 | user workflow | delivery | Every application commit is followed by a journal-only `[skip ci]` commit; final application SHA gets CI, human APK and exact SCIP | GitHub/graph/artifact audit | NOT DONE |
+
+Physical validation remains **PENDING — USER ONLY**.
