@@ -1770,3 +1770,7 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **RED/GREEN:** `SUM-DETAIL-01` initially did not compile because no transaction detail read model/API existed. It is GREEN with separately timed 00:20 and two 12:00 entries, including slider-range exclusion. `DSUM-LOD-01` proves 1,095 yearly source transactions reduce materially at home while retaining the 9,000 spike; a deep day emits all three exact source ordinals. The renderer consumes this API directly and exposes its anchor count for mounted inspection.
 - **Validation:** Ubuntu/proot Sum projection, detail-model, temporal viewport and production Mind-host suites PASS (**54 tests**); changed-Dart formatter check and `git diff --check` PASS. No Year, Month, Day, inline legend, range owner, Query semantics, Time/Avatar, Header, repository/Room/schema, Budget, LogBox or milestone code changes.
 - **Still unproven:** Android perceived refinement and recognizer cadence, full analyzer/fast/boundary suites, exact final CI/APK/SCIP and user validation. Physical validation: `PENDING — USER ONLY`.
+
+### Production-parent pinch assertion follow-up
+
+- Test-only commit `4221870f` strengthens `SUM-GEST-01`: the realistic noisy two-pointer sequence now proves the detail time-window changes as well as proving active local pinch ownership, unchanged expansion state, unchanged Sum surface and unchanged admitted frame. The source is unchanged by this test follow-up; Android recognizer cadence remains user-only evidence.
