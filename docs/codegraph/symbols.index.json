@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 11385,
+  "record_count": 11463,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -13,36 +13,36 @@
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#diagnostics.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_projection.dart`/MindYearHeatmapFrame#days.",
-      "sha256": "6a37db50ad887de671eea6d0ee468ddca6ab0faa2e200ee948782d2740974e94"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_presentation_settings.dart`/MindYearHeatmapPresentationSettings#`<get>yearThreeColumnProfitabilityTintEnabled`.",
+      "sha256": "eab74d15f3c3965f8e8f2e9868689c7790601ec32618a5b319bcc3c500b8ba56"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_projection.dart`/MindYearHeatmapFrame#identity.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_fragment_backend.dart`/DashboardHeaderFragmentRenderPlan#",
-      "sha256": "396f61b96ad7bbad14af4890460e6a79d4e25c301f7409d1ace9b1b34472218e"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_presentation_settings.dart`/MindYearHeatmapPresentationSettings#`<get>yearThreeColumnProfitabilityTintOpacity`.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_field_mesh.dart`/DashboardHeaderFieldSamplingGeometry#==().",
+      "sha256": "2dee642d05a92c944e186662b7f9b07adae78eeb8e7e8fb19439940f8a4430ba"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_fragment_backend.dart`/DashboardHeaderFragmentRenderPlan#`<get>dartSurfaceFieldSamplesPerTick`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/application/`dashboard_applied_query_facet_loader.dart`/DashboardAppliedQueryFacetLoader#`<get>error`.",
-      "sha256": "5c1977f6ab056ac57035a77dba632b798066834ce3eb1af8e08fc33cf6aef5fe"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_field_mesh.dart`/DashboardHeaderFieldSamplingGeometry#`<get>hasIntermediateRaster`.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`summary_pill_text_transition.dart`/SummaryPillTextTransitionMath#",
+      "sha256": "037bca226b741b9389affabd4681b950b8e0554770fb57153869e6e091d6b56f"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/application/`dashboard_applied_query_facet_loader.dart`/DashboardAppliedQueryFacetLoader#`<get>isLoading`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_motion_diagnostics.dart`/CenteredCarouselActivityKind#hold.",
-      "sha256": "807aeb25689f8ed225ad8c6f7160de1082b0611efaf6574f3a31e59e96ca806d"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`summary_pill_text_transition.dart`/SummaryPillTextTransitionMath#easeOutCubicInputForVisualProgress().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_controller.dart`/CenteredCarouselPointerDecisionReason#accepted.",
+      "sha256": "6c4811414c3a3643642372a895d5f679695bf760dd18fab07130f74e01270476"
     },
     {
       "path": "symbols/part-005.jsonl",
-      "record_count": 1385,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_motion_diagnostics.dart`/CenteredCarouselActivityKind#idle.",
+      "record_count": 1463,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_controller.dart`/CenteredCarouselPointerDecisionReason#competingCurrentPointer.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "c90c855b4833f63b926d11408caf48a4a7277feb9f2f4e2f367979a1b4029fbb"
+      "sha256": "26604d3c36e11209039bec2fb497c635b388a83616adbcaf90902111ec01c625"
     }
   ]
 }
