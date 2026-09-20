@@ -1535,6 +1535,84 @@ void main() {
   );
 
   testWidgets(
+    'XR-SUM-03 RED: horizontal pan keeps the detailed yearly Y domain stable',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _entry(1, 900, const LocalDate(year: 2025, month: 1, day: 5)),
+          for (var month = 3; month <= 12; month += 1)
+            _entry(
+              month,
+              100 + month,
+              LocalDate(year: 2025, month: month, day: 15),
+            ),
+        ],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindSumHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pumpAndSettle();
+
+      final plot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2025')),
+      );
+      final first = await tester.startGesture(
+        Offset(plot.center.dx - 18, plot.center.dy),
+        pointer: 41,
+      );
+      final second = await tester.startGesture(
+        Offset(plot.center.dx + 18, plot.center.dy),
+        pointer: 42,
+      );
+      await first.moveTo(Offset(plot.center.dx - 26, plot.center.dy - 2));
+      await second.moveTo(Offset(plot.center.dx + 26, plot.center.dy + 2));
+      await tester.pump();
+      await first.up();
+      await second.up();
+      await tester.pump();
+
+      final topAxis = find.byKey(
+        const ValueKey<String>('mind-sum-detailed-axis-y-2025-3'),
+      );
+      final before = tester.widget<Text>(topAxis).data;
+      await tester.drag(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2025')),
+        Offset(plot.width, 0),
+      );
+      await tester.pump();
+      final after = tester.widget<Text>(topAxis).data;
+
+      expect(
+        after,
+        before,
+        reason:
+            'A high January outlier may enter the cropped window, but '
+            'horizontal pan alone must not vertically re-normalize the same '
+            'admitted year.',
+      );
+    },
+  );
+
+  testWidgets(
     'RED SUMD-02: a pinch in one visible detailed-year band synchronizes every visible yearly window',
     (tester) async {
       FluviDiagnosticLogger.clear();
@@ -1615,7 +1693,8 @@ void main() {
       expect(
         spanFor(2025),
         lessThanOrEqualTo(184),
-        reason: 'The detailed Sum owns one shared temporal viewport; a '
+        reason:
+            'The detailed Sum owns one shared temporal viewport; a '
             'multi-year pinch must not leave the untouched band at home.',
       );
       expect(identical(listenable.value, frame), isTrue);

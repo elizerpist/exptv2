@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -402,6 +403,131 @@ void main() {
       expect(temporal.value, same(admitted));
       expect(tester.element(range), same(rangeElement));
       expect(expansion.starts, 0);
+    },
+  );
+
+  testWidgets(
+    'XR-SUM-01/02 RED: a noisy cross-band pinch owns the shared Sum viewport without starting collapse',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      FluviDiagnosticLogger.clear();
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final year = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final temporal = ValueNotifier<MindTemporalHeatmapFrame?>(
+        _sumFrameWithYears(2024, 2025),
+      );
+      final rangeChanges = ValueNotifier<int>(0);
+      final expansion = DashboardExpansionController();
+      final coordinator = DashboardUpperVerticalGestureCoordinator(
+        expansion: expansion,
+        mapViewportDelta: (delta) => delta,
+      );
+      addTearDown(mode.dispose);
+      addTearDown(year.dispose);
+      addTearDown(temporal.dispose);
+      addTearDown(rangeChanges.dispose);
+      addTearDown(expansion.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: year,
+          temporalFrame: temporal,
+          temporalPlane: TimePlane.sum,
+          showYearHeatmap: false,
+          showTemporalHeatmap: true,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+          upperVerticalGestures: coordinator,
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-sum-detail-toggle-line')),
+      );
+      await tester.pumpAndSettle();
+
+      final firstPlot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2024')),
+      );
+      final secondPlot = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-sum-detailed-plot-2025')),
+      );
+      final first = await tester.startGesture(
+        Offset(firstPlot.center.dx - 18, firstPlot.center.dy - 3),
+        pointer: 31,
+      );
+      final second = await tester.startGesture(
+        Offset(secondPlot.center.dx + 18, secondPlot.center.dy + 4),
+        pointer: 32,
+      );
+      await first.moveTo(
+        Offset(firstPlot.center.dx - 62, firstPlot.center.dy - 7),
+      );
+      await second.moveTo(
+        Offset(secondPlot.center.dx + 62, secondPlot.center.dy + 9),
+      );
+      await tester.pump();
+      await first.up();
+      await second.up();
+      await tester.pump();
+
+      int spanFor(int year) {
+        final bounds = tester
+            .widget<Semantics>(
+              find.byKey(ValueKey<String>('mind-sum-detailed-window-$year')),
+            )
+            .properties
+            .label!
+            .split(':')
+            .map(int.parse)
+            .toList();
+        return bounds[1] - bounds[0] + 1;
+      }
+
+      expect(spanFor(2024), lessThanOrEqualTo(184));
+      expect(spanFor(2025), lessThanOrEqualTo(184));
+      expect(expansion.isDragging, isFalse);
+      final detailedScroll = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(
+                const ValueKey<String>('mind-sum-detailed-scroll'),
+              ),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(detailedScroll.position.pixels, 0);
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_SUM|SCALE_START' &&
+              (event.scope?.contains('owner=parent') ?? false),
+        ),
+        isTrue,
+        reason:
+            'Two pointers in different yearly plots must reach one parent '
+            'scale owner rather than only incrementing the raw pointer count.',
+      );
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_SUM|SCALE_UPDATE' &&
+              (event.scope?.contains('synced=true') ?? false),
+        ),
+        isTrue,
+      );
+      expect(
+        FluviDiagnosticLogger.entries.any(
+          (event) =>
+              event.stage == 'MIND_SUM|SCALE_END' &&
+              (event.scope?.contains('owner=parent') ?? false),
+        ),
+        isTrue,
+      );
     },
   );
 
@@ -1161,6 +1287,15 @@ void main() {
       final fourColumnCard = tester.getRect(
         find.byKey(const ValueKey('mind-year-direct-month-1')),
       );
+      final fourColumnPainter =
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(
+                      const ValueKey<String>('mind-year-heatmap-month-cells-1'),
+                    ),
+                  )
+                  .painter!
+              as MindYearHeatmapMonthPainter;
 
       expect(fourColumnContent.height, closeTo(threeColumnContent.height, .01));
       expect(fourColumnCard.width, greaterThanOrEqualTo(83.5));
@@ -1170,6 +1305,15 @@ void main() {
         reason:
             'Parity is an outer-envelope change; direct-group width and its '
             'width-derived day-cell authority may not shrink.',
+      );
+      expect(
+        fourColumnPainter.cellExtent,
+        greaterThanOrEqualTo(4.333333333333333),
+        reason:
+            'XR-YEAR-01 freezes the mounted bda65eb four-column '
+            'day-cell baseline (4.333333333333333 logical px in the shared '
+            'production host). The header must reclaim chrome/gaps, not '
+            'subtract from the actual painter extent.',
       );
       expect(tester.takeException(), isNull);
     },

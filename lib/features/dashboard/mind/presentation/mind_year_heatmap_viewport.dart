@@ -272,9 +272,8 @@ final class _MindYearHeatmapViewportState
         const horizontalPadding = 10.0;
         const rowGap = 4.0;
         const headerHeight = 30.0;
-        final columns = _directGridLayout == _MindYearDirectGridLayout.fourByThree
-            ? 4
-            : 3;
+        final columns =
+            _directGridLayout == _MindYearDirectGridLayout.fourByThree ? 4 : 3;
         final footerRowCount =
             _directGridLayout == _MindYearDirectGridLayout.threeByFour ? 2 : 0;
         final contentWidth = (constraints.maxWidth - horizontalPadding * 2)
@@ -300,9 +299,10 @@ final class _MindYearHeatmapViewportState
             cardWidth: monthCardWidth,
             geometries: geometries,
             footerRowCount: footerRowCount,
-            viewportTopPadding: 10,
-            viewportBottomPadding: 14,
+            viewportTopPadding: 5,
+            viewportBottomPadding: 0,
             rowGap: rowGap,
+            compactChrome: true,
           );
           heatmapPage = KeyedSubtree(
             key: const ValueKey('mind-year-heatmap-scroll'),
@@ -311,7 +311,7 @@ final class _MindYearHeatmapViewportState
               controller: _annualScrollController,
               physics: const NeverScrollableScrollPhysics(),
               clipBehavior: Clip.hardEdge,
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
+              padding: const EdgeInsets.fromLTRB(10, 5, 10, 0),
               child: KeyedSubtree(
                 key: const ValueKey('mind-year-heatmap-grid'),
                 child: Column(
@@ -349,16 +349,17 @@ final class _MindYearHeatmapViewportState
                                   cellExtent: fit.cellExtent,
                                   geometry: geometries[month - 1],
                                   frameListenable: widget.frameListenable,
+                                  compactChrome: true,
                                   paletteStyle:
                                       _presentationSettings.paletteStyle,
                                   scaleResolution:
                                       _presentationSettings.scaleResolution,
                                   showMonthlyClosing:
                                       _directGridLayout ==
-                                          _MindYearDirectGridLayout.threeByFour,
+                                      _MindYearDirectGridLayout.threeByFour,
                                   showScopeAmount:
                                       _directGridLayout ==
-                                          _MindYearDirectGridLayout.threeByFour,
+                                      _MindYearDirectGridLayout.threeByFour,
                                   monthlyAggregates: _monthlyAggregates,
                                   scopedMonthlyAggregates:
                                       _scopedMonthlyAggregates,
@@ -428,10 +429,10 @@ final class _MindYearHeatmapViewportState
                               _presentationSettings.scaleResolution,
                           showMonthlyClosing:
                               _directGridLayout ==
-                                  _MindYearDirectGridLayout.threeByFour,
+                              _MindYearDirectGridLayout.threeByFour,
                           showScopeAmount:
                               _directGridLayout ==
-                                  _MindYearDirectGridLayout.threeByFour,
+                              _MindYearDirectGridLayout.threeByFour,
                           monthlyAggregates: _monthlyAggregates,
                           scopedMonthlyAggregates: _scopedMonthlyAggregates,
                           inspectionScope: _inspectionScope,
@@ -470,7 +471,9 @@ final class _MindYearHeatmapViewportState
                                 const Expanded(
                                   child: Text(
                                     'Éves aktivitás',
-                                    key: ValueKey<String>('mind-year-direct-title'),
+                                    key: ValueKey<String>(
+                                      'mind-year-direct-title',
+                                    ),
                                     style: TextStyle(
                                       color: FluviVisualTokens.textSecondary,
                                       fontSize: 10,
@@ -598,7 +601,10 @@ final class _MindYearDaySelection {
 }
 
 final class _MindYearDirectGridSelector extends StatelessWidget {
-  const _MindYearDirectGridSelector({required this.value, required this.onChanged});
+  const _MindYearDirectGridSelector({
+    required this.value,
+    required this.onChanged,
+  });
 
   final _MindYearDirectGridLayout value;
   final ValueChanged<_MindYearDirectGridLayout> onChanged;
@@ -896,6 +902,7 @@ final class _MindYearHeatmapFourColumnFit {
     required double viewportTopPadding,
     required double viewportBottomPadding,
     required double rowGap,
+    required bool compactChrome,
   }) {
     const annualRows = 3;
     // The physical MonthCard envelope is deliberately independent of a
@@ -908,6 +915,7 @@ final class _MindYearHeatmapFourColumnFit {
     );
     final staticCardChrome = MindYearHeatmapMonthGroup.fixedChromeHeightFor(
       footerRowCount: footerRowCount,
+      compactChrome: compactChrome,
     );
     final internalDayGaps = calendarRows.fold<double>(
       0,
@@ -938,6 +946,7 @@ final class _MindYearHeatmapFourColumnFit {
             cellExtent: cellExtent,
             calendarRowCount: rows,
             footerRowCount: footerRowCount,
+            compactChrome: compactChrome,
           ),
         )
         .toList(growable: false);
@@ -958,6 +967,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     required this.geometry,
     required this.frameListenable,
     this.cellExtent,
+    this.compactChrome = false,
     this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.showMonthlyClosing = false,
@@ -985,6 +995,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
   final int month;
   final double width;
   final double? cellExtent;
+  final bool compactChrome;
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
@@ -1011,10 +1022,13 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         .toDouble();
   }
 
-  static double fixedChromeHeightFor({int footerRowCount = 0}) =>
-      _padding * 2 +
-      _titleHeight +
-      _titleBottomGap +
+  static double fixedChromeHeightFor({
+    int footerRowCount = 0,
+    bool compactChrome = false,
+  }) =>
+      _verticalPaddingFor(compactChrome) * 2 +
+      _titleHeightFor(compactChrome) +
+      _titleBottomGapFor(compactChrome) +
       (footerRowCount == 0
           ? 0
           : _footerTopGap + _footerRowHeight * footerRowCount);
@@ -1034,8 +1048,12 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     required int calendarRowCount,
     int footerRowCount = 0,
     double? cellExtent,
+    bool compactChrome = false,
   }) =>
-      fixedChromeHeightFor(footerRowCount: footerRowCount) +
+      fixedChromeHeightFor(
+        footerRowCount: footerRowCount,
+        compactChrome: compactChrome,
+      ) +
       gridHeightFor(
         width: width,
         calendarRowCount: calendarRowCount,
@@ -1045,6 +1063,15 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
   int get _footerRowCount =>
       (showMonthlyClosing ? 1 : 0) + (showScopeAmount ? 1 : 0);
 
+  static double _verticalPaddingFor(bool compactChrome) =>
+      compactChrome ? 2 : _padding;
+
+  static double _titleHeightFor(bool compactChrome) =>
+      compactChrome ? 10 : _titleHeight;
+
+  static double _titleBottomGapFor(bool compactChrome) =>
+      compactChrome ? 1 : _titleBottomGap;
+
   @override
   Widget build(BuildContext context) {
     final gridHeight = gridHeightFor(
@@ -1052,14 +1079,20 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
       calendarRowCount: displayCalendarRowCount,
       cellExtent: cellExtent,
     );
+    final verticalPadding = _verticalPaddingFor(compactChrome);
+    final titleHeight = _titleHeightFor(compactChrome);
+    final titleBottomGap = _titleBottomGapFor(compactChrome);
     final heatmapContent = Padding(
-      padding: const EdgeInsets.all(_padding),
+      padding: EdgeInsets.symmetric(
+        horizontal: _padding,
+        vertical: verticalPadding,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           SizedBox(
-            height: _titleHeight,
+            height: titleHeight,
             child: Align(
               alignment: Alignment.centerLeft,
               child: FittedBox(
@@ -1077,7 +1110,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: _titleBottomGap),
+          SizedBox(height: titleBottomGap),
           SizedBox(
             height: gridHeight,
             child: ValueListenableBuilder<MindYearHeatmapFrame?>(
@@ -1162,6 +1195,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         calendarRowCount: displayCalendarRowCount,
         footerRowCount: _footerRowCount,
         cellExtent: cellExtent,
+        compactChrome: compactChrome,
       ),
       child: Semantics(
         readOnly: true,

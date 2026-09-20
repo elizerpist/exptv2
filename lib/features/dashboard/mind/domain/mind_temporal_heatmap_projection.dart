@@ -44,6 +44,11 @@ final class MindTemporalHeatmapIdentity {
 /// A compact all-time month-cell frame. Every represented year owns exactly
 /// twelve calendar cells; null totals are real empty months, not fake data.
 final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
+  /// The deepest detailed Sum representation uses the already-admitted local
+  /// transaction minutes. This is presentation granularity only; it never
+  /// opens a repository or query path.
+  static const rawDetailWindowMinutes = _rawDetailWindowMinutes;
+
   MindSumHeatmapFrame._({
     required this.identity,
     required this.range,
@@ -120,12 +125,13 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
     required int year,
     required int startEpochMinute,
     required int endEpochMinute,
+    bool forceRawTransactions = false,
   }) {
     if (endEpochMinute < startEpochMinute) {
       return const <MindSumHeatmapDetailPoint>[];
     }
     final visibleMinutes = endEpochMinute - startEpochMinute + 1;
-    if (visibleMinutes <= _rawDetailWindowMinutes) {
+    if (forceRawTransactions || visibleMinutes <= _rawDetailWindowMinutes) {
       final prepared = _detailContributionsByYear[year];
       if (prepared == null || prepared.isEmpty) {
         return const <MindSumHeatmapDetailPoint>[];

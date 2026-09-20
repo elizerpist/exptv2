@@ -163,4 +163,51 @@ void main() {
       expect(deep.map((point) => point.ordinal), <int>[360, 361, 362]);
     },
   );
+
+  test(
+    'XR-SUM-04 RED: same-resolution LOD anchors stay stable through an overlapping pan',
+    () {
+      final home = MindDetailedSumTimeWindow.fullYear(2025);
+      final source = <MindSumHeatmapDetailPoint>[
+        for (var day = 0; day < home.homeDayCount; day += 1)
+          for (var sample = 0; sample < 4; sample += 1)
+            MindSumHeatmapDetailPoint(
+              epochMinute:
+                  home.homeStartEpochMinute + day * 1440 + sample * 180,
+              total: day == 190 && sample == 3 ? 9000 : 100 + sample + day,
+              ordinal: day * 4 + sample,
+            ),
+      ];
+      final first = home.zoomAtMinute(
+        scaleDelta: 4,
+        focalEpochMinute: home.homeStartEpochMinute + 180 * 1440,
+      );
+      final second = first.panByDays(20);
+      final interiorStart = second.startEpochMinute + 7 * 1440;
+      final interiorEnd = first.endEpochMinute - 7 * 1440;
+
+      Set<int> interiorOrdinals(MindDetailedSumTimeWindow window) =>
+          MindDetailedSumLod.sample(
+                points: source,
+                window: window,
+                pixelWidth: 140,
+              )
+              .where(
+                (point) =>
+                    point.epochMinute >= interiorStart &&
+                    point.epochMinute <= interiorEnd,
+              )
+              .map((point) => point.ordinal!)
+              .toSet();
+
+      expect(interiorOrdinals(first), isNotEmpty);
+      expect(
+        interiorOrdinals(second),
+        interiorOrdinals(first),
+        reason:
+            'At a fixed zoom level, a pan may crop or translate the '
+            'line but may not re-bucket the overlapping financial anchors.',
+      );
+    },
+  );
 }

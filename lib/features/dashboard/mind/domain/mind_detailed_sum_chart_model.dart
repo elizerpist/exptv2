@@ -169,7 +169,8 @@ final class MindDetailedSumNormalizedViewport {
     // focal-point zoom calculation below; it is not a fraction of the
     // remaining post-zoom travel.  Using the latter shifts the date under a
     // centred pinch toward the start of the year.
-    final start = home.homeStartEpochMinute +
+    final start =
+        home.homeStartEpochMinute +
         (home.homeMinuteCount * startFraction)
             .round()
             .clamp(0, remaining)
@@ -195,7 +196,8 @@ final class MindDetailedSumNormalizedViewport {
         .clamp(1 / (366 * _minutesPerDay), 1.0)
         .toDouble();
     if ((nextVisible - visibleFraction).abs() < 1e-9) return this;
-    final focal = startFraction + focalFraction.clamp(0.0, 1.0) * visibleFraction;
+    final focal =
+        startFraction + focalFraction.clamp(0.0, 1.0) * visibleFraction;
     final requestedStart = focal - focalFraction.clamp(0.0, 1.0) * nextVisible;
     final nextStart = requestedStart
         .clamp(0.0, math.max(0.0, 1.0 - nextVisible))
@@ -235,6 +237,14 @@ final class MindDetailedSumNormalizedViewport {
 final class MindDetailedSumLod {
   const MindDetailedSumLod._();
 
+  /// The caller supplies the current domain plus one bucket on either side.
+  /// That bounded overlap lets a pan keep an interior bucket's extrema stable
+  /// without rebuilding a whole financial history for every pointer update.
+  static int sourcePaddingMinutes({
+    required MindDetailedSumTimeWindow window,
+    required double pixelWidth,
+  }) => _bucketSpanMinutes(window: window, pixelWidth: pixelWidth);
+
   static List<MindSumHeatmapDetailPoint> sample({
     required List<MindSumHeatmapDetailPoint> points,
     required MindDetailedSumTimeWindow window,
@@ -258,6 +268,71 @@ final class MindDetailedSumLod {
       return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
     }
 
+    final binCount = _visibleBinCount(window: window, pixelWidth: pixelWidth);
+    if (visible.length <= binCount) {
+      return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
+    }
+
+    final selectedIndices = <int>{};
+    final buckets = <int, List<int>>{};
+    final bucketSpan = _bucketSpanMinutes(
+      window: window,
+      pixelWidth: pixelWidth,
+    );
+    // Deliberately anchor the grid at the calendar-year home domain, never at
+    // the current viewport edge. At fixed zoom an overlapping interval is
+    // therefore sampled by the same immutable buckets after a horizontal pan.
+    final paddedStart = window.startEpochMinute - bucketSpan;
+    final paddedEnd = window.endEpochMinute + bucketSpan;
+    for (var index = 0; index < points.length; index += 1) {
+      final point = points[index];
+      if (point.epochMinute < paddedStart || point.epochMinute > paddedEnd) {
+        continue;
+      }
+      final bucket =
+          ((point.epochMinute - window.homeStartEpochMinute) / bucketSpan)
+              .floor();
+      buckets.putIfAbsent(bucket, () => <int>[]).add(index);
+    }
+    for (final indices in buckets.values) {
+      selectedIndices.add(indices.first);
+      selectedIndices.add(indices.last);
+      var minimum = indices.first;
+      var maximum = indices.first;
+      for (final index in indices.skip(1)) {
+        if (points[index].total < points[minimum].total) minimum = index;
+        if (points[index].total > points[maximum].total) maximum = index;
+      }
+      selectedIndices
+        ..add(minimum)
+        ..add(maximum);
+    }
+    final ordered = selectedIndices.toList()
+      ..sort((left, right) {
+        final byTime = points[left].epochMinute.compareTo(
+          points[right].epochMinute,
+        );
+        return byTime != 0
+            ? byTime
+            : (points[left].ordinal ?? -1).compareTo(
+                points[right].ordinal ?? -1,
+              );
+      });
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(
+      ordered
+          .map((index) => points[index])
+          .where(
+            (point) =>
+                point.epochMinute >= window.startEpochMinute &&
+                point.epochMinute <= window.endEpochMinute,
+          ),
+    );
+  }
+
+  static int _visibleBinCount({
+    required MindDetailedSumTimeWindow window,
+    required double pixelWidth,
+  }) {
     const minimumAnchorSpacing = 28.0;
     final overviewBins = math.max(
       1,
@@ -267,39 +342,16 @@ final class MindDetailedSumLod {
         (1 - window.visibleMinuteCount / window.homeMinuteCount)
             .clamp(0.0, 1.0)
             .toDouble();
-    final binCount = math.max(
-      1,
-      (overviewBins * (1 + zoomProgress * 3)).round(),
-    );
-    if (visible.length <= binCount) {
-      return List<MindSumHeatmapDetailPoint>.unmodifiable(visible);
-    }
-
-    final selectedIndices = <int>{};
-    final buckets = <int, List<int>>{};
-    final denominator = math.max(1, window.visibleMinuteCount - 1);
-    for (var index = 0; index < visible.length; index += 1) {
-      final fraction =
-          (visible[index].epochMinute - window.startEpochMinute) / denominator;
-      final bucket = (fraction * binCount).floor().clamp(0, binCount - 1);
-      buckets.putIfAbsent(bucket, () => <int>[]).add(index);
-    }
-    for (final indices in buckets.values) {
-      selectedIndices.add(indices.first);
-      selectedIndices.add(indices.last);
-      var minimum = indices.first;
-      var maximum = indices.first;
-      for (final index in indices.skip(1)) {
-        if (visible[index].total < visible[minimum].total) minimum = index;
-        if (visible[index].total > visible[maximum].total) maximum = index;
-      }
-      selectedIndices
-        ..add(minimum)
-        ..add(maximum);
-    }
-    final ordered = selectedIndices.toList()..sort();
-    return List<MindSumHeatmapDetailPoint>.unmodifiable(
-      ordered.map((index) => visible[index]),
-    );
+    return math.max(1, (overviewBins * (1 + zoomProgress * 3)).round());
   }
+
+  static int _bucketSpanMinutes({
+    required MindDetailedSumTimeWindow window,
+    required double pixelWidth,
+  }) => math.max(
+    1,
+    (window.visibleMinuteCount /
+            _visibleBinCount(window: window, pixelWidth: pixelWidth))
+        .ceil(),
+  );
 }

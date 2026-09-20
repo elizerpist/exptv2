@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -41,10 +42,13 @@ final class MindDetailedSumChart extends StatefulWidget {
 
 final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
   final _activePointers = <int>{};
+  final _pointerPositions = <int, Offset>{};
   late final ValueNotifier<bool> _pinchActive;
   MindDetailedSumNormalizedViewport _viewport =
       const MindDetailedSumNormalizedViewport.fullYear();
   MindDetailedSumNormalizedViewport? _scaleStartViewport;
+  double? _scaleStartDistance;
+  double _parentPlotWidth = 1;
 
   @override
   void initState() {
@@ -71,11 +75,22 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
 
   void _trackPointerDown(PointerDownEvent event) {
     if (!_activePointers.add(event.pointer)) return;
+    _pointerPositions[event.pointer] = event.localPosition;
     _syncPointerMode();
+    if (_pinchActive.value) _onParentScaleStart();
+  }
+
+  void _trackPointerMove(PointerMoveEvent event) {
+    if (!_activePointers.contains(event.pointer)) return;
+    _pointerPositions[event.pointer] = event.localPosition;
+    if (_pinchActive.value) _onParentScaleUpdate();
   }
 
   void _trackPointerEnd(PointerEvent event) {
+    final wasScaling = _pinchActive.value;
+    if (wasScaling) _onParentScaleEnd();
     if (!_activePointers.remove(event.pointer)) return;
+    _pointerPositions.remove(event.pointer);
     _syncPointerMode();
   }
 
@@ -86,62 +101,87 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
     _log(
       'PINCH_OWNERSHIP',
       'mode=detailed pointers=${_activePointers.length} '
-      'pinchActive=$next competing=verticalBoundarySuppressed '
-      '${_viewportScope()}',
+          'pinchActive=$next competing=verticalBoundarySuppressed '
+          '${_viewportScope()}',
     );
     setState(() {});
   }
 
-  void _onScaleStart(int year, double plotWidth) {
+  void _onParentScaleStart() {
+    final pair = _pointerPair;
+    if (pair == null) return;
     _scaleStartViewport = _viewport;
+    _scaleStartDistance = math.max(1, (pair.$1 - pair.$2).distance);
     _log(
       'SCALE_START',
-      'mode=detailed year=$year pointers=${_activePointers.length} '
-      'plotWidth=${plotWidth.toStringAsFixed(1)} '
-      '${_viewportScope(year: year, plotWidth: plotWidth)}',
+      'mode=detailed owner=parent pointers=${_activePointers.length} '
+          'plotWidth=${_parentPlotWidth.toStringAsFixed(1)} '
+          'focal=${_focalFraction(pair).toStringAsFixed(3)} '
+          '${_viewportScope(plotWidth: _parentPlotWidth)}',
     );
   }
 
-  void _onScaleUpdate({
-    required int year,
-    required double scaleDelta,
-    required double focalFraction,
-    required double plotWidth,
-  }) {
+  void _onParentScaleUpdate() {
+    final pair = _pointerPair;
     final start = _scaleStartViewport;
-    if (start == null) return;
+    final startDistance = _scaleStartDistance;
+    if (pair == null || start == null || startDistance == null) return;
+    final scaleDelta =
+        math.max(1, (pair.$1 - pair.$2).distance) / startDistance;
+    final focalFraction = _focalFraction(pair);
     final next = start.zoomForGesture(
       scaleDelta: scaleDelta,
       focalFraction: focalFraction,
     );
     if (next == _viewport) return;
-    final before = _viewportScope(year: year, plotWidth: plotWidth);
+    final before = _viewportScope(plotWidth: _parentPlotWidth);
     setState(() => _viewport = next);
     _log(
       'SCALE_UPDATE',
-      'mode=detailed year=$year pointers=${_activePointers.length} '
-      'focal=${focalFraction.toStringAsFixed(3)} '
-      'scale=${scaleDelta.toStringAsFixed(3)} accepted=true '
-      'windowBefore={$before} windowAfter={${_viewportScope(year: year, plotWidth: plotWidth)}} '
-      'synced=true competing=verticalBoundarySuppressed',
+      'mode=detailed owner=parent pointers=${_activePointers.length} '
+          'focal=${focalFraction.toStringAsFixed(3)} '
+          'scale=${scaleDelta.toStringAsFixed(3)} accepted=true '
+          'windowBefore={$before} windowAfter={${_viewportScope(plotWidth: _parentPlotWidth)}} '
+          'synced=true competing=verticalBoundarySuppressed',
     );
   }
 
-  void _onScaleEnd(int year, double plotWidth) {
+  void _onParentScaleEnd() {
+    if (_scaleStartViewport == null) return;
     _scaleStartViewport = null;
+    _scaleStartDistance = null;
     _log(
       'SCALE_END',
-      'mode=detailed year=$year pointers=${_activePointers.length} '
-      '${_viewportScope(year: year, plotWidth: plotWidth)}',
+      'mode=detailed owner=parent pointers=${_activePointers.length} '
+          '${_viewportScope(plotWidth: _parentPlotWidth)}',
     );
   }
 
+  (Offset, Offset)? get _pointerPair {
+    if (_pointerPositions.length < 2) return null;
+    final iterator = _pointerPositions.values.iterator;
+    iterator.moveNext();
+    final first = iterator.current;
+    iterator.moveNext();
+    return (first, iterator.current);
+  }
+
+  double _focalFraction((Offset, Offset) pair) =>
+      (((pair.$1.dx + pair.$2.dx) / 2 - 34) / _parentPlotWidth)
+          .clamp(0.0, 1.0)
+          .toDouble();
+
   void _panBy(double deltaX, double plotWidth) {
-    if (!_viewport.isZoomed || plotWidth <= 0) return;
-    final next = _viewport.panByFraction(-deltaX / plotWidth * _viewport.visibleFraction);
+    if (_pinchActive.value || !_viewport.isZoomed || plotWidth <= 0) return;
+    final next = _viewport.panByFraction(
+      -deltaX / plotWidth * _viewport.visibleFraction,
+    );
     if (next == _viewport) return;
     setState(() => _viewport = next);
-    _log('PAN', 'mode=detailed deltaX=${deltaX.toStringAsFixed(1)} ${_viewportScope()}');
+    _log(
+      'PAN',
+      'mode=detailed deltaX=${deltaX.toStringAsFixed(1)} ${_viewportScope()}',
+    );
   }
 
   void _onPointSelected(int year, MindSumHeatmapDetailPoint? point) {
@@ -150,20 +190,24 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
     _log(
       'TAP_INSPECT',
       'mode=detailed year=$year nearestEpochDay=$day '
-      'nearestAmount=${point.total} ${_viewportScope(year: year)}',
+          'nearestAmount=${point.total} ${_viewportScope(year: year)}',
     );
   }
 
   String _viewportScope({int? year, double? plotWidth}) {
-    final effectiveYear = year ?? (widget.frame.years.isEmpty ? 0 : widget.frame.years.first);
-    final window = effectiveYear == 0 ? null : _viewport.windowForYear(effectiveYear);
+    final effectiveYear =
+        year ?? (widget.frame.years.isEmpty ? 0 : widget.frame.years.first);
+    final window = effectiveYear == 0
+        ? null
+        : _viewport.windowForYear(effectiveYear);
     final anchors = window == null || plotWidth == null
         ? 0
         : MindDetailedSumLod.sample(
-            points: widget.frame.detailPointsForYear(
+            points: _detailSourceForWindow(
+              frame: widget.frame,
               year: effectiveYear,
-              startEpochMinute: window.startEpochMinute,
-              endEpochMinute: window.endEpochMinute,
+              window: window,
+              plotWidth: plotWidth,
             ),
             window: window,
             pixelWidth: plotWidth,
@@ -183,6 +227,7 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      _parentPlotWidth = math.max(1.0, constraints.maxWidth - 34 - 3);
       final years = widget.frame.years;
       final availableHeight = constraints.maxHeight.isFinite
           ? constraints.maxHeight
@@ -206,6 +251,7 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
       return Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: _trackPointerDown,
+        onPointerMove: _trackPointerMove,
         onPointerUp: _trackPointerEnd,
         onPointerCancel: _trackPointerEnd,
         child: Semantics(
@@ -233,9 +279,7 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
                     frame: widget.frame,
                     lineColor: widget.lineColor,
                     viewport: _viewport,
-                    onScaleStart: _onScaleStart,
-                    onScaleUpdate: _onScaleUpdate,
-                    onScaleEnd: _onScaleEnd,
+                    pinchActive: _pinchActive,
                     onPanBy: _panBy,
                     onPointSelected: _onPointSelected,
                   ),
@@ -249,6 +293,50 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
   );
 }
 
+/// Retrieves only the current LOD window and one stable bucket on either side.
+/// The bucket grid itself is year-anchored in [MindDetailedSumLod], so the
+/// extra source is sufficient to keep all interior pan anchors immutable.
+List<MindSumHeatmapDetailPoint> _detailSourceForWindow({
+  required MindSumHeatmapFrame frame,
+  required int year,
+  required MindDetailedSumTimeWindow window,
+  required double plotWidth,
+}) {
+  final padding = MindDetailedSumLod.sourcePaddingMinutes(
+    window: window,
+    pixelWidth: plotWidth,
+  );
+  final rawTransactions =
+      window.visibleMinuteCount <= MindSumHeatmapFrame.rawDetailWindowMinutes;
+  return frame.detailPointsForYear(
+    year: year,
+    startEpochMinute: math.max(
+      window.homeStartEpochMinute,
+      window.startEpochMinute - padding,
+    ),
+    endEpochMinute: math.min(
+      window.homeEndEpochMinute,
+      window.endEpochMinute + padding,
+    ),
+    forceRawTransactions: rawTransactions,
+  );
+}
+
+/// A per-year, current-frame/range domain. It intentionally excludes only
+/// horizontal viewport position: pan is a translation/crop operation, not a
+/// financial rescale operation.
+List<MindSumHeatmapDetailPoint> _stableYearDomain({
+  required MindSumHeatmapFrame frame,
+  required int year,
+}) {
+  final home = MindDetailedSumTimeWindow.fullYear(year);
+  return frame.detailPointsForYear(
+    year: year,
+    startEpochMinute: home.homeStartEpochMinute,
+    endEpochMinute: home.homeEndEpochMinute,
+  );
+}
+
 final class _MindDetailedSumYearBand extends StatefulWidget {
   const _MindDetailedSumYearBand({
     super.key,
@@ -256,9 +344,7 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
     required this.frame,
     required this.lineColor,
     required this.viewport,
-    required this.onScaleStart,
-    required this.onScaleUpdate,
-    required this.onScaleEnd,
+    required this.pinchActive,
     required this.onPanBy,
     required this.onPointSelected,
   });
@@ -267,14 +353,7 @@ final class _MindDetailedSumYearBand extends StatefulWidget {
   final MindSumHeatmapFrame frame;
   final Color lineColor;
   final MindDetailedSumNormalizedViewport viewport;
-  final void Function(int year, double plotWidth) onScaleStart;
-  final void Function({
-    required int year,
-    required double scaleDelta,
-    required double focalFraction,
-    required double plotWidth,
-  }) onScaleUpdate;
-  final void Function(int year, double plotWidth) onScaleEnd;
+  final ValueListenable<bool> pinchActive;
   final void Function(double deltaX, double plotWidth) onPanBy;
   final void Function(int year, MindSumHeatmapDetailPoint? point)
   onPointSelected;
@@ -290,7 +369,8 @@ final class _MindDetailedSumYearBandState
   MindSumHeatmapDetailPoint? _selectedPoint;
   Offset? _selectionAnchor;
 
-  MindDetailedSumTimeWindow get _window => widget.viewport.windowForYear(widget.year);
+  MindDetailedSumTimeWindow get _window =>
+      widget.viewport.windowForYear(widget.year);
 
   @override
   void didUpdateWidget(covariant _MindDetailedSumYearBand oldWidget) {
@@ -304,30 +384,8 @@ final class _MindDetailedSumYearBandState
 
   bool get _isZoomed => widget.viewport.isZoomed;
 
-  void _onScaleStart(double plotWidth) =>
-      widget.onScaleStart(widget.year, plotWidth);
-
-  void _onScaleUpdate(
-    ScaleUpdateDetails details,
-    double plotLeft,
-    double plotWidth,
-  ) {
-    if (details.pointerCount < 2 || plotWidth <= 0) return;
-    final fraction = ((details.localFocalPoint.dx - plotLeft) / plotWidth)
-        .clamp(0.0, 1.0)
-        .toDouble();
-    widget.onScaleUpdate(
-      year: widget.year,
-      scaleDelta: details.scale,
-      focalFraction: fraction,
-      plotWidth: plotWidth,
-    );
-  }
-
-  void _onScaleEnd(double plotWidth) => widget.onScaleEnd(widget.year, plotWidth);
-
   void _panBy(DragUpdateDetails details, double plotWidth) {
-    if (plotWidth <= 0 || !_isZoomed) return;
+    if (widget.pinchActive.value || plotWidth <= 0 || !_isZoomed) return;
     widget.onPanBy(details.delta.dx, plotWidth);
   }
 
@@ -372,10 +430,11 @@ final class _MindDetailedSumYearBandState
       const axisLeft = 34.0;
       const axisBottom = 18.0;
       final plotWidth = math.max(1.0, constraints.maxWidth - axisLeft - 3);
-      final source = widget.frame.detailPointsForYear(
+      final source = _detailSourceForWindow(
+        frame: widget.frame,
         year: widget.year,
-        startEpochMinute: _window.startEpochMinute,
-        endEpochMinute: _window.endEpochMinute,
+        window: _window,
+        plotWidth: plotWidth,
       );
       final lod = MindDetailedSumLod.sample(
         points: source,
@@ -384,14 +443,13 @@ final class _MindDetailedSumYearBandState
       );
       final maximum = math.max(
         1,
-        lod.fold<int>(0, (value, point) => math.max(value, point.total)),
+        _stableYearDomain(
+          frame: widget.frame,
+          year: widget.year,
+        ).fold<int>(0, (value, point) => math.max(value, point.total)),
       );
       final chart = GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onScaleStart: (_) => _onScaleStart(plotWidth),
-        onScaleUpdate: (details) =>
-            _onScaleUpdate(details, axisLeft, plotWidth),
-        onScaleEnd: (_) => _onScaleEnd(plotWidth),
         onTapUp: (details) => _selectNearestPoint(
           details: details,
           points: lod,
