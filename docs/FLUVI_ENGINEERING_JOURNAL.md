@@ -1995,3 +1995,11 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **UNPROVEN:** exact duration; exact first blocking phase; whether SUM, Year, Month and Day share the same first-use cost; whether prewarming all Mind products is necessary or only the current target.
 - **MISSING EVIDENCE:** exact-build USER_MARK for this specific startup reproduction, cold-vs-warm stage timestamps, first-paint acknowledgement for the Mind card, and a production-parent RED latency contract.
 - Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, graph, milestone or settings implementation changed. Physical validation of a future repair remains `PENDING — USER ONLY`.
+
+## 2026-09-20 — Sum detailed X-axis label expansion while zoomed
+
+- New presentation feedback only; no coding-agent prompt requested yet.
+- In the Mind / Sum detailed line chart, when the user zooms in far enough that there is sufficient horizontal space, the X-axis should stop using only single-letter Hungarian month initials and instead render the full Hungarian month names.
+- The axis should therefore be adaptive to the current visible temporal span / available label density: overview may keep compact initials, while zoomed-in states should prefer full names whenever they fit without collision or clipping.
+- This is an axis-label presentation change only. It must not alter zoom semantics, viewport state, LOD selection, financial data, tap inspection, or monthly separator positions.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, graph, milestone or settings implementation changed.
