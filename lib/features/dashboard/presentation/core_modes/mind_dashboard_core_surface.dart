@@ -12,6 +12,7 @@ import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
 import '../../mind/domain/mind_temporal_heatmap_frame.dart';
+import '../../mind/domain/mind_temporal_heatmap_projection.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
@@ -25,6 +26,17 @@ import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
+
+/// UI-side acknowledgement of one actually laid-out/painted immutable Mind
+/// frame. Core owns the correlation trace; this callback only reports the
+/// renderer boundary without accepting input or mutating financial state.
+typedef MindTemporalEntryFrameStageReporter =
+    void Function({
+      required String stage,
+      required int frameCoreRevision,
+      required String kind,
+      required String frameIdentity,
+    });
 
 /// Mind owns one merged body surface spanning the central unified envelope.
 class MindDashboardCoreSurface extends StatelessWidget {
@@ -59,6 +71,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
     this.behavioralScore,
     this.headerScoreChartPresentation,
     this.headerScoreChartPointerObserver,
+    this.onTemporalEntryFrameStage,
   });
 
   final DashboardCoreModePresentation presentation;
@@ -93,6 +106,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   final ValueListenable<MindHeaderScoreChartPresentationSettings>?
   headerScoreChartPresentation;
   final MindHeaderScoreChartPointerObserver? headerScoreChartPointerObserver;
+  final MindTemporalEntryFrameStageReporter? onTemporalEntryFrameStage;
 
   @override
   Widget build(BuildContext context) {
@@ -209,8 +223,50 @@ class MindDashboardCoreSurface extends StatelessWidget {
         key: ValueKey<String>('mind-temporal-content-unavailable'),
       ),
     };
+    final probedTemporalContent = switch (resolvedPlane) {
+      TimePlane.year when showYearHeatmap && heatmap != null =>
+        _MindTemporalEntryFrameProbe<MindYearHeatmapFrame>(
+          frameListenable: heatmap,
+          descriptorFor: (frame) => (
+            kind: 'year',
+            coreRevision: frame.identity.coreRevision,
+            identity:
+                '${frame.identity.year}:${frame.identity.indexGeneration}:${frame.identity.navigationEpoch}',
+          ),
+          reporter: onTemporalEntryFrameStage,
+          child: temporalContent,
+        ),
+      TimePlane.sum || TimePlane.month when temporalHeatmap != null =>
+        _MindTemporalEntryFrameProbe<MindTemporalHeatmapFrame>(
+          frameListenable: temporalHeatmap!,
+          descriptorFor: (frame) => switch (frame) {
+            MindSumHeatmapFrame(:final identity) => (
+              kind: 'sum',
+              coreRevision: identity.coreRevision,
+              identity:
+                  '${identity.timeScopeKey}:${identity.indexGeneration}:${identity.navigationEpoch}',
+            ),
+            MindMonthHeatmapFrame(:final identity) => (
+              kind: 'month',
+              coreRevision: identity.coreRevision,
+              identity:
+                  '${identity.timeScopeKey}:${identity.indexGeneration}:${identity.navigationEpoch}',
+            ),
+            MindDayHeatmapFrame(:final identity) => (
+              kind: 'day',
+              coreRevision: identity.coreRevision,
+              identity:
+                  '${identity.timeScopeKey}:${identity.indexGeneration}:${identity.navigationEpoch}',
+            ),
+            _ => (kind: 'unknown', coreRevision: 0, identity: 'unsupported'),
+          },
+          reporter: onTemporalEntryFrameStage,
+          child: temporalContent,
+        ),
+      _ => temporalContent,
+    };
     final guardedTemporalContent = temporalViewportOwnsVerticalDrag
-        ? temporalContent
+        ? probedTemporalContent
         : GestureDetector(
             key: const ValueKey('dashboard-core-mode-content-gesture-region'),
             behavior: HitTestBehavior.translucent,
@@ -219,7 +275,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
             onVerticalDragUpdate: onContentVerticalDragUpdate,
             onVerticalDragEnd: onContentVerticalDragEnd,
             onVerticalDragCancel: onContentVerticalDragCancel,
-            child: temporalContent,
+            child: probedTemporalContent,
           );
     Widget bodyFor(MindYearHeatmapPresentationSettings? settings) {
       final paletteStyle =
@@ -260,6 +316,94 @@ class MindDashboardCoreSurface extends StatelessWidget {
       builder: (context, value, _) => bodyFor(value),
     );
   }
+}
+
+final class _MindTemporalEntryFrameProbe<T> extends StatefulWidget {
+  const _MindTemporalEntryFrameProbe({
+    required this.frameListenable,
+    required this.descriptorFor,
+    required this.child,
+    this.reporter,
+  });
+
+  final ValueListenable<T?> frameListenable;
+  final ({String kind, int coreRevision, String identity}) Function(T frame)
+  descriptorFor;
+  final MindTemporalEntryFrameStageReporter? reporter;
+  final Widget child;
+
+  @override
+  State<_MindTemporalEntryFrameProbe<T>> createState() =>
+      _MindTemporalEntryFrameProbeState<T>();
+}
+
+final class _MindTemporalEntryFrameProbeState<T>
+    extends State<_MindTemporalEntryFrameProbe<T>> {
+  ({String kind, int coreRevision, String identity})? _lastAcknowledged;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.frameListenable.addListener(_onFrameChanged);
+    _scheduleCurrentFrameAcknowledgement();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MindTemporalEntryFrameProbe<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.frameListenable, widget.frameListenable)) {
+      oldWidget.frameListenable.removeListener(_onFrameChanged);
+      widget.frameListenable.addListener(_onFrameChanged);
+      _lastAcknowledged = null;
+    }
+    _scheduleCurrentFrameAcknowledgement();
+  }
+
+  @override
+  void dispose() {
+    widget.frameListenable.removeListener(_onFrameChanged);
+    super.dispose();
+  }
+
+  void _onFrameChanged() => _scheduleCurrentFrameAcknowledgement();
+
+  void _scheduleCurrentFrameAcknowledgement() {
+    final reporter = widget.reporter;
+    final frame = widget.frameListenable.value;
+    if (!mounted || reporter == null || frame == null) return;
+    final descriptor = widget.descriptorFor(frame);
+    if (_lastAcknowledged == descriptor) return;
+    _lastAcknowledged = descriptor;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _currentDescriptor() != descriptor) return;
+      reporter(
+        stage: 'FIRST_LAYOUT',
+        frameCoreRevision: descriptor.coreRevision,
+        kind: descriptor.kind,
+        frameIdentity: descriptor.identity,
+      );
+      // Layout has just completed for this frame. A second post-frame callback
+      // acknowledges that its first actual paint opportunity also survived
+      // without being replaced by a newer immutable frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _currentDescriptor() != descriptor) return;
+        reporter(
+          stage: 'FIRST_PAINT',
+          frameCoreRevision: descriptor.coreRevision,
+          kind: descriptor.kind,
+          frameIdentity: descriptor.identity,
+        );
+      });
+    });
+  }
+
+  ({String kind, int coreRevision, String identity})? _currentDescriptor() {
+    final frame = widget.frameListenable.value;
+    return frame == null ? null : widget.descriptorFor(frame);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Semantic Header content only. It listens to score publications, never the

@@ -83,6 +83,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.onMindQueryAmountRangeInteractionStarted,
     this.onMindQueryAmountRangeInteractionEnded,
     this.onMindQueryAmountRangeInteractionSummary,
+    this.onMindTemporalEntryFrameStage,
     required this.onVerticalExpansionStart,
     required this.onVerticalExpansionDragBy,
     required this.onVerticalExpansionEnd,
@@ -133,6 +134,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final VoidCallback? onMindQueryAmountRangeInteractionEnded;
   final ValueChanged<QueryAmountRangeInteractionSummary>?
   onMindQueryAmountRangeInteractionSummary;
+  final MindTemporalEntryFrameStageReporter? onMindTemporalEntryFrameStage;
   final VoidCallback onVerticalExpansionStart;
   final ValueChanged<double> onVerticalExpansionDragBy;
   final VoidCallback onVerticalExpansionEnd;
@@ -404,6 +406,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         behavioralScore: widget.mindBehavioralScore,
         headerScoreChartPresentation: widget.mindHeaderScoreChartPresentation,
         headerScoreChartPointerObserver: _mindHeaderScoreChartPointers,
+        onTemporalEntryFrameStage: widget.onMindTemporalEntryFrameStage,
       ),
     };
   }

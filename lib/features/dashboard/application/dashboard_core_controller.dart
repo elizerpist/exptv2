@@ -132,6 +132,28 @@ final class _MindHeatmapDirectionTrace {
   String get flowId => 'mind-heatmap-direction:$id';
 }
 
+/// Bounded correlation for one physical dashboard-mode entry into Mind.
+///
+/// This is diagnostics-only state. It neither selects a time plane nor owns
+/// prepared financial data; it only relates the existing Core admission and
+/// presentation acknowledgements for a cold-versus-warm comparison.
+final class _MindTemporalEntryTrace {
+  _MindTemporalEntryTrace({
+    required this.id,
+    required this.requestedAtMicros,
+    required this.modeEpoch,
+    required this.coreRevision,
+  });
+
+  final int id;
+  final int requestedAtMicros;
+  final int modeEpoch;
+  final int? coreRevision;
+  final Set<String> recordedStages = <String>{};
+
+  String get flowId => 'mind-entry:$id';
+}
+
 /// The runtime and presentation owners can expose the same immutable index
 /// through distinct wrapper references during an initial attach. Live-resource
 /// safety is revision/query/generation identity, not Dart object identity.
@@ -1110,6 +1132,8 @@ final class DashboardCoreController {
   _DirectionSwitchDiagnosticTrace? _pendingDirectionSwitchDiagnosticTrace;
   int _mindHeatmapDirectionGeneration = 0;
   _MindHeatmapDirectionTrace? _pendingMindHeatmapDirectionTrace;
+  int _mindTemporalEntryGeneration = 0;
+  _MindTemporalEntryTrace? _pendingMindTemporalEntryTrace;
   int _logBoxTextLayoutPreparedRows = 0;
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
@@ -3857,6 +3881,52 @@ final class DashboardCoreController {
   /// publication-critical scenes exist. Noncritical bank completion remains
   /// cancellable background maintenance; the callbacks make navigation, index
   /// and applied-query pointer switch at one publication boundary.
+  void beginMindTemporalEntryTrace({required int modeEpoch}) {
+    if (_disposed) return;
+    final trace = _MindTemporalEntryTrace(
+      id: ++_mindTemporalEntryGeneration,
+      requestedAtMicros: developer.Timeline.now,
+      modeEpoch: modeEpoch,
+      coreRevision: coreRevision,
+    );
+    _pendingMindTemporalEntryTrace = trace;
+    _recordMindTemporalEntryStage(
+      trace,
+      'REQUEST_ACCEPTED',
+      details:
+          'source=dashboardModeCommitted modeEpoch=$modeEpoch '
+          'plane=${navigation.state.plane.name}',
+    );
+  }
+
+  /// Presentation reports only a frame that has survived its first physical
+  /// layout/paint pass. The Core remains the sole owner of correlation and
+  /// retention; widgets never create a second diagnostic timeline.
+  void recordMindTemporalEntrySurfaceStage({
+    required String stage,
+    required int frameCoreRevision,
+    required String kind,
+    required String frameIdentity,
+  }) {
+    final trace = _pendingMindTemporalEntryTrace;
+    if (_disposed ||
+        trace == null ||
+        (trace.coreRevision != null &&
+            trace.coreRevision != frameCoreRevision)) {
+      return;
+    }
+    _recordMindTemporalEntryStage(
+      trace,
+      stage,
+      details:
+          'source=mindSurface kind=$kind frameIdentity=$frameIdentity '
+          'frameCoreRevision=$frameCoreRevision',
+    );
+    if (stage == 'FIRST_PAINT') {
+      _pendingMindTemporalEntryTrace = null;
+    }
+  }
+
   Future<bool> primeMindAmountPreviewDomain() async {
     if (_disposed) return false;
     final direction = navigation.state.parentQueryScope.direction;
@@ -3870,6 +3940,16 @@ final class DashboardCoreController {
     // this Future resolves; only then may the bounded sibling prewarm enter
     // that shared lane.
     if (activeReady) {
+      final trace = _pendingMindTemporalEntryTrace;
+      if (trace != null) {
+        _recordMindTemporalEntryStage(
+          trace,
+          'PREPARED_BASE_READY',
+          details:
+              'direction=${direction.name} '
+              'source=primeMindAmountPreviewDomain',
+        );
+      }
       _publishPreparedMindAmountDomainForScope(
         mindAmountDomainScopeFor(direction),
       );
@@ -4895,12 +4975,56 @@ final class DashboardCoreController {
   /// publication cannot leave the body heatmap on a newer target than the
   /// Header score, chart and palette.
   bool ensureMindTemporalVisualProjection() {
+    final state = navigation.state;
+    final reusedProjection = switch (state.plane) {
+      TimePlane.year => mindYearHeatmap.identity != null,
+      TimePlane.sum => _mindSumHeatmapProjection != null,
+      TimePlane.month when state.effectiveScope is DayScope =>
+        _mindDayHeatmapProjection != null,
+      TimePlane.month => _mindMonthHeatmapProjection != null,
+    };
     final heatmapPublished = ensureMindTemporalHeatmapProjection();
     final scorePublished = ensureMindBehavioralScoreProjection();
     if (heatmapPublished || navigation.state.plane == TimePlane.month) {
       if (!scorePublished) _clearCurrentMindTemporalHeatmap();
     }
-    return heatmapPublished && scorePublished;
+    final published =
+        heatmapPublished && scorePublished && mindTemporalHeatmap.value != null;
+    final trace = _pendingMindTemporalEntryTrace;
+    if (published && trace != null) {
+      _recordMindTemporalEntryStage(
+        trace,
+        'PROJECTION_BUILT_OR_REUSED',
+        details:
+            'plane=${state.plane.name} '
+            'result=${reusedProjection ? 'reused' : 'built'}',
+      );
+      _recordMindTemporalEntryStage(
+        trace,
+        'FRAME_PUBLISHED',
+        details:
+            'plane=${state.plane.name} '
+            'frame=${mindTemporalHeatmap.value.runtimeType}',
+      );
+    }
+    return published;
+  }
+
+  void _recordMindTemporalEntryStage(
+    _MindTemporalEntryTrace trace,
+    String stage, {
+    required String details,
+  }) {
+    if (!trace.recordedStages.add(stage)) return;
+    final elapsed = developer.Timeline.now - trace.requestedAtMicros;
+    FluviDiagnosticLogger.log(
+      FluviDiagnosticEvent(
+        stage: 'MIND_ENTRY|$stage',
+        flowId: trace.flowId,
+        coreRevision: trace.coreRevision,
+        scope: 'modeEpoch=${trace.modeEpoch} elapsedMicros=$elapsed $details',
+      ),
+    );
   }
 
   bool _installMindSumHeatmapProjection(DashboardNavigationState state) {

@@ -446,7 +446,12 @@ class _CoreDashboardState extends State<CoreDashboard>
 
   void _onCoreModeChanged() {
     _syncMindModeContentGeometry();
-    if (modeController.committedMode == DashboardModeSpec.mind) return;
+    if (modeController.committedMode == DashboardModeSpec.mind) {
+      controller.beginMindTemporalEntryTrace(
+        modeEpoch: modeController.committedModeEpoch,
+      );
+      return;
+    }
     _mindAmountInteractionActive = false;
     controller.clearMindAmountRangePreview();
   }
@@ -825,6 +830,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _endMindQueryAmountRangeInteraction,
                                         onMindQueryAmountRangeInteractionSummary:
                                             _recordMindQueryAmountRangeInteractionSummary,
+                                        onMindTemporalEntryFrameStage: controller
+                                            .recordMindTemporalEntrySurfaceStage,
                                         budgetPresentation: _budgetPresentation,
                                         budgetLimitEditController:
                                             _budgetLimitEdit,

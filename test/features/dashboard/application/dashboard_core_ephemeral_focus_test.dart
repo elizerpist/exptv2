@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_event.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
@@ -129,6 +130,109 @@ void main() {
       expect(ready.scope, contains('fullBaseRowsScanned=0'));
       expect(ready.scope, contains('copiedPreparedRows=0'));
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'MIND-COLD-01 records correlated cold then warm Mind entry stages through the production mode host',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.budget,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      final scope = core.currentQuery.scope;
+      core.currentQuery.replaceDirection(
+        scope.direction,
+        scope,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 2,
+            amountScaled100: 120000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 50000,
+            maximumAmountScaled100: 70000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(modes.setProgrammaticMode(DashboardModeSpec.mind), isTrue);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      List<FluviDiagnosticEvent> entryEvents() => FluviDiagnosticLogger.entries
+          .where((event) => event.stage.startsWith('MIND_ENTRY|'))
+          .toList(growable: false);
+      List<String> entryStages() =>
+          entryEvents().map((event) => event.stage).toList(growable: false);
+      expect(
+        entryStages(),
+        containsAllInOrder(<String>[
+          'MIND_ENTRY|REQUEST_ACCEPTED',
+          'MIND_ENTRY|PREPARED_BASE_READY',
+          'MIND_ENTRY|PROJECTION_BUILT_OR_REUSED',
+          'MIND_ENTRY|FRAME_PUBLISHED',
+          'MIND_ENTRY|FIRST_LAYOUT',
+          'MIND_ENTRY|FIRST_PAINT',
+        ]),
+      );
+      final coldFlowIds = entryEvents()
+          .map((event) => event.flowId)
+          .whereType<String>()
+          .toSet();
+      expect(coldFlowIds, hasLength(1));
+      final coldFlowId = coldFlowIds.single;
+
+      expect(modes.setProgrammaticMode(DashboardModeSpec.budget), isTrue);
+      await tester.pump();
+      FluviDiagnosticLogger.clear();
+
+      expect(modes.setProgrammaticMode(DashboardModeSpec.mind), isTrue);
+      expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      expect(
+        entryStages(),
+        containsAllInOrder(<String>[
+          'MIND_ENTRY|REQUEST_ACCEPTED',
+          'MIND_ENTRY|PREPARED_BASE_READY',
+          'MIND_ENTRY|PROJECTION_BUILT_OR_REUSED',
+          'MIND_ENTRY|FRAME_PUBLISHED',
+          'MIND_ENTRY|FIRST_LAYOUT',
+          'MIND_ENTRY|FIRST_PAINT',
+        ]),
+      );
+      final warmFlowIds = entryEvents()
+          .map((event) => event.flowId)
+          .whereType<String>()
+          .toSet();
+      expect(warmFlowIds, hasLength(1));
+      expect(warmFlowIds.single, isNot(coldFlowId));
     },
   );
 
