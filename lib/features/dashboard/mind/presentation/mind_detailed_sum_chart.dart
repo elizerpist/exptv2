@@ -377,9 +377,11 @@ final class _MindDetailedSumChartState extends State<MindDetailedSumChart> {
   );
 }
 
-/// Retrieves only the current LOD window and one stable bucket on either side.
+/// Retrieves the current LOD window and one stable bucket on either side.
 /// The bucket grid itself is year-anchored in [MindDetailedSumLod], so the
-/// extra source is sufficient to keep all interior pan anchors immutable.
+/// bounded source keeps all interior pan anchors immutable. The frame also
+/// supplies the nearest real source anchors outside the actual viewport for
+/// paint-only continuity when a sparse year has no point inside that padding.
 List<MindSumHeatmapDetailPoint> _detailSourceForWindow({
   required MindSumHeatmapFrame frame,
   required int year,
@@ -392,16 +394,18 @@ List<MindSumHeatmapDetailPoint> _detailSourceForWindow({
   );
   final rawTransactions =
       window.visibleMinuteCount <= MindSumHeatmapFrame.rawDetailWindowMinutes;
-  return frame.detailPointsForYear(
+  return frame.detailPaintSourceForYear(
     year: year,
-    startEpochMinute: math.max(
+    requestedStartEpochMinute: math.max(
       window.homeStartEpochMinute,
       window.startEpochMinute - padding,
     ),
-    endEpochMinute: math.min(
+    requestedEndEpochMinute: math.min(
       window.homeEndEpochMinute,
       window.endEpochMinute + padding,
     ),
+    visibleStartEpochMinute: window.startEpochMinute,
+    visibleEndEpochMinute: window.endEpochMinute,
     forceRawTransactions: rawTransactions,
   );
 }

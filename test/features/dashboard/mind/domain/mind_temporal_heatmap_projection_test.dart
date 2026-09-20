@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_detailed_sum_chart_model.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
@@ -225,6 +226,78 @@ void main() {
         <int>[7, 9],
       );
       expect(projection.preparedContributionTouches, 4);
+    },
+  );
+
+  test(
+    'SUM-DETAIL-EDGE-01 RED: sparse paint continuity can request the nearest real range-approved neighbours without widening inspection',
+    () {
+      final projection = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          _contribution(1, 140, const LocalDate(year: 2027, month: 1, day: 8)),
+          _contribution(2, 320, const LocalDate(year: 2027, month: 3, day: 4)),
+          _contribution(
+            3,
+            560,
+            const LocalDate(year: 2027, month: 11, day: 19),
+          ),
+        ],
+      );
+      final frame = projection.preview(fullRange);
+      final home = MindDetailedSumTimeWindow.fullYear(2027);
+      final window = home.zoomAtMinute(
+        scaleDelta: home.homeMinuteCount / (8 * 1440),
+        focalEpochMinute:
+            const LocalDate(year: 2027, month: 3, day: 4).epochDay * 1440 + 720,
+      );
+      final windowStart = window.startEpochMinute;
+      final windowEnd = window.endEpochMinute;
+
+      expect(
+        frame
+            .detailPointsForYear(
+              year: 2027,
+              startEpochMinute: windowStart,
+              endEpochMinute: windowEnd,
+            )
+            .map((point) => point.total),
+        <int>[320],
+      );
+
+      final paintSource = frame.detailPaintSourceForYear(
+        year: 2027,
+        requestedStartEpochMinute: windowStart,
+        requestedEndEpochMinute: windowEnd,
+        visibleStartEpochMinute: windowStart,
+        visibleEndEpochMinute: windowEnd,
+      );
+      expect(
+        paintSource.map((point) => point.total),
+        <int>[140, 320, 560],
+        reason:
+            'A sparse year retains nearest real neighbouring anchors for '
+            'clipped line continuity beside its only inspectable point. The '
+            'neighbours remain outside the visible inspection range.',
+      );
+      final selection = MindDetailedSumLod.select(
+        points: paintSource,
+        window: window,
+        pixelWidth: 280,
+      );
+      expect(selection.inspectablePoints.map((point) => point.total), <int>[
+        320,
+      ]);
+      expect(selection.paintPoints.map((point) => point.total), <int>[
+        140,
+        320,
+        560,
+      ]);
     },
   );
 

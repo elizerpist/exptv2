@@ -174,6 +174,155 @@ final class MindSumHeatmapFrame implements MindTemporalHeatmapFrame {
     );
   }
 
+  /// Returns at most one truthful range-approved anchor on either side of a
+  /// detailed chart viewport. These are painter context only: callers keep
+  /// inspection restricted to points inside their actual visible window.
+  ///
+  /// A sparse year can have its nearest real neighbour farther away than the
+  /// current LOD bucket padding. Resolving it from this immutable prepared
+  /// frame prevents the clipped line from collapsing at a viewport edge
+  /// without inventing a calendar value or reopening a repository/query path.
+  List<MindSumHeatmapDetailPoint> detailPaintNeighboursForYear({
+    required int year,
+    required int startEpochMinute,
+    required int endEpochMinute,
+    bool forceRawTransactions = false,
+  }) {
+    if (endEpochMinute < startEpochMinute) {
+      return const <MindSumHeatmapDetailPoint>[];
+    }
+    final visibleMinutes = endEpochMinute - startEpochMinute + 1;
+    if (forceRawTransactions || visibleMinutes <= _rawDetailWindowMinutes) {
+      final prepared = _detailContributionsByYear[year];
+      if (prepared == null || prepared.isEmpty) {
+        return const <MindSumHeatmapDetailPoint>[];
+      }
+      return _rawPaintNeighbours(
+        prepared: prepared,
+        startEpochMinute: startEpochMinute,
+        endEpochMinute: endEpochMinute,
+      );
+    }
+
+    final daily = dailyPointsForYear(year)
+        .map(
+          (point) => MindSumHeatmapDetailPoint(
+            epochMinute: point.date.epochDay * _minutesPerDay + 720,
+            total: point.total,
+          ),
+        )
+        .toList(growable: false);
+    return _paintNeighbours(
+      points: daily,
+      startEpochMinute: startEpochMinute,
+      endEpochMinute: endEpochMinute,
+    );
+  }
+
+  /// Resolves the bounded LOD source plus truthful off-screen painter context.
+  /// The requested domain may include the current sampler padding, whereas
+  /// [visibleStartEpochMinute]/[visibleEndEpochMinute] remain the real chart
+  /// viewport. Callers must pass the result to an LOD selector that exposes
+  /// only in-viewport anchors to inspection.
+  List<MindSumHeatmapDetailPoint> detailPaintSourceForYear({
+    required int year,
+    required int requestedStartEpochMinute,
+    required int requestedEndEpochMinute,
+    required int visibleStartEpochMinute,
+    required int visibleEndEpochMinute,
+    bool forceRawTransactions = false,
+  }) {
+    final bounded = detailPointsForYear(
+      year: year,
+      startEpochMinute: requestedStartEpochMinute,
+      endEpochMinute: requestedEndEpochMinute,
+      forceRawTransactions: forceRawTransactions,
+    );
+    final neighbours = detailPaintNeighboursForYear(
+      year: year,
+      startEpochMinute: visibleStartEpochMinute,
+      endEpochMinute: visibleEndEpochMinute,
+      forceRawTransactions: forceRawTransactions,
+    );
+    final byIdentity = <(int, int?, int), MindSumHeatmapDetailPoint>{
+      for (final point in bounded)
+        (point.epochMinute, point.ordinal, point.total): point,
+      for (final point in neighbours)
+        (point.epochMinute, point.ordinal, point.total): point,
+    };
+    final points = byIdentity.values.toList(growable: false)
+      ..sort((left, right) {
+        final byMinute = left.epochMinute.compareTo(right.epochMinute);
+        return byMinute != 0
+            ? byMinute
+            : (left.ordinal ?? -1).compareTo(right.ordinal ?? -1);
+      });
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(points);
+  }
+
+  List<MindSumHeatmapDetailPoint> _rawPaintNeighbours({
+    required List<_MindSumPreparedDetail> prepared,
+    required int startEpochMinute,
+    required int endEpochMinute,
+  }) {
+    MindSumHeatmapDetailPoint? before;
+    var beforeIndex = _lowerBoundByMinute(prepared, startEpochMinute) - 1;
+    while (beforeIndex >= 0) {
+      final contribution = prepared[beforeIndex];
+      if (contribution.amountMinor >= range.lowerScaled100 &&
+          contribution.amountMinor <= range.upperScaled100) {
+        before = MindSumHeatmapDetailPoint(
+          epochMinute: contribution.epochMinute,
+          total: contribution.amountMinor,
+          ordinal: contribution.ordinal,
+        );
+        break;
+      }
+      beforeIndex -= 1;
+    }
+
+    MindSumHeatmapDetailPoint? after;
+    var afterIndex = _lowerBoundByMinute(prepared, endEpochMinute + 1);
+    while (afterIndex < prepared.length) {
+      final contribution = prepared[afterIndex];
+      if (contribution.amountMinor >= range.lowerScaled100 &&
+          contribution.amountMinor <= range.upperScaled100) {
+        after = MindSumHeatmapDetailPoint(
+          epochMinute: contribution.epochMinute,
+          total: contribution.amountMinor,
+          ordinal: contribution.ordinal,
+        );
+        break;
+      }
+      afterIndex += 1;
+    }
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(
+      <MindSumHeatmapDetailPoint>[?before, ?after],
+    );
+  }
+
+  static List<MindSumHeatmapDetailPoint> _paintNeighbours({
+    required List<MindSumHeatmapDetailPoint> points,
+    required int startEpochMinute,
+    required int endEpochMinute,
+  }) {
+    MindSumHeatmapDetailPoint? before;
+    MindSumHeatmapDetailPoint? after;
+    for (final point in points) {
+      if (point.epochMinute < startEpochMinute) {
+        before = point;
+        continue;
+      }
+      if (point.epochMinute > endEpochMinute) {
+        after = point;
+        break;
+      }
+    }
+    return List<MindSumHeatmapDetailPoint>.unmodifiable(
+      <MindSumHeatmapDetailPoint>[?before, ?after],
+    );
+  }
+
   static int _lowerBoundByMinute(
     List<_MindSumPreparedDetail> points,
     int epochMinute,
