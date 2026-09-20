@@ -2003,3 +2003,18 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - The axis should therefore be adaptive to the current visible temporal span / available label density: overview may keep compact initials, while zoomed-in states should prefer full names whenever they fit without collision or clipping.
 - This is an axis-label presentation change only. It must not alter zoom semantics, viewport state, LOD selection, financial data, tap inspection, or monthly separator positions.
 - Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, graph, milestone or settings implementation changed.
+
+## 2026-09-20 — Month comparison rhythm card with Budget-style bars
+
+- New presentation feature feedback only; no coding-agent prompt requested yet.
+- In Mind / Month, duplicate the existing daily spending-rhythm card as a separate comparison card rather than replacing the current one.
+- The new comparison card should use the same filled-bar visual language shown in the supplied Budget-mode screenshot: narrow rounded vertical bars rising from the baseline.
+- Product differences from the Budget screenshot are explicit:
+  - if a day has no value, render no bar for that day at all;
+  - do not render an empty outline/track or the unused remainder of a partially filled bar;
+  - only the actually filled value segment is visible.
+- Bar color must be reactive and derived from the existing Mind heatmap dynamic palette/intensity semantics, including current slider/range context; do not introduce a fixed Budget cyan authority for this Month card.
+- Preserve the existing daily-axis/month semantics. This is a comparison visualization, not a replacement of the current Month rhythm card.
+- The information/stat cards below the chart should be enlarged relative to their current implementation so their labels/values are easier to read; improve legibility without changing the underlying financial/statistical semantics.
+- Screenshot source of truth for the requested bar silhouette is the supplied Budget-mode image from this feedback turn. The screenshot's empty outlined columns are specifically NOT part of the new Month comparison card.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No application source, tests, graph, milestone or settings implementation changed.
