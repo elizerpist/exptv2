@@ -1211,7 +1211,37 @@ void main() {
       );
 
       core.beginMindAmountRangeInteraction();
-      expect(core.previewMindAmountRange(previewValues), isTrue);
+      // The complete preview lanes publish synchronously inside the Core call.
+      // A profile-like observer may therefore ask Core for a score again before
+      // the narrower LogBox render target has been registered.  The only safe
+      // answer at that point is the already accepted heatmap range, never a
+      // rebuilt canonical domain.
+      QueryAmountRangeValues? scoreRangeDuringPreviewLanePublication;
+      void captureScoreDuringPreviewLanePublication() {
+        core.ensureMindBehavioralScoreProjection();
+        scoreRangeDuringPreviewLanePublication =
+            core.mindBehavioralScore.value?.range;
+      }
+
+      core.visibleFrames.logBoxLane.addListener(
+        captureScoreDuringPreviewLanePublication,
+      );
+      try {
+        expect(core.previewMindAmountRange(previewValues), isTrue);
+      } finally {
+        core.visibleFrames.logBoxLane.removeListener(
+          captureScoreDuringPreviewLanePublication,
+        );
+      }
+
+      expect(
+        scoreRangeDuringPreviewLanePublication,
+        previewValues,
+        reason:
+            'A re-entrant score admission during the Core-owned preview-lane '
+            'publication must retain the exact heatmap range before the '
+            'LogBox render target is registered.',
+      );
 
       expect(core.visibleFrames.value, same(committed));
       expect(core.navigation.state, same(navigation));

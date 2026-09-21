@@ -1176,6 +1176,7 @@ final class DashboardCoreController {
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
   DashboardLogBoxRenderExtentSnapshot? _lastLogBoxRenderExtent;
+  _MindAmountSemanticRangeTarget? _mindAmountSemanticRangeTarget;
   _MindAmountRenderTarget? _mindAmountRenderTarget;
   _AvatarLiveRenderTarget? _avatarLiveRenderTarget;
   DashboardLogBoxLayoutProfile _logBoxLayoutProfile =
@@ -6586,6 +6587,7 @@ final class DashboardCoreController {
     // Rich scene preparation is a bounded Phase-B augmentation.  Starting a
     // new Mind drag must not cancel an Avatar/Time resource or invalidate the
     // reusable non-amount universe needed by this and the next drag.
+    _mindAmountSemanticRangeTarget = null;
     _mindAmountRenderTarget = null;
     _mindAmountInteractionGeneration += 1;
     _mindAmountInteractionPreviewCount = 0;
@@ -6666,6 +6668,13 @@ final class DashboardCoreController {
       direction: direction,
       values: values,
     );
+    if (heatmapPublished) {
+      _recordMindAmountSemanticRangeTarget(
+        values: values,
+        direction: direction,
+        coreRevision: base.coreRevision,
+      );
+    }
     final temporalHeatmapPublished = navigation.state.plane == TimePlane.year
         ? heatmapPublished
         : _publishMindTemporalHeatmapPreview(values: values);
@@ -6871,6 +6880,7 @@ final class DashboardCoreController {
     );
     _mindYearHeatmapInteractionIdentity = null;
     _mindScoreInteractionIdentity = null;
+    _mindAmountSemanticRangeTarget = null;
   }
 
   /// Ends the physical Slider drag after its exact Phase-A frame has been
@@ -16029,6 +16039,28 @@ final class DashboardCoreController {
     required QueryAmountRangeValues canonicalValues,
   }) {
     final live = liveInteractions.frame;
+    final semanticTarget = _mindAmountSemanticRangeTarget;
+    final currentHeatmap = mindYearHeatmap.value;
+    // The Year heatmap is the semantic publisher for a held range.  It
+    // publishes before the optional LogBox lanes, so a synchronous observer of
+    // those lanes can legitimately ask Core for the Header score before a
+    // [_MindAmountRenderTarget] exists.  Keep only the exact range that is
+    // still visible on that same immutable heatmap identity; this is a Core
+    // interaction guard, not another range, Query, or prepared-data owner.
+    final heldSemanticValues =
+        semanticTarget != null &&
+            semanticTarget.interactionGeneration ==
+                _mindAmountInteractionGeneration &&
+            semanticTarget.coreRevision == coreRevision &&
+            semanticTarget.direction == direction &&
+            semanticTarget.heatmapIdentity == mindYearHeatmap.identity &&
+            currentHeatmap?.identity == semanticTarget.heatmapIdentity &&
+            currentHeatmap?.range == semanticTarget.values
+        ? semanticTarget.values
+        : null;
+    if (_mindScoreInteractionIdentity != null && heldSemanticValues != null) {
+      return heldSemanticValues;
+    }
     final target = _mindAmountRenderTarget;
     // Once the preview lanes have accepted a Mind drag, the render target is
     // the exact value object that drove the heatmap. Do not reconstruct its
@@ -16037,7 +16069,8 @@ final class DashboardCoreController {
     // still holding a narrower, already-rendered range. Reconstructing it
     // would leave the score's min/max provenance different from the heatmap
     // even when the two thumbs happened to agree.
-    final heldTargetValues = target != null &&
+    final heldTargetValues =
+        target != null &&
             target.interactionGeneration == _mindAmountInteractionGeneration &&
             target.coreRevision == coreRevision &&
             live?.source == DashboardLiveInteractionSource.mindRange &&
@@ -16045,8 +16078,7 @@ final class DashboardCoreController {
             live?.direction == direction &&
             target.values.minimumScaled100 >=
                 canonicalValues.minimumScaled100 &&
-            target.values.maximumScaled100 <=
-                canonicalValues.maximumScaled100
+            target.values.maximumScaled100 <= canonicalValues.maximumScaled100
         ? target.values
         : null;
     if (_mindScoreInteractionIdentity != null && heldTargetValues != null) {
@@ -16082,6 +16114,28 @@ final class DashboardCoreController {
       maximumScaled100: domainValues.maximumScaled100,
       lowerScaled100: lower,
       upperScaled100: upper,
+    );
+  }
+
+  void _recordMindAmountSemanticRangeTarget({
+    required QueryAmountRangeValues values,
+    required LedgerDirection direction,
+    required int coreRevision,
+  }) {
+    final frame = mindYearHeatmap.value;
+    final identity = mindYearHeatmap.identity;
+    if (frame == null ||
+        identity == null ||
+        frame.identity != identity ||
+        frame.range != values) {
+      return;
+    }
+    _mindAmountSemanticRangeTarget = _MindAmountSemanticRangeTarget(
+      values: values,
+      interactionGeneration: _mindAmountInteractionGeneration,
+      direction: direction,
+      coreRevision: coreRevision,
+      heatmapIdentity: identity,
     );
   }
 
@@ -16264,6 +16318,22 @@ final class _AvatarLiveRenderTarget {
   void completePaint(bool painted) {
     if (!paintCompletion.isCompleted) paintCompletion.complete(painted);
   }
+}
+
+final class _MindAmountSemanticRangeTarget {
+  const _MindAmountSemanticRangeTarget({
+    required this.values,
+    required this.interactionGeneration,
+    required this.direction,
+    required this.coreRevision,
+    required this.heatmapIdentity,
+  });
+
+  final QueryAmountRangeValues values;
+  final int interactionGeneration;
+  final LedgerDirection direction;
+  final int coreRevision;
+  final MindYearHeatmapIdentity heatmapIdentity;
 }
 
 final class _MindAmountRenderTarget {
