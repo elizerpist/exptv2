@@ -35,6 +35,7 @@ import '../mind/domain/mind_behavioral_score_settings.dart';
 import '../mind/domain/mind_header_score_chart_presentation.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
+import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
 import 'core_modes/budget_category_distribution_visual_bank.dart';
@@ -142,6 +143,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final BudgetTargetAvatarRailController _budgetAvatarRailController;
   late final BudgetDistributionPageController _budgetDistributionPageController;
   late final DashboardHeaderVisualController _headerVisualController;
+  late final BalancePresentationController _balancePresentationSettings;
   late final DashboardHeaderStaticColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
@@ -219,6 +221,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
     _headerVisualController = DashboardHeaderVisualController(vsync: this);
+    _balancePresentationSettings = BalancePresentationController();
     _balanceHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
       DashboardModePaletteResolver.resolve(
         DashboardModeSpec.balance,
@@ -627,6 +630,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetHeaderColorPolicy.dispose();
     _mindHeaderColorPolicy.dispose();
     _headerVisualController.dispose();
+    _balancePresentationSettings.dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
@@ -733,6 +737,13 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         controller: modeController,
                                         balancePresentation:
                                             controller.balancePresentation,
+                                        balancePresentationSettings:
+                                            _balancePresentationSettings,
+                                        balanceAdaptiveScope: controller
+                                            .presentation
+                                            .navigation
+                                            .state
+                                            .effectiveScope,
                                         headerVisualController:
                                             _headerVisualController,
                                         balanceHeaderVisualFrame:
@@ -1298,6 +1309,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                 .mindHeaderScoreChartPresentation,
                                         mindYearHeatmapPresentation: controller
                                             .mindYearHeatmapPresentation,
+                                        balancePresentationSettings:
+                                            _balancePresentationSettings,
                                         headerBounds: geometry.headerBounds,
                                       ),
                                     ],
@@ -2029,6 +2042,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
     this.mindBehavioralScoreSettings,
     this.mindHeaderScoreChartPresentation,
     this.mindYearHeatmapPresentation,
+    this.balancePresentationSettings,
     required this.headerBounds,
   });
 
@@ -2051,6 +2065,7 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
   final MindHeaderScoreChartPresentationController?
   mindHeaderScoreChartPresentation;
   final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
+  final BalancePresentationController? balancePresentationSettings;
   final DashboardBounds headerBounds;
 
   @override
@@ -2126,6 +2141,8 @@ final class _DashboardHeaderVisualTunerOverlay extends StatelessWidget {
                               mindHeaderScoreChartPresentation,
                           mindYearHeatmapPresentation:
                               mindYearHeatmapPresentation,
+                          balancePresentationSettings:
+                              balancePresentationSettings,
                         ),
                       ),
                     ),

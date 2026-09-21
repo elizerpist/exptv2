@@ -4,9 +4,48 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../application/dashboard_balance_presentation.dart';
+import '../../application/dashboard_balance_history_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
+import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
+
+/// Balance-local passive relay for the existing Header gesture layer. It has
+/// no gesture-arena or financial-data ownership; the chart only observes the
+/// real Header pointer sequence that is already accepted by the host.
+final class BalanceHeaderHistoryChartPointerObserver {
+  void Function(PointerDownEvent event)? _onPointerDown;
+  void Function(PointerMoveEvent event)? _onPointerMove;
+  void Function(PointerUpEvent event)? _onPointerUp;
+  void Function(PointerCancelEvent event)? _onPointerCancel;
+
+  void attach({
+    required void Function(PointerDownEvent event) onPointerDown,
+    required void Function(PointerMoveEvent event) onPointerMove,
+    required void Function(PointerUpEvent event) onPointerUp,
+    required void Function(PointerCancelEvent event) onPointerCancel,
+  }) {
+    _onPointerDown = onPointerDown;
+    _onPointerMove = onPointerMove;
+    _onPointerUp = onPointerUp;
+    _onPointerCancel = onPointerCancel;
+  }
+
+  void detach() {
+    _onPointerDown = null;
+    _onPointerMove = null;
+    _onPointerUp = null;
+    _onPointerCancel = null;
+  }
+
+  void observePointerDown(PointerDownEvent event) =>
+      _onPointerDown?.call(event);
+  void observePointerMove(PointerMoveEvent event) =>
+      _onPointerMove?.call(event);
+  void observePointerUp(PointerUpEvent event) => _onPointerUp?.call(event);
+  void observePointerCancel(PointerCancelEvent event) =>
+      _onPointerCancel?.call(event);
+}
 
 /// Balance's typed adapter around the shared Header trend visual kernel.
 /// Financial minor-unit values remain financial values end-to-end; only the
@@ -16,10 +55,18 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
     super.key,
     required this.series,
     required this.expansionProgress,
+    this.chartMode = BalanceHeaderChartMode.allTime,
+    this.showTimeLabels = true,
+    this.adaptiveScope = const AllTimeScope(),
+    this.pointerObserver,
   });
 
   final DashboardBalanceHistorySeries series;
   final double expansionProgress;
+  final BalanceHeaderChartMode chartMode;
+  final bool showTimeLabels;
+  final LedgerTimeScope adaptiveScope;
+  final BalanceHeaderHistoryChartPointerObserver? pointerObserver;
 
   @visibleForTesting
   static List<int> projectedTimeLabelEpochMinutes(
@@ -47,17 +94,43 @@ final class _BalanceHeaderHistoryChartState
   Offset? _pointerDownPosition;
   var _pointerExceededTapSlop = false;
   int? _selectedEpochMinute;
+  DashboardBalanceHistorySeries? _cachedSource;
+  BalanceHeaderChartMode? _cachedMode;
+  LedgerTimeScope? _cachedAdaptiveScope;
+  DashboardBalanceHistorySeries? _cachedProjection;
+  var _hasCachedProjection = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachPointerObserver(widget.pointerObserver);
+  }
 
   @override
   void didUpdateWidget(covariant BalanceHeaderHistoryChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.series != widget.series) _selectedEpochMinute = null;
+    if (!identical(oldWidget.pointerObserver, widget.pointerObserver)) {
+      oldWidget.pointerObserver?.detach();
+      _attachPointerObserver(widget.pointerObserver);
+    }
+    if (oldWidget.series != widget.series ||
+        oldWidget.chartMode != widget.chartMode ||
+        oldWidget.adaptiveScope != widget.adaptiveScope) {
+      _selectedEpochMinute = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.pointerObserver?.detach();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final reveal = widget.expansionProgress.clamp(0.0, 1.0).toDouble();
-    final source = widget.series;
+    final source = _projectedSeries();
+    if (source == null) return const SizedBox.shrink();
     if (reveal <= 0 || source.points.isEmpty) return const SizedBox.shrink();
     final trend = DashboardHeaderTrendSeries(
       startInclusiveTemporalCoordinate: source.startInclusiveEpochMinute,
@@ -130,10 +203,11 @@ final class _BalanceHeaderHistoryChartState
                 ),
               ),
             ),
-            _BalanceHeaderHistoryTimeLabels(
-              series: source,
-              expansionProgress: reveal,
-            ),
+            if (widget.showTimeLabels)
+              _BalanceHeaderHistoryTimeLabels(
+                series: source,
+                expansionProgress: reveal,
+              ),
             if (selected != null)
               _BalanceHeaderHistorySelectedLabels(
                 point: selected,
@@ -155,6 +229,47 @@ final class _BalanceHeaderHistoryChartState
       if (point.epochMinute == selected) return point;
     }
     return null;
+  }
+
+  DashboardBalanceHistorySeries? _projectedSeries() {
+    final source = widget.series;
+    if (_hasCachedProjection &&
+        identical(_cachedSource, source) &&
+        _cachedMode == widget.chartMode &&
+        _cachedAdaptiveScope == widget.adaptiveScope) {
+      return _cachedProjection;
+    }
+    _cachedSource = source;
+    _cachedMode = widget.chartMode;
+    _cachedAdaptiveScope = widget.adaptiveScope;
+    _cachedProjection = DashboardBalanceHistoryViewProjection.project(
+      source: source,
+      mode: widget.chartMode,
+      adaptiveScope: widget.adaptiveScope,
+    );
+    _hasCachedProjection = true;
+    return _cachedProjection;
+  }
+
+  void _attachPointerObserver(
+    BalanceHeaderHistoryChartPointerObserver? observer,
+  ) {
+    observer?.attach(
+      onPointerDown: _observePointerDown,
+      onPointerMove: _observePointerMove,
+      onPointerUp: (event) {
+        final source = _projectedSeries();
+        if (source == null) return;
+        _onPointerUp(
+          event,
+          DashboardHeaderTrendTemporalProjection(
+            startInclusiveTemporalCoordinate: source.startInclusiveEpochMinute,
+            endInclusiveTemporalCoordinate: source.endInclusiveEpochMinute,
+          ),
+        );
+      },
+      onPointerCancel: _observePointerCancel,
+    );
   }
 
   void _observePointerDown(PointerDownEvent event) {
@@ -183,12 +298,14 @@ final class _BalanceHeaderHistoryChartState
         (event.position - origin).distance <= kTouchSlop;
     _resetPointer();
     if (!shouldInspect) return;
+    final source = _projectedSeries();
+    if (source == null) return;
     final box = _plotKey.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.hasSize) return;
     final localPosition = box.globalToLocal(event.position);
     if (!(Offset.zero & box.size).contains(localPosition)) return;
     final trendPoints = <DashboardHeaderTrendPoint>[
-      for (final point in widget.series.points)
+      for (final point in source.points)
         DashboardHeaderTrendPoint(
           temporalCoordinate: point.epochMinute,
           value: point.balanceMinor.toDouble(),

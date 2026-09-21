@@ -4,11 +4,17 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_header_trend_visual_kernel.dart';
+import 'package:fluvi/core/design/dashboard_border_profile.dart';
+import 'package:fluvi/core/design/dashboard_corner_profile.dart';
+import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
@@ -408,7 +414,10 @@ void main() {
       );
       expect(
         center.height,
-        closeTo(modePresentation.geometry.subheaderOneBounds.height, .01),
+        closeTo(
+          modePresentation.geometry.subheaderOneBounds.height * 1.10,
+          .01,
+        ),
       );
       expect(left.height, lessThan(center.height));
       expect(right.height, lessThan(center.height));
@@ -521,4 +530,307 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'BALANCE-GEOMETRY-10PCT RED: Balance alone transfers exactly ten percent of upper height from lower card',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      final settings = BalancePresentationController();
+      addTearDown(balance.dispose);
+      addTearDown(settings.dispose);
+      final modePresentation = _balanceModePresentation();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: modePresentation,
+              balancePresentation: balance,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cards = tester
+          .widgetList<DashboardCoreModeCascadeCard>(
+            find.byType(DashboardCoreModeCascadeCard),
+          )
+          .toList(growable: false);
+      final upper = cards.singleWhere(
+        (card) =>
+            card.semanticKey ==
+            const ValueKey<String>('dashboard-core-mode-balance-card-1'),
+      );
+      final lower = cards.singleWhere(
+        (card) =>
+            card.semanticKey ==
+            const ValueKey<String>('dashboard-core-mode-balance-card-2'),
+      );
+      final originalUpper = modePresentation.geometry.subheaderOneBounds;
+      final originalLower = modePresentation.geometry.zone2Bounds;
+      final delta = originalUpper.height * .10;
+
+      expect(upper.bounds.height, closeTo(originalUpper.height * 1.10, .001));
+      expect(lower.bounds.top, closeTo(originalLower.top + delta, .001));
+      expect(lower.bounds.height, closeTo(originalLower.height - delta, .001));
+      expect(
+        lower.bounds.top - upper.bounds.bottom,
+        closeTo(originalLower.top - originalUpper.bottom, .001),
+      );
+      expect(lower.bounds.bottom, closeTo(originalLower.bottom, .001));
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(
+                const ValueKey<String>('dashboard-core-mode-balance-dots'),
+              ),
+            )
+            .dy,
+        closeTo(modePresentation.geometry.zone2IndicatorBounds.top, .001),
+      );
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey<String>(
+                  'balance-carousel-card-latest-transaction',
+                ),
+              ),
+            )
+            .height,
+        closeTo(upper.bounds.height, .001),
+      );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-CARD-MATERIAL RED: carousel surfaces read the live Balance content border and shadow scopes',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      final border = DashboardBorderController();
+      final shadow = DashboardShadowStyleController();
+      addTearDown(balance.dispose);
+      addTearDown(border.dispose);
+      addTearDown(shadow.dispose);
+      final modePresentation = _balanceModePresentation();
+
+      Future<void> pump() => tester.pumpWidget(
+        MaterialApp(
+          home: DashboardBorderScope(
+            controller: border,
+            child: DashboardShadowStyleScope(
+              controller: shadow,
+              child: Scaffold(
+                body: BalanceDashboardCoreSurface(
+                  presentation: modePresentation,
+                  balancePresentation: balance,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      border.setEnabled(DashboardBorderSurface.balanceContent, true);
+      shadow.select(DashboardShadowStyle.reference3d);
+      await pump();
+      await tester.pumpAndSettle();
+
+      final decoration =
+          tester
+                  .widget<DecoratedBox>(
+                    find.byKey(
+                      const ValueKey<String>(
+                        'balance-carousel-card-surface-latest-transaction',
+                      ),
+                    ),
+                  )
+                  .decoration
+              as BoxDecoration;
+      final expectedBorder = DashboardBorderScope.profileOf(
+        tester.element(find.byType(BalanceDashboardCoreSurface)),
+      ).borderFor(DashboardBorderSurface.balanceContent);
+      final expectedDepth = DashboardShadowStyleScope.profileOf(
+        tester.element(find.byType(BalanceDashboardCoreSurface)),
+      ).depthFor(DashboardCornerSurfaceFamily.contentCard);
+      expect(decoration.border, expectedBorder);
+      expect(decoration.boxShadow, expectedDepth.shadows);
+      expect(
+        decoration.color,
+        expectedDepth.surfaceColor ?? FluviVisualTokens.surface,
+      );
+
+      shadow.select(DashboardShadowStyle.soft);
+      border.setEnabled(DashboardBorderSurface.balanceContent, false);
+      await tester.pump();
+      final updated =
+          tester
+                  .widget<DecoratedBox>(
+                    find.byKey(
+                      const ValueKey<String>(
+                        'balance-carousel-card-surface-latest-transaction',
+                      ),
+                    ),
+                  )
+                  .decoration
+              as BoxDecoration;
+      final updatedContext = tester.element(
+        find.byType(BalanceDashboardCoreSurface),
+      );
+      expect(
+        updated.border,
+        DashboardBorderScope.profileOf(
+          updatedContext,
+        ).borderFor(DashboardBorderSurface.balanceContent),
+      );
+      expect(
+        updated.boxShadow,
+        DashboardShadowStyleScope.profileOf(
+          updatedContext,
+        ).depthFor(DashboardCornerSurfaceFamily.contentCard).shadows,
+      );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-CHART-LABELS/CAROUSEL-CONTROLS RED: Balance-only settings hide static labels and keep the shared rail identity at safe extremes',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        _balance().copyWith(history: _history()),
+      );
+      final settings = BalancePresentationController();
+      addTearDown(balance.dispose);
+      addTearDown(settings.dispose);
+      final modePresentation = _balanceModePresentation();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: modePresentation,
+              balancePresentation: balance,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-history-chart-time-label-0'),
+        ),
+        findsOneWidget,
+      );
+      final initial = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final controller = initial.controller;
+      final position = controller.scrollController.position;
+      final initialWidth = tester
+          .getSize(
+            find.byKey(
+              const ValueKey<String>(
+                'balance-carousel-card-latest-transaction',
+              ),
+            ),
+          )
+          .width;
+      final neutralExtent = initial.spec.itemExtent;
+
+      settings.setTimeLabels(BalanceHeaderChartTimeLabels.hidden);
+      settings.setCardWidthBoost(.30);
+      settings.setCarouselSpacingAdjustment(.12);
+      await tester.pump();
+      final expanded = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final selected = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-card-latest-transaction'),
+        ),
+      );
+      final left = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-4')),
+      );
+      final right = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-history-chart-time-label-0'),
+        ),
+        findsNothing,
+      );
+      expect(selected.width, closeTo(initialWidth * 1.30, .01));
+      expect(expanded.spec.itemExtent, greaterThan(neutralExtent));
+      expect(expanded.spec.visibleItemCount, 3);
+      expect(expanded.spec.itemExtent, greaterThanOrEqualTo(selected.width));
+      expect(selected.overlaps(left), isFalse);
+      expect(selected.overlaps(right), isFalse);
+      expect(identical(expanded.controller, controller), isTrue);
+      expect(
+        identical(expanded.controller.scrollController.position, position),
+        isTrue,
+      );
+      expect(
+        identical(
+          expanded.spec.motionProfile,
+          CenteredCarouselMotionProfiles.timeRefinementRail,
+        ),
+        isTrue,
+      );
+    },
+  );
 }
+
+DashboardCoreModePresentation _balanceModePresentation() =>
+    DashboardCoreModePresentation(
+      geometry: DashboardGeometryResolver.resolve(
+        metrics: DashboardLayoutMetrics.reference,
+        mode: DashboardModeSpec.balance,
+        collapseProgress: 0,
+        isRailExpanded: false,
+      ),
+      palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
+    );
+
+DashboardBalancePresentation _balance() => const DashboardBalancePresentation(
+  scopeKey: 'income|all|expense|all',
+  coreRevision: 7,
+  incomeTotalMinor: 1000000,
+  expenseTotalMinor: 400000,
+  netTotalMinor: 600000,
+  formattedNetTotal: '6 000,00 Ft',
+  presentationId: 7,
+  latestTransaction: DashboardBalanceLatestTransactionPresentation(
+    entryId: 'latest',
+    title: 'Latest',
+    formattedAmount: '100,00 Ft',
+    direction: LedgerDirection.income,
+    occurredOrder: 1,
+  ),
+);
+
+DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(
+  startInclusiveEpochMinute: 20000 * 1440,
+  endInclusiveEpochMinute: 20100 * 1440,
+  points: const <DashboardBalanceHistoryPoint>[
+    DashboardBalanceHistoryPoint(
+      entryId: 'first',
+      epochDay: 20000,
+      epochMinute: 20000 * 1440,
+      incomeTotalMinor: 1000000,
+      expenseTotalMinor: 0,
+      balanceMinor: 1000000,
+    ),
+    DashboardBalanceHistoryPoint(
+      entryId: 'last',
+      epochDay: 20100,
+      epochMinute: 20100 * 1440,
+      incomeTotalMinor: 1000000,
+      expenseTotalMinor: 400000,
+      balanceMinor: 600000,
+    ),
+  ],
+);

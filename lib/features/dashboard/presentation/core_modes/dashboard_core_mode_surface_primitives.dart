@@ -215,7 +215,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
           ),
           Positioned(
             top: 12,
-            right: visualController == null ? 14 : 62,
+            right: 14,
             child:
                 labelContent ??
                 Text(

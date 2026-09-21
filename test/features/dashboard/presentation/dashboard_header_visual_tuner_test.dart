@@ -17,12 +17,77 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_budget_header_pr
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_header_score_chart_presentation.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_history_projection.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'BALANCE-PRESENTATION-TUNER RED: chart and carousel controls use one Balance-only session owner',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final balance = BalancePresentationController();
+      addTearDown(balance.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1800,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              balancePresentationSettings: balance,
+            ),
+          ),
+        ),
+      );
+
+      final adaptive = find.byKey(
+        const ValueKey<String>('balance-header-chart-mode-adaptiveSummary'),
+      );
+      await tester.ensureVisible(adaptive);
+      await tester.tap(adaptive);
+      await tester.pump();
+      expect(balance.value.chartMode, BalanceHeaderChartMode.adaptiveSummary);
+
+      final labels = find.byKey(
+        const ValueKey<String>(
+          'balance-header-history-chart-time-labels-hidden',
+        ),
+      );
+      await tester.ensureVisible(labels);
+      await tester.tap(labels);
+      await tester.pump();
+      expect(balance.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
+
+      final width = find.byKey(
+        const ValueKey<String>('balance-carousel-width-boost'),
+      );
+      await tester.ensureVisible(width);
+      tester
+          .widget<Slider>(
+            find.descendant(of: width, matching: find.byType(Slider)),
+          )
+          .onChanged!(.30);
+      final spacing = find.byKey(
+        const ValueKey<String>('balance-carousel-spacing'),
+      );
+      await tester.ensureVisible(spacing);
+      tester
+          .widget<Slider>(
+            find.descendant(of: spacing, matching: find.byType(Slider)),
+          )
+          .onChanged!(.12);
+      await tester.pump();
+      expect(balance.value.cardWidthBoost, .30);
+      expect(balance.value.carouselSpacingAdjustment, .12);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
+
   testWidgets('BottomNav layout style is default-raised and tuner-selectable', (
     tester,
   ) async {

@@ -4,12 +4,136 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart';
 
 void main() {
+  testWidgets(
+    'BALANCE-HEADER-ROUTE/BUTTON RED: production Header relay inspects Balance points and the tuner sits in the brand lane',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final headerVisual = DashboardHeaderVisualController(vsync: tester);
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        DashboardBalancePresentation(
+          scopeKey: 'all',
+          coreRevision: 1,
+          incomeTotalMinor: 1000,
+          expenseTotalMinor: 100,
+          netTotalMinor: 900,
+          formattedNetTotal: '9,00 Ft',
+          presentationId: 1,
+          history: DashboardBalanceHistorySeries(
+            startInclusiveEpochMinute: 20000 * 1440,
+            endInclusiveEpochMinute: 20100 * 1440,
+            points: const <DashboardBalanceHistoryPoint>[
+              DashboardBalanceHistoryPoint(
+                entryId: 'first',
+                epochDay: 20000,
+                epochMinute: 20000 * 1440,
+                incomeTotalMinor: 1000,
+                expenseTotalMinor: 0,
+                balanceMinor: 1000,
+              ),
+              DashboardBalanceHistoryPoint(
+                entryId: 'last',
+                epochDay: 20100,
+                epochMinute: 20100 * 1440,
+                incomeTotalMinor: 1000,
+                expenseTotalMinor: 100,
+                balanceMinor: 900,
+              ),
+            ],
+          ),
+        ),
+      );
+      final settings = BalancePresentationController();
+      final expansion = _ExpansionRecorder();
+      addTearDown(controller.dispose);
+      addTearDown(balance.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: DashboardLayoutMetrics.reference.canvasWidth,
+            height: DashboardLayoutMetrics.reference.canvasHeight,
+            child: DashboardCoreModeHost(
+              controller: controller,
+              presentationFor: (mode) => _presentationFor(mode),
+              balancePresentation: balance,
+              balancePresentationSettings: settings,
+              headerVisualController: headerVisual,
+              onVerticalExpansionStart: expansion.begin,
+              onVerticalExpansionDragBy: expansion.dragBy,
+              onVerticalExpansionEnd: expansion.end,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final button = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-visual-tuner-button'),
+        ),
+      );
+      final header = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('dashboard-core-mode-balance-header'),
+        ),
+      );
+      final modeLabel = tester.getRect(
+        find.byKey(const ValueKey<String>('dashboard-core-mode-label-balance')),
+      );
+      expect(button.bottom, lessThanOrEqualTo(header.top));
+      expect(button.right, closeTo(header.right - 8, .01));
+      expect(
+        modeLabel.right,
+        closeTo(header.right - 14, .01),
+        reason: 'The former in-Header tuner reservation must be gone.',
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-visual-tuner-button'),
+        ),
+      );
+      await tester.pump();
+      expect(headerVisual.tunerOpen.value, isTrue);
+
+      final plot = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-header-history-chart-paint'),
+        ),
+      );
+      await tester.tapAt(Offset(plot.left + 3, plot.center.dy));
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-header-history-chart-selected-amount',
+          ),
+        ),
+        findsOneWidget,
+      );
+      await tester.drag(
+        find.byKey(
+          const ValueKey<String>('dashboard-core-mode-header-gesture-region'),
+        ),
+        const Offset(0, -100),
+      );
+      await tester.pump();
+      expect(expansion.starts, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      headerVisual.dispose();
+    },
+  );
+
   testWidgets('settled host mounts exactly the committed mode root', (
     tester,
   ) async {

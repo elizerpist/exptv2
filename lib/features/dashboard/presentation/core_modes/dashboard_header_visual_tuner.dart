@@ -24,6 +24,8 @@ import '../dashboard_summary_presentation.dart';
 import '../../mind/domain/mind_behavioral_score_settings.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
+import '../../application/dashboard_balance_history_projection.dart';
+import 'balance_presentation_settings.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
 import 'dashboard_header_tap_wave.dart';
@@ -451,6 +453,90 @@ final class _MindHeaderScoreChartPresentationSection extends StatelessWidget {
   );
 }
 
+final class _BalancePresentationSection extends StatelessWidget {
+  const _BalancePresentationSection({required this.controller});
+
+  final BalancePresentationController controller;
+
+  @override
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<BalancePresentationSettings>(
+    valueListenable: controller,
+    builder: (context, settings, _) => _TunerSection(
+      title: 'Balance',
+      children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Header chart nézet'),
+        ),
+        RadioGroup<BalanceHeaderChartMode>(
+          groupValue: settings.chartMode,
+          onChanged: (mode) {
+            if (mode != null) controller.setChartMode(mode);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final mode in BalanceHeaderChartMode.values)
+                RadioListTile<BalanceHeaderChartMode>(
+                  key: ValueKey('balance-header-chart-mode-${mode.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(mode.tunerLabel),
+                  value: mode,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Line chart időjelölések'),
+        ),
+        RadioGroup<BalanceHeaderChartTimeLabels>(
+          groupValue: settings.timeLabels,
+          onChanged: (visibility) {
+            if (visibility != null) controller.setTimeLabels(visibility);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final visibility in BalanceHeaderChartTimeLabels.values)
+                RadioListTile<BalanceHeaderChartTimeLabels>(
+                  key: ValueKey(
+                    'balance-header-history-chart-time-labels-${visibility.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(visibility.tunerLabel),
+                  value: visibility,
+                ),
+            ],
+          ),
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-carousel-width-boost'),
+          label: 'Balance kártyaszélesség',
+          valueLabel: '${(settings.cardWidthBoost * 100).round()}%',
+          min: 0,
+          max: BalancePresentationSettings.maximumCardWidthBoost,
+          divisions: 30,
+          value: settings.cardWidthBoost,
+          onChanged: controller.setCardWidthBoost,
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-carousel-spacing'),
+          label: 'Balance kártyaköz',
+          valueLabel: '${(settings.carouselSpacingAdjustment * 100).round()}%',
+          min: 0,
+          max: BalancePresentationSettings.maximumCarouselSpacingAdjustment,
+          divisions: 12,
+          value: settings.carouselSpacingAdjustment,
+          onChanged: controller.setCarouselSpacingAdjustment,
+        ),
+      ],
+    ),
+  );
+}
+
 final class _MindYearHeatmapPresentationSection extends StatelessWidget {
   const _MindYearHeatmapPresentationSection({required this.controller});
 
@@ -777,6 +863,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
     this.mindBehavioralScoreSettings,
     this.mindHeaderScoreChartPresentation,
     this.mindYearHeatmapPresentation,
+    this.balancePresentationSettings,
   });
 
   final DashboardHeaderVisualController controller;
@@ -798,6 +885,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
   final MindHeaderScoreChartPresentationController?
   mindHeaderScoreChartPresentation;
   final MindYearHeatmapPresentationController? mindYearHeatmapPresentation;
+  final BalancePresentationController? balancePresentationSettings;
 
   @override
   Widget build(
@@ -919,6 +1007,11 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 _MindYearHeatmapPresentationSection(
                   controller: heatmapPresentation,
                 ),
+                const SizedBox(height: 14),
+              ],
+              if (balancePresentationSettings
+                  case final balanceSettings?) ...<Widget>[
+                _BalancePresentationSection(controller: balanceSettings),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(

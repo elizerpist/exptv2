@@ -21,7 +21,10 @@ import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
 import '../../time_navigation/domain/time_plane.dart';
+import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_dashboard_core_surface.dart';
+import 'balance_header_history_chart.dart';
+import 'balance_presentation_settings.dart';
 import 'budget_dashboard_core_surface.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
@@ -49,6 +52,8 @@ class DashboardCoreModeHost extends StatefulWidget {
     required this.controller,
     required this.presentationFor,
     this.balancePresentation,
+    this.balancePresentationSettings,
+    this.balanceAdaptiveScope = const AllTimeScope(),
     this.budgetPresentation,
     this.budgetLimitEditController,
     this.budgetDistributionDrawables,
@@ -95,6 +100,9 @@ class DashboardCoreModeHost extends StatefulWidget {
   final DashboardCoreModeController controller;
   final DashboardCoreModePresentationLookup presentationFor;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
+  final ValueListenable<BalancePresentationSettings>?
+  balancePresentationSettings;
+  final LedgerTimeScope balanceAdaptiveScope;
   final DashboardBudgetPresentationController? budgetPresentation;
   final DashboardBudgetLimitEditController? budgetLimitEditController;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
@@ -150,6 +158,9 @@ class DashboardCoreModeHost extends StatefulWidget {
 class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
   final MindHeaderScoreChartPointerObserver _mindHeaderScoreChartPointers =
       MindHeaderScoreChartPointerObserver();
+  final BalanceHeaderHistoryChartPointerObserver
+  _balanceHeaderHistoryChartPointers =
+      BalanceHeaderHistoryChartPointerObserver();
   GestureDirectionIntent? _pointerAxis;
   Offset? _pointerOrigin;
   double _appliedVerticalDisplacement = 0;
@@ -276,6 +287,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     final mode = widget.controller.committedMode;
     final presentation = widget.presentationFor(mode);
     final headerBounds = presentation.geometry.headerBounds;
+    final brandBounds = presentation.geometry.brandLockupBounds;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -311,18 +323,34 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
           height: headerBounds.height,
           child: DashboardHeaderTapWaveGestureLayer(
             controller: widget.headerVisualController,
-            onPointerDown: mode.mode == DashboardMode.mind
-                ? _mindHeaderScoreChartPointers.observePointerDown
-                : null,
-            onPointerMove: mode.mode == DashboardMode.mind
-                ? _mindHeaderScoreChartPointers.observePointerMove
-                : null,
-            onPointerUp: mode.mode == DashboardMode.mind
-                ? _mindHeaderScoreChartPointers.observePointerUp
-                : null,
-            onPointerCancel: mode.mode == DashboardMode.mind
-                ? _mindHeaderScoreChartPointers.observePointerCancel
-                : null,
+            onPointerDown: switch (mode.mode) {
+              DashboardMode.mind =>
+                _mindHeaderScoreChartPointers.observePointerDown,
+              DashboardMode.balance =>
+                _balanceHeaderHistoryChartPointers.observePointerDown,
+              DashboardMode.budget => null,
+            },
+            onPointerMove: switch (mode.mode) {
+              DashboardMode.mind =>
+                _mindHeaderScoreChartPointers.observePointerMove,
+              DashboardMode.balance =>
+                _balanceHeaderHistoryChartPointers.observePointerMove,
+              DashboardMode.budget => null,
+            },
+            onPointerUp: switch (mode.mode) {
+              DashboardMode.mind =>
+                _mindHeaderScoreChartPointers.observePointerUp,
+              DashboardMode.balance =>
+                _balanceHeaderHistoryChartPointers.observePointerUp,
+              DashboardMode.budget => null,
+            },
+            onPointerCancel: switch (mode.mode) {
+              DashboardMode.mind =>
+                _mindHeaderScoreChartPointers.observePointerCancel,
+              DashboardMode.balance =>
+                _balanceHeaderHistoryChartPointers.observePointerCancel,
+              DashboardMode.budget => null,
+            },
             child: GestureDetector(
               key: const ValueKey('dashboard-core-mode-header-gesture-region'),
               behavior: HitTestBehavior.translucent,
@@ -337,7 +365,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
         if (widget.headerVisualController case final controller?)
           Positioned(
             left: headerBounds.right - 50,
-            top: headerBounds.top + 8,
+            top: brandBounds.top + (brandBounds.height - 42) / 2,
             width: 42,
             height: 42,
             child: DashboardHeaderVisualTunerButton(controller: controller),
@@ -354,6 +382,9 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       DashboardMode.balance => BalanceDashboardCoreSurface(
         presentation: presentation,
         balancePresentation: widget.balancePresentation,
+        presentationSettings: widget.balancePresentationSettings,
+        adaptiveScope: widget.balanceAdaptiveScope,
+        headerHistoryChartPointerObserver: _balanceHeaderHistoryChartPointers,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.balanceHeaderVisualFrame,
       ),
