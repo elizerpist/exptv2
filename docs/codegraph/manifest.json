@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "97445be09f96c465c5e18b7c9862e764fc2a40ce",
-  "source_parent": "db38ede71f7b744706bf47576c3a15ec720eae02",
-  "source_ref": "97445be09f96c465c5e18b7c9862e764fc2a40ce",
+  "source_head": "c39f625e753d063dc053a1371bff0b9f4bae0c83",
+  "source_parent": "629e6596e0cfacbc8b543d3877693c0cb01dbefd",
+  "source_ref": "c39f625e753d063dc053a1371bff0b9f4bae0c83",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "7eb4da24cf9d1df3dfcb9688c7154b7acbc1952002c86b9c784bbe3e77c1d440",
+  "index_sha256": "05698661f0c2b27d6124cad458cfa539645dc6449b37dc43f4efb3e5c4948c11",
   "document_count": 490,
-  "occurrence_count": 341864,
-  "defined_symbol_count": 46570,
+  "occurrence_count": 342541,
+  "defined_symbol_count": 46638,
   "repository_defined_symbol_count": 11593,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
@@ -24,12 +24,12 @@
         "symbols/part-004.jsonl",
         "symbols/part-005.jsonl"
       ],
-      "byte_count": 4902421
+      "byte_count": 4902437
     },
     {
       "name": "refs",
       "storage": "jsonl_shards",
-      "record_count": 86279,
+      "record_count": 86414,
       "paths": [
         "refs.index.json",
         "refs/part-000.jsonl",
@@ -77,12 +77,12 @@
         "refs/part-042.jsonl",
         "refs/part-043.jsonl"
       ],
-      "byte_count": 27858760
+      "byte_count": 27900039
     },
     {
       "name": "edges",
       "storage": "jsonl_shards",
-      "record_count": 24847,
+      "record_count": 24854,
       "paths": [
         "edges.index.json",
         "edges/part-000.jsonl",
@@ -99,16 +99,16 @@
         "edges/part-011.jsonl",
         "edges/part-012.jsonl"
       ],
-      "byte_count": 8742515
+      "byte_count": 8745025
     },
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 4,
+      "record_count": 3,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 86135
+      "byte_count": 20305
     }
   ]
 }

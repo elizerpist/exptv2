@@ -7,21 +7,21 @@
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#beginRailMotion().",
-      "sha256": "42a7b0f77905c06a2a070330f934b97c43f8d60fd2ec058c98fb82a88cfcf621"
+      "sha256": "ae1bdb381a81fdb7b4cb934a246ca02145ef77492851efb8acebe69a4218b22e"
     },
     {
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#beginSegmentedSummaryMotion().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_presentation_settings.dart`/MindDayTimelineLayout#timelineOnly.",
-      "sha256": "ee663ce18117b86bad1f38f3fcfc1dc5388068ea686e9c572c4140ff81f25719"
+      "sha256": "7bdbef2cfaf6c4dcad9b949aa10cb536b4edac482449f2df56a95e26e312c4b5"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_presentation_settings.dart`/MindHeatmapScaleResolution#",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_category_scale.dart`/DashboardBudgetHeaderCategoryState#copyWith().",
-      "sha256": "2f91d34dab88def9a3ae85db11c3d4ccd2c226078923c45a933db08904d6f290"
+      "sha256": "49a9105dcfd4c630bbdc42bd7735ecd3f613d17a3b47437dab8bf05a03f4298b"
     },
     {
       "path": "symbols/part-003.jsonl",
@@ -42,7 +42,7 @@
       "record_count": 1593,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/visible/domain/`dashboard_visible_frame.dart`/DashboardVisibleFrame#queryKey.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "c565361cf56e6834fecc187039a834620edecbaef4fd4df69fb749d49b356b50"
+      "sha256": "f32ba664b992695ffadc15e2559943c3dabd34cb0aa646a2d9a9036a1d9484d5"
     }
   ]
 }
