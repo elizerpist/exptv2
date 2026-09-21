@@ -1,48 +1,48 @@
 {
   "schema_version": 1,
-  "record_count": 11695,
+  "record_count": 11702,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#`<get>mindAmountPreparedBaseCount`.",
-      "sha256": "8d5838ff848c8a5d091ebd09103a9f5e31d74b67301d3b2c079433d85cbfbe2a"
+      "sha256": "05834f0426e3ecc918f3d937a56aa34a22d690b997329ba6969e8dc7da94e6ba"
     },
     {
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/DashboardCoreController#`<get>motion`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_calendar_geometry.dart`/MindYearHeatmapCalendarGeometry#dayAtSlot().",
-      "sha256": "13898605bf0d18a15cf160e370c1ecdd6be07c416500fb721fa3c5fd3ca5cbfe"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_temporal_heatmap_projection.dart`/_MindSumPreparedDetail#ordinal.",
+      "sha256": "69336e63b8fcefbb51bf1e93a504ad418578e256574ba52b7ed382f41d2917c8"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_calendar_geometry.dart`/MindYearHeatmapCalendarGeometry#dayCount.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_budget_cool_source.dart`/BudgetHeaderCoolColorSource#sample().",
-      "sha256": "858cb6215fe9defb5350fdd140e9e3a9e403ef24d40adc7dab32ae21b698d026"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_calendar_geometry.dart`/MindYearHeatmapCalendarGeometry#",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_core_mode_surface_primitives.dart`/_HeaderPhysicalShell#controller.",
+      "sha256": "b9c9ba75c7817ce8899df903396c7995245d6b7c7937f7ff492bb76bc9aaa43e"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_budget_cool_source.dart`/BudgetHeaderCoolColorSource#stops.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`summary_pill_experiments.dart`/SummaryPillExperiment#onLevelCrossed.",
-      "sha256": "1a3b0ee7e0ac90c662435892c762864c3a6c3173d9461618d7cd339275ef1ca1"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_core_mode_surface_primitives.dart`/_HeaderPhysicalShell#semanticKey.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`summary_pill_experiments.dart`/SummaryPillExperiment#onBackgroundVerticalDragStart.",
+      "sha256": "09a8eef556d65fba708431d9a67ed510cc925a82c401da60e07d4e6245a2d7f5"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`summary_pill_experiments.dart`/SummaryPillExperiment#onPointerHitClassified.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/visible/application/`dashboard_visible_frame_store.dart`/DashboardInteractionPreviewOrder#localGeneration.",
-      "sha256": "648712193ed6531baa4343fc43032e1589e3fa122b4acfd172689bda8dfff989"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`summary_pill_experiments.dart`/SummaryPillExperiment#onBackgroundVerticalDragUpdate.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/presentation/`time_label_formatter.dart`/DashboardTimeLabelFormatter#monthName().",
+      "sha256": "b75ee42d116a75ee1cc3383623d6c8c3151a23f5164323d5158aab13c582e5d8"
     },
     {
       "path": "symbols/part-005.jsonl",
-      "record_count": 1695,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/visible/application/`dashboard_visible_frame_store.dart`/DashboardInteractionPreviewOrder#producer.",
+      "record_count": 1702,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/presentation/`time_label_formatter.dart`/DashboardTimeLabelFormatter#shortMonthName().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "142b2c00db951947e62e48101b4586d6473041d7ef2678862b5024355530a4ff"
+      "sha256": "90058cc9ba269fe06b9b74ebb3ad9efdcffd22ce8f2d5a6addce542ad1839ec6"
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "source_head": "ba5f3cc3c0634c428cf00da494c4b16f73b650d1",
-  "base_head": "153b04c359d1325163dd5c5513bc9978b286cb44",
+  "source_head": "4e5a61d1981524571350d0336e82ed2f25fbea19",
+  "base_head": "baff5a1c844833745261dfbc5115d41193f8beac",
   "changed_files": [
     "lib/features/dashboard/application/dashboard_core_controller.dart",
     "test/features/dashboard/application/dashboard_core_ephemeral_focus_test.dart"
@@ -259,6 +259,12 @@
     "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#previewGeneration.",
     "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#queryKey.",
     "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#values.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#coreRevision.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#direction.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#heatmapIdentity.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#interactionGeneration.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#values.",
     "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#`<constructor>`().",
     "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#`<get>flowId`.",
     "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#direction.",
@@ -435,6 +441,7 @@
     "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/_MindFooterRepository#prepareBudgetLimitSnapshot().",
     "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/bank().",
     "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/bankFor().",
+    "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/captureScoreDuringPreviewLanePublication().",
     "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/entryEvents().",
     "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/entryStages().",
     "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/expectCoherentScore().",
@@ -729,6 +736,12 @@
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#previewGeneration.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#queryKey.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#values.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#coreRevision.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#direction.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#heatmapIdentity.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#interactionGeneration.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#values.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#`<constructor>`().",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#`<get>flowId`.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#direction.",
@@ -882,7 +895,7 @@
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/start().",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/stillCurrent()."
       ],
-      "reference_count": 2149,
+      "reference_count": 2166,
       "first_line": 109,
       "first_column": 18,
       "basis": "scip_reference"
@@ -1175,6 +1188,7 @@
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/_MindFooterRepository#`<constructor>`().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/bank().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/bankFor().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/captureScoreDuringPreviewLanePublication().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/entryEvents().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/entryStages().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/expectCoherentScore().",
@@ -1194,7 +1208,7 @@
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/summaryAndListPainted2026().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/totalFor()."
       ],
-      "reference_count": 1679,
+      "reference_count": 1685,
       "first_line": 67,
       "first_column": 25,
       "basis": "scip_reference"
@@ -1881,6 +1895,7 @@
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/_MindFooterRepository#`<constructor>`().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/bank().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/bankFor().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/captureScoreDuringPreviewLanePublication().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/entryEvents().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/entryStages().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/expectCoherentScore().",
@@ -1900,7 +1915,7 @@
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/summaryAndListPainted2026().",
         "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/application/`dashboard_core_ephemeral_focus_test.dart`/totalFor()."
       ],
-      "reference_count": 1679,
+      "reference_count": 1685,
       "first_line": 67,
       "first_column": 25,
       "basis": "scip_reference"
@@ -2607,6 +2622,12 @@
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#previewGeneration.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#queryKey.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountRenderTarget#values.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#coreRevision.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#direction.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#heatmapIdentity.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#interactionGeneration.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindAmountSemanticRangeTarget#values.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#`<constructor>`().",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#`<get>flowId`.",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/_MindHeatmapDirectionTrace#direction.",
@@ -2760,7 +2781,7 @@
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/start().",
         "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_core_controller.dart`/stillCurrent()."
       ],
-      "reference_count": 2149,
+      "reference_count": 2166,
       "first_line": 109,
       "first_column": 18,
       "basis": "scip_reference"
