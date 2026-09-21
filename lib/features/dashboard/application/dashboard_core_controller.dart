@@ -18,6 +18,8 @@ import '../logbox/application/dashboard_logbox_render_domain.dart';
 import '../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
+import '../prepared/data/dashboard_prepared_formatter.dart';
+import '../query/data/dashboard_ledger_entry.dart';
 import '../mind/domain/mind_year_heatmap_live_projection.dart';
 import '../mind/domain/mind_entry_diagnostic_identity.dart';
 import '../mind/domain/mind_year_heatmap_projection.dart';
@@ -48,6 +50,7 @@ import '../runtime/domain/dashboard_prepared_revision_bundle.dart';
 import '../runtime/domain/dashboard_ephemeral_focus_deriver.dart';
 import '../runtime/domain/dashboard_focus_membership_seed.dart';
 import '../runtime/domain/prepared_dashboard_index.dart';
+import '../runtime/domain/prepared_presentation_frame.dart';
 import '../runtime/domain/prepared_budget_limit_snapshot.dart';
 import '../runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
 import '../time_navigation/application/dashboard_time_navigation_controller.dart';
@@ -63,6 +66,7 @@ import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_avatar_target_painted.dart';
+import 'dashboard_balance_presentation.dart';
 import 'dashboard_avatar_resource_window.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
 import 'dashboard_vertical_background_work_snapshot.dart';
@@ -1116,6 +1120,12 @@ final class DashboardCoreController {
   /// state.
   final ValueNotifier<MindTemporalHeatmapFrame?> mindTemporalHeatmap =
       ValueNotifier<MindTemporalHeatmapFrame?>(null);
+
+  /// The one Core-prepared Balance surface model. It derives both directions
+  /// from the visible temporal/filter scope and never gives a renderer a data
+  /// acquisition path.
+  final ValueNotifier<DashboardBalancePresentation?> balancePresentation =
+      ValueNotifier<DashboardBalancePresentation?>(null);
 
   MindSumHeatmapProjection? _mindSumHeatmapProjection;
   MindMonthHeatmapProjection? _mindMonthHeatmapProjection;
@@ -15459,6 +15469,7 @@ final class DashboardCoreController {
   void _onVisibleFramePublished() {
     final frame = visibleFrames.value;
     if (frame == null) return;
+    _publishBalancePresentationForVisibleFrame(frame);
     // A rail semantic crossing can coalesce before paint, while this callback
     // observes only the frame that the visible-frame store actually accepted.
     // Bind its exact child time scope here so Header score/text/palette cannot
@@ -15556,6 +15567,125 @@ final class DashboardCoreController {
             'frameGeneration=${frame.frameGeneration}',
       ),
     );
+  }
+
+  void _publishBalancePresentationForVisibleFrame(DashboardVisibleFrame frame) {
+    final index = presentation.index ?? _activePreparedRevisionBundle?.index;
+    if (index == null || index.coreRevision != frame.coreRevision) {
+      _setBalancePresentation(null);
+      return;
+    }
+    DashboardPreparedFrame? preparedFor(LedgerDirection direction) {
+      if (frame.direction == direction) return frame.preparedFrame;
+      final exactTimeScope = frame.scope.timeScope;
+      final parentTimeScope = switch (exactTimeScope) {
+        AllTimeScope() || YearScope() => const AllTimeScope(),
+        MonthScope(:final value) => YearScope(value.year),
+        DayScope(:final date) => MonthScope(
+          YearMonth(year: date.year, month: date.month),
+        ),
+      };
+      final catalog = index.catalogForIdentity(
+        direction: direction,
+        timeScope: parentTimeScope,
+      );
+      final scope = catalog?.parentScope.copyWith(timeScope: exactTimeScope);
+      if (scope == null || !index.hasMaterializedFrameForKey(scope.key)) {
+        return null;
+      }
+      final prepared = index.frameForKey(scope.key);
+      return prepared.coreRevision == frame.coreRevision ? prepared : null;
+    }
+
+    final income = preparedFor(LedgerDirection.income);
+    final expense = preparedFor(LedgerDirection.expense);
+    if (income == null || expense == null) {
+      _setBalancePresentation(null);
+      return;
+    }
+    final latest = _balanceLatestTransactionFor(<DashboardPreparedFrame>[
+      income,
+      expense,
+    ]);
+    final net = income.totalMinor - expense.totalMinor;
+    _setBalancePresentation(
+      DashboardBalancePresentation(
+        scopeKey: '${income.scope.key.value}|${expense.scope.key.value}',
+        coreRevision: frame.coreRevision,
+        incomeTotalMinor: income.totalMinor,
+        expenseTotalMinor: expense.totalMinor,
+        netTotalMinor: net,
+        formattedNetTotal: DashboardPreparedFormatter.amountMinor(net),
+        presentationId: Object.hash(
+          frame.scope.key,
+          frame.coreRevision,
+          income.frameId,
+          expense.frameId,
+          latest?.entryId,
+        ),
+        latestTransaction: latest,
+      ),
+    );
+  }
+
+  DashboardBalanceLatestTransactionPresentation? _balanceLatestTransactionFor(
+    Iterable<DashboardPreparedFrame> frames,
+  ) {
+    DashboardLedgerEntry? latest;
+    for (final frame in frames) {
+      // The prepared LogBox's first preview row is the bounded, already
+      // ordered current-scope latest transaction. This Core read cannot
+      // materialize the rich row projection or acquire repository data.
+      final candidate = frame.logBox.semanticPreviewLedgerEntryAt(0);
+      if (candidate == null ||
+          (latest != null && !_isBalanceEntryNewer(candidate, latest))) {
+        continue;
+      }
+      latest = candidate;
+    }
+    if (latest == null) return null;
+    final direction = latest.direction == LedgerDirection.expense.name
+        ? LedgerDirection.expense
+        : LedgerDirection.income;
+    final title = latest.partnerDisplayName?.trim().isNotEmpty ?? false
+        ? latest.partnerDisplayName!.trim()
+        : latest.note?.trim().isNotEmpty ?? false
+        ? latest.note!.trim()
+        : latest.categoryDisplayName?.trim().isNotEmpty ?? false
+        ? latest.categoryDisplayName!.trim()
+        : 'Tranzakció';
+    final absolute = DashboardPreparedFormatter.amountMinor(
+      latest.amountMinor.abs(),
+    );
+    return DashboardBalanceLatestTransactionPresentation(
+      entryId: latest.id,
+      title: title,
+      formattedAmount: direction == LedgerDirection.expense
+          ? '-$absolute'
+          : absolute,
+      direction: direction,
+      occurredOrder: _balanceEntryOrder(latest),
+    );
+  }
+
+  bool _isBalanceEntryNewer(
+    DashboardLedgerEntry candidate,
+    DashboardLedgerEntry current,
+  ) {
+    final candidateOrder = _balanceEntryOrder(candidate);
+    final currentOrder = _balanceEntryOrder(current);
+    if (candidateOrder != currentOrder) return candidateOrder > currentOrder;
+    return candidate.id.compareTo(current.id) > 0;
+  }
+
+  int _balanceEntryOrder(DashboardLedgerEntry entry) =>
+      entry.occurredAtUtcMs ??
+      entry.bookedLocalEpochDay * (24 * 60) + entry.bookedLocalTimeMinutes;
+
+  void _setBalancePresentation(DashboardBalancePresentation? next) {
+    final current = balancePresentation.value;
+    if (current?.presentationId == next?.presentationId) return;
+    balancePresentation.value = next;
   }
 
   void _publishMindBehavioralScoreForVisibleFrame(DashboardVisibleFrame frame) {
@@ -15716,6 +15846,7 @@ final class DashboardCoreController {
     mindYearHeatmap.removeListener(_onMindYearHeatmapPublished);
     mindYearHeatmap.dispose();
     mindTemporalHeatmap.dispose();
+    balancePresentation.dispose();
     mindBehavioralScore.dispose();
     mindBehavioralScoreSettings.removeListener(
       _onMindBehavioralScoreSettingsChanged,

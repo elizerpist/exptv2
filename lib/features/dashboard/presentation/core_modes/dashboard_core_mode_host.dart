@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
+import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../../application/dashboard_budget_limit_edit_controller.dart';
@@ -47,6 +48,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     super.key,
     required this.controller,
     required this.presentationFor,
+    this.balancePresentation,
     this.budgetPresentation,
     this.budgetLimitEditController,
     this.budgetDistributionDrawables,
@@ -92,6 +94,7 @@ class DashboardCoreModeHost extends StatefulWidget {
 
   final DashboardCoreModeController controller;
   final DashboardCoreModePresentationLookup presentationFor;
+  final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
   final DashboardBudgetPresentationController? budgetPresentation;
   final DashboardBudgetLimitEditController? budgetLimitEditController;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
@@ -350,6 +353,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     return switch (mode.mode) {
       DashboardMode.balance => BalanceDashboardCoreSurface(
         presentation: presentation,
+        balancePresentation: widget.balancePresentation,
         headerVisualController: widget.headerVisualController,
         headerVisualFrame: widget.balanceHeaderVisualFrame,
       ),

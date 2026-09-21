@@ -30,6 +30,7 @@ import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runti
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_domain.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_logbox_render_extent_snapshot.dart';
@@ -327,6 +328,31 @@ void main() {
       expect(summary.scope, contains('preparedIndexBuilds='));
       expect(summary.scope, contains('projectionBuilds='));
       expect(summary.scope, contains('projectionReuses='));
+    },
+  );
+
+  test(
+    'BALANCE-HEADER RED: Core prepares same-scope income, expense, net, and latest transaction without a renderer read',
+    () async {
+      final repository = _BalancePreparedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+
+      await core.bootstrap();
+
+      final balance = core.balancePresentation.value;
+      expect(balance, isNotNull);
+      expect(balance!.incomeTotalMinor, 120000);
+      expect(balance.expenseTotalMinor, 35000);
+      expect(balance.netTotalMinor, 85000);
+      expect(balance.latestTransaction?.entryId, 'expense-balance-latest');
+      expect(repository.prepareCalls, 1);
     },
   );
 
@@ -9948,6 +9974,101 @@ class _FocusSeedRepository implements DashboardDataRuntimeRepository {
 
   static int _preparedYearPreviewRowCount(CurrentLedgerQueryScope scope) =>
       _preparedYearEntryCount(scope).clamp(0, 24).toInt();
+}
+
+/// An exact two-direction prepared frame fixture for the Balance Core seam.
+/// The deliberately different entry timestamps prove that the latest card is
+/// selected from Core-owned prepared LogBox preview data, not a renderer read.
+final class _BalancePreparedRepository
+    implements DashboardDataRuntimeRepository {
+  var prepareCalls = 0;
+
+  @override
+  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+
+  @override
+  Future<PreparedDashboardIndex> prepareIndex(
+    PreparedDashboardIndexRequest request,
+    DashboardIndexPreparationToken token,
+  ) async {
+    prepareCalls += 1;
+    final base = buildRuntimeTestIndex(
+      revision: request.key.coreRevision,
+      generation: token.generation,
+      directionalQueries: request.directionalQueries,
+      initialYear: request.initialYear,
+      yearWindowRadius:
+          request.key.yearWindowEndInclusive - request.initialYear,
+      deferredLogBoxes: true,
+    );
+    final frames = <LedgerQueryKey, DashboardPreparedFrame>{
+      for (final entry in base.frames.entries)
+        entry.key: _balanceFrameFor(entry.value),
+    };
+    return PreparedDashboardIndex.complete(
+      key: base.key,
+      frames: frames,
+      catalogs: base.catalogs,
+      origins: base.origins,
+      generation: token.generation,
+      contentDigest: Object.hash(base.contentDigest, 'balance-prepared'),
+      preparedAt: DateTime.utc(2026, 9, 21),
+      buildMetrics: base.buildMetrics,
+    );
+  }
+
+  DashboardPreparedFrame _balanceFrameFor(DashboardPreparedFrame frame) {
+    if (frame.scope.timeScope is! AllTimeScope) return frame;
+    final direction = frame.scope.direction;
+    final total = direction == LedgerDirection.income ? 120000 : 35000;
+    final latest = DashboardLedgerEntry(
+      id: direction == LedgerDirection.income
+          ? 'income-earlier'
+          : 'expense-balance-latest',
+      partnerId: direction == LedgerDirection.income ? 'employer' : 'market',
+      categoryId: direction == LedgerDirection.income ? 'salary' : 'food',
+      direction: direction.name,
+      amountMinor: total,
+      bookedLocalEpochDay: 20632,
+      bookedLocalTimeMinutes: direction == LedgerDirection.income ? 480 : 720,
+      partnerDisplayName: direction == LedgerDirection.income
+          ? 'Employer'
+          : 'Piac',
+    );
+    return DashboardPreparedFrame.complete(
+      scope: frame.scope,
+      parentQueryKey: frame.parentQueryKey,
+      coreRevision: frame.coreRevision,
+      totalMinor: total,
+      formattedAmount: '$total Ft',
+      entryCount: 1,
+      formattedEntryCount: '1',
+      logBox: DashboardLogViewportState.deferredPreparedOrdered(
+        scope: frame.scope,
+        revision: frame.coreRevision,
+        entries: <DashboardLedgerEntry>[latest],
+        entryCount: 1,
+        nextCursor: null,
+      ),
+      presentationDigest: Object.hash(
+        frame.presentationDigest,
+        total,
+        latest.id,
+      ),
+    );
+  }
+
+  @override
+  Future<CommittedLogPage> readCommittedPage(
+    DashboardCommittedPageRequest request,
+  ) => Future<CommittedLogPage>.error(
+    StateError(
+      'Balance renderer must not request a committed repository page.',
+    ),
+  );
+
+  @override
+  Map<String, Object?> performanceReport() => const <String, Object?>{};
 }
 
 /// Test-only native snapshot capability: unlike the focus seed, it always

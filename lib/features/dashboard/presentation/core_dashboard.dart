@@ -732,6 +732,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                       ),
                                       DashboardCoreModeHost(
                                         controller: modeController,
+                                        balancePresentation:
+                                            controller.balancePresentation,
                                         headerVisualController:
                                             _headerVisualController,
                                         balanceHeaderVisualFrame:
