@@ -9,7 +9,6 @@ import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
 import '../../presentation/dashboard_vertical_scroll_boundary_handoff.dart';
 import '../../query/presentation/query_menu_formatters.dart';
-import '../../time_navigation/domain/year_month.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_frame.dart';
 import '../domain/mind_detailed_sum_chart_model.dart';
