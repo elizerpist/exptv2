@@ -1270,16 +1270,12 @@ void main() {
         delayedFullFrame.scope.timeScope,
       );
       expect(
-        core.mindBehavioralScore.value!.range.lowerScaled100,
-        previewValues.lowerScaled100,
+        core.mindBehavioralScore.value!.range,
+        previewValues,
         reason:
-            'A delayed complete-frame callback must observe the current '
-            'Mind live-range identity; it cannot restore canonical values '
+            'A delayed complete-frame callback must retain the exact range '
+            'object accepted by the heatmap, including its structural domain, '
             'while the thumb remains held.',
-      );
-      expect(
-        core.mindBehavioralScore.value!.range.upperScaled100,
-        previewValues.upperScaled100,
       );
       expect(repository.prepareCalls, 1);
       expect(

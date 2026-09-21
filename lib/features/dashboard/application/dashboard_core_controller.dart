@@ -16029,6 +16029,29 @@ final class DashboardCoreController {
     required QueryAmountRangeValues canonicalValues,
   }) {
     final live = liveInteractions.frame;
+    final target = _mindAmountRenderTarget;
+    // Once the preview lanes have accepted a Mind drag, the render target is
+    // the exact value object that drove the heatmap. Do not reconstruct its
+    // domain from a later temporal candidate: that candidate may legitimately
+    // resolve a wider structural amount domain while the physical slider is
+    // still holding a narrower, already-rendered range. Reconstructing it
+    // would leave the score's min/max provenance different from the heatmap
+    // even when the two thumbs happened to agree.
+    final heldTargetValues = target != null &&
+            target.interactionGeneration == _mindAmountInteractionGeneration &&
+            target.coreRevision == coreRevision &&
+            live?.source == DashboardLiveInteractionSource.mindRange &&
+            live?.generation == target.liveInteractionGeneration &&
+            live?.direction == direction &&
+            target.values.minimumScaled100 >=
+                canonicalValues.minimumScaled100 &&
+            target.values.maximumScaled100 <=
+                canonicalValues.maximumScaled100
+        ? target.values
+        : null;
+    if (_mindScoreInteractionIdentity != null && heldTargetValues != null) {
+      return heldTargetValues;
+    }
     final lower = live?.minimumAmountScaled100;
     final upper = live?.maximumAmountScaled100;
     // A delayed frame can describe the previous structural scope.  Resolve
