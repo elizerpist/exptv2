@@ -66,6 +66,7 @@ import '../visible/application/dashboard_visible_frame_store.dart';
 import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_avatar_target_painted.dart';
+import 'dashboard_balance_history_projection.dart';
 import 'dashboard_balance_presentation.dart';
 import 'dashboard_avatar_resource_window.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
@@ -1121,11 +1122,13 @@ final class DashboardCoreController {
   final ValueNotifier<MindTemporalHeatmapFrame?> mindTemporalHeatmap =
       ValueNotifier<MindTemporalHeatmapFrame?>(null);
 
-  /// The one Core-prepared Balance surface model. It derives both directions
-  /// from the visible temporal/filter scope and never gives a renderer a data
-  /// acquisition path.
+  /// The one Core-prepared all-time Balance surface model. It retains the
+  /// exact non-temporal prepared Query partitions, but never derives from a
+  /// Summary time target or gives a renderer a data-acquisition path.
   final ValueNotifier<DashboardBalancePresentation?> balancePresentation =
       ValueNotifier<DashboardBalancePresentation?>(null);
+
+  _DashboardBalanceHistoryCache? _balanceHistoryCache;
 
   MindSumHeatmapProjection? _mindSumHeatmapProjection;
   MindMonthHeatmapProjection? _mindMonthHeatmapProjection;
@@ -15765,21 +15768,16 @@ final class DashboardCoreController {
       _setBalancePresentation(null);
       return;
     }
-    DashboardPreparedFrame? preparedFor(LedgerDirection direction) {
-      if (frame.direction == direction) return frame.preparedFrame;
-      final exactTimeScope = frame.scope.timeScope;
-      final parentTimeScope = switch (exactTimeScope) {
-        AllTimeScope() || YearScope() => const AllTimeScope(),
-        MonthScope(:final value) => YearScope(value.year),
-        DayScope(:final date) => MonthScope(
-          YearMonth(year: date.year, month: date.month),
-        ),
-      };
+    DashboardPreparedFrame? preparedAllTimeFor(LedgerDirection direction) {
+      // Balance has one Core-owned all-time financial universe per exact
+      // directional Query partition.  A visible frame supplies the
+      // rendering/navigation acknowledgement only; its Summary time scope
+      // must never become Balance data provenance.
       final catalog = index.catalogForIdentity(
         direction: direction,
-        timeScope: parentTimeScope,
+        timeScope: const AllTimeScope(),
       );
-      final scope = catalog?.parentScope.copyWith(timeScope: exactTimeScope);
+      final scope = catalog?.parentScope;
       if (scope == null || !index.hasMaterializedFrameForKey(scope.key)) {
         return null;
       }
@@ -15787,8 +15785,8 @@ final class DashboardCoreController {
       return prepared.coreRevision == frame.coreRevision ? prepared : null;
     }
 
-    final income = preparedFor(LedgerDirection.income);
-    final expense = preparedFor(LedgerDirection.expense);
+    final income = preparedAllTimeFor(LedgerDirection.income);
+    final expense = preparedAllTimeFor(LedgerDirection.expense);
     if (income == null || expense == null) {
       _setBalancePresentation(null);
       return;
@@ -15797,6 +15795,11 @@ final class DashboardCoreController {
       income,
       expense,
     ]);
+    final history = _balanceHistoryFor(
+      index: index,
+      income: income,
+      expense: expense,
+    );
     final net = income.totalMinor - expense.totalMinor;
     _setBalancePresentation(
       DashboardBalancePresentation(
@@ -15807,15 +15810,62 @@ final class DashboardCoreController {
         netTotalMinor: net,
         formattedNetTotal: DashboardPreparedFormatter.amountMinor(net),
         presentationId: Object.hash(
-          frame.scope.key,
           frame.coreRevision,
           income.frameId,
           expense.frameId,
           latest?.entryId,
         ),
         latestTransaction: latest,
+        history: history,
       ),
     );
+  }
+
+  DashboardBalanceHistorySeries? _balanceHistoryFor({
+    required PreparedDashboardIndex index,
+    required DashboardPreparedFrame income,
+    required DashboardPreparedFrame expense,
+  }) {
+    final identity = Object.hash(
+      index.generation,
+      index.coreRevision,
+      income.frameId,
+      expense.frameId,
+      income.scope.key,
+      expense.scope.key,
+    );
+    final cached = _balanceHistoryCache;
+    if (cached?.identity == identity) return cached!.history;
+
+    final history = DashboardBalanceHistoryProjection.build(
+      incomeEntries:
+          index
+              .partitionFor(LedgerDirection.income)
+              .focusMembershipSeed
+              ?.entries ??
+          const <DashboardLedgerEntry>[],
+      expenseEntries:
+          index
+              .partitionFor(LedgerDirection.expense)
+              .focusMembershipSeed
+              ?.entries ??
+          const <DashboardLedgerEntry>[],
+    );
+    // The transport membership is accepted only when it proves it belongs to
+    // exactly the same all-time directional prepared frames that own the
+    // Header totals. Returning no chart is truthful; borrowing an unmatched
+    // base universe would create a visually plausible but wrong Balance line.
+    final last = history?.points.last;
+    final exact =
+        last != null &&
+        last.incomeTotalMinor == income.totalMinor &&
+        last.expenseTotalMinor == expense.totalMinor;
+    final resolved = exact ? history : null;
+    _balanceHistoryCache = _DashboardBalanceHistoryCache(
+      identity: identity,
+      history: resolved,
+    );
+    return resolved;
   }
 
   DashboardBalanceLatestTransactionPresentation? _balanceLatestTransactionFor(
@@ -16109,6 +16159,19 @@ final class DashboardCoreController {
     transactionDirection.dispose();
     expansion.dispose();
   }
+}
+
+/// One cached immutable Balance history for the exact financial prepared
+/// identity. Summary-only frame publications reuse this object without a
+/// membership scan or Balance notifier update.
+final class _DashboardBalanceHistoryCache {
+  const _DashboardBalanceHistoryCache({
+    required this.identity,
+    required this.history,
+  });
+
+  final int identity;
+  final DashboardBalanceHistorySeries? history;
 }
 
 final class _AvatarLiveRenderTarget {

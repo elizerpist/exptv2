@@ -26,6 +26,7 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
+import 'package:fluvi/features/dashboard/runtime/application/dashboard_data_runtime.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -505,6 +506,266 @@ void main() {
       expect(balance.netTotalMinor, 85000);
       expect(balance.latestTransaction?.entryId, 'expense-balance-latest');
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'BALANCE-ALL-TIME RED: Header and latest transaction ignore Summary time while prepared financial data stays current',
+    () async {
+      final repository = _BalancePreparedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialRailOpen: false,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+
+      await core.bootstrap();
+
+      final initial = core.balancePresentation.value;
+      expect(initial, isNotNull);
+      expect(initial!.incomeTotalMinor, 120000);
+      expect(initial.expenseTotalMinor, 35000);
+      expect(initial.netTotalMinor, 85000);
+      expect(initial.latestTransaction?.entryId, 'expense-balance-latest');
+      expect(initial.history?.points.map((point) => point.balanceMinor), <int>[
+        120000,
+        85000,
+      ]);
+      final presentationId = initial.presentationId;
+      final history = initial.history;
+      final repositoryCalls = repository.prepareCalls;
+      var balancePublications = 0;
+      core.balancePresentation.addListener(() => balancePublications += 1);
+
+      Future<void> publishSummaryScope({
+        required LedgerTimeScope timeScope,
+        required TimePlane plane,
+        required bool railOpen,
+        required LedgerQueryKey parentQueryKey,
+      }) async {
+        final index = core.preparedIndex!;
+        final directionScope = index
+            .catalogForIdentity(
+              direction: LedgerDirection.income,
+              timeScope: timeScope is DayScope
+                  ? MonthScope(
+                      YearMonth(
+                        year: timeScope.date.year,
+                        month: timeScope.date.month,
+                      ),
+                    )
+                  : timeScope,
+            )!
+            .parentScope;
+        final visibleScope = timeScope is DayScope
+            ? directionScope.copyWith(timeScope: timeScope)
+            : directionScope;
+        final previous = core.visibleFrames.value!;
+        final frame = DashboardVisibleFrame.fromPrepared(
+          index.frameFor(visibleScope),
+          parentQueryKey: parentQueryKey,
+          plane: plane,
+          railOpen: railOpen,
+          semanticIndex: 0,
+          childLabel: 'balance-all-time-${timeScope.runtimeType}',
+          navigationEpoch: previous.navigationEpoch + 1,
+          presentationEpoch: previous.presentationEpoch + 1,
+          frameGeneration: previous.frameGeneration + 1,
+          mode: DashboardVisibleMode.committed,
+        );
+        expect(core.visibleFrames.publish(frame), isTrue);
+        expect(core.visibleFrames.value?.scope.timeScope, timeScope);
+        await pumpEventQueue();
+      }
+
+      final index = core.preparedIndex!;
+      final yearScope = index
+          .catalogForIdentity(
+            direction: LedgerDirection.income,
+            timeScope: const YearScope(2026),
+          )!
+          .parentScope;
+      final monthScope = index
+          .catalogForIdentity(
+            direction: LedgerDirection.income,
+            timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+          )!
+          .parentScope;
+      final dayScope = DayScope(const LocalDate(year: 2026, month: 7, day: 2));
+      final temporalStates =
+          <
+            ({
+              LedgerTimeScope scope,
+              TimePlane plane,
+              bool railOpen,
+              LedgerQueryKey parentKey,
+            })
+          >[
+            (
+              scope: const YearScope(2026),
+              plane: TimePlane.year,
+              railOpen: false,
+              parentKey: yearScope.key,
+            ),
+            (
+              scope: const MonthScope(YearMonth(year: 2026, month: 7)),
+              plane: TimePlane.month,
+              railOpen: false,
+              parentKey: monthScope.key,
+            ),
+            (
+              scope: dayScope,
+              plane: TimePlane.month,
+              railOpen: true,
+              parentKey: monthScope.key,
+            ),
+          ];
+
+      for (final state in temporalStates) {
+        await publishSummaryScope(
+          timeScope: state.scope,
+          plane: state.plane,
+          railOpen: state.railOpen,
+          parentQueryKey: state.parentKey,
+        );
+        expect(
+          core.balancePresentation.value?.presentationId,
+          presentationId,
+          reason:
+              'A Summary ${state.scope.runtimeType} frame is not Balance '
+              'data identity and must not republish all-time content.',
+        );
+        expect(core.balancePresentation.value?.formattedNetTotal, '850,00 Ft');
+        expect(
+          core.balancePresentation.value?.latestTransaction?.entryId,
+          'expense-balance-latest',
+        );
+        expect(core.balancePresentation.value?.history, same(history));
+      }
+      expect(
+        balancePublications,
+        0,
+        reason:
+            'Pure Summary scope frames must not notify the immutable '
+            'all-time Balance presentation.',
+      );
+      expect(repository.prepareCalls, repositoryCalls);
+    },
+  );
+
+  test(
+    'BALANCE-ALL-TIME positive control: a genuine prepared revision replaces net, latest and history',
+    () async {
+      final repository = _BalancePreparedRepository();
+      final stableFrames = _BalanceStableFrameScheduler();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        stableFrameScheduler: stableFrames,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      addTearDown(repository.dispose);
+
+      await core.bootstrap();
+      final initial = core.balancePresentation.value!;
+      expect(initial.netTotalMinor, 85000);
+      expect(initial.latestTransaction?.entryId, 'expense-balance-latest');
+      final initialHistory = initial.history;
+
+      // The Core observer is intentionally subscribed after bootstrap has
+      // installed its first immutable index; let that canonical subscription
+      // exist before the repository emits the genuine later revision.
+      await pumpEventQueue();
+      expect(repository.revisionListenCount, 1);
+      repository.emitRevision(2);
+      // The production repository emits through an asynchronous event channel.
+      // Let that event reach the one Core-owned revision observer, then advance
+      // the explicit post-frame publication boundary that production owns.
+      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue(times: 30);
+      expect(repository.prepareCalls, 2);
+      expect(core.preparedIndex?.coreRevision, 1);
+      expect(core.dataRuntime.pendingIndex?.coreRevision, 2);
+      stableFrames.fireFrame();
+      await pumpEventQueue(times: 30);
+
+      final updated = core.balancePresentation.value!;
+      expect(repository.prepareCalls, 2);
+      expect(core.preparedIndex?.coreRevision, 2);
+      expect(updated.coreRevision, 2);
+      expect(updated.incomeTotalMinor, 170000);
+      expect(updated.expenseTotalMinor, 35000);
+      expect(updated.netTotalMinor, 135000);
+      expect(updated.latestTransaction?.entryId, 'income-revision-latest');
+      expect(updated.history, isNot(same(initialHistory)));
+      expect(updated.presentationId, isNot(initial.presentationId));
+    },
+  );
+
+  testWidgets(
+    'BALANCE-ALL-TIME production Summary navigation leaves the Core presentation untouched',
+    (tester) async {
+      final repository = _BalancePreparedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      addTearDown(repository.dispose);
+      await core.bootstrap();
+      final initial = core.balancePresentation.value!;
+      var balancePublications = 0;
+      void onBalancePublication() => balancePublications += 1;
+      core.balancePresentation.addListener(onBalancePublication);
+      addTearDown(
+        () => core.balancePresentation.removeListener(onBalancePublication),
+      );
+      final repositoryCalls = repository.prepareCalls;
+
+      Future<void> selectSummary(
+        TimePlane plane, {
+        required bool railOpen,
+      }) async {
+        core.beginSegmentedSummaryMotion();
+        core.navigateExperimentalTemporalSelection(
+          plane: plane,
+          isRailOpen: railOpen,
+        );
+        await tester.pump();
+        expect(core.navigation.state.plane, plane);
+        expect(core.navigation.state.isRailOpen, railOpen);
+        expect(
+          core.visibleFrames.value?.scope.timeScope,
+          isNot(const AllTimeScope()),
+          reason: 'The positive control requires a genuine temporal frame.',
+        );
+        expect(
+          core.balancePresentation.value?.presentationId,
+          initial.presentationId,
+        );
+        expect(core.balancePresentation.value?.formattedNetTotal, '850,00 Ft');
+        expect(
+          core.balancePresentation.value?.latestTransaction?.entryId,
+          'expense-balance-latest',
+        );
+        expect(core.balancePresentation.value?.history, same(initial.history));
+      }
+
+      await selectSummary(TimePlane.year, railOpen: false);
+      await selectSummary(TimePlane.month, railOpen: false);
+      await selectSummary(TimePlane.month, railOpen: true);
+      expect(balancePublications, 0);
+      expect(repository.prepareCalls, repositoryCalls);
     },
   );
 
@@ -10179,10 +10440,25 @@ class _FocusSeedRepository implements DashboardDataRuntimeRepository {
 /// selected from Core-owned prepared LogBox preview data, not a renderer read.
 final class _BalancePreparedRepository
     implements DashboardDataRuntimeRepository {
+  _BalancePreparedRepository() {
+    // A single-subscriber controller intentionally buffers the initial
+    // revision until DashboardDataRuntime starts its one global observer.
+    _revisions.add(1);
+  }
+
+  late final StreamController<int> _revisions = StreamController<int>(
+    onListen: () => revisionListenCount += 1,
+  );
+
   var prepareCalls = 0;
+  var revisionListenCount = 0;
 
   @override
-  Stream<int> watchCoreRevision() => Stream<int>.value(1);
+  Stream<int> watchCoreRevision() => _revisions.stream;
+
+  void emitRevision(int revision) => _revisions.add(revision);
+
+  Future<void> dispose() => _revisions.close();
 
   @override
   Future<PreparedDashboardIndex> prepareIndex(
@@ -10208,6 +10484,23 @@ final class _BalancePreparedRepository
       frames: frames,
       catalogs: base.catalogs,
       origins: base.origins,
+      focusMembershipSeedsByDirection:
+          <LedgerDirection, DashboardFocusMembershipSeed>{
+            LedgerDirection.income:
+                DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+                  _balanceHistoryEntry(
+                    LedgerDirection.income,
+                    coreRevision: request.key.coreRevision,
+                  ),
+                ]),
+            LedgerDirection.expense:
+                DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+                  _balanceHistoryEntry(
+                    LedgerDirection.expense,
+                    coreRevision: request.key.coreRevision,
+                  ),
+                ]),
+          },
       generation: token.generation,
       contentDigest: Object.hash(base.contentDigest, 'balance-prepared'),
       preparedAt: DateTime.utc(2026, 9, 21),
@@ -10218,27 +10511,16 @@ final class _BalancePreparedRepository
   DashboardPreparedFrame _balanceFrameFor(DashboardPreparedFrame frame) {
     if (frame.scope.timeScope is! AllTimeScope) return frame;
     final direction = frame.scope.direction;
-    final total = direction == LedgerDirection.income ? 120000 : 35000;
-    final latest = DashboardLedgerEntry(
-      id: direction == LedgerDirection.income
-          ? 'income-earlier'
-          : 'expense-balance-latest',
-      partnerId: direction == LedgerDirection.income ? 'employer' : 'market',
-      categoryId: direction == LedgerDirection.income ? 'salary' : 'food',
-      direction: direction.name,
-      amountMinor: total,
-      bookedLocalEpochDay: 20632,
-      bookedLocalTimeMinutes: direction == LedgerDirection.income ? 480 : 720,
-      partnerDisplayName: direction == LedgerDirection.income
-          ? 'Employer'
-          : 'Piac',
+    final latest = _balanceHistoryEntry(
+      direction,
+      coreRevision: frame.coreRevision,
     );
     return DashboardPreparedFrame.complete(
       scope: frame.scope,
       parentQueryKey: frame.parentQueryKey,
       coreRevision: frame.coreRevision,
-      totalMinor: total,
-      formattedAmount: '$total Ft',
+      totalMinor: latest.amountMinor,
+      formattedAmount: '${latest.amountMinor} Ft',
       entryCount: 1,
       formattedEntryCount: '1',
       logBox: DashboardLogViewportState.deferredPreparedOrdered(
@@ -10250,11 +10532,38 @@ final class _BalancePreparedRepository
       ),
       presentationDigest: Object.hash(
         frame.presentationDigest,
-        total,
+        latest.amountMinor,
         latest.id,
       ),
     );
   }
+
+  DashboardLedgerEntry _balanceHistoryEntry(
+    LedgerDirection direction, {
+    required int coreRevision,
+  }) => DashboardLedgerEntry(
+    id: direction == LedgerDirection.income
+        ? coreRevision >= 2
+              ? 'income-revision-latest'
+              : 'income-earlier'
+        : 'expense-balance-latest',
+    partnerId: direction == LedgerDirection.income ? 'employer' : 'market',
+    categoryId: direction == LedgerDirection.income ? 'salary' : 'food',
+    direction: direction.name,
+    amountMinor: direction == LedgerDirection.income
+        ? coreRevision >= 2
+              ? 170000
+              : 120000
+        : 35000,
+    bookedLocalEpochDay:
+        direction == LedgerDirection.income && coreRevision >= 2
+        ? 20633
+        : 20632,
+    bookedLocalTimeMinutes: direction == LedgerDirection.income ? 480 : 720,
+    partnerDisplayName: direction == LedgerDirection.income
+        ? 'Employer'
+        : 'Piac',
+  );
 
   @override
   Future<CommittedLogPage> readCommittedPage(
@@ -10267,6 +10576,26 @@ final class _BalancePreparedRepository
 
   @override
   Map<String, Object?> performanceReport() => const <String, Object?>{};
+}
+
+/// Test-only deterministic equivalent of the production post-frame revision
+/// publication gate.  It preserves the real Core/DataRuntime ownership while
+/// making a genuine revision's publish boundary explicit in this non-widget
+/// test.
+final class _BalanceStableFrameScheduler
+    implements DashboardStableFrameScheduler {
+  final List<void Function()> _pending = <void Function()>[];
+
+  @override
+  void scheduleStableFrame(void Function() callback) => _pending.add(callback);
+
+  void fireFrame() {
+    final callbacks = List<void Function()>.of(_pending);
+    _pending.clear();
+    for (final callback in callbacks) {
+      callback();
+    }
+  }
 }
 
 /// Test-only native snapshot capability: unlike the focus seed, it always
