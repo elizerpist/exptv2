@@ -16032,8 +16032,8 @@ final class DashboardCoreController {
     return QueryAmountRangeValues(
       minimumScaled100: domainValues.minimumScaled100,
       maximumScaled100: domainValues.maximumScaled100,
-      lowerScaled100: lower!,
-      upperScaled100: upper!,
+      lowerScaled100: lower,
+      upperScaled100: upper,
     );
   }
 

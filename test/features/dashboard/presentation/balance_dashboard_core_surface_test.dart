@@ -310,7 +310,7 @@ void main() {
         final surface = tester.widget<DecoratedBox>(
           find.byKey(ValueKey<String>('balance-carousel-card-surface-$id')),
         );
-        final decoration = surface.decoration! as BoxDecoration;
+        final decoration = surface.decoration as BoxDecoration;
         expect(decoration.color, FluviVisualTokens.surface, reason: id);
       }
 
