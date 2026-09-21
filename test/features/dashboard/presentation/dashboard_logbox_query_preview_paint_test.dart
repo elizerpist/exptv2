@@ -1636,6 +1636,10 @@ void main() {
       );
       await tester.pump();
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      // Semantic Mind readiness intentionally resolves before its optional
+      // live LogBox resource lane. Settle that bounded lane before exercising
+      // this test's warm readable-row contract.
+      await tester.pumpAndSettle();
       expect(sceneCache.hasLiveInteractionResourceBank, isTrue);
 
       core.beginMindAmountRangeInteraction();
@@ -1816,6 +1820,7 @@ void main() {
       );
       await tester.pump();
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
+      await tester.pumpAndSettle();
       final viewportElement = tester.element(
         find.byType(DashboardLogBoxViewport),
       );

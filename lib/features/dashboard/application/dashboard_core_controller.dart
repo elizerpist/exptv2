@@ -1166,6 +1166,9 @@ final class DashboardCoreController {
   _MindHeatmapDirectionTrace? _pendingMindHeatmapDirectionTrace;
   int _mindTemporalEntryGeneration = 0;
   _MindTemporalEntryTrace? _pendingMindTemporalEntryTrace;
+  final Map<CurrentLedgerQueryScope, Future<bool>>
+  _mindAmountLiveResourcePreparations =
+      <CurrentLedgerQueryScope, Future<bool>>{};
   int _logBoxTextLayoutPreparedRows = 0;
   int _logBoxTextLayoutPreparedDayHeaders = 0;
   int _logBoxTextLayoutEstimatedBytes = 0;
@@ -4014,38 +4017,152 @@ final class DashboardCoreController {
         details: 'source=primeMindAmountPreviewDomain',
       );
     }
-    final activeReady = await _primeMindAmountPreviewBaseFor(
+    final semanticReady = await _primeMindAmountPreviewBaseFor(
       direction: direction,
-      preparesLiveRows: true,
+      preparesLiveRows: false,
+    );
+    if (!semanticReady) return false;
+
+    final domainScope = QueryAmountRange.domainScope(
+      currentQuery.scopeFor(direction),
+    );
+    final base = _mindAmountPreparedBaseFor(domainScope);
+    if (base == null) return false;
+    final readyTrace = _pendingMindTemporalEntryTrace;
+    if (readyTrace != null && readyTrace.direction == direction) {
+      _recordMindTemporalEntryStage(
+        readyTrace,
+        'PREPARED_BASE_READY',
+        details:
+            'direction=${direction.name} '
+            'source=semanticAdmission',
+      );
+    }
+    final domainPublished = _publishPreparedMindAmountDomainForScope(
+      mindAmountDomainScopeFor(direction),
+    );
+    if (readyTrace != null && readyTrace.direction == direction) {
+      _recordMindTemporalEntryStage(
+        readyTrace,
+        'STRUCTURAL_DOMAIN_PUBLISHED',
+        details:
+            'direction=${direction.name} '
+            'published=$domainPublished',
+      );
+    }
+    // Semantic publication is complete as soon as the exact immutable base
+    // exists. The broad source-membership row universe is only a later,
+    // bounded readability prerequisite for a live amount drag; it cannot be
+    // an admission dependency for Mind Header/body frames.
+    ensureMindTemporalVisualProjection();
+    _startMindAmountLiveRowResourcePreparation(
+      base: base,
+      domainScope: domainScope,
+      trace: readyTrace?.direction == direction ? readyTrace : null,
     );
     // DashboardDataRuntime has exactly one native prepared-index builder
-    // lane.  Starting the sibling while this request is still admitted would
-    // cancel the active base.  The active base is already installed before
-    // this Future resolves; only then may the bounded sibling prewarm enter
-    // that shared lane.
-    if (activeReady) {
-      final readyTrace = _pendingMindTemporalEntryTrace;
-      if (readyTrace != null && readyTrace.direction == direction) {
+    // lane. The active semantic base is now installed before sibling work can
+    // enter that shared lane.
+    _prewarmInactiveMindAmountPreviewBase(direction);
+    return true;
+  }
+
+  void _startMindAmountLiveRowResourcePreparation({
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope domainScope,
+    required _MindTemporalEntryTrace? trace,
+  }) {
+    final resourceKey =
+        'mind-live-root:rev:${base.coreRevision}|index:${base.generation}|'
+        'domain:${domainScope.key.value}';
+    final lane = _mindAmountPreviewResourceLaneFor(domainScope.direction);
+    final existing = _mindAmountPreviewResources[domainScope.direction];
+    final existingIsReadable =
+        existing?.resourceKey == resourceKey &&
+        (_liveInteractionResourceWindowLookup?.call(
+              existing!.window,
+              lane: lane,
+              candidateKey: resourceKey,
+            ) ??
+            false);
+    if (existingIsReadable) {
+      if (trace != null) {
         _recordMindTemporalEntryStage(
-          readyTrace,
-          'PREPARED_BASE_READY',
+          trace,
+          'LIVE_ROOT_RESOURCE_REUSED',
           details:
-              'direction=${direction.name} '
-              'source=primeMindAmountPreviewDomain',
+              'lane=${lane.name} readable=true '
+              'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)}',
         );
       }
-      _publishPreparedMindAmountDomainForScope(
-        mindAmountDomainScopeFor(direction),
-      );
-      _prewarmInactiveMindAmountPreviewBase(direction);
-      // Admission completed on Core's asynchronous prepared-data boundary.
-      // Publish every semantic Mind product here rather than asking a range
-      // widget build to mutate a ValueNotifier. That keeps the compact range,
-      // temporal heatmap, Header score and chart coherent without a
-      // markNeedsBuild-during-build path.
-      ensureMindTemporalVisualProjection();
+      return;
     }
-    return activeReady;
+    final active = _mindAmountLiveResourcePreparations[domainScope];
+    if (active != null) {
+      if (trace != null) {
+        _recordMindTemporalEntryStage(
+          trace,
+          'LIVE_ROOT_RESOURCE_JOINED',
+          details:
+              'lane=${lane.name} readable=false '
+              'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)}',
+        );
+      }
+      return;
+    }
+    if (trace != null) {
+      _recordMindTemporalEntryStage(
+        trace,
+        'LIVE_ROOT_RESOURCE_REQUESTED',
+        details:
+            'lane=${lane.name} '
+            'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)} '
+            'rowCount=${base.partitionFor(domainScope.direction).focusMembershipSeed?.entryCount ?? 0}',
+      );
+    }
+    final preparation = _primeMindAmountLiveRowResources(base, domainScope);
+    _mindAmountLiveResourcePreparations[domainScope] = preparation;
+    unawaited(
+      preparation.then<void>(
+        (ready) {
+          if (identical(
+            _mindAmountLiveResourcePreparations[domainScope],
+            preparation,
+          )) {
+            _mindAmountLiveResourcePreparations.remove(domainScope);
+          }
+          if (trace != null) {
+            _recordMindTemporalEntryStage(
+              trace,
+              ready
+                  ? 'LIVE_ROOT_RESOURCE_READY'
+                  : 'LIVE_ROOT_RESOURCE_REJECTED',
+              details:
+                  'lane=${lane.name} readable=$ready '
+                  'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)}',
+            );
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (identical(
+            _mindAmountLiveResourcePreparations[domainScope],
+            preparation,
+          )) {
+            _mindAmountLiveResourcePreparations.remove(domainScope);
+          }
+          if (trace != null) {
+            _recordMindTemporalEntryStage(
+              trace,
+              'LIVE_ROOT_RESOURCE_REJECTED',
+              details:
+                  'lane=${lane.name} readable=false '
+                  'resourceKey=${FluviDiagnosticKeyDigest.of(resourceKey)} '
+                  'reason=preparationError',
+            );
+          }
+        },
+      ),
+    );
   }
 
   /// Resolves the one visible, non-local scope whose native amount domain
@@ -4148,8 +4265,24 @@ final class DashboardCoreController {
     unawaited(
       _primeMindAmountPreviewBaseFor(
         direction: inactiveDirection,
-        preparesLiveRows: true,
-      ),
+        preparesLiveRows: false,
+      ).then((semanticReady) {
+        if (_disposed || !semanticReady) return;
+        final domainScope = QueryAmountRange.domainScope(
+          currentQuery.scopeFor(inactiveDirection),
+        );
+        final base = _mindAmountPreparedBaseFor(domainScope);
+        if (base == null) return;
+        // The inactive direction keeps its existing bounded Phase-A warmup,
+        // but it is deliberately detached from semantic Mind admission. This
+        // is still Core-owned: no render/read callback may start a second
+        // live-resource owner on a later direction tap.
+        _startMindAmountLiveRowResourcePreparation(
+          base: base,
+          domainScope: domainScope,
+          trace: null,
+        );
+      }),
     );
   }
 
@@ -4162,6 +4295,12 @@ final class DashboardCoreController {
     final domainScope = QueryAmountRange.domainScope(appliedScope);
     final resident = _mindAmountPreparedBaseFor(domainScope);
     if (resident != null) {
+      _recordMindTemporalEntrySemanticBase(
+        direction: direction,
+        base: resident,
+        domainScope: domainScope,
+        source: 'resident',
+      );
       if (preparesLiveRows) {
         _setMindAmountPreviewBase(resident, domainScope);
         return _primeMindAmountLiveRowResources(resident, domainScope);
@@ -4173,6 +4312,12 @@ final class DashboardCoreController {
         installed.coreRevision == coreRevision &&
         installed.key.matchesScope(domainScope)) {
       _setMindAmountPreviewBase(installed, domainScope);
+      _recordMindTemporalEntrySemanticBase(
+        direction: direction,
+        base: installed,
+        domainScope: domainScope,
+        source: 'currentIndex',
+      );
       if (!preparesLiveRows) return true;
       return _primeMindAmountLiveRowResources(installed, domainScope);
     }
@@ -4227,6 +4372,12 @@ final class DashboardCoreController {
       return false;
     }
     _setMindAmountPreviewBase(index, domainScope);
+    _recordMindTemporalEntrySemanticBase(
+      direction: direction,
+      base: index,
+      domainScope: domainScope,
+      source: 'preparedCandidate',
+    );
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: preparesLiveRows
@@ -4245,6 +4396,32 @@ final class DashboardCoreController {
     );
     if (!preparesLiveRows) return true;
     return _primeMindAmountLiveRowResources(index, domainScope);
+  }
+
+  void _recordMindTemporalEntrySemanticBase({
+    required LedgerDirection direction,
+    required PreparedDashboardIndex base,
+    required CurrentLedgerQueryScope domainScope,
+    required String source,
+  }) {
+    final trace = _pendingMindTemporalEntryTrace;
+    if (trace == null || trace.direction != direction) return;
+    _recordMindTemporalEntryStage(
+      trace,
+      'BASE_SOURCE_RESOLVED',
+      details:
+          'source=$source '
+          'baseGeneration=${base.generation} '
+          'domainScope=${FluviDiagnosticKeyDigest.of(domainScope.key.value)}',
+    );
+    _recordMindTemporalEntryStage(
+      trace,
+      'SEMANTIC_BASE_INSTALLED',
+      details:
+          'source=$source '
+          'baseCoreRevision=${base.coreRevision} '
+          'rowCount=${base.partitionFor(direction).focusMembershipSeed?.entryCount ?? 0}',
+    );
   }
 
   PreparedDashboardIndex? _mindAmountPreparedBaseFor(
@@ -5711,10 +5888,7 @@ final class DashboardCoreController {
     if (_disposed ||
         candidate.plane != navigation.state.plane ||
         (candidate.plane != TimePlane.year &&
-            candidate.plane != TimePlane.month) ||
-        (candidate.plane == TimePlane.year && mindYearHeatmap.value == null) ||
-        (candidate.plane == TimePlane.month &&
-            mindTemporalHeatmap.value is! MindMonthHeatmapFrame)) {
+            candidate.plane != TimePlane.month)) {
       return;
     }
     final accepted = _segmentedLatestAcceptedPaintTarget;
@@ -5724,6 +5898,11 @@ final class DashboardCoreController {
         !_sameTemporalTarget(accepted.candidate, candidate)) {
       return;
     }
+    // The accepted Phase-A identity below is sufficient to derive the exact
+    // resident Mind frame. Requiring a pre-existing Month/Year frame here
+    // would create a circular renderer dependency: the next RangeSlider
+    // build would have to admit the frame before this Core acknowledgement
+    // could publish it.
     _admitMindTemporalHeatmapForSegmentedTarget(
       accepted: accepted,
       candidate: candidate,
@@ -10354,7 +10533,7 @@ final class DashboardCoreController {
     unawaited(
       _primeMindAmountPreviewBaseFor(
         direction: ledgerDirection,
-        preparesLiveRows: true,
+        preparesLiveRows: false,
       ).then((ready) {
         if (_disposed ||
             gateGeneration != _mindDirectionBaseGateGeneration ||
@@ -10375,6 +10554,17 @@ final class DashboardCoreController {
             );
           }
           return;
+        }
+        final domainScope = QueryAmountRange.domainScope(
+          currentQuery.scopeFor(ledgerDirection),
+        );
+        final base = _mindAmountPreparedBaseFor(domainScope);
+        if (base != null) {
+          _startMindAmountLiveRowResourcePreparation(
+            base: base,
+            domainScope: domainScope,
+            trace: null,
+          );
         }
         selectDirection(direction);
       }),

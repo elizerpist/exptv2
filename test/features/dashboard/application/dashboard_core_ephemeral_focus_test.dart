@@ -331,6 +331,158 @@ void main() {
     },
   );
 
+  testWidgets(
+    'MIND-COLD-03 RED: a held Mind live-row resource does not delay the current Header or body frame',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final resourceStarted = Completer<void>();
+      final releaseResource = Completer<void>();
+      var resourceReady = false;
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      addTearDown(() {
+        if (!releaseResource.isCompleted) releaseResource.complete();
+      });
+      await core.bootstrap();
+      final scope = core.currentQuery.scope;
+      core.currentQuery.replaceDirection(
+        scope.direction,
+        scope,
+        facetPresentation: const QueryMenuData(
+          result: QueryMenuResultSummary(
+            entryCount: 2,
+            amountScaled100: 120000,
+          ),
+          amountDomain: QueryMenuAmountDomain(
+            minimumAmountScaled100: 50000,
+            maximumAmountScaled100: 70000,
+          ),
+          availableMonths: <QueryMenuAvailableMonth>[],
+          categories: <QueryMenuCategoryFacet>[],
+          partners: <QueryMenuPartnerFacet>[],
+        ),
+      );
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      core.attachLogBoxSceneWindowCoordinator(
+        prepare: (_, {required retainViewportId}) async {},
+        activate: (_) {},
+        prepareLiveInteractionResources:
+            (
+              _, {
+              required lane,
+              required retainedKey,
+              required retainViewportId,
+            }) async {
+              if (lane ==
+                      DashboardLiveInteractionResourceLane
+                          .mindIncomeAmountPreview &&
+                  !resourceStarted.isCompleted) {
+                resourceStarted.complete();
+              }
+              await releaseResource.future;
+              resourceReady = true;
+            },
+        hasLiveInteractionResources:
+            (_, {required lane, required candidateKey}) =>
+                lane ==
+                    DashboardLiveInteractionResourceLane
+                        .mindIncomeAmountPreview &&
+                resourceReady,
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(modes.setProgrammaticMode(DashboardModeSpec.mind), isTrue);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+      expect(
+        resourceStarted.isCompleted,
+        isTrue,
+        reason:
+            'The production Mind entry must start its live-resource lane. '
+            '${FluviDiagnosticLogger.entries.where((event) => event.stage.startsWith('MIND')).map((event) => event.stage).join(', ')}',
+      );
+
+      final beforeResourceRelease = FluviDiagnosticLogger.entries
+          .where((event) => event.stage.startsWith('MIND_ENTRY|'))
+          .toList(growable: false);
+      final beforeStages = beforeResourceRelease
+          .map((event) => event.stage)
+          .toList(growable: false);
+      expect(resourceReady, isFalse);
+      expect(
+        beforeStages,
+        containsAll(<String>[
+          'MIND_ENTRY|SEMANTIC_BASE_INSTALLED',
+          'MIND_ENTRY|STRUCTURAL_DOMAIN_PUBLISHED',
+          'MIND_ENTRY|FRAME_PUBLISHED',
+          'MIND_ENTRY|HEADER_FRAME_PUBLISHED',
+          'MIND_ENTRY|FIRST_PAINT',
+          'MIND_ENTRY|HEADER_FIRST_PAINT',
+          'MIND_ENTRY|MODE_VISIBLE_CURRENT_ACK',
+          'MIND_ENTRY|SUMMARY',
+        ]),
+        reason:
+            'Mind semantic presentation must use the installed immutable base '
+            'without waiting for broad live LogBox row preparation.',
+      );
+      expect(
+        beforeResourceRelease
+            .where((event) => event.stage == 'MIND_ENTRY|SUMMARY')
+            .single
+            .scope,
+        contains('preparedBaseRequests=1'),
+        reason:
+            'The renderer must remain read-only; only the committed Core mode '
+            'entry may admit this cold Mind base.',
+      );
+      expect(
+        beforeResourceRelease
+            .where((event) => event.stage == 'MIND_ENTRY|SUMMARY')
+            .single
+            .scope,
+        contains('repositoryRequests=0'),
+      );
+      expect(
+        beforeResourceRelease
+            .where((event) => event.stage == 'MIND_ENTRY|SUMMARY')
+            .single
+            .scope,
+        contains('preparedIndexBuilds=0'),
+      );
+
+      releaseResource.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+      expect(resourceReady, isTrue);
+      expect(
+        FluviDiagnosticLogger.entries
+            .where(
+              (event) => event.stage == 'MIND_ENTRY|LIVE_ROOT_RESOURCE_READY',
+            )
+            .single
+            .scope,
+        contains('readable=true'),
+      );
+    },
+  );
+
   test(
     'BALANCE-HEADER RED: Core prepares same-scope income, expense, net, and latest transaction without a renderer read',
     () async {

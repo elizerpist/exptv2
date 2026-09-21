@@ -151,7 +151,6 @@ class _CoreDashboardState extends State<CoreDashboard>
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
   int? _lastMindRangeDiagnosticSignature;
-  int? _mindAmountPreviewPrimeSignature;
   bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
   late SummaryPillVariant _lastSummaryPillVariant;
@@ -1464,22 +1463,10 @@ class _CoreDashboardState extends State<CoreDashboard>
         ),
       );
     }
-    if (values != null) {
-      final primeSignature = Object.hash(
-        direction,
-        QueryAmountRange.domainScope(scope),
-        controller.coreRevision,
-        _preparedSceneCache.activeWindowDigest,
-      );
-      if (_mindAmountPreviewPrimeSignature != primeSignature) {
-        _mindAmountPreviewPrimeSignature = primeSignature;
-        // The Core asynchronous prepared-data admission publishes the full
-        // Mind semantic frame on completion. A render callback may request
-        // that admission, but it may never directly publish a heatmap or
-        // score ValueNotifier while the widget tree is building.
-        unawaited(controller.primeMindAmountPreviewDomain());
-      }
-    }
+    // The compact control only reads the exact domain admitted by the Core's
+    // mode/navigation lifecycle. Rendering must never become a second async
+    // Mind admission owner: a build callback can neither make Header/body
+    // readiness depend on LogBox resources nor start a duplicate cold path.
     // Unknown is not the 1,000 HUF floor. Query Menu hides its control until
     // this exact canonical data owner is ready; Mind mirrors that explicit
     // state instead of manufacturing a collapsed disabled RangeSlider.
