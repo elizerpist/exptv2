@@ -81,6 +81,34 @@ void main() {
     });
 
     test(
+      'DAY-LAYOUT-SETTINGS RED: Day timeline layout has one canonical presentation-only owner',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        final defaults = controller.value;
+        expect(
+          defaults.dayTimelineLayout,
+          MindDayTimelineLayout.statsAndTimeline,
+        );
+        final timelineOnly = defaults.copyWith(
+          dayTimelineLayout: MindDayTimelineLayout.timelineOnly,
+        );
+        expect(timelineOnly, isNot(defaults));
+        expect(timelineOnly.hashCode, isNot(defaults.hashCode));
+
+        controller.setDayTimelineLayout(MindDayTimelineLayout.timelineOnly);
+        expect(
+          controller.value.dayTimelineLayout,
+          MindDayTimelineLayout.timelineOnly,
+        );
+        expect(controller.value.revision, 1);
+        controller.setDayTimelineLayout(MindDayTimelineLayout.timelineOnly);
+        expect(controller.value.revision, 1);
+      },
+    );
+
+    test(
       'PAL-REDUCE-01: exactly five approved product palettes are selectable',
       () {
         expect(

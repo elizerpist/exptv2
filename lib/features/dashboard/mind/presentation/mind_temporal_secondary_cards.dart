@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
@@ -527,11 +528,13 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
     required this.frame,
     required this.paletteStyle,
     required this.scaleResolution,
+    this.timelineLayout = MindDayTimelineLayout.statsAndTimeline,
   });
 
   final MindDayHeatmapFrame frame;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindDayTimelineLayout timelineLayout;
 
   @override
   Widget build(BuildContext context) {
@@ -542,23 +545,37 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
       paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
       scaleResolution: scaleResolution,
     ).background;
-    final strongest = frame.timelineEvents.fold<MindDayTimelineEvent?>(
-      null,
-      (current, event) =>
-          current == null || event.total > current.total ? event : current,
-    );
+    final timelineOnly = timelineLayout == MindDayTimelineLayout.timelineOnly;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text(
-            'Napi tranzakciók idővonala',
-            style: TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-            ),
+          Row(
+            children: <Widget>[
+              const Expanded(
+                child: Text(
+                  'Napi tranzakciók idővonala',
+                  style: TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (timelineOnly)
+                Text(
+                  QueryMenuFormatters.money(frame.total),
+                  key: const ValueKey<String>(
+                    'mind-day-timeline-current-total',
+                  ),
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+            ],
           ),
           Text(
             '${frame.date.year}. ${DashboardTimeLabelFormatter.monthName(frame.date.month)} ${frame.date.day}.',
@@ -571,34 +588,47 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final plot = _MindDayTimelinePlot(
+                  events: frame.timelineEvents,
+                  fullEvents: frame.fullTimelineEvents,
+                  markerColor: markerColor,
+                );
+                const legend = Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    _MindTimelineLegendDot(color: Color(0xffc9ccd2)),
+                    Text(
+                      ' Összes tranzakció (nap)',
+                      style: TextStyle(fontSize: 7),
+                    ),
+                    SizedBox(width: 7),
+                    _MindTimelineLegendDot(color: Color(0xff7657c5)),
+                    Text(' Aktuális szűrőben', style: TextStyle(fontSize: 7)),
+                  ],
+                );
+                if (timelineOnly) {
+                  return Column(
+                    children: <Widget>[
+                      Expanded(child: plot),
+                      const SizedBox(height: 2),
+                      legend,
+                    ],
+                  );
+                }
+                final strongest = frame.timelineEvents
+                    .fold<MindDayTimelineEvent?>(
+                      null,
+                      (current, event) =>
+                          current == null || event.total > current.total
+                          ? event
+                          : current,
+                    );
                 final chartHeight = math.max(54.0, constraints.maxHeight - 86);
                 return Column(
                   children: <Widget>[
-                    SizedBox(
-                      height: chartHeight,
-                      child: _MindDayTimelinePlot(
-                        events: frame.timelineEvents,
-                        fullEvents: frame.fullTimelineEvents,
-                        markerColor: markerColor,
-                      ),
-                    ),
+                    SizedBox(height: chartHeight, child: plot),
                     const SizedBox(height: 2),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        _MindTimelineLegendDot(color: Color(0xffc9ccd2)),
-                        Text(
-                          ' Összes tranzakció (nap)',
-                          style: TextStyle(fontSize: 7),
-                        ),
-                        SizedBox(width: 7),
-                        _MindTimelineLegendDot(color: Color(0xff7657c5)),
-                        Text(
-                          ' Aktuális szűrőben',
-                          style: TextStyle(fontSize: 7),
-                        ),
-                      ],
-                    ),
+                    legend,
                     const SizedBox(height: 3),
                     _MindTemporalStats(
                       values: <_MindTemporalStatValue>[
@@ -723,7 +753,32 @@ final class _MindDayTimelinePainter extends CustomPainter {
       math.max(0, size.width - left - right),
       math.max(0, size.height - top - bottom),
     );
-    final axisY = plot.top + plot.height * .64;
+    final selectedLabels = <int, TextPainter>{
+      for (final event in events)
+        event.ordinal: TextPainter(
+          text: TextSpan(
+            text: _timelinePrimaryLabel(event),
+            style: TextStyle(
+              color: markerColor,
+              fontSize: 7,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: 45),
+    };
+    final annotationHeight = selectedLabels.values.fold<double>(
+      0,
+      (maximum, label) => math.max(maximum, label.height),
+    );
+    // Reserve measured annotation room before calculating marker stems. A
+    // top clamp would hide the collision but still place a label on its stem.
+    final markerTop =
+        plot.top +
+        annotationHeight +
+        MindDayTimelineAnnotationGeometry.labelToMarkerClearance;
+    final markerHeight = math.max(0.0, plot.bottom - markerTop);
+    final axisY = markerTop + markerHeight * .64;
     final axis = Paint()
       ..color = FluviVisualTokens.surfaceMuted
       ..strokeWidth = 1.2;
@@ -761,27 +816,18 @@ final class _MindDayTimelinePainter extends CustomPainter {
       required bool selected,
     }) {
       final x = plot.left + plot.width * event.timeMinutes / (24 * 60);
-      final stem = plot.height * (.16 + .44 * event.total / maximum);
+      final stem = markerHeight * (.16 + .44 * event.total / maximum);
       final y = axisY - stem;
       canvas.drawLine(Offset(x, axisY), Offset(x, y), paint);
       canvas.drawCircle(Offset(x, y), selected ? 3.5 : 2.6, paint);
       if (!selected) return;
-      label.text = TextSpan(
-        text: _timelinePrimaryLabel(event),
-        style: TextStyle(
-          color: markerColor,
-          fontSize: 7,
-          fontWeight: FontWeight.w800,
-        ),
+      final selectedLabel = selectedLabels[event.ordinal]!;
+      final annotation = MindDayTimelineAnnotationGeometry.forMarker(
+        plot: plot,
+        markerTip: Offset(x, y),
+        labelSize: Size(selectedLabel.width, selectedLabel.height),
       );
-      label.layout(maxWidth: 45);
-      label.paint(
-        canvas,
-        Offset(
-          (x - label.width / 2).clamp(plot.left, plot.right - label.width),
-          math.max(plot.top, y - 18),
-        ),
-      );
+      selectedLabel.paint(canvas, annotation.labelBounds.topLeft);
     }
 
     for (final event in fullEvents) {
@@ -797,6 +843,44 @@ final class _MindDayTimelinePainter extends CustomPainter {
       oldDelegate.events != events ||
       oldDelegate.fullEvents != fullEvents ||
       oldDelegate.markerColor != markerColor;
+}
+
+/// Explicit bounds for a measured timeline label and its marker tip.
+///
+/// The painter reserves enough vertical space before calling this method, so
+/// a valid label needs no top clamp and keeps a positive gap to the stem.
+@visibleForTesting
+final class MindDayTimelineAnnotationGeometry {
+  const MindDayTimelineAnnotationGeometry._({
+    required this.markerTip,
+    required this.labelBounds,
+  });
+
+  static const positiveGap = 2.0;
+  static const labelToMarkerClearance = positiveGap + 1;
+
+  final Offset markerTip;
+  final Rect labelBounds;
+
+  static MindDayTimelineAnnotationGeometry forMarker({
+    required Rect plot,
+    required Offset markerTip,
+    required Size labelSize,
+  }) {
+    final width = math.min(labelSize.width, plot.width);
+    final left = (markerTip.dx - width / 2)
+        .clamp(plot.left, math.max(plot.left, plot.right - width))
+        .toDouble();
+    final top = markerTip.dy - labelToMarkerClearance - labelSize.height;
+    assert(
+      top >= plot.top,
+      'Timeline painter must reserve annotation space instead of clamping.',
+    );
+    return MindDayTimelineAnnotationGeometry._(
+      markerTip: markerTip,
+      labelBounds: Rect.fromLTWH(left, top, width, labelSize.height),
+    );
+  }
 }
 
 final class _MindTimelineLegendDot extends StatelessWidget {

@@ -19,6 +19,7 @@ import '../logbox/application/dashboard_logbox_render_extent_snapshot.dart';
 import '../logbox/application/dashboard_log_viewport_state.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import '../mind/domain/mind_year_heatmap_live_projection.dart';
+import '../mind/domain/mind_entry_diagnostic_identity.dart';
 import '../mind/domain/mind_year_heatmap_projection.dart';
 import '../mind/domain/mind_temporal_heatmap_frame.dart';
 import '../mind/domain/mind_temporal_heatmap_projection.dart';
@@ -143,13 +144,34 @@ final class _MindTemporalEntryTrace {
     required this.requestedAtMicros,
     required this.modeEpoch,
     required this.coreRevision,
+    required this.direction,
+    required this.queryKey,
+    required this.scopeKey,
+    required this.timePlane,
+    required this.cold,
+    required this.buildCommit,
   });
 
   final int id;
   final int requestedAtMicros;
   final int modeEpoch;
   final int? coreRevision;
+  final LedgerDirection direction;
+  final String queryKey;
+  final String scopeKey;
+  final TimePlane timePlane;
+  final bool cold;
+  final String buildCommit;
   final Set<String> recordedStages = <String>{};
+  int preparedBaseRequests = 0;
+  int repositoryRequests = 0;
+  int preparedIndexBuilds = 0;
+  int projectionBuilds = 0;
+  int projectionReuses = 0;
+  String? expectedBodyFrameIdentity;
+  String? expectedHeaderFrameIdentity;
+  bool bodyPainted = false;
+  bool headerPainted = false;
 
   String get flowId => 'mind-entry:$id';
 }
@@ -3883,19 +3905,46 @@ final class DashboardCoreController {
   /// and applied-query pointer switch at one publication boundary.
   void beginMindTemporalEntryTrace({required int modeEpoch}) {
     if (_disposed) return;
+    final state = navigation.state;
+    final direction = state.parentQueryScope.direction;
+    final domainScope = mindAmountDomainScopeFor(
+      direction,
+      navigationState: state,
+    );
+    final canonicalDomain = currentQuery.amountDomainForScope(domainScope);
+    final resident = _mindAmountPreparedBaseFor(
+      QueryAmountRange.domainScope(currentQuery.scopeFor(direction)),
+    );
     final trace = _MindTemporalEntryTrace(
       id: ++_mindTemporalEntryGeneration,
       requestedAtMicros: developer.Timeline.now,
       modeEpoch: modeEpoch,
       coreRevision: coreRevision,
+      direction: direction,
+      queryKey: state.parentQueryKey.value,
+      scopeKey: domainScope.key.value,
+      timePlane: state.plane,
+      cold: resident == null,
+      buildCommit: const String.fromEnvironment(
+        'FLUVI_BUILD_COMMIT',
+        defaultValue: 'unknown',
+      ),
     );
     _pendingMindTemporalEntryTrace = trace;
     _recordMindTemporalEntryStage(
       trace,
       'REQUEST_ACCEPTED',
       details:
-          'source=dashboardModeCommitted modeEpoch=$modeEpoch '
-          'plane=${navigation.state.plane.name}',
+          'source=dashboardModeCommitted '
+          'canonicalDomain=${canonicalDomain == null ? 'absent' : 'present'} '
+          'preparedBase=${resident == null ? 'absent' : 'resident'}',
+    );
+    _recordMindTemporalEntryStage(
+      trace,
+      'CANONICAL_DOMAIN_STATE',
+      details:
+          'canonicalDomain=${canonicalDomain == null ? 'absent' : 'present'} '
+          'preparedBase=${resident == null ? 'absent' : 'resident'}',
     );
   }
 
@@ -3915,6 +3964,22 @@ final class DashboardCoreController {
             trace.coreRevision != frameCoreRevision)) {
       return;
     }
+    final expectedIdentity = switch (kind) {
+      'header' => trace.expectedHeaderFrameIdentity,
+      _ => trace.expectedBodyFrameIdentity,
+    };
+    if (expectedIdentity == null || expectedIdentity != frameIdentity) {
+      _recordMindTemporalEntryStage(
+        trace,
+        'STALE_SURFACE_REJECTED',
+        details:
+            'surface=$kind expectedFrameIdentity='
+            '${expectedIdentity == null ? '-' : FluviDiagnosticKeyDigest.of(expectedIdentity)} '
+            'actualFrameIdentity=${FluviDiagnosticKeyDigest.of(frameIdentity)} '
+            'frameCoreRevision=$frameCoreRevision',
+      );
+      return;
+    }
     _recordMindTemporalEntryStage(
       trace,
       stage,
@@ -3922,14 +3987,23 @@ final class DashboardCoreController {
           'source=mindSurface kind=$kind frameIdentity=$frameIdentity '
           'frameCoreRevision=$frameCoreRevision',
     );
-    if (stage == 'FIRST_PAINT') {
-      _pendingMindTemporalEntryTrace = null;
-    }
+    if (stage == 'FIRST_PAINT') trace.bodyPainted = true;
+    if (stage == 'HEADER_FIRST_PAINT') trace.headerPainted = true;
+    _completeMindTemporalEntryTraceIfBothPainted(trace);
   }
 
   Future<bool> primeMindAmountPreviewDomain() async {
     if (_disposed) return false;
     final direction = navigation.state.parentQueryScope.direction;
+    final trace = _pendingMindTemporalEntryTrace;
+    if (trace != null && trace.direction == direction) {
+      trace.preparedBaseRequests += 1;
+      _recordMindTemporalEntryStage(
+        trace,
+        'PREPARED_BASE_REQUESTED',
+        details: 'source=primeMindAmountPreviewDomain',
+      );
+    }
     final activeReady = await _primeMindAmountPreviewBaseFor(
       direction: direction,
       preparesLiveRows: true,
@@ -3940,10 +4014,10 @@ final class DashboardCoreController {
     // this Future resolves; only then may the bounded sibling prewarm enter
     // that shared lane.
     if (activeReady) {
-      final trace = _pendingMindTemporalEntryTrace;
-      if (trace != null) {
+      final readyTrace = _pendingMindTemporalEntryTrace;
+      if (readyTrace != null && readyTrace.direction == direction) {
         _recordMindTemporalEntryStage(
-          trace,
+          readyTrace,
           'PREPARED_BASE_READY',
           details:
               'direction=${direction.name} '
@@ -4096,6 +4170,14 @@ final class DashboardCoreController {
     final primeGeneration =
         (_mindAmountPreviewPrimeGenerations[direction] ?? 0) + 1;
     _mindAmountPreviewPrimeGenerations[direction] = primeGeneration;
+    final trace = _pendingMindTemporalEntryTrace;
+    if (trace != null && trace.direction == direction) {
+      // This is the only entry path that asks the prepared-query admission
+      // lane for a new candidate. Renderer acknowledgements must leave both
+      // counters unchanged.
+      trace.repositoryRequests += 1;
+      trace.preparedIndexBuilds += 1;
+    }
     FluviDiagnosticLogger.log(
       FluviDiagnosticEvent(
         stage: preparesLiveRows
@@ -4992,6 +5074,23 @@ final class DashboardCoreController {
         heatmapPublished && scorePublished && mindTemporalHeatmap.value != null;
     final trace = _pendingMindTemporalEntryTrace;
     if (published && trace != null) {
+      final bodyFrame = switch (state.plane) {
+        TimePlane.year => mindYearHeatmap.value,
+        TimePlane.sum || TimePlane.month => mindTemporalHeatmap.value,
+      };
+      final headerFrame = mindBehavioralScore.value;
+      if (bodyFrame == null || headerFrame == null) return false;
+      trace.expectedBodyFrameIdentity = mindTemporalEntryBodyFrameIdentity(
+        bodyFrame,
+      );
+      trace.expectedHeaderFrameIdentity = mindTemporalEntryHeaderFrameIdentity(
+        headerFrame,
+      );
+      if (reusedProjection) {
+        trace.projectionReuses += 1;
+      } else {
+        trace.projectionBuilds += 1;
+      }
       _recordMindTemporalEntryStage(
         trace,
         'PROJECTION_BUILT_OR_REUSED',
@@ -5004,7 +5103,15 @@ final class DashboardCoreController {
         'FRAME_PUBLISHED',
         details:
             'plane=${state.plane.name} '
-            'frame=${mindTemporalHeatmap.value.runtimeType}',
+            'frame=${bodyFrame.runtimeType} '
+            'frameIdentity=${FluviDiagnosticKeyDigest.of(trace.expectedBodyFrameIdentity!)}',
+      );
+      _recordMindTemporalEntryStage(
+        trace,
+        'HEADER_FRAME_PUBLISHED',
+        details:
+            'frame=MindBehavioralScoreFrame '
+            'frameIdentity=${FluviDiagnosticKeyDigest.of(trace.expectedHeaderFrameIdentity!)}',
       );
     }
     return published;
@@ -5021,10 +5128,49 @@ final class DashboardCoreController {
       FluviDiagnosticEvent(
         stage: 'MIND_ENTRY|$stage',
         flowId: trace.flowId,
+        queryKey: trace.queryKey,
+        direction: trace.direction.name,
         coreRevision: trace.coreRevision,
-        scope: 'modeEpoch=${trace.modeEpoch} elapsedMicros=$elapsed $details',
+        scope:
+            'sessionId=${FluviDiagnosticLogger.sessionId} '
+            'build=${trace.buildCommit} '
+            'entryId=${trace.id} '
+            'modeEpoch=${trace.modeEpoch} '
+            'coreRevision=${trace.coreRevision ?? '-'} '
+            'timePlane=${trace.timePlane.name} '
+            'temporalScope=${FluviDiagnosticKeyDigest.of(trace.scopeKey)} '
+            'queryIdentity=${FluviDiagnosticKeyDigest.of(trace.queryKey)} '
+            'cold=${trace.cold} '
+            'elapsedMicros=$elapsed '
+            '$details',
       ),
     );
+  }
+
+  void _completeMindTemporalEntryTraceIfBothPainted(
+    _MindTemporalEntryTrace trace,
+  ) {
+    if (!trace.bodyPainted || !trace.headerPainted) return;
+    _recordMindTemporalEntryStage(
+      trace,
+      'MODE_VISIBLE_CURRENT_ACK',
+      details: 'bodyAndHeaderCurrentIdentity=true',
+    );
+    final elapsed = developer.Timeline.now - trace.requestedAtMicros;
+    _recordMindTemporalEntryStage(
+      trace,
+      'SUMMARY',
+      details:
+          'requestToBothPaintedMicros=$elapsed '
+          'preparedBaseRequests=${trace.preparedBaseRequests} '
+          'repositoryRequests=${trace.repositoryRequests} '
+          'preparedIndexBuilds=${trace.preparedIndexBuilds} '
+          'projectionBuilds=${trace.projectionBuilds} '
+          'projectionReuses=${trace.projectionReuses}',
+    );
+    if (identical(_pendingMindTemporalEntryTrace, trace)) {
+      _pendingMindTemporalEntryTrace = null;
+    }
   }
 
   bool _installMindSumHeatmapProjection(DashboardNavigationState state) {

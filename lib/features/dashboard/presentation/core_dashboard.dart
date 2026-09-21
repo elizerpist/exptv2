@@ -450,6 +450,10 @@ class _CoreDashboardState extends State<CoreDashboard>
       controller.beginMindTemporalEntryTrace(
         modeEpoch: modeController.committedModeEpoch,
       );
+      // The range renderer must wait for the canonical domain, but the Core
+      // admission that creates that domain cannot wait for the renderer. This
+      // is the production mode-entry boundary, not an eager background warmup.
+      unawaited(controller.primeMindAmountPreviewDomain());
       return;
     }
     _mindAmountInteractionActive = false;

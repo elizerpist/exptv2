@@ -1306,278 +1306,29 @@ final class MindDayHeatmapViewport extends StatelessWidget {
           Widget content(
             MindYearHeatmapPaletteStyle style,
             MindHeatmapScaleResolution scaleResolution,
-          ) => _MindDayHeatmapContent(
+            MindDayTimelineLayout timelineLayout,
+          ) => MindDayTransactionTimelineCard(
             frame: frame,
             paletteStyle: style,
             scaleResolution: scaleResolution,
+            timelineLayout: timelineLayout,
           );
           final settings = presentationSettings;
           if (settings == null) {
             return content(
               MindYearHeatmapPaletteStyle.fluvi,
               MindHeatmapScaleResolution.ten,
+              MindDayTimelineLayout.statsAndTimeline,
             );
           }
           return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
             valueListenable: settings,
-            builder: (context, value, _) =>
-                content(value.paletteStyle, value.scaleResolution),
+            builder: (context, value, _) => content(
+              value.paletteStyle,
+              value.scaleResolution,
+              value.dayTimelineLayout,
+            ),
           );
         },
       );
-}
-
-final class _MindDayHeatmapContent extends StatefulWidget {
-  const _MindDayHeatmapContent({
-    required this.frame,
-    required this.paletteStyle,
-    required this.scaleResolution,
-  });
-
-  final MindDayHeatmapFrame frame;
-  final MindYearHeatmapPaletteStyle paletteStyle;
-  final MindHeatmapScaleResolution scaleResolution;
-
-  @override
-  State<_MindDayHeatmapContent> createState() => _MindDayHeatmapContentState();
-}
-
-final class _MindDayHeatmapContentState extends State<_MindDayHeatmapContent> {
-  late final PageController _pageController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-  }
-
-  @override
-  void didUpdateWidget(covariant _MindDayHeatmapContent oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.frame.identity != widget.frame.identity &&
-        _pageController.hasClients) {
-      _pageController.jumpToPage(0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => PageView(
-    key: const ValueKey<String>('mind-day-heatmap-pager'),
-    controller: _pageController,
-    children: <Widget>[
-      KeyedSubtree(
-        key: const ValueKey<String>('mind-day-heatmap-page-0'),
-        child: _MindDayHeatmapPage(
-          frame: widget.frame,
-          paletteStyle: widget.paletteStyle,
-          scaleResolution: widget.scaleResolution,
-        ),
-      ),
-      KeyedSubtree(
-        key: const ValueKey<String>('mind-day-heatmap-page-1'),
-        child: MindDayTransactionTimelineCard(
-          frame: widget.frame,
-          paletteStyle: widget.paletteStyle,
-          scaleResolution: widget.scaleResolution,
-        ),
-      ),
-    ],
-  );
-}
-
-final class _MindDayHeatmapPage extends StatelessWidget {
-  const _MindDayHeatmapPage({
-    required this.frame,
-    required this.paletteStyle,
-    required this.scaleResolution,
-  });
-
-  final MindDayHeatmapFrame frame;
-  final MindYearHeatmapPaletteStyle paletteStyle;
-  final MindHeatmapScaleResolution scaleResolution;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      const horizontalPadding = 12.0;
-      const gap = 4.0;
-      const staticChrome = 70.0;
-      final gridAvailableWidth = (constraints.maxWidth - horizontalPadding * 2)
-          .clamp(0.0, double.infinity)
-          .toDouble();
-      final cellByWidth = ((gridAvailableWidth - gap * 5) / 6)
-          .clamp(0.0, double.infinity)
-          .toDouble();
-      final cellByHeight = constraints.maxHeight.isFinite
-          ? ((constraints.maxHeight - staticChrome - gap * 3) / 4)
-                .clamp(0.0, double.infinity)
-                .toDouble()
-          : cellByWidth;
-      final cellExtent = math.min(cellByWidth, cellByHeight);
-      final gridWidth = cellExtent * 6 + gap * 5;
-      final gridHeight = cellExtent * 4 + gap * 3;
-      final date = DashboardTimeLabelFormatter.date(
-        YearMonth(year: frame.date.year, month: frame.date.month),
-        frame.date.day,
-      );
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            SizedBox(
-              height: 20,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  const Text(
-                    'Óránkénti aktivitás',
-                    key: ValueKey<String>('mind-day-heatmap-title'),
-                    style: TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    '${frame.activeHourCount} aktív óra',
-                    key: const ValueKey<String>(
-                      'mind-day-heatmap-active-hours',
-                    ),
-                    style: const TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 17,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  Text(
-                    date,
-                    key: const ValueKey<String>('mind-day-heatmap-date'),
-                    style: const TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    QueryMenuFormatters.money(frame.total),
-                    key: const ValueKey<String>(
-                      'mind-day-heatmap-summary-total',
-                    ),
-                    style: const TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 7),
-            Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                key: const ValueKey<String>('mind-day-heatmap-grid'),
-                width: gridWidth,
-                height: gridHeight,
-                child: Column(
-                  children: List<Widget>.generate(4, (row) {
-                    return Padding(
-                      padding: EdgeInsets.only(bottom: row == 3 ? 0 : gap),
-                      child: Row(
-                        children: List<Widget>.generate(6, (column) {
-                          final hour = row * 6 + column;
-                          final tile = frame.hour(hour);
-                          final palette =
-                              MindYearHeatmapPaletteResolver.resolveTile(
-                                style: paletteStyle,
-                                isEmpty: tile.isEmpty,
-                                intensity: tile.intensity,
-                                paletteIntensity: tile.paletteIntensity,
-                                scaleResolution: scaleResolution,
-                              );
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              right: column == 5 ? 0 : gap,
-                            ),
-                            child: SizedBox(
-                              width: cellExtent,
-                              height: cellExtent,
-                              child: DecoratedBox(
-                                key: ValueKey<String>(
-                                  'mind-day-heatmap-cell-${hour.toString().padLeft(2, '0')}',
-                                ),
-                                decoration: BoxDecoration(
-                                  color: palette.background,
-                                  borderRadius: BorderRadius.circular(
-                                    mindMonthHeatmapCellCornerRadius,
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(3),
-                                  child: Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Text(
-                                      hour.toString().padLeft(2, '0'),
-                                      style: TextStyle(
-                                        color: palette.foreground,
-                                        fontSize: 7,
-                                        fontWeight: FontWeight.w900,
-                                        height: 1,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }, growable: false),
-                      ),
-                    );
-                  }, growable: false),
-                ),
-              ),
-            ),
-            const SizedBox(height: 3),
-            Row(
-              children: <Widget>[
-                const Text(
-                  'Összesen',
-                  style: TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  QueryMenuFormatters.money(frame.total),
-                  key: const ValueKey<String>('mind-day-heatmap-total'),
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    },
-  );
 }

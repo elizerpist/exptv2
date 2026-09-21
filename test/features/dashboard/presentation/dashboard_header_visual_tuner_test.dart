@@ -879,6 +879,15 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.scaleResolution, resolution);
     }
+    for (final layout in MindDayTimelineLayout.values) {
+      final dayLayout = find.byKey(
+        ValueKey('mind-day-timeline-layout-${layout.name}'),
+      );
+      await tester.ensureVisible(dayLayout);
+      await tester.tap(dayLayout);
+      await tester.pump();
+      expect(heatmapSettings.value.dayTimelineLayout, layout);
+    }
     for (final count in MindSumVisibleChartCount.values) {
       final density = find.byKey(
         ValueKey('mind-sum-visible-chart-count-${count.name}'),

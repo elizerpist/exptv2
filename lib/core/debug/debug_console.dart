@@ -660,7 +660,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       entries.where(
         (entry) =>
             entry.stage.startsWith('MIND_HEATMAP|') ||
-            entry.stage.startsWith('MIND_SUM|'),
+            entry.stage.startsWith('MIND_SUM|') ||
+            entry.stage.startsWith('MIND_ENTRY|'),
       ),
     );
   }

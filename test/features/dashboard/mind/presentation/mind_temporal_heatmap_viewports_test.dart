@@ -10,6 +10,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projectio
 import 'package:fluvi/features/dashboard/mind/presentation/mind_detailed_sum_chart.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_monthly_overlay_bar_chart.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_temporal_heatmap_viewports.dart';
+import 'package:fluvi/features/dashboard/mind/presentation/mind_temporal_secondary_cards.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_palette_resolver.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_upper_vertical_gesture_coordinator.dart';
@@ -796,7 +797,7 @@ void main() {
   );
 
   testWidgets(
-    'DAY-UI-01/02/03/04: Day presents one bounded chronological 4 by 6 grid from the shared palette authority',
+    'DAY-TOPOLOGY RED: Day is a direct timeline, without an hourly heatmap pager or cell UI',
     (tester) async {
       const date = LocalDate(year: 2026, month: 7, day: 14);
       final frame = MindDayHeatmapProjection.build(
@@ -813,11 +814,7 @@ void main() {
         ],
       ).preview(range);
       final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
-      final settings = MindYearHeatmapPresentationController(
-        initial: const MindYearHeatmapPresentationSettings.defaults(),
-      )..setPaletteStyle(MindYearHeatmapPaletteStyle.meadowGreen);
       addTearDown(listenable.dispose);
-      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -825,67 +822,37 @@ void main() {
             body: SizedBox(
               width: 360,
               height: 300,
-              child: MindDayHeatmapViewport(
-                frameListenable: listenable,
-                presentationSettings: settings,
-              ),
+              child: MindDayHeatmapViewport(frameListenable: listenable),
             ),
           ),
         ),
       );
 
-      expect(find.text('Óránkénti aktivitás'), findsOneWidget);
-      expect(find.text('2 aktív óra'), findsOneWidget);
+      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-date')),
+        find.byKey(const ValueKey('mind-day-timeline-chart')),
         findsOneWidget,
       );
-      expect(find.text('Összesen'), findsOneWidget);
-      final summaryTotal = tester.widget<Text>(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-summary-total')),
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-stat-total')),
+        findsOneWidget,
       );
-      final footerTotal = tester.widget<Text>(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-total')),
-      );
-      expect(summaryTotal.data, footerTotal.data);
-      for (var hour = 0; hour < 24; hour += 1) {
-        expect(
-          find.byKey(
-            ValueKey<String>(
-              'mind-day-heatmap-cell-${hour.toString().padLeft(2, '0')}',
-            ),
-          ),
-          findsOneWidget,
-        );
-      }
-      final hour00 = find.byKey(
-        const ValueKey<String>('mind-day-heatmap-cell-00'),
-      );
-      final hour23 = find.byKey(
-        const ValueKey<String>('mind-day-heatmap-cell-23'),
-      );
-      final hour00Rect = tester.getRect(hour00);
-      final hour23Rect = tester.getRect(hour23);
-      expect(hour00Rect.width, greaterThan(0));
-      expect(hour00Rect.height, closeTo(hour00Rect.width, .01));
-      expect(hour23Rect.top, greaterThan(hour00Rect.top));
-      expect(hour23Rect.left, greaterThan(hour00Rect.left));
       expect(
         find.byKey(const ValueKey('mind-day-heatmap-pager')),
-        findsOneWidget,
-        reason:
-            'The new secondary card adds only the horizontal pager; the 4×6 grid remains non-scrollable.',
+        findsNothing,
       );
-      final decoration =
-          tester.widget<DecoratedBox>(hour23).decoration as BoxDecoration;
       expect(
-        decoration.color,
-        MindYearHeatmapPaletteResolver.resolveTile(
-          style: MindYearHeatmapPaletteStyle.meadowGreen,
-          isEmpty: false,
-          intensity: 1,
-          paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
-        ).background,
+        find.byKey(const ValueKey('mind-day-heatmap-page-0')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-heatmap-page-1')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('mind-day-heatmap-grid')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('mind-day-heatmap-cell-00')),
+        findsNothing,
       );
     },
   );
@@ -984,7 +951,7 @@ void main() {
   );
 
   testWidgets(
-    'DAY-TIMELINE-UI-01 RED: Day preserves its hourly heatmap primary page and exposes a real-time-marker timeline secondary page',
+    'DAY-LAYOUT RED: combined is compatible by default while timeline-only expands the timeline without changing its frame',
     (tester) async {
       const date = LocalDate(year: 2026, month: 7, day: 14);
       final frame = MindDayHeatmapProjection.build(
@@ -1003,7 +970,9 @@ void main() {
         ],
       ).preview(range);
       final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(listenable.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1011,30 +980,21 @@ void main() {
             body: SizedBox(
               width: 360,
               height: 300,
-              child: MindDayHeatmapViewport(frameListenable: listenable),
+              child: MindDayHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
       );
 
-      final pager = find.byKey(const ValueKey('mind-day-heatmap-pager'));
-      expect(pager, findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('mind-day-heatmap-page-0')),
-        findsOneWidget,
-      );
-      await tester.drag(pager, const Offset(-300, 0));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.byKey(const ValueKey('mind-day-heatmap-page-1')),
-        findsOneWidget,
-      );
       expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('mind-day-timeline-chart')),
-        findsOneWidget,
+      final combinedChart = find.byKey(
+        const ValueKey('mind-day-timeline-chart'),
       );
+      expect(combinedChart, findsOneWidget);
+      final combinedHeight = tester.getRect(combinedChart).height;
       expect(
         find.byKey(const ValueKey('mind-day-timeline-marker-1')),
         findsOneWidget,
@@ -1047,6 +1007,65 @@ void main() {
         find.byKey(const ValueKey('mind-day-timeline-stat-range')),
         findsOneWidget,
       );
+
+      final originalFrame = listenable.value;
+      settings.setDayTimelineLayout(MindDayTimelineLayout.timelineOnly);
+      await tester.pump();
+
+      expect(listenable.value, same(originalFrame));
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-stat-total')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-stat-range')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-timeline-current-total')),
+        findsOneWidget,
+      );
+      final timelineOnlyHeight = tester
+          .getRect(find.byKey(const ValueKey('mind-day-timeline-chart')))
+          .height;
+      expect(timelineOnlyHeight, greaterThan(combinedHeight + 20));
+    },
+  );
+
+  test(
+    'DAY-TIMELINE-LABEL RED: measured two-line labels stay inside the plot and strictly above every marker',
+    () {
+      final painter = TextPainter(
+        text: const TextSpan(
+          text: 'Nagyon hosszú partnernév · 123 456 Ft',
+          style: TextStyle(fontSize: 7, fontWeight: FontWeight.w800),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 45);
+      expect(painter.height, greaterThan(8));
+      const plot = Rect.fromLTWH(8, 8, 180, 100);
+      final reservedMarkerY =
+          plot.top +
+          painter.height +
+          MindDayTimelineAnnotationGeometry.labelToMarkerClearance;
+      for (final markerX in <double>[plot.left, plot.center.dx, plot.right]) {
+        final geometry = MindDayTimelineAnnotationGeometry.forMarker(
+          plot: plot,
+          markerTip: Offset(markerX, reservedMarkerY),
+          labelSize: Size(painter.width, painter.height),
+        );
+        expect(geometry.labelBounds.left, greaterThanOrEqualTo(plot.left));
+        expect(geometry.labelBounds.right, lessThanOrEqualTo(plot.right));
+        expect(geometry.labelBounds.top, greaterThanOrEqualTo(plot.top));
+        expect(geometry.labelBounds.bottom, lessThanOrEqualTo(plot.bottom));
+        expect(
+          geometry.labelBounds.bottom,
+          lessThan(
+            geometry.markerTip.dy -
+                MindDayTimelineAnnotationGeometry.positiveGap,
+          ),
+        );
+      }
     },
   );
 

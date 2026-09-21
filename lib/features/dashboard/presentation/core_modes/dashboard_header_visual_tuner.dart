@@ -514,6 +514,28 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
+          child: Text('Day idővonal'),
+        ),
+        RadioGroup<MindDayTimelineLayout>(
+          groupValue: settings.dayTimelineLayout,
+          onChanged: (layout) {
+            if (layout != null) controller.setDayTimelineLayout(layout);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final layout in MindDayTimelineLayout.values)
+                RadioListTile<MindDayTimelineLayout>(
+                  key: ValueKey('mind-day-timeline-layout-${layout.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(layout.tunerLabel),
+                  value: layout,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
           child: Text('Sum évblokk'),
         ),
         RadioGroup<MindSumYearRowLayout>(

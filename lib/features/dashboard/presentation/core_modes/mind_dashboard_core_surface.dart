@@ -11,6 +11,7 @@ import '../../query/domain/query_amount_range.dart';
 import '../../query/application/dashboard_applied_query_facet_loader.dart';
 import '../../query/presentation/query_amount_range_control.dart';
 import '../../mind/domain/mind_year_heatmap_projection.dart';
+import '../../mind/domain/mind_entry_diagnostic_identity.dart';
 import '../../mind/domain/mind_temporal_heatmap_frame.dart';
 import '../../mind/domain/mind_temporal_heatmap_projection.dart';
 import '../../mind/domain/mind_year_heatmap_presentation_settings.dart';
@@ -159,6 +160,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
                     chartPresentation: headerScoreChartPresentation,
                     temporalContext: _headerScoreChartTemporalContext,
                     pointerObserver: headerScoreChartPointerObserver,
+                    reporter: onTemporalEntryFrameStage,
                   ),
           ),
         ],
@@ -230,8 +232,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
           descriptorFor: (frame) => (
             kind: 'year',
             coreRevision: frame.identity.coreRevision,
-            identity:
-                '${frame.identity.year}:${frame.identity.indexGeneration}:${frame.identity.navigationEpoch}',
+            identity: mindTemporalEntryBodyFrameIdentity(frame),
           ),
           reporter: onTemporalEntryFrameStage,
           child: temporalContent,
@@ -243,20 +244,17 @@ class MindDashboardCoreSurface extends StatelessWidget {
             MindSumHeatmapFrame(:final identity) => (
               kind: 'sum',
               coreRevision: identity.coreRevision,
-              identity:
-                  '${identity.timeScopeKey}:${identity.indexGeneration}:${identity.navigationEpoch}',
+              identity: mindTemporalEntryBodyFrameIdentity(frame),
             ),
             MindMonthHeatmapFrame(:final identity) => (
               kind: 'month',
               coreRevision: identity.coreRevision,
-              identity:
-                  '${identity.timeScopeKey}:${identity.indexGeneration}:${identity.navigationEpoch}',
+              identity: mindTemporalEntryBodyFrameIdentity(frame),
             ),
             MindDayHeatmapFrame(:final identity) => (
               kind: 'day',
               coreRevision: identity.coreRevision,
-              identity:
-                  '${identity.timeScopeKey}:${identity.indexGeneration}:${identity.navigationEpoch}',
+              identity: mindTemporalEntryBodyFrameIdentity(frame),
             ),
             _ => (kind: 'unknown', coreRevision: 0, identity: 'unsupported'),
           },
@@ -324,12 +322,16 @@ final class _MindTemporalEntryFrameProbe<T> extends StatefulWidget {
     required this.descriptorFor,
     required this.child,
     this.reporter,
+    this.firstLayoutStage = 'FIRST_LAYOUT',
+    this.firstPaintStage = 'FIRST_PAINT',
   });
 
   final ValueListenable<T?> frameListenable;
   final ({String kind, int coreRevision, String identity}) Function(T frame)
   descriptorFor;
   final MindTemporalEntryFrameStageReporter? reporter;
+  final String firstLayoutStage;
+  final String firstPaintStage;
   final Widget child;
 
   @override
@@ -377,7 +379,7 @@ final class _MindTemporalEntryFrameProbeState<T>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _currentDescriptor() != descriptor) return;
       reporter(
-        stage: 'FIRST_LAYOUT',
+        stage: widget.firstLayoutStage,
         frameCoreRevision: descriptor.coreRevision,
         kind: descriptor.kind,
         frameIdentity: descriptor.identity,
@@ -388,7 +390,7 @@ final class _MindTemporalEntryFrameProbeState<T>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _currentDescriptor() != descriptor) return;
         reporter(
-          stage: 'FIRST_PAINT',
+          stage: widget.firstPaintStage,
           frameCoreRevision: descriptor.coreRevision,
           kind: descriptor.kind,
           frameIdentity: descriptor.identity,
@@ -415,6 +417,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
     this.chartPresentation,
     required this.temporalContext,
     this.pointerObserver,
+    this.reporter,
   });
 
   final ValueListenable<MindBehavioralScoreFrame?> score;
@@ -423,48 +426,61 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
   chartPresentation;
   final MindHeaderScoreChartTemporalContext temporalContext;
   final MindHeaderScoreChartPointerObserver? pointerObserver;
+  final MindTemporalEntryFrameStageReporter? reporter;
 
   @override
   Widget build(
     BuildContext context,
-  ) => ValueListenableBuilder<MindBehavioralScoreFrame?>(
-    valueListenable: score,
-    builder: (context, frame, _) {
-      Widget contentFor(bool showTimeLabels) => Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          if (frame?.chartSeries case final chartSeries?)
-            MindHeaderScoreChart(
-              series: chartSeries,
-              expansionProgress: expansionProgress,
-              showTimeLabels: showTimeLabels,
-              temporalContext: temporalContext,
-              pointerObserver: pointerObserver,
-            ),
-          Positioned(
-            left: 16,
-            top: 16,
-            child: Text(
-              '${frame?.point.roundedScore ?? 50}/100',
-              key: const ValueKey<String>('mind-header-score-text'),
-              style: DefaultTextStyle.of(context).style.copyWith(
-                color: FluviVisualTokens.textOnAction,
-                fontSize: 19,
-                height: .96,
-                letterSpacing: -.76,
-                fontWeight: FontWeight.w900,
+  ) => _MindTemporalEntryFrameProbe<MindBehavioralScoreFrame>(
+    frameListenable: score,
+    descriptorFor: (frame) => (
+      kind: 'header',
+      coreRevision: frame.identity.coreRevision,
+      identity: mindTemporalEntryHeaderFrameIdentity(frame),
+    ),
+    reporter: reporter,
+    firstLayoutStage: 'HEADER_FIRST_LAYOUT',
+    firstPaintStage: 'HEADER_FIRST_PAINT',
+    child: ValueListenableBuilder<MindBehavioralScoreFrame?>(
+      valueListenable: score,
+      builder: (context, frame, _) {
+        Widget contentFor(bool showTimeLabels) => Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (frame?.chartSeries case final chartSeries?)
+              MindHeaderScoreChart(
+                series: chartSeries,
+                expansionProgress: expansionProgress,
+                showTimeLabels: showTimeLabels,
+                temporalContext: temporalContext,
+                pointerObserver: pointerObserver,
+              ),
+            Positioned(
+              left: 16,
+              top: 16,
+              child: Text(
+                '${frame?.point.roundedScore ?? 50}/100',
+                key: const ValueKey<String>('mind-header-score-text'),
+                style: DefaultTextStyle.of(context).style.copyWith(
+                  color: FluviVisualTokens.textOnAction,
+                  fontSize: 19,
+                  height: .96,
+                  letterSpacing: -.76,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
-          ),
-        ],
-      );
-      final presentation = chartPresentation;
-      if (presentation == null) return contentFor(false);
-      return ValueListenableBuilder<MindHeaderScoreChartPresentationSettings>(
-        valueListenable: presentation,
-        builder: (context, settings, _) => contentFor(settings.showsTimeLabels),
-      );
-    },
+          ],
+        );
+        final presentation = chartPresentation;
+        if (presentation == null) return contentFor(false);
+        return ValueListenableBuilder<MindHeaderScoreChartPresentationSettings>(
+          valueListenable: presentation,
+          builder: (context, settings, _) =>
+              contentFor(settings.showsTimeLabels),
+        );
+      },
+    ),
   );
 }
 

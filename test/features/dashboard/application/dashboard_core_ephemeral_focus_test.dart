@@ -178,7 +178,6 @@ void main() {
       FluviDiagnosticLogger.clear();
 
       expect(modes.setProgrammaticMode(DashboardModeSpec.mind), isTrue);
-      expect(await core.primeMindAmountPreviewDomain(), isTrue);
       await tester.pump();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 32));
@@ -192,11 +191,18 @@ void main() {
         entryStages(),
         containsAllInOrder(<String>[
           'MIND_ENTRY|REQUEST_ACCEPTED',
+          'MIND_ENTRY|CANONICAL_DOMAIN_STATE',
+          'MIND_ENTRY|PREPARED_BASE_REQUESTED',
           'MIND_ENTRY|PREPARED_BASE_READY',
           'MIND_ENTRY|PROJECTION_BUILT_OR_REUSED',
           'MIND_ENTRY|FRAME_PUBLISHED',
+          'MIND_ENTRY|HEADER_FRAME_PUBLISHED',
           'MIND_ENTRY|FIRST_LAYOUT',
+          'MIND_ENTRY|HEADER_FIRST_LAYOUT',
           'MIND_ENTRY|FIRST_PAINT',
+          'MIND_ENTRY|HEADER_FIRST_PAINT',
+          'MIND_ENTRY|MODE_VISIBLE_CURRENT_ACK',
+          'MIND_ENTRY|SUMMARY',
         ]),
       );
       final coldFlowIds = entryEvents()
@@ -211,7 +217,6 @@ void main() {
       FluviDiagnosticLogger.clear();
 
       expect(modes.setProgrammaticMode(DashboardModeSpec.mind), isTrue);
-      expect(await core.primeMindAmountPreviewDomain(), isTrue);
       await tester.pump();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 32));
@@ -220,11 +225,18 @@ void main() {
         entryStages(),
         containsAllInOrder(<String>[
           'MIND_ENTRY|REQUEST_ACCEPTED',
+          'MIND_ENTRY|CANONICAL_DOMAIN_STATE',
+          'MIND_ENTRY|PREPARED_BASE_REQUESTED',
           'MIND_ENTRY|PREPARED_BASE_READY',
           'MIND_ENTRY|PROJECTION_BUILT_OR_REUSED',
           'MIND_ENTRY|FRAME_PUBLISHED',
+          'MIND_ENTRY|HEADER_FRAME_PUBLISHED',
           'MIND_ENTRY|FIRST_LAYOUT',
+          'MIND_ENTRY|HEADER_FIRST_LAYOUT',
           'MIND_ENTRY|FIRST_PAINT',
+          'MIND_ENTRY|HEADER_FIRST_PAINT',
+          'MIND_ENTRY|MODE_VISIBLE_CURRENT_ACK',
+          'MIND_ENTRY|SUMMARY',
         ]),
       );
       final warmFlowIds = entryEvents()
@@ -233,6 +245,88 @@ void main() {
           .toSet();
       expect(warmFlowIds, hasLength(1));
       expect(warmFlowIds.single, isNot(coldFlowId));
+    },
+  );
+
+  testWidgets(
+    'MIND-COLD-02 RED: a cold production Balance to Mind entry reaches the current frame without a manual domain prime',
+    (tester) async {
+      final core = DashboardCoreController(
+        dataRepository: _FocusSeedRepository(),
+        initialDate: DateTime.utc(2026, 7, 1),
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+        initialPlane: TimePlane.sum,
+      );
+      final modes = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      addTearDown(core.dispose);
+      addTearDown(modes.dispose);
+      await core.bootstrap();
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: core,
+          modeController: modes,
+          categoryCollection: emptyTestCategoryCollection,
+        ),
+      );
+      FluviDiagnosticLogger.clear();
+
+      expect(modes.setProgrammaticMode(DashboardModeSpec.mind), isTrue);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
+
+      final stages = FluviDiagnosticLogger.entries
+          .where((event) => event.stage.startsWith('MIND_ENTRY|'))
+          .map((event) => event.stage)
+          .toList(growable: false);
+      expect(
+        stages,
+        containsAllInOrder(<String>[
+          'MIND_ENTRY|REQUEST_ACCEPTED',
+          'MIND_ENTRY|CANONICAL_DOMAIN_STATE',
+          'MIND_ENTRY|PREPARED_BASE_REQUESTED',
+          'MIND_ENTRY|PREPARED_BASE_READY',
+          'MIND_ENTRY|PROJECTION_BUILT_OR_REUSED',
+          'MIND_ENTRY|FRAME_PUBLISHED',
+          'MIND_ENTRY|HEADER_FRAME_PUBLISHED',
+          'MIND_ENTRY|FIRST_LAYOUT',
+          'MIND_ENTRY|HEADER_FIRST_LAYOUT',
+          'MIND_ENTRY|FIRST_PAINT',
+          'MIND_ENTRY|HEADER_FIRST_PAINT',
+          'MIND_ENTRY|MODE_VISIBLE_CURRENT_ACK',
+          'MIND_ENTRY|SUMMARY',
+        ]),
+        reason:
+            'Production must initiate the exact prepared-domain admission; a '
+            'test-only post-switch prime cannot be the path that makes Mind ready.',
+      );
+      final entries = FluviDiagnosticLogger.entries
+          .where((event) => event.stage.startsWith('MIND_ENTRY|'))
+          .toList(growable: false);
+      expect(entries, isNotEmpty);
+      for (final event in entries) {
+        expect(event.scope, contains('sessionId='));
+        expect(event.scope, contains('build='));
+        expect(event.scope, contains('entryId='));
+        expect(event.scope, contains('modeEpoch='));
+        expect(event.scope, contains('coreRevision='));
+        expect(event.scope, contains('timePlane='));
+        expect(event.scope, contains('temporalScope='));
+        expect(event.scope, contains('queryIdentity='));
+        expect(event.scope, contains('cold='));
+        expect(event.scope, contains('elapsedMicros='));
+      }
+      final summary = entries.singleWhere(
+        (event) => event.stage == 'MIND_ENTRY|SUMMARY',
+      );
+      expect(summary.scope, contains('repositoryRequests='));
+      expect(summary.scope, contains('preparedIndexBuilds='));
+      expect(summary.scope, contains('projectionBuilds='));
+      expect(summary.scope, contains('projectionReuses='));
     },
   );
 
@@ -2165,14 +2259,11 @@ void main() {
             'same frame as the pre-settle score publication.',
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
         findsOneWidget,
-        reason: 'The mounted Mind body must paint the accepted Day target.',
+        reason: 'The mounted Mind timeline must paint the accepted Day target.',
       );
-      expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-date')),
-        findsOneWidget,
-      );
+      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
       final headerScore = tester.widget<Text>(
         find.byKey(const ValueKey<String>('mind-header-score-text')),
       );
@@ -2276,16 +2367,16 @@ void main() {
         const DayScope(LocalDate(year: 2026, month: 7, day: 14)),
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
         findsOneWidget,
       );
-      expect(find.text('Óránkénti aktivitás'), findsOneWidget);
+      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-cell-00')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-marker-0')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-cell-23')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-marker-1')),
         findsOneWidget,
       );
       final score = core.mindBehavioralScore.value!;
@@ -2350,7 +2441,7 @@ void main() {
       );
       expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
         findsOneWidget,
       );
       final readsBeforeLevelClose = repository.prepareCalls;
@@ -2386,7 +2477,7 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
         findsNothing,
       );
 
@@ -2479,7 +2570,7 @@ void main() {
           expect(core.navigation.state.effectiveScope, isA<DayScope>());
           expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
           expect(
-            find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+            find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
             findsOneWidget,
           );
         } else {
@@ -2494,7 +2585,7 @@ void main() {
             findsOneWidget,
           );
           expect(
-            find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+            find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
             findsNothing,
           );
         }
@@ -2623,7 +2714,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-heatmap-grid')),
+        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
         findsNothing,
       );
       expect(

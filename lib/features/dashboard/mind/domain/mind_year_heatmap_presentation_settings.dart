@@ -102,6 +102,18 @@ enum MindSumSmoothingWindow {
   String get tunerLabel => '$dayCount nap';
 }
 
+/// Day uses the same immutable prepared frame in both layouts. This setting
+/// chooses only how much surrounding current-frame information is rendered.
+enum MindDayTimelineLayout {
+  statsAndTimeline,
+  timelineOnly;
+
+  String get tunerLabel => switch (this) {
+    MindDayTimelineLayout.statsAndTimeline => 'Statisztikák és idővonal',
+    MindDayTimelineLayout.timelineOnly => 'Csak idővonal',
+  };
+}
+
 /// Immutable user preferences for visualizing an admitted annual heatmap.
 /// None of these values changes financial membership, Query state or score.
 @immutable
@@ -121,6 +133,7 @@ final class MindYearHeatmapPresentationSettings {
     this.sumLineTemporalSmoothingEnabled = false,
     this.sumLineSmoothingWindow = MindSumSmoothingWindow.days3,
     this.sumLineZoomAdaptiveSmoothingEnabled = false,
+    this.dayTimelineLayout = MindDayTimelineLayout.statsAndTimeline,
   });
 
   const MindYearHeatmapPresentationSettings.defaults()
@@ -137,6 +150,7 @@ final class MindYearHeatmapPresentationSettings {
       sumLineTemporalSmoothingEnabled = false,
       sumLineSmoothingWindow = MindSumSmoothingWindow.days3,
       sumLineZoomAdaptiveSmoothingEnabled = false,
+      dayTimelineLayout = MindDayTimelineLayout.statsAndTimeline,
       revision = 0;
 
   final MindYearHeatmapPaletteStyle paletteStyle;
@@ -155,6 +169,7 @@ final class MindYearHeatmapPresentationSettings {
   final bool sumLineTemporalSmoothingEnabled;
   final MindSumSmoothingWindow sumLineSmoothingWindow;
   final bool sumLineZoomAdaptiveSmoothingEnabled;
+  final MindDayTimelineLayout dayTimelineLayout;
 
   @Deprecated('Use yearMonthCardProfitabilityTintEnabled.')
   bool get yearThreeColumnProfitabilityTintEnabled =>
@@ -179,6 +194,7 @@ final class MindYearHeatmapPresentationSettings {
     bool? sumLineTemporalSmoothingEnabled,
     MindSumSmoothingWindow? sumLineSmoothingWindow,
     bool? sumLineZoomAdaptiveSmoothingEnabled,
+    MindDayTimelineLayout? dayTimelineLayout,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
@@ -206,6 +222,7 @@ final class MindYearHeatmapPresentationSettings {
     sumLineZoomAdaptiveSmoothingEnabled:
         sumLineZoomAdaptiveSmoothingEnabled ??
         this.sumLineZoomAdaptiveSmoothingEnabled,
+    dayTimelineLayout: dayTimelineLayout ?? this.dayTimelineLayout,
     revision: revision ?? this.revision,
   );
 
@@ -229,6 +246,7 @@ final class MindYearHeatmapPresentationSettings {
       other.sumLineSmoothingWindow == sumLineSmoothingWindow &&
       other.sumLineZoomAdaptiveSmoothingEnabled ==
           sumLineZoomAdaptiveSmoothingEnabled &&
+      other.dayTimelineLayout == dayTimelineLayout &&
       other.revision == revision;
 
   @override
@@ -246,6 +264,7 @@ final class MindYearHeatmapPresentationSettings {
     sumLineTemporalSmoothingEnabled,
     sumLineSmoothingWindow,
     sumLineZoomAdaptiveSmoothingEnabled,
+    dayTimelineLayout,
     revision,
   );
 }
@@ -381,6 +400,15 @@ final class MindYearHeatmapPresentationController
     if (current.sumLineZoomAdaptiveSmoothingEnabled == enabled) return;
     value = current.copyWith(
       sumLineZoomAdaptiveSmoothingEnabled: enabled,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setDayTimelineLayout(MindDayTimelineLayout layout) {
+    final current = value;
+    if (current.dayTimelineLayout == layout) return;
+    value = current.copyWith(
+      dayTimelineLayout: layout,
       revision: current.revision + 1,
     );
   }

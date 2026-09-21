@@ -80,6 +80,9 @@ void main() {
         const FluviDiagnosticEvent(stage: 'MIND_HEATMAP|PAINTED'),
       );
       FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'MIND_ENTRY|SUMMARY'),
+      );
+      FluviDiagnosticLogger.log(
         const FluviDiagnosticEvent(stage: 'MIND|PREVIEW_FRAME'),
       );
       FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'AVATAR|X'));
@@ -114,6 +117,13 @@ void main() {
       expect(
         find.textContaining('[FLOW][MIND_HEATMAP|PAINTED]'),
         findsOneWidget,
+      );
+      expect(
+        find.textContaining('[FLOW][MIND_ENTRY|SUMMARY]'),
+        findsOneWidget,
+        reason:
+            'The on-screen Mind Heatmap export is the one retained flow for '
+            'both existing heatmap records and correlated Mind entries.',
       );
       expect(find.textContaining('[FLOW][MIND|PREVIEW_FRAME]'), findsNothing);
       expect(find.textContaining('[FLOW][AVATAR|X]'), findsNothing);
@@ -174,7 +184,8 @@ void main() {
       expect(
         find.byKey(const ValueKey('debug-console-copy')),
         findsOneWidget,
-        reason: 'The existing bounded console copy affordance exports the '
+        reason:
+            'The existing bounded console copy affordance exports the '
             'currently selected Mind diagnostic view.',
       );
       await tester.tap(find.byKey(const ValueKey('debug-console-copy')));
