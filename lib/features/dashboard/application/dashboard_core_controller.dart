@@ -15909,14 +15909,18 @@ final class DashboardCoreController {
     }
     final projection = mindBehavioralScore.projection;
     if (projection?.identity != expectedProjection) return;
+    final scoreRange = _mindScoreRangeForVisibleFrame(
+      frame: frame,
+      canonicalValues: binding.values,
+    );
     final target = _mindScoreTargetEpochDayForScope(
       projection: projection!,
-      range: binding.values,
+      range: scoreRange,
       timeScope: frame.scope.timeScope,
     );
     final request = _mindScoreSeriesRequest(
       projection: projection,
-      range: binding.values,
+      range: scoreRange,
       timeScope: frame.scope.timeScope,
       targetEpochDay: target,
     );
@@ -15927,15 +15931,59 @@ final class DashboardCoreController {
       seriesRequest: request,
     );
     if (mindBehavioralScore.identity == identity &&
-        mindBehavioralScore.value?.range == binding.values) {
+        mindBehavioralScore.value?.range == scoreRange) {
       return;
     }
     mindBehavioralScore.publishTarget(
       expectedProjectionIdentity: expectedProjection,
       targetEpochDay: target,
       navigationEpoch: frame.navigationEpoch,
-      range: binding.values,
+      range: scoreRange,
       seriesRequest: request,
+    );
+  }
+
+  /// Resolves the one range the current Header score may use when an ordinary
+  /// complete-frame callback arrives during a held Mind slider interaction.
+  /// The live coordinator is only a latest-wins provenance snapshot; the
+  /// immutable domain still belongs to [canonicalValues].  This prevents a
+  /// delayed canonical frame from overwriting an already-visible exact
+  /// amount-range preview without allowing a stale slider to cross a
+  /// direction, revision, temporal scope or domain boundary.
+  QueryAmountRangeValues _mindScoreRangeForVisibleFrame({
+    required DashboardVisibleFrame frame,
+    required QueryAmountRangeValues canonicalValues,
+  }) {
+    final live = liveInteractions.frame;
+    final lower = live?.minimumAmountScaled100;
+    final upper = live?.maximumAmountScaled100;
+    // A delayed frame can describe the previous structural scope.  Resolve
+    // bounds from the live interaction's already-accepted temporal target,
+    // not from that delayed frame, so the score uses precisely the same
+    // domain as the held heatmap/LogBox preview.
+    final liveDomainValues =
+        live?.source == DashboardLiveInteractionSource.mindRange
+        ? mindAmountRangeBindingFor(
+            frame.direction,
+            navigationState: live!.temporalCandidate,
+          )?.values
+        : null;
+    final domainValues = liveDomainValues ?? canonicalValues;
+    final isCurrentMindRange =
+        live?.source == DashboardLiveInteractionSource.mindRange &&
+        live?.coreRevision == frame.coreRevision &&
+        live?.direction == frame.direction &&
+        lower != null &&
+        upper != null &&
+        lower >= domainValues.minimumScaled100 &&
+        upper <= domainValues.maximumScaled100 &&
+        lower <= upper;
+    if (!isCurrentMindRange) return canonicalValues;
+    return QueryAmountRangeValues(
+      minimumScaled100: domainValues.minimumScaled100,
+      maximumScaled100: domainValues.maximumScaled100,
+      lowerScaled100: lower!,
+      upperScaled100: upper!,
     );
   }
 

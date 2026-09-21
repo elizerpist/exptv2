@@ -912,6 +912,7 @@ void main() {
       final core = DashboardCoreController(
         dataRepository: repository,
         initialDate: DateTime.utc(2026, 7, 1),
+        initialPlane: TimePlane.year,
         initialCoreRevision: 1,
         initialDirection: LedgerDirection.income,
       );
@@ -939,19 +940,17 @@ void main() {
       );
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
       expect(repository.prepareCalls, 1);
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+
+      const previewValues = QueryAmountRangeValues(
+        minimumScaled100: 100000,
+        maximumScaled100: 300000,
+        lowerScaled100: 150000,
+        upperScaled100: 250000,
+      );
 
       core.beginMindAmountRangeInteraction();
-      expect(
-        core.previewMindAmountRange(
-          const QueryAmountRangeValues(
-            minimumScaled100: 100000,
-            maximumScaled100: 300000,
-            lowerScaled100: 150000,
-            upperScaled100: 250000,
-          ),
-        ),
-        isTrue,
-      );
+      expect(core.previewMindAmountRange(previewValues), isTrue);
 
       expect(core.visibleFrames.value, same(committed));
       expect(core.navigation.state, same(navigation));
@@ -960,6 +959,53 @@ void main() {
       expect(
         core.visibleFrames.logBoxLane.value!.preparedFrame.stableRowIdentities,
         <String>['amount-200000'],
+      );
+      expect(
+        core.mindBehavioralScore.value!.range,
+        previewValues,
+        reason:
+            'The renderer-accepted transient amount frame must retain the '
+            'same held canonical range as the heatmap and LogBox before '
+            'pointer release. A visible-frame callback must not overwrite it '
+            'with the committed query range.',
+      );
+      // This is the profile-gate ordering: a prepared full-frame callback can
+      // arrive after the held slider preview has published its exact live
+      // lanes.  Route it through the production visible-frame store rather
+      // than calling Core's listener directly.  The score must retain the
+      // live range until the slider itself releases ownership.
+      final delayedFullFrame = DashboardVisibleFrame.fromPrepared(
+        committed.preparedFrame,
+        parentQueryKey: committed.parentQueryKey,
+        plane: committed.plane,
+        railOpen: committed.railOpen,
+        semanticIndex: committed.semanticChildIndex,
+        childLabel: 'profile-gate-delayed-full-frame',
+        navigationEpoch: committed.navigationEpoch + 1,
+        presentationEpoch: committed.presentationEpoch + 1,
+        frameGeneration: committed.frameGeneration + 1,
+        mode: DashboardVisibleMode.committed,
+      );
+      expect(core.visibleFrames.publish(delayedFullFrame), isTrue);
+      final heldLiveRange = core.liveInteractions.frame;
+      expect(heldLiveRange?.source, DashboardLiveInteractionSource.mindRange);
+      expect(heldLiveRange?.coreRevision, delayedFullFrame.coreRevision);
+      expect(heldLiveRange?.direction, delayedFullFrame.direction);
+      expect(
+        heldLiveRange?.temporalCandidate.effectiveScope,
+        delayedFullFrame.scope.timeScope,
+      );
+      expect(
+        core.mindBehavioralScore.value!.range.lowerScaled100,
+        previewValues.lowerScaled100,
+        reason:
+            'A delayed complete-frame callback must observe the current '
+            'Mind live-range identity; it cannot restore canonical values '
+            'while the thumb remains held.',
+      );
+      expect(
+        core.mindBehavioralScore.value!.range.upperScaled100,
+        previewValues.upperScaled100,
       );
       expect(repository.prepareCalls, 1);
       expect(
