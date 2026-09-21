@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../presentation/widgets/dashboard_header_trend_visual_kernel.dart';
 import '../domain/mind_behavioral_score_projection.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 
@@ -105,30 +105,30 @@ final class MindHeaderScoreChartPointerObserver {
 /// These are Header-local layout measures, not an alternate dashboard layout
 /// or a second physical card.
 abstract final class MindHeaderScoreChartStyle {
-  static const plotLeft = 16.0;
-  static const plotTop = 48.0;
-  static const plotWidth = 346.0;
-  static const plotHeight = 60.0;
-  static const lineColor = FluviVisualTokens.textOnAction;
-  static const lineWidth = 1.6;
-  static const endpointRadius = 4.3;
-  static const endpointStrokeWidth = 2.0;
-  static const verticalPadding = 3.5;
-  static const guideRelativeY = .36;
-  static const guideDash = 2.0;
-  static const guideGap = 3.0;
-  static const guideOpacity = .24;
-  static const areaFadeStartOpacity = .30;
-  static const areaFadeEndOpacity = 0.0;
-  static const timeLabelTop = plotTop + plotHeight + 4.0;
-  static const timeLabelHeight = 12.0;
-  static const timeLabelRevealExtent = plotHeight + 4.0 + timeLabelHeight;
-  static const timeLabelTextStyle = TextStyle(
-    color: Color(0xD9FFFFFF),
-    fontSize: 8.5,
-    height: 1,
-    fontWeight: FontWeight.w700,
-  );
+  static const plotLeft = DashboardHeaderTrendChartStyle.plotLeft;
+  static const plotTop = DashboardHeaderTrendChartStyle.plotTop;
+  static const plotWidth = DashboardHeaderTrendChartStyle.plotWidth;
+  static const plotHeight = DashboardHeaderTrendChartStyle.plotHeight;
+  static const lineColor = DashboardHeaderTrendChartStyle.lineColor;
+  static const lineWidth = DashboardHeaderTrendChartStyle.lineWidth;
+  static const endpointRadius = DashboardHeaderTrendChartStyle.endpointRadius;
+  static const endpointStrokeWidth =
+      DashboardHeaderTrendChartStyle.endpointStrokeWidth;
+  static const verticalPadding = DashboardHeaderTrendChartStyle.verticalPadding;
+  static const guideRelativeY = DashboardHeaderTrendChartStyle.guideRelativeY;
+  static const guideDash = DashboardHeaderTrendChartStyle.guideDash;
+  static const guideGap = DashboardHeaderTrendChartStyle.guideGap;
+  static const guideOpacity = DashboardHeaderTrendChartStyle.guideOpacity;
+  static const areaFadeStartOpacity =
+      DashboardHeaderTrendChartStyle.areaFadeStartOpacity;
+  static const areaFadeEndOpacity =
+      DashboardHeaderTrendChartStyle.areaFadeEndOpacity;
+  static const timeLabelTop = DashboardHeaderTrendChartStyle.timeLabelTop;
+  static const timeLabelHeight = DashboardHeaderTrendChartStyle.timeLabelHeight;
+  static const timeLabelRevealExtent =
+      DashboardHeaderTrendChartStyle.timeLabelRevealExtent;
+  static const timeLabelTextStyle =
+      DashboardHeaderTrendChartStyle.timeLabelTextStyle;
 }
 
 /// A paint-only chart reveal physically clipped by the dashboard-owned Header
@@ -590,73 +590,22 @@ final class MindHeaderScoreChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.isEmpty || points.isEmpty) return;
-    final projection = MindHeaderScoreChartTemporalProjection(
-      startInclusiveEpochDay: series.startInclusiveEpochDay,
-      endInclusiveEpochDay: series.endInclusiveEpochDay,
-    );
-    final line = Path();
-
-    final first = pointOffsetAt(0, size, projection);
-    line.moveTo(first.dx, first.dy);
-    if (points.length > 1) {
-      for (var index = 0; index < points.length - 1; index += 1) {
-        final current = pointOffsetAt(index, size, projection);
-        final next = pointOffsetAt(index + 1, size, projection);
-        final midpoint = Offset(
-          (current.dx + next.dx) / 2,
-          (current.dy + next.dy) / 2,
-        );
-        line.quadraticBezierTo(
-          current.dx,
-          current.dy,
-          midpoint.dx,
-          midpoint.dy,
-        );
-      }
-      final last = pointOffsetAt(points.length - 1, size, projection);
-      line.quadraticBezierTo(last.dx, last.dy, last.dx, last.dy);
-    }
-
-    _drawGuide(canvas, size);
-    final area = Path.from(line)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
-    final fadeRect = Offset.zero & size;
-    canvas.drawPath(
-      area,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            lineColor.withValues(alpha: areaFadeStartOpacity),
-            lineColor.withValues(alpha: areaFadeEndOpacity),
-          ],
-        ).createShader(fadeRect),
-    );
-    canvas.drawPath(
-      line,
-      Paint()
-        ..color = lineColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = lineWidth
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..isAntiAlias = true,
-    );
-    _drawSelection(canvas, size, projection);
-    final endpoint = pointOffsetAt(points.length - 1, size, projection);
-    canvas.drawCircle(
-      endpoint,
-      endpointRadius,
-      Paint()
-        ..color = lineColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = MindHeaderScoreChartStyle.endpointStrokeWidth
-        ..isAntiAlias = true,
-    );
+    DashboardHeaderTrendPainter(
+      series: DashboardHeaderTrendSeries(
+        startInclusiveTemporalCoordinate: series.startInclusiveEpochDay,
+        endInclusiveTemporalCoordinate: series.endInclusiveEpochDay,
+        points: <DashboardHeaderTrendPoint>[
+          for (final point in points)
+            DashboardHeaderTrendPoint(
+              temporalCoordinate: point.epochDay,
+              value: point.score,
+            ),
+        ],
+      ),
+      minimumValue: 0,
+      maximumValue: 100,
+      selectedTemporalCoordinate: selectedEpochDay,
+    ).paint(canvas, size);
   }
 
   /// Exposed for sparse-domain tests: this exact mapping drives the smooth
@@ -676,60 +625,6 @@ final class MindHeaderScoreChartPainter extends CustomPainter {
       MindHeaderScoreChartStyle.verticalPadding +
           (1 - score / 100) * drawableHeight,
     );
-  }
-
-  void _drawSelection(
-    Canvas canvas,
-    Size size,
-    MindHeaderScoreChartTemporalProjection projection,
-  ) {
-    final selected = selectedEpochDay;
-    if (selected == null) return;
-    final index = points.indexWhere((point) => point.epochDay == selected);
-    if (index < 0) return;
-    final offset = pointOffsetAt(index, size, projection);
-    canvas.drawLine(
-      Offset(offset.dx, 0),
-      Offset(offset.dx, size.height),
-      Paint()
-        ..color = lineColor
-        ..strokeWidth = 1
-        ..isAntiAlias = true,
-    );
-    canvas.drawCircle(
-      offset,
-      2.6,
-      Paint()
-        ..color = lineColor
-        ..style = PaintingStyle.fill
-        ..isAntiAlias = true,
-    );
-  }
-
-  void _drawGuide(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = lineColor.withValues(
-        alpha: MindHeaderScoreChartStyle.guideOpacity,
-      )
-      ..strokeWidth = .7
-      ..strokeCap = StrokeCap.round;
-    final y = size.height * MindHeaderScoreChartStyle.guideRelativeY;
-    for (
-      var start = 0.0;
-      start < size.width;
-      start +=
-          MindHeaderScoreChartStyle.guideDash +
-          MindHeaderScoreChartStyle.guideGap
-    ) {
-      canvas.drawLine(
-        Offset(start, y),
-        Offset(
-          (start + MindHeaderScoreChartStyle.guideDash).clamp(0, size.width),
-          y,
-        ),
-        paint,
-      );
-    }
   }
 
   @override

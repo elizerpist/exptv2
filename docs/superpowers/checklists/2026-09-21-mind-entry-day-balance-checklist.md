@@ -1,4 +1,4 @@
-# Mind entry, Day timeline, and Balance carousel acceptance checklist
+# Mind entry, Day timeline, and Balance acceptance checklist
 
 ## Architecture card
 
@@ -22,7 +22,7 @@
 | Mind entry flow correlation | `DashboardCoreController` | committed mode entry and Core admissions | reports immutable frame acknowledgements only |
 | Mind Header/body frame | existing Core notifiers | existing prepared projection publication | renders current identity only |
 | Day layout choice | `MindYearHeatmapPresentationSettingsController` | presentation setter | selects layout only |
-| Balance aggregate/latest item | existing prepared Core presentation authority | existing Core publication only | no repository or ledger access |
+| Balance aggregate/latest/history | `DashboardCoreController` immutable all-time presentation | canonical query/revision/prepared-index lifecycle only | renders prepared values; no repository or ledger access |
 | Balance carousel motion | shared centered-carousel engine | stable feature controller | renders typed Balance cards |
 
 ### Reuse and boundary decisions
@@ -32,7 +32,8 @@
 | Cold-entry correlation | `DashboardCoreController` | extend the bounded Core trace; do not add a widget trace owner |
 | Header/body acknowledgement | Mind header/body render seams | add correlated acknowledgement inputs only |
 | Day visual alternative | `MindYearHeatmapPresentationSettings` | extend its enum/controller; do not create a Day store |
-| Amount and financial totals | prepared/current-scope Core projection | consume only; no renderer data query |
+| Balance totals/latest/history | one all-time Core presentation keyed by non-temporal query provenance | consume only; no renderer data query or Summary-time subscription |
+| Header trend visual | shared Header trend kernel extracted from Mind chart | typed score/money adapters only | no financial aggregation, ticker or expansion ownership |
 | Drag, fling, snap, interruption | `CenteredCarousel` | reuse unchanged; Balance supplies geometry/content adapter only |
 | Carousel motion profile | `CenteredCarouselMotionProfiles.timeRefinementRail` | exact shared object identity; no copied constants |
 
@@ -57,12 +58,19 @@
 | D3-SETTINGS | §8/13/14 Day layouts | existing Mind presentation settings/controller/tuner | One canonical enum defaults to combined and supports copy/equality/hash/setter/UI controls. | settings/controller and tuner tests | DONE |
 | D4-COMBINED | §13/14 | Day timeline viewport | Default combined mode preserves current info/stat cards and timeline. | DAY-LAYOUT widget test | DONE |
 | D5-ONLY | §12/13/14 | Day timeline viewport | Timeline-only hides stats, shows current Day total top-right from current frame, and materially enlarges chart without query/frame mutation. | DAY-LAYOUT widget bounds and same-frame test | DONE |
-| B1-OWNER | §14 Balance Header | existing prepared Core presentation owner | Current-scope income and expense are independently prepared from the same structural time scope; net is `income - expense`; renderer has no repository/ledger access. | `BALANCE-HEADER RED` Core fixture + controller source inspection | DONE |
+| B1-OWNER | superseded by 2026-09-21 all-time contract | `DashboardCoreController` | Earlier current-scope Balance contract is obsolete and must not be used for delivery. | B7–B9 Core contracts and production Summary-navigation test | DONE |
 | B2-HEADER | 2026-09-21 physical Balance feedback | Header detail seam and semantic colour tokens | Existing Header material remains owner; positive/negative net uses the canonical on-action foreground rather than the identical Balance background token. | `BALANCE-HEADER-VISIBILITY` RED→GREEN widget test | DONE |
-| B3-LATEST | §14 Balance latest card | prepared/current-scope Core presentation owner | One stale-safe latest-transaction item is prepared upstream from bounded prepared LogBox preview; Balance surface does not query. | `BALANCE-HEADER RED` + Balance surface widget test | DONE |
+| B3-LATEST | superseded by 2026-09-21 all-time contract | `DashboardCoreController` | Earlier current-scope latest-card contract is obsolete and must not be used for delivery. | B8 Core contract and positive prepared-revision test | DONE |
 | B4-CAROUSEL | §12/13/14 Balance carousel | Balance surface adapter + shared centered carousel | Exactly five cyclic items, latest initially centred, four empty prototypes, and exactly three visible slots. | Balance widget/controller test | DONE |
 | B5-MOTION | §8/13/14 shared motion | Balance adapter | One stable controller/ScrollPosition and exact `timeRefinementRail` identity; ballistic fling and new-pointer interruption work. | Balance widget test + shared controller/identity/widget tests | DONE |
 | B6-BOUNDS | 2026-09-21 physical Balance feedback | Balance geometry/renderer | Selected centre is authored at the full `subheaderOne` structural height (scale 1); neighbours are shorter through existing scale, with real unclipped layout/hit/semantic bounds and one selected semantic item. The upper cascade intentionally has no placeholder surface; the lower `zone2` placeholder remains. | `BALANCE-UPPER-VISUALS` RED→GREEN geometry/widget test and collapsed CoreDashboard regression | DONE |
 | NR1-PHYSICS | §8/11/15 protected milestone | shared/Budget source | Budget/Time/Avatar physics constants and owners remain unchanged from `6e962187`. | Shared/Budget regression run and source diff | DONE |
+| P0-PROFILE | 2026-09-21 profile-gate audit | Core score/range preview lifecycle + profile test | Classify the `score.range != heatmap.range` slider failure against pre-`b799af3b` behavior; repair separately only if branch-introduced. | Pre-`b799af3b` Actions comparison, Core/store RED (`150000` vs `100000`), focused GREEN; final remote A–K run remains required | PARTIAL |
+| B7-ALL-TIME | 2026-09-21 Balance clarification §4–7 | immutable Core Balance presentation | Header is `allTimeIncome - allTimeExpense` for current non-temporal query/filter identity; Summary Sum/Year/Month/Day changes neither identity nor notifier publication. | Real Core Summary target navigation, identity/publication counters, and a materially different all-time fixture | DONE |
+| B8-LATEST-ALL-TIME | 2026-09-21 Balance clarification §8 | immutable Core Balance presentation | Latest card is the newest admitted item across both directions in the same all-time query universe; it changes only with real data/query/revision change. | Old-period/newer-outside prepared fixture plus post-frame-gate positive revision update | DONE |
+| B9-HISTORY | 2026-09-21 Balance clarification §9–10 | Core all-time Balance history projection | Points are cumulative income minus expense; real first/last dates map to fixed plot edges; Summary movement cannot rebuild or alter the series. | Two-month/two-year, one-point/empty, cumulative-finance, immutable-object and notification tests | DONE |
+| B10-HEADER-PARITY | 2026-09-21 Balance clarification §11–13 | shared Header trend kernel + Balance header composition | Mind output remains golden-compatible; Balance uses the same plot/style/reveal and money adapter, with amount at `left=16, top=16`. | Unchanged Mind chart/golden suite plus explicit Balance geometry/style/reveal tests | DONE |
+| B11-WHITE-CARDS | 2026-09-21 Balance clarification §14 | Balance carousel card renderer | All five card surfaces use `FluviVisualTokens.surface`; no carousel motion/geometry owner changes. | All-five decoration/token RED→GREEN test and shared-carousel identity suite | DONE |
+| B12-BOUNDARY | structuring-apps architecture gate | Balance Core/UI boundary | Presentation has no repository/ledger dependency, Core is the only Balance write owner, and the shared trend renderer owns no financial logic. | Focused single-runtime boundary/source-inspection test | DONE |
 | V1-DELIVERY | current repair delivery | commits/CI/APK/SCIP | Atomic application + journal commits, one final exact-SHA normal APK, and exact-source SCIP manifest are available. | New source requires a new Actions run, APK and final graph. | PARTIAL |
 | V2-PHYSICAL | §4/20 | Android device | User alone validates final physical behavior. | User report | PENDING — USER ONLY |

@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_header_trend_visual_kernel.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
@@ -258,6 +259,75 @@ void main() {
   );
 
   testWidgets(
+    'BALANCE-CAROUSEL-SURFACES RED: every cyclic logical card has the canonical white surface',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        const DashboardBalancePresentation(
+          scopeKey: 'income|all|expense|all',
+          coreRevision: 7,
+          incomeTotalMinor: 1000000,
+          expenseTotalMinor: 400000,
+          netTotalMinor: 600000,
+          formattedNetTotal: '6 000,00 Ft',
+          presentationId: 7,
+          latestTransaction: DashboardBalanceLatestTransactionPresentation(
+            entryId: 'latest',
+            title: 'Latest',
+            formattedAmount: '100,00 Ft',
+            direction: LedgerDirection.income,
+            occurredOrder: 1,
+          ),
+        ),
+      );
+      addTearDown(balance.dispose);
+      final modePresentation = DashboardCoreModePresentation(
+        geometry: DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        ),
+        palette: DashboardModePaletteResolver.resolve(
+          DashboardModeSpec.balance,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: modePresentation,
+              balancePresentation: balance,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+
+      void expectSurface(String id) {
+        final surface = tester.widget<DecoratedBox>(
+          find.byKey(ValueKey<String>('balance-carousel-card-surface-$id')),
+        );
+        final decoration = surface.decoration! as BoxDecoration;
+        expect(decoration.color, FluviVisualTokens.surface, reason: id);
+      }
+
+      // The centered initial triad covers latest/1/4; index two covers the
+      // remaining logical prototypes without changing the cyclic domain.
+      expectSurface('latest-transaction');
+      expectSurface('prototype-1');
+      expectSurface('prototype-4');
+      carousel.controller.jumpToIndex(2);
+      await tester.pump();
+      expectSurface('prototype-1');
+      expectSurface('prototype-2');
+      expectSurface('prototype-3');
+    },
+  );
+
+  testWidgets(
     'BALANCE-UPPER-VISUALS RED: only carousel cards occupy the upper slot at full structural height',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(
@@ -349,6 +419,105 @@ void main() {
             )
             .contains(center.center),
         isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-HEADER-HISTORY RED: all-time amount shares Mind anchor and expanded trend geometry',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        DashboardBalancePresentation(
+          scopeKey: 'income|all|expense|all',
+          coreRevision: 7,
+          incomeTotalMinor: 1000000,
+          expenseTotalMinor: 400000,
+          netTotalMinor: 600000,
+          formattedNetTotal: '6 000,00 Ft',
+          presentationId: 7,
+          history: DashboardBalanceHistorySeries(
+            startInclusiveEpochMinute: 20000 * 1440,
+            endInclusiveEpochMinute: 20620 * 1440,
+            points: const <DashboardBalanceHistoryPoint>[
+              DashboardBalanceHistoryPoint(
+                entryId: 'first',
+                epochDay: 20000,
+                epochMinute: 20000 * 1440,
+                incomeTotalMinor: 1000000,
+                expenseTotalMinor: 0,
+                balanceMinor: 1000000,
+              ),
+              DashboardBalanceHistoryPoint(
+                entryId: 'last',
+                epochDay: 20620,
+                epochMinute: 20620 * 1440,
+                incomeTotalMinor: 1000000,
+                expenseTotalMinor: 400000,
+                balanceMinor: 600000,
+              ),
+            ],
+          ),
+        ),
+      );
+      addTearDown(balance.dispose);
+      final modePresentation = DashboardCoreModePresentation(
+        geometry: DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        ),
+        palette: DashboardModePaletteResolver.resolve(
+          DashboardModeSpec.balance,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: modePresentation,
+              balancePresentation: balance,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final header = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('dashboard-core-mode-balance-header'),
+        ),
+      );
+      final amount = tester.getTopLeft(
+        find.byKey(const ValueKey<String>('balance-header-net-amount')),
+      );
+      expect(
+        amount.dx,
+        closeTo(header.left + DashboardHeaderTrendChartStyle.detailLeft, .01),
+      );
+      expect(
+        amount.dy,
+        closeTo(header.top + DashboardHeaderTrendChartStyle.detailTop, .01),
+      );
+
+      final plot = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-header-history-chart-paint'),
+        ),
+      );
+      expect(plot.left, closeTo(header.left + 16, .01));
+      expect(plot.top, closeTo(header.top + 48, .01));
+      expect(plot.width, 346);
+      expect(plot.height, 60);
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey<String>('balance-header-history-chart-reveal'),
+              ),
+            )
+            .height,
+        60,
       );
     },
   );

@@ -102,6 +102,49 @@ void main() {
       }
     },
   );
+
+  test(
+    'Balance UI renders one Core-owned immutable model and the shared trend kernel has no financial acquisition path',
+    () {
+      final root = Directory.current;
+      final balanceSurface = File(
+        '${root.path}/lib/features/dashboard/presentation/core_modes/'
+        'balance_dashboard_core_surface.dart',
+      ).readAsStringSync();
+      final trendKernel = File(
+        '${root.path}/lib/features/dashboard/presentation/widgets/'
+        'dashboard_header_trend_visual_kernel.dart',
+      ).readAsStringSync();
+      final core = File(
+        '${root.path}/lib/features/dashboard/application/'
+        'dashboard_core_controller.dart',
+      ).readAsStringSync();
+
+      for (final forbidden in <String>[
+        'runtime/data/',
+        'DashboardDataRuntimeRepository',
+        'DashboardLedgerEntry',
+        'readCommittedPage(',
+        'prepareIndex(',
+        'Repository',
+      ]) {
+        expect(balanceSurface, isNot(contains(forbidden)), reason: forbidden);
+        expect(trendKernel, isNot(contains(forbidden)), reason: forbidden);
+      }
+      expect(balanceSurface, contains('DashboardBalancePresentation'));
+      expect(balanceSurface, contains('ValueListenableBuilder'));
+      expect(trendKernel, isNot(contains('DashboardBalanceHistoryPoint')));
+      expect(trendKernel, isNot(contains('amountMinor')));
+      expect(
+        RegExp(
+          r'final\s+ValueNotifier<DashboardBalancePresentation\?>\s+'
+          r'balancePresentation\b',
+        ).allMatches(core),
+        hasLength(1),
+        reason: 'Dashboard Core is the single Balance publication owner.',
+      );
+    },
+  );
 }
 
 String _sources(

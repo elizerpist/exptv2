@@ -23,6 +23,7 @@ import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../../mind/presentation/mind_temporal_heatmap_viewports.dart';
 import '../../time_navigation/domain/time_plane.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../widgets/dashboard_header_trend_visual_kernel.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -456,8 +457,8 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                 pointerObserver: pointerObserver,
               ),
             Positioned(
-              left: 16,
-              top: 16,
+              left: DashboardHeaderTrendChartStyle.detailLeft,
+              top: DashboardHeaderTrendChartStyle.detailTop,
               child: Text(
                 '${frame?.point.roundedScore ?? 50}/100',
                 key: const ValueKey<String>('mind-header-score-text'),

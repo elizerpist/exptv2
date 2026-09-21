@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
+import 'balance_header_history_chart.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../widgets/dashboard_header_trend_visual_kernel.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
@@ -111,13 +113,14 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
             label: 'balance',
             visualController: headerVisualController,
             visualFrameListenable: headerVisualFrame,
-            detail: _BalanceHeaderAmount(
+            detail: _BalanceHeaderDetail(
               balancePresentation: balancePresentation,
+              expansionProgress: geometry.headerExpansionProgress,
             ),
-            detailLeft: 16,
-            detailRight: 16,
-            detailTop: 20,
-            detailBottom: 8,
+            detailLeft: 0,
+            detailRight: 0,
+            detailTop: 0,
+            detailBottom: 0,
           ),
         ],
       ),
@@ -125,10 +128,14 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
   }
 }
 
-final class _BalanceHeaderAmount extends StatelessWidget {
-  const _BalanceHeaderAmount({required this.balancePresentation});
+final class _BalanceHeaderDetail extends StatelessWidget {
+  const _BalanceHeaderDetail({
+    required this.balancePresentation,
+    required this.expansionProgress,
+  });
 
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
+  final double expansionProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -136,18 +143,29 @@ final class _BalanceHeaderAmount extends StatelessWidget {
     if (listenable == null) return const SizedBox.shrink();
     return ValueListenableBuilder<DashboardBalancePresentation?>(
       valueListenable: listenable,
-      builder: (context, balance, _) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          balance?.formattedNetTotal ?? '—',
-          key: const ValueKey<String>('balance-header-net-amount'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: FluviVisualTokens.textOnAction,
-            fontWeight: FontWeight.w700,
+      builder: (context, balance, _) => Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          if (balance?.history case final history?)
+            BalanceHeaderHistoryChart(
+              series: history,
+              expansionProgress: expansionProgress,
+            ),
+          Positioned(
+            left: DashboardHeaderTrendChartStyle.detailLeft,
+            top: DashboardHeaderTrendChartStyle.detailTop,
+            child: Text(
+              balance?.formattedNetTotal ?? '—',
+              key: const ValueKey<String>('balance-header-net-amount'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: FluviVisualTokens.textOnAction,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -305,8 +323,9 @@ final class _BalanceCarouselCard extends StatelessWidget {
       width: width,
       height: itemHeight,
       child: DecoratedBox(
+        key: ValueKey<String>('balance-carousel-card-surface-${card.id}'),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          color: FluviVisualTokens.surface,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Padding(
