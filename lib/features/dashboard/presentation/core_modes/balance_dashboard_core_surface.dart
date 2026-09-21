@@ -88,6 +88,7 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
             bounds: geometry.subheaderOneBounds,
             motion: geometry.upperCardMotion!,
             semanticKey: const ValueKey('dashboard-core-mode-balance-card-1'),
+            showPlaceholderSurface: false,
             content: _BalanceUpperCarouselHost(
               balancePresentation: balancePresentation,
               onMotionInterrupted: onCarouselMotionInterrupted,
@@ -143,7 +144,7 @@ final class _BalanceHeaderAmount extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: FluviVisualTokens.textPrimary,
+            color: FluviVisualTokens.textOnAction,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -236,7 +237,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           child: _BalanceCarouselCard(
             card: card,
             itemExtent: itemExtent,
-            itemHeight: math.min(52, carouselHeight),
+            itemHeight: carouselHeight,
           ),
         ),
       );
@@ -293,9 +294,10 @@ final class _BalanceCarouselCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The unscaled selected visual is deliberately smaller than its item
-    // canvas. The full selected card therefore has real layout/hit bounds and
-    // never needs a paint-only overflow or clipping exception.
+    // The selected card owns the full structural upper-card height in real
+    // layout/hit bounds. The shared carousel keeps it at scale 1 and scales
+    // only its neighbours down, so no selected visual relies on paint-only
+    // overflow or an undersized interactive parent.
     final width = math.max(1.0, itemExtent * .82);
     final compact = itemHeight < 42;
     return SizedBox(

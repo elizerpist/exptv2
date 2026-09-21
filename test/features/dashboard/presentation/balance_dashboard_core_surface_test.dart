@@ -7,6 +7,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_balance_presentat
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
@@ -183,6 +184,171 @@ void main() {
         rebuilt.controller.selectedLogicalIndex,
         isNot(0),
         reason: 'A direct fling must stay on the shared ballistic engine.',
+      );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-HEADER-VISIBILITY RED: prepared net uses the canonical on-dark Header foreground',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        const DashboardBalancePresentation(
+          scopeKey: 'income|all',
+          coreRevision: 7,
+          incomeTotalMinor: 150000,
+          expenseTotalMinor: 210000,
+          netTotalMinor: -60000,
+          formattedNetTotal: '-600,00 Ft',
+          presentationId: 1,
+        ),
+      );
+      addTearDown(balance.dispose);
+      final modePresentation = DashboardCoreModePresentation(
+        geometry: DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        ),
+        palette: DashboardModePaletteResolver.resolve(
+          DashboardModeSpec.balance,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: modePresentation,
+              balancePresentation: balance,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final amount = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('balance-header-net-amount')),
+      );
+      expect(amount.data, '-600,00 Ft');
+      expect(amount.style?.color, FluviVisualTokens.textOnAction);
+      expect(
+        amount.style?.color,
+        isNot(modePresentation.palette.upcomingHeaderTone),
+        reason: 'Widget presence alone is not evidence of visible contrast.',
+      );
+
+      balance.value = balance.value!.copyWith(
+        netTotalMinor: 60000,
+        formattedNetTotal: '600,00 Ft',
+        presentationId: 2,
+      );
+      await tester.pump();
+      expect(find.text('600,00 Ft'), findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('balance-header-net-amount')),
+            )
+            .style
+            ?.color,
+        FluviVisualTokens.textOnAction,
+      );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-UPPER-VISUALS RED: only carousel cards occupy the upper slot at full structural height',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        const DashboardBalancePresentation(
+          scopeKey: 'income|all',
+          coreRevision: 7,
+          incomeTotalMinor: 150000,
+          expenseTotalMinor: 210000,
+          netTotalMinor: -60000,
+          formattedNetTotal: '-600,00 Ft',
+          presentationId: 1,
+          latestTransaction: DashboardBalanceLatestTransactionPresentation(
+            entryId: 'expense-latest',
+            title: 'Piac',
+            formattedAmount: '-30,00 Ft',
+            direction: LedgerDirection.expense,
+            occurredOrder: 42,
+          ),
+        ),
+      );
+      addTearDown(balance.dispose);
+      final modePresentation = DashboardCoreModePresentation(
+        geometry: DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        ),
+        palette: DashboardModePaletteResolver.resolve(
+          DashboardModeSpec.balance,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              children: <Widget>[
+                BalanceDashboardCoreSurface(
+                  presentation: modePresentation,
+                  balancePresentation: balance,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cards = tester
+          .widgetList<DashboardCoreModeCascadeCard>(
+            find.byType(DashboardCoreModeCascadeCard),
+          )
+          .toList(growable: false);
+      final upper = cards.singleWhere(
+        (card) =>
+            card.semanticKey ==
+            const ValueKey<String>('dashboard-core-mode-balance-card-1'),
+      );
+      final lower = cards.singleWhere(
+        (card) =>
+            card.semanticKey ==
+            const ValueKey<String>('dashboard-core-mode-balance-card-2'),
+      );
+      expect(upper.showPlaceholderSurface, isFalse);
+      expect(lower.showPlaceholderSurface, isTrue);
+
+      final center = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-card-latest-transaction'),
+        ),
+      );
+      final left = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-4')),
+      );
+      final right = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+      );
+      expect(
+        center.height,
+        closeTo(modePresentation.geometry.subheaderOneBounds.height, .01),
+      );
+      expect(left.height, lessThan(center.height));
+      expect(right.height, lessThan(center.height));
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey<String>('balance-carousel-viewport')),
+            )
+            .contains(center.center),
+        isTrue,
       );
     },
   );
