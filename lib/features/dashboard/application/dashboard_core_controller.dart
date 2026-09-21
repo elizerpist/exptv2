@@ -4553,6 +4553,11 @@ final class DashboardCoreController {
       mindBehavioralScore.clear();
       return false;
     }
+    final scoreRange = _mindScoreRangeForCurrentInteraction(
+      direction: resolvedDirection,
+      coreRevision: base.coreRevision,
+      canonicalValues: binding.values,
+    );
     final domainScope = QueryAmountRange.domainScope(appliedScope);
     final seed = base.partitionFor(resolvedDirection).focusMembershipSeed;
     final membership = _mindYearHeatmapPreparedMembershipFor(
@@ -4575,12 +4580,12 @@ final class DashboardCoreController {
     if (activeProjection?.identity == projectionIdentity) {
       final target = _mindScoreTargetEpochDay(
         projection: activeProjection!,
-        range: binding.values,
+        range: scoreRange,
         state: state,
       );
       final request = _mindScoreSeriesRequest(
         projection: activeProjection,
-        range: binding.values,
+        range: scoreRange,
         timeScope: state.effectiveScope,
         targetEpochDay: target,
       );
@@ -4588,7 +4593,7 @@ final class DashboardCoreController {
         expectedProjectionIdentity: projectionIdentity,
         targetEpochDay: target,
         navigationEpoch: state.navigationEpoch,
-        range: binding.values,
+        range: scoreRange,
         seriesRequest: request,
       );
     }
@@ -4615,12 +4620,12 @@ final class DashboardCoreController {
     );
     final target = _mindScoreTargetEpochDay(
       projection: projection,
-      range: binding.values,
+      range: scoreRange,
       state: state,
     );
     final request = _mindScoreSeriesRequest(
       projection: projection,
-      range: binding.values,
+      range: scoreRange,
       timeScope: state.effectiveScope,
       targetEpochDay: target,
     );
@@ -4633,7 +4638,7 @@ final class DashboardCoreController {
         navigationEpoch: state.navigationEpoch,
         seriesRequest: request,
       ),
-      range: binding.values,
+      range: scoreRange,
       seriesRequest: request,
     );
     FluviDiagnosticLogger.log(
@@ -6096,6 +6101,11 @@ final class DashboardCoreController {
     final domainScope = QueryAmountRange.domainScope(canonicalScope);
     final base = _mindAmountPreparedBaseFor(domainScope);
     if (binding == null || base == null) return false;
+    final scoreRange = _mindScoreRangeForCurrentInteraction(
+      direction: direction,
+      coreRevision: base.coreRevision,
+      canonicalValues: binding.values,
+    );
     final expectedProjection = MindBehavioralScoreIdentity(
       upstreamScopeKey:
           '${domainScope.key.value}|${_mindFocusIdentityFor(base, domainScope)}',
@@ -6118,12 +6128,12 @@ final class DashboardCoreController {
     if (projection?.identity != expectedProjection) return false;
     final target = _mindScoreTargetEpochDayForScope(
       projection: projection!,
-      range: binding.values,
+      range: scoreRange,
       timeScope: timeScope,
     );
     final request = _mindScoreSeriesRequest(
       projection: projection,
-      range: binding.values,
+      range: scoreRange,
       timeScope: timeScope,
       targetEpochDay: target,
     );
@@ -6131,7 +6141,7 @@ final class DashboardCoreController {
       expectedProjectionIdentity: expectedProjection,
       targetEpochDay: target,
       navigationEpoch: temporalGeneration,
-      range: binding.values,
+      range: scoreRange,
       seriesRequest: request,
     );
     if (published) {
@@ -16003,6 +16013,20 @@ final class DashboardCoreController {
   QueryAmountRangeValues _mindScoreRangeForVisibleFrame({
     required DashboardVisibleFrame frame,
     required QueryAmountRangeValues canonicalValues,
+  }) => _mindScoreRangeForCurrentInteraction(
+    direction: frame.direction,
+    coreRevision: frame.coreRevision,
+    canonicalValues: canonicalValues,
+  );
+
+  /// Resolves a held Mind slider range for every semantic score publisher,
+  /// including ordinary Core admissions that do not pass through the visible
+  /// frame listener. A complete score retarget must never reset the Header to
+  /// canonical bounds while the heatmap remains on a current accepted drag.
+  QueryAmountRangeValues _mindScoreRangeForCurrentInteraction({
+    required LedgerDirection direction,
+    required int coreRevision,
+    required QueryAmountRangeValues canonicalValues,
   }) {
     final live = liveInteractions.frame;
     final lower = live?.minimumAmountScaled100;
@@ -16014,15 +16038,16 @@ final class DashboardCoreController {
     final liveDomainValues =
         live?.source == DashboardLiveInteractionSource.mindRange
         ? mindAmountRangeBindingFor(
-            frame.direction,
+            direction,
             navigationState: live!.temporalCandidate,
           )?.values
         : null;
     final domainValues = liveDomainValues ?? canonicalValues;
     final isCurrentMindRange =
+        _mindScoreInteractionIdentity != null &&
         live?.source == DashboardLiveInteractionSource.mindRange &&
-        live?.coreRevision == frame.coreRevision &&
-        live?.direction == frame.direction &&
+        live?.coreRevision == coreRevision &&
+        live?.direction == direction &&
         lower != null &&
         upper != null &&
         lower >= domainValues.minimumScaled100 &&

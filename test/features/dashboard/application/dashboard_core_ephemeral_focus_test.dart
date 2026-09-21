@@ -1230,6 +1230,19 @@ void main() {
             'pointer release. A visible-frame callback must not overwrite it '
             'with the committed query range.',
       );
+      // The profile gate can also receive a late ordinary Core admission
+      // after the held preview has published. It is not a visible-frame
+      // callback, so it must independently preserve the same live range.
+      // Otherwise a pending semantic admission resets only the Header score
+      // while the heatmap remains on the exact thumb range.
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+      expect(
+        core.mindBehavioralScore.value!.range,
+        previewValues,
+        reason:
+            'A late Core score admission must retain the live Mind slider '
+            'range until this physical drag releases it.',
+      );
       // This is the profile-gate ordering: a prepared full-frame callback can
       // arrive after the held slider preview has published its exact live
       // lanes.  Route it through the production visible-frame store rather
@@ -1274,6 +1287,17 @@ void main() {
             .singleWhere((event) => event.stage == 'MIND|PREVIEW_FRAME')
             .scope,
         contains('repositoryRequests=0 indexBuilds=0 canonicalCommits=0'),
+      );
+      // The held range is scoped to the physical slider interaction. Once it
+      // ends, the next ordinary admission may again use the canonical query
+      // range even though the live coordinator retains its last snapshot for
+      // diagnostics and canonical reconciliation.
+      core.endMindAmountRangeInteraction(committed: false);
+      core.clearMindAmountRangePreview();
+      expect(core.ensureMindBehavioralScoreProjection(), isTrue);
+      expect(
+        core.mindBehavioralScore.value!.range,
+        core.mindAmountRangeBindingFor(LedgerDirection.income)!.values,
       );
     },
   );
