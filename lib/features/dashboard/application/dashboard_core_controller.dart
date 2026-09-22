@@ -67,6 +67,7 @@ import '../visible/domain/dashboard_visible_frame.dart';
 import 'dashboard_expansion_controller.dart';
 import 'dashboard_avatar_target_painted.dart';
 import 'dashboard_balance_history_projection.dart';
+import 'dashboard_balance_primary_projection.dart';
 import 'dashboard_balance_presentation.dart';
 import 'dashboard_avatar_resource_window.dart';
 import 'dashboard_ephemeral_focus_controller.dart';
@@ -1128,7 +1129,20 @@ final class DashboardCoreController {
   final ValueNotifier<DashboardBalancePresentation?> balancePresentation =
       ValueNotifier<DashboardBalancePresentation?>(null);
 
+  /// The Summary-aware Balance primary-card payload is intentionally separate
+  /// from the all-time Header/latest presentation above. A visible temporal
+  /// target can replace this value synchronously from resident prepared
+  /// membership without changing the Header's non-temporal authority.
+  final ValueNotifier<DashboardBalancePrimaryPresentation?>
+  balancePrimaryPresentation =
+      ValueNotifier<DashboardBalancePrimaryPresentation?>(null);
+
   _DashboardBalanceHistoryCache? _balanceHistoryCache;
+  static const _balancePrimaryProjectionCacheCapacity = 24;
+  final LinkedHashMap<String, DashboardBalancePrimaryPresentation>
+  _balancePrimaryProjectionCache =
+      LinkedHashMap<String, DashboardBalancePrimaryPresentation>();
+  bool _balancePrimaryPresentationActive = false;
 
   MindSumHeatmapProjection? _mindSumHeatmapProjection;
   MindMonthHeatmapProjection? _mindMonthHeatmapProjection;
@@ -15683,6 +15697,9 @@ final class DashboardCoreController {
     final frame = visibleFrames.value;
     if (frame == null) return;
     _publishBalancePresentationForVisibleFrame(frame);
+    if (_balancePrimaryPresentationActive) {
+      _publishBalancePrimaryPresentationForVisibleFrame(frame);
+    }
     // A rail semantic crossing can coalesce before paint, while this callback
     // observes only the frame that the visible-frame store actually accepted.
     // Bind its exact child time scope here so Header score/text/palette cannot
@@ -15839,6 +15856,128 @@ final class DashboardCoreController {
         history: history,
       ),
     );
+  }
+
+  /// Builds only the Balance card's selected Summary target. The two source
+  /// memberships are already immutable parts of the prepared index; this is
+  /// deliberately a synchronous projection, never a frame/scene admission.
+  void _publishBalancePrimaryPresentationForVisibleFrame(
+    DashboardVisibleFrame frame,
+  ) {
+    final index = presentation.index ?? _activePreparedRevisionBundle?.index;
+    if (index == null || index.coreRevision != frame.coreRevision) {
+      _setBalancePrimaryPresentation(null);
+      return;
+    }
+    final incomeCatalog = index.catalogForIdentity(
+      direction: LedgerDirection.income,
+      timeScope: const AllTimeScope(),
+    );
+    final expenseCatalog = index.catalogForIdentity(
+      direction: LedgerDirection.expense,
+      timeScope: const AllTimeScope(),
+    );
+    if (incomeCatalog == null || expenseCatalog == null) {
+      _setBalancePrimaryPresentation(null);
+      return;
+    }
+    final identity = DashboardBalancePrimaryIdentity(
+      upstreamScopeKey:
+          '${incomeCatalog.parentScope.key.value}|'
+          '${expenseCatalog.parentScope.key.value}',
+      indexGeneration: index.generation,
+      coreRevision: index.coreRevision,
+    );
+    final timeScope = frame.scope.timeScope;
+    final cacheKey =
+        '${identity.upstreamScopeKey}|${identity.indexGeneration}|'
+        '${identity.coreRevision}|${timeScope.canonicalKey}';
+    final cached = _balancePrimaryProjectionCache.remove(cacheKey);
+    if (cached != null) {
+      _balancePrimaryProjectionCache[cacheKey] = cached;
+      _setBalancePrimaryPresentation(cached);
+      return;
+    }
+    final next = DashboardBalancePrimaryProjection.build(
+      identity: identity,
+      timeScope: timeScope,
+      incomeEntries: _balancePrimaryEntriesFor(
+        index: index,
+        direction: LedgerDirection.income,
+      ),
+      expenseEntries: _balancePrimaryEntriesFor(
+        index: index,
+        direction: LedgerDirection.expense,
+      ),
+    );
+    // The visible-frame store is the Core's renderer-acknowledged temporal
+    // boundary. Guard this synchronous work against a reentrant later target
+    // so an old chart cannot replace a newer accepted Summary frame.
+    if (_disposed || !identical(visibleFrames.value, frame)) return;
+    _balancePrimaryProjectionCache[cacheKey] = next;
+    if (_balancePrimaryProjectionCache.length >
+        _balancePrimaryProjectionCacheCapacity) {
+      _balancePrimaryProjectionCache.remove(
+        _balancePrimaryProjectionCache.keys.first,
+      );
+    }
+    _setBalancePrimaryPresentation(next);
+  }
+
+  /// The one mode-lifecycle gate for the Balance card's bounded projection.
+  /// A mode that cannot display this card never spends a Summary crossing on
+  /// its financial grouping. Returning to Balance uses the current accepted
+  /// visible frame synchronously; it never asks a renderer to acquire data.
+  void setBalancePrimaryPresentationActive(bool active) {
+    if (_balancePrimaryPresentationActive == active) return;
+    _balancePrimaryPresentationActive = active;
+    if (!active) return;
+    final frame = visibleFrames.value;
+    if (frame != null) _publishBalancePrimaryPresentationForVisibleFrame(frame);
+  }
+
+  /// Resolves one direction's exact resident Balance membership. A direct
+  /// category/partner/search focus deliberately retains its base index, so
+  /// its focused partition has no duplicate seed. Re-select that existing
+  /// base seed here instead of treating a valid focused or empty direction as
+  /// an unavailable chart.
+  Iterable<DashboardLedgerEntry> _balancePrimaryEntriesFor({
+    required PreparedDashboardIndex index,
+    required LedgerDirection direction,
+  }) {
+    final active = focus.state;
+    final base = _focusBaseIndex;
+    final baseScope = currentQuery.scopeFor(direction);
+    final hasExactFocus =
+        active != null &&
+        active.anchor.direction == direction &&
+        base != null &&
+        base.coreRevision == index.coreRevision &&
+        active.anchor.matches(
+          baseScope: baseScope,
+          revision: base.coreRevision,
+        );
+    if (hasExactFocus) {
+      final seed = base.partitionFor(direction).focusMembershipSeed;
+      if (seed == null) return const <DashboardLedgerEntry>[];
+      return seed
+          .select(
+            categoryId: active.category?.id,
+            partnerId: active.partner?.id,
+            normalizedSearch: active.normalizedSearch,
+          )
+          .entries;
+    }
+    return index.partitionFor(direction).focusMembershipSeed?.entries ??
+        const <DashboardLedgerEntry>[];
+  }
+
+  void _setBalancePrimaryPresentation(
+    DashboardBalancePrimaryPresentation? next,
+  ) {
+    final current = balancePrimaryPresentation.value;
+    if (current?.presentationId == next?.presentationId) return;
+    balancePrimaryPresentation.value = next;
   }
 
   DashboardBalanceHistorySeries? _balanceHistoryFor({
@@ -16237,6 +16376,8 @@ final class DashboardCoreController {
     mindYearHeatmap.dispose();
     mindTemporalHeatmap.dispose();
     balancePresentation.dispose();
+    balancePrimaryPresentation.dispose();
+    _balancePrimaryProjectionCache.clear();
     mindBehavioralScore.dispose();
     mindBehavioralScoreSettings.removeListener(
       _onMindBehavioralScoreSettingsChanged,

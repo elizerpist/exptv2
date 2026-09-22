@@ -1690,7 +1690,7 @@ void main() {
 
       expect(headerGesture.bottom, lessThan(action.top));
       expect(action.bottom, lessThan(summary.top));
-      await tester.tap(find.text('Kiadás'));
+      await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
       await tester.pump();
       expect(controller.transactionDirection.direction.name, 'expense');
       await tester.tap(find.byKey(const ValueKey('dashboard-summary-chevron')));
@@ -1763,7 +1763,7 @@ void main() {
     expect(controller.expansion.progress, expansionBeforeRailDrag);
     expect(controller.navigation.state.parentScope, parentScopeBeforeRailDrag);
 
-    await tester.tap(find.text('Kiadás'));
+    await tester.tap(find.byKey(const ValueKey('fluvi-expense-button')));
     await tester.pump();
     expect(controller.transactionDirection.direction.name, 'expense');
     expect(

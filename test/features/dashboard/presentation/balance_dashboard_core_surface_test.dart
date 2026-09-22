@@ -4,6 +4,7 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -16,9 +17,109 @@ import 'package:fluvi/core/design/dashboard_border_profile.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
+  testWidgets(
+    'P2-LOWER-CARD RED: the existing Balance zone2 envelope hosts paired primary bars without moving its geometry',
+    (tester) async {
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      final primary = ValueNotifier<DashboardBalancePrimaryPresentation?>(
+        DashboardBalancePrimaryPresentation(
+          identity: const DashboardBalancePrimaryIdentity(
+            upstreamScopeKey: 'income|expense',
+            indexGeneration: 3,
+            coreRevision: 7,
+          ),
+          timeScope: const AllTimeScope(),
+          mode: DashboardBalancePrimaryMode.sum,
+          incomeTotalMinor: 700000,
+          expenseTotalMinor: 400000,
+          periodPairs: const <DashboardBalancePrimaryPeriodPair>[
+            DashboardBalancePrimaryPeriodPair(
+              value: 2025,
+              incomeMinor: 300000,
+              expenseMinor: 200000,
+            ),
+            DashboardBalancePrimaryPeriodPair(
+              value: 2026,
+              incomeMinor: 400000,
+              expenseMinor: 200000,
+            ),
+          ],
+          dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+        ),
+      );
+      addTearDown(balance.dispose);
+      addTearDown(primary.dispose);
+      final modePresentation = _balanceModePresentation();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: modePresentation,
+              balancePresentation: balance,
+              balancePrimaryPresentation: primary,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cards = tester
+          .widgetList<DashboardCoreModeCascadeCard>(
+            find.byType(DashboardCoreModeCascadeCard),
+          )
+          .toList(growable: false);
+      final lower = cards.singleWhere(
+        (card) =>
+            card.semanticKey ==
+            const ValueKey<String>('dashboard-core-mode-balance-card-2'),
+      );
+      expect(lower.showPlaceholderSurface, isFalse);
+      final delta = modePresentation.geometry.subheaderOneBounds.height * .10;
+      expect(
+        lower.bounds.top,
+        closeTo(modePresentation.geometry.zone2Bounds.top + delta, .001),
+      );
+      expect(
+        lower.bounds.height,
+        closeTo(modePresentation.geometry.zone2Bounds.height - delta, .001),
+      );
+      expect(
+        lower.bounds.bottom,
+        closeTo(modePresentation.geometry.zone2Bounds.bottom, .001),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card')),
+        findsOneWidget,
+      );
+      expect(find.text('Többéves balance'), findsOneWidget);
+
+      primary.value = DashboardBalancePrimaryPresentation(
+        identity: primary.value!.identity,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 2)),
+        mode: DashboardBalancePrimaryMode.unsupportedDay,
+        incomeTotalMinor: 0,
+        expenseTotalMinor: 0,
+        periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+        dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card-placeholder')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-pair-chart')),
+        findsNothing,
+      );
+    },
+  );
+
   testWidgets(
     'BALANCE-HEADER/CAROUSEL RED: prepared net uses the Header detail seam and the upper card owns one shared-engine five-card rail',
     (tester) async {
@@ -104,7 +205,8 @@ void main() {
           const ValueKey<String>('dashboard-core-mode-balance-card-2'),
         ),
         findsOneWidget,
-        reason: 'The lower structural card remains the unchanged placeholder.',
+        reason:
+            'The lower structural Balance envelope remains the single card slot.',
       );
 
       final selectedSemantics = tester
@@ -399,7 +501,19 @@ void main() {
             const ValueKey<String>('dashboard-core-mode-balance-card-2'),
       );
       expect(upper.showPlaceholderSurface, isFalse);
-      expect(lower.showPlaceholderSurface, isTrue);
+      expect(
+        lower.showPlaceholderSurface,
+        isFalse,
+        reason:
+            'The lower shell is now populated through its own Balance '
+            'primary-card host, not a second outer placeholder layer.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card-placeholder')),
+        findsOneWidget,
+        reason:
+            'Without a primary payload, the existing lower visual shell remains.',
+      );
 
       final center = tester.getRect(
         find.byKey(

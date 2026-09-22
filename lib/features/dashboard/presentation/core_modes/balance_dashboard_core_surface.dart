@@ -10,8 +10,10 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
+import '../../application/dashboard_balance_primary_projection.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
+import 'balance_primary_chart_card.dart';
 import 'balance_presentation_settings.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
@@ -63,13 +65,14 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
   ]);
 }
 
-/// Balance owns its Header data seam and the upper finite carousel. Its lower
-/// large zone stays the existing placeholder structural surface.
+/// Balance owns its Header data seam, upper finite carousel, and the existing
+/// lower structural zone that now hosts the primary financial chart.
 class BalanceDashboardCoreSurface extends StatelessWidget {
   const BalanceDashboardCoreSurface({
     super.key,
     required this.presentation,
     this.balancePresentation,
+    this.balancePrimaryPresentation,
     this.onCarouselMotionInterrupted,
     this.headerVisualController,
     this.headerVisualFrame,
@@ -80,6 +83,8 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
 
   final DashboardCoreModePresentation presentation;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
+  final ValueListenable<DashboardBalancePrimaryPresentation?>?
+  balancePrimaryPresentation;
   @visibleForTesting
   final VoidCallback? onCarouselMotionInterrupted;
   final DashboardHeaderVisualController? headerVisualController;
@@ -102,6 +107,11 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
             bounds: local.lowerBounds,
             motion: local.lowerMotion,
             semanticKey: const ValueKey('dashboard-core-mode-balance-card-2'),
+            showPlaceholderSurface: false,
+            content: _BalancePrimaryCardHost(
+              bounds: local.lowerBounds,
+              presentation: balancePrimaryPresentation,
+            ),
           ),
           DashboardCoreModeCascadeCard(
             bounds: local.upperBounds,
@@ -147,6 +157,46 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Keeps the existing zone2 envelope as the one Balance primary-card surface.
+/// Day intentionally retains a normal empty card until it receives its own
+/// product specification.
+final class _BalancePrimaryCardHost extends StatelessWidget {
+  const _BalancePrimaryCardHost({
+    required this.bounds,
+    required this.presentation,
+  });
+
+  final DashboardBounds bounds;
+  final ValueListenable<DashboardBalancePrimaryPresentation?>? presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    final listenable = presentation;
+    if (listenable == null) return _placeholder();
+    return ValueListenableBuilder<DashboardBalancePrimaryPresentation?>(
+      valueListenable: listenable,
+      builder: (context, value, _) {
+        if (value == null ||
+            value.mode == DashboardBalancePrimaryMode.unsupportedDay) {
+          return _placeholder();
+        }
+        return DashboardPlaceholderCard(
+          bounds: bounds,
+          fillParent: true,
+          semanticKey: const ValueKey<String>('balance-primary-card'),
+          child: BalancePrimaryChartCard(presentation: value),
+        );
+      },
+    );
+  }
+
+  Widget _placeholder() => DashboardPlaceholderCard(
+    bounds: bounds,
+    fillParent: true,
+    semanticKey: const ValueKey<String>('balance-primary-card-placeholder'),
+  );
 }
 
 /// Balance-only transfer inside the existing split-card envelope. It neither

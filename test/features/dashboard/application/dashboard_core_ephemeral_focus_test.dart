@@ -8,6 +8,7 @@ import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -506,6 +507,112 @@ void main() {
       expect(balance.netTotalMinor, 85000);
       expect(balance.latestTransaction?.entryId, 'expense-balance-latest');
       expect(repository.prepareCalls, 1);
+    },
+  );
+
+  test(
+    'P2-NEXT-FRAME RED: a visible Summary target synchronously publishes resident Balance primary data without source work',
+    () async {
+      final repository = _BalancePreparedRepository();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.setBalancePrimaryPresentationActive(true);
+
+      final initial = core.balancePrimaryPresentation.value;
+      expect(initial, isNotNull);
+      expect(initial!.mode, DashboardBalancePrimaryMode.sum);
+      final repositoryCalls = repository.prepareCalls;
+      final indexGeneration = core.preparedIndex!.generation;
+
+      void publish(LedgerTimeScope target, TimePlane plane) {
+        final index = core.preparedIndex!;
+        final scope = index
+            .catalogForIdentity(
+              direction: LedgerDirection.income,
+              timeScope: target,
+            )!
+            .parentScope;
+        final previous = core.visibleFrames.value!;
+        final frame = DashboardVisibleFrame.fromPrepared(
+          index.frameFor(scope),
+          parentQueryKey: scope.key,
+          plane: plane,
+          railOpen: false,
+          semanticIndex: 0,
+          childLabel: 'balance-primary-${target.canonicalKey}',
+          navigationEpoch: previous.navigationEpoch + 1,
+          presentationEpoch: previous.presentationEpoch + 1,
+          frameGeneration: previous.frameGeneration + 1,
+          mode: DashboardVisibleMode.committed,
+        );
+        expect(core.visibleFrames.publish(frame), isTrue);
+      }
+
+      publish(const YearScope(2026), TimePlane.year);
+      expect(
+        core.balancePrimaryPresentation.value?.mode,
+        DashboardBalancePrimaryMode.year,
+        reason: 'The accepted visible target is enough; no settle is needed.',
+      );
+      publish(
+        const MonthScope(YearMonth(year: 2026, month: 6)),
+        TimePlane.month,
+      );
+      final month = core.balancePrimaryPresentation.value;
+      expect(month?.mode, DashboardBalancePrimaryMode.month);
+      expect(month?.dailyPoints.last.incomeMinor, 120000);
+      expect(month?.dailyPoints.last.expenseMinor, 35000);
+      expect(repository.prepareCalls, repositoryCalls);
+      expect(core.preparedIndex?.generation, indexGeneration);
+
+      publish(const AllTimeScope(), TimePlane.sum);
+      expect(
+        identical(core.balancePrimaryPresentation.value, initial),
+        isTrue,
+        reason:
+            'Returning to a resident Summary target must reuse its immutable '
+            'Balance presentation instead of rescanning membership.',
+      );
+    },
+  );
+
+  test(
+    'P2-FOCUS/ZERO RED: Balance keeps exact focused Income and an empty Expense lane without a second source owner',
+    () async {
+      final repository = _BalancePreparedRepository(
+        omitExpenseMembershipSeed: true,
+      );
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      core.setBalancePrimaryPresentationActive(true);
+
+      expect(core.balancePrimaryPresentation.value?.incomeTotalMinor, 120000);
+      expect(core.balancePrimaryPresentation.value?.expenseTotalMinor, 0);
+      final preparedCalls = repository.prepareCalls;
+
+      expect(
+        await core.requestCategoryFocus(
+          const DashboardFocusFacet(id: 'salary', displayName: 'Salary'),
+        ),
+        isTrue,
+      );
+      expect(core.balancePrimaryPresentation.value?.incomeTotalMinor, 120000);
+      expect(core.balancePrimaryPresentation.value?.expenseTotalMinor, 0);
+      expect(repository.prepareCalls, preparedCalls);
     },
   );
 
@@ -10490,7 +10597,7 @@ class _FocusSeedRepository implements DashboardDataRuntimeRepository {
 /// selected from Core-owned prepared LogBox preview data, not a renderer read.
 final class _BalancePreparedRepository
     implements DashboardDataRuntimeRepository {
-  _BalancePreparedRepository() {
+  _BalancePreparedRepository({this.omitExpenseMembershipSeed = false}) {
     // A single-subscriber controller intentionally buffers the initial
     // revision until DashboardDataRuntime starts its one global observer.
     _revisions.add(1);
@@ -10502,6 +10609,7 @@ final class _BalancePreparedRepository
 
   var prepareCalls = 0;
   var revisionListenCount = 0;
+  final bool omitExpenseMembershipSeed;
 
   @override
   Stream<int> watchCoreRevision() => _revisions.stream;
@@ -10543,13 +10651,14 @@ final class _BalancePreparedRepository
                     coreRevision: request.key.coreRevision,
                   ),
                 ]),
-            LedgerDirection.expense:
-                DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
-                  _balanceHistoryEntry(
-                    LedgerDirection.expense,
-                    coreRevision: request.key.coreRevision,
-                  ),
-                ]),
+            if (!omitExpenseMembershipSeed)
+              LedgerDirection.expense:
+                  DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+                    _balanceHistoryEntry(
+                      LedgerDirection.expense,
+                      coreRevision: request.key.coreRevision,
+                    ),
+                  ]),
           },
       generation: token.generation,
       contentDigest: Object.hash(base.contentDigest, 'balance-prepared'),
