@@ -1129,20 +1129,20 @@ final class DashboardCoreController {
   final ValueNotifier<DashboardBalancePresentation?> balancePresentation =
       ValueNotifier<DashboardBalancePresentation?>(null);
 
-  /// The Summary-aware Balance primary-card payload is intentionally separate
-  /// from the all-time Header/latest presentation above. A visible temporal
-  /// target can replace this value synchronously from resident prepared
-  /// membership without changing the Header's non-temporal authority.
-  final ValueNotifier<DashboardBalancePrimaryPresentation?>
-  balancePrimaryPresentation =
-      ValueNotifier<DashboardBalancePrimaryPresentation?>(null);
+  /// The Summary-aware linked Balance-card payload is intentionally separate
+  /// from the all-time Header presentation above. A visible temporal target
+  /// can replace this value synchronously from resident prepared membership
+  /// without changing the Header's non-temporal authority.
+  final ValueNotifier<DashboardBalanceLinkedPresentation?>
+  balanceLinkedPresentation =
+      ValueNotifier<DashboardBalanceLinkedPresentation?>(null);
 
   _DashboardBalanceHistoryCache? _balanceHistoryCache;
   static const _balancePrimaryProjectionCacheCapacity = 24;
-  final LinkedHashMap<String, DashboardBalancePrimaryPresentation>
-  _balancePrimaryProjectionCache =
-      LinkedHashMap<String, DashboardBalancePrimaryPresentation>();
-  bool _balancePrimaryPresentationActive = false;
+  final LinkedHashMap<String, DashboardBalanceLinkedPresentation>
+  _balanceLinkedProjectionCache =
+      LinkedHashMap<String, DashboardBalanceLinkedPresentation>();
+  bool _balanceLinkedPresentationActive = false;
 
   MindSumHeatmapProjection? _mindSumHeatmapProjection;
   MindMonthHeatmapProjection? _mindMonthHeatmapProjection;
@@ -15697,8 +15697,8 @@ final class DashboardCoreController {
     final frame = visibleFrames.value;
     if (frame == null) return;
     _publishBalancePresentationForVisibleFrame(frame);
-    if (_balancePrimaryPresentationActive) {
-      _publishBalancePrimaryPresentationForVisibleFrame(frame);
+    if (_balanceLinkedPresentationActive) {
+      _publishBalanceLinkedPresentationForVisibleFrame(frame);
     }
     // A rail semantic crossing can coalesce before paint, while this callback
     // observes only the frame that the visible-frame store actually accepted.
@@ -15861,12 +15861,12 @@ final class DashboardCoreController {
   /// Builds only the Balance card's selected Summary target. The two source
   /// memberships are already immutable parts of the prepared index; this is
   /// deliberately a synchronous projection, never a frame/scene admission.
-  void _publishBalancePrimaryPresentationForVisibleFrame(
+  void _publishBalanceLinkedPresentationForVisibleFrame(
     DashboardVisibleFrame frame,
   ) {
     final index = presentation.index ?? _activePreparedRevisionBundle?.index;
     if (index == null || index.coreRevision != frame.coreRevision) {
-      _setBalancePrimaryPresentation(null);
+      _setBalanceLinkedPresentation(null);
       return;
     }
     final incomeCatalog = index.catalogForIdentity(
@@ -15878,7 +15878,7 @@ final class DashboardCoreController {
       timeScope: const AllTimeScope(),
     );
     if (incomeCatalog == null || expenseCatalog == null) {
-      _setBalancePrimaryPresentation(null);
+      _setBalanceLinkedPresentation(null);
       return;
     }
     final identity = DashboardBalancePrimaryIdentity(
@@ -15891,16 +15891,18 @@ final class DashboardCoreController {
     final timeScope = frame.scope.timeScope;
     final cacheKey =
         '${identity.upstreamScopeKey}|${identity.indexGeneration}|'
-        '${identity.coreRevision}|${timeScope.canonicalKey}';
-    final cached = _balancePrimaryProjectionCache.remove(cacheKey);
+        '${identity.coreRevision}|${timeScope.canonicalKey}|'
+        '${frame.direction.name}';
+    final cached = _balanceLinkedProjectionCache.remove(cacheKey);
     if (cached != null) {
-      _balancePrimaryProjectionCache[cacheKey] = cached;
-      _setBalancePrimaryPresentation(cached);
+      _balanceLinkedProjectionCache[cacheKey] = cached;
+      _setBalanceLinkedPresentation(cached);
       return;
     }
-    final next = DashboardBalancePrimaryProjection.build(
+    final next = DashboardBalanceLinkedProjection.build(
       identity: identity,
       timeScope: timeScope,
+      selectedDirection: frame.direction,
       incomeEntries: _balancePrimaryEntriesFor(
         index: index,
         direction: LedgerDirection.income,
@@ -15914,26 +15916,26 @@ final class DashboardCoreController {
     // boundary. Guard this synchronous work against a reentrant later target
     // so an old chart cannot replace a newer accepted Summary frame.
     if (_disposed || !identical(visibleFrames.value, frame)) return;
-    _balancePrimaryProjectionCache[cacheKey] = next;
-    if (_balancePrimaryProjectionCache.length >
+    _balanceLinkedProjectionCache[cacheKey] = next;
+    if (_balanceLinkedProjectionCache.length >
         _balancePrimaryProjectionCacheCapacity) {
-      _balancePrimaryProjectionCache.remove(
-        _balancePrimaryProjectionCache.keys.first,
+      _balanceLinkedProjectionCache.remove(
+        _balanceLinkedProjectionCache.keys.first,
       );
     }
-    _setBalancePrimaryPresentation(next);
+    _setBalanceLinkedPresentation(next);
   }
 
   /// The one mode-lifecycle gate for the Balance card's bounded projection.
   /// A mode that cannot display this card never spends a Summary crossing on
   /// its financial grouping. Returning to Balance uses the current accepted
   /// visible frame synchronously; it never asks a renderer to acquire data.
-  void setBalancePrimaryPresentationActive(bool active) {
-    if (_balancePrimaryPresentationActive == active) return;
-    _balancePrimaryPresentationActive = active;
+  void setBalanceLinkedPresentationActive(bool active) {
+    if (_balanceLinkedPresentationActive == active) return;
+    _balanceLinkedPresentationActive = active;
     if (!active) return;
     final frame = visibleFrames.value;
-    if (frame != null) _publishBalancePrimaryPresentationForVisibleFrame(frame);
+    if (frame != null) _publishBalanceLinkedPresentationForVisibleFrame(frame);
   }
 
   /// Resolves one direction's exact resident Balance membership. A direct
@@ -15972,12 +15974,10 @@ final class DashboardCoreController {
         const <DashboardLedgerEntry>[];
   }
 
-  void _setBalancePrimaryPresentation(
-    DashboardBalancePrimaryPresentation? next,
-  ) {
-    final current = balancePrimaryPresentation.value;
+  void _setBalanceLinkedPresentation(DashboardBalanceLinkedPresentation? next) {
+    final current = balanceLinkedPresentation.value;
     if (current?.presentationId == next?.presentationId) return;
-    balancePrimaryPresentation.value = next;
+    balanceLinkedPresentation.value = next;
   }
 
   DashboardBalanceHistorySeries? _balanceHistoryFor({
@@ -16376,8 +16376,8 @@ final class DashboardCoreController {
     mindYearHeatmap.dispose();
     mindTemporalHeatmap.dispose();
     balancePresentation.dispose();
-    balancePrimaryPresentation.dispose();
-    _balancePrimaryProjectionCache.clear();
+    balanceLinkedPresentation.dispose();
+    _balanceLinkedProjectionCache.clear();
     mindBehavioralScore.dispose();
     mindBehavioralScoreSettings.removeListener(
       _onMindBehavioralScoreSettingsChanged,

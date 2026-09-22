@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
+import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -115,6 +116,183 @@ void main() {
     expect(projection.periodPairs, isEmpty);
     expect(projection.dailyPoints, isEmpty);
   });
+
+  test(
+    'L3-RED: Day keeps scope-local Cashflow totals although its large chart is unsupported',
+    () {
+      final projection = DashboardBalancePrimaryProjection.build(
+        identity: identity,
+        timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 18)),
+        incomeEntries: <DashboardLedgerEntry>[
+          _entry('income-prior', 'income', 100000, 2026, 7, 17),
+          _entry('income-day', 'income', 7000, 2026, 7, 18),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry('expense-day', 'expense', 2500, 2026, 7, 18),
+          _entry('expense-later', 'expense', 8000, 2026, 7, 19),
+        ],
+      );
+
+      expect(projection.mode, DashboardBalancePrimaryMode.unsupportedDay);
+      expect(projection.incomeTotalMinor, 7000);
+      expect(projection.expenseTotalMinor, 2500);
+      expect(projection.netTotalMinor, 4500);
+    },
+  );
+
+  test(
+    'L4-RED: linked latest transactions stay in scope and order both directions',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+        selectedDirection: LedgerDirection.expense,
+        incomeEntries: <DashboardLedgerEntry>[
+          _entry('income-july', 'income', 7000, 2026, 7, 20),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry('expense-july-late', 'expense', 5000, 2026, 7, 28),
+          _entry('expense-august', 'expense', 9000, 2026, 8, 1),
+        ],
+      );
+
+      expect(
+        linked.latestTransactions.map((transaction) => transaction.entryId),
+        <String>['expense-july-late', 'income-july'],
+      );
+      expect(linked.cashflow.incomeTotalMinor, 7000);
+      expect(linked.cashflow.expenseTotalMinor, 5000);
+    },
+  );
+
+  test(
+    'L5-RED: linked top category ranks absolute amount on active direction only',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const YearScope(2026),
+        selectedDirection: LedgerDirection.expense,
+        incomeEntries: <DashboardLedgerEntry>[
+          _entry(
+            'income-larger',
+            'income',
+            50000,
+            2026,
+            7,
+            1,
+            categoryId: 'salary',
+          ),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry(
+            'expense-food-first',
+            'expense',
+            -4000,
+            2026,
+            7,
+            2,
+            categoryId: 'food',
+          ),
+          _entry(
+            'expense-food-second',
+            'expense',
+            -5000,
+            2026,
+            7,
+            3,
+            categoryId: 'food',
+          ),
+        ],
+      );
+
+      expect(linked.topCategories.single.id, 'food');
+      expect(linked.topCategories.single.amountMinor, 9000);
+      expect(linked.topCategories.single.direction, LedgerDirection.expense);
+    },
+  );
+
+  test(
+    'L6-RED: linked top partner ranks transaction count on active direction only',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const YearScope(2026),
+        selectedDirection: LedgerDirection.income,
+        incomeEntries: <DashboardLedgerEntry>[
+          _entry(
+            'recurring-1',
+            'income',
+            10,
+            2026,
+            1,
+            1,
+            partnerId: 'recurring',
+          ),
+          _entry(
+            'recurring-2',
+            'income',
+            10,
+            2026,
+            2,
+            1,
+            partnerId: 'recurring',
+          ),
+          _entry(
+            'recurring-3',
+            'income',
+            10,
+            2026,
+            3,
+            1,
+            partnerId: 'recurring',
+          ),
+          _entry('one-off', 'income', 99999, 2026, 4, 1, partnerId: 'one-off'),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry(
+            'expense-many',
+            'expense',
+            -10,
+            2026,
+            1,
+            1,
+            partnerId: 'expense-only',
+          ),
+          _entry(
+            'expense-many-2',
+            'expense',
+            -10,
+            2026,
+            1,
+            2,
+            partnerId: 'expense-only',
+          ),
+          _entry(
+            'expense-many-3',
+            'expense',
+            -10,
+            2026,
+            1,
+            3,
+            partnerId: 'expense-only',
+          ),
+          _entry(
+            'expense-many-4',
+            'expense',
+            -10,
+            2026,
+            1,
+            4,
+            partnerId: 'expense-only',
+          ),
+        ],
+      );
+
+      expect(linked.topPartners.first.id, 'recurring');
+      expect(linked.topPartners.first.transactionCount, 3);
+      expect(linked.topPartners.first.direction, LedgerDirection.income);
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(
@@ -123,13 +301,23 @@ DashboardLedgerEntry _entry(
   int amount,
   int year,
   int month,
-  int day,
-) => DashboardLedgerEntry(
+  int day, {
+  String? categoryId,
+  String? partnerId,
+  String? categoryDisplayName,
+  String? partnerDisplayName,
+  String? categoryColorId,
+  String? categoryIconId,
+}) => DashboardLedgerEntry(
   id: id,
-  partnerId: 'partner-$id',
-  categoryId: 'category-$direction',
+  partnerId: partnerId ?? 'partner-$id',
+  categoryId: categoryId ?? 'category-$direction',
   direction: direction,
   amountMinor: amount,
   bookedLocalEpochDay: LocalDate(year: year, month: month, day: day).epochDay,
   bookedLocalTimeMinutes: 12 * 60,
+  categoryDisplayName: categoryDisplayName,
+  partnerDisplayName: partnerDisplayName,
+  categoryColorId: categoryColorId,
+  categoryIconId: categoryIconId,
 );

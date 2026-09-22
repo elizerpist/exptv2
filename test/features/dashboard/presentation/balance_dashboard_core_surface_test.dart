@@ -19,6 +19,7 @@ import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
@@ -26,30 +27,42 @@ void main() {
     'P2-LOWER-CARD RED: the existing Balance zone2 envelope hosts paired primary bars without moving its geometry',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
-      final primary = ValueNotifier<DashboardBalancePrimaryPresentation?>(
-        DashboardBalancePrimaryPresentation(
+      final primary = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        DashboardBalanceLinkedPresentation(
           identity: const DashboardBalancePrimaryIdentity(
             upstreamScopeKey: 'income|expense',
             indexGeneration: 3,
             coreRevision: 7,
           ),
           timeScope: const AllTimeScope(),
-          mode: DashboardBalancePrimaryMode.sum,
-          incomeTotalMinor: 700000,
-          expenseTotalMinor: 400000,
-          periodPairs: const <DashboardBalancePrimaryPeriodPair>[
-            DashboardBalancePrimaryPeriodPair(
-              value: 2025,
-              incomeMinor: 300000,
-              expenseMinor: 200000,
+          selectedDirection: LedgerDirection.income,
+          cashflow: DashboardBalancePrimaryPresentation(
+            identity: const DashboardBalancePrimaryIdentity(
+              upstreamScopeKey: 'income|expense',
+              indexGeneration: 3,
+              coreRevision: 7,
             ),
-            DashboardBalancePrimaryPeriodPair(
-              value: 2026,
-              incomeMinor: 400000,
-              expenseMinor: 200000,
-            ),
-          ],
-          dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+            timeScope: const AllTimeScope(),
+            mode: DashboardBalancePrimaryMode.sum,
+            incomeTotalMinor: 700000,
+            expenseTotalMinor: 400000,
+            periodPairs: const <DashboardBalancePrimaryPeriodPair>[
+              DashboardBalancePrimaryPeriodPair(
+                value: 2025,
+                incomeMinor: 300000,
+                expenseMinor: 200000,
+              ),
+              DashboardBalancePrimaryPeriodPair(
+                value: 2026,
+                incomeMinor: 400000,
+                expenseMinor: 200000,
+              ),
+            ],
+            dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+          ),
+          latestTransactions: const <DashboardBalanceScopedTransaction>[],
+          topCategories: const <DashboardBalanceRankedItem>[],
+          topPartners: const <DashboardBalanceRankedItem>[],
         ),
       );
       addTearDown(balance.dispose);
@@ -62,7 +75,7 @@ void main() {
             body: BalanceDashboardCoreSurface(
               presentation: modePresentation,
               balancePresentation: balance,
-              balancePrimaryPresentation: primary,
+              balanceLinkedPresentation: primary,
             ),
           ),
         ),
@@ -99,14 +112,22 @@ void main() {
       );
       expect(find.text('Többéves balance'), findsOneWidget);
 
-      primary.value = DashboardBalancePrimaryPresentation(
+      primary.value = DashboardBalanceLinkedPresentation(
         identity: primary.value!.identity,
         timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 2)),
-        mode: DashboardBalancePrimaryMode.unsupportedDay,
-        incomeTotalMinor: 0,
-        expenseTotalMinor: 0,
-        periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
-        dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+        selectedDirection: LedgerDirection.income,
+        cashflow: DashboardBalancePrimaryPresentation(
+          identity: primary.value!.identity,
+          timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 2)),
+          mode: DashboardBalancePrimaryMode.unsupportedDay,
+          incomeTotalMinor: 0,
+          expenseTotalMinor: 0,
+          periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+          dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+        ),
+        latestTransactions: const <DashboardBalanceScopedTransaction>[],
+        topCategories: const <DashboardBalanceRankedItem>[],
+        topPartners: const <DashboardBalanceRankedItem>[],
       );
       await tester.pump();
       expect(
@@ -116,6 +137,72 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('balance-primary-pair-chart')),
         findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'L2-RED: the selected Balance carousel topic owns the matching lower detail card',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      addTearDown(linked.dispose);
+      addTearDown(balance.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balancePresentation: balance,
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-cashflow')),
+        findsOneWidget,
+      );
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      carousel.controller.jumpToIndex(1);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-latest')),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(2);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-top-category'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(3);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-employer')),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(4);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-prototype')),
+        findsOneWidget,
       );
     },
   );
@@ -141,7 +228,11 @@ void main() {
           ),
         ),
       );
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
       addTearDown(presentation.dispose);
+      addTearDown(linked.dispose);
       var interruptionCount = 0;
       final modePresentation = DashboardCoreModePresentation(
         geometry: DashboardGeometryResolver.resolve(
@@ -163,6 +254,7 @@ void main() {
                 BalanceDashboardCoreSurface(
                   presentation: modePresentation,
                   balancePresentation: presentation,
+                  balanceLinkedPresentation: linked,
                   onCarouselMotionInterrupted: () => interruptionCount += 1,
                 ),
               ],
@@ -185,10 +277,7 @@ void main() {
       final source =
           carousel.dataSource! as CyclicCarouselDataSource<BalanceCarouselCard>;
       expect(source.items, hasLength(5));
-      expect(
-        source.items.first.kind,
-        BalanceCarouselCardKind.latestTransaction,
-      );
+      expect(source.items.first.kind, BalanceCarouselCardKind.cashflow);
       expect(carousel.controller.selectedLogicalIndex, 0);
       expect(carousel.spec.visibleItemCount, 3);
       expect(
@@ -214,24 +303,21 @@ void main() {
           .where((semantics) => semantics.properties.selected == true)
           .toList(growable: false);
       expect(selectedSemantics, hasLength(1));
-      expect(
-        selectedSemantics.single.properties.label,
-        'Legutóbbi tranzakció: Piac, -30,00 Ft',
-      );
+      expect(selectedSemantics.single.properties.label, 'Cashflow: 3000,00 Ft');
 
       final viewport = find.byKey(
         const ValueKey<String>('balance-carousel-viewport'),
       );
       final centerCard = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+      );
+      final leftCard = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+      );
+      final rightCard = tester.getRect(
         find.byKey(
           const ValueKey<String>('balance-carousel-card-latest-transaction'),
         ),
-      );
-      final leftCard = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-4')),
-      );
-      final rightCard = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
       );
       expect(centerCard.width, greaterThan(leftCard.width));
       expect(centerCard.width, greaterThan(rightCard.width));
@@ -256,23 +342,31 @@ void main() {
       carousel.controller.jumpToIndex(-1);
       await tester.pump();
       expect(carousel.controller.selectedLogicalIndex, -1);
-      expect(source.itemAtLogicalIndex(-1).id, 'prototype-4');
+      expect(source.itemAtLogicalIndex(-1).id, 'prototype-1');
       carousel.controller.jumpToIndex(0);
       await tester.pump();
 
       final controllerIdentity = identityHashCode(carousel.controller);
       final scrollPosition = carousel.controller.scrollController.position;
-      presentation.value = presentation.value!.copyWith(presentationId: 2);
+      linked.value = _linkedReplacement();
       await tester.pump();
       final rebuilt = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
         find.byType(CenteredCarousel<BalanceCarouselCard>),
       );
+      final rebuiltSource =
+          rebuilt.dataSource! as CyclicCarouselDataSource<BalanceCarouselCard>;
       expect(identityHashCode(rebuilt.controller), controllerIdentity);
       expect(
         identical(rebuilt.controller.scrollController.position, scrollPosition),
         isTrue,
       );
       expect(rebuilt.controller.selectedLogicalIndex, 0);
+      expect(
+        rebuiltSource.items[2].amount,
+        'Lakhatás',
+        reason:
+            'A scope/direction linked payload frissíti az előnézetet anélkül, hogy a közös Carousel újraindulna.',
+      );
 
       await tester.fling(viewport, const Offset(-420, 0), 2200);
       await tester.pump(const Duration(milliseconds: 50));
@@ -422,16 +516,16 @@ void main() {
         expect(decoration.color, FluviVisualTokens.surface, reason: id);
       }
 
-      // The centered initial triad covers latest/1/4; index two covers the
-      // remaining logical prototypes without changing the cyclic domain.
-      expectSurface('latest-transaction');
+      // The centered initial triad covers prototype/cashflow/latest; index
+      // two covers the two ranked topics without changing the cyclic domain.
       expectSurface('prototype-1');
-      expectSurface('prototype-4');
+      expectSurface('cashflow');
+      expectSurface('latest-transaction');
       carousel.controller.jumpToIndex(2);
       await tester.pump();
-      expectSurface('prototype-1');
-      expectSurface('prototype-2');
-      expectSurface('prototype-3');
+      expectSurface('latest-transaction');
+      expectSurface('top-category');
+      expectSurface('top-partner');
     },
   );
 
@@ -516,15 +610,15 @@ void main() {
       );
 
       final center = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+      );
+      final left = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+      );
+      final right = tester.getRect(
         find.byKey(
           const ValueKey<String>('balance-carousel-card-latest-transaction'),
         ),
-      );
-      final left = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-4')),
-      );
-      final right = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
       );
       expect(
         center.height,
@@ -708,9 +802,7 @@ void main() {
         tester
             .getSize(
               find.byKey(
-                const ValueKey<String>(
-                  'balance-carousel-card-latest-transaction',
-                ),
+                const ValueKey<String>('balance-carousel-card-cashflow'),
               ),
             )
             .height,
@@ -757,7 +849,7 @@ void main() {
                   .widget<DecoratedBox>(
                     find.byKey(
                       const ValueKey<String>(
-                        'balance-carousel-card-surface-latest-transaction',
+                        'balance-carousel-card-surface-cashflow',
                       ),
                     ),
                   )
@@ -784,7 +876,7 @@ void main() {
                   .widget<DecoratedBox>(
                     find.byKey(
                       const ValueKey<String>(
-                        'balance-carousel-card-surface-latest-transaction',
+                        'balance-carousel-card-surface-cashflow',
                       ),
                     ),
                   )
@@ -844,9 +936,7 @@ void main() {
       final initialWidth = tester
           .getSize(
             find.byKey(
-              const ValueKey<String>(
-                'balance-carousel-card-latest-transaction',
-              ),
+              const ValueKey<String>('balance-carousel-card-cashflow'),
             ),
           )
           .width;
@@ -860,15 +950,15 @@ void main() {
         find.byType(CenteredCarousel<BalanceCarouselCard>),
       );
       final selected = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+      );
+      final left = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+      );
+      final right = tester.getRect(
         find.byKey(
           const ValueKey<String>('balance-carousel-card-latest-transaction'),
         ),
-      );
-      final left = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-4')),
-      );
-      final right = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
       );
       expect(
         find.byKey(
@@ -948,3 +1038,100 @@ DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(
     ),
   ],
 );
+
+DashboardBalanceLinkedPresentation _linked() {
+  const identity = DashboardBalancePrimaryIdentity(
+    upstreamScopeKey: 'income|expense',
+    indexGeneration: 3,
+    coreRevision: 7,
+  );
+  return DashboardBalanceLinkedPresentation(
+    identity: identity,
+    timeScope: const AllTimeScope(),
+    selectedDirection: LedgerDirection.income,
+    cashflow: DashboardBalancePrimaryPresentation(
+      identity: identity,
+      timeScope: const AllTimeScope(),
+      mode: DashboardBalancePrimaryMode.sum,
+      incomeTotalMinor: 700000,
+      expenseTotalMinor: 400000,
+      periodPairs: const <DashboardBalancePrimaryPeriodPair>[
+        DashboardBalancePrimaryPeriodPair(
+          value: 2025,
+          incomeMinor: 300000,
+          expenseMinor: 200000,
+        ),
+        DashboardBalancePrimaryPeriodPair(
+          value: 2026,
+          incomeMinor: 400000,
+          expenseMinor: 200000,
+        ),
+      ],
+      dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+    ),
+    latestTransactions: const <DashboardBalanceScopedTransaction>[
+      DashboardBalanceScopedTransaction(
+        entryId: 'latest-in-scope',
+        title: 'Piac',
+        categoryTitle: 'Élelmiszer',
+        amountMinor: 35000,
+        direction: LedgerDirection.expense,
+        occurredOrder: 20632 * 1440,
+        epochDay: 20632,
+      ),
+    ],
+    topCategories: const <DashboardBalanceRankedItem>[
+      DashboardBalanceRankedItem(
+        id: 'salary',
+        label: 'Fizetés',
+        direction: LedgerDirection.income,
+        amountMinor: 700000,
+        transactionCount: 2,
+        categoryColorId: 'color_07',
+        categoryIconId: 'icon_17',
+      ),
+    ],
+    topPartners: const <DashboardBalanceRankedItem>[
+      DashboardBalanceRankedItem(
+        id: 'employer',
+        label: 'Munkahely',
+        direction: LedgerDirection.income,
+        amountMinor: 700000,
+        transactionCount: 2,
+        categoryColorId: 'color_07',
+        categoryIconId: 'icon_17',
+      ),
+    ],
+  );
+}
+
+DashboardBalanceLinkedPresentation _linkedReplacement() {
+  final initial = _linked();
+  return DashboardBalanceLinkedPresentation(
+    identity: initial.identity,
+    timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+    selectedDirection: LedgerDirection.expense,
+    cashflow: DashboardBalancePrimaryPresentation(
+      identity: initial.identity,
+      timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+      mode: DashboardBalancePrimaryMode.month,
+      incomeTotalMinor: 0,
+      expenseTotalMinor: 46000,
+      periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+      dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+    ),
+    latestTransactions: initial.latestTransactions,
+    topCategories: const <DashboardBalanceRankedItem>[
+      DashboardBalanceRankedItem(
+        id: 'housing',
+        label: 'Lakhatás',
+        direction: LedgerDirection.expense,
+        amountMinor: 46000,
+        transactionCount: 1,
+        categoryColorId: 'color_07',
+        categoryIconId: 'icon_17',
+      ),
+    ],
+    topPartners: initial.topPartners,
+  );
+}

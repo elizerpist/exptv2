@@ -266,7 +266,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         );
     modeController.addListener(_syncBudgetDistributionTimePublicationPreparer);
     modeController.addListener(_onCoreModeChanged);
-    controller.setBalancePrimaryPresentationActive(
+    controller.setBalanceLinkedPresentationActive(
       modeController.committedMode == DashboardModeSpec.balance,
     );
     _syncBudgetDistributionTimePublicationPreparer();
@@ -451,7 +451,7 @@ class _CoreDashboardState extends State<CoreDashboard>
 
   void _onCoreModeChanged() {
     _syncMindModeContentGeometry();
-    controller.setBalancePrimaryPresentationActive(
+    controller.setBalanceLinkedPresentationActive(
       modeController.committedMode == DashboardModeSpec.balance,
     );
     if (modeController.committedMode == DashboardModeSpec.mind) {
@@ -743,8 +743,8 @@ class _CoreDashboardState extends State<CoreDashboard>
                                         controller: modeController,
                                         balancePresentation:
                                             controller.balancePresentation,
-                                        balancePrimaryPresentation: controller
-                                            .balancePrimaryPresentation,
+                                        balanceLinkedPresentation: controller
+                                            .balanceLinkedPresentation,
                                         balancePresentationSettings:
                                             _balancePresentationSettings,
                                         balanceAdaptiveScope: controller

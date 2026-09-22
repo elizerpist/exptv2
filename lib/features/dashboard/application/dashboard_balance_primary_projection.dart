@@ -1,8 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 import '../query/data/dashboard_ledger_entry.dart';
+import '../query/domain/ledger_direction.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/year_month.dart';
+
+const _balanceLinkedMaximumRows = 5;
 
 /// Immutable upstream provenance for one Balance primary-card projection.
 ///
@@ -105,6 +108,104 @@ final class DashboardBalancePrimaryPresentation {
   int get netTotalMinor => incomeTotalMinor - expenseTotalMinor;
 }
 
+/// One scope-local transaction used by the linked Balance carousel details.
+///
+/// This stays deliberately compact: it retains immutable entry identity and
+/// display metadata but never imports LogBox rows, scene resources or a
+/// repository-facing capability into Balance presentation.
+@immutable
+final class DashboardBalanceScopedTransaction {
+  const DashboardBalanceScopedTransaction({
+    required this.entryId,
+    required this.title,
+    required this.categoryTitle,
+    required this.amountMinor,
+    required this.direction,
+    required this.occurredOrder,
+    required this.epochDay,
+  });
+
+  final String entryId;
+  final String title;
+  final String categoryTitle;
+  final int amountMinor;
+  final LedgerDirection direction;
+  final int occurredOrder;
+  final int epochDay;
+}
+
+/// One active-direction rank for Balance's Category or Partner detail.
+@immutable
+final class DashboardBalanceRankedItem {
+  const DashboardBalanceRankedItem({
+    required this.id,
+    required this.label,
+    required this.direction,
+    required this.amountMinor,
+    required this.transactionCount,
+    required this.categoryColorId,
+    required this.categoryIconId,
+  });
+
+  final String id;
+  final String label;
+  final LedgerDirection direction;
+  final int amountMinor;
+  final int transactionCount;
+  final String categoryColorId;
+  final String categoryIconId;
+}
+
+/// One immutable Summary-aware Balance payload for all linked card topics.
+///
+/// The all-time Header presentation intentionally remains separate. This value
+/// is rebuilt or reused only from resident prepared membership when an exact
+/// visible Summary scope or active direction changes.
+@immutable
+final class DashboardBalanceLinkedPresentation {
+  DashboardBalanceLinkedPresentation({
+    required this.identity,
+    required this.timeScope,
+    required this.selectedDirection,
+    required this.cashflow,
+    required List<DashboardBalanceScopedTransaction> latestTransactions,
+    required List<DashboardBalanceRankedItem> topCategories,
+    required List<DashboardBalanceRankedItem> topPartners,
+  }) : latestTransactions =
+           List<DashboardBalanceScopedTransaction>.unmodifiable(
+             latestTransactions.take(_balanceLinkedMaximumRows),
+           ),
+       topCategories = List<DashboardBalanceRankedItem>.unmodifiable(
+         topCategories.take(_balanceLinkedMaximumRows),
+       ),
+       topPartners = List<DashboardBalanceRankedItem>.unmodifiable(
+         topPartners.take(_balanceLinkedMaximumRows),
+       ),
+       presentationId = Object.hashAll(<Object?>[
+         identity,
+         timeScope.canonicalKey,
+         selectedDirection,
+         cashflow.presentationId,
+         for (final transaction in latestTransactions.take(
+           _balanceLinkedMaximumRows,
+         ))
+           '${transaction.entryId}:${transaction.occurredOrder}',
+         for (final category in topCategories.take(_balanceLinkedMaximumRows))
+           '${category.id}:${category.amountMinor}:${category.transactionCount}',
+         for (final partner in topPartners.take(_balanceLinkedMaximumRows))
+           '${partner.id}:${partner.amountMinor}:${partner.transactionCount}',
+       ]);
+
+  final DashboardBalancePrimaryIdentity identity;
+  final LedgerTimeScope timeScope;
+  final LedgerDirection selectedDirection;
+  final DashboardBalancePrimaryPresentation cashflow;
+  final List<DashboardBalanceScopedTransaction> latestTransactions;
+  final List<DashboardBalanceRankedItem> topCategories;
+  final List<DashboardBalanceRankedItem> topPartners;
+  final int presentationId;
+}
+
 /// Thin two-direction temporal read model over resident prepared membership.
 ///
 /// This deliberately mirrors the bounded projection style used by Mind while
@@ -132,14 +233,12 @@ abstract final class DashboardBalancePrimaryProjection {
         incomeEntries,
         expenseEntries,
       ),
-      DayScope() => DashboardBalancePrimaryPresentation(
-        identity: identity,
-        timeScope: timeScope,
-        mode: DashboardBalancePrimaryMode.unsupportedDay,
-        incomeTotalMinor: 0,
-        expenseTotalMinor: 0,
-        periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
-        dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+      DayScope(:final date) => _day(
+        identity,
+        date.epochDay,
+        timeScope,
+        incomeEntries,
+        expenseEntries,
       ),
     };
   }
@@ -244,6 +343,22 @@ abstract final class DashboardBalancePrimaryProjection {
     );
   }
 
+  static DashboardBalancePrimaryPresentation _day(
+    DashboardBalancePrimaryIdentity identity,
+    int epochDay,
+    LedgerTimeScope timeScope,
+    Iterable<DashboardLedgerEntry> income,
+    Iterable<DashboardLedgerEntry> expense,
+  ) => DashboardBalancePrimaryPresentation(
+    identity: identity,
+    timeScope: timeScope,
+    mode: DashboardBalancePrimaryMode.unsupportedDay,
+    incomeTotalMinor: _totalForEpochDay(income, epochDay),
+    expenseTotalMinor: _totalForEpochDay(expense, epochDay),
+    periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+    dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+  );
+
   static _BalanceAnnualTotals _annualTotals(
     Iterable<DashboardLedgerEntry> entries,
   ) {
@@ -304,8 +419,206 @@ abstract final class DashboardBalancePrimaryProjection {
     return Map<int, int>.unmodifiable(totals);
   }
 
+  static int _totalForEpochDay(
+    Iterable<DashboardLedgerEntry> entries,
+    int epochDay,
+  ) => entries
+      .where((entry) => entry.bookedLocalEpochDay == epochDay)
+      .fold<int>(0, (total, entry) => total + entry.amountMinor);
+
   static DateTime _date(int epochDay) =>
       DateTime.utc(1970).add(Duration(days: epochDay));
+}
+
+/// Summary/direction-local Balance read model over resident prepared rows.
+///
+/// It deliberately performs no frame admission: the Core supplies already
+/// immutable memberships for both canonical directions.
+abstract final class DashboardBalanceLinkedProjection {
+  static DashboardBalanceLinkedPresentation build({
+    required DashboardBalancePrimaryIdentity identity,
+    required LedgerTimeScope timeScope,
+    required LedgerDirection selectedDirection,
+    required Iterable<DashboardLedgerEntry> incomeEntries,
+    required Iterable<DashboardLedgerEntry> expenseEntries,
+  }) {
+    final income = _entriesForScope(incomeEntries, timeScope);
+    final expense = _entriesForScope(expenseEntries, timeScope);
+    final directional = selectedDirection == LedgerDirection.income
+        ? income
+        : expense;
+    return DashboardBalanceLinkedPresentation(
+      identity: identity,
+      timeScope: timeScope,
+      selectedDirection: selectedDirection,
+      cashflow: DashboardBalancePrimaryProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        incomeEntries: income,
+        expenseEntries: expense,
+      ),
+      latestTransactions: _latestTransactions(income, expense),
+      topCategories: _rank(
+        directional,
+        selectedDirection,
+        _BalanceRankKind.category,
+      ),
+      topPartners: _rank(
+        directional,
+        selectedDirection,
+        _BalanceRankKind.partner,
+      ),
+    );
+  }
+
+  static List<DashboardLedgerEntry> _entriesForScope(
+    Iterable<DashboardLedgerEntry> entries,
+    LedgerTimeScope timeScope,
+  ) {
+    final boundaries = timeScope.boundaries;
+    if (boundaries == null) {
+      return List<DashboardLedgerEntry>.unmodifiable(entries);
+    }
+    final start = boundaries.startInclusive.epochDay;
+    final end = boundaries.endExclusive.epochDay;
+    return List<DashboardLedgerEntry>.unmodifiable(
+      entries.where(
+        (entry) =>
+            entry.bookedLocalEpochDay >= start &&
+            entry.bookedLocalEpochDay < end,
+      ),
+    );
+  }
+
+  static List<DashboardBalanceScopedTransaction> _latestTransactions(
+    List<DashboardLedgerEntry> income,
+    List<DashboardLedgerEntry> expense,
+  ) {
+    final ordered = <DashboardLedgerEntry>[...income, ...expense]
+      ..sort(_newestFirst);
+    return List<DashboardBalanceScopedTransaction>.unmodifiable(
+      ordered.take(_balanceLinkedMaximumRows).map(_transactionFor),
+    );
+  }
+
+  static DashboardBalanceScopedTransaction _transactionFor(
+    DashboardLedgerEntry entry,
+  ) {
+    final direction = entry.direction == LedgerDirection.expense.name
+        ? LedgerDirection.expense
+        : LedgerDirection.income;
+    return DashboardBalanceScopedTransaction(
+      entryId: entry.id,
+      title: _transactionTitle(entry),
+      categoryTitle: _categoryLabel(entry),
+      amountMinor: entry.amountMinor.abs(),
+      direction: direction,
+      occurredOrder: _occurredOrder(entry),
+      epochDay: entry.bookedLocalEpochDay,
+    );
+  }
+
+  static List<DashboardBalanceRankedItem> _rank(
+    List<DashboardLedgerEntry> entries,
+    LedgerDirection direction,
+    _BalanceRankKind kind,
+  ) {
+    final buckets = <String, _BalanceRankAccumulator>{};
+    for (final entry in entries) {
+      final id = kind == _BalanceRankKind.category
+          ? entry.categoryId
+          : entry.partnerId;
+      final label = kind == _BalanceRankKind.category
+          ? _categoryLabel(entry)
+          : _partnerLabel(entry);
+      final bucket = buckets.putIfAbsent(
+        id,
+        () => _BalanceRankAccumulator(
+          id: id,
+          label: label,
+          representative: entry,
+        ),
+      );
+      bucket.amountMinor += entry.amountMinor.abs();
+      bucket.transactionCount += 1;
+      if (_newestFirst(entry, bucket.representative) < 0) {
+        bucket.representative = entry;
+        bucket.label = label;
+      }
+    }
+    final ranked = buckets.values.toList(growable: false)
+      ..sort((left, right) {
+        final metric = kind == _BalanceRankKind.category
+            ? right.amountMinor.compareTo(left.amountMinor)
+            : right.transactionCount.compareTo(left.transactionCount);
+        if (metric != 0) return metric;
+        final label = left.label.compareTo(right.label);
+        return label != 0 ? label : left.id.compareTo(right.id);
+      });
+    return List<DashboardBalanceRankedItem>.unmodifiable(
+      ranked
+          .take(_balanceLinkedMaximumRows)
+          .map(
+            (bucket) => DashboardBalanceRankedItem(
+              id: bucket.id,
+              label: bucket.label,
+              direction: direction,
+              amountMinor: bucket.amountMinor,
+              transactionCount: bucket.transactionCount,
+              categoryColorId:
+                  bucket.representative.categoryColorId ?? 'fallback',
+              categoryIconId:
+                  bucket.representative.categoryIconId ?? 'fallback',
+            ),
+          ),
+    );
+  }
+
+  static int _newestFirst(
+    DashboardLedgerEntry left,
+    DashboardLedgerEntry right,
+  ) {
+    final order = _occurredOrder(right).compareTo(_occurredOrder(left));
+    return order != 0 ? order : right.id.compareTo(left.id);
+  }
+
+  static int _occurredOrder(DashboardLedgerEntry entry) =>
+      entry.occurredAtUtcMs ??
+      entry.bookedLocalEpochDay * (24 * 60) + entry.bookedLocalTimeMinutes;
+
+  static String _transactionTitle(DashboardLedgerEntry entry) {
+    final partner = entry.partnerDisplayName?.trim();
+    if (partner != null && partner.isNotEmpty) return partner;
+    final note = entry.note?.trim();
+    if (note != null && note.isNotEmpty) return note;
+    return _categoryLabel(entry);
+  }
+
+  static String _categoryLabel(DashboardLedgerEntry entry) {
+    final label = entry.categoryDisplayName?.trim();
+    return label == null || label.isEmpty ? 'Kategorizálatlan' : label;
+  }
+
+  static String _partnerLabel(DashboardLedgerEntry entry) {
+    final label = entry.partnerDisplayName?.trim();
+    return label == null || label.isEmpty ? _transactionTitle(entry) : label;
+  }
+}
+
+enum _BalanceRankKind { category, partner }
+
+final class _BalanceRankAccumulator {
+  _BalanceRankAccumulator({
+    required this.id,
+    required this.label,
+    required this.representative,
+  });
+
+  final String id;
+  String label;
+  int amountMinor = 0;
+  int transactionCount = 0;
+  DashboardLedgerEntry representative;
 }
 
 @immutable

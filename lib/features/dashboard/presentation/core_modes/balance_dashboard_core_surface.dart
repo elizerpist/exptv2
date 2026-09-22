@@ -11,9 +11,10 @@ import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
+import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
-import 'balance_primary_chart_card.dart';
+import 'balance_linked_detail_card.dart';
 import 'balance_presentation_settings.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
@@ -24,11 +25,18 @@ import '../dashboard_border_style.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 
-/// The finite presentation domain of Balance's upper prototype rail.
-enum BalanceCarouselCardKind { latestTransaction, emptyPrototype }
+/// The finite presentation domain of Balance's upper linked topic rail.
+enum BalanceCarouselCardKind {
+  cashflow,
+  latestTransaction,
+  topCategory,
+  topPartner,
+  emptyPrototype,
+}
 
 /// One render-only Balance carousel item. Financial data is supplied in the
-/// prepared [DashboardBalancePresentation] and never fetched by this widget.
+/// prepared [DashboardBalanceLinkedPresentation] and never fetched by this
+/// widget.
 @immutable
 final class BalanceCarouselCard {
   const BalanceCarouselCard._({
@@ -45,34 +53,57 @@ final class BalanceCarouselCard {
 }
 
 List<BalanceCarouselCard> balanceCarouselCardsFor(
-  DashboardBalancePresentation? presentation,
+  DashboardBalanceLinkedPresentation? presentation,
 ) {
-  final latest = presentation?.latestTransaction;
+  final latest = presentation?.latestTransactions.firstOrNull;
+  final topCategory = presentation?.topCategories.firstOrNull;
+  final topPartner = presentation?.topPartners.firstOrNull;
   return List<BalanceCarouselCard>.unmodifiable(<BalanceCarouselCard>[
+    BalanceCarouselCard._(
+      id: 'cashflow',
+      kind: BalanceCarouselCardKind.cashflow,
+      title: 'Cashflow',
+      amount: presentation == null
+          ? '—'
+          : DashboardPreparedFormatter.amountMinor(
+              presentation.cashflow.netTotalMinor,
+            ),
+    ),
     BalanceCarouselCard._(
       id: 'latest-transaction',
       kind: BalanceCarouselCardKind.latestTransaction,
-      title: latest?.title ?? 'Legutóbbi tétel',
-      amount: latest?.formattedAmount ?? '—',
+      title: 'Legutóbbi tétel',
+      amount: latest?.title ?? 'Nincs tétel',
     ),
-    for (var index = 1; index <= 4; index += 1)
-      BalanceCarouselCard._(
-        id: 'prototype-$index',
-        kind: BalanceCarouselCardKind.emptyPrototype,
-        title: 'Prototípus',
-        amount: '—',
-      ),
+    BalanceCarouselCard._(
+      id: 'top-category',
+      kind: BalanceCarouselCardKind.topCategory,
+      title: 'Top kategória',
+      amount: topCategory?.label ?? 'Nincs adat',
+    ),
+    BalanceCarouselCard._(
+      id: 'top-partner',
+      kind: BalanceCarouselCardKind.topPartner,
+      title: 'Top partner',
+      amount: topPartner?.label ?? 'Nincs adat',
+    ),
+    const BalanceCarouselCard._(
+      id: 'prototype-1',
+      kind: BalanceCarouselCardKind.emptyPrototype,
+      title: 'Prototípus',
+      amount: '—',
+    ),
   ]);
 }
 
 /// Balance owns its Header data seam, upper finite carousel, and the existing
 /// lower structural zone that now hosts the primary financial chart.
-class BalanceDashboardCoreSurface extends StatelessWidget {
+class BalanceDashboardCoreSurface extends StatefulWidget {
   const BalanceDashboardCoreSurface({
     super.key,
     required this.presentation,
     this.balancePresentation,
-    this.balancePrimaryPresentation,
+    this.balanceLinkedPresentation,
     this.onCarouselMotionInterrupted,
     this.headerVisualController,
     this.headerVisualFrame,
@@ -83,8 +114,8 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
 
   final DashboardCoreModePresentation presentation;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
-  final ValueListenable<DashboardBalancePrimaryPresentation?>?
-  balancePrimaryPresentation;
+  final ValueListenable<DashboardBalanceLinkedPresentation?>?
+  balanceLinkedPresentation;
   @visibleForTesting
   final VoidCallback? onCarouselMotionInterrupted;
   final DashboardHeaderVisualController? headerVisualController;
@@ -95,8 +126,17 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
   headerHistoryChartPointerObserver;
 
   @override
+  State<BalanceDashboardCoreSurface> createState() =>
+      _BalanceDashboardCoreSurfaceState();
+}
+
+final class _BalanceDashboardCoreSurfaceState
+    extends State<BalanceDashboardCoreSurface> {
+  BalanceLinkedDetailTopic _selectedTopic = BalanceLinkedDetailTopic.cashflow;
+
+  @override
   Widget build(BuildContext context) {
-    final geometry = presentation.geometry;
+    final geometry = widget.presentation.geometry;
     final local = _BalanceLocalGeometry.resolve(geometry);
     return KeyedSubtree(
       key: const ValueKey('dashboard-core-mode-balance'),
@@ -110,7 +150,8 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
             showPlaceholderSurface: false,
             content: _BalancePrimaryCardHost(
               bounds: local.lowerBounds,
-              presentation: balancePrimaryPresentation,
+              presentation: widget.balanceLinkedPresentation,
+              selectedTopic: _selectedTopic,
             ),
           ),
           DashboardCoreModeCascadeCard(
@@ -119,9 +160,26 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
             semanticKey: const ValueKey('dashboard-core-mode-balance-card-1'),
             showPlaceholderSurface: false,
             content: _BalanceUpperCarouselHost(
-              balancePresentation: balancePresentation,
-              presentationSettings: presentationSettings,
-              onMotionInterrupted: onCarouselMotionInterrupted,
+              presentation: widget.balanceLinkedPresentation,
+              presentationSettings: widget.presentationSettings,
+              onMotionInterrupted: widget.onCarouselMotionInterrupted,
+              onCardSelected: (card) {
+                final selected = switch (card.kind) {
+                  BalanceCarouselCardKind.cashflow =>
+                    BalanceLinkedDetailTopic.cashflow,
+                  BalanceCarouselCardKind.latestTransaction =>
+                    BalanceLinkedDetailTopic.latestTransaction,
+                  BalanceCarouselCardKind.topCategory =>
+                    BalanceLinkedDetailTopic.topCategory,
+                  BalanceCarouselCardKind.topPartner =>
+                    BalanceLinkedDetailTopic.topPartner,
+                  BalanceCarouselCardKind.emptyPrototype =>
+                    BalanceLinkedDetailTopic.prototype,
+                };
+                if (selected != _selectedTopic) {
+                  setState(() => _selectedTopic = selected);
+                }
+              },
             ),
           ),
           DashboardCoreModeOpacityPosition(
@@ -135,18 +193,18 @@ class BalanceDashboardCoreSurface extends StatelessWidget {
           ),
           DashboardCoreModeHeaderScaffold(
             bounds: geometry.headerBounds,
-            surfaceColor: presentation.palette.upcomingHeaderTone,
+            surfaceColor: widget.presentation.palette.upcomingHeaderTone,
             headerKey: const ValueKey('dashboard-core-mode-balance-header'),
             labelKey: const ValueKey('dashboard-core-mode-label-balance'),
             label: 'balance',
-            visualController: headerVisualController,
-            visualFrameListenable: headerVisualFrame,
+            visualController: widget.headerVisualController,
+            visualFrameListenable: widget.headerVisualFrame,
             detail: _BalanceHeaderDetail(
-              balancePresentation: balancePresentation,
+              balancePresentation: widget.balancePresentation,
               expansionProgress: geometry.headerExpansionProgress,
-              presentationSettings: presentationSettings,
-              adaptiveScope: adaptiveScope,
-              pointerObserver: headerHistoryChartPointerObserver,
+              presentationSettings: widget.presentationSettings,
+              adaptiveScope: widget.adaptiveScope,
+              pointerObserver: widget.headerHistoryChartPointerObserver,
             ),
             detailLeft: 0,
             detailRight: 0,
@@ -166,27 +224,34 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
   const _BalancePrimaryCardHost({
     required this.bounds,
     required this.presentation,
+    required this.selectedTopic,
   });
 
   final DashboardBounds bounds;
-  final ValueListenable<DashboardBalancePrimaryPresentation?>? presentation;
+  final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
+  final BalanceLinkedDetailTopic selectedTopic;
 
   @override
   Widget build(BuildContext context) {
     final listenable = presentation;
     if (listenable == null) return _placeholder();
-    return ValueListenableBuilder<DashboardBalancePrimaryPresentation?>(
+    return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
       valueListenable: listenable,
       builder: (context, value, _) {
         if (value == null ||
-            value.mode == DashboardBalancePrimaryMode.unsupportedDay) {
+            (selectedTopic == BalanceLinkedDetailTopic.cashflow &&
+                value.cashflow.mode ==
+                    DashboardBalancePrimaryMode.unsupportedDay)) {
           return _placeholder();
         }
         return DashboardPlaceholderCard(
           bounds: bounds,
           fillParent: true,
           semanticKey: const ValueKey<String>('balance-primary-card'),
-          child: BalancePrimaryChartCard(presentation: value),
+          child: BalanceLinkedDetailCard(
+            presentation: value,
+            topic: selectedTopic,
+          ),
         );
       },
     );
@@ -341,20 +406,41 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
 
 final class _BalanceUpperCarouselHost extends StatelessWidget {
   const _BalanceUpperCarouselHost({
-    required this.balancePresentation,
+    required this.presentation,
     required this.presentationSettings,
     required this.onMotionInterrupted,
+    required this.onCardSelected,
   });
 
-  final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
+  final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final VoidCallback? onMotionInterrupted;
+  final ValueChanged<BalanceCarouselCard> onCardSelected;
 
   @override
   Widget build(BuildContext context) {
-    final listenable = balancePresentation;
-    if (listenable == null) return const SizedBox.shrink();
-    return ValueListenableBuilder<DashboardBalancePresentation?>(
+    final listenable = presentation;
+    if (listenable == null) {
+      final settings = presentationSettings;
+      if (settings != null) {
+        return ValueListenableBuilder<BalancePresentationSettings>(
+          valueListenable: settings,
+          builder: (context, value, _) => _BalanceUpperCarousel(
+            cards: balanceCarouselCardsFor(null),
+            settings: value,
+            onMotionInterrupted: onMotionInterrupted,
+            onCardSelected: onCardSelected,
+          ),
+        );
+      }
+      return _BalanceUpperCarousel(
+        cards: balanceCarouselCardsFor(null),
+        settings: const BalancePresentationSettings.defaults(),
+        onMotionInterrupted: onMotionInterrupted,
+        onCardSelected: onCardSelected,
+      );
+    }
+    return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
       valueListenable: listenable,
       builder: (context, presentation, _) {
         final settings = presentationSettings;
@@ -363,6 +449,7 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
             cards: balanceCarouselCardsFor(presentation),
             settings: const BalancePresentationSettings.defaults(),
             onMotionInterrupted: onMotionInterrupted,
+            onCardSelected: onCardSelected,
           );
         }
         return ValueListenableBuilder<BalancePresentationSettings>(
@@ -371,6 +458,7 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
             cards: balanceCarouselCardsFor(presentation),
             settings: value,
             onMotionInterrupted: onMotionInterrupted,
+            onCardSelected: onCardSelected,
           ),
         );
       },
@@ -383,11 +471,13 @@ final class _BalanceUpperCarousel extends StatefulWidget {
     required this.cards,
     required this.settings,
     required this.onMotionInterrupted,
+    required this.onCardSelected,
   });
 
   final List<BalanceCarouselCard> cards;
   final BalancePresentationSettings settings;
   final VoidCallback? onMotionInterrupted;
+  final ValueChanged<BalanceCarouselCard> onCardSelected;
 
   @override
   State<_BalanceUpperCarousel> createState() => _BalanceUpperCarouselState();
@@ -447,10 +537,20 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
         height: carouselHeight,
         viewportKey: const ValueKey<String>('balance-carousel-viewport'),
         onMotionInterrupted: widget.onMotionInterrupted,
-        semanticsLabelBuilder: (card) =>
-            card.kind == BalanceCarouselCardKind.latestTransaction
-            ? 'Legutóbbi tranzakció: ${card.title}, ${card.amount}'
-            : 'Üres Balance prototípus',
+        onSelectedChanged: (logicalIndex) {
+          final count = widget.cards.length;
+          final itemIndex = ((logicalIndex % count) + count) % count;
+          widget.onCardSelected(widget.cards[itemIndex]);
+        },
+        semanticsLabelBuilder: (card) => switch (card.kind) {
+          BalanceCarouselCardKind.cashflow => 'Cashflow: ${card.amount}',
+          BalanceCarouselCardKind.latestTransaction =>
+            'Legutóbbi tranzakció: ${card.amount}',
+          BalanceCarouselCardKind.topCategory =>
+            'Top kategória: ${card.amount}',
+          BalanceCarouselCardKind.topPartner => 'Top partner: ${card.amount}',
+          BalanceCarouselCardKind.emptyPrototype => 'Üres Balance prototípus',
+        },
         itemBuilder: (context, card, metrics) => _BalanceCarouselPressFeedback(
           child: _BalanceCarouselCard(
             card: card,

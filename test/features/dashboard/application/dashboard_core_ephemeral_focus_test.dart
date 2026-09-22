@@ -21,6 +21,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_proje
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
+import 'package:fluvi/features/dashboard/motion/dashboard_display_frame_coalescer.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -511,7 +512,7 @@ void main() {
   );
 
   test(
-    'P2-NEXT-FRAME RED: a visible Summary target synchronously publishes resident Balance primary data without source work',
+    'L1-NEXT-FRAME RED: a visible Summary target synchronously publishes the resident linked Balance payload without source work',
     () async {
       final repository = _BalancePreparedRepository();
       final core = DashboardCoreController(
@@ -523,11 +524,11 @@ void main() {
       );
       addTearDown(core.dispose);
       await core.bootstrap();
-      core.setBalancePrimaryPresentationActive(true);
+      core.setBalanceLinkedPresentationActive(true);
 
-      final initial = core.balancePrimaryPresentation.value;
+      final initial = core.balanceLinkedPresentation.value;
       expect(initial, isNotNull);
-      expect(initial!.mode, DashboardBalancePrimaryMode.sum);
+      expect(initial!.cashflow.mode, DashboardBalancePrimaryMode.sum);
       final repositoryCalls = repository.prepareCalls;
       final indexGeneration = core.preparedIndex!.generation;
 
@@ -557,7 +558,7 @@ void main() {
 
       publish(const YearScope(2026), TimePlane.year);
       expect(
-        core.balancePrimaryPresentation.value?.mode,
+        core.balanceLinkedPresentation.value?.cashflow.mode,
         DashboardBalancePrimaryMode.year,
         reason: 'The accepted visible target is enough; no settle is needed.',
       );
@@ -565,20 +566,20 @@ void main() {
         const MonthScope(YearMonth(year: 2026, month: 6)),
         TimePlane.month,
       );
-      final month = core.balancePrimaryPresentation.value;
-      expect(month?.mode, DashboardBalancePrimaryMode.month);
-      expect(month?.dailyPoints.last.incomeMinor, 120000);
-      expect(month?.dailyPoints.last.expenseMinor, 35000);
+      final month = core.balanceLinkedPresentation.value;
+      expect(month?.cashflow.mode, DashboardBalancePrimaryMode.month);
+      expect(month?.cashflow.dailyPoints.last.incomeMinor, 120000);
+      expect(month?.cashflow.dailyPoints.last.expenseMinor, 35000);
       expect(repository.prepareCalls, repositoryCalls);
       expect(core.preparedIndex?.generation, indexGeneration);
 
       publish(const AllTimeScope(), TimePlane.sum);
       expect(
-        identical(core.balancePrimaryPresentation.value, initial),
+        identical(core.balanceLinkedPresentation.value, initial),
         isTrue,
         reason:
             'Returning to a resident Summary target must reuse its immutable '
-            'Balance presentation instead of rescanning membership.',
+            'linked Balance presentation instead of rescanning membership.',
       );
     },
   );
@@ -598,10 +599,16 @@ void main() {
       );
       addTearDown(core.dispose);
       await core.bootstrap();
-      core.setBalancePrimaryPresentationActive(true);
+      core.setBalanceLinkedPresentationActive(true);
 
-      expect(core.balancePrimaryPresentation.value?.incomeTotalMinor, 120000);
-      expect(core.balancePrimaryPresentation.value?.expenseTotalMinor, 0);
+      expect(
+        core.balanceLinkedPresentation.value?.cashflow.incomeTotalMinor,
+        120000,
+      );
+      expect(
+        core.balanceLinkedPresentation.value?.cashflow.expenseTotalMinor,
+        0,
+      );
       final preparedCalls = repository.prepareCalls;
 
       expect(
@@ -610,9 +617,60 @@ void main() {
         ),
         isTrue,
       );
-      expect(core.balancePrimaryPresentation.value?.incomeTotalMinor, 120000);
-      expect(core.balancePrimaryPresentation.value?.expenseTotalMinor, 0);
+      expect(
+        core.balanceLinkedPresentation.value?.cashflow.incomeTotalMinor,
+        120000,
+      );
+      expect(
+        core.balanceLinkedPresentation.value?.cashflow.expenseTotalMinor,
+        0,
+      );
       expect(repository.prepareCalls, preparedCalls);
+    },
+  );
+
+  test(
+    'L8-RED: a direct Balance direction change publishes active-direction ranks without source work',
+    () async {
+      final repository = _BalancePreparedRepository();
+      final displayFrames = _BalanceDisplayFrameScheduler();
+      final core = DashboardCoreController(
+        dataRepository: repository,
+        displayFrameScheduler: displayFrames,
+        initialDate: DateTime.utc(2026, 7, 2),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+      await core.bootstrap();
+      displayFrames.fireFrame();
+      core.setBalanceLinkedPresentationActive(true);
+
+      expect(
+        core.balanceLinkedPresentation.value?.selectedDirection,
+        LedgerDirection.income,
+      );
+      expect(
+        core.balanceLinkedPresentation.value?.topCategories.single.id,
+        'salary',
+      );
+      expect(
+        core.balanceLinkedPresentation.value?.topPartners.single.id,
+        'employer',
+      );
+      final repositoryCalls = repository.prepareCalls;
+      final indexGeneration = core.preparedIndex!.generation;
+
+      core.selectDirection(TransactionDirection.expense);
+      displayFrames.fireFrame();
+
+      final expense = core.balanceLinkedPresentation.value;
+      expect(expense?.selectedDirection, LedgerDirection.expense);
+      expect(expense?.topCategories.single.id, 'food');
+      expect(expense?.topPartners.single.id, 'market');
+      expect(repository.prepareCalls, repositoryCalls);
+      expect(core.preparedIndex?.generation, indexGeneration);
     },
   );
 
@@ -10751,6 +10809,26 @@ final class _BalanceStableFrameScheduler
   void fireFrame() {
     final callbacks = List<void Function()>.of(_pending);
     _pending.clear();
+    for (final callback in callbacks) {
+      callback();
+    }
+  }
+}
+
+final class _BalanceDisplayFrameScheduler
+    implements DashboardDisplayFrameScheduler {
+  final List<void Function()> _callbacks = <void Function()>[];
+
+  @override
+  int currentFrameNumber = 0;
+
+  @override
+  void scheduleFrame(void Function() callback) => _callbacks.add(callback);
+
+  void fireFrame() {
+    currentFrameNumber += 1;
+    final callbacks = List<void Function()>.of(_callbacks);
+    _callbacks.clear();
     for (final callback in callbacks) {
       callback();
     }

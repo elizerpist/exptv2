@@ -53,7 +53,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     required this.controller,
     required this.presentationFor,
     this.balancePresentation,
-    this.balancePrimaryPresentation,
+    this.balanceLinkedPresentation,
     this.balancePresentationSettings,
     this.balanceAdaptiveScope = const AllTimeScope(),
     this.budgetPresentation,
@@ -102,8 +102,8 @@ class DashboardCoreModeHost extends StatefulWidget {
   final DashboardCoreModeController controller;
   final DashboardCoreModePresentationLookup presentationFor;
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
-  final ValueListenable<DashboardBalancePrimaryPresentation?>?
-  balancePrimaryPresentation;
+  final ValueListenable<DashboardBalanceLinkedPresentation?>?
+  balanceLinkedPresentation;
   final ValueListenable<BalancePresentationSettings>?
   balancePresentationSettings;
   final LedgerTimeScope balanceAdaptiveScope;
@@ -386,7 +386,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       DashboardMode.balance => BalanceDashboardCoreSurface(
         presentation: presentation,
         balancePresentation: widget.balancePresentation,
-        balancePrimaryPresentation: widget.balancePrimaryPresentation,
+        balanceLinkedPresentation: widget.balanceLinkedPresentation,
         presentationSettings: widget.balancePresentationSettings,
         adaptiveScope: widget.balanceAdaptiveScope,
         headerHistoryChartPointerObserver: _balanceHeaderHistoryChartPointers,
