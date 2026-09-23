@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "c1282a1820acfe6711baed08c8d995209d3383cb",
-  "source_parent": "31e61e4752ba7c19d4deaf1fccedb040df32b243",
-  "source_ref": "c1282a1820acfe6711baed08c8d995209d3383cb",
+  "source_head": "b6b5584030de0ae41e40cc4d2cc91e68d36e61c9",
+  "source_parent": "36cb417a0337656ece1d2c7a65158cfb7ed28ace",
+  "source_ref": "b6b5584030de0ae41e40cc4d2cc91e68d36e61c9",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "692072aeacc039c7e9002d3605b1ad55d774b7e012cc7ef81c62ec3785540c6c",
+  "index_sha256": "604ccf6e0895422654943c0550e24942aaf22a98c13b34174b7ee254dfc78fa3",
   "document_count": 510,
-  "occurrence_count": 357518,
-  "defined_symbol_count": 48742,
+  "occurrence_count": 357522,
+  "defined_symbol_count": 48743,
   "repository_defined_symbol_count": 12166,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
@@ -30,7 +30,7 @@
     {
       "name": "refs",
       "storage": "jsonl_shards",
-      "record_count": 90567,
+      "record_count": 90568,
       "paths": [
         "refs.index.json",
         "refs/part-000.jsonl",
@@ -80,7 +80,7 @@
         "refs/part-044.jsonl",
         "refs/part-045.jsonl"
       ],
-      "byte_count": 29266627
+      "byte_count": 29266981
     },
     {
       "name": "edges",
@@ -108,11 +108,11 @@
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 44,
+      "record_count": 3,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 610838
+      "byte_count": 39030
     }
   ]
 }
