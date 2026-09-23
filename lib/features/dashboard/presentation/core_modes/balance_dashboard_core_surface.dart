@@ -535,10 +535,15 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
           key: const ValueKey<String>('balance-header-net-amount'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: frame?.foregroundTextColor ?? FluviVisualTokens.textOnAction,
-            fontWeight: FontWeight.w700,
-          ),
+          style: (frame?.typography ?? DashboardHeaderTypographyProfile.app)
+              .applyTo(
+                Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color:
+                      frame?.foregroundTextColor ??
+                      FluviVisualTokens.textOnAction,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
         ),
       ),
     ],

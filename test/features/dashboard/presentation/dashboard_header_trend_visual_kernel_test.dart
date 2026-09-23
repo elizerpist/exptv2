@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_header_trend_visual_kernel.dart';
 
 void main() {
@@ -112,4 +113,54 @@ void main() {
     expect(black.lineColor, const Color(0xff000000));
     expect(black.shouldRepaint(white), isTrue);
   });
+
+  test(
+    'HTY-04 RED: softened foreground changes only the existing line paint token',
+    () {
+      final series = DashboardHeaderTrendSeries(
+        startInclusiveTemporalCoordinate: 10,
+        endInclusiveTemporalCoordinate: 20,
+        points: const <DashboardHeaderTrendPoint>[
+          DashboardHeaderTrendPoint(temporalCoordinate: 10, value: -50),
+          DashboardHeaderTrendPoint(temporalCoordinate: 20, value: 75),
+        ],
+      );
+      final black = DashboardHeaderTrendPainter(
+        series: series,
+        minimumValue: -50,
+        maximumValue: 75,
+        lineColor: DashboardHeaderForegroundColor.black.color,
+      );
+      final softened = DashboardHeaderTrendPainter(
+        series: series,
+        minimumValue: -50,
+        maximumValue: 75,
+        lineColor: DashboardHeaderForegroundColor.softenedDark.color,
+      );
+      const plot = Size(
+        DashboardHeaderTrendChartStyle.plotWidth,
+        DashboardHeaderTrendChartStyle.plotHeight,
+      );
+      const projection = DashboardHeaderTrendTemporalProjection(
+        startInclusiveTemporalCoordinate: 10,
+        endInclusiveTemporalCoordinate: 20,
+      );
+
+      expect(softened.lineColor, const Color(0xd114213a));
+      expect(
+        DashboardHeaderTrendChartStyle.lineWidth,
+        1.6,
+        reason:
+            'Foreground selection must not alter the shared stroke contract.',
+      );
+      expect(
+        softened.pointOffsetAt(0, plot, projection),
+        black.pointOffsetAt(0, plot, projection),
+      );
+      expect(
+        softened.pointOffsetAt(1, plot, projection),
+        black.pointOffsetAt(1, plot, projection),
+      );
+    },
+  );
 }

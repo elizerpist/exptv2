@@ -95,6 +95,15 @@ void main() {
             .color,
         Colors.black,
       );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('balance-header-net-amount')),
+            )
+            .style!
+            .fontFamily,
+        'Roboto',
+      );
       final before = balance.value;
       frame.value = const DashboardHeaderVisualFrame(
         colors: <Color>[Colors.red, Colors.red],
@@ -114,6 +123,31 @@ void main() {
             .style!
             .color,
         Colors.white,
+      );
+      frame.value = const DashboardHeaderVisualFrame(
+        colors: <Color>[Colors.red, Colors.red],
+        stops: <double>[0, 1],
+        opacity: 1,
+        colorA: Colors.red,
+        colorB: Colors.red,
+        foregroundTextColor: Color(0xD114213A),
+        chartColor: Colors.black,
+        typography: DashboardHeaderTypographyProfile.colorLab,
+      );
+      await tester.pump();
+      final colorLabAmount = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('balance-header-net-amount')),
+      );
+      expect(colorLabAmount.style!.color, const Color(0xD114213A));
+      expect(colorLabAmount.style!.fontFamily, 'FluviColorLabInter');
+      expect(
+        Theme.of(
+          tester.element(
+            find.byKey(const ValueKey<String>('balance-header-net-amount')),
+          ),
+        ).textTheme.titleMedium!.fontFamily,
+        'Roboto',
+        reason: 'Color Lab must not mutate the app-wide Material typography.',
       );
       expect(balance.value, same(before));
       await tester.pumpWidget(const SizedBox.shrink());

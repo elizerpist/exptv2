@@ -2160,19 +2160,46 @@ final class DashboardHeaderPaletteOrientationTuning {
 
 /// A mode-local presentation preference. It deliberately owns only material
 /// opacity and Header foreground tokens, never domain values or chart points.
-enum DashboardHeaderForegroundColor { white, black }
+enum DashboardHeaderForegroundColor { white, black, softenedDark }
 
 extension DashboardHeaderForegroundColorPresentation
     on DashboardHeaderForegroundColor {
   String get label => switch (this) {
     DashboardHeaderForegroundColor.white => 'Fehér',
     DashboardHeaderForegroundColor.black => 'Fekete',
+    DashboardHeaderForegroundColor.softenedDark => 'Lágyított',
   };
 
   Color get color => switch (this) {
     DashboardHeaderForegroundColor.white => Colors.white,
     DashboardHeaderForegroundColor.black => Colors.black,
+    // Exact portal-content foreground from docs/prototypes/color_lab.html:
+    // rgba(20, 33, 58, .82), encoded as Flutter ARGB.
+    DashboardHeaderForegroundColor.softenedDark => const Color(0xD114213A),
   };
+}
+
+/// Header-local type comparison. It deliberately does not change the app-wide
+/// theme: only Balance and Mind Header text consumers read this token.
+enum DashboardHeaderTypographyProfile { app, colorLab }
+
+extension DashboardHeaderTypographyProfilePresentation
+    on DashboardHeaderTypographyProfile {
+  String get label => switch (this) {
+    DashboardHeaderTypographyProfile.app => 'App',
+    DashboardHeaderTypographyProfile.colorLab => 'Color Lab',
+  };
+
+  /// App preserves the existing inherited TextStyle exactly. Color Lab uses
+  /// the locally bundled Inter variable font authored first in the prototype's
+  /// portal Header font stack; it is not a claim about browser fallback.
+  String? get fontFamily => switch (this) {
+    DashboardHeaderTypographyProfile.app => null,
+    DashboardHeaderTypographyProfile.colorLab => 'FluviColorLabInter',
+  };
+
+  TextStyle? applyTo(TextStyle? style) =>
+      fontFamily == null ? style : style?.copyWith(fontFamily: fontFamily);
 }
 
 @immutable
@@ -2228,6 +2255,7 @@ final class DashboardHeaderVisualTuning {
     required this.balanceHeader,
     required this.mindHeader,
     required this.budgetHeader,
+    required this.headerTypography,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
     required this.generation,
   }) : settingsByEffect =
@@ -2249,6 +2277,7 @@ final class DashboardHeaderVisualTuning {
     balanceHeader: const DashboardHeaderModeVisualState.defaults(),
     mindHeader: const DashboardHeaderModeVisualState.defaults(),
     budgetHeader: const DashboardHeaderModeVisualState.defaults(),
+    headerTypography: DashboardHeaderTypographyProfile.app,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
       for (final spec in DashboardHeaderEffectCatalog.effects)
         spec.id: spec.defaultSettings,
@@ -2266,6 +2295,7 @@ final class DashboardHeaderVisualTuning {
   final DashboardHeaderModeVisualState balanceHeader;
   final DashboardHeaderModeVisualState mindHeader;
   final DashboardHeaderModeVisualState budgetHeader;
+  final DashboardHeaderTypographyProfile headerTypography;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
   final int generation;
 
@@ -2283,6 +2313,7 @@ final class DashboardHeaderVisualTuning {
     DashboardHeaderModeVisualState? balanceHeader,
     DashboardHeaderModeVisualState? mindHeader,
     DashboardHeaderModeVisualState? budgetHeader,
+    DashboardHeaderTypographyProfile? headerTypography,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
     effect: effect ?? this.effect,
@@ -2295,6 +2326,7 @@ final class DashboardHeaderVisualTuning {
     balanceHeader: balanceHeader ?? this.balanceHeader,
     mindHeader: mindHeader ?? this.mindHeader,
     budgetHeader: budgetHeader ?? this.budgetHeader,
+    headerTypography: headerTypography ?? this.headerTypography,
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
     generation: generation + 1,
   );
@@ -2563,6 +2595,18 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       'positionPct=${next.positionPercent} '
           'windowWidthPct=${next.windowWidthPercent} '
           'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
+  /// Switches only the Header-local comparison profile. Financial and score
+  /// publications, chart geometry, and the shared visual ticker are untouched.
+  void setHeaderTypography(DashboardHeaderTypographyProfile value) {
+    if (_disposed || tuning.value.headerTypography == value) return;
+    tuning.value = tuning.value.copyWith(headerTypography: value);
+    _record(
+      'HEADER_TYPOGRAPHY_CHANGED',
+      'profile=${value.name} settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
   }
@@ -3060,6 +3104,7 @@ final class DashboardHeaderVisualFrame {
     required this.colorB,
     this.foregroundTextColor = Colors.white,
     this.chartColor = Colors.white,
+    this.typography = DashboardHeaderTypographyProfile.app,
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
     this.windowRightPercent,
@@ -3078,6 +3123,7 @@ final class DashboardHeaderVisualFrame {
   final Color colorB;
   final Color foregroundTextColor;
   final Color chartColor;
+  final DashboardHeaderTypographyProfile typography;
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
@@ -3125,6 +3171,7 @@ final class DashboardHeaderVisualFrame {
       colorB == other.colorB &&
       foregroundTextColor == other.foregroundTextColor &&
       chartColor == other.chartColor &&
+      typography == other.typography &&
       paletteSplitPercent == other.paletteSplitPercent &&
       windowLeftPercent == other.windowLeftPercent &&
       windowRightPercent == other.windowRightPercent &&
@@ -3148,6 +3195,7 @@ final class DashboardHeaderVisualFrame {
     colorB,
     foregroundTextColor,
     chartColor,
+    typography,
     paletteSplitPercent,
     windowLeftPercent,
     windowRightPercent,
@@ -3216,6 +3264,7 @@ final class DashboardBalanceHeaderColorPolicy
     colorB: window.colorB,
     foregroundTextColor: tuning.balanceHeader.textColor.color,
     chartColor: tuning.balanceHeader.chartColor.color,
+    typography: tuning.headerTypography,
     paletteSplitPercent: window.state.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3238,6 +3287,7 @@ abstract final class MindHeaderScoreColorScale {
   static DashboardHeaderVisualFrame fromWindow({
     required MindHeaderScoreWindow window,
     required DashboardHeaderModeVisualState modeVisual,
+    required DashboardHeaderTypographyProfile typography,
     required int staticSettingsGeneration,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
@@ -3247,6 +3297,7 @@ abstract final class MindHeaderScoreColorScale {
     colorB: window.colorB,
     foregroundTextColor: modeVisual.textColor.color,
     chartColor: modeVisual.chartColor.color,
+    typography: typography,
     paletteSplitPercent: window.centerPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3323,6 +3374,7 @@ final class DashboardMindHeaderColorPolicy
   ) => MindHeaderScoreColorScale.fromWindow(
     window: window,
     modeVisual: tuning.mindHeader,
+    typography: tuning.headerTypography,
     staticSettingsGeneration: tuning.generation,
   );
 

@@ -246,6 +246,15 @@ void main() {
           .color,
       Colors.black,
     );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey<String>('mind-header-score-text')),
+          )
+          .style!
+          .fontFamily,
+      'Roboto',
+    );
     final before = score.value;
     header.value = const DashboardHeaderVisualFrame(
       colors: <Color>[Colors.red, Colors.red],
@@ -266,6 +275,22 @@ void main() {
           .color,
       Colors.white,
     );
+    header.value = const DashboardHeaderVisualFrame(
+      colors: <Color>[Colors.red, Colors.red],
+      stops: <double>[0, 1],
+      opacity: 1,
+      colorA: Colors.red,
+      colorB: Colors.red,
+      foregroundTextColor: Color(0xD114213A),
+      chartColor: Colors.black,
+      typography: DashboardHeaderTypographyProfile.colorLab,
+    );
+    await tester.pump();
+    final colorLabScore = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('mind-header-score-text')),
+    );
+    expect(colorLabScore.style!.color, const Color(0xD114213A));
+    expect(colorLabScore.style!.fontFamily, 'FluviColorLabInter');
     expect(score.value, same(before));
     await tester.pumpWidget(const SizedBox.shrink());
     visual.dispose();

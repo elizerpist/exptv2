@@ -20,6 +20,9 @@ void main() {
         initialMode: DashboardModeSpec.balance,
       );
       final headerVisual = DashboardHeaderVisualController(vsync: tester);
+      final balanceHeaderFrame = DashboardBalanceHeaderColorPolicy(
+        tuning: headerVisual.tuning,
+      );
       final balance = ValueNotifier<DashboardBalancePresentation?>(
         DashboardBalancePresentation(
           scopeKey: 'all',
@@ -56,6 +59,7 @@ void main() {
       final settings = BalancePresentationController();
       final expansion = _ExpansionRecorder();
       addTearDown(controller.dispose);
+      addTearDown(balanceHeaderFrame.dispose);
       addTearDown(balance.dispose);
       addTearDown(settings.dispose);
       await tester.pumpWidget(
@@ -68,6 +72,7 @@ void main() {
               presentationFor: (mode) => _presentationFor(mode),
               balancePresentation: balance,
               balancePresentationSettings: settings,
+              balanceHeaderVisualFrame: balanceHeaderFrame,
               headerVisualController: headerVisual,
               onVerticalExpansionStart: expansion.begin,
               onVerticalExpansionDragBy: expansion.dragBy,
@@ -98,6 +103,26 @@ void main() {
         closeTo(header.right - 14, .01),
         reason: 'The former in-Header tuner reservation must be gone.',
       );
+      final balanceModeLabel = find.byKey(
+        const ValueKey<String>('dashboard-core-mode-label-balance'),
+      );
+      expect(
+        tester.widget<Text>(balanceModeLabel).style!.fontFamily,
+        'Roboto',
+        reason: 'App typography must retain the existing mode-label style.',
+      );
+      headerVisual.setHeaderTypography(
+        DashboardHeaderTypographyProfile.colorLab,
+      );
+      await tester.pump();
+      expect(
+        tester.widget<Text>(balanceModeLabel).style!.fontFamily,
+        'FluviColorLabInter',
+        reason: 'Only the Header-local Color Lab profile changes the label.',
+      );
+      headerVisual.setHeaderTypography(DashboardHeaderTypographyProfile.app);
+      await tester.pump();
+      expect(tester.widget<Text>(balanceModeLabel).style!.fontFamily, 'Roboto');
       await tester.tap(
         find.byKey(
           const ValueKey<String>('dashboard-header-visual-tuner-button'),

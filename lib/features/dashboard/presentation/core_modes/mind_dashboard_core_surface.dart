@@ -452,39 +452,46 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
         Widget contentFor(
           bool showTimeLabels,
           DashboardHeaderVisualFrame? headerFrame,
-        ) => Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            if (frame?.chartSeries case final chartSeries?)
-              MindHeaderScoreChart(
-                series: chartSeries,
-                expansionProgress: expansionProgress,
-                showTimeLabels: showTimeLabels,
-                lineColor:
-                    headerFrame?.chartColor ??
-                    MindHeaderScoreChartStyle.lineColor,
-                temporalContext: temporalContext,
-                pointerObserver: pointerObserver,
-              ),
-            Positioned(
-              left: DashboardHeaderTrendChartStyle.detailLeft,
-              top: DashboardHeaderTrendChartStyle.detailTop,
-              child: Text(
-                '${frame?.point.roundedScore ?? 50}/100',
-                key: const ValueKey<String>('mind-header-score-text'),
-                style: DefaultTextStyle.of(context).style.copyWith(
-                  color:
-                      headerFrame?.foregroundTextColor ??
-                      FluviVisualTokens.textOnAction,
-                  fontSize: 19,
-                  height: .96,
-                  letterSpacing: -.76,
-                  fontWeight: FontWeight.w900,
+        ) {
+          final typography =
+              headerFrame?.typography ?? DashboardHeaderTypographyProfile.app;
+          return Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              if (frame?.chartSeries case final chartSeries?)
+                MindHeaderScoreChart(
+                  series: chartSeries,
+                  expansionProgress: expansionProgress,
+                  showTimeLabels: showTimeLabels,
+                  lineColor:
+                      headerFrame?.chartColor ??
+                      MindHeaderScoreChartStyle.lineColor,
+                  temporalContext: temporalContext,
+                  pointerObserver: pointerObserver,
+                ),
+              Positioned(
+                left: DashboardHeaderTrendChartStyle.detailLeft,
+                top: DashboardHeaderTrendChartStyle.detailTop,
+                child: Text(
+                  '${frame?.point.roundedScore ?? 50}/100',
+                  key: const ValueKey<String>('mind-header-score-text'),
+                  style: typography.applyTo(
+                    DefaultTextStyle.of(context).style.copyWith(
+                      color:
+                          headerFrame?.foregroundTextColor ??
+                          FluviVisualTokens.textOnAction,
+                      fontSize: 19,
+                      height: .96,
+                      letterSpacing: -.76,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
+            ],
+          );
+        }
+
         final presentation = chartPresentation;
         Widget withVisualFrame(bool showTimeLabels) {
           final frames = headerVisualFrame;

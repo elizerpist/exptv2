@@ -358,20 +358,7 @@ final class _HeaderForegroundControls extends StatelessWidget {
         onChanged: (value) {
           if (value != null) onTextColorChanged(value);
         },
-        child: Row(
-          children: <Widget>[
-            for (final color in DashboardHeaderForegroundColor.values)
-              Expanded(
-                child: RadioListTile<DashboardHeaderForegroundColor>(
-                  key: ValueKey<String>('$keyPrefix-text-${color.name}'),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(color.label),
-                  value: color,
-                ),
-              ),
-          ],
-        ),
+        child: _ForegroundChoiceWrap(keyPrefix: '$keyPrefix-text'),
       ),
       Text(
         'Vonaldiagram színe',
@@ -382,16 +369,76 @@ final class _HeaderForegroundControls extends StatelessWidget {
         onChanged: (value) {
           if (value != null) onChartColorChanged(value);
         },
-        child: Row(
+        child: _ForegroundChoiceWrap(keyPrefix: '$keyPrefix-chart'),
+      ),
+    ],
+  );
+}
+
+/// Wraps instead of constraining the new third option into a too-narrow tile.
+/// It has no state or gesture owner: the surrounding [RadioGroup] owns both.
+final class _ForegroundChoiceWrap extends StatelessWidget {
+  const _ForegroundChoiceWrap({required this.keyPrefix});
+
+  final String keyPrefix;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.maxWidth >= 420 ? 140.0 : 132.0;
+      return Wrap(
+        children: <Widget>[
+          for (final color in DashboardHeaderForegroundColor.values)
+            SizedBox(
+              width: width,
+              child: RadioListTile<DashboardHeaderForegroundColor>(
+                key: ValueKey<String>('$keyPrefix-${color.name}'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(color.label),
+                value: color,
+              ),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+/// One dashboard-lifetime Header-local comparison profile. This deliberately
+/// does not use a global Theme or create a second visual settings owner.
+final class _HeaderTypographyControls extends StatelessWidget {
+  const _HeaderTypographyControls({
+    required this.profile,
+    required this.onChanged,
+  });
+
+  final DashboardHeaderTypographyProfile profile;
+  final ValueChanged<DashboardHeaderTypographyProfile> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text('Header tipográfia', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<DashboardHeaderTypographyProfile>(
+        groupValue: profile,
+        onChanged: (value) {
+          if (value != null) onChanged(value);
+        },
+        child: Wrap(
           children: <Widget>[
-            for (final color in DashboardHeaderForegroundColor.values)
-              Expanded(
-                child: RadioListTile<DashboardHeaderForegroundColor>(
-                  key: ValueKey<String>('$keyPrefix-chart-${color.name}'),
+            for (final candidate in DashboardHeaderTypographyProfile.values)
+              SizedBox(
+                width: 132,
+                child: RadioListTile<DashboardHeaderTypographyProfile>(
+                  key: ValueKey<String>(
+                    'dashboard-header-typography-${candidate.name}',
+                  ),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: Text(color.label),
-                  value: color,
+                  title: Text(candidate.label),
+                  value: candidate,
                 ),
               ),
           ],
@@ -1159,6 +1206,16 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                         DashboardHeaderTunerSection.animation,
                       ),
                       children: <Widget>[
+                        _TunerSection(
+                          title: 'Header tipográfia',
+                          children: <Widget>[
+                            _HeaderTypographyControls(
+                              profile: tuning.headerTypography,
+                              onChanged: controller.setHeaderTypography,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
                         _TunerSection(
                           title: 'Balance Header szín',
                           children: <Widget>[

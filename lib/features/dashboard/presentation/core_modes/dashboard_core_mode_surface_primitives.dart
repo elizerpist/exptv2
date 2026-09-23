@@ -259,18 +259,25 @@ final class _HeaderModeLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget text(Color color) => Text(
-      label,
-      key: labelKey,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
-    );
+    Widget text(Color color, DashboardHeaderTypographyProfile typography) =>
+        Text(
+          label,
+          key: labelKey,
+          style: typography.applyTo(
+            Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+          ),
+        );
     final frames = frame;
     if (!usesVisualForeground || frames == null) {
-      return text(FluviVisualTokens.textSecondary);
+      return text(
+        FluviVisualTokens.textSecondary,
+        DashboardHeaderTypographyProfile.app,
+      );
     }
     return ValueListenableBuilder<DashboardHeaderVisualFrame>(
       valueListenable: frames,
-      builder: (context, value, _) => text(value.foregroundTextColor),
+      builder: (context, value, _) =>
+          text(value.foregroundTextColor, value.typography),
     );
   }
 }

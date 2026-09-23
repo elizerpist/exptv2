@@ -1744,6 +1744,119 @@ void main() {
     expect(controller.tuning.value.effect, DashboardHeaderEffectId.dualTide);
     controller.dispose();
   });
+
+  test(
+    'HTF-01 RED: foreground catalog retains literal black and adds Portal-softened dark',
+    () {
+      expect(
+        DashboardHeaderForegroundColor.values,
+        <DashboardHeaderForegroundColor>[
+          DashboardHeaderForegroundColor.white,
+          DashboardHeaderForegroundColor.black,
+          DashboardHeaderForegroundColor.softenedDark,
+        ],
+      );
+      expect(DashboardHeaderForegroundColor.white.label, 'Fehér');
+      expect(DashboardHeaderForegroundColor.black.label, 'Fekete');
+      expect(DashboardHeaderForegroundColor.softenedDark.label, 'Lágyított');
+      expect(DashboardHeaderForegroundColor.black.color, Colors.black);
+      expect(
+        DashboardHeaderForegroundColor.softenedDark.color,
+        const Color(0xd114213a),
+        reason:
+            'The compared Color Lab Portal panel authors rgba(20,33,58,.82).',
+      );
+    },
+  );
+
+  test(
+    'HTY-01 RED: typography profile is Header-local, repeatable and frame-projected',
+    () {
+      final controller = DashboardHeaderVisualController(
+        vsync: const TestVSync(),
+      );
+      final policy = DashboardBalanceHeaderColorPolicy(
+        tuning: controller.tuning,
+      );
+      addTearDown(() {
+        policy.dispose();
+        controller.dispose();
+      });
+
+      final ticker = controller.tickerIdentity;
+      final beforeFrame = policy.value;
+      expect(
+        controller.tuning.value.headerTypography,
+        DashboardHeaderTypographyProfile.app,
+      );
+      expect(DashboardHeaderTypographyProfile.app.fontFamily, isNull);
+      expect(
+        DashboardHeaderTypographyProfile.colorLab.fontFamily,
+        'FluviColorLabInter',
+      );
+
+      controller.setHeaderTypography(DashboardHeaderTypographyProfile.colorLab);
+      expect(
+        controller.tuning.value.headerTypography,
+        DashboardHeaderTypographyProfile.colorLab,
+      );
+      expect(
+        policy.value.typography,
+        DashboardHeaderTypographyProfile.colorLab,
+      );
+      expect(controller.tickerIdentity, same(ticker));
+      expect(policy.value.colors, beforeFrame.colors);
+
+      controller.setHeaderTypography(DashboardHeaderTypographyProfile.app);
+      expect(
+        controller.tuning.value.headerTypography,
+        DashboardHeaderTypographyProfile.app,
+      );
+      expect(policy.value.typography, DashboardHeaderTypographyProfile.app);
+      expect(controller.tickerIdentity, same(ticker));
+    },
+  );
+
+  test(
+    'HTF-02/03 RED: softened tokens remain independent across text, chart and mode',
+    () {
+      final controller = DashboardHeaderVisualController(
+        vsync: const TestVSync(),
+      );
+      final score = ValueNotifier<MindBehavioralScoreFrame?>(null);
+      final balance = DashboardBalanceHeaderColorPolicy(
+        tuning: controller.tuning,
+      );
+      final mind = DashboardMindHeaderColorPolicy(
+        tuning: controller.tuning,
+        score: score,
+      );
+      addTearDown(() {
+        mind.dispose();
+        balance.dispose();
+        score.dispose();
+        controller.dispose();
+      });
+
+      controller.setBalanceHeaderTextColor(
+        DashboardHeaderForegroundColor.black,
+      );
+      controller.setBalanceHeaderChartColor(
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(mind.value.foregroundTextColor, Colors.white);
+      expect(mind.value.chartColor, Colors.white);
+      controller.setMindHeaderTextColor(
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      controller.setMindHeaderChartColor(DashboardHeaderForegroundColor.black);
+
+      expect(balance.value.foregroundTextColor, Colors.black);
+      expect(balance.value.chartColor, const Color(0xd114213a));
+      expect(mind.value.foregroundTextColor, const Color(0xd114213a));
+      expect(mind.value.chartColor, Colors.black);
+    },
+  );
 }
 
 Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {

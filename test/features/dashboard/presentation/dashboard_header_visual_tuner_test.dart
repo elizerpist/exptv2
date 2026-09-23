@@ -232,6 +232,88 @@ void main() {
     shell.dispose();
   });
 
+  testWidgets(
+    'HTF-04/HTY-01 RED: the real tuner exposes softened foregrounds and Header typography',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      await tester.binding.setSurfaceSize(const Size(800, 1200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            child: DashboardHeaderVisualTuner(controller: controller),
+          ),
+        ),
+      );
+
+      final app = find.byKey(
+        const ValueKey<String>('dashboard-header-typography-app'),
+      );
+      final colorLab = find.byKey(
+        const ValueKey<String>('dashboard-header-typography-colorLab'),
+      );
+      for (final control in <Finder>[app, colorLab]) {
+        await tester.ensureVisible(control);
+        expect(control, findsOneWidget);
+      }
+      await tester.tap(colorLab);
+      await tester.pump();
+      expect(
+        controller.tuning.value.headerTypography,
+        DashboardHeaderTypographyProfile.colorLab,
+      );
+
+      final controls = <Finder>[
+        find.byKey(
+          const ValueKey<String>('dashboard-header-balance-text-softenedDark'),
+        ),
+        find.byKey(
+          const ValueKey<String>('dashboard-header-balance-chart-softenedDark'),
+        ),
+        find.byKey(
+          const ValueKey<String>('dashboard-header-mind-text-softenedDark'),
+        ),
+        find.byKey(
+          const ValueKey<String>('dashboard-header-mind-chart-softenedDark'),
+        ),
+      ];
+      for (final control in controls) {
+        expect(control, findsOneWidget);
+        await tester.scrollUntilVisible(
+          control,
+          120,
+          scrollable: find.descendant(
+            of: find.byKey(
+              const ValueKey<String>('dashboard-header-visual-tuner-list'),
+            ),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        await tester.tap(control);
+        await tester.pump();
+      }
+      expect(
+        controller.tuning.value.balanceHeader.textColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(
+        controller.tuning.value.balanceHeader.chartColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(
+        controller.tuning.value.mindHeader.textColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(
+        controller.tuning.value.mindHeader.chartColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
+
   testWidgets('Budget content composition is session-owned and live', (
     tester,
   ) async {

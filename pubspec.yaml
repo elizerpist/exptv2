@@ -34,3 +34,7 @@ flutter:
     - assets/category_catalog/
     - assets/category_icons/
     - assets/logbox_category_icons/
+  fonts:
+    - family: FluviColorLabInter
+      fonts:
+        - asset: assets/fonts/inter/InterVariable.ttf
