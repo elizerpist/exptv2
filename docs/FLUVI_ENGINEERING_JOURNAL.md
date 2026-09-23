@@ -2412,6 +2412,14 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Current repository search on application source lineage found no existing `ghost`, pending-transaction, fixed-expense, recurring-expense, or triggered-transaction implementation. Therefore this is a forward product/data-model contract, not a current-source behavior claim.
 - Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
 
+## 2026-09-23 — Balance compact Momentum preview delivery correction
+
+- The first Closings/Momentum application delivery candidate `c1282a1820acfe6711baed08c8d995209d3383cb` reached GitHub Actions run `35835098652`. `dashboard-paths` and `test-core` passed, but `test-flutter` failed before the human APK job could start. The exact failure was a `RenderFlex` bottom overflow of 13px in `dashboard_rebuild_isolation_test.dart`, test `structural dashboard changes preserve the rail controller, position and physics`.
+- The failure is a Balance-local compact-preview layout defect: a scaled carousel side-card could receive only 39.3px of physical height while the new optional Momentum semantic-state line still rendered. It is neither a Core-data, financial-math, shared-carousel controller/physics, Query nor repository failure.
+- Application correction `b6b5584030de0ae41e40cc4d2cc91e68d36e61c9` preserves the primary preview value and renders the optional semantic-state detail only in a normal-height Balance card. The selected normal card retains its state label. Compact side cards have no overflow or clipped extra text.
+- **RED/GREEN:** the exact existing structural rebuild test reproduces the 13px overflow before the correction and is PASS after it. Ubuntu/proot `scripts/test-fluvi-fast.sh` is PASS (**432 passed**); Balance surface/detail retest is PASS (**22 passed**); `flutter analyze --no-pub --no-fatal-infos` is PASS (`No issues found`, 152.9 s); formatter and `git diff --check` are PASS.
+- The final source is now `b6b5584030de0ae41e40cc4d2cc91e68d36e61c9`; the `c1282...` graph is historical and must be regenerated for this source. The previous Actions run produced no human APK, so a new online build, APK hash/embedded identity and exact-source SCIP graph remain required. **Physical validation: PENDING — USER ONLY.**
+
 ## 2026-09-23 — Dedicated Ghost card content approved; Forecast card discussion pending
 
 - User approved the dedicated **Ghost / Fix terhek** card concept as a lifecycle/provenance view, distinct from the future global Ghost analytics lens.
