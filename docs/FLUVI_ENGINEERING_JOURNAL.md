@@ -2621,3 +2621,10 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Protected physical interaction milestone remains `6e962187e90e2a82431b1f91b224d2b52a6e0ba7`; do not alter Avatar/Time/carousel physics, Query, Summary, LogBox, Header geometry or animation ticker ownership.
 - User requested a clear/simple coding-agent prompt for this feature. Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of the future candidate remains **PENDING — USER ONLY**.
 
+## 2026-09-23 — Balance Header palette prompt preflight CI addendum
+
+- Current feature-line build evidence for merge head `511553c4671495fd85ad22d5d1482e9ed6e58271` (behavioral application source `22f58adfd79115f995fb23cef6029ebf06ca8526`): GitHub Actions run `35846311443` has `dashboard-paths` PASS, `test-core` PASS, `test-flutter` PASS and `build-human-diagnostic-apk` PASS; `run-dashboard-profile` FAIL, so the workflow is not globally green.
+- The profile failure in this run is outside the requested Balance Header palette/opacity scope: `DashboardProfileReport.validateMindYearHeatmapEvidence` rejects `frame_timing_headroom is invalid: null` in scenario `B_year_month_rail_populated`, followed by the consequential missing report-map error. Do not weaken or repair that Mind profile gate as part of the Balance Header presentation feature unless a new direct causal regression is proven.
+- Human diagnostic release for the merge head exists as `fluvi_HUMAN_DIAGNOSTIC_511553c.apk`, size 85,431,905 bytes, SHA-256 `be3692b725d3655763357f236db2f1770bc1f6381851bf73b660af68b7950d89`. This is automation/build identity only; no user physical acceptance is recorded.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]`; application source remains `22f58adf...`.
+
