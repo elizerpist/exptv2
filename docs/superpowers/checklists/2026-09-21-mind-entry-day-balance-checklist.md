@@ -106,3 +106,41 @@
 | M5-CARDS | Category Movers prompt §§8/9/15 | existing Balance upper/lower card slots | Upper hero shows the first money-impact mover; lower shows bounded diverging ranked rows, and a row opens an in-card immutable category trend with Back. | linked-card and Balance surface widget tests | DONE |
 | M6-GESTURES-HOTPATH | Category Movers prompt §§18/25 | Balance surface/Core publication | Card gestures stay local, global mode/Query/LogBox remain unchanged, and build/paint/gesture paths only consume the immutable payload. | Material-free cold-entry regression, host/shared/Budget and Core hot-path suites | DONE |
 | M7-INDICATORS | Category Movers prompt §17 | Balance Zone2 indicator renderer | Six real Balance insight indicators use the existing selected topic; exactly one is semantically active and no empty/prototype indicator is fabricated. | `MOVERS-INDICATORS` surface widget test | DONE |
+
+## 2026-09-23 — Period Closings and Balance Momentum architecture card
+
+### Single source and write path
+
+| State | Owner | Lifetime | Publication rule |
+| --- | --- | --- | --- |
+| Closings buckets and Momentum rates | `DashboardBalanceLinkedProjection` | one exact linked-presentation identity | Core builds once from resident Income + Expense memberships |
+| Logical comparison clock | `DashboardCoreController` | controller lifetime | one resolved initial `DateTime` publishes immutable date and local minute |
+| Selected upper topic | `BalanceDashboardCoreSurface` | mounted Balance surface | local only; never changes Query or Summary |
+| Selected closing bucket | `BalanceLinkedDetailCard` | mounted lower-card renderer | local only; never acquires data |
+| Carousel gesture/motion | existing `CenteredCarousel` | stable Balance controller/position | unchanged shared owner |
+
+### Reuse and boundary decision
+
+`DashboardBalanceLinkedPresentation` is extended rather than creating a second
+Query, repository, cache, controller or renderer-side aggregation. Closings
+and Momentum are separate immutable read models because their mathematics and
+visuals differ; they share the existing linked-presentation identity, resident
+memberships, cache, one carousel and one lower-card shell. The Budget
+eight-bucket `SpendingRhythmDayPart` stays a distinct owner.
+
+| ID | Source | Intended code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| PC1-OWNER | user §§11,20,22 | linked projection + Core cache | Closings and Momentum are immutable, bounded Core DTOs built once from resident Income and Expense memberships; widgets do no aggregation/I/O. | pure projection + Core no-source-work tests and source import check | DONE |
+| PC2-SUM | user §12.2 | Closings projection | SUM has one truthful sparse real-year bucket with exact Income, Expense and net. | CLOSING-SUM unit fixture | DONE |
+| PC3-YEAR-MONTH | user §12.2 | Closings projection | YEAR has 12 non-cumulative monthly buckets; MONTH has real calendar day buckets, including 28/29/30/31-day months. | CLOSING-YEAR/MONTH leap and zero fixtures | DONE |
+| PC4-DAYPARTS | user §12.2 | Balance-local Closings projection | DAY has exactly six named local dayparts with all specified boundary minutes; Budget's eight buckets are unchanged. | CLOSING-DAY boundary fixture plus Budget guard | DONE |
+| PC5-CLOSINGS-UI | user §§12.3–12.5,26 | one existing lower-card dispatch + Balance carousel preview | Preview reports truthful `N / M pozitív`; lower card uses centered symmetric zero axis, diverging discrete bars, compact local selection and no Summary mutation. | renderer sign/bounds/selection widget tests | DONE |
+| BM1-CLOCK | user §§9.6,13.3 | `DashboardCoreController` | Core retains date and local minute from the one injected/resolved initial time; no independent wall-clock/timer read occurs. | deterministic injected-time Core test | DONE |
+| BM2-WINDOWS | user §14 | Momentum projection | SUM/YEAR/MONTH/DAY use specified comparable windows, leap/month clamps and historical anchors from resident all-history membership. | SUM/YEAR/MONTH/DAY window fixtures | DONE |
+| BM3-MATH-STATE | user §§13,15,19 | Momentum projection | Integer financial totals yield finite normalized pace/momentum; four quadrants, five exact-zero states and unavailable history are explicit. | quadrant/zero/insufficient unit fixtures | DONE |
+| BM4-MOMENTUM-UI | user §§16–18,26 | one existing lower-card dispatch + Balance carousel preview | Preview and lower card use the same DTO; lower view is a symmetric four-quadrant map with one correctly located point and three rate metrics, never a time-series chart. | map sign/axis/metrics/empty widget tests | DONE |
+| BC1-SIX-TOPICS | user §§1,21,26 | Balance topic mapping/surface/detail dispatch | Exactly Cashflow, Closings, Momentum, Latest, Top category and Top partner exist; prototype is absent and both new topics select the one lower card. | six-topic mapping/wrap/semantics widget tests | DONE |
+| BC2-IDENTITY-HOTPATH | user §§20,21,25,29 | Core publication + existing carousel adapter | Data refresh retains selected logical index, controller and ScrollPosition; selecting either new topic performs zero repository/index/scene/TextPainter work. | production Core counters and carousel identity test | DONE |
+| BC3-BOUNDS-GESTURES | user §22,26 | Closings/Momentum lower renderers | Normal and compact bounds avoid overflow/clipped hit surfaces; bar/map gestures are local and never compete with global/carousel movement. | compact and interaction-bound widget tests | DONE |
+| BC4-NO-TOUCH | user §§9.7,30 | diff/regression boundary | Cashflow, Header/Compound, Mind, Budget taxonomy, shared carousel engine/profile, Summary/global geometry, Query and repository remain unchanged. | protected shared/Budget/Mind suites plus diff review | DONE |
+| BC5-DELIVERY | user §§33–37 | commits, CI, APK and codegraph | One application commit, journal-only follow-up, exact final-source SCIP, successful human APK and hash are delivered; physical validation is honestly pending. | commit/Actions/APK/manifest checks | PARTIAL |

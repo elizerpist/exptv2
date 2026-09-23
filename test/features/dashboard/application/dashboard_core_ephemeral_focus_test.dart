@@ -529,6 +529,8 @@ void main() {
       final initial = core.balanceLinkedPresentation.value;
       expect(initial, isNotNull);
       expect(initial!.cashflow.mode, DashboardBalancePrimaryMode.sum);
+      expect(initial.closings.buckets, isNotEmpty);
+      expect(initial.momentum.identity, initial.identity);
       final repositoryCalls = repository.prepareCalls;
       final indexGeneration = core.preparedIndex!.generation;
 
@@ -562,6 +564,10 @@ void main() {
         DashboardBalancePrimaryMode.year,
         reason: 'The accepted visible target is enough; no settle is needed.',
       );
+      expect(
+        core.balanceLinkedPresentation.value?.closings.buckets,
+        hasLength(12),
+      );
       publish(
         const MonthScope(YearMonth(year: 2026, month: 6)),
         TimePlane.month,
@@ -570,6 +576,8 @@ void main() {
       expect(month?.cashflow.mode, DashboardBalancePrimaryMode.month);
       expect(month?.cashflow.dailyPoints.last.incomeMinor, 120000);
       expect(month?.cashflow.dailyPoints.last.expenseMinor, 35000);
+      expect(month?.closings.buckets, hasLength(30));
+      expect(month?.momentum.identity, month?.identity);
       expect(repository.prepareCalls, repositoryCalls);
       expect(core.preparedIndex?.generation, indexGeneration);
 
@@ -581,6 +589,26 @@ void main() {
             'Returning to a resident Summary target must reuse its immutable '
             'linked Balance presentation instead of rescanning membership.',
       );
+    },
+  );
+
+  test(
+    'BM1: Core freezes one injected logical date and local minute-of-day',
+    () {
+      final core = DashboardCoreController(
+        dataRepository: _BalancePreparedRepository(),
+        initialDate: DateTime.utc(2026, 9, 23, 14, 37),
+        initialPlane: TimePlane.sum,
+        initialCoreRevision: 1,
+        initialDirection: LedgerDirection.income,
+      );
+      addTearDown(core.dispose);
+
+      expect(
+        core.logicalAsOfDate,
+        const LocalDate(year: 2026, month: 9, day: 23),
+      );
+      expect(core.logicalAsOfLocalTimeMinutes, 14 * 60 + 37);
     },
   );
 

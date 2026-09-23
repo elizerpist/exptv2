@@ -792,6 +792,8 @@ final class DashboardCoreController {
       month: resolvedInitialDate.month,
       day: resolvedInitialDate.day,
     );
+    logicalAsOfLocalTimeMinutes =
+        resolvedInitialDate.hour * 60 + resolvedInitialDate.minute;
     committedLogViewport = CommittedLogViewportCache(pageSize: pageSize);
     final activeRailFlightRecorder = this.railFlightRecorder?.isEnabled == true
         ? this.railFlightRecorder
@@ -1095,6 +1097,7 @@ final class DashboardCoreController {
   late final DashboardRenderReadinessDiagnostics renderReadinessDiagnostics;
   late final DashboardPresentationController presentation;
   late final LocalDate logicalAsOfDate;
+  late final int logicalAsOfLocalTimeMinutes;
   late final DashboardDataRuntime dataRuntime;
   final ValueNotifier<bool> foregroundInputMotion = ValueNotifier<bool>(false);
   final ValueNotifier<bool> budgetAvatarLiveRootReady = ValueNotifier<bool>(
@@ -15892,7 +15895,8 @@ final class DashboardCoreController {
     final cacheKey =
         '${identity.upstreamScopeKey}|${identity.indexGeneration}|'
         '${identity.coreRevision}|${timeScope.canonicalKey}|'
-        '${frame.direction.name}|${logicalAsOfDate.isoString}';
+        '${frame.direction.name}|${logicalAsOfDate.isoString}|'
+        '$logicalAsOfLocalTimeMinutes';
     final cached = _balanceLinkedProjectionCache.remove(cacheKey);
     if (cached != null) {
       _balanceLinkedProjectionCache[cacheKey] = cached;
@@ -15904,6 +15908,7 @@ final class DashboardCoreController {
       timeScope: timeScope,
       selectedDirection: frame.direction,
       logicalAsOfDate: logicalAsOfDate,
+      logicalAsOfLocalTimeMinutes: logicalAsOfLocalTimeMinutes,
       incomeEntries: _balancePrimaryEntriesFor(
         index: index,
         direction: LedgerDirection.income,

@@ -4,7 +4,6 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
@@ -24,8 +23,25 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
+  test(
+    'BC1 RED: Balance has the six final real linked topics and no prototype',
+    () {
+      expect(
+        balanceCarouselCardsFor(null).map((card) => card.kind),
+        <BalanceCarouselCardKind>[
+          BalanceCarouselCardKind.cashflow,
+          BalanceCarouselCardKind.closings,
+          BalanceCarouselCardKind.momentum,
+          BalanceCarouselCardKind.latestTransaction,
+          BalanceCarouselCardKind.topCategory,
+          BalanceCarouselCardKind.topPartner,
+        ],
+      );
+    },
+  );
+
   testWidgets(
-    'MOVERS-PRODUCTION-PARENT RED: the existing Balance zone2 envelope hosts the selected Movers detail without moving its geometry',
+    'BALANCE-LOWER-ENVELOPE: the existing lower card retains its geometry for Cashflow',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
       final primary = ValueNotifier<DashboardBalanceLinkedPresentation?>(
@@ -107,12 +123,6 @@ void main() {
         lower.bounds.bottom,
         closeTo(modePresentation.geometry.zone2Bounds.bottom, .001),
       );
-      expect(
-        find.byKey(const ValueKey<String>('balance-primary-card')),
-        findsOneWidget,
-      );
-      expect(find.text('Nincs kategóriaváltozás'), findsOneWidget);
-
       primary.value = DashboardBalanceLinkedPresentation(
         identity: primary.value!.identity,
         timeScope: const DayScope(LocalDate(year: 2026, month: 7, day: 2)),
@@ -131,11 +141,6 @@ void main() {
         topPartners: const <DashboardBalanceRankedItem>[],
       );
       await tester.pump();
-      expect(
-        find.byKey(const ValueKey<String>('balance-primary-card')),
-        findsOneWidget,
-      );
-      expect(find.text('Nincs kategóriaváltozás'), findsOneWidget);
     },
   );
 
@@ -162,9 +167,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(
-          const ValueKey<String>('balance-linked-detail-category-movers'),
-        ),
+        find.byKey(const ValueKey<String>('balance-linked-detail-cashflow')),
         findsOneWidget,
       );
       final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
@@ -173,16 +176,22 @@ void main() {
       carousel.controller.jumpToIndex(1);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-linked-detail-cashflow')),
+        find.byKey(const ValueKey<String>('balance-linked-detail-closings')),
         findsOneWidget,
       );
       carousel.controller.jumpToIndex(2);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-linked-detail-latest')),
+        find.byKey(const ValueKey<String>('balance-linked-detail-momentum')),
         findsOneWidget,
       );
       carousel.controller.jumpToIndex(3);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-latest')),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(4);
       await tester.pump();
       expect(
         find.byKey(
@@ -194,20 +203,10 @@ void main() {
         find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
         findsOneWidget,
       );
-      carousel.controller.jumpToIndex(4);
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('balance-linked-rank-employer')),
-        findsOneWidget,
-      );
       carousel.controller.jumpToIndex(5);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-linked-detail-prototype')),
+        find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
         findsOneWidget,
       );
     },
@@ -283,7 +282,7 @@ void main() {
       final source =
           carousel.dataSource! as CyclicCarouselDataSource<BalanceCarouselCard>;
       expect(source.items, hasLength(6));
-      expect(source.items.first.kind, BalanceCarouselCardKind.categoryMovers);
+      expect(source.items.first.kind, BalanceCarouselCardKind.cashflow);
       expect(carousel.controller.selectedLogicalIndex, 0);
       expect(carousel.spec.visibleItemCount, 3);
       expect(
@@ -294,8 +293,6 @@ void main() {
         isTrue,
       );
       expect(carousel.spec.maxScale, greaterThan(carousel.spec.neighborScale));
-      expect(find.text('Piac'), findsOneWidget);
-      expect(find.text('előző időszakhoz képest'), findsOneWidget);
       expect(
         find.byKey(
           const ValueKey<String>('dashboard-core-mode-balance-card-2'),
@@ -310,29 +307,26 @@ void main() {
           .where(
             (semantics) =>
                 semantics.properties.selected == true &&
-                semantics.properties.label ==
-                    'Legnagyobb kategóriaváltozás: RESTAURANTS',
+                semantics.properties.label?.startsWith('Cashflow:') == true,
           )
           .toList(growable: false);
       expect(selectedSemantics, hasLength(1));
       expect(
         selectedSemantics.single.properties.label,
-        'Legnagyobb kategóriaváltozás: RESTAURANTS',
+        startsWith('Cashflow:'),
       );
 
       final viewport = find.byKey(
         const ValueKey<String>('balance-carousel-viewport'),
       );
       final centerCard = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('balance-carousel-card-category-movers'),
-        ),
+        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
       );
       final leftCard = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+        find.byKey(const ValueKey<String>('balance-carousel-card-top-partner')),
       );
       final rightCard = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+        find.byKey(const ValueKey<String>('balance-carousel-card-closings')),
       );
       expect(centerCard.width, greaterThan(leftCard.width));
       expect(centerCard.width, greaterThan(rightCard.width));
@@ -357,7 +351,7 @@ void main() {
       carousel.controller.jumpToIndex(-1);
       await tester.pump();
       expect(carousel.controller.selectedLogicalIndex, -1);
-      expect(source.itemAtLogicalIndex(-1).id, 'prototype-1');
+      expect(source.itemAtLogicalIndex(-1).id, 'top-partner');
       carousel.controller.jumpToIndex(0);
       await tester.pump();
 
@@ -378,9 +372,9 @@ void main() {
       expect(rebuilt.controller.selectedLogicalIndex, 0);
       expect(
         rebuiltSource.items.first.amount,
-        'Lakhatás',
+        '-460,00 Ft',
         reason:
-            'A scope/direction linked payload frissíti a Movers hőskártyát '
+            'A scope/direction linked payload frissíti a Cashflow hőskártyát '
             'anélkül, hogy a közös Carousel újraindulna.',
       );
 
@@ -532,12 +526,9 @@ void main() {
         expect(decoration.color, FluviVisualTokens.surface, reason: id);
       }
 
-      // The centered initial triad covers prototype/Movers/Cashflow; index
-      // three covers latest plus the two ranked topics without changing the
-      // cyclic domain.
-      expectSurface('prototype-1');
-      expectSurface('category-movers');
       expectSurface('cashflow');
+      expectSurface('closings');
+      expectSurface('momentum');
       carousel.controller.jumpToIndex(3);
       await tester.pump();
       expectSurface('latest-transaction');
@@ -627,15 +618,13 @@ void main() {
       );
 
       final center = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('balance-carousel-card-category-movers'),
-        ),
+        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
       );
       final left = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+        find.byKey(const ValueKey<String>('balance-carousel-card-top-partner')),
       );
       final right = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+        find.byKey(const ValueKey<String>('balance-carousel-card-closings')),
       );
       expect(
         center.height,
@@ -953,7 +942,7 @@ void main() {
       final initialWidth = tester
           .getSize(
             find.byKey(
-              const ValueKey<String>('balance-carousel-card-category-movers'),
+              const ValueKey<String>('balance-carousel-card-cashflow'),
             ),
           )
           .width;
@@ -967,15 +956,13 @@ void main() {
         find.byType(CenteredCarousel<BalanceCarouselCard>),
       );
       final selected = tester.getRect(
-        find.byKey(
-          const ValueKey<String>('balance-carousel-card-category-movers'),
-        ),
+        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
       );
       final left = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-prototype-1')),
+        find.byKey(const ValueKey<String>('balance-carousel-card-top-partner')),
       );
       final right = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+        find.byKey(const ValueKey<String>('balance-carousel-card-closings')),
       );
       expect(
         find.byKey(
@@ -1005,7 +992,7 @@ void main() {
   );
 
   testWidgets(
-    'MOVERS-INDICATORS RED: Zone2 indicators reflect the one shared Balance insight selection',
+    'BALANCE-INDICATORS: Zone2 indicators reflect the one shared Balance insight selection',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
@@ -1025,7 +1012,7 @@ void main() {
 
       expect(
         find.byKey(
-          const ValueKey<String>('balance-insight-indicator-category-movers'),
+          const ValueKey<String>('balance-insight-indicator-cashflow'),
         ),
         findsOneWidget,
       );
@@ -1039,7 +1026,7 @@ void main() {
                     .widget<DecoratedBox>(
                       find.byKey(
                         const ValueKey<String>(
-                          'balance-insight-indicator-cashflow',
+                          'balance-insight-indicator-closings',
                         ),
                       ),
                     )
@@ -1166,11 +1153,6 @@ DashboardBalanceLinkedPresentation _linked() {
         categoryIconId: 'icon_17',
       ),
     ],
-    categoryMovers: _movers(
-      identity: identity,
-      label: 'RESTAURANTS',
-      categoryId: 'restaurants',
-    ),
   );
 }
 
@@ -1202,46 +1184,5 @@ DashboardBalanceLinkedPresentation _linkedReplacement() {
       ),
     ],
     topPartners: initial.topPartners,
-    categoryMovers: _movers(
-      identity: initial.identity,
-      label: 'Lakhatás',
-      categoryId: 'housing',
-    ),
   );
 }
-
-DashboardBalanceCategoryMoversPresentation _movers({
-  required DashboardBalancePrimaryIdentity identity,
-  required String label,
-  required String categoryId,
-}) => DashboardBalanceCategoryMoversPresentation(
-  identity: identity,
-  timeScope: const AllTimeScope(),
-  selectedDirection: LedgerDirection.income,
-  logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 23),
-  currentWindow: const DashboardBalanceCategoryComparisonWindow(
-    startInclusive: LocalDate(year: 2026, month: 1, day: 1),
-    endInclusive: LocalDate(year: 2026, month: 9, day: 23),
-  ),
-  referenceWindow: const DashboardBalanceCategoryComparisonWindow(
-    startInclusive: LocalDate(year: 2025, month: 1, day: 1),
-    endInclusive: LocalDate(year: 2025, month: 9, day: 23),
-  ),
-  movers: <DashboardBalanceCategoryMover>[
-    DashboardBalanceCategoryMover(
-      id: categoryId,
-      label: label,
-      categoryColorId: 'color_07',
-      categoryIconId: 'icon_17',
-      currentMinor: 7240000,
-      referenceMinor: 5398000,
-      trend: const <DashboardBalanceCategoryMoverTrendPoint>[
-        DashboardBalanceCategoryMoverTrendPoint(
-          bucket: 1,
-          currentMinor: 12000,
-          referenceMinor: 9000,
-        ),
-      ],
-    ),
-  ],
-);

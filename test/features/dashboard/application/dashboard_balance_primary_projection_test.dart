@@ -295,71 +295,30 @@ void main() {
   );
 
   test(
-    'MOVERS-LINKED-IDENTITY RED: the Core-linked payload keeps directions separate and carries the exact comparison identity',
+    'PC1/BM1 RED: one linked Balance payload carries dual-direction Closings and Momentum from resident histories',
     () {
-      final expense = DashboardBalanceLinkedProjection.build(
+      final linked = DashboardBalanceLinkedProjection.build(
         identity: identity,
-        timeScope: const YearScope(2026),
+        timeScope: DayScope(const LocalDate(year: 2026, month: 9, day: 23)),
         selectedDirection: LedgerDirection.expense,
-        logicalAsOfDate: const LocalDate(year: 2027, month: 1, day: 1),
+        logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 23),
+        logicalAsOfLocalTimeMinutes: 14 * 60 + 37,
         incomeEntries: <DashboardLedgerEntry>[
-          _entry(
-            'income-2026',
-            'income',
-            900000,
-            2026,
-            6,
-            1,
-            categoryId: 'salary',
-          ),
+          _entry('history', 'income', 1, 2026, 9, 21),
+          _entry('today-income', 'income', 900, 2026, 9, 23),
         ],
         expenseEntries: <DashboardLedgerEntry>[
-          _entry(
-            'food-2025',
-            'expense',
-            -80000,
-            2025,
-            6,
-            1,
-            categoryId: 'food',
-          ),
-          _entry(
-            'food-2026',
-            'expense',
-            -120000,
-            2026,
-            6,
-            1,
-            categoryId: 'food',
-          ),
-          _entry(
-            'new-2026',
-            'expense',
-            -7000,
-            2026,
-            7,
-            1,
-            categoryId: 'new-category',
-          ),
+          _entry('today-expense', 'expense', -400, 2026, 9, 23),
+          _entry('yesterday-expense', 'expense', -100, 2026, 9, 22),
         ],
       );
 
-      expect(expense.categoryMovers, isNotNull);
-      expect(
-        expense.categoryMovers!.selectedDirection,
-        LedgerDirection.expense,
-      );
-      expect(expense.categoryMovers!.identity, identity);
-      expect(expense.categoryMovers!.movers.map((mover) => mover.id), <String>[
-        'food',
-        'new-category',
-      ]);
-      expect(expense.categoryMovers!.movers.first.deltaMinor, 40000);
-      expect(expense.categoryMovers!.movers.last.isNew, isTrue);
-      expect(
-        expense.categoryMovers!.movers.map((mover) => mover.id),
-        isNot(contains('salary')),
-      );
+      expect(linked.closings.buckets, hasLength(6));
+      expect(linked.closings.buckets[3].netMinor, 500);
+      expect(linked.momentum.isAvailable, isTrue);
+      expect(linked.momentum.currentNetMinor, 500);
+      expect(linked.momentum.previousNetMinor, -100);
+      expect(linked.momentum.logicalAsOfLocalTimeMinutes, 14 * 60 + 37);
     },
   );
 }

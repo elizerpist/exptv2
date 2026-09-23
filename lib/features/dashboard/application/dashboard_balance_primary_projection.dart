@@ -5,7 +5,7 @@ import '../query/domain/ledger_direction.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
-import 'dashboard_balance_category_movers_projection.dart';
+import 'dashboard_balance_closings_momentum_projection.dart';
 
 const _balanceLinkedMaximumRows = 5;
 
@@ -170,10 +170,11 @@ final class DashboardBalanceLinkedPresentation {
     required this.timeScope,
     required this.selectedDirection,
     required this.cashflow,
+    DashboardBalanceClosingsPresentation? closings,
+    DashboardBalanceMomentumPresentation? momentum,
     required List<DashboardBalanceScopedTransaction> latestTransactions,
     required List<DashboardBalanceRankedItem> topCategories,
     required List<DashboardBalanceRankedItem> topPartners,
-    this.categoryMovers,
   }) : latestTransactions =
            List<DashboardBalanceScopedTransaction>.unmodifiable(
              latestTransactions.take(_balanceLinkedMaximumRows),
@@ -184,31 +185,45 @@ final class DashboardBalanceLinkedPresentation {
        topPartners = List<DashboardBalanceRankedItem>.unmodifiable(
          topPartners.take(_balanceLinkedMaximumRows),
        ),
-       presentationId = Object.hashAll(<Object?>[
-         identity,
-         timeScope.canonicalKey,
-         selectedDirection,
-         cashflow.presentationId,
-         for (final transaction in latestTransactions.take(
-           _balanceLinkedMaximumRows,
-         ))
-           '${transaction.entryId}:${transaction.occurredOrder}',
-         for (final category in topCategories.take(_balanceLinkedMaximumRows))
-           '${category.id}:${category.amountMinor}:${category.transactionCount}',
-         for (final partner in topPartners.take(_balanceLinkedMaximumRows))
-           '${partner.id}:${partner.amountMinor}:${partner.transactionCount}',
-         categoryMovers?.presentationId,
-       ]);
+       closings =
+           closings ??
+           DashboardBalanceClosingsPresentation(
+             identity: identity,
+             timeScope: timeScope,
+             buckets: const <DashboardBalanceClosingBucket>[],
+           ),
+       momentum =
+           momentum ??
+           DashboardBalanceMomentumPresentation.unavailable(
+             identity: identity,
+             timeScope: timeScope,
+           );
 
   final DashboardBalancePrimaryIdentity identity;
   final LedgerTimeScope timeScope;
   final LedgerDirection selectedDirection;
   final DashboardBalancePrimaryPresentation cashflow;
+  final DashboardBalanceClosingsPresentation closings;
+  final DashboardBalanceMomentumPresentation momentum;
   final List<DashboardBalanceScopedTransaction> latestTransactions;
   final List<DashboardBalanceRankedItem> topCategories;
   final List<DashboardBalanceRankedItem> topPartners;
-  final DashboardBalanceCategoryMoversPresentation? categoryMovers;
-  final int presentationId;
+  int get presentationId => Object.hashAll(<Object?>[
+    identity,
+    timeScope.canonicalKey,
+    selectedDirection,
+    cashflow.presentationId,
+    closings.presentationId,
+    momentum.presentationId,
+    for (final transaction in latestTransactions.take(
+      _balanceLinkedMaximumRows,
+    ))
+      '${transaction.entryId}:${transaction.occurredOrder}',
+    for (final category in topCategories.take(_balanceLinkedMaximumRows))
+      '${category.id}:${category.amountMinor}:${category.transactionCount}',
+    for (final partner in topPartners.take(_balanceLinkedMaximumRows))
+      '${partner.id}:${partner.amountMinor}:${partner.transactionCount}',
+  ]);
 }
 
 /// Thin two-direction temporal read model over resident prepared membership.
@@ -447,6 +462,7 @@ abstract final class DashboardBalanceLinkedProjection {
     required Iterable<DashboardLedgerEntry> incomeEntries,
     required Iterable<DashboardLedgerEntry> expenseEntries,
     LocalDate logicalAsOfDate = const LocalDate(year: 2026, month: 1, day: 1),
+    int logicalAsOfLocalTimeMinutes = 12 * 60,
   }) {
     final income = _entriesForScope(incomeEntries, timeScope);
     final expense = _entriesForScope(expenseEntries, timeScope);
@@ -463,6 +479,20 @@ abstract final class DashboardBalanceLinkedProjection {
         incomeEntries: income,
         expenseEntries: expense,
       ),
+      closings: DashboardBalanceClosingsProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        incomeEntries: incomeEntries,
+        expenseEntries: expenseEntries,
+      ),
+      momentum: DashboardBalanceMomentumProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        logicalAsOfDate: logicalAsOfDate,
+        logicalAsOfLocalTimeMinutes: logicalAsOfLocalTimeMinutes,
+        incomeEntries: incomeEntries,
+        expenseEntries: expenseEntries,
+      ),
       latestTransactions: _latestTransactions(income, expense),
       topCategories: _rank(
         directional,
@@ -473,15 +503,6 @@ abstract final class DashboardBalanceLinkedProjection {
         directional,
         selectedDirection,
         _BalanceRankKind.partner,
-      ),
-      categoryMovers: DashboardBalanceCategoryMoversProjection.build(
-        identity: identity,
-        timeScope: timeScope,
-        selectedDirection: selectedDirection,
-        logicalAsOfDate: logicalAsOfDate,
-        entries: selectedDirection == LedgerDirection.income
-            ? incomeEntries
-            : expenseEntries,
       ),
     );
   }

@@ -16,6 +16,7 @@ import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_linked_detail_card.dart';
+import 'balance_momentum_card.dart';
 import 'balance_presentation_settings.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
@@ -28,30 +29,30 @@ import '../dashboard_shadow_style.dart';
 
 /// The finite presentation domain of Balance's upper linked topic rail.
 enum BalanceCarouselCardKind {
-  categoryMovers,
   cashflow,
+  closings,
+  momentum,
   latestTransaction,
   topCategory,
   topPartner,
-  emptyPrototype,
 }
 
 const _balanceInsightIndicatorIds = <String>[
-  'category-movers',
   'cashflow',
+  'closings',
+  'momentum',
   'latest-transaction',
   'top-category',
   'top-partner',
-  'prototype-1',
 ];
 
 String _indicatorIdFor(BalanceLinkedDetailTopic topic) => switch (topic) {
-  BalanceLinkedDetailTopic.categoryMovers => 'category-movers',
   BalanceLinkedDetailTopic.cashflow => 'cashflow',
+  BalanceLinkedDetailTopic.closings => 'closings',
+  BalanceLinkedDetailTopic.momentum => 'momentum',
   BalanceLinkedDetailTopic.latestTransaction => 'latest-transaction',
   BalanceLinkedDetailTopic.topCategory => 'top-category',
   BalanceLinkedDetailTopic.topPartner => 'top-partner',
-  BalanceLinkedDetailTopic.prototype => 'prototype-1',
 };
 
 /// One render-only Balance carousel item. Financial data is supplied in the
@@ -65,7 +66,6 @@ final class BalanceCarouselCard {
     required this.title,
     required this.amount,
     this.detail,
-    this.contextLabel,
   });
 
   final String id;
@@ -73,28 +73,17 @@ final class BalanceCarouselCard {
   final String title;
   final String amount;
   final String? detail;
-  final String? contextLabel;
 }
 
 List<BalanceCarouselCard> balanceCarouselCardsFor(
   DashboardBalanceLinkedPresentation? presentation,
 ) {
-  final hero = presentation?.categoryMovers?.movers.firstOrNull;
   final latest = presentation?.latestTransactions.firstOrNull;
   final topCategory = presentation?.topCategories.firstOrNull;
   final topPartner = presentation?.topPartners.firstOrNull;
+  final closings = presentation?.closings;
+  final momentum = presentation?.momentum;
   return List<BalanceCarouselCard>.unmodifiable(<BalanceCarouselCard>[
-    BalanceCarouselCard._(
-      id: 'category-movers',
-      kind: BalanceCarouselCardKind.categoryMovers,
-      title: 'Legnagyobb kategóriaváltozás',
-      amount: hero?.label ?? 'Nincs változás',
-      detail: hero == null
-          ? null
-          : '${_signedPercent(hero.percentageBasisPoints, hero.isNew)} · '
-                '${_signedAmount(hero.deltaMinor)}',
-      contextLabel: hero == null ? null : 'előző időszakhoz képest',
-    ),
     BalanceCarouselCard._(
       id: 'cashflow',
       kind: BalanceCarouselCardKind.cashflow,
@@ -104,6 +93,25 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
           : DashboardPreparedFormatter.amountMinor(
               presentation.cashflow.netTotalMinor,
             ),
+    ),
+    BalanceCarouselCard._(
+      id: 'closings',
+      kind: BalanceCarouselCardKind.closings,
+      title: 'Zárások',
+      amount: closings == null
+          ? '—'
+          : '${closings.positiveBucketCount} / ${closings.buckets.length} pozitív',
+    ),
+    BalanceCarouselCard._(
+      id: 'momentum',
+      kind: BalanceCarouselCardKind.momentum,
+      title: 'Balance momentum',
+      amount: momentum == null || !momentum.isAvailable
+          ? 'Nincs adat'
+          : formatBalanceMomentumRate(momentum.momentum, momentum.unit),
+      detail: momentum == null
+          ? null
+          : balanceMomentumStateLabel(momentum.state),
     ),
     BalanceCarouselCard._(
       id: 'latest-transaction',
@@ -122,12 +130,6 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       kind: BalanceCarouselCardKind.topPartner,
       title: 'Top partner',
       amount: topPartner?.label ?? 'Nincs adat',
-    ),
-    const BalanceCarouselCard._(
-      id: 'prototype-1',
-      kind: BalanceCarouselCardKind.emptyPrototype,
-      title: 'Prototípus',
-      amount: '—',
     ),
   ]);
 }
@@ -168,8 +170,7 @@ class BalanceDashboardCoreSurface extends StatefulWidget {
 
 final class _BalanceDashboardCoreSurfaceState
     extends State<BalanceDashboardCoreSurface> {
-  BalanceLinkedDetailTopic _selectedTopic =
-      BalanceLinkedDetailTopic.categoryMovers;
+  BalanceLinkedDetailTopic _selectedTopic = BalanceLinkedDetailTopic.cashflow;
 
   @override
   Widget build(BuildContext context) {
@@ -202,18 +203,18 @@ final class _BalanceDashboardCoreSurfaceState
               onMotionInterrupted: widget.onCarouselMotionInterrupted,
               onCardSelected: (card) {
                 final selected = switch (card.kind) {
-                  BalanceCarouselCardKind.categoryMovers =>
-                    BalanceLinkedDetailTopic.categoryMovers,
                   BalanceCarouselCardKind.cashflow =>
                     BalanceLinkedDetailTopic.cashflow,
+                  BalanceCarouselCardKind.closings =>
+                    BalanceLinkedDetailTopic.closings,
+                  BalanceCarouselCardKind.momentum =>
+                    BalanceLinkedDetailTopic.momentum,
                   BalanceCarouselCardKind.latestTransaction =>
                     BalanceLinkedDetailTopic.latestTransaction,
                   BalanceCarouselCardKind.topCategory =>
                     BalanceLinkedDetailTopic.topCategory,
                   BalanceCarouselCardKind.topPartner =>
                     BalanceLinkedDetailTopic.topPartner,
-                  BalanceCarouselCardKind.emptyPrototype =>
-                    BalanceLinkedDetailTopic.prototype,
                 };
                 if (selected != _selectedTopic) {
                   setState(() => _selectedTopic = selected);
@@ -583,15 +584,15 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           widget.onCardSelected(widget.cards[itemIndex]);
         },
         semanticsLabelBuilder: (card) => switch (card.kind) {
-          BalanceCarouselCardKind.categoryMovers =>
-            'Legnagyobb kategóriaváltozás: ${card.amount}',
           BalanceCarouselCardKind.cashflow => 'Cashflow: ${card.amount}',
+          BalanceCarouselCardKind.closings => 'Zárások: ${card.amount}',
+          BalanceCarouselCardKind.momentum =>
+            'Balance momentum: ${card.amount}',
           BalanceCarouselCardKind.latestTransaction =>
             'Legutóbbi tranzakció: ${card.amount}',
           BalanceCarouselCardKind.topCategory =>
             'Top kategória: ${card.amount}',
           BalanceCarouselCardKind.topPartner => 'Top partner: ${card.amount}',
-          BalanceCarouselCardKind.emptyPrototype => 'Üres Balance prototípus',
         },
         itemBuilder: (context, card, metrics) => _BalanceCarouselPressFeedback(
           child: _BalanceCarouselCard(
@@ -685,7 +686,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? 4 : 8,
-                vertical: compact ? 2 : (card.contextLabel == null ? 7 : 4),
+                vertical: compact ? 2 : 7,
               ),
               child: compact
                   ? Align(
@@ -737,19 +738,6 @@ final class _BalanceCarouselCard extends StatelessWidget {
                                 ),
                           ),
                         ],
-                        if (card.contextLabel
-                            case final contextLabel?) ...<Widget>[
-                          const SizedBox(height: 1),
-                          Text(
-                            contextLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: FluviVisualTokens.textSecondary,
-                                ),
-                          ),
-                        ],
                       ],
                     ),
             ),
@@ -758,14 +746,4 @@ final class _BalanceCarouselCard extends StatelessWidget {
       ),
     );
   }
-}
-
-String _signedAmount(int amountMinor) =>
-    '${amountMinor < 0 ? '-' : '+'}${DashboardPreparedFormatter.amountMinor(amountMinor.abs())}';
-
-String _signedPercent(int? basisPoints, bool isNew) {
-  if (isNew) return 'Új';
-  if (basisPoints == null) return '0%';
-  final rounded = (basisPoints / 100).round();
-  return '${rounded > 0 ? '+' : ''}$rounded%';
 }
