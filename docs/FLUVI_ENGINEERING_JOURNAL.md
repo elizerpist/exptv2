@@ -2425,3 +2425,70 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - The dedicated Ghost card and the future global provenance lens have separate responsibilities: **Ghost card = lifecycle/obligation/entity inspection**; **Ghost analytics lens = include/exclude materialized Ghost-origin real transactions in behavioral analytics**; **pending forecast = separate explicit scenario layer**.
 - User explicitly requested **NO coding-agent prompt yet**. A separate Forecast card will be designed next; Ghost + Forecast are intended to be bundled later in one larger implementation prompt.
 - Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
+## 2026-09-23 — Ghost + Forecast placeholder-card bundle approved
+
+- User approved bundling **two new Balance linked topics/cards** into one implementation unit: **Ghost / Fix terhek** and **Forecast**. The Ghost engine/data model does not exist yet, so the immediate delivery is a **truthful presentation placeholder integration**, not a speculative Ghost storage/trigger implementation. Forecast is likewise data-blocked because truthful behavior forecasting must distinguish materialized Ghost-origin transactions from ordinary real transactions and must separately consume pending Ghost obligations; therefore the immediate Forecast delivery is also a presentation placeholder, not fabricated analytics.
+- Current feature branch at prompt audit is merge HEAD `36cb417a0337656ece1d2c7a65158cfb7ed28ace`; that merge changes only `docs/FLUVI_ENGINEERING_JOURNAL.md`. Current behavioral application source is `c1282a1820acfe6711baed08c8d995209d3383cb` (`feat(balance): add closings and momentum insights`).
+- Current source at `c1282...` has exactly six real Balance linked topics and no prototype: **Cashflow, Zárások, Balance Momentum, Legutóbbi tétel, Top kategória, Top partner**. One unchanged shared `CenteredCarousel` remains the controller/ScrollPosition/physics/gesture owner. Ghost + Forecast must extend this finite topic list without replacing any current real topic. If more real topics land before execution, preserve all of them and append/adapt rather than relying on a hard-coded count.
+- Current graph status at prompt audit: tooling head `c3424b2496bfddbd68eade7f926d0b8d44265142` indexes `manifest.source_head=76ee16256bdde96d8ea9ae16077e5db1e105170c`; therefore it is **STALE FOR CURRENT APPLICATION SOURCE `c1282...`**. Stale graph may be used only for historical navigation. The coding agent must source-audit current owners and regenerate a matching pre-change graph before shared/Core impact conclusions if feasible, then regenerate exact final-source SCIP after delivery.
+- Current merge-head workflow `35835098652` was still **in progress** at prompt audit time. No exact `c1282...` workflow run or human diagnostic APK/release was found yet. Local tests recorded in the delivery journal are green, but Android physical validation remains **PENDING — USER ONLY**.
+- Connected Drive search found **no Ghost/Forecast runtime log**. This is expected because neither feature exists. Existing historical Fluvi interaction logs are not causal evidence for these new placeholder cards.
+
+### Ghost semantic contract
+
+- Ghost has **two separate authorities**:
+  1. lifecycle: a pending Ghost definition/event is not yet a real ledger transaction;
+  2. persistent provenance: once its trigger fires it materializes into a real ledger transaction and permanently retains Ghost origin/badge metadata.
+- A materialized Ghost-origin transaction is financially real and belongs in actual totals, but behavioral analytics may later exclude it because mandatory/fixed spending (rent, utilities, etc.) must remain distinguishable from discretionary behavior.
+- Future global analytics lens remains conceptually separate from this card: **All actual / With Ghost**, **Without Ghost**, **Only Ghost** apply to materialized real transactions by persistent Ghost provenance. Pending Ghost definitions do not enter actual historical analytics. This shared lens is future scope, not part of the immediate placeholder implementation.
+- Dedicated Ghost card responsibility: lifecycle/obligation/entity inspection, not generic Ghost-only analytics.
+- Approved future compact Ghost preview concept: **Fix terhek** with Ghost badge; hero prioritizes pending/materialized amount over count, with compact count/next-trigger context.
+- Approved future large Ghost card: clearly separates **materialized/activated real Ghost-origin transactions** from **pending untriggered Ghost definitions**. Preferred metrics are **Aktiválódott/materializált amount**, **Pending amount**, and explicitly forecast-labelled **Várható fix teher**. A projected amount must never masquerade as actual Balance.
+- Preferred future Month/Day main composition is a **Ghost timeline/list**. Materialized rows use solid real-transaction treatment while retaining the Ghost badge; pending rows use ghosted/transparent/dashed treatment. Tap opens local detail only.
+- Future item detail distinguishes definition vs occurrence/materialized transaction and may show name, amount, lifecycle state, trigger, next trigger, last activation, and historical materialized Ghost-origin total.
+- Approved future Summary behavior: **SUM → commitments/definitions overview + all-history materialized Ghost context + current pending obligations; YEAR → monthly fixed-burden overview; MONTH → strongest Ghost timeline/list; DAY → selected-day Ghost items with clean no-item state and optionally next upcoming Ghost.**
+- Optional future secondary metric: **Fix teher aránya** relative to truthful Income. It is secondary and never replaces actual Balance.
+
+### Forecast semantic contract
+
+- Forecast answers: **“Given actual financial state, known future obligations, and robust non-Ghost spending behavior, where am I likely to close?”**
+- Forecast must distinguish three provenance classes visually and mathematically:
+  - **Actual / fact** — already materialized ledger reality;
+  - **Known future / committed** — pending Ghost obligations (and source-proven known future Income if such authority later exists);
+  - **Estimated future** — statistical non-Ghost behavior forecast.
+- Pending Ghost obligations and behavior forecast must never be merged into one anonymous “expected expense” number.
+- Historical materialized `ghostOrigin=true` expenses are excluded from the **behavior baseline** so mandatory fixed costs do not train the discretionary-spending estimate; pending Ghost obligations are then added separately. This prevents double counting.
+- Approved first forecast model for MONTH/DAY behavior: **remaining-behavior forecast = robust median of the previous six complete months' non-Ghost spending over the same remaining-calendar-span length**. Example: with 7 days left in the selected/current month, take the final 7 days from each of the six previous complete months, exclude Ghost-origin materialized rows, compute each month's spend, then use the median. Do not use a simple mean and do not use ML in v1.
+- Category-level decomposition may later explain the aggregate estimate, but sparse categories must not create fake precision; the aggregate robust baseline remains authoritative unless a source-proven category model is explicitly added later.
+- Forecast uncertainty must be a **truthful typical range** derived from the historical remainder sample/robust dispersion; do not display arbitrary confidence percentages.
+- Forecast large card is approved as **two pages**:
+  1. **Forecast Bridge / Zárás** — “Where will I close?” with current actual state, known future Income if available, pending Ghost burden, estimated non-Ghost spending, projected closing amount, and typical range;
+  2. **Forward Timeline / Kilátás** — “Why?” with known dated future events as concrete items and estimated behavior as a band/aggregate, never fake future transactions.
+- Use subtle page dots/local page selection rather than adding another global segmented controller. Any page interaction stays local to the lower card and must not compete with Header/global horizontal mode navigation or the upper carousel.
+- Approved Forecast horizons:
+  - **SUM → rolling next 12 months**, not “all-time end”;
+  - **YEAR → current year end**;
+  - **MONTH → current month end**;
+  - **DAY → same containing month end, starting from the selected/current day**, not end-of-day as the hero horizon.
+- Page-2 granularity:
+  - SUM → months;
+  - YEAR → remaining months;
+  - MONTH → remaining days;
+  - DAY → selected day through month end, daily.
+- Historical selected periods must **not** receive fake hindsight forecasts. V1 should expose an explicit unavailable state such as “Forecast csak az aktuális időszakra érhető el.” Historical backtesting is a separate future feature.
+- Forecast may expose two conceptually distinct results when the data engine exists:
+  - **Ismert terhek után** = actual state adjusted only by source-proven known future items;
+  - **Várható zárás** = known future result plus estimated non-Ghost behavior.
+  They must not be collapsed into one undocumented number.
+
+### Immediate implementation boundary
+
+- Because neither Ghost lifecycle/provenance storage nor pending-Ghost authority exists in current source, **do not add Room/schema/native/repository/domain trigger machinery in this task**.
+- Do not fabricate fake financial numbers, hard-coded example transactions, or treat all current transactions as non-Ghost merely to make Forecast appear functional.
+- Immediate deliverable: add **two real finite Balance carousel topics** and their lower-card placeholder surfaces using the existing linked-card architecture, with truthful disabled/coming-soon states. Preserve the approved future semantic contract in tests/docs/code comments only where useful; do not create speculative duplicate data authorities.
+- The placeholders must remain presentation-only: selecting them performs zero repository/index/scene/Query work and preserves the exact shared carousel controller/ScrollPosition/physics.
+- Future implementation must replace placeholder data through the existing Core-owned immutable linked-presentation seam (or a source-proven equivalent single authority), not by letting widgets query Ghost/Forecast data independently.
+- User requested this Ghost + Forecast pair as **one large coding-agent prompt**. It does **not** reopen or bundle Retention, Cashflow Stability, the Ghost analytics lens, Ghost engine/storage, or historical forecast backtesting.
+- Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of the eventual candidate remains **PENDING — USER ONLY**.
+
