@@ -2581,3 +2581,43 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Scope does NOT include Retention, Cashflow Stability, Ghost/Forecast, Ghost analytics lens, Category Movers implementation, changes to Top Category/Top Partner ranking rules, Header/Compound, Closings, Momentum, Cashflow or shared carousel physics.
 - Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of the future candidate remains **PENDING — USER ONLY**.
 
+## 2026-09-23 — Manual dynamic Balance Header palettes + shared opacity contract
+
+- User-approved new Header presentation feature: make the **Balance Header colour field dynamic and user-selectable**, using the same reactive palette/window mechanism already used by the Header category colour path, but **do not bind the Balance colour position to financial data yet**. The user wants to tune and physically evaluate palettes manually first.
+- Current branch at prompt audit: `feature/balance-carousel-v1` HEAD `511553c4671495fd85ad22d5d1482e9ed6e58271` is a journal merge; current behavioral application source is `22f58adfd79115f995fb23cef6029ebf06ca8526` (`feat(balance): add linked retention, stability and future topics`). Matching SCIP tooling is `53ce186f11fb28cb0a79fe4f210a44fc930093f3`, with exact `manifest.source_head=22f58adfd79115f995fb23cef6029ebf06ca8526`, scip-dart 1.6.2 and raw index SHA-256 `7b9a4f9b6cfcdcc41c99febe149879c12fd635655cdfb57910dc6250d6ad16ce`.
+- Current source proves Balance colour is still static: `CoreDashboard` owns `_balanceHeaderColorPolicy` as `DashboardHeaderStaticColorPolicy` created from the fixed Balance `upcomingHeaderTone`; the same owner creates reactive `DashboardBudgetHeaderColorPolicy` and `DashboardMindHeaderColorPolicy`. The current diagnostic contract literally classifies the mode policies as `balance:static,budget:live,mind:liveScore`.
+- Balance financial authority must remain unchanged. `DashboardBalancePresentation` explicitly excludes Summary time navigation from Header authority and publishes the stable `netTotalMinor/formattedNetTotal`; `_BalanceHeaderDetail` renders `formattedNetTotal`. The new manual colour controls must never mutate/recompute the Balance amount, Summary scope, Query, history chart values or any financial projection.
+- Approved Balance Header colour controls in the existing Header visual tuner:
+  1. **Palette** selector;
+  2. **Ablakméret / window width** slider;
+  3. **Pozíció / center percentage** slider indicating where the sampled window is centered on the selected palette.
+  Initial manual testing defaults may follow the existing Header colour-control convention: center 50%, window 28%, with the first supplied palette selected unless current source requires preserving an explicit prior user setting.
+- Sampling semantics mirror the existing Category window contract: map each supplied palette continuously across 0–100%; manual position supplies the center; window width supplies the finite sample window; clamp left/right to 0–100%; sample left/center/right from the palette with the same current perceptual interpolation family; publish the resulting A/M/B three-colour field through the existing `DashboardHeaderVisualFrame` and the existing animated/static Header material transport. Slider changes must update the visible Balance Header immediately without a new ticker/controller.
+- No financial data binding in this unit: Balance position is **manual only**. A later task may bind it to the stable all-time Balance amount; do not invent normalization/min/max rules now.
+
+### Approved Balance palette catalog
+
+1. **Soft rainbow**: `#fbf8ccff`, `#fde4cfff`, `#ffcfd2ff`, `#f1c0e8ff`, `#cfbaf0ff`, `#a3c4f3ff`, `#90dbf4ff`, `#8eecf5ff`, `#98f5e1ff`, `#b9fbc0ff`.
+2. **Levander rose embrace**: `#af99ffff`, `#caadffff`, `#ffc2e2ff`, `#ffadc7ff`, `#ff99b6ff`.
+3. **Majestic levander dreams**: `#a564d3ff`, `#b66ee8ff`, `#c879ffff`, `#d689ffff`, `#e498ffff`, `#f2a8ffff`, `#ffb7ffff`, `#ffc4ffff`, `#ffc9ffff`, `#ffceffff`.
+4. **Fairy loss dream**: `#fcd6f9ff`, `#ffc6feff`, `#f6b2ffff`, `#ceafffff`, `#c19bffff`.
+5. **Lecander spring wishper**: `#a06ec4ff`, `#cba9efff`, `#ebe0f5ff`, `#f8b5d2ff`, `#e378a8ff`.
+6. **Cotton candy dreams**: `#ffb2e6ff`, `#f6a2edff`, `#ec92f3ff`, `#e382f9ff`, `#d972ffff`.
+7. **Whimiscal unicorn dream**: `#9f8be8ff`, `#af99ffff`, `#caadffff`, `#ffc2e2ff`, `#ffadc7ff`, `#ff99b6ff`, followed by the five additional unlabelled colours supplied immediately before the next named palette: `#c468ffff`, `#ba63ffff`, `#af5dffff`, `#9a52ffff`, `#8447ffff`. Preserve this exact supplied sequence unless the user later names those five as a separate palette.
+8. **Mistic levander fields**: `#fdc5f5ff`, `#f7aef8ff`, `#b388ebff`, `#c2a0efff`, `#ceb3f2ff`.
+9. **Magical levander haze**: `#5d36e7ff`, `#6e44ffff`, `#936bffff`, `#b892ffff`, `#dcaaf1ff`, `#ffc2e2ff`, `#ffa9cbff`, `#ff90b3ff`, `#f7859cff`, `#ef7a85ff`.
+
+### Shared opacity correction
+
+- User physical observation: the existing Header **Áttetszőség / opacity** slider does not produce the intended visible fade. Desired semantic is global across all Header modes: lowering opacity reveals an opaque **white Header base** behind the colour material; 0% = white base only, 100% = full Header colour, intermediate values = the colour layer blended over white. Header text/chart/content/border/shadow must remain fully opaque and must NOT fade with the colour layer.
+- Current source proves three relevant gaps:
+  1. `DashboardHeaderOpacityScale` maps 0–100 to a non-zero legacy range `.16 … 1.0`, so 0% can never be fully transparent;
+  2. Balance uses `DashboardHeaderStaticColorPolicy.staticTone` with frame opacity fixed at 1, so the shared slider cannot affect Balance;
+  3. with a visual frame active, `_HeaderPhysicalShell` paints shadow/border plus a clipped colour layer over a transparent fill and has no guaranteed opaque white base below the colour material.
+- Required correction: one shared semantic opacity authority for Balance/Budget/Mind and for static/native plus animated/fragment rendering. Use linear user semantics `opacity = sliderPercent / 100` (clamped 0–1). Apply the opacity **exactly once** to the Header colour/material layer, over a clipped opaque white base. Do not double-apply alpha. Prove the final pixel result for native/static and animated/fragment paths rather than assuming that passing a uniform is enough.
+- The existing opacity slider is currently visually nested under the Budget Header colour section even though its tuning value is shared. Move/present it as a clearly shared Header-colour opacity control (or source-equivalent UI that communicates its global scope) and keep one state owner.
+- Mandatory visual contract: at 0% the Header colour region is white; at 50% it is the expected blend of the active palette material over white; at 100% the existing full-colour result is preserved. This must hold for Balance, Budget and Mind. The content overlay remains unchanged at every opacity.
+- Drive audit found no current dedicated Header-opacity runtime trace. Historical Avatar/Time/Slider/all-logs are not direct causal evidence for this new Header presentation change. User observation + current source are the relevant evidence.
+- Protected physical interaction milestone remains `6e962187e90e2a82431b1f91b224d2b52a6e0ba7`; do not alter Avatar/Time/carousel physics, Query, Summary, LogBox, Header geometry or animation ticker ownership.
+- User requested a clear/simple coding-agent prompt for this feature. Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of the future candidate remains **PENDING — USER ONLY**.
+
