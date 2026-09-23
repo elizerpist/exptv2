@@ -2492,3 +2492,13 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - User requested this Ghost + Forecast pair as **one large coding-agent prompt**. It does **not** reopen or bundle Retention, Cashflow Stability, the Ghost analytics lens, Ghost engine/storage, or historical forecast backtesting.
 - Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of the eventual candidate remains **PENDING — USER ONLY**.
 
+## 2026-09-23 — Ghost + Forecast prompt preflight addendum: current Balance branch CI baseline is red
+
+- After the Ghost + Forecast design entry, merge-head workflow `35835098652` for `36cb417a0337656ece1d2c7a65158cfb7ed28ace` completed **FAIL**. `test-core` and `dashboard-paths` passed; `test-flutter` failed, therefore profile/APK jobs were skipped.
+- Exact failing curated test: `test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart: structural dashboard changes preserve the rail controller, position and physics`. The retained CI log proves a **vertical RenderFlex overflow by 13 pixels** under constraints approximately `w=53.5, h=39.3`; the suite result was **431 passed, 1 failed**.
+- This failure is current **baseline evidence before Ghost/Forecast application changes**. It is not yet proven which specific Balance compact card/body owns the overflowing Column, and no root cause is asserted here.
+- Because Ghost + Forecast modify the same finite Balance upper-carousel surface, the coding agent must reproduce this exact baseline failure before mutation, identify the actual offending widget/card and first failing layout boundary, and apply only the smallest source-proven responsive-layout repair required to restore the existing no-overflow contract before/while extending the rail. Do not retune shared carousel physics, controller/ScrollPosition identity, global geometry or unrelated dashboard layout to hide it.
+- The new Ghost/Forecast placeholder cards must themselves remain compact-safe at the same constrained heights and may not introduce additional lines/overflow in the compact rail state.
+- This addendum does not change the feature semantic scope: Ghost engine/storage, Forecast analytics engine, global Ghost provenance lens, Retention/Stability and historical forecast backtesting remain out of this implementation.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
