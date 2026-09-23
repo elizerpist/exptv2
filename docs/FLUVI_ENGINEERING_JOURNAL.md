@@ -2374,3 +2374,21 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Break-even compact insight remains derived from Closings buckets: e.g. `9 / 12 hónap pluszos`; strictly positive net counts as pluszos, exact zero does not. It is shown in the Closings small carousel card, not as a new lower-card topic.
 - Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of any future implementation remains **PENDING — USER ONLY**.
 
+## 2026-09-23 — Ghost transaction semantics correction: lifecycle vs persistent provenance
+
+- User correction: a Fluvi **Ghost transaction is not merely a conditional forecast item**. It has two distinct concepts that must not be conflated:
+  1. **lifecycle state** — before its trigger fires it is a pending Ghost definition/event and is not yet a real ledger transaction;
+  2. **persistent provenance flag** — after the trigger fires, it materializes into a real ledger transaction, but the Ghost-origin flag/badge remains permanently attached to that real transaction.
+- Consequence for analytics: materialized Ghost-origin transactions are valid real transactions and may be included in financial totals. However, behavioral analytics may need to **exclude** them because large mandatory/fixed expenses can distort discretionary-spending behavior. Example product distinction: 100k restaurant spend is behaviorally different from 100k mandatory gas/utility/rent spend even though both are real Expense transactions.
+- The analytics filtering problem is therefore **not the same as pending-vs-actual forecast state**. Recommended future Balance data lens is over **materialized real transactions by Ghost provenance**:
+  - **All actual / With Ghost** = all real transactions, including triggered Ghost-origin rows;
+  - **Without Ghost** = only real non-Ghost-origin transactions;
+  - **Only Ghost** = only materialized real Ghost-origin transactions.
+  Pending untriggered Ghost definitions must NOT silently enter historical actual analytics under any of these three modes.
+- Pending Ghosts remain useful in a dedicated Ghost card for lifecycle/obligation visibility and may later feed an explicitly labelled forecast/scenario layer, but forecast inclusion is a separate semantic mode from the provenance filter above.
+- Strong product rationale: one global/shared Ghost provenance lens is preferable to duplicating independent toggles on every analytics card, because mixed card-local filter states would make cross-card comparisons ambiguous. Card-specific compatibility can still be explicit where a metric should ignore or restrict Ghost filtering.
+- Dedicated Ghost card remains useful even with the global provenance lens because it answers a different question: pending definitions, recently triggered/materialized Ghosts, lifecycle state, amount at risk/expected, and individual selection. The card may show both pending and already-materialized Ghost-origin items with clearly different states.
+- Future data model requirement: keep **pending lifecycle state** and **persistent Ghost provenance** as separate fields/authorities. Do not model Ghost as a single transient boolean that disappears on trigger. A real materialized Ghost transaction must remain distinguishable from an ordinary real transaction.
+- Current repository search on application source lineage found no existing `ghost`, pending-transaction, fixed-expense, recurring-expense, or triggered-transaction implementation. Therefore this is a forward product/data-model contract, not a current-source behavior claim.
+- Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
