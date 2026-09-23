@@ -2678,3 +2678,14 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - The softer Mind traffic-light palettes discussed next are brainstorming candidates only until the user selects one; do not treat any candidate as approved implementation input yet.
 - User explicitly requested **NO coding-agent prompt yet**. Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
 
+## 2026-09-23 — Mind alternative palette must reuse an existing Color Lab test scale
+
+- User rejected further invented Mind traffic-light palettes and explicitly requested that the future Mind palette selector include an **existing scale already present in `docs/prototypes/color_lab.html`**, taken from the lower **Portal színezés** test window.
+- Source audit of `docs/prototypes/color_lab.html` confirms the test panel exposes the existing signature palettes **Traffic**, **Limit**, **Cool**, **Meadow green**, **Soft rainbow**, and **Ocean blue serenity**, plus Money flow.
+- For the softer alternative that best matches the immediately preceding product direction (less saturated, pink/lilac through blue/aqua/mint rather than a strict red→yellow→green traffic light), use the existing **Soft rainbow** signature palette exactly as authored in Color Lab:
+  `#FBF8CC`, `#FDE4CF`, `#FFCFD2`, `#F1C0E8`, `#CFBAF0`, `#A3C4F3`, `#90DBF4`, `#8EECF5`, `#98F5E1`, `#B9FBC0`.
+- This is not a newly invented palette. Preserve the exact existing Color Lab order and values when it is later implemented as an alternative Mind Header scale.
+- Existing Color Lab source also contains these additional reusable alternatives, but they are not selected by this entry: **Meadow green** = `#D9ED92`, `#B5E48C`, `#99D98C`, `#76C893`, `#52B69A`, `#34A0A4`, `#168AAD`, `#1A759F`, `#1E6091`, `#184E77`; **Ocean blue serenity** = `#CAF0F8`, `#ADE8F4`, `#90E0EF`, `#48CAE4`, `#00B4D8`, `#0096C7`, `#0077B6`.
+- No coding-agent prompt requested. This remains product-design input for a later combined Mind/Balance foreground customization prompt.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
