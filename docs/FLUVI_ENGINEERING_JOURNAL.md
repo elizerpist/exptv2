@@ -2527,3 +2527,13 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Category detail should avoid period-over-period mover/delta ranking if Category Movers remains a separate feature; any temporal profile shown here should describe the category's internal composition, not compete with Movers' change-detection responsibility.
 - No coding-agent prompt requested. Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
 
+## 2026-09-23 — Category detail transaction-size distribution approved; Partner detail discussion opened
+
+- User approved a category-specific **Tipikus tranzakcióméret / Typical transaction size** block for the future Top Category local drill-down page.
+- Approved visual grammar: a compact horizontal **transaction-count distribution band** with four readable amount buckets (initial product default: `0–5k`, `5–10k`, `10–20k`, `20k+`) and a clearly marked **median transaction amount**. The distribution measures **transaction count per amount bucket**, not money-weighted share, so one large transaction cannot dominate the visual.
+- The block may expose one compact textual insight such as the dominant bucket/share (for example “A tranzakciók 57%-a 5–10k közé esik”). The first version should be read-only; no separate bucket interaction/filtering is required.
+- Scope behavior: SUM/Year/Month use the selected category's actual transactions in that scope. DAY should not force a histogram when sample size is too small; it may fall back to compact transaction-size stats (median/min/max or an equivalent truthful low-sample treatment). Exact low-sample threshold must be frozen when implementation is specified.
+- This remains **category-only analytics**. No partner/vendor aggregation may appear in this block or the category detail.
+- User explicitly requested **NO coding-agent prompt yet**. Next product-design topic is a local **partner-specific secondary page** opened by tapping a row in the existing Top Partner list. No partner-detail content contract is approved yet; brainstorming follows in chat.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
