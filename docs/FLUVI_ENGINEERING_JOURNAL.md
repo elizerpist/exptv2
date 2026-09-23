@@ -2689,3 +2689,24 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - No coding-agent prompt requested. This remains product-design input for a later combined Mind/Balance foreground customization prompt.
 - Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
 
+## 2026-09-23 — CORRECTION: Mind alternative must use Color Lab Traffic palette, not Soft rainbow
+
+- This entry explicitly **supersedes the immediately preceding Soft-rainbow selection**. The prior prompt-writer interpretation was wrong: the user did NOT ask to select Soft rainbow.
+- User clarification: the requested existing alternative Mind scale is the **Traffic** palette from the lower `Portal színezés` test window in `docs/prototypes/color_lab.html`.
+- Source audit proves that the Portal test panel's `Traffic` control uses `mindPortalSignaturePalettes.balance`, which is exactly `balanceScaleStops`.
+- Exact Color Lab Traffic palette, in authored order:
+  1. `#FF3B4F`
+  2. `#FF5733`
+  3. `#FF8C1A`
+  4. `#F7B500`
+  5. `#F4DF24`
+  6. `#D4F52F`
+  7. `#7DD943`
+  8. `#35C76E`
+  9. `#15BD6F`
+  10. `#0B8F54`
+- In Color Lab these ten colours span the full 0–100% scale at equal authored gradient positions: 0%, 11.11%, 22.22%, 33.33%, 44.44%, 55.56%, 66.67%, 77.78%, 88.89%, 100%.
+- Future Mind presentation requirement: keep the current Mind traffic-light scale available and add this existing Color Lab **Traffic** scale as an alternative selectable palette. Do NOT substitute Soft rainbow unless separately requested later.
+- Existing future foreground requirement remains unchanged: Mind and Balance each need independently selectable Header text colour (Black/White) and Header line-chart colour (Black/White).
+- No coding-agent prompt requested in this correction. Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
