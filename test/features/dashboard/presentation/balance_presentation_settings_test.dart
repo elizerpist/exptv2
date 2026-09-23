@@ -107,6 +107,106 @@ void main() {
       );
     },
   );
+
+  test(
+    'COMPOUND-RED: fourth mode selects closing trend by Summary dimension',
+    () {
+      final history = DashboardBalanceHistorySeries(
+        startInclusiveEpochMinute: _epochDay(2024, 1, 2) * 1440,
+        endInclusiveEpochMinute: _epochDay(2026, 4, 2) * 1440,
+        points: <DashboardBalanceHistoryPoint>[
+          _point('2024-salary', 2024, 1, 2, 1000),
+          _point('2024-expense', 2024, 1, 18, 700),
+          _point('2024-feb', 2024, 2, 8, 1200),
+          _point('2025-salary', 2025, 1, 4, 2200),
+          _point('2025-expense', 2025, 1, 22, 1800),
+          _point('2026-salary', 2026, 1, 3, 3000),
+          _point('2026-feb', 2026, 2, 12, 2700),
+          _point('2026-mar', 2026, 3, 6, 3400),
+          _point('partial-april', 2026, 4, 2, 3300),
+        ],
+      );
+
+      expect(BalanceHeaderChartMode.values, hasLength(4));
+      expect(BalanceHeaderChartMode.compound.tunerLabel, 'Compound');
+
+      final sum = DashboardBalanceHistoryViewProjection.project(
+        source: history,
+        mode: BalanceHeaderChartMode.compound,
+        adaptiveScope: const AllTimeScope(),
+      )!;
+      expect(
+        sum.points.map((point) => point.entryId),
+        everyElement(startsWith('month-close:')),
+      );
+      expect(sum.points.map((point) => point.epochDay), <int>[
+        _epochDay(2024, 1, 31),
+        _epochDay(2024, 2, 29),
+        _epochDay(2024, 3, 31),
+        _epochDay(2024, 4, 30),
+        _epochDay(2024, 5, 31),
+        _epochDay(2024, 6, 30),
+        _epochDay(2024, 7, 31),
+        _epochDay(2024, 8, 31),
+        _epochDay(2024, 9, 30),
+        _epochDay(2024, 10, 31),
+        _epochDay(2024, 11, 30),
+        _epochDay(2024, 12, 31),
+        _epochDay(2025, 1, 31),
+        _epochDay(2025, 2, 28),
+        _epochDay(2025, 3, 31),
+        _epochDay(2025, 4, 30),
+        _epochDay(2025, 5, 31),
+        _epochDay(2025, 6, 30),
+        _epochDay(2025, 7, 31),
+        _epochDay(2025, 8, 31),
+        _epochDay(2025, 9, 30),
+        _epochDay(2025, 10, 31),
+        _epochDay(2025, 11, 30),
+        _epochDay(2025, 12, 31),
+        _epochDay(2026, 1, 31),
+        _epochDay(2026, 2, 28),
+        _epochDay(2026, 3, 31),
+      ]);
+
+      final year = DashboardBalanceHistoryViewProjection.project(
+        source: history,
+        mode: BalanceHeaderChartMode.compound,
+        adaptiveScope: const YearScope(2026),
+      )!;
+      expect(year.points.map((point) => point.epochDay), <int>[
+        _epochDay(2026, 1, 31),
+        _epochDay(2026, 2, 28),
+        _epochDay(2026, 3, 31),
+      ]);
+      expect(
+        year.points.first.balanceMinor,
+        3000,
+        reason: 'January must keep absolute Balance, not reset to zero.',
+      );
+
+      final month = DashboardBalanceHistoryViewProjection.project(
+        source: history,
+        mode: BalanceHeaderChartMode.compound,
+        adaptiveScope: const MonthScope(YearMonth(year: 2025, month: 1)),
+      )!;
+      expect(month.points.map((point) => point.entryId), <String>[
+        '2025-salary',
+        '2025-expense',
+      ]);
+      expect(month.points.map((point) => point.balanceMinor), <int>[
+        2200,
+        1800,
+      ]);
+
+      final day = DashboardBalanceHistoryViewProjection.project(
+        source: history,
+        mode: BalanceHeaderChartMode.compound,
+        adaptiveScope: const DayScope(LocalDate(year: 2025, month: 1, day: 4)),
+      )!;
+      expect(day.points.single.entryId, '2025-salary');
+    },
+  );
 }
 
 DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(

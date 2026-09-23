@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_linked_detail_card.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
   testWidgets('L4-RED: latest detail renders the five scoped transactions', (
@@ -101,6 +103,93 @@ void main() {
     },
   );
 
+  testWidgets(
+    'MOVERS-CARDS-RED: local row detail renders money-impact overview and returns with no global mutation',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(),
+        ),
+      );
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Largest category changes'), findsOneWidget);
+      expect(find.text('RESTAURANTS'), findsOneWidget);
+      expect(find.text('+18420,00 Ft'), findsOneWidget);
+      expect(find.text('+34%'), findsOneWidget);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-mover-restaurants'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        findsOneWidget,
+      );
+      expect(find.text('← RESTAURANTS'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-trend')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-movers-back')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'MOVERS-PUBLICATION RED: an unavailable category publication clears local detail selection',
+    (tester) async {
+      final presentation = ValueNotifier<DashboardBalanceLinkedPresentation>(
+        _linked(),
+      );
+      addTearDown(presentation.dispose);
+      await tester.pumpWidget(
+        ValueListenableBuilder<DashboardBalanceLinkedPresentation>(
+          valueListenable: presentation,
+          builder: (context, value, _) => _host(
+            topic: BalanceLinkedDetailTopic.categoryMovers,
+            presentation: value,
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-mover-restaurants'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        findsOneWidget,
+      );
+
+      presentation.value = _linked(includesCategoryMovers: false);
+      await tester.pump();
+
+      expect(find.text('Nincs kategóriaváltozás'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        findsNothing,
+      );
+    },
+  );
+
   test(
     'L1-RED: linked detail rendering has no repository or prepared-index dependency',
     () {
@@ -129,7 +218,9 @@ Widget _host({
   ),
 );
 
-DashboardBalanceLinkedPresentation _linked() {
+DashboardBalanceLinkedPresentation _linked({
+  bool includesCategoryMovers = true,
+}) {
   const identity = DashboardBalancePrimaryIdentity(
     upstreamScopeKey: 'income|expense',
     indexGeneration: 7,
@@ -165,6 +256,44 @@ DashboardBalanceLinkedPresentation _linked() {
     ),
     topCategories: _ranks('category', amountBase: 50000),
     topPartners: _ranks('partner', amountBase: 1000),
+    categoryMovers: includesCategoryMovers
+        ? DashboardBalanceCategoryMoversPresentation(
+            identity: identity,
+            timeScope: const AllTimeScope(),
+            selectedDirection: LedgerDirection.expense,
+            logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 23),
+            currentWindow: const DashboardBalanceCategoryComparisonWindow(
+              startInclusive: LocalDate(year: 2026, month: 1, day: 1),
+              endInclusive: LocalDate(year: 2026, month: 9, day: 23),
+            ),
+            referenceWindow: const DashboardBalanceCategoryComparisonWindow(
+              startInclusive: LocalDate(year: 2025, month: 1, day: 1),
+              endInclusive: LocalDate(year: 2025, month: 9, day: 23),
+            ),
+            movers: <DashboardBalanceCategoryMover>[
+              DashboardBalanceCategoryMover(
+                id: 'restaurants',
+                label: 'RESTAURANTS',
+                categoryColorId: 'color_07',
+                categoryIconId: 'icon_17',
+                currentMinor: 7240000,
+                referenceMinor: 5398000,
+                trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+                  DashboardBalanceCategoryMoverTrendPoint(
+                    bucket: 1,
+                    currentMinor: 12000,
+                    referenceMinor: 9000,
+                  ),
+                  DashboardBalanceCategoryMoverTrendPoint(
+                    bucket: 2,
+                    currentMinor: 18420,
+                    referenceMinor: 11000,
+                  ),
+                ],
+              ),
+            ],
+          )
+        : null,
   );
 }
 

@@ -15892,7 +15892,7 @@ final class DashboardCoreController {
     final cacheKey =
         '${identity.upstreamScopeKey}|${identity.indexGeneration}|'
         '${identity.coreRevision}|${timeScope.canonicalKey}|'
-        '${frame.direction.name}';
+        '${frame.direction.name}|${logicalAsOfDate.isoString}';
     final cached = _balanceLinkedProjectionCache.remove(cacheKey);
     if (cached != null) {
       _balanceLinkedProjectionCache[cacheKey] = cached;
@@ -15903,6 +15903,7 @@ final class DashboardCoreController {
       identity: identity,
       timeScope: timeScope,
       selectedDirection: frame.direction,
+      logicalAsOfDate: logicalAsOfDate,
       incomeEntries: _balancePrimaryEntriesFor(
         index: index,
         direction: LedgerDirection.income,

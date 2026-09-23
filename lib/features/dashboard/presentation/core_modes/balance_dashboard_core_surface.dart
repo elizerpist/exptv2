@@ -14,6 +14,7 @@ import '../../application/dashboard_balance_primary_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
+import 'balance_insight_indicators.dart';
 import 'balance_linked_detail_card.dart';
 import 'balance_presentation_settings.dart';
 import '../widgets/dashboard_placeholder_card.dart';
@@ -27,12 +28,31 @@ import '../dashboard_shadow_style.dart';
 
 /// The finite presentation domain of Balance's upper linked topic rail.
 enum BalanceCarouselCardKind {
+  categoryMovers,
   cashflow,
   latestTransaction,
   topCategory,
   topPartner,
   emptyPrototype,
 }
+
+const _balanceInsightIndicatorIds = <String>[
+  'category-movers',
+  'cashflow',
+  'latest-transaction',
+  'top-category',
+  'top-partner',
+  'prototype-1',
+];
+
+String _indicatorIdFor(BalanceLinkedDetailTopic topic) => switch (topic) {
+  BalanceLinkedDetailTopic.categoryMovers => 'category-movers',
+  BalanceLinkedDetailTopic.cashflow => 'cashflow',
+  BalanceLinkedDetailTopic.latestTransaction => 'latest-transaction',
+  BalanceLinkedDetailTopic.topCategory => 'top-category',
+  BalanceLinkedDetailTopic.topPartner => 'top-partner',
+  BalanceLinkedDetailTopic.prototype => 'prototype-1',
+};
 
 /// One render-only Balance carousel item. Financial data is supplied in the
 /// prepared [DashboardBalanceLinkedPresentation] and never fetched by this
@@ -44,21 +64,37 @@ final class BalanceCarouselCard {
     required this.kind,
     required this.title,
     required this.amount,
+    this.detail,
+    this.contextLabel,
   });
 
   final String id;
   final BalanceCarouselCardKind kind;
   final String title;
   final String amount;
+  final String? detail;
+  final String? contextLabel;
 }
 
 List<BalanceCarouselCard> balanceCarouselCardsFor(
   DashboardBalanceLinkedPresentation? presentation,
 ) {
+  final hero = presentation?.categoryMovers?.movers.firstOrNull;
   final latest = presentation?.latestTransactions.firstOrNull;
   final topCategory = presentation?.topCategories.firstOrNull;
   final topPartner = presentation?.topPartners.firstOrNull;
   return List<BalanceCarouselCard>.unmodifiable(<BalanceCarouselCard>[
+    BalanceCarouselCard._(
+      id: 'category-movers',
+      kind: BalanceCarouselCardKind.categoryMovers,
+      title: 'Legnagyobb kategóriaváltozás',
+      amount: hero?.label ?? 'Nincs változás',
+      detail: hero == null
+          ? null
+          : '${_signedPercent(hero.percentageBasisPoints, hero.isNew)} · '
+                '${_signedAmount(hero.deltaMinor)}',
+      contextLabel: hero == null ? null : 'előző időszakhoz képest',
+    ),
     BalanceCarouselCard._(
       id: 'cashflow',
       kind: BalanceCarouselCardKind.cashflow,
@@ -132,7 +168,8 @@ class BalanceDashboardCoreSurface extends StatefulWidget {
 
 final class _BalanceDashboardCoreSurfaceState
     extends State<BalanceDashboardCoreSurface> {
-  BalanceLinkedDetailTopic _selectedTopic = BalanceLinkedDetailTopic.cashflow;
+  BalanceLinkedDetailTopic _selectedTopic =
+      BalanceLinkedDetailTopic.categoryMovers;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +202,8 @@ final class _BalanceDashboardCoreSurfaceState
               onMotionInterrupted: widget.onCarouselMotionInterrupted,
               onCardSelected: (card) {
                 final selected = switch (card.kind) {
+                  BalanceCarouselCardKind.categoryMovers =>
+                    BalanceLinkedDetailTopic.categoryMovers,
                   BalanceCarouselCardKind.cashflow =>
                     BalanceLinkedDetailTopic.cashflow,
                   BalanceCarouselCardKind.latestTransaction =>
@@ -186,9 +225,10 @@ final class _BalanceDashboardCoreSurfaceState
             bounds: geometry.zone2IndicatorBounds,
             opacity: geometry.zone2Opacity,
             offset: Offset(0, geometry.zone2Shift),
-            child: DashboardPlaceholderDots(
+            child: BalanceInsightIndicators(
               bounds: geometry.zone2IndicatorBounds,
-              semanticKey: const ValueKey('dashboard-core-mode-balance-dots'),
+              itemIds: _balanceInsightIndicatorIds,
+              activeItemId: _indicatorIdFor(_selectedTopic),
             ),
           ),
           DashboardCoreModeHeaderScaffold(
@@ -543,6 +583,8 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           widget.onCardSelected(widget.cards[itemIndex]);
         },
         semanticsLabelBuilder: (card) => switch (card.kind) {
+          BalanceCarouselCardKind.categoryMovers =>
+            'Legnagyobb kategóriaváltozás: ${card.amount}',
           BalanceCarouselCardKind.cashflow => 'Cashflow: ${card.amount}',
           BalanceCarouselCardKind.latestTransaction =>
             'Legutóbbi tranzakció: ${card.amount}',
@@ -643,7 +685,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? 4 : 8,
-                vertical: compact ? 2 : 7,
+                vertical: compact ? 2 : (card.contextLabel == null ? 7 : 4),
               ),
               child: compact
                   ? Align(
@@ -682,6 +724,32 @@ final class _BalanceCarouselCard extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                               ),
                         ),
+                        if (card.detail case final detail?) ...<Widget>[
+                          const SizedBox(height: 2),
+                          Text(
+                            detail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: FluviVisualTokens.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                        if (card.contextLabel
+                            case final contextLabel?) ...<Widget>[
+                          const SizedBox(height: 1),
+                          Text(
+                            contextLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: FluviVisualTokens.textSecondary,
+                                ),
+                          ),
+                        ],
                       ],
                     ),
             ),
@@ -690,4 +758,14 @@ final class _BalanceCarouselCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _signedAmount(int amountMinor) =>
+    '${amountMinor < 0 ? '-' : '+'}${DashboardPreparedFormatter.amountMinor(amountMinor.abs())}';
+
+String _signedPercent(int? basisPoints, bool isNew) {
+  if (isNew) return 'Új';
+  if (basisPoints == null) return '0%';
+  final rounded = (basisPoints / 100).round();
+  return '${rounded > 0 ? '+' : ''}$rounded%';
 }

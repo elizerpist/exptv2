@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import '../query/data/dashboard_ledger_entry.dart';
 import '../query/domain/ledger_direction.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
+import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
+import 'dashboard_balance_category_movers_projection.dart';
 
 const _balanceLinkedMaximumRows = 5;
 
@@ -171,6 +173,7 @@ final class DashboardBalanceLinkedPresentation {
     required List<DashboardBalanceScopedTransaction> latestTransactions,
     required List<DashboardBalanceRankedItem> topCategories,
     required List<DashboardBalanceRankedItem> topPartners,
+    this.categoryMovers,
   }) : latestTransactions =
            List<DashboardBalanceScopedTransaction>.unmodifiable(
              latestTransactions.take(_balanceLinkedMaximumRows),
@@ -194,6 +197,7 @@ final class DashboardBalanceLinkedPresentation {
            '${category.id}:${category.amountMinor}:${category.transactionCount}',
          for (final partner in topPartners.take(_balanceLinkedMaximumRows))
            '${partner.id}:${partner.amountMinor}:${partner.transactionCount}',
+         categoryMovers?.presentationId,
        ]);
 
   final DashboardBalancePrimaryIdentity identity;
@@ -203,6 +207,7 @@ final class DashboardBalanceLinkedPresentation {
   final List<DashboardBalanceScopedTransaction> latestTransactions;
   final List<DashboardBalanceRankedItem> topCategories;
   final List<DashboardBalanceRankedItem> topPartners;
+  final DashboardBalanceCategoryMoversPresentation? categoryMovers;
   final int presentationId;
 }
 
@@ -441,6 +446,7 @@ abstract final class DashboardBalanceLinkedProjection {
     required LedgerDirection selectedDirection,
     required Iterable<DashboardLedgerEntry> incomeEntries,
     required Iterable<DashboardLedgerEntry> expenseEntries,
+    LocalDate logicalAsOfDate = const LocalDate(year: 2026, month: 1, day: 1),
   }) {
     final income = _entriesForScope(incomeEntries, timeScope);
     final expense = _entriesForScope(expenseEntries, timeScope);
@@ -467,6 +473,15 @@ abstract final class DashboardBalanceLinkedProjection {
         directional,
         selectedDirection,
         _BalanceRankKind.partner,
+      ),
+      categoryMovers: DashboardBalanceCategoryMoversProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        selectedDirection: selectedDirection,
+        logicalAsOfDate: logicalAsOfDate,
+        entries: selectedDirection == LedgerDirection.income
+            ? incomeEntries
+            : expenseEntries,
       ),
     );
   }

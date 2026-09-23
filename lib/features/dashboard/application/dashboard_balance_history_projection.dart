@@ -8,13 +8,15 @@ import 'dashboard_balance_presentation.dart';
 enum BalanceHeaderChartMode {
   adaptiveSummary,
   allTime,
-  monthEndClosingExperimental;
+  monthEndClosingExperimental,
+  compound;
 
   String get tunerLabel => switch (this) {
     BalanceHeaderChartMode.adaptiveSummary => 'Adaptive / Summary',
     BalanceHeaderChartMode.allTime => 'All-time / Sum',
     BalanceHeaderChartMode.monthEndClosingExperimental =>
       'Hóvégi záróérték — kísérleti',
+    BalanceHeaderChartMode.compound => 'Compound',
   };
 }
 
@@ -83,7 +85,36 @@ abstract final class DashboardBalanceHistoryViewProjection {
     BalanceHeaderChartMode.allTime => source,
     BalanceHeaderChartMode.adaptiveSummary => _adaptive(source, adaptiveScope),
     BalanceHeaderChartMode.monthEndClosingExperimental => _monthEnds(source),
+    BalanceHeaderChartMode.compound => _compound(source, adaptiveScope),
   };
+
+  /// Compound deliberately follows the selected Summary dimension without
+  /// changing the all-time Header amount: long views use truthful calendar
+  /// closes; the enlarged Month/Day views retain real transaction extrema.
+  static DashboardBalanceHistorySeries? _compound(
+    DashboardBalanceHistorySeries source,
+    LedgerTimeScope scope,
+  ) => switch (scope) {
+    AllTimeScope() => _monthEnds(source),
+    YearScope(:final year) => _forYear(_monthEnds(source), year),
+    MonthScope() || DayScope() => _adaptive(source, scope),
+  };
+
+  static DashboardBalanceHistorySeries? _forYear(
+    DashboardBalanceHistorySeries? source,
+    int year,
+  ) {
+    if (source == null) return null;
+    final points = source.points
+        .where((point) => _calendarDate(point.epochDay).year == year)
+        .toList(growable: false);
+    if (points.isEmpty) return null;
+    return DashboardBalanceHistorySeries(
+      startInclusiveEpochMinute: points.first.epochMinute,
+      endInclusiveEpochMinute: points.last.epochMinute,
+      points: points,
+    );
+  }
 
   static DashboardBalanceHistorySeries? _adaptive(
     DashboardBalanceHistorySeries source,

@@ -293,6 +293,75 @@ void main() {
       expect(linked.topPartners.first.direction, LedgerDirection.income);
     },
   );
+
+  test(
+    'MOVERS-LINKED-IDENTITY RED: the Core-linked payload keeps directions separate and carries the exact comparison identity',
+    () {
+      final expense = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const YearScope(2026),
+        selectedDirection: LedgerDirection.expense,
+        logicalAsOfDate: const LocalDate(year: 2027, month: 1, day: 1),
+        incomeEntries: <DashboardLedgerEntry>[
+          _entry(
+            'income-2026',
+            'income',
+            900000,
+            2026,
+            6,
+            1,
+            categoryId: 'salary',
+          ),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry(
+            'food-2025',
+            'expense',
+            -80000,
+            2025,
+            6,
+            1,
+            categoryId: 'food',
+          ),
+          _entry(
+            'food-2026',
+            'expense',
+            -120000,
+            2026,
+            6,
+            1,
+            categoryId: 'food',
+          ),
+          _entry(
+            'new-2026',
+            'expense',
+            -7000,
+            2026,
+            7,
+            1,
+            categoryId: 'new-category',
+          ),
+        ],
+      );
+
+      expect(expense.categoryMovers, isNotNull);
+      expect(
+        expense.categoryMovers!.selectedDirection,
+        LedgerDirection.expense,
+      );
+      expect(expense.categoryMovers!.identity, identity);
+      expect(expense.categoryMovers!.movers.map((mover) => mover.id), <String>[
+        'food',
+        'new-category',
+      ]);
+      expect(expense.categoryMovers!.movers.first.deltaMinor, 40000);
+      expect(expense.categoryMovers!.movers.last.isNew, isTrue);
+      expect(
+        expense.categoryMovers!.movers.map((mover) => mover.id),
+        isNot(contains('salary')),
+      );
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(
