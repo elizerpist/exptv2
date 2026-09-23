@@ -660,6 +660,11 @@ final class _BalanceCarouselCard extends StatelessWidget {
     // only its neighbours down, so no selected visual relies on paint-only
     // overflow or an undersized interactive parent.
     final compact = itemHeight < 42;
+    // A transformed side-card can retain the normal logical item height while
+    // receiving only a short physical content box. Preserve its primary value
+    // and omit the optional Momentum state line there; the selected card keeps
+    // the full preview at its normal height.
+    final showDetail = !compact && itemHeight >= 60;
     return SizedBox(
       key: ValueKey<String>('balance-carousel-card-${card.id}'),
       width: width,
@@ -725,19 +730,20 @@ final class _BalanceCarouselCard extends StatelessWidget {
                                 fontWeight: FontWeight.w700,
                               ),
                         ),
-                        if (card.detail case final detail?) ...<Widget>[
-                          const SizedBox(height: 2),
-                          Text(
-                            detail,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: FluviVisualTokens.textSecondary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
+                        if (showDetail)
+                          if (card.detail case final detail?) ...<Widget>[
+                            const SizedBox(height: 2),
+                            Text(
+                              detail,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: FluviVisualTokens.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ],
                       ],
                     ),
             ),
