@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
@@ -23,20 +26,75 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
+  test('BX1 RED: Balance has ten real linked topics and no prototype', () {
+    expect(
+      balanceCarouselCardsFor(null).map((card) => card.kind),
+      <BalanceCarouselCardKind>[
+        BalanceCarouselCardKind.cashflow,
+        BalanceCarouselCardKind.closings,
+        BalanceCarouselCardKind.momentum,
+        BalanceCarouselCardKind.retention,
+        BalanceCarouselCardKind.stability,
+        BalanceCarouselCardKind.ghost,
+        BalanceCarouselCardKind.forecast,
+        BalanceCarouselCardKind.latestTransaction,
+        BalanceCarouselCardKind.topCategory,
+        BalanceCarouselCardKind.topPartner,
+      ],
+    );
+  });
+
   test(
-    'BC1 RED: Balance has the six final real linked topics and no prototype',
+    'BX5 RED: Closings compact fraction uses strict-positive bucket DTOs',
     () {
-      expect(
-        balanceCarouselCardsFor(null).map((card) => card.kind),
-        <BalanceCarouselCardKind>[
-          BalanceCarouselCardKind.cashflow,
-          BalanceCarouselCardKind.closings,
-          BalanceCarouselCardKind.momentum,
-          BalanceCarouselCardKind.latestTransaction,
-          BalanceCarouselCardKind.topCategory,
-          BalanceCarouselCardKind.topPartner,
-        ],
+      final summary = balanceClosingsCompactSummary(
+        DashboardBalanceClosingsPresentation(
+          identity: const DashboardBalancePrimaryIdentity(
+            upstreamScopeKey: 'closings',
+            indexGeneration: 1,
+            coreRevision: 1,
+          ),
+          timeScope: const YearScope(2026),
+          buckets: const <DashboardBalanceClosingBucket>[
+            DashboardBalanceClosingBucket(
+              id: 'one',
+              label: 'JAN',
+              incomeMinor: 100,
+              expenseMinor: 0,
+            ),
+            DashboardBalanceClosingBucket(
+              id: 'two',
+              label: 'FEB',
+              incomeMinor: 0,
+              expenseMinor: 0,
+            ),
+            DashboardBalanceClosingBucket(
+              id: 'three',
+              label: 'MÁR',
+              incomeMinor: 0,
+              expenseMinor: 30,
+            ),
+            DashboardBalanceClosingBucket(
+              id: 'four',
+              label: 'ÁPR',
+              incomeMinor: 80,
+              expenseMinor: 0,
+            ),
+          ],
+        ),
       );
+      expect(summary, '2 / 12 hónap pluszos');
+
+      final empty = DashboardBalanceClosingsPresentation(
+        identity: const DashboardBalancePrimaryIdentity(
+          upstreamScopeKey: 'empty-closings',
+          indexGeneration: 1,
+          coreRevision: 1,
+        ),
+        timeScope: const AllTimeScope(),
+        buckets: const <DashboardBalanceClosingBucket>[],
+      );
+      expect(balanceClosingsCompactSummary(empty), 'Nincs adat');
     },
   );
 
@@ -188,10 +246,70 @@ void main() {
       carousel.controller.jumpToIndex(3);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-linked-detail-latest')),
+        find.byKey(const ValueKey<String>('balance-linked-detail-retention')),
         findsOneWidget,
       );
       carousel.controller.jumpToIndex(4);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-stability')),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(5);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-ghost')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Ghost funkció még nincs bekötve'),
+        findsOneWidget,
+      );
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-insight-indicator-ghost',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .gradient,
+        FluviVisualTokens.appHighlightGradient,
+      );
+      carousel.controller.jumpToIndex(6);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-forecast')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('előrejelzési adatok bekötése'),
+        findsOneWidget,
+      );
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-insight-indicator-forecast',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .gradient,
+        FluviVisualTokens.appHighlightGradient,
+      );
+      carousel.controller.jumpToIndex(7);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-latest')),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(8);
       await tester.pump();
       expect(
         find.byKey(
@@ -203,12 +321,73 @@ void main() {
         find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
         findsOneWidget,
       );
-      carousel.controller.jumpToIndex(5);
+      carousel.controller.jumpToIndex(9);
       await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'BX6: Ghost and Forecast selection is presentation-only and retains the shared rail identity',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());
+      addTearDown(linked.dispose);
+      addTearDown(balance.dispose);
+      var publications = 0;
+      linked.addListener(() => publications += 1);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balancePresentation: balance,
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final originalPayload = linked.value;
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final controller = carousel.controller;
+      final position = controller.scrollController.position;
+
+      carousel.controller.jumpToIndex(5);
+      await tester.pump();
+      carousel.controller.jumpToIndex(6);
+      await tester.pump();
+
+      final rebuilt = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      expect(publications, 0);
+      expect(identical(linked.value, originalPayload), isTrue);
+      expect(identical(rebuilt.controller, controller), isTrue);
+      expect(
+        identical(rebuilt.controller.scrollController.position, position),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'BX6: Balance topic renderers have no acquisition or scene dependency',
+    () {
+      final source = File(
+        'lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart',
+      ).readAsStringSync();
+      expect(source, isNot(contains('repository/')));
+      expect(source, isNot(contains('PreparedDashboardIndex')));
+      expect(source, isNot(contains('scene')));
+      expect(source, isNot(contains('DateTime.now')));
     },
   );
 
@@ -281,7 +460,7 @@ void main() {
       );
       final source =
           carousel.dataSource! as CyclicCarouselDataSource<BalanceCarouselCard>;
-      expect(source.items, hasLength(6));
+      expect(source.items, hasLength(10));
       expect(source.items.first.kind, BalanceCarouselCardKind.cashflow);
       expect(carousel.controller.selectedLogicalIndex, 0);
       expect(carousel.spec.visibleItemCount, 3);
@@ -529,9 +708,17 @@ void main() {
       expectSurface('cashflow');
       expectSurface('closings');
       expectSurface('momentum');
-      carousel.controller.jumpToIndex(3);
+      carousel.controller.jumpToIndex(4);
       await tester.pump();
+      expectSurface('retention');
+      expectSurface('stability');
+      expectSurface('ghost');
+      carousel.controller.jumpToIndex(6);
+      await tester.pump();
+      expectSurface('forecast');
       expectSurface('latest-transaction');
+      carousel.controller.jumpToIndex(8);
+      await tester.pump();
       expectSurface('top-category');
       expectSurface('top-partner');
     },
@@ -1016,6 +1203,23 @@ void main() {
         ),
         findsOneWidget,
       );
+      for (final id in <String>[
+        'cashflow',
+        'closings',
+        'momentum',
+        'retention',
+        'stability',
+        'ghost',
+        'forecast',
+        'latest-transaction',
+        'top-category',
+        'top-partner',
+      ]) {
+        expect(
+          find.byKey(ValueKey<String>('balance-insight-indicator-$id')),
+          findsOneWidget,
+        );
+      }
       final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
         find.byType(CenteredCarousel<BalanceCarouselCard>),
       );
@@ -1027,6 +1231,38 @@ void main() {
                       find.byKey(
                         const ValueKey<String>(
                           'balance-insight-indicator-closings',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .gradient,
+        FluviVisualTokens.appHighlightGradient,
+      );
+      carousel.controller.jumpToIndex(5);
+      await tester.pump();
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-insight-indicator-ghost',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .gradient,
+        FluviVisualTokens.appHighlightGradient,
+      );
+      carousel.controller.jumpToIndex(6);
+      await tester.pump();
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-insight-indicator-forecast',
                         ),
                       ),
                     )

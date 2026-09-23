@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_retention_stability_projection.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_cashflow_stability_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_linked_detail_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_closings_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_momentum_card.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_retention_card.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
@@ -68,6 +71,59 @@ void main() {
       const Offset(100, 100),
     );
   });
+
+  test('BX3: Retention bars retain a fixed zero-percent axis', () {
+    const periods = <DashboardBalanceRetentionPeriod>[
+      DashboardBalanceRetentionPeriod(
+        id: 'positive',
+        label: 'P',
+        incomeMinor: 100,
+        expenseMinor: 75,
+        retentionBasisPoints: 2500,
+        state: DashboardBalanceRetentionState.value,
+        selected: true,
+      ),
+      DashboardBalanceRetentionPeriod(
+        id: 'negative',
+        label: 'N',
+        incomeMinor: 100,
+        expenseMinor: 120,
+        retentionBasisPoints: -2000,
+        state: DashboardBalanceRetentionState.value,
+        selected: false,
+      ),
+    ];
+    final positive = balanceRetentionBarRectFor(
+      size: const Size(80, 200),
+      basisPoints: 2500,
+      allPeriods: periods,
+    );
+    final negative = balanceRetentionBarRectFor(
+      size: const Size(80, 200),
+      basisPoints: -2000,
+      allPeriods: periods,
+    );
+    expect(positive.bottom, 100);
+    expect(positive.top, lessThan(100));
+    expect(negative.top, 100);
+    expect(negative.bottom, greaterThan(100));
+  });
+
+  test(
+    'BX4: Stability distribution includes zero, median and complete marks',
+    () {
+      final presentation = _stability();
+      final geometry = balanceStabilityDistributionGeometryFor(
+        size: const Size(300, 120),
+        presentation: presentation,
+      );
+      expect(geometry.zeroX, inInclusiveRange(0, 300));
+      expect(geometry.medianX, inInclusiveRange(0, 300));
+      expect(geometry.band.left, lessThanOrEqualTo(geometry.medianX));
+      expect(geometry.band.right, greaterThanOrEqualTo(geometry.medianX));
+      expect(geometry.observationMarks, hasLength(3));
+    },
+  );
 
   testWidgets('PC5/BM4: new topics dispatch through the one lower card', (
     tester,
@@ -199,6 +255,72 @@ void main() {
     );
   });
 
+  testWidgets(
+    'BX3/BX4: Retention and Stability use immutable detail data and local inspection',
+    (tester) async {
+      final retention = _retention();
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.retention,
+          presentation: _linked(retention: retention),
+        ),
+      );
+      expect(find.text('Megtartási arány'), findsOneWidget);
+      expect(find.text('25%'), findsOneWidget);
+      expect(find.text('Bevétel'), findsOneWidget);
+      expect(find.text('Megtartott'), findsOneWidget);
+      expect(find.text('Kiadás'), findsOneWidget);
+      final retentionBar = find.byKey(
+        const ValueKey<String>('balance-retention-bar-selected'),
+      );
+      await tester.tap(retentionBar);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-retention-inspection')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.stability,
+          presentation: _linked(stability: _stability()),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-distribution')),
+        findsOneWidget,
+      );
+      expect(find.text('Medián nettó'), findsOneWidget);
+      expect(find.text('Tipikus sáv'), findsOneWidget);
+      expect(find.text('0 Ft'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-stability-distribution')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-inspection')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'BX6: analytic and future details use a bounded compact fallback',
+    (tester) async {
+      for (final topic in <BalanceLinkedDetailTopic>[
+        BalanceLinkedDetailTopic.retention,
+        BalanceLinkedDetailTopic.stability,
+        BalanceLinkedDetailTopic.ghost,
+        BalanceLinkedDetailTopic.forecast,
+      ]) {
+        await tester.pumpWidget(
+          _host(topic: topic, presentation: _linked(), width: 150, height: 110),
+        );
+        expect(tester.takeException(), isNull, reason: '$topic compact layout');
+      }
+    },
+  );
+
   testWidgets('L4: latest detail renders the five scoped transactions', (
     tester,
   ) async {
@@ -268,6 +390,63 @@ void main() {
     },
   );
 
+  testWidgets(
+    'BX1/BX2 RED: new detail topics are data-free truthful surfaces',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.retention,
+          presentation: _linked(),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-retention')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.stability,
+          presentation: _linked(),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-stability')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _host(topic: BalanceLinkedDetailTopic.ghost, presentation: _linked()),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-ghost')),
+        findsOneWidget,
+      );
+      expect(find.text('Hamarosan'), findsOneWidget);
+      expect(
+        find.textContaining('Ghost funkció még nincs bekötve'),
+        findsOneWidget,
+      );
+      expect(find.text('0 Ft'), findsNothing);
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.forecast,
+          presentation: _linked(),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-forecast')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('előrejelzési adatok bekötése'),
+        findsOneWidget,
+      );
+      expect(find.text('0 Ft'), findsNothing);
+    },
+  );
+
   test(
     'L1: linked detail rendering has no repository or prepared-index dependency',
     () {
@@ -291,11 +470,13 @@ const _identity = DashboardBalancePrimaryIdentity(
 Widget _host({
   required BalanceLinkedDetailTopic topic,
   required DashboardBalanceLinkedPresentation presentation,
+  double width = 390,
+  double height = 320,
 }) => MaterialApp(
   home: Scaffold(
     body: SizedBox(
-      width: 390,
-      height: 320,
+      width: width,
+      height: height,
       child: BalanceLinkedDetailCard(presentation: presentation, topic: topic),
     ),
   ),
@@ -304,6 +485,8 @@ Widget _host({
 DashboardBalanceLinkedPresentation _linked({
   DashboardBalanceClosingsPresentation? closings,
   DashboardBalanceMomentumPresentation? momentum,
+  DashboardBalanceRetentionPresentation? retention,
+  DashboardBalanceStabilityPresentation? stability,
 }) => DashboardBalanceLinkedPresentation(
   identity: _identity,
   timeScope: const AllTimeScope(),
@@ -319,6 +502,8 @@ DashboardBalanceLinkedPresentation _linked({
   ),
   closings: closings,
   momentum: momentum,
+  retention: retention,
+  stability: stability,
   latestTransactions: List<DashboardBalanceScopedTransaction>.generate(
     5,
     (index) => DashboardBalanceScopedTransaction(
@@ -337,6 +522,63 @@ DashboardBalanceLinkedPresentation _linked({
   topCategories: _ranks('category', amountBase: 50000),
   topPartners: _ranks('partner', amountBase: 1000),
 );
+
+DashboardBalanceRetentionPresentation _retention() =>
+    DashboardBalanceRetentionPresentation(
+      identity: _identity,
+      timeScope: const YearScope(2026),
+      periods: const <DashboardBalanceRetentionPeriod>[
+        DashboardBalanceRetentionPeriod(
+          id: 'previous',
+          label: '2025',
+          incomeMinor: 100,
+          expenseMinor: 80,
+          retentionBasisPoints: 2000,
+          state: DashboardBalanceRetentionState.value,
+          selected: false,
+        ),
+        DashboardBalanceRetentionPeriod(
+          id: 'selected',
+          label: '2026',
+          incomeMinor: 100,
+          expenseMinor: 75,
+          retentionBasisPoints: 2500,
+          state: DashboardBalanceRetentionState.value,
+          selected: true,
+        ),
+      ],
+    );
+
+DashboardBalanceStabilityPresentation _stability() =>
+    DashboardBalanceStabilityPresentation(
+      identity: _identity,
+      timeScope: const AllTimeScope(),
+      observations: const <DashboardBalanceMonthlyNetObservation>[
+        DashboardBalanceMonthlyNetObservation(
+          id: 'month:2026-1',
+          label: '2026 JAN',
+          month: YearMonth(year: 2026, month: 1),
+          incomeMinor: 100,
+          expenseMinor: 0,
+        ),
+        DashboardBalanceMonthlyNetObservation(
+          id: 'month:2026-2',
+          label: '2026 FEB',
+          month: YearMonth(year: 2026, month: 2),
+          incomeMinor: 200,
+          expenseMinor: 0,
+        ),
+        DashboardBalanceMonthlyNetObservation(
+          id: 'month:2026-3',
+          label: '2026 MÁR',
+          month: YearMonth(year: 2026, month: 3),
+          incomeMinor: 300,
+          expenseMinor: 0,
+        ),
+      ],
+      medianNetTimesTwo: 400,
+      typicalDeviationTimesTwo: 200,
+    );
 
 List<DashboardBalanceRankedItem> _ranks(
   String prefix, {

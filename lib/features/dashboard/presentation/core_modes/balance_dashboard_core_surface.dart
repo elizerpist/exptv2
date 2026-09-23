@@ -10,14 +10,17 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
+import '../../application/dashboard_balance_closings_momentum_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_linked_detail_card.dart';
+import 'balance_cashflow_stability_card.dart';
 import 'balance_momentum_card.dart';
 import 'balance_presentation_settings.dart';
+import 'balance_retention_card.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
 import 'dashboard_core_mode_presentation.dart';
@@ -32,6 +35,10 @@ enum BalanceCarouselCardKind {
   cashflow,
   closings,
   momentum,
+  retention,
+  stability,
+  ghost,
+  forecast,
   latestTransaction,
   topCategory,
   topPartner,
@@ -41,6 +48,10 @@ const _balanceInsightIndicatorIds = <String>[
   'cashflow',
   'closings',
   'momentum',
+  'retention',
+  'stability',
+  'ghost',
+  'forecast',
   'latest-transaction',
   'top-category',
   'top-partner',
@@ -50,6 +61,10 @@ String _indicatorIdFor(BalanceLinkedDetailTopic topic) => switch (topic) {
   BalanceLinkedDetailTopic.cashflow => 'cashflow',
   BalanceLinkedDetailTopic.closings => 'closings',
   BalanceLinkedDetailTopic.momentum => 'momentum',
+  BalanceLinkedDetailTopic.retention => 'retention',
+  BalanceLinkedDetailTopic.stability => 'stability',
+  BalanceLinkedDetailTopic.ghost => 'ghost',
+  BalanceLinkedDetailTopic.forecast => 'forecast',
   BalanceLinkedDetailTopic.latestTransaction => 'latest-transaction',
   BalanceLinkedDetailTopic.topCategory => 'top-category',
   BalanceLinkedDetailTopic.topPartner => 'top-partner',
@@ -83,6 +98,8 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
   final topPartner = presentation?.topPartners.firstOrNull;
   final closings = presentation?.closings;
   final momentum = presentation?.momentum;
+  final retention = presentation?.retention;
+  final stability = presentation?.stability;
   return List<BalanceCarouselCard>.unmodifiable(<BalanceCarouselCard>[
     BalanceCarouselCard._(
       id: 'cashflow',
@@ -98,9 +115,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       id: 'closings',
       kind: BalanceCarouselCardKind.closings,
       title: 'Zárások',
-      amount: closings == null
-          ? '—'
-          : '${closings.positiveBucketCount} / ${closings.buckets.length} pozitív',
+      amount: closings == null ? '—' : balanceClosingsCompactSummary(closings),
     ),
     BalanceCarouselCard._(
       id: 'momentum',
@@ -112,6 +127,38 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       detail: momentum == null
           ? null
           : balanceMomentumStateLabel(momentum.state),
+    ),
+    BalanceCarouselCard._(
+      id: 'retention',
+      kind: BalanceCarouselCardKind.retention,
+      title: 'Megtartási arány',
+      amount: formatBalanceRetentionPeriod(retention?.selectedPeriod),
+      detail: 'bevételből megtartva',
+    ),
+    BalanceCarouselCard._(
+      id: 'stability',
+      kind: BalanceCarouselCardKind.stability,
+      title: 'Cashflow stabilitás',
+      amount: stability == null || !stability.isAvailable
+          ? 'Nincs elég adat'
+          : formatBalanceStabilityDeviation(
+              stability.typicalDeviationTimesTwo!,
+            ),
+      detail: 'tipikus havi kilengés',
+    ),
+    const BalanceCarouselCard._(
+      id: 'ghost',
+      kind: BalanceCarouselCardKind.ghost,
+      title: 'Fix terhek',
+      amount: 'Hamarosan',
+      detail: 'Ghost tranzakciók',
+    ),
+    const BalanceCarouselCard._(
+      id: 'forecast',
+      kind: BalanceCarouselCardKind.forecast,
+      title: 'Forecast',
+      amount: 'Hamarosan',
+      detail: 'Várható zárás',
     ),
     BalanceCarouselCard._(
       id: 'latest-transaction',
@@ -132,6 +179,27 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       amount: topPartner?.label ?? 'Nincs adat',
     ),
   ]);
+}
+
+/// Compact Closings wording is deliberately a read-only view of the exact
+/// immutable bucket list supplied to the lower Closings renderer.
+String balanceClosingsCompactSummary(
+  DashboardBalanceClosingsPresentation closings,
+) {
+  if (closings.buckets.isEmpty) return 'Nincs adat';
+  final unit = switch (closings.timeScope) {
+    AllTimeScope() => 'év',
+    YearScope() => 'hónap',
+    MonthScope() => 'nap',
+    DayScope() => 'napszak',
+  };
+  final denominator = switch (closings.timeScope) {
+    AllTimeScope() => closings.buckets.length,
+    YearScope() => 12,
+    MonthScope() => closings.buckets.length,
+    DayScope() => 6,
+  };
+  return '${closings.positiveBucketCount} / $denominator $unit pluszos';
 }
 
 /// Balance owns its Header data seam, upper finite carousel, and the existing
@@ -209,6 +277,14 @@ final class _BalanceDashboardCoreSurfaceState
                     BalanceLinkedDetailTopic.closings,
                   BalanceCarouselCardKind.momentum =>
                     BalanceLinkedDetailTopic.momentum,
+                  BalanceCarouselCardKind.retention =>
+                    BalanceLinkedDetailTopic.retention,
+                  BalanceCarouselCardKind.stability =>
+                    BalanceLinkedDetailTopic.stability,
+                  BalanceCarouselCardKind.ghost =>
+                    BalanceLinkedDetailTopic.ghost,
+                  BalanceCarouselCardKind.forecast =>
+                    BalanceLinkedDetailTopic.forecast,
                   BalanceCarouselCardKind.latestTransaction =>
                     BalanceLinkedDetailTopic.latestTransaction,
                   BalanceCarouselCardKind.topCategory =>
@@ -588,6 +664,12 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           BalanceCarouselCardKind.closings => 'Zárások: ${card.amount}',
           BalanceCarouselCardKind.momentum =>
             'Balance momentum: ${card.amount}',
+          BalanceCarouselCardKind.retention =>
+            'Megtartási arány: ${card.amount}',
+          BalanceCarouselCardKind.stability =>
+            'Cashflow stabilitás: ${card.amount}',
+          BalanceCarouselCardKind.ghost => 'Fix terhek: ${card.amount}',
+          BalanceCarouselCardKind.forecast => 'Forecast: ${card.amount}',
           BalanceCarouselCardKind.latestTransaction =>
             'Legutóbbi tranzakció: ${card.amount}',
           BalanceCarouselCardKind.topCategory =>

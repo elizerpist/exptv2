@@ -321,6 +321,33 @@ void main() {
       expect(linked.momentum.logicalAsOfLocalTimeMinutes, 14 * 60 + 37);
     },
   );
+
+  test(
+    'BX-OWNER RED: one linked presentation owns both-direction Retention and Stability once',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 8)),
+        selectedDirection: LedgerDirection.expense,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 23),
+        incomeEntries: <DashboardLedgerEntry>[
+          for (var month = 1; month <= 8; month += 1)
+            _entry('income-$month', 'income', 1000 + month, 2026, month, 1),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry('expense-aug', 'expense', -400, 2026, 8, 2),
+        ],
+      );
+
+      expect(linked.retention.selectedPeriod!.id, 'month:2026-8');
+      expect(linked.retention.selectedPeriod!.incomeMinor, 1008);
+      expect(linked.retention.selectedPeriod!.expenseMinor, 400);
+      expect(linked.stability.observations, hasLength(8));
+      expect(linked.stability.isAvailable, isTrue);
+      expect(linked.retention.identity, linked.identity);
+      expect(linked.stability.identity, linked.identity);
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(

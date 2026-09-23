@@ -9,8 +9,11 @@ import '../../application/dashboard_balance_primary_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../query/domain/ledger_direction.dart';
 import 'balance_closings_card.dart';
+import 'balance_cashflow_stability_card.dart';
+import 'balance_future_placeholder_card.dart';
 import 'balance_momentum_card.dart';
 import 'balance_primary_chart_card.dart';
+import 'balance_retention_card.dart';
 
 /// The single lower Balance card's topic-specific body.
 ///
@@ -39,6 +42,16 @@ class BalanceLinkedDetailCard extends StatelessWidget {
     BalanceLinkedDetailTopic.momentum => BalanceMomentumCard(
       presentation: presentation.momentum,
     ),
+    BalanceLinkedDetailTopic.retention => BalanceRetentionCard(
+      presentation: presentation.retention,
+    ),
+    BalanceLinkedDetailTopic.stability => BalanceCashflowStabilityCard(
+      presentation: presentation.stability,
+    ),
+    BalanceLinkedDetailTopic.ghost =>
+      const BalanceFuturePlaceholderCard.ghost(),
+    BalanceLinkedDetailTopic.forecast =>
+      const BalanceFuturePlaceholderCard.forecast(),
     BalanceLinkedDetailTopic.latestTransaction => _LatestTransactionsDetail(
       transactions: presentation.latestTransactions,
     ),
@@ -63,6 +76,10 @@ enum BalanceLinkedDetailTopic {
   cashflow,
   closings,
   momentum,
+  retention,
+  stability,
+  ghost,
+  forecast,
   latestTransaction,
   topCategory,
   topPartner,

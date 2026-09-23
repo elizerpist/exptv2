@@ -144,3 +144,21 @@ eight-bucket `SpendingRhythmDayPart` stays a distinct owner.
 | BC3-BOUNDS-GESTURES | user §22,26 | Closings/Momentum lower renderers | Normal and compact bounds avoid overflow/clipped hit surfaces; bar/map gestures are local and never compete with global/carousel movement. | compact and interaction-bound widget tests | DONE |
 | BC4-NO-TOUCH | user §§9.7,30 | diff/regression boundary | Cashflow, Header/Compound, Mind, Budget taxonomy, shared carousel engine/profile, Summary/global geometry, Query and repository remain unchanged. | protected shared/Budget/Mind suites plus diff review | DONE |
 | BC5-DELIVERY | user §§33–37 | commits, CI, APK and codegraph | One application commit, journal-only follow-up, exact final-source SCIP, successful human APK and hash are delivered; physical validation is honestly pending. | commit/Actions/APK/manifest checks | DONE |
+
+## 2026-09-23 — Combined Balance expansion acceptance card
+
+The current behavioural base is `b6b5584030de0ae41e40cc4d2cc91e68d36e61c9`.
+It already contains Closings and Momentum; the incoming prompt portions that
+describe a six-slot/prototype-only source are stale. The bundle therefore adds
+four topics to the current six real topics, and enriches the existing Closings
+preview without giving it a second aggregate path.
+
+| ID | Source | Intended code area | Acceptance condition | Verification | Status |
+| --- | --- | --- | --- | --- | --- |
+| BX1-TOPICS | Ghost/Forecast §§10,14–17 | Balance topic list, indicator IDs, lower dispatch | Ten real topics preserve Cashflow/Closings/Momentum/Latest/Category/Partner and add Retention, Stability, Fix terhek and Forecast; no prototype returns. | mounted surface and detail selection tests | DONE |
+| BX2-PLACEHOLDERS | Ghost/Forecast §§15,17 | Balance-local static placeholder renderer | Ghost/Forecast have no amount/count/transaction/data model, no computation and no nested page gesture; copy truthfully states that the engines are not connected. | copy/source and mounted widget tests | DONE |
+| BX3-RETENTION | Retention §§4,13–14 | immutable linked DTO/projection + renderer | Dual-direction formula, noIncome/noData distinction, SUM aggregate, selected YEAR siblings and continuous MONTH/DAY month siblings are exact. | pure RED→GREEN and widget tests | DONE |
+| BX4-STABILITY | Stability §§4,13–15 | immutable linked DTO/projection + renderer | Complete-month samples, deterministic even median/MAD-style band, 3-sample unavailable state and distribution-band visual are exact. | pure RED→GREEN and widget tests | DONE |
+| BX5-BREAK-EVEN | Break-even §§1,13–14 | existing Closings preview | The compact strict-positive fraction uses the same immutable Closings buckets as the lower card, with scope-correct unit wording and no `0 / 0`. | DTO/copy tests | DONE |
+| BX6-OWNERSHIP | both prompts §§12,15,24–26 | Core/surface lower-envelope seam | One Core payload/cache, carousel controller/position/physics and lower card remain; selection causes no data work and bounds stay compact-safe. | Core counters/controller/bounds tests | DONE |
+| BX7-DELIVERY | user final build requirement | app commit, Actions, APK, SCIP, journal | All five requested features are in one app-code build; final graph matches exact app SHA and journal follows separately. | CI/APK/hash/manifest/git evidence | PARTIAL — final application commit, one remote build/APK, exact-source SCIP and journal evidence are pending. |

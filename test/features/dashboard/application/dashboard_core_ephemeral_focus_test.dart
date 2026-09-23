@@ -531,6 +531,8 @@ void main() {
       expect(initial!.cashflow.mode, DashboardBalancePrimaryMode.sum);
       expect(initial.closings.buckets, isNotEmpty);
       expect(initial.momentum.identity, initial.identity);
+      expect(initial.retention.identity, initial.identity);
+      expect(initial.stability.identity, initial.identity);
       final repositoryCalls = repository.prepareCalls;
       final indexGeneration = core.preparedIndex!.generation;
 
@@ -578,6 +580,8 @@ void main() {
       expect(month?.cashflow.dailyPoints.last.expenseMinor, 35000);
       expect(month?.closings.buckets, hasLength(30));
       expect(month?.momentum.identity, month?.identity);
+      expect(month?.retention.identity, month?.identity);
+      expect(month?.stability.identity, month?.identity);
       expect(repository.prepareCalls, repositoryCalls);
       expect(core.preparedIndex?.generation, indexGeneration);
 
@@ -697,6 +701,8 @@ void main() {
       expect(expense?.selectedDirection, LedgerDirection.expense);
       expect(expense?.topCategories.single.id, 'food');
       expect(expense?.topPartners.single.id, 'market');
+      expect(expense?.retention.selectedPeriod?.incomeMinor, isNotNull);
+      expect(expense?.stability.presentationId, isNotNull);
       expect(repository.prepareCalls, repositoryCalls);
       expect(core.preparedIndex?.generation, indexGeneration);
     },

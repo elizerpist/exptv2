@@ -6,6 +6,7 @@ import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import 'dashboard_balance_closings_momentum_projection.dart';
+import 'dashboard_balance_retention_stability_projection.dart';
 
 const _balanceLinkedMaximumRows = 5;
 
@@ -172,6 +173,8 @@ final class DashboardBalanceLinkedPresentation {
     required this.cashflow,
     DashboardBalanceClosingsPresentation? closings,
     DashboardBalanceMomentumPresentation? momentum,
+    DashboardBalanceRetentionPresentation? retention,
+    DashboardBalanceStabilityPresentation? stability,
     required List<DashboardBalanceScopedTransaction> latestTransactions,
     required List<DashboardBalanceRankedItem> topCategories,
     required List<DashboardBalanceRankedItem> topPartners,
@@ -197,6 +200,22 @@ final class DashboardBalanceLinkedPresentation {
            DashboardBalanceMomentumPresentation.unavailable(
              identity: identity,
              timeScope: timeScope,
+           ),
+       retention =
+           retention ??
+           DashboardBalanceRetentionPresentation(
+             identity: identity,
+             timeScope: timeScope,
+             periods: const <DashboardBalanceRetentionPeriod>[],
+           ),
+       stability =
+           stability ??
+           DashboardBalanceStabilityPresentation(
+             identity: identity,
+             timeScope: timeScope,
+             observations: const <DashboardBalanceMonthlyNetObservation>[],
+             medianNetTimesTwo: null,
+             typicalDeviationTimesTwo: null,
            );
 
   final DashboardBalancePrimaryIdentity identity;
@@ -205,6 +224,8 @@ final class DashboardBalanceLinkedPresentation {
   final DashboardBalancePrimaryPresentation cashflow;
   final DashboardBalanceClosingsPresentation closings;
   final DashboardBalanceMomentumPresentation momentum;
+  final DashboardBalanceRetentionPresentation retention;
+  final DashboardBalanceStabilityPresentation stability;
   final List<DashboardBalanceScopedTransaction> latestTransactions;
   final List<DashboardBalanceRankedItem> topCategories;
   final List<DashboardBalanceRankedItem> topPartners;
@@ -215,6 +236,8 @@ final class DashboardBalanceLinkedPresentation {
     cashflow.presentationId,
     closings.presentationId,
     momentum.presentationId,
+    retention.presentationId,
+    stability.presentationId,
     for (final transaction in latestTransactions.take(
       _balanceLinkedMaximumRows,
     ))
@@ -490,6 +513,19 @@ abstract final class DashboardBalanceLinkedProjection {
         timeScope: timeScope,
         logicalAsOfDate: logicalAsOfDate,
         logicalAsOfLocalTimeMinutes: logicalAsOfLocalTimeMinutes,
+        incomeEntries: incomeEntries,
+        expenseEntries: expenseEntries,
+      ),
+      retention: DashboardBalanceRetentionProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        incomeEntries: incomeEntries,
+        expenseEntries: expenseEntries,
+      ),
+      stability: DashboardBalanceStabilityProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        logicalAsOfDate: logicalAsOfDate,
         incomeEntries: incomeEntries,
         expenseEntries: expenseEntries,
       ),
