@@ -2813,3 +2813,48 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **Current carousel-card design direction:** each Balance carousel card should use a compact three-row information hierarchy: (1) top row = tight card title with a small representative icon to its left, (2) middle row = the primary information in the largest type, (3) bottom row = secondary/context information in the smallest type. This is a design requirement, not a bugfix.
 - **Latest-transaction carousel card:** exact primary/secondary field choice is still under design discussion and is not yet user-approved. Do not treat any candidate content arrangement as final until the user selects one.
 - Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No Flutter source, tests, graph, prototype, milestone, workflow or build configuration is changed here.
+
+## 2026-09-24 — Reintroduce Category Movers as a separate Balance linked topic
+
+- User now explicitly requests a coding-agent implementation prompt to **put Category Movers back into the Balance linked carousel**, preserving the product semantics previously discussed. Movers remains a separate insight from the newer Top Category drill-down: **Movers answers which categories changed most versus a comparison period; Category Detail answers how one category behaves internally.** Partner analytics remain separately owned by Top Partner.
+- Prompt-time feature branch HEAD before this journal entry is `ff6107ad29846978ce1bd1f5bce13af1cbfbac1a`, a journal-only commit. The current behavioral application source remains `65f33a4e388f6f796b77f31a5360e8f2f82a6f01` (`feat(header): add per-mode palettes and foreground`). Exact-source SCIP is tooling `d6eb121ba5979afc5939e19758c579d6ebb0b901`, with `manifest.source_head=65f33a4e388f6f796b77f31a5360e8f2f82a6f01`, scip-dart 1.6.2 and raw index SHA-256 `c2081d1283846edbb629f41e0baef9d0d2172779eb4ceff9e264ec170622aff9`.
+- Current Balance UI source has **10 real linked topics** in this exact prompt-time order: Cashflow, Zárások, Momentum, Megtartási arány, Cashflow stabilitás, Fix terhek, Forecast, Legutóbbi tétel, Top kategória, Top partner. The current initial selected topic is **Cashflow**. The user did not request changing that initial selection.
+- The current repository still contains the prior Movers analytics implementation unchanged as dormant source: `lib/features/dashboard/application/dashboard_balance_category_movers_projection.dart` blob `9ec3f96aeec895dc2a9eddb88fd38b27e8969e70` and its pure projection test blob `ba4b13319b07320de0cb3fe5454ca06ff8a52c1b`. These are the same implementation/test blobs used by application commit `76ee16256bdde96d8ea9ae16077e5db1e105170c` (`feat(balance): add Compound and category movers`). Therefore this task is primarily a **current-architecture reconnection/source-port**, not a request to invent new Movers mathematics.
+- Historical commit `c1282a1820acfe6711baed08c8d995209d3383cb` later removed Category Movers from the finite carousel while adding Closings/Momentum, but did not delete the Movers projection/test source. Do **not** cherry-pick or roll back `76ee162...`; reconnect only the relevant feature to the evolved current architecture while preserving all current topics/features.
+- Existing dormant Movers semantics remain authoritative unless CURRENT-source adaptation proves a necessary compatibility change:
+  - selected-direction analytics over resident prepared membership;
+  - group by canonical `categoryId`;
+  - current/reference money totals use absolute directional amount magnitudes;
+  - `delta = current - reference`;
+  - rank by descending **absolute money impact**, then descending current amount, then deterministic category-id tie break;
+  - unchanged categories are omitted;
+  - reference==0/current>0 is finite **New**, never infinity;
+  - percentage uses deterministic integer basis points when reference > 0.
+- Existing comparison-window semantics remain approved:
+  - **SUM / AllTime → current YTD vs previous year same elapsed calendar span**;
+  - **YEAR current year → current YTD vs previous year same elapsed span; historical YEAR → full selected year vs full previous year**;
+  - **MONTH current month → MTD vs immediately previous month over same/clamped elapsed-day span; historical MONTH → full selected month vs previous calendar month**;
+  - **DAY → selected calendar day vs previous calendar day**.
+  Use the app's existing immutable `logicalAsOfDate`; no widget/device wall-clock read.
+- Existing Movers UI contract to restore/adapt:
+  - upper compact hero = `Legnagyobb kategóriaváltozás`; hero category is the top-ranked mover; secondary info shows signed percentage or `New` plus signed money delta and comparison context;
+  - lower overview = maximum **5** movers, zero-centered diverging bars with **csökkenés** left and **növekedés** right, canonical category colour, category label, signed change and signed money delta, plus truthful comparison-window context;
+  - row tap opens a **local Movers category-comparison detail** in the same lower Balance card; it must not mutate Query, Summary, Top Category detail state or the upper carousel;
+  - local detail shows current amount, reference amount, signed change, signed delta and the already-prepared current-vs-reference trend; current series uses category colour, reference series remains muted;
+  - Back returns locally to Movers overview;
+  - payload replacement is stale-safe: if the locally selected mover no longer exists, return to overview;
+  - explicit empty state: `Nincs kategóriaváltozás`.
+- Product ownership boundary is strict:
+  - **Movers = period-over-period category change detection/comparison**;
+  - **Top Category detail = category internal structure/behavior and must keep NO Movers/delta comparison analytics**;
+  - **Top Partner = partner/vendor analytics**.
+- Current architecture has one shared `CenteredCarousel`, one controller/`ScrollPosition`/physics owner, one indicator strip and one lower Balance card shell. Movers must extend those same owners. Preserve current Cashflow initial selection. If no newer real topics land before coding, add Movers as an **11th** topic, placed adjacent to Top Category (preferred prompt-time order: immediately before Top Category) without removing/replacing any current topic.
+- **Important boundedness correction from current-source audit:** the dormant projection currently retains every changed category and computes a trend by rescanning entries once per changed category, while the actual UI renders only the first five. When reconnecting Movers to the current 24-entry linked-presentation LRU, preserve the exact ranking/math but bound the retained/renderable Movers DTO to the top 5 and avoid N×all-category trend rescans; compute/retain detailed trend only for the bounded top-5 set or use an equivalent bounded single-pass aggregation. Do not change which five categories win the ranking.
+- The Movers projection must receive the **full resident selected-direction membership**, not the already Summary-scope-filtered `directional` list, because its reference comparison window often lies outside the selected current scope. The projection itself owns current/reference window admission.
+- Current matching graph was queried for the current `BalanceCarouselCardKind` and `BalanceLinkedDetailTopic` neighborhoods; direct production/test consumers are the expected Balance surface/detail and focused tests. Re-open CURRENT source after graph navigation before mutation.
+- Connected Drive search for Movers/Balance-category evidence found only prompt/design docs and **no current Movers runtime log**. Classification: `NO CURRENT MOVERS RUNTIME LOG — DORMANT/NOT IN CURRENT UI`. No broad forensic instrumentation campaign is justified for this product reconnection unless tests expose an actual defect.
+- Current application CI baseline is Actions run `35895355192` for exact app SHA `65f33a4e...`: `test-core`, `test-flutter`, `dashboard-paths`, and human APK build PASS; `run-dashboard-profile` FAIL due the separately documented inherited Mind live-range assertion. Human APK is `fluvi_HUMAN_DIAGNOSTIC_65f33a4.apk`, 86,038,245 bytes, SHA-256 `3635bf3e37e3615abf9e2f273907b2b76ae32bcb7e3c6c768a0697287022cfdc`.
+- Protected physical interaction floor remains `6e962187e90e2a824244dbc11a3d73a6c5174472`? **Correction:** use the milestone-file authoritative SHA `6e962187e90e2a82431b1f91b224d2b52a6e0ba7`; preserve Avatar/Time/carousel controller, ScrollPosition and physics identity, and zero unintended hot-path repository/index/query work.
+- Scope explicitly excludes changes to Header foreground/palettes/opacity/typography work, Cashflow/Closings/Momentum/Retention/Stability math, Ghost/Forecast semantics, Top Category/Partner drill-down contracts, Query/repository architecture, Mind, Budget and global dashboard geometry.
+- User requests the production-grade coding-agent prompt now. Prompt-writer action for this feedback: journal only, build-trigger-free `[skip ci]`; no Flutter application source, tests, workflow, graph, milestone or build configuration changed. Physical validation of the eventual Movers candidate remains **PENDING — USER ONLY**.
+
