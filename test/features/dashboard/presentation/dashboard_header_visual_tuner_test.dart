@@ -1,6 +1,7 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_mind_score_color.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
@@ -34,7 +35,7 @@ void main() {
         MaterialApp(
           home: SizedBox(
             width: 360,
-            height: 1800,
+            height: 520,
             child: DashboardHeaderVisualTuner(controller: controller),
           ),
         ),
@@ -45,7 +46,7 @@ void main() {
       await tester.ensureVisible(selector);
       final dropdown = tester
           .widget<DropdownButton<DashboardBalanceHeaderPalette>>(selector);
-      expect(dropdown.items, hasLength(9));
+      expect(dropdown.items, hasLength(11));
       dropdown.onChanged!(DashboardBalanceHeaderPalette.misticLevanderFields);
       final position = find.byKey(
         const ValueKey<String>('dashboard-header-balance-position-slider'),
@@ -70,6 +71,59 @@ void main() {
       );
       expect(controller.tuning.value.balanceColor.positionPercent, 100);
       expect(controller.tuning.value.balanceColor.windowWidthPercent, 10);
+
+      final balanceTextBlack = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-text-black'),
+      );
+      final balanceChartWhite = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-chart-white'),
+      );
+      for (final control in <Finder>[balanceTextBlack, balanceChartWhite]) {
+        await tester.ensureVisible(control);
+        await tester.tap(control);
+      }
+      await tester.pump();
+      expect(
+        controller.tuning.value.balanceHeader.textColor,
+        DashboardHeaderForegroundColor.black,
+      );
+      expect(
+        controller.tuning.value.balanceHeader.chartColor,
+        DashboardHeaderForegroundColor.white,
+      );
+
+      final mindSelector = find.byKey(
+        const ValueKey<String>('dashboard-header-mind-palette-selector'),
+      );
+      await tester.ensureVisible(mindSelector);
+      tester
+          .widget<DropdownButton<MindHeaderScorePalette>>(mindSelector)
+          .onChanged!(MindHeaderScorePalette.trafficColorLab);
+      await tester.pump();
+      expect(
+        controller.tuning.value.mindScore.palette,
+        MindHeaderScorePalette.trafficColorLab,
+      );
+
+      final mindTextWhite = find.byKey(
+        const ValueKey<String>('dashboard-header-mind-text-white'),
+      );
+      final mindChartBlack = find.byKey(
+        const ValueKey<String>('dashboard-header-mind-chart-black'),
+      );
+      for (final control in <Finder>[mindTextWhite, mindChartBlack]) {
+        await tester.ensureVisible(control);
+        await tester.tap(control);
+      }
+      await tester.pump();
+      expect(
+        controller.tuning.value.mindHeader.textColor,
+        DashboardHeaderForegroundColor.white,
+      );
+      expect(
+        controller.tuning.value.mindHeader.chartColor,
+        DashboardHeaderForegroundColor.black,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
     },
@@ -546,6 +600,32 @@ void main() {
       ),
       findsOneWidget,
     );
+    for (final entry in <({String key, void Function(double) change})>[
+      (
+        key: 'dashboard-header-balance-opacity-slider',
+        change: controller.setBalanceHeaderOpacityPercent,
+      ),
+      (
+        key: 'dashboard-header-mind-opacity-slider',
+        change: controller.setMindHeaderOpacityPercent,
+      ),
+      (
+        key: 'dashboard-header-budget-opacity-slider',
+        change: controller.setBudgetHeaderOpacityPercent,
+      ),
+    ]) {
+      final slider = find.byKey(ValueKey<String>(entry.key));
+      await tester.ensureVisible(slider);
+      tester
+          .widget<Slider>(
+            find.descendant(of: slider, matching: find.byType(Slider)),
+          )
+          .onChanged!(entry.key.contains('balance') ? 0 : 100);
+    }
+    await tester.pump();
+    expect(controller.tuning.value.balanceHeader.opacityPercent, 0);
+    expect(controller.tuning.value.mindHeader.opacityPercent, 100);
+    expect(controller.tuning.value.budgetHeader.opacityPercent, 100);
     expect(
       find.byKey(
         const ValueKey<String>('dashboard-header-cool-window-width-slider'),
@@ -553,7 +633,21 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('dashboard-header-opacity-slider')),
+      find.byKey(
+        const ValueKey<String>('dashboard-header-balance-opacity-slider'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-mind-opacity-slider'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('dashboard-header-budget-opacity-slider'),
+      ),
       findsOneWidget,
     );
     expect(
@@ -610,10 +704,12 @@ void main() {
       reason: 'Position stays directly controllable at a 100% window.',
     );
 
-    await tester.tap(
-      find.byKey(
-        const ValueKey<String>('dashboard-header-colour-source-category'),
-      ),
+    // This test exercises synchronous owner wiring; its preceding opacity
+    // controls intentionally scroll the bounded tuner through all three
+    // mode sections. Selection gesture coverage lives in the dedicated
+    // Budget tuner flow, so use the same controller intent directly here.
+    controller.selectBudgetHeaderColorSource(
+      DashboardBudgetHeaderColorSource.category,
     );
     await tester.pump();
     expect(
@@ -627,15 +723,11 @@ void main() {
       findsNothing,
       reason: 'Category position is data-derived, never a second user value.',
     );
+    final categoryWidthControl = find.byKey(
+      const ValueKey<String>('dashboard-header-category-window-width-slider'),
+    );
     final categoryWidth = tester.widget<Slider>(
-      find.descendant(
-        of: find.byKey(
-          const ValueKey<String>(
-            'dashboard-header-category-window-width-slider',
-          ),
-        ),
-        matching: find.byType(Slider),
-      ),
+      find.descendant(of: categoryWidthControl, matching: find.byType(Slider)),
     );
     categoryWidth.onChanged!(42);
     await tester.pump();

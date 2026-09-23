@@ -177,6 +177,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.detailRight,
     this.detailTop,
     this.detailBottom = 15,
+    this.usesVisualForeground = false,
   });
 
   final DashboardBounds bounds;
@@ -192,6 +193,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final double? detailRight;
   final double? detailTop;
   final double? detailBottom;
+  final bool usesVisualForeground;
 
   @override
   Widget build(BuildContext context) {
@@ -218,12 +220,11 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             right: 14,
             child:
                 labelContent ??
-                Text(
-                  label,
-                  key: labelKey,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: FluviVisualTokens.textSecondary,
-                  ),
+                _HeaderModeLabel(
+                  frame: visualFrameListenable,
+                  label: label,
+                  labelKey: labelKey,
+                  usesVisualForeground: usesVisualForeground,
                 ),
           ),
           if (detail case final detail?)
@@ -236,6 +237,40 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Header label foreground follows the mode frame but remains outside the
+/// animated material repaint boundary. A missing visual frame retains the
+/// existing secondary-token fallback.
+final class _HeaderModeLabel extends StatelessWidget {
+  const _HeaderModeLabel({
+    required this.frame,
+    required this.label,
+    required this.labelKey,
+    required this.usesVisualForeground,
+  });
+
+  final ValueListenable<DashboardHeaderVisualFrame>? frame;
+  final String label;
+  final Key labelKey;
+  final bool usesVisualForeground;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget text(Color color) => Text(
+      label,
+      key: labelKey,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+    );
+    final frames = frame;
+    if (!usesVisualForeground || frames == null) {
+      return text(FluviVisualTokens.textSecondary);
+    }
+    return ValueListenableBuilder<DashboardHeaderVisualFrame>(
+      valueListenable: frames,
+      builder: (context, value, _) => text(value.foregroundTextColor),
     );
   }
 }

@@ -85,4 +85,31 @@ void main() {
       expect(point.dy, DashboardHeaderTrendChartStyle.plotHeight / 2);
     },
   );
+
+  test('Header trend painter accepts a render-only foreground line colour', () {
+    final series = DashboardHeaderTrendSeries(
+      startInclusiveTemporalCoordinate: 0,
+      endInclusiveTemporalCoordinate: 1,
+      points: const <DashboardHeaderTrendPoint>[
+        DashboardHeaderTrendPoint(temporalCoordinate: 0, value: 0),
+        DashboardHeaderTrendPoint(temporalCoordinate: 1, value: 1),
+      ],
+    );
+    final white = DashboardHeaderTrendPainter(
+      series: series,
+      minimumValue: 0,
+      maximumValue: 1,
+      lineColor: const Color(0xffffffff),
+    );
+    final black = DashboardHeaderTrendPainter(
+      series: series,
+      minimumValue: 0,
+      maximumValue: 1,
+      lineColor: const Color(0xff000000),
+    );
+
+    expect(white.lineColor, const Color(0xffffffff));
+    expect(black.lineColor, const Color(0xff000000));
+    expect(black.shouldRepaint(white), isTrue);
+  });
 }

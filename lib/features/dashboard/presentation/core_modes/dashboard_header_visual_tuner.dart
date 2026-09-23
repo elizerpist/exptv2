@@ -29,6 +29,7 @@ import 'balance_presentation_settings.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
 import 'dashboard_header_balance_color_scale.dart';
+import 'dashboard_header_mind_score_color.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
 
@@ -325,6 +326,78 @@ final class _TunerSlider extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+/// Reusable pair of independent Header foreground choices. The state itself
+/// remains in the one dashboard-lifetime visual controller; this widget only
+/// renders intent controls for a mode.
+final class _HeaderForegroundControls extends StatelessWidget {
+  const _HeaderForegroundControls({
+    required this.keyPrefix,
+    required this.textColor,
+    required this.chartColor,
+    required this.onTextColorChanged,
+    required this.onChartColorChanged,
+  });
+
+  final String keyPrefix;
+  final DashboardHeaderForegroundColor textColor;
+  final DashboardHeaderForegroundColor chartColor;
+  final ValueChanged<DashboardHeaderForegroundColor> onTextColorChanged;
+  final ValueChanged<DashboardHeaderForegroundColor> onChartColorChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      const SizedBox(height: 4),
+      Text('Szöveg színe', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<DashboardHeaderForegroundColor>(
+        groupValue: textColor,
+        onChanged: (value) {
+          if (value != null) onTextColorChanged(value);
+        },
+        child: Row(
+          children: <Widget>[
+            for (final color in DashboardHeaderForegroundColor.values)
+              Expanded(
+                child: RadioListTile<DashboardHeaderForegroundColor>(
+                  key: ValueKey<String>('$keyPrefix-text-${color.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(color.label),
+                  value: color,
+                ),
+              ),
+          ],
+        ),
+      ),
+      Text(
+        'Vonaldiagram színe',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      RadioGroup<DashboardHeaderForegroundColor>(
+        groupValue: chartColor,
+        onChanged: (value) {
+          if (value != null) onChartColorChanged(value);
+        },
+        child: Row(
+          children: <Widget>[
+            for (final color in DashboardHeaderForegroundColor.values)
+              Expanded(
+                child: RadioListTile<DashboardHeaderForegroundColor>(
+                  key: ValueKey<String>('$keyPrefix-chart-${color.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(color.label),
+                  value: color,
+                ),
+              ),
+          ],
+        ),
+      ),
+    ],
   );
 }
 
@@ -903,9 +976,6 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
         DashboardHeaderAnimationFamily.fullFieldFlow => 'Áramlás típusa',
         DashboardHeaderAnimationFamily.spaceFabricWarp => 'Térszövet típusa',
       };
-      final opacity = DashboardHeaderOpacityScale.valueAt(
-        tuning.opacityScalePosition,
-      );
       return Material(
         color: Colors.transparent,
         child: DecoratedBox(
@@ -1153,6 +1223,29 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               onChanged:
                                   controller.setBalanceHeaderWindowWidthPercent,
                             ),
+                            _HeaderForegroundControls(
+                              keyPrefix: 'dashboard-header-balance',
+                              textColor: tuning.balanceHeader.textColor,
+                              chartColor: tuning.balanceHeader.chartColor,
+                              onTextColorChanged:
+                                  controller.setBalanceHeaderTextColor,
+                              onChartColorChanged:
+                                  controller.setBalanceHeaderChartColor,
+                            ),
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-balance-opacity-slider',
+                              ),
+                              label: 'Balance áttetszőség',
+                              valueLabel:
+                                  '${tuning.balanceHeader.opacityPercent.toStringAsFixed(0)}%',
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              value: tuning.balanceHeader.opacityPercent,
+                              onChanged:
+                                  controller.setBalanceHeaderOpacityPercent,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -1248,12 +1341,58 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                 onChanged: controller
                                     .setBudgetCategoryWindowWidthPercent,
                               ),
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-budget-opacity-slider',
+                              ),
+                              label: 'Budget áttetszőség',
+                              valueLabel:
+                                  '${tuning.budgetHeader.opacityPercent.toStringAsFixed(0)}%',
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              value: tuning.budgetHeader.opacityPercent,
+                              onChanged:
+                                  controller.setBudgetHeaderOpacityPercent,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
                         _TunerSection(
                           title: 'Mind Header szín',
                           children: <Widget>[
+                            InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Paletta',
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<MindHeaderScorePalette>(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-mind-palette-selector',
+                                  ),
+                                  value: tuning.mindScore.palette,
+                                  isExpanded: true,
+                                  items: MindHeaderScorePalette.values
+                                      .map(
+                                        (palette) =>
+                                            DropdownMenuItem<
+                                              MindHeaderScorePalette
+                                            >(
+                                              value: palette,
+                                              child: Text(palette.label),
+                                            ),
+                                      )
+                                      .toList(growable: false),
+                                  onChanged: (palette) {
+                                    if (palette != null) {
+                                      controller.selectMindHeaderPalette(
+                                        palette,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
                             _TunerSlider(
                               key: const ValueKey<String>(
                                 'dashboard-header-mind-score-window-width-slider',
@@ -1268,24 +1407,27 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               onChanged: controller
                                   .setMindHeaderScoreWindowWidthPercent,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        _TunerSection(
-                          title: 'Header szín áttetszőség',
-                          children: <Widget>[
+                            _HeaderForegroundControls(
+                              keyPrefix: 'dashboard-header-mind',
+                              textColor: tuning.mindHeader.textColor,
+                              chartColor: tuning.mindHeader.chartColor,
+                              onTextColorChanged:
+                                  controller.setMindHeaderTextColor,
+                              onChartColorChanged:
+                                  controller.setMindHeaderChartColor,
+                            ),
                             _TunerSlider(
                               key: const ValueKey<String>(
-                                'dashboard-header-opacity-slider',
+                                'dashboard-header-mind-opacity-slider',
                               ),
-                              label: 'Áttetszőség',
+                              label: 'Mind áttetszőség',
                               valueLabel:
-                                  '${tuning.opacityScalePosition.toStringAsFixed(0)}% · ${opacity.toStringAsFixed(2)}',
+                                  '${tuning.mindHeader.opacityPercent.toStringAsFixed(0)}%',
                               min: 0,
                               max: 100,
                               divisions: 100,
-                              value: tuning.opacityScalePosition,
-                              onChanged: controller.setOpacityScalePosition,
+                              value: tuning.mindHeader.opacityPercent,
+                              onChanged: controller.setMindHeaderOpacityPercent,
                             ),
                           ],
                         ),

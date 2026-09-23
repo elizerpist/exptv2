@@ -149,6 +149,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
             label: 'mind',
             visualController: headerVisualController,
             visualFrameListenable: headerVisualFrame,
+            usesVisualForeground: true,
             detailLeft: 0,
             detailTop: 0,
             detailRight: 0,
@@ -157,6 +158,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
                 ? null
                 : _MindHeaderScoreDetail(
                     score: behavioralScore!,
+                    headerVisualFrame: headerVisualFrame,
                     expansionProgress: geometry.headerExpansionProgress,
                     chartPresentation: headerScoreChartPresentation,
                     temporalContext: _headerScoreChartTemporalContext,
@@ -414,6 +416,7 @@ final class _MindTemporalEntryFrameProbeState<T>
 final class _MindHeaderScoreDetail extends StatelessWidget {
   const _MindHeaderScoreDetail({
     required this.score,
+    required this.headerVisualFrame,
     required this.expansionProgress,
     this.chartPresentation,
     required this.temporalContext,
@@ -422,6 +425,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
   });
 
   final ValueListenable<MindBehavioralScoreFrame?> score;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
   final ValueListenable<MindHeaderScoreChartPresentationSettings>?
   chartPresentation;
@@ -445,7 +449,10 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
     child: ValueListenableBuilder<MindBehavioralScoreFrame?>(
       valueListenable: score,
       builder: (context, frame, _) {
-        Widget contentFor(bool showTimeLabels) => Stack(
+        Widget contentFor(
+          bool showTimeLabels,
+          DashboardHeaderVisualFrame? headerFrame,
+        ) => Stack(
           fit: StackFit.expand,
           children: <Widget>[
             if (frame?.chartSeries case final chartSeries?)
@@ -453,6 +460,9 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                 series: chartSeries,
                 expansionProgress: expansionProgress,
                 showTimeLabels: showTimeLabels,
+                lineColor:
+                    headerFrame?.chartColor ??
+                    MindHeaderScoreChartStyle.lineColor,
                 temporalContext: temporalContext,
                 pointerObserver: pointerObserver,
               ),
@@ -463,7 +473,9 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                 '${frame?.point.roundedScore ?? 50}/100',
                 key: const ValueKey<String>('mind-header-score-text'),
                 style: DefaultTextStyle.of(context).style.copyWith(
-                  color: FluviVisualTokens.textOnAction,
+                  color:
+                      headerFrame?.foregroundTextColor ??
+                      FluviVisualTokens.textOnAction,
                   fontSize: 19,
                   height: .96,
                   letterSpacing: -.76,
@@ -474,11 +486,21 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
           ],
         );
         final presentation = chartPresentation;
-        if (presentation == null) return contentFor(false);
+        Widget withVisualFrame(bool showTimeLabels) {
+          final frames = headerVisualFrame;
+          if (frames == null) return contentFor(showTimeLabels, null);
+          return ValueListenableBuilder<DashboardHeaderVisualFrame>(
+            valueListenable: frames,
+            builder: (context, headerFrame, _) =>
+                contentFor(showTimeLabels, headerFrame),
+          );
+        }
+
+        if (presentation == null) return withVisualFrame(false);
         return ValueListenableBuilder<MindHeaderScoreChartPresentationSettings>(
           valueListenable: presentation,
           builder: (context, settings, _) =>
-              contentFor(settings.showsTimeLabels),
+              withVisualFrame(settings.showsTimeLabels),
         );
       },
     ),

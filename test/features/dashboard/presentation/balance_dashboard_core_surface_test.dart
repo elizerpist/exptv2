@@ -16,6 +16,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboa
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_header_trend_visual_kernel.dart';
 import 'package:fluvi/core/design/dashboard_border_profile.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
@@ -27,6 +28,101 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
+  testWidgets(
+    'Balance Header foreground frame changes text without balance data work',
+    (tester) async {
+      final visual = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      final frame = ValueNotifier<DashboardHeaderVisualFrame>(
+        const DashboardHeaderVisualFrame(
+          colors: <Color>[Colors.red, Colors.red],
+          stops: <double>[0, 1],
+          opacity: 1,
+          colorA: Colors.red,
+          colorB: Colors.red,
+          foregroundTextColor: Colors.black,
+          chartColor: Colors.white,
+        ),
+      );
+      final balance = ValueNotifier<DashboardBalancePresentation?>(
+        const DashboardBalancePresentation(
+          scopeKey: 'balance|all',
+          coreRevision: 1,
+          incomeTotalMinor: 120000,
+          expenseTotalMinor: 20000,
+          netTotalMinor: 100000,
+          formattedNetTotal: '1 000,00 Ft',
+          presentationId: 1,
+          latestTransaction: DashboardBalanceLatestTransactionPresentation(
+            entryId: 'latest',
+            title: 'Teszt',
+            formattedAmount: '1 000,00 Ft',
+            direction: LedgerDirection.income,
+            occurredOrder: 1,
+          ),
+        ),
+      );
+      final mode = DashboardCoreModePresentation(
+        geometry: DashboardGeometryResolver.resolve(
+          metrics: DashboardLayoutMetrics.reference,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        ),
+        palette: DashboardModePaletteResolver.resolve(
+          DashboardModeSpec.balance,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: mode,
+              balancePresentation: balance,
+              headerVisualController: visual,
+              headerVisualFrame: frame,
+            ),
+          ),
+        ),
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('balance-header-net-amount')),
+            )
+            .style!
+            .color,
+        Colors.black,
+      );
+      final before = balance.value;
+      frame.value = const DashboardHeaderVisualFrame(
+        colors: <Color>[Colors.red, Colors.red],
+        stops: <double>[0, 1],
+        opacity: 1,
+        colorA: Colors.red,
+        colorB: Colors.red,
+        foregroundTextColor: Colors.white,
+        chartColor: Colors.black,
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey<String>('balance-header-net-amount')),
+            )
+            .style!
+            .color,
+        Colors.white,
+      );
+      expect(balance.value, same(before));
+      await tester.pumpWidget(const SizedBox.shrink());
+      visual.dispose();
+      frame.dispose();
+      balance.dispose();
+    },
+  );
+
   test('BX1 RED: Balance has ten real linked topics and no prototype', () {
     expect(
       balanceCarouselCardsFor(null).map((card) => card.kind),

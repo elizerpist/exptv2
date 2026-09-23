@@ -142,6 +142,7 @@ final class MindHeaderScoreChart extends StatefulWidget {
     this.showTimeLabels = false,
     this.temporalContext = MindHeaderScoreChartTemporalContext.year,
     this.pointerObserver,
+    this.lineColor = MindHeaderScoreChartStyle.lineColor,
   });
 
   final MindBehavioralScoreChartSeries series;
@@ -149,6 +150,7 @@ final class MindHeaderScoreChart extends StatefulWidget {
   final bool showTimeLabels;
   final MindHeaderScoreChartTemporalContext temporalContext;
   final MindHeaderScoreChartPointerObserver? pointerObserver;
+  final Color lineColor;
 
   /// Five semantic quarter positions over the immutable score-series time
   /// domain. These are dates first and pixels second, so scope/range/history
@@ -265,6 +267,7 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
                               painter: MindHeaderScoreChartPainter(
                                 series: series,
                                 selectedEpochDay: selected?.epochDay,
+                                lineColor: widget.lineColor,
                               ),
                             ),
                           ),
@@ -573,14 +576,17 @@ final class _MindHeaderScoreChartTimeLabels extends StatelessWidget {
 /// minimal white score line and its subtle outlined latest-value marker.
 /// It consumes already-calculated score points only.
 final class MindHeaderScoreChartPainter extends CustomPainter {
-  MindHeaderScoreChartPainter({required this.series, this.selectedEpochDay})
-    : points = List<MindBehavioralScorePoint>.unmodifiable(series.points);
+  MindHeaderScoreChartPainter({
+    required this.series,
+    this.selectedEpochDay,
+    this.lineColor = MindHeaderScoreChartStyle.lineColor,
+  }) : points = List<MindBehavioralScorePoint>.unmodifiable(series.points);
 
   final MindBehavioralScoreChartSeries series;
   final List<MindBehavioralScorePoint> points;
   final int? selectedEpochDay;
 
-  Color get lineColor => MindHeaderScoreChartStyle.lineColor;
+  final Color lineColor;
   double get lineWidth => MindHeaderScoreChartStyle.lineWidth;
   double get endpointRadius => MindHeaderScoreChartStyle.endpointRadius;
   bool get smoothsBetweenDailySamples => true;
@@ -605,6 +611,7 @@ final class MindHeaderScoreChartPainter extends CustomPainter {
       minimumValue: 0,
       maximumValue: 100,
       selectedTemporalCoordinate: selectedEpochDay,
+      lineColor: lineColor,
     ).paint(canvas, size);
   }
 
@@ -630,5 +637,6 @@ final class MindHeaderScoreChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant MindHeaderScoreChartPainter oldDelegate) =>
       oldDelegate.series != series ||
-      oldDelegate.selectedEpochDay != selectedEpochDay;
+      oldDelegate.selectedEpochDay != selectedEpochDay ||
+      oldDelegate.lineColor != lineColor;
 }

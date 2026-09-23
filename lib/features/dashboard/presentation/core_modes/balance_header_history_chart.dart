@@ -59,6 +59,7 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
     this.showTimeLabels = true,
     this.adaptiveScope = const AllTimeScope(),
     this.pointerObserver,
+    this.lineColor = DashboardHeaderTrendChartStyle.lineColor,
   });
 
   final DashboardBalanceHistorySeries series;
@@ -67,6 +68,7 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
   final bool showTimeLabels;
   final LedgerTimeScope adaptiveScope;
   final BalanceHeaderHistoryChartPointerObserver? pointerObserver;
+  final Color lineColor;
 
   @visibleForTesting
   static List<int> projectedTimeLabelEpochMinutes(
@@ -193,6 +195,7 @@ final class _BalanceHeaderHistoryChartState
                                 maximumValue: values.reduce(math.max),
                                 selectedTemporalCoordinate:
                                     selected?.epochMinute,
+                                lineColor: widget.lineColor,
                               ),
                             ),
                           ),

@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
+import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_mind_score_color.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/mind_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 
@@ -42,6 +48,25 @@ void main() {
     expect(MindHeaderTrafficLightScale.sample(100), const Color(0xff15803d));
     expect(MindHeaderTrafficLightScale.sample(-1), const Color(0xff991b1b));
     expect(MindHeaderTrafficLightScale.sample(101), const Color(0xff15803d));
+  });
+
+  test('Mind Traffic Color Lab selection changes only the visual palette', () {
+    final current = MindHeaderScoreWindowSampler.sample(
+      score: 50,
+      windowWidthPercent: 28,
+      palette: MindHeaderScorePalette.current,
+    );
+    final traffic = MindHeaderScoreWindowSampler.sample(
+      score: 50,
+      windowWidthPercent: 28,
+      palette: MindHeaderScorePalette.trafficColorLab,
+    );
+
+    expect(current.palette, MindHeaderScorePalette.current);
+    expect(traffic.palette, MindHeaderScorePalette.trafficColorLab);
+    expect(traffic.centerPercent, current.centerPercent);
+    expect(traffic.windowWidthPercent, current.windowWidthPercent);
+    expect(traffic.colorMid, isNot(current.colorMid));
   });
 
   test(
@@ -145,4 +170,106 @@ void main() {
       expect(visual.tickerIdentity, same(ticker));
     },
   );
+
+  test('Mind palette selector preserves score identity and frame data', () {
+    final visual = DashboardHeaderVisualController(vsync: const TestVSync());
+    final score = ValueNotifier<MindBehavioralScoreFrame?>(scoreFrame(75));
+    final policy = DashboardMindHeaderColorPolicy(
+      tuning: visual.tuning,
+      score: score,
+    );
+    addTearDown(() {
+      policy.dispose();
+      score.dispose();
+      visual.dispose();
+    });
+
+    final before = policy.value;
+    final ticker = visual.tickerIdentity;
+    visual.selectMindHeaderPalette(MindHeaderScorePalette.trafficColorLab);
+
+    expect(
+      policy.value.mindScoreWindow!.palette,
+      MindHeaderScorePalette.trafficColorLab,
+    );
+    expect(policy.value.mindScoreWindow!.centerPercent, 75);
+    expect(score.value!.point.score, 75);
+    expect(policy.value.colors, isNot(before.colors));
+    expect(visual.tickerIdentity, same(ticker));
+  });
+
+  testWidgets('Mind Header foreground frame changes text without score work', (
+    tester,
+  ) async {
+    final visual = DashboardHeaderVisualController(vsync: tester)
+      ..selectEffect(DashboardHeaderEffectId.staticEffect);
+    final header = ValueNotifier<DashboardHeaderVisualFrame>(
+      const DashboardHeaderVisualFrame(
+        colors: <Color>[Colors.red, Colors.red],
+        stops: <double>[0, 1],
+        opacity: 1,
+        colorA: Colors.red,
+        colorB: Colors.red,
+        foregroundTextColor: Colors.black,
+        chartColor: Colors.white,
+      ),
+    );
+    final score = ValueNotifier<MindBehavioralScoreFrame?>(scoreFrame(75));
+    final mode = DashboardCoreModePresentation(
+      geometry: DashboardGeometryResolver.resolve(
+        metrics: DashboardLayoutMetrics.reference,
+        mode: DashboardModeSpec.mind,
+        collapseProgress: 0,
+        isRailExpanded: false,
+      ),
+      palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.mind),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MindDashboardCoreSurface(
+            presentation: mode,
+            behavioralScore: score,
+            headerVisualController: visual,
+            headerVisualFrame: header,
+          ),
+        ),
+      ),
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey<String>('mind-header-score-text')),
+          )
+          .style!
+          .color,
+      Colors.black,
+    );
+    final before = score.value;
+    header.value = const DashboardHeaderVisualFrame(
+      colors: <Color>[Colors.red, Colors.red],
+      stops: <double>[0, 1],
+      opacity: 1,
+      colorA: Colors.red,
+      colorB: Colors.red,
+      foregroundTextColor: Colors.white,
+      chartColor: Colors.black,
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey<String>('mind-header-score-text')),
+          )
+          .style!
+          .color,
+      Colors.white,
+    );
+    expect(score.value, same(before));
+    await tester.pumpWidget(const SizedBox.shrink());
+    visual.dispose();
+    header.dispose();
+    score.dispose();
+  });
 }

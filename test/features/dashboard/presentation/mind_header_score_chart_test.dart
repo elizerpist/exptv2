@@ -28,6 +28,18 @@ void main() {
     },
   );
 
+  testWidgets('MHC foreground line color is independent from score data', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _chart(series: series, expansion: 1, lineColor: const Color(0xff000000)),
+    );
+
+    final painter = _painter(tester);
+    expect(painter.lineColor, const Color(0xff000000));
+    expect(painter.points, series.points);
+  });
+
   testWidgets(
     'MHC-01 chart reveal is continuously clipped by existing Header expansion',
     (tester) async {
@@ -551,6 +563,7 @@ Widget _chart({
   bool showTimeLabels = false,
   MindHeaderScoreChartTemporalContext temporalContext =
       MindHeaderScoreChartTemporalContext.year,
+  Color lineColor = MindHeaderScoreChartStyle.lineColor,
 }) => Directionality(
   textDirection: TextDirection.ltr,
   child: SizedBox(
@@ -563,6 +576,7 @@ Widget _chart({
           expansionProgress: expansion,
           showTimeLabels: showTimeLabels,
           temporalContext: temporalContext,
+          lineColor: lineColor,
         ),
       ],
     ),

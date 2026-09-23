@@ -16,6 +16,8 @@ enum DashboardBalanceHeaderPalette {
   whimiscalUnicornDream,
   misticLevanderFields,
   magicalLevanderHaze,
+  limitColorLab,
+  customBalance,
 }
 
 extension DashboardBalanceHeaderPalettePresentation
@@ -36,6 +38,8 @@ extension DashboardBalanceHeaderPalettePresentation
       'Mistic levander fields',
     DashboardBalanceHeaderPalette.magicalLevanderHaze =>
       'Magical levander haze',
+    DashboardBalanceHeaderPalette.limitColorLab => 'Limit (Color Lab)',
+    DashboardBalanceHeaderPalette.customBalance => 'Custom Balance',
   };
 }
 
@@ -236,6 +240,32 @@ abstract final class DashboardBalanceHeaderPaletteCatalog {
                 0xffff90b3,
                 0xfff7859c,
                 0xffef7a85,
+              ]),
+          DashboardBalanceHeaderPalette.limitColorLab:
+              _scale(DashboardBalanceHeaderPalette.limitColorLab, <int>[
+                0xff6d28d9,
+                0xff8b5cf6,
+                0xffa78bfa,
+                0xffd8b4fe,
+                0xfffbcfe8,
+                0xfff9a8d4,
+                0xfff472b6,
+                0xffec4899,
+                0xffe23883,
+                0xffdb2777,
+              ]),
+          DashboardBalanceHeaderPalette.customBalance:
+              _scale(DashboardBalanceHeaderPalette.customBalance, <int>[
+                0xff7c5cff,
+                0xff9b7bff,
+                0xffb794ff,
+                0xffd9a1f3,
+                0xfff08bd6,
+                0xffff7bb7,
+                0xffff6ea4,
+                0xffff8a7a,
+                0xffff9b5f,
+                0xffffb36b,
               ]),
         },
       );

@@ -2158,6 +2158,63 @@ final class DashboardHeaderPaletteOrientationTuning {
       Object.hash(enabled, baseAngleDegrees, sweepDegrees, speed, phaseDegrees);
 }
 
+/// A mode-local presentation preference. It deliberately owns only material
+/// opacity and Header foreground tokens, never domain values or chart points.
+enum DashboardHeaderForegroundColor { white, black }
+
+extension DashboardHeaderForegroundColorPresentation
+    on DashboardHeaderForegroundColor {
+  String get label => switch (this) {
+    DashboardHeaderForegroundColor.white => 'Fehér',
+    DashboardHeaderForegroundColor.black => 'Fekete',
+  };
+
+  Color get color => switch (this) {
+    DashboardHeaderForegroundColor.white => Colors.white,
+    DashboardHeaderForegroundColor.black => Colors.black,
+  };
+}
+
+@immutable
+final class DashboardHeaderModeVisualState {
+  const DashboardHeaderModeVisualState({
+    required this.opacityPercent,
+    required this.textColor,
+    required this.chartColor,
+  });
+
+  const DashboardHeaderModeVisualState.defaults()
+    : opacityPercent = 50,
+      textColor = DashboardHeaderForegroundColor.white,
+      chartColor = DashboardHeaderForegroundColor.white;
+
+  final double opacityPercent;
+  final DashboardHeaderForegroundColor textColor;
+  final DashboardHeaderForegroundColor chartColor;
+
+  DashboardHeaderModeVisualState copyWith({
+    double? opacityPercent,
+    DashboardHeaderForegroundColor? textColor,
+    DashboardHeaderForegroundColor? chartColor,
+  }) => DashboardHeaderModeVisualState(
+    opacityPercent: (opacityPercent ?? this.opacityPercent)
+        .clamp(0.0, 100.0)
+        .toDouble(),
+    textColor: textColor ?? this.textColor,
+    chartColor: chartColor ?? this.chartColor,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is DashboardHeaderModeVisualState &&
+      opacityPercent == other.opacityPercent &&
+      textColor == other.textColor &&
+      chartColor == other.chartColor;
+
+  @override
+  int get hashCode => Object.hash(opacityPercent, textColor, chartColor);
+}
+
 @immutable
 final class DashboardHeaderVisualTuning {
   DashboardHeaderVisualTuning({
@@ -2168,7 +2225,9 @@ final class DashboardHeaderVisualTuning {
     required this.budgetCategory,
     required this.balanceColor,
     required this.mindScore,
-    required this.opacityScalePosition,
+    required this.balanceHeader,
+    required this.mindHeader,
+    required this.budgetHeader,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
     required this.generation,
   }) : settingsByEffect =
@@ -2187,7 +2246,9 @@ final class DashboardHeaderVisualTuning {
     budgetCategory: const DashboardBudgetHeaderCategoryState.defaults(),
     balanceColor: const DashboardBalanceHeaderColorState.defaults(),
     mindScore: const MindHeaderScoreWindowState.defaults(),
-    opacityScalePosition: 50,
+    balanceHeader: const DashboardHeaderModeVisualState.defaults(),
+    mindHeader: const DashboardHeaderModeVisualState.defaults(),
+    budgetHeader: const DashboardHeaderModeVisualState.defaults(),
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
       for (final spec in DashboardHeaderEffectCatalog.effects)
         spec.id: spec.defaultSettings,
@@ -2202,7 +2263,9 @@ final class DashboardHeaderVisualTuning {
   final DashboardBudgetHeaderCategoryState budgetCategory;
   final DashboardBalanceHeaderColorState balanceColor;
   final MindHeaderScoreWindowState mindScore;
-  final double opacityScalePosition;
+  final DashboardHeaderModeVisualState balanceHeader;
+  final DashboardHeaderModeVisualState mindHeader;
+  final DashboardHeaderModeVisualState budgetHeader;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
   final int generation;
 
@@ -2217,7 +2280,9 @@ final class DashboardHeaderVisualTuning {
     DashboardBudgetHeaderCategoryState? budgetCategory,
     DashboardBalanceHeaderColorState? balanceColor,
     MindHeaderScoreWindowState? mindScore,
-    double? opacityScalePosition,
+    DashboardHeaderModeVisualState? balanceHeader,
+    DashboardHeaderModeVisualState? mindHeader,
+    DashboardHeaderModeVisualState? budgetHeader,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
     effect: effect ?? this.effect,
@@ -2227,7 +2292,9 @@ final class DashboardHeaderVisualTuning {
     budgetCategory: budgetCategory ?? this.budgetCategory,
     balanceColor: balanceColor ?? this.balanceColor,
     mindScore: mindScore ?? this.mindScore,
-    opacityScalePosition: opacityScalePosition ?? this.opacityScalePosition,
+    balanceHeader: balanceHeader ?? this.balanceHeader,
+    mindHeader: mindHeader ?? this.mindHeader,
+    budgetHeader: budgetHeader ?? this.budgetHeader,
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
     generation: generation + 1,
   );
@@ -2500,6 +2567,36 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setBalanceHeaderOpacityPercent(double value) {
+    _setModeHeaderVisual(
+      mode: 'balance',
+      current: tuning.value.balanceHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(balanceHeader: next),
+      opacityPercent: value,
+    );
+  }
+
+  void setBalanceHeaderTextColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'balance',
+      current: tuning.value.balanceHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(balanceHeader: next),
+      textColor: value,
+    );
+  }
+
+  void setBalanceHeaderChartColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'balance',
+      current: tuning.value.balanceHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(balanceHeader: next),
+      chartColor: value,
+    );
+  }
+
   /// Mind's center is a behavioural-score domain result. The only
   /// user-editable state is the visual sample-window width.
   void setMindHeaderScoreWindowWidthPercent(double value) {
@@ -2514,13 +2611,75 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setOpacityScalePosition(double value) {
-    final bounded = value.clamp(0.0, 100.0).toDouble();
-    if (tuning.value.opacityScalePosition == bounded) return;
-    tuning.value = tuning.value.copyWith(opacityScalePosition: bounded);
+  void selectMindHeaderPalette(MindHeaderScorePalette palette) {
+    final next = tuning.value.mindScore.copyWith(palette: palette);
+    if (next == tuning.value.mindScore) return;
+    tuning.value = tuning.value.copyWith(mindScore: next);
     _record(
-      'HEADER_EFFECT_SETTING_CHANGED',
-      'parameterId=opacityScalePosition newValue=$bounded '
+      'MIND_HEADER_PALETTE_CHANGED',
+      'palette=${palette.name} '
+          'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
+  void setMindHeaderOpacityPercent(double value) {
+    _setModeHeaderVisual(
+      mode: 'mind',
+      current: tuning.value.mindHeader,
+      update: (next) => tuning.value = tuning.value.copyWith(mindHeader: next),
+      opacityPercent: value,
+    );
+  }
+
+  void setMindHeaderTextColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'mind',
+      current: tuning.value.mindHeader,
+      update: (next) => tuning.value = tuning.value.copyWith(mindHeader: next),
+      textColor: value,
+    );
+  }
+
+  void setMindHeaderChartColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'mind',
+      current: tuning.value.mindHeader,
+      update: (next) => tuning.value = tuning.value.copyWith(mindHeader: next),
+      chartColor: value,
+    );
+  }
+
+  void setBudgetHeaderOpacityPercent(double value) {
+    _setModeHeaderVisual(
+      mode: 'budget',
+      current: tuning.value.budgetHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(budgetHeader: next),
+      opacityPercent: value,
+    );
+  }
+
+  void _setModeHeaderVisual({
+    required String mode,
+    required DashboardHeaderModeVisualState current,
+    required void Function(DashboardHeaderModeVisualState next) update,
+    double? opacityPercent,
+    DashboardHeaderForegroundColor? textColor,
+    DashboardHeaderForegroundColor? chartColor,
+  }) {
+    if (_disposed) return;
+    final next = current.copyWith(
+      opacityPercent: opacityPercent,
+      textColor: textColor,
+      chartColor: chartColor,
+    );
+    if (next == current) return;
+    update(next);
+    _record(
+      'HEADER_MODE_VISUAL_CHANGED',
+      'mode=$mode opacityPct=${next.opacityPercent} '
+          'text=${next.textColor.name} chart=${next.chartColor.name} '
           'settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
@@ -2899,6 +3058,8 @@ final class DashboardHeaderVisualFrame {
     required this.opacity,
     required this.colorA,
     required this.colorB,
+    this.foregroundTextColor = Colors.white,
+    this.chartColor = Colors.white,
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
     this.windowRightPercent,
@@ -2915,6 +3076,8 @@ final class DashboardHeaderVisualFrame {
   final double opacity;
   final Color colorA;
   final Color colorB;
+  final Color foregroundTextColor;
+  final Color chartColor;
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
@@ -2960,6 +3123,8 @@ final class DashboardHeaderVisualFrame {
       opacity == other.opacity &&
       colorA == other.colorA &&
       colorB == other.colorB &&
+      foregroundTextColor == other.foregroundTextColor &&
+      chartColor == other.chartColor &&
       paletteSplitPercent == other.paletteSplitPercent &&
       windowLeftPercent == other.windowLeftPercent &&
       windowRightPercent == other.windowRightPercent &&
@@ -2981,6 +3146,8 @@ final class DashboardHeaderVisualFrame {
     opacity,
     colorA,
     colorB,
+    foregroundTextColor,
+    chartColor,
     paletteSplitPercent,
     windowLeftPercent,
     windowRightPercent,
@@ -3042,9 +3209,13 @@ final class DashboardBalanceHeaderColorPolicy
   ) => DashboardHeaderVisualFrame(
     colors: window.colors,
     stops: window.stops,
-    opacity: DashboardHeaderOpacityScale.valueAt(tuning.opacityScalePosition),
+    opacity: DashboardHeaderOpacityScale.valueAt(
+      tuning.balanceHeader.opacityPercent,
+    ),
     colorA: window.colorA,
     colorB: window.colorB,
+    foregroundTextColor: tuning.balanceHeader.textColor.color,
+    chartColor: tuning.balanceHeader.chartColor.color,
     paletteSplitPercent: window.state.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3066,14 +3237,16 @@ final class DashboardBalanceHeaderColorPolicy
 abstract final class MindHeaderScoreColorScale {
   static DashboardHeaderVisualFrame fromWindow({
     required MindHeaderScoreWindow window,
-    required double opacityScalePosition,
+    required DashboardHeaderModeVisualState modeVisual,
     required int staticSettingsGeneration,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
     stops: window.stops,
-    opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
+    opacity: DashboardHeaderOpacityScale.valueAt(modeVisual.opacityPercent),
     colorA: window.colorA,
     colorB: window.colorB,
+    foregroundTextColor: modeVisual.textColor.color,
+    chartColor: modeVisual.chartColor.color,
     paletteSplitPercent: window.centerPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3141,6 +3314,7 @@ final class DashboardMindHeaderColorPolicy
   ) => MindHeaderScoreWindowSampler.sample(
     score: score?.point.score ?? 50,
     windowWidthPercent: tuning.mindScore.windowWidthPercent,
+    palette: tuning.mindScore.palette,
   );
 
   static DashboardHeaderVisualFrame _projectionFor(
@@ -3148,7 +3322,7 @@ final class DashboardMindHeaderColorPolicy
     MindHeaderScoreWindow window,
   ) => MindHeaderScoreColorScale.fromWindow(
     window: window,
-    opacityScalePosition: tuning.opacityScalePosition,
+    modeVisual: tuning.mindHeader,
     staticSettingsGeneration: tuning.generation,
   );
 
@@ -3371,12 +3545,12 @@ final class DashboardBudgetHeaderColorPolicy
   ) => categoryWindow == null
       ? BudgetHeaderCoolColorScale.fromWindow(
           window: window,
-          opacityScalePosition: tuning.opacityScalePosition,
+          opacityScalePosition: tuning.budgetHeader.opacityPercent,
           staticSettingsGeneration: tuning.generation,
         )
       : BudgetHeaderCategoryColorScale.fromWindow(
           window: categoryWindow,
-          opacityScalePosition: tuning.opacityScalePosition,
+          opacityScalePosition: tuning.budgetHeader.opacityPercent,
           staticSettingsGeneration: tuning.generation,
         );
 

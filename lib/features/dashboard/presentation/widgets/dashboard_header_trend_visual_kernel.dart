@@ -130,12 +130,14 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
     required this.minimumValue,
     required this.maximumValue,
     this.selectedTemporalCoordinate,
+    this.lineColor = DashboardHeaderTrendChartStyle.lineColor,
   }) : assert(maximumValue >= minimumValue);
 
   final DashboardHeaderTrendSeries series;
   final double minimumValue;
   final double maximumValue;
   final int? selectedTemporalCoordinate;
+  final Color lineColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -179,10 +181,10 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: <Color>[
-            DashboardHeaderTrendChartStyle.lineColor.withValues(
+            lineColor.withValues(
               alpha: DashboardHeaderTrendChartStyle.areaFadeStartOpacity,
             ),
-            DashboardHeaderTrendChartStyle.lineColor.withValues(
+            lineColor.withValues(
               alpha: DashboardHeaderTrendChartStyle.areaFadeEndOpacity,
             ),
           ],
@@ -191,7 +193,7 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
     canvas.drawPath(
       line,
       Paint()
-        ..color = DashboardHeaderTrendChartStyle.lineColor
+        ..color = lineColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = DashboardHeaderTrendChartStyle.lineWidth
         ..strokeCap = StrokeCap.round
@@ -203,7 +205,7 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
       pointOffsetAt(points.length - 1, size, projection),
       DashboardHeaderTrendChartStyle.endpointRadius,
       Paint()
-        ..color = DashboardHeaderTrendChartStyle.lineColor
+        ..color = lineColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = DashboardHeaderTrendChartStyle.endpointStrokeWidth
         ..isAntiAlias = true,
@@ -249,7 +251,7 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
       Offset(offset.dx, 0),
       Offset(offset.dx, size.height),
       Paint()
-        ..color = DashboardHeaderTrendChartStyle.lineColor
+        ..color = lineColor
         ..strokeWidth = 1
         ..isAntiAlias = true,
     );
@@ -257,7 +259,7 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
       offset,
       2.6,
       Paint()
-        ..color = DashboardHeaderTrendChartStyle.lineColor
+        ..color = lineColor
         ..style = PaintingStyle.fill
         ..isAntiAlias = true,
     );
@@ -265,7 +267,7 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
 
   void _drawGuide(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = DashboardHeaderTrendChartStyle.lineColor.withValues(
+      ..color = lineColor.withValues(
         alpha: DashboardHeaderTrendChartStyle.guideOpacity,
       )
       ..strokeWidth = .7
@@ -297,5 +299,6 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
       oldDelegate.series != series ||
       oldDelegate.minimumValue != minimumValue ||
       oldDelegate.maximumValue != maximumValue ||
-      oldDelegate.selectedTemporalCoordinate != selectedTemporalCoordinate;
+      oldDelegate.selectedTemporalCoordinate != selectedTemporalCoordinate ||
+      oldDelegate.lineColor != lineColor;
 }

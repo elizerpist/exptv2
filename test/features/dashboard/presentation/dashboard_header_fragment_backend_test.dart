@@ -334,20 +334,21 @@ void main() {
           shader.indexOf('float overlayAlpha'),
         );
 
-        // A 100% Header opacity must not erase background Portal material,
-        // and Color Lab paints its interior material source-over rather than
-        // using the touch layer's optical screen blend.
+        // Portal blend weights remain material-local. Header opacity belongs
+        // once at final source-over composition so a half-opacity Header does
+        // not attenuate either Portal channel twice.
         expect(
           portalComposition,
-          contains(
-            'mix(base, background, backgroundMatter * saturate(uOpacity))',
-          ),
+          contains('mix(base, background, backgroundMatter);'),
         );
         expect(
           portalComposition,
-          contains(
-            'mix(composed, interior, matter * .38 * saturate(uOpacity))',
-          ),
+          contains('mix(composed, interior, matter * .38);'),
+        );
+        expect(portalComposition, isNot(contains('saturate(uOpacity)')));
+        expect(
+          shader,
+          contains('fragColor = vec4(composed, saturate(uOpacity));'),
         );
         expect(
           portalComposition,

@@ -316,8 +316,10 @@ final class _BalanceDashboardCoreSurfaceState
             label: 'balance',
             visualController: widget.headerVisualController,
             visualFrameListenable: widget.headerVisualFrame,
+            usesVisualForeground: true,
             detail: _BalanceHeaderDetail(
               balancePresentation: widget.balancePresentation,
+              headerVisualFrame: widget.headerVisualFrame,
               expansionProgress: geometry.headerExpansionProgress,
               presentationSettings: widget.presentationSettings,
               adaptiveScope: widget.adaptiveScope,
@@ -434,6 +436,7 @@ final class _BalanceLocalGeometry {
 final class _BalanceHeaderDetail extends StatelessWidget {
   const _BalanceHeaderDetail({
     required this.balancePresentation,
+    required this.headerVisualFrame,
     required this.expansionProgress,
     required this.presentationSettings,
     required this.adaptiveScope,
@@ -441,6 +444,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
   });
 
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final LedgerTimeScope adaptiveScope;
@@ -454,6 +458,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
       valueListenable: listenable,
       builder: (context, balance, _) => _BalanceHeaderDetailContents(
         balance: balance,
+        headerVisualFrame: headerVisualFrame,
         expansionProgress: expansionProgress,
         presentationSettings: presentationSettings,
         adaptiveScope: adaptiveScope,
@@ -466,6 +471,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
 final class _BalanceHeaderDetailContents extends StatelessWidget {
   const _BalanceHeaderDetailContents({
     required this.balance,
+    required this.headerVisualFrame,
     required this.expansionProgress,
     required this.presentationSettings,
     required this.adaptiveScope,
@@ -473,6 +479,7 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
   });
 
   final DashboardBalancePresentation? balance;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final LedgerTimeScope adaptiveScope;
@@ -482,43 +489,60 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = presentationSettings;
     if (settings == null) {
-      return _content(context, const BalancePresentationSettings.defaults());
+      return _withFrame(context, const BalancePresentationSettings.defaults());
     }
     return ValueListenableBuilder<BalancePresentationSettings>(
       valueListenable: settings,
-      builder: (context, value, _) => _content(context, value),
+      builder: (context, value, _) => _withFrame(context, value),
     );
   }
 
-  Widget _content(BuildContext context, BalancePresentationSettings settings) =>
-      Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          if (balance?.history case final history?)
-            BalanceHeaderHistoryChart(
-              series: history,
-              expansionProgress: expansionProgress,
-              chartMode: settings.chartMode,
-              showTimeLabels: settings.showsTimeLabels,
-              adaptiveScope: adaptiveScope,
-              pointerObserver: pointerObserver,
-            ),
-          Positioned(
-            left: DashboardHeaderTrendChartStyle.detailLeft,
-            top: DashboardHeaderTrendChartStyle.detailTop,
-            child: Text(
-              balance?.formattedNetTotal ?? '—',
-              key: const ValueKey<String>('balance-header-net-amount'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: FluviVisualTokens.textOnAction,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+  Widget _withFrame(
+    BuildContext context,
+    BalancePresentationSettings settings,
+  ) {
+    final frames = headerVisualFrame;
+    if (frames == null) return _content(context, settings, null);
+    return ValueListenableBuilder<DashboardHeaderVisualFrame>(
+      valueListenable: frames,
+      builder: (context, frame, _) => _content(context, settings, frame),
+    );
+  }
+
+  Widget _content(
+    BuildContext context,
+    BalancePresentationSettings settings,
+    DashboardHeaderVisualFrame? frame,
+  ) => Stack(
+    fit: StackFit.expand,
+    children: <Widget>[
+      if (balance?.history case final history?)
+        BalanceHeaderHistoryChart(
+          series: history,
+          expansionProgress: expansionProgress,
+          chartMode: settings.chartMode,
+          lineColor:
+              frame?.chartColor ?? DashboardHeaderTrendChartStyle.lineColor,
+          showTimeLabels: settings.showsTimeLabels,
+          adaptiveScope: adaptiveScope,
+          pointerObserver: pointerObserver,
+        ),
+      Positioned(
+        left: DashboardHeaderTrendChartStyle.detailLeft,
+        top: DashboardHeaderTrendChartStyle.detailTop,
+        child: Text(
+          balance?.formattedNetTotal ?? '—',
+          key: const ValueKey<String>('balance-header-net-amount'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: frame?.foregroundTextColor ?? FluviVisualTokens.textOnAction,
+            fontWeight: FontWeight.w700,
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
 final class _BalanceUpperCarouselHost extends StatelessWidget {

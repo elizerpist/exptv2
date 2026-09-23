@@ -13,6 +13,7 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_proje
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_mind_score_color.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_cool_source.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
@@ -23,11 +24,11 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Balance manual palette and shared opacity contract', () {
+  group('Balance manual palette and per-mode opacity contract', () {
     test(
-      'all nine supplied palette identities retain exact ARGB endpoints',
+      'all eleven supplied palette identities retain exact ARGB endpoints',
       () {
-        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(9));
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(11));
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
             DashboardBalanceHeaderPalette.softRainbow,
@@ -52,8 +53,89 @@ void main() {
           ).colors.last,
           const Color(0xffef7a85),
         );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            DashboardBalanceHeaderPalette.limitColorLab,
+          ).colors,
+          const <Color>[
+            Color(0xff6d28d9),
+            Color(0xff8b5cf6),
+            Color(0xffa78bfa),
+            Color(0xffd8b4fe),
+            Color(0xfffbcfe8),
+            Color(0xfff9a8d4),
+            Color(0xfff472b6),
+            Color(0xffec4899),
+            Color(0xffe23883),
+            Color(0xffdb2777),
+          ],
+        );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            DashboardBalanceHeaderPalette.customBalance,
+          ).colors,
+          const <Color>[
+            Color(0xff7c5cff),
+            Color(0xff9b7bff),
+            Color(0xffb794ff),
+            Color(0xffd9a1f3),
+            Color(0xfff08bd6),
+            Color(0xffff7bb7),
+            Color(0xffff6ea4),
+            Color(0xffff8a7a),
+            Color(0xffff9b5f),
+            Color(0xffffb36b),
+          ],
+        );
       },
     );
+
+    test('Mind keeps Current and exposes exact Traffic Color Lab anchors', () {
+      expect(MindHeaderScorePalette.values, <MindHeaderScorePalette>[
+        MindHeaderScorePalette.current,
+        MindHeaderScorePalette.trafficColorLab,
+      ]);
+      expect(
+        MindHeaderScorePalette.trafficColorLab.label,
+        'Traffic (Color Lab)',
+      );
+      expect(MindHeaderTrafficColorLabScale.stops, const <double>[
+        0,
+        11.11,
+        22.22,
+        33.33,
+        44.44,
+        55.56,
+        66.67,
+        77.78,
+        88.89,
+        100,
+      ]);
+      expect(MindHeaderTrafficColorLabScale.colors, const <Color>[
+        Color(0xffff3b4f),
+        Color(0xffff5733),
+        Color(0xffff8c1a),
+        Color(0xfff7b500),
+        Color(0xfff4df24),
+        Color(0xffd4f52f),
+        Color(0xff7dd943),
+        Color(0xff35c76e),
+        Color(0xff15bd6f),
+        Color(0xff0b8f54),
+      ]);
+      for (
+        var index = 0;
+        index < MindHeaderTrafficColorLabScale.stops.length;
+        index += 1
+      ) {
+        expect(
+          MindHeaderTrafficColorLabScale.sample(
+            MindHeaderTrafficColorLabScale.stops[index],
+          ),
+          MindHeaderTrafficColorLabScale.colors[index],
+        );
+      }
+    });
 
     test('manual Balance window samples 0, 50 and 100 with clipped edges', () {
       const palette = DashboardBalanceHeaderPalette.softRainbow;
@@ -104,16 +186,16 @@ void main() {
         );
         controller.setBalanceHeaderPositionPercent(100);
         controller.setBalanceHeaderWindowWidthPercent(10);
-        controller.setOpacityScalePosition(0);
+        controller.setBalanceHeaderOpacityPercent(0);
         expect(policy.value, isNot(before));
         expect(
           policy.value.balanceColorWindow!.state.palette,
           DashboardBalanceHeaderPalette.magicalLevanderHaze,
         );
         expect(policy.value.opacity, 0);
-        controller.setOpacityScalePosition(50);
+        controller.setBalanceHeaderOpacityPercent(50);
         expect(policy.value.opacity, .5);
-        controller.setOpacityScalePosition(100);
+        controller.setBalanceHeaderOpacityPercent(100);
         expect(policy.value.opacity, 1);
         expect(controller.tickerIdentity, same(ticker));
         policy.dispose();
@@ -121,7 +203,7 @@ void main() {
       },
     );
 
-    test('shared opacity scale has no hidden minimum alpha', () {
+    test('mode opacity scale has no hidden minimum alpha', () {
       expect(DashboardHeaderOpacityScale.valueAt(0), 0);
       expect(DashboardHeaderOpacityScale.valueAt(50), .5);
       expect(DashboardHeaderOpacityScale.valueAt(100), 1);
@@ -129,7 +211,7 @@ void main() {
       expect(DashboardHeaderOpacityScale.valueAt(500), 1);
     });
 
-    test('one shared opacity state reaches Balance, Budget and Mind policies', () {
+    test('Balance, Budget and Mind opacity are independent', () {
       final controller = DashboardHeaderVisualController(
         vsync: const TestVSync(),
       );
@@ -152,21 +234,78 @@ void main() {
         controller.dispose();
       });
 
-      for (final position in <int>[0, 50, 100]) {
-        controller.setOpacityScalePosition(position.toDouble());
-        final expected = position / 100;
-        expect(balance.value.opacity, expected);
-        expect(budget.value.opacity, expected);
-        expect(mind.value.opacity, expected);
-      }
+      controller.setBalanceHeaderOpacityPercent(0);
+      expect(balance.value.opacity, 0);
+      expect(budget.value.opacity, .5);
+      expect(mind.value.opacity, .5);
+      controller.setMindHeaderOpacityPercent(100);
+      expect(balance.value.opacity, 0);
+      expect(budget.value.opacity, .5);
+      expect(mind.value.opacity, 1);
+      controller.setBudgetHeaderOpacityPercent(25);
+      expect(balance.value.opacity, 0);
+      expect(budget.value.opacity, .25);
+      expect(mind.value.opacity, 1);
     });
 
-    test('Fragment material applies opacity once to its final composed colour', () {
-      final shader = File('shaders/dashboard_header_field.frag').readAsStringSync();
-      expect(shader, contains('fragColor = vec4(composed, saturate(uOpacity));'));
-      expect(shader, isNot(contains('backgroundMatter * saturate(uOpacity)')));
-      expect(shader, isNot(contains('interiorMatter * saturate(uOpacity)')));
-    });
+    test(
+      'Mind and Balance foreground choices are independent and reactive',
+      () {
+        final controller = DashboardHeaderVisualController(
+          vsync: const TestVSync(),
+        );
+        final score = ValueNotifier<MindBehavioralScoreFrame?>(null);
+        final balance = DashboardBalanceHeaderColorPolicy(
+          tuning: controller.tuning,
+        );
+        final mind = DashboardMindHeaderColorPolicy(
+          tuning: controller.tuning,
+          score: score,
+        );
+        addTearDown(() {
+          mind.dispose();
+          balance.dispose();
+          score.dispose();
+          controller.dispose();
+        });
+
+        final ticker = controller.tickerIdentity;
+        controller.setBalanceHeaderTextColor(
+          DashboardHeaderForegroundColor.black,
+        );
+        controller.setBalanceHeaderChartColor(
+          DashboardHeaderForegroundColor.white,
+        );
+        controller.setMindHeaderTextColor(DashboardHeaderForegroundColor.white);
+        controller.setMindHeaderChartColor(
+          DashboardHeaderForegroundColor.black,
+        );
+
+        expect(balance.value.foregroundTextColor, Colors.black);
+        expect(balance.value.chartColor, Colors.white);
+        expect(mind.value.foregroundTextColor, Colors.white);
+        expect(mind.value.chartColor, Colors.black);
+        expect(controller.tickerIdentity, same(ticker));
+      },
+    );
+
+    test(
+      'Fragment material applies opacity once to its final composed colour',
+      () {
+        final shader = File(
+          'shaders/dashboard_header_field.frag',
+        ).readAsStringSync();
+        expect(
+          shader,
+          contains('fragColor = vec4(composed, saturate(uOpacity));'),
+        );
+        expect(
+          shader,
+          isNot(contains('backgroundMatter * saturate(uOpacity)')),
+        );
+        expect(shader, isNot(contains('interiorMatter * saturate(uOpacity)')));
+      },
+    );
   });
 
   group('Header field fidelity and fallback contract', () {
