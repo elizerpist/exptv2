@@ -2805,3 +2805,11 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - **UNPROVEN:** exact Color Lab runtime font family on the user’s Android browser; whether Color Lab white shadow/stroke should be reproduced in Flutter; whether softened dark should have additional alpha beyond source `#14213A`; whether user wants settings persistence across restart.
 - **MISSING EVIDENCE / implementation gate:** prove the exact available typeface asset/family before claiming a true Color Lab font-family toggle. If no deterministic legal/local asset exists, do not fake the family; report the typography subtask blocked or implement only source-provable typography properties under an honestly named profile after explicit evidence. Foreground softening itself is source-proven and independently implementable.
 - Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No Flutter application source, tests, graph, prototype, milestone, workflow or build configuration is modified here. Physical validation of the eventual APK remains `PENDING — USER ONLY`.
+
+
+## 2026-09-24 — Transaction-list visual preference + Balance carousel card content direction
+
+- **User-approved transaction-list visual direction:** keep the clean five-row latest-transactions card without separator lines and without coloured row strips; use rounded-square avatars at the left; keep the transaction amount right-aligned. The immediately preceding alternative with the amount placed under the transaction text was explicitly rejected in favour of right-aligned amounts.
+- **Current carousel-card design direction:** each Balance carousel card should use a compact three-row information hierarchy: (1) top row = tight card title with a small representative icon to its left, (2) middle row = the primary information in the largest type, (3) bottom row = secondary/context information in the smallest type. This is a design requirement, not a bugfix.
+- **Latest-transaction carousel card:** exact primary/secondary field choice is still under design discussion and is not yet user-approved. Do not treat any candidate content arrangement as final until the user selects one.
+- Prompt-writer action: journal only, build-trigger-free `[skip ci]` commit. No Flutter source, tests, graph, prototype, milestone, workflow or build configuration is changed here.
