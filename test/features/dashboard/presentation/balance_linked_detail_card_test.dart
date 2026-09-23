@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_entity_insights_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_retention_stability_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_cashflow_stability_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_linked_detail_card.dart';
@@ -391,6 +392,103 @@ void main() {
   );
 
   testWidgets(
+    'CAT/PART-RED: real rank rows open local detail, update from replacement and Back never leaves the lower card',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(
+            categoryInsights: <String, DashboardBalanceCategoryInsight>{
+              'category-0': _categoryInsight(amountMinor: 1200),
+            },
+          ),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+        findsOneWidget,
+      );
+      expect(find.text('12,00 Ft'), findsNWidgets(2));
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(
+            categoryInsights: <String, DashboardBalanceCategoryInsight>{
+              'category-0': _categoryInsight(amountMinor: 3400),
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('34,00 Ft'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-insight-back')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-list-category')),
+        findsOneWidget,
+      );
+
+      // A replacement which no longer admits the locally selected entity
+      // returns to the master list; stale detail data may never survive it.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-list-category')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topPartner,
+          presentation: _linked(
+            partnerInsights: <String, DashboardBalancePartnerInsight>{
+              'partner-0': _partnerInsight(),
+            },
+          ),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-partner-0')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-partner-insight-detail')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Kapcsolati előzmény'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-partner-insight-back')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-list-partner')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'BX1/BX2 RED: new detail topics are data-free truthful surfaces',
     (tester) async {
       await tester.pumpWidget(
@@ -487,6 +585,10 @@ DashboardBalanceLinkedPresentation _linked({
   DashboardBalanceMomentumPresentation? momentum,
   DashboardBalanceRetentionPresentation? retention,
   DashboardBalanceStabilityPresentation? stability,
+  Map<String, DashboardBalanceCategoryInsight> categoryInsights =
+      const <String, DashboardBalanceCategoryInsight>{},
+  Map<String, DashboardBalancePartnerInsight> partnerInsights =
+      const <String, DashboardBalancePartnerInsight>{},
 }) => DashboardBalanceLinkedPresentation(
   identity: _identity,
   timeScope: const AllTimeScope(),
@@ -521,7 +623,73 @@ DashboardBalanceLinkedPresentation _linked({
   ),
   topCategories: _ranks('category', amountBase: 50000),
   topPartners: _ranks('partner', amountBase: 1000),
+  categoryInsights: categoryInsights,
+  partnerInsights: partnerInsights,
 );
+
+DashboardBalanceCategoryInsight _categoryInsight({required int amountMinor}) =>
+    DashboardBalanceCategoryInsight(
+      id: 'category-0',
+      label: 'category 0',
+      direction: LedgerDirection.income,
+      amountMinor: amountMinor,
+      activeDirectionScopeAmountMinor: 10000,
+      transactionCount: 4,
+      activeDayCount: 2,
+      medianAmountTimesTwo: amountMinor,
+      temporalBuckets: const <DashboardBalanceEntityTemporalBucket>[
+        DashboardBalanceEntityTemporalBucket(
+          id: '2026',
+          label: '2026',
+          value: 1200,
+        ),
+      ],
+      distribution: const DashboardBalanceTransactionSizeDistribution(
+        zeroToFiveKCount: 1,
+        fiveToTenKCount: 2,
+        tenToTwentyKCount: 1,
+        twentyKPlusCount: 0,
+      ),
+      minimumAmountMinor: 100,
+      maximumAmountMinor: 1000,
+      dayOccurrences: const <DashboardBalanceEntityOccurrence>[],
+      hiddenDayOccurrenceCount: 0,
+    );
+
+DashboardBalancePartnerInsight _partnerInsight() {
+  const occurrence = DashboardBalanceEntityOccurrence(
+    id: 'partner-occurrence',
+    epochDay: 20000,
+    localTimeMinutes: 12 * 60,
+    amountMinor: 1200,
+    occurredOrder: 1,
+  );
+  return DashboardBalancePartnerInsight(
+    id: 'partner-0',
+    label: 'partner 0',
+    direction: LedgerDirection.income,
+    amountMinor: 1200,
+    transactionCount: 3,
+    activeDayCount: 2,
+    latestScopeOccurrence: occurrence,
+    temporalBuckets: const <DashboardBalanceEntityTemporalBucket>[
+      DashboardBalanceEntityTemporalBucket(id: '2026', label: '2026', value: 3),
+    ],
+    recentScopeOccurrences: const <DashboardBalanceEntityOccurrence>[
+      occurrence,
+    ],
+    relationship: DashboardBalancePartnerRelationship(
+      allHistoryTransactionCount: 3,
+      firstOccurrence: occurrence,
+      latestOccurrence: occurrence,
+      medianAmountTimesTwo: 2400,
+      firstQuartileAmountMinor: 1000,
+      thirdQuartileAmountMinor: 1400,
+      typicalCadenceMinutesTimesTwo: 60,
+      cadenceOccurrences: const <DashboardBalanceEntityOccurrence>[occurrence],
+    ),
+  );
+}
 
 DashboardBalanceRetentionPresentation _retention() =>
     DashboardBalanceRetentionPresentation(

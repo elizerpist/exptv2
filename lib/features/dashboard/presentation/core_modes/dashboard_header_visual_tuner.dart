@@ -28,6 +28,7 @@ import '../../application/dashboard_balance_history_projection.dart';
 import 'balance_presentation_settings.dart';
 import 'dashboard_header_portal_material_field.dart';
 import 'dashboard_header_category_scale.dart';
+import 'dashboard_header_balance_color_scale.dart';
 import 'dashboard_header_tap_wave.dart';
 import 'dashboard_header_visual_engine.dart';
 
@@ -1089,6 +1090,73 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                       ),
                       children: <Widget>[
                         _TunerSection(
+                          title: 'Balance Header szín',
+                          children: <Widget>[
+                            InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Paletta',
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<DashboardBalanceHeaderPalette>(
+                                  key: const ValueKey<String>(
+                                    'dashboard-header-balance-palette-selector',
+                                  ),
+                                  value: tuning.balanceColor.palette,
+                                  isExpanded: true,
+                                  items: DashboardBalanceHeaderPaletteCatalog
+                                      .palettes
+                                      .map(
+                                        (palette) =>
+                                            DropdownMenuItem<
+                                              DashboardBalanceHeaderPalette
+                                            >(
+                                              value: palette,
+                                              child: Text(palette.label),
+                                            ),
+                                      )
+                                      .toList(growable: false),
+                                  onChanged: (palette) {
+                                    if (palette != null) {
+                                      controller.selectBalanceHeaderPalette(
+                                        palette,
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-balance-position-slider',
+                              ),
+                              label: 'Pozíció',
+                              valueLabel:
+                                  '${tuning.balanceColor.positionPercent.toStringAsFixed(0)}%',
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              value: tuning.balanceColor.positionPercent,
+                              onChanged:
+                                  controller.setBalanceHeaderPositionPercent,
+                            ),
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-balance-window-width-slider',
+                              ),
+                              label: 'Ablakméret',
+                              valueLabel:
+                                  '${tuning.balanceColor.windowWidthPercent.toStringAsFixed(0)}%',
+                              min: 10,
+                              max: 100,
+                              divisions: 90,
+                              value: tuning.balanceColor.windowWidthPercent,
+                              onChanged:
+                                  controller.setBalanceHeaderWindowWidthPercent,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _TunerSection(
                           title: 'Budget Header szín',
                           children: <Widget>[
                             RadioGroup<DashboardBudgetHeaderColorSource>(
@@ -1180,19 +1248,6 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                 onChanged: controller
                                     .setBudgetCategoryWindowWidthPercent,
                               ),
-                            _TunerSlider(
-                              key: const ValueKey<String>(
-                                'dashboard-header-opacity-slider',
-                              ),
-                              label: 'Áttetszőség',
-                              valueLabel:
-                                  '${tuning.opacityScalePosition.toStringAsFixed(0)}% · ${opacity.toStringAsFixed(2)}',
-                              min: 0,
-                              max: 100,
-                              divisions: 100,
-                              value: tuning.opacityScalePosition,
-                              onChanged: controller.setOpacityScalePosition,
-                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -1212,6 +1267,25 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               value: tuning.mindScore.windowWidthPercent,
                               onChanged: controller
                                   .setMindHeaderScoreWindowWidthPercent,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _TunerSection(
+                          title: 'Header szín áttetszőség',
+                          children: <Widget>[
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-opacity-slider',
+                              ),
+                              label: 'Áttetszőség',
+                              valueLabel:
+                                  '${tuning.opacityScalePosition.toStringAsFixed(0)}% · ${opacity.toStringAsFixed(2)}',
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              value: tuning.opacityScalePosition,
+                              onChanged: controller.setOpacityScalePosition,
                             ),
                           ],
                         ),

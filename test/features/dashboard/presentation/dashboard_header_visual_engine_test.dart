@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 
@@ -8,8 +9,10 @@ import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_scope_analysis.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_budget_cool_source.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_field_mesh.dart';
@@ -19,6 +22,152 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Balance manual palette and shared opacity contract', () {
+    test(
+      'all nine supplied palette identities retain exact ARGB endpoints',
+      () {
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(9));
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            DashboardBalanceHeaderPalette.softRainbow,
+          ).colors.first,
+          const Color(0xfffbf8cc),
+        );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            DashboardBalanceHeaderPalette.whimiscalUnicornDream,
+          ).colors,
+          hasLength(11),
+        );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            DashboardBalanceHeaderPalette.whimiscalUnicornDream,
+          ).colors.last,
+          const Color(0xff8447ff),
+        );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.scaleFor(
+            DashboardBalanceHeaderPalette.magicalLevanderHaze,
+          ).colors.last,
+          const Color(0xffef7a85),
+        );
+      },
+    );
+
+    test('manual Balance window samples 0, 50 and 100 with clipped edges', () {
+      const palette = DashboardBalanceHeaderPalette.softRainbow;
+      final start = DashboardBalanceHeaderWindowSampler.sample(
+        const DashboardBalanceHeaderColorState(
+          palette: palette,
+          positionPercent: 0,
+          windowWidthPercent: 28,
+        ),
+      );
+      final middle = DashboardBalanceHeaderWindowSampler.sample(
+        const DashboardBalanceHeaderColorState(
+          palette: palette,
+          positionPercent: 50,
+          windowWidthPercent: 100,
+        ),
+      );
+      final end = DashboardBalanceHeaderWindowSampler.sample(
+        const DashboardBalanceHeaderColorState(
+          palette: palette,
+          positionPercent: 100,
+          windowWidthPercent: 28,
+        ),
+      );
+      final scale = DashboardBalanceHeaderPaletteCatalog.scaleFor(palette);
+      expect(start.leftSamplePercent, 0);
+      expect(start.colorA, scale.colors.first);
+      expect(middle.leftSamplePercent, 0);
+      expect(middle.rightSamplePercent, 100);
+      expect(middle.colorMid, scale.samplePercent(50));
+      expect(end.rightSamplePercent, 100);
+      expect(end.colorB, scale.colors.last);
+    });
+
+    test(
+      'Balance policy reacts through the existing controller and opacity is exact',
+      () {
+        final controller = DashboardHeaderVisualController(
+          vsync: const TestVSync(),
+        );
+        final ticker = controller.tickerIdentity;
+        final policy = DashboardBalanceHeaderColorPolicy(
+          tuning: controller.tuning,
+        );
+        final before = policy.value;
+        controller.selectBalanceHeaderPalette(
+          DashboardBalanceHeaderPalette.magicalLevanderHaze,
+        );
+        controller.setBalanceHeaderPositionPercent(100);
+        controller.setBalanceHeaderWindowWidthPercent(10);
+        controller.setOpacityScalePosition(0);
+        expect(policy.value, isNot(before));
+        expect(
+          policy.value.balanceColorWindow!.state.palette,
+          DashboardBalanceHeaderPalette.magicalLevanderHaze,
+        );
+        expect(policy.value.opacity, 0);
+        controller.setOpacityScalePosition(50);
+        expect(policy.value.opacity, .5);
+        controller.setOpacityScalePosition(100);
+        expect(policy.value.opacity, 1);
+        expect(controller.tickerIdentity, same(ticker));
+        policy.dispose();
+        controller.dispose();
+      },
+    );
+
+    test('shared opacity scale has no hidden minimum alpha', () {
+      expect(DashboardHeaderOpacityScale.valueAt(0), 0);
+      expect(DashboardHeaderOpacityScale.valueAt(50), .5);
+      expect(DashboardHeaderOpacityScale.valueAt(100), 1);
+      expect(DashboardHeaderOpacityScale.valueAt(-5), 0);
+      expect(DashboardHeaderOpacityScale.valueAt(500), 1);
+    });
+
+    test('one shared opacity state reaches Balance, Budget and Mind policies', () {
+      final controller = DashboardHeaderVisualController(
+        vsync: const TestVSync(),
+      );
+      final score = ValueNotifier<MindBehavioralScoreFrame?>(null);
+      final balance = DashboardBalanceHeaderColorPolicy(
+        tuning: controller.tuning,
+      );
+      final budget = DashboardBudgetHeaderColorPolicy(
+        tuning: controller.tuning,
+      );
+      final mind = DashboardMindHeaderColorPolicy(
+        tuning: controller.tuning,
+        score: score,
+      );
+      addTearDown(() {
+        mind.dispose();
+        budget.dispose();
+        balance.dispose();
+        score.dispose();
+        controller.dispose();
+      });
+
+      for (final position in <int>[0, 50, 100]) {
+        controller.setOpacityScalePosition(position.toDouble());
+        final expected = position / 100;
+        expect(balance.value.opacity, expected);
+        expect(budget.value.opacity, expected);
+        expect(mind.value.opacity, expected);
+      }
+    });
+
+    test('Fragment material applies opacity once to its final composed colour', () {
+      final shader = File('shaders/dashboard_header_field.frag').readAsStringSync();
+      expect(shader, contains('fragColor = vec4(composed, saturate(uOpacity));'));
+      expect(shader, isNot(contains('backgroundMatter * saturate(uOpacity)')));
+      expect(shader, isNot(contains('interiorMatter * saturate(uOpacity)')));
+    });
+  });
 
   group('Header field fidelity and fallback contract', () {
     test(

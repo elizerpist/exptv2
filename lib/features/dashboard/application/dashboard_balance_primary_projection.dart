@@ -6,6 +6,7 @@ import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import 'dashboard_balance_closings_momentum_projection.dart';
+import 'dashboard_balance_entity_insights_projection.dart';
 import 'dashboard_balance_retention_stability_projection.dart';
 
 const _balanceLinkedMaximumRows = 5;
@@ -175,6 +176,10 @@ final class DashboardBalanceLinkedPresentation {
     DashboardBalanceMomentumPresentation? momentum,
     DashboardBalanceRetentionPresentation? retention,
     DashboardBalanceStabilityPresentation? stability,
+    Map<String, DashboardBalanceCategoryInsight> categoryInsights =
+        const <String, DashboardBalanceCategoryInsight>{},
+    Map<String, DashboardBalancePartnerInsight> partnerInsights =
+        const <String, DashboardBalancePartnerInsight>{},
     required List<DashboardBalanceScopedTransaction> latestTransactions,
     required List<DashboardBalanceRankedItem> topCategories,
     required List<DashboardBalanceRankedItem> topPartners,
@@ -216,6 +221,14 @@ final class DashboardBalanceLinkedPresentation {
              observations: const <DashboardBalanceMonthlyNetObservation>[],
              medianNetTimesTwo: null,
              typicalDeviationTimesTwo: null,
+           ),
+       categoryInsights =
+           Map<String, DashboardBalanceCategoryInsight>.unmodifiable(
+             categoryInsights,
+           ),
+       partnerInsights =
+           Map<String, DashboardBalancePartnerInsight>.unmodifiable(
+             partnerInsights,
            );
 
   final DashboardBalancePrimaryIdentity identity;
@@ -226,6 +239,8 @@ final class DashboardBalanceLinkedPresentation {
   final DashboardBalanceMomentumPresentation momentum;
   final DashboardBalanceRetentionPresentation retention;
   final DashboardBalanceStabilityPresentation stability;
+  final Map<String, DashboardBalanceCategoryInsight> categoryInsights;
+  final Map<String, DashboardBalancePartnerInsight> partnerInsights;
   final List<DashboardBalanceScopedTransaction> latestTransactions;
   final List<DashboardBalanceRankedItem> topCategories;
   final List<DashboardBalanceRankedItem> topPartners;
@@ -246,6 +261,10 @@ final class DashboardBalanceLinkedPresentation {
       '${category.id}:${category.amountMinor}:${category.transactionCount}',
     for (final partner in topPartners.take(_balanceLinkedMaximumRows))
       '${partner.id}:${partner.amountMinor}:${partner.transactionCount}',
+    for (final category in categoryInsights.entries)
+      '${category.key}:${category.value.amountMinor}:${category.value.transactionCount}',
+    for (final partner in partnerInsights.entries)
+      '${partner.key}:${partner.value.amountMinor}:${partner.value.transactionCount}',
   ]);
 }
 
@@ -492,6 +511,41 @@ abstract final class DashboardBalanceLinkedProjection {
     final directional = selectedDirection == LedgerDirection.income
         ? income
         : expense;
+    final topCategories = _rank(
+      directional,
+      selectedDirection,
+      _BalanceRankKind.category,
+    );
+    final topPartners = _rank(
+      directional,
+      selectedDirection,
+      _BalanceRankKind.partner,
+    );
+    final entityInsights = DashboardBalanceEntityInsightsProjection.build(
+      timeScope: timeScope,
+      scopedDirectionalEntries: directional,
+      fullDirectionalEntries: selectedDirection == LedgerDirection.income
+          ? incomeEntries
+          : expenseEntries,
+      categorySeeds: topCategories
+          .map(
+            (item) => DashboardBalanceEntityInsightSeed(
+              id: item.id,
+              label: item.label,
+              direction: item.direction,
+            ),
+          )
+          .toList(growable: false),
+      partnerSeeds: topPartners
+          .map(
+            (item) => DashboardBalanceEntityInsightSeed(
+              id: item.id,
+              label: item.label,
+              direction: item.direction,
+            ),
+          )
+          .toList(growable: false),
+    );
     return DashboardBalanceLinkedPresentation(
       identity: identity,
       timeScope: timeScope,
@@ -530,16 +584,10 @@ abstract final class DashboardBalanceLinkedProjection {
         expenseEntries: expenseEntries,
       ),
       latestTransactions: _latestTransactions(income, expense),
-      topCategories: _rank(
-        directional,
-        selectedDirection,
-        _BalanceRankKind.category,
-      ),
-      topPartners: _rank(
-        directional,
-        selectedDirection,
-        _BalanceRankKind.partner,
-      ),
+      topCategories: topCategories,
+      topPartners: topPartners,
+      categoryInsights: entityInsights.categories,
+      partnerInsights: entityInsights.partners,
     );
   }
 

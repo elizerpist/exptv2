@@ -10,12 +10,200 @@ import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_corner_roundness.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/core/design/dashboard_shadow_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart';
 
 void main() {
+  testWidgets(
+    'Header colour opacity composites exactly once over its clipped white base while content stays opaque',
+    (tester) async {
+      final boundary = GlobalKey();
+      final visual = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      final frame = ValueNotifier<DashboardHeaderVisualFrame>(
+        const DashboardHeaderVisualFrame(
+          colors: <Color>[Colors.red, Colors.red],
+          stops: <double>[0, 1],
+          opacity: 0,
+          colorA: Colors.red,
+          colorB: Colors.red,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: RepaintBoundary(
+                key: boundary,
+                child: SizedBox(
+                  width: 320,
+                  height: 104,
+                  child: Stack(
+                    children: <Widget>[
+                      DashboardCoreModeHeaderScaffold(
+                        bounds: const DashboardBounds(
+                          left: 0,
+                          top: 0,
+                          width: 320,
+                          height: 104,
+                        ),
+                        surfaceColor: Colors.red,
+                        headerKey: const ValueKey<String>('opacity-header'),
+                        labelKey: const ValueKey<String>('opacity-label'),
+                        labelContent: const Text(
+                          'opaque content',
+                          key: ValueKey<String>('opacity-content'),
+                          style: TextStyle(color: Colors.black),
+                        ),
+                        label: 'mode',
+                        visualController: visual,
+                        visualFrameListenable: frame,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-header-white-base')),
+        findsOneWidget,
+      );
+      final renderBoundary =
+          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      Future<Color> pixel() async {
+        final image = (await tester.runAsync(() => renderBoundary.toImage()))!;
+        try {
+          final bytes = await tester.runAsync(
+            () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+          );
+          return _pixelAt(bytes!, width: 320, x: 36, y: 52);
+        } finally {
+          image.dispose();
+        }
+      }
+
+      expect((await pixel()).toARGB32(), Colors.white.toARGB32());
+      frame.value = const DashboardHeaderVisualFrame(
+        colors: <Color>[Colors.red, Colors.red],
+        stops: <double>[0, 1],
+        opacity: .5,
+        colorA: Colors.red,
+        colorB: Colors.red,
+      );
+      await tester.pump();
+      final half = await pixel();
+      expect(half.toARGB32(), isNot(Colors.white.toARGB32()));
+      expect(half.toARGB32(), isNot(Colors.red.toARGB32()));
+      expect(
+        tester.getTopLeft(
+          find.byKey(const ValueKey<String>('opacity-content')),
+        ),
+        isNotNull,
+      );
+      frame.value = const DashboardHeaderVisualFrame(
+        colors: <Color>[Colors.red, Colors.red],
+        stops: <double>[0, 1],
+        opacity: 1,
+        colorA: Colors.red,
+        colorB: Colors.red,
+      );
+      await tester.pump();
+      expect((await pixel()).toARGB32(), Colors.red.toARGB32());
+      await tester.pumpWidget(const SizedBox.shrink());
+      visual.dispose();
+      frame.dispose();
+    },
+  );
+
+  testWidgets(
+    'static material performs the exact one-pass colour-over-white composition',
+    (tester) async {
+      final boundary = GlobalKey();
+      final visual = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: RepaintBoundary(
+              key: boundary,
+              child: SizedBox(
+                width: 320,
+                height: 104,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    const ColoredBox(color: Colors.white),
+                    DashboardHeaderVisualPaintLayer(
+                      controller: visual,
+                      frame: const DashboardHeaderVisualFrame(
+                        colors: <Color>[Colors.red, Colors.red],
+                        stops: <double>[0, 1],
+                        opacity: .5,
+                        colorA: Colors.red,
+                        colorB: Colors.red,
+                      ),
+                      child: const Text(
+                        'content',
+                        key: ValueKey<String>('one-pass-opaque-content'),
+                        style: TextStyle(color: Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final renderBoundary =
+          boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = (await tester.runAsync(() => renderBoundary.toImage()))!;
+      try {
+        final actualBytes = await tester.runAsync(
+          () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+        );
+        final recorder = ui.PictureRecorder();
+        final canvas = Canvas(recorder)
+          ..drawRect(
+            const Rect.fromLTWH(0, 0, 320, 104),
+            Paint()..color = Colors.white,
+          );
+        DashboardHeaderStaticColorRenderer.paint(
+          canvas: canvas,
+          rect: const Rect.fromLTWH(0, 0, 320, 104),
+          colors: const <Color>[Colors.red, Colors.red],
+          stops: const <double>[0, 1],
+          opacity: .5,
+        );
+        final expectedImage = await tester.runAsync(
+          () => recorder.endRecording().toImage(320, 104),
+        );
+        try {
+          final expectedBytes = await tester.runAsync(
+            () => expectedImage!.toByteData(format: ui.ImageByteFormat.rawRgba),
+          );
+          expect(
+            _pixelAt(actualBytes!, width: 320, x: 180, y: 52).toARGB32(),
+            _pixelAt(expectedBytes!, width: 320, x: 180, y: 52).toARGB32(),
+          );
+        } finally {
+          expectedImage?.dispose();
+        }
+      } finally {
+        image.dispose();
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      visual.dispose();
+    },
+  );
+
   testWidgets('reference Header depth keeps inner material above the clip', (
     tester,
   ) async {

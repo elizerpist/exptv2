@@ -16,7 +16,6 @@ import '../../../core/financial_limits/presentation/budget_ring_presentation.dar
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../core/design/dashboard_body_order.dart';
-import '../../../core/design/dashboard_mode_palette.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
 import '../application/dashboard_core_mode_controller.dart';
@@ -144,7 +143,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final BudgetDistributionPageController _budgetDistributionPageController;
   late final DashboardHeaderVisualController _headerVisualController;
   late final BalancePresentationController _balancePresentationSettings;
-  late final DashboardHeaderStaticColorPolicy _balanceHeaderColorPolicy;
+  late final DashboardBalanceHeaderColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
   late final DashboardSummaryAutoResetController _summaryAutoResetController;
@@ -222,10 +221,8 @@ class _CoreDashboardState extends State<CoreDashboard>
     );
     _headerVisualController = DashboardHeaderVisualController(vsync: this);
     _balancePresentationSettings = BalancePresentationController();
-    _balanceHeaderColorPolicy = DashboardHeaderStaticColorPolicy(
-      DashboardModePaletteResolver.resolve(
-        DashboardModeSpec.balance,
-      ).upcomingHeaderTone,
+    _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
+      tuning: _headerVisualController.tuning,
     );
     _budgetHeaderColorPolicy = DashboardBudgetHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
@@ -240,7 +237,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         stage: 'HEADER_VISUAL_POLICY_BOUND',
         message:
             'sharedController=DashboardHeaderVisualController '
-            'modePolicies=balance:static,budget:live,mind:liveScore '
+            'modePolicies=balance:manualPalette,budget:live,mind:liveScore '
             'tickerOwners=1',
       ),
     );

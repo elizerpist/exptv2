@@ -8,6 +8,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_entity_insights_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -317,6 +318,42 @@ void main() {
         ),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
+        findsOneWidget,
+      );
+      final categoryController = carousel.controller;
+      final categoryPosition = categoryController.scrollController.position;
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+        findsOneWidget,
+      );
+      expect(
+        identical(
+          tester
+              .widget<CenteredCarousel<BalanceCarouselCard>>(
+                find.byType(CenteredCarousel<BalanceCarouselCard>),
+              )
+              .controller,
+          categoryController,
+        ),
+        isTrue,
+      );
+      expect(
+        identical(
+          categoryController.scrollController.position,
+          categoryPosition,
+        ),
+        isTrue,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-insight-back')),
+      );
+      await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
         findsOneWidget,
@@ -1389,6 +1426,76 @@ DashboardBalanceLinkedPresentation _linked() {
         categoryIconId: 'icon_17',
       ),
     ],
+    categoryInsights: <String, DashboardBalanceCategoryInsight>{
+      'salary': _salaryCategoryInsight(),
+    },
+    partnerInsights: <String, DashboardBalancePartnerInsight>{
+      'employer': _employerPartnerInsight(),
+    },
+  );
+}
+
+DashboardBalanceCategoryInsight _salaryCategoryInsight() =>
+    DashboardBalanceCategoryInsight(
+      id: 'salary',
+      label: 'Fizetés',
+      direction: LedgerDirection.income,
+      amountMinor: 700000,
+      activeDirectionScopeAmountMinor: 700000,
+      transactionCount: 2,
+      activeDayCount: 2,
+      medianAmountTimesTwo: 700000,
+      temporalBuckets: const <DashboardBalanceEntityTemporalBucket>[
+        DashboardBalanceEntityTemporalBucket(
+          id: '2026',
+          label: '2026',
+          value: 700000,
+        ),
+      ],
+      distribution: const DashboardBalanceTransactionSizeDistribution(
+        zeroToFiveKCount: 0,
+        fiveToTenKCount: 0,
+        tenToTwentyKCount: 0,
+        twentyKPlusCount: 2,
+      ),
+      minimumAmountMinor: 350000,
+      maximumAmountMinor: 350000,
+      dayOccurrences: const <DashboardBalanceEntityOccurrence>[],
+      hiddenDayOccurrenceCount: 0,
+    );
+
+DashboardBalancePartnerInsight _employerPartnerInsight() {
+  const occurrence = DashboardBalanceEntityOccurrence(
+    id: 'employer-1',
+    epochDay: 20000,
+    localTimeMinutes: 12 * 60,
+    amountMinor: 350000,
+    occurredOrder: 20000 * 1440 + 12 * 60,
+  );
+  return DashboardBalancePartnerInsight(
+    id: 'employer',
+    label: 'Munkahely',
+    direction: LedgerDirection.income,
+    amountMinor: 700000,
+    transactionCount: 2,
+    activeDayCount: 2,
+    latestScopeOccurrence: occurrence,
+    temporalBuckets: const <DashboardBalanceEntityTemporalBucket>[
+      DashboardBalanceEntityTemporalBucket(id: '2026', label: '2026', value: 2),
+    ],
+    recentScopeOccurrences: const <DashboardBalanceEntityOccurrence>[
+      occurrence,
+    ],
+    relationship: DashboardBalancePartnerRelationship(
+      allHistoryTransactionCount: 3,
+      firstOccurrence: occurrence,
+      latestOccurrence: occurrence,
+      medianAmountTimesTwo: 700000,
+      firstQuartileAmountMinor: 350000,
+      thirdQuartileAmountMinor: 350000,
+      typicalCadenceMinutesTimesTwo: 1440,
+      cadenceOccurrences: const <DashboardBalanceEntityOccurrence>[occurrence],
+    ),
   );
 }
 

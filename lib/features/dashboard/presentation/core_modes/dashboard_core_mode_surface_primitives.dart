@@ -296,12 +296,24 @@ final class _HeaderPhysicalShell extends StatelessWidget {
                 borderRadius: borderRadius,
                 child: ValueListenableBuilder<DashboardHeaderVisualFrame>(
                   valueListenable: frames,
-                  builder: (context, frame, child) =>
+                  builder: (context, frame, child) => Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      // Opacity belongs to the colour/material layer only.
+                      // This clipped opaque base is deliberately below it, so
+                      // 0% is a normal white Header rather than translucency
+                      // into the dashboard behind the physical card.
+                      const ColoredBox(
+                        key: ValueKey<String>('dashboard-header-white-base'),
+                        color: Colors.white,
+                      ),
                       DashboardHeaderVisualPaintLayer(
                         controller: visualController,
                         frame: frame,
                         child: const SizedBox.expand(),
                       ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
@@ -25,6 +26,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'Balance Header tuner exposes the approved palette selector and manual position/window controls',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1800,
+            child: DashboardHeaderVisualTuner(controller: controller),
+          ),
+        ),
+      );
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-palette-selector'),
+      );
+      await tester.ensureVisible(selector);
+      final dropdown = tester
+          .widget<DropdownButton<DashboardBalanceHeaderPalette>>(selector);
+      expect(dropdown.items, hasLength(9));
+      dropdown.onChanged!(DashboardBalanceHeaderPalette.misticLevanderFields);
+      final position = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-position-slider'),
+      );
+      final window = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-window-width-slider'),
+      );
+      tester
+          .widget<Slider>(
+            find.descendant(of: position, matching: find.byType(Slider)),
+          )
+          .onChanged!(100);
+      tester
+          .widget<Slider>(
+            find.descendant(of: window, matching: find.byType(Slider)),
+          )
+          .onChanged!(10);
+      await tester.pump();
+      expect(
+        controller.tuning.value.balanceColor.palette,
+        DashboardBalanceHeaderPalette.misticLevanderFields,
+      );
+      expect(controller.tuning.value.balanceColor.positionPercent, 100);
+      expect(controller.tuning.value.balanceColor.windowWidthPercent, 10);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
+
   testWidgets(
     'BALANCE-PRESENTATION-TUNER RED: chart and carousel controls use one Balance-only session owner',
     (tester) async {

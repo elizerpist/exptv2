@@ -1598,11 +1598,10 @@ void main() {
       uBackgroundPhase);
   vec3 background = sampleCanonicalPalette(backgroundCoordinate);
   vec3 base = commonField(displaced, rippleLight);
-  // `uOpacity` must not turn a separately enabled Portal background into a
-  // zero-contribution layer at 100%. Its bounded material field supplies the
-  // local blend weight, preserving the canonical multi-stop base between
-  // Portal material areas.
-  vec3 composed = mix(base, background, backgroundMatter * saturate(uOpacity));
+  // The material's opacity is applied exactly once at final source-over
+  // composition below. Portal blend weights stay semantic/material-local;
+  // otherwise a 50% Header would attenuate portal colour twice.
+  vec3 composed = mix(base, background, backgroundMatter);
 
   vec2 interiorUv = displaced;
   if (uInteriorEnabled > .5 && uInteriorRotationEnabled > .5) {
@@ -1630,7 +1629,7 @@ void main() {
     // over the already-rendered base canvas with per-pixel alpha. Source-over
     // is intentionally not the Header touch layer's optical screen blend:
     // screen compressed the material contrast until BE/KI was imperceptible.
-    composed = mix(composed, interior, matter * .38 * saturate(uOpacity));
+    composed = mix(composed, interior, matter * .38);
   }
   float overlayAlpha;
   vec3 overlay = touchOverlay(uv, overlayAlpha);
@@ -1638,5 +1637,8 @@ void main() {
   float trailAlpha;
   vec3 trail = touchTrail(uv, trailAlpha);
   composed = mix(composed, screenBlend(composed, trail), trailAlpha);
-  fragColor = vec4(composed, 1.0);
+  // The clipped physical Header shell owns an opaque white base below this
+  // colour/material layer. A zero opacity therefore reveals white while text,
+  // charts, borders and interaction surfaces remain entirely outside it.
+  fragColor = vec4(composed, saturate(uOpacity));
 }
