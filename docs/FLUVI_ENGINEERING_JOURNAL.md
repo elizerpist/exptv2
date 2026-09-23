@@ -2664,3 +2664,17 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - The workflow remains globally **FAIL** only because the profile job reproduces the inherited Mind live-range assertion at `dashboard_interaction_profile_test.dart:1694`, `B_year_month_rail_populated`, exactly as pre-feature `35837157590`; it was not fixed or weakened here.
 - Final exact-source graph is tooling commit `2282d0284f75b2fb6b926ad3c335a82bbcce3634`; manifest source head is `616e87c`, raw index SHA-256 is `309350d75e6abcd3689102a967f48d2c0cb9c50557058d8e245192efb8ebea85`, and its two-run deterministic graph tree SHA-256 is `954aa3fce89e0941e7097624ebc6193029e0cf0863b3465fd86471fe7fcb096f`.
 - **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-09-23 — Approved Balance semantic scale + future Mind/Balance foreground controls
+
+- User approved the latest **single 10-colour Balance semantic scale** inspired by the current Income/Expense button gradients. Approved order is deliberately monotonic by hue family: **purple → pink → warm yellow-pink/apricot**, avoiding pink at both ends.
+- Exact approved Balance scale, left→right: `#7C5CFF`, `#9B7BFF`, `#B794FF`, `#D9A1F3`, `#F08BD6`, `#FF7BB7`, `#FF6EA4`, `#FF8A7A`, `#FF9B5F`, `#FFB36B`.
+- This scale is a product-design decision for future Balance semantic colour mapping; it is distinct from the already-delivered manual Balance palette catalog and should not be silently substituted into production until the user requests an implementation prompt.
+- Current behavioral application source remains `616e87cb25ef08f6dbfb72fd4b1629418a4782e5`; matching SCIP tooling is `2282d0284f75b2fb6b926ad3c335a82bbcce3634`.
+- Current Mind Header traffic-light source was inspected. It has eight semantic anchors at 0/18/35/48/58/70/82/100% with current colours `#991B1B`, `#DC2626`, `#F04A24`, `#F97316`, `#FBBF24`, `#86D957`, `#4ADE80`, `#15803D`, interpolated through the shared perceptual path. User wants softer, silkier, less saturated alternative traffic-light palettes while preserving the red→yellow→green semantics.
+- Current source also proves Mind Header score text and Balance Header amount text use the shared white `textOnAction`; Mind and Balance Header trend charts share the same white `DashboardHeaderTrendChartStyle.lineColor`. These are currently fixed rather than per-mode user choices.
+- Future presentation requirement approved for later implementation: both **Mind** and **Balance** need user-selectable **Header foreground text colour: Black / White** and independently user-selectable **Header line-chart colour: Black / White**. The two choices should be independent per mode so users can choose, for example, black text + white line or white text + black line if desired.
+- This foreground customization is presentation-only; it must not alter score/Balance values, chart data, Header palette semantics, opacity, Query, Summary, or financial/behavioral projections.
+- The softer Mind traffic-light palettes discussed next are brainstorming candidates only until the user selects one; do not treat any candidate as approved implementation input yet.
+- User explicitly requested **NO coding-agent prompt yet**. Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
