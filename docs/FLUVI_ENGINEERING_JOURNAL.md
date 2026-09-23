@@ -2710,3 +2710,23 @@ Shared evidence journal for the Fluvi prompt-writer and coding agents. Read this
 - Existing future foreground requirement remains unchanged: Mind and Balance each need independently selectable Header text colour (Black/White) and Header line-chart colour (Black/White).
 - No coding-agent prompt requested in this correction. Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
 
+## 2026-09-23 — Balance alternative palette: reuse existing Color Lab Limit scale
+
+- User requested another existing scale from `docs/prototypes/color_lab.html` for future Balance Header palette selection: **Limit**.
+- Source audit confirms the lower Color Lab `Portal színezés` panel's `Limit` control uses `mindPortalSignaturePalettes.limits`, which is exactly `limitsScaleStops`.
+- Exact authored Limit palette, left→right:
+  1. `#6D28D9`
+  2. `#8B5CF6`
+  3. `#A78BFA`
+  4. `#D8B4FE`
+  5. `#FBCFE8`
+  6. `#F9A8D4`
+  7. `#F472B6`
+  8. `#EC4899`
+  9. `#E23883`
+  10. `#DB2777`
+- In Color Lab these ten stops span 0–100% at equal authored positions: 0%, 11.11%, 22.22%, 33.33%, 44.44%, 55.56%, 66.67%, 77.78%, 88.89%, 100%.
+- Future Balance presentation requirement: keep the already-delivered manual Balance palette catalog and add this existing Color Lab **Limit** scale as an additional selectable Balance palette/scale. Do not alter its order or recolor it.
+- This decision is presentation-only and does not yet define how Balance amount semantics will drive palette position. Current manual position/window controls remain the authoritative testing mechanism until the user explicitly requests data binding.
+- No coding-agent prompt requested. Prompt-writer action: journal only, build-trigger-free `[skip ci]`; no application source, tests, workflow, graph, milestone or build configuration changed.
+
