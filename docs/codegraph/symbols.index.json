@@ -1,55 +1,55 @@
 {
   "schema_version": 1,
-  "record_count": 12166,
+  "record_count": 12290,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_presentation_controller.dart`/DashboardBudgetHeaderMetricPresentation#usesPerDayAmounts.",
-      "sha256": "c13f28316dabad2f96608c54d56daab0533382d4d1b7da949e107b2a74ef48f9"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_partner_distribution_controller.dart`/DashboardBudgetPartnerDistributionDirectionFrame#`<constructor>`().",
+      "sha256": "712f803f9a9302342c1fa02ea5518355d6e55a709f235cfe36e059b6f1553ef6"
     },
     {
       "path": "symbols/part-001.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_presentation_controller.dart`/DashboardBudgetHeaderPresentation#",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_behavioral_score_settings.dart`/MindBehavioralScoreSettingsController#setExpenseAlgorithm().",
-      "sha256": "08064de627e486fdf80e849f19c6b34b8eaa9a3f6293499338c61fc966be50ed"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_partner_distribution_controller.dart`/DashboardBudgetPartnerDistributionDirectionFrame#direction.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_behavioral_score_projection.dart`/MindExpenseScoreComponents#==().",
+      "sha256": "6aff7718cb203ac0ba8e3eb7f20633cab0dea616e267c6dbfba459f44f5f33de"
     },
     {
       "path": "symbols/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_behavioral_score_settings.dart`/MindCausalHistoryOrigin#",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_clay_donut_scene.dart`/BudgetClayDonutGeometry#selectedOuterRadius.",
-      "sha256": "227a5dd2eeb0cc3503e8f30e8797778104dc44fa6cfdc08c06c10b8333accce8"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_behavioral_score_projection.dart`/MindExpenseScoreComponents#`<constructor>`().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_category_distribution_card.dart`/_DistributionLegendRowState#build().",
+      "sha256": "99aa1e3ccce7b56baa78579347e6716a118fbca8a96820f8c44f14819ecbb10a"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_clay_donut_scene.dart`/BudgetClayDonutGeometry#sourceCenter.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_render_surface.dart`/_DashboardLogBoxPaintResources#editPlaceholder.",
-      "sha256": "8917b8ea2df2d4d9f9b6c456c8786f336170aee1ce8cb6c14b72eb0031e08cb3"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`budget_category_distribution_card.dart`/_DistributionLegendRowState#didUpdateWidget().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_prepared_scene_cache.dart`/_DashboardLogBoxStagedSceneBank#hasCompleteSceneFor().",
+      "sha256": "7d7c256c995c8591eccdce307344c4ab5eff46b779544d8add91e6725d6f1b15"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_render_surface.dart`/_DashboardLogBoxPaintResources#groupSurface.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`prepared_dashboard_index.dart`/PreparedDashboardIndexBuildMetrics#copyWith().",
-      "sha256": "b9f05df650d28e5db28229363fd32fb908f3b9415a489cb7323092bd1d42c7ec"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_prepared_scene_cache.dart`/_DashboardLogBoxStagedSceneBank#manifest.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`prepared_budget_partner_distribution_snapshot.dart`/PreparedBudgetPartnerDistributionSnapshot#expenseBank.",
+      "sha256": "b10da2ceb3134217e67ef9d2e0836a437618fcf0c1cb3eebcde2b0b677c96117"
     },
     {
       "path": "symbols/part-005.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`prepared_dashboard_index.dart`/PreparedDashboardIndexBuildMetrics#dartDecodeDurationMicros.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_data_runtime_test.dart`/_PendingIndex#`<constructor>`().",
-      "sha256": "8195e4cbea483566fe56d5ed534d2a4eeafa2b1df7292840c9f77e4297144726"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`prepared_budget_partner_distribution_snapshot.dart`/PreparedBudgetPartnerDistributionSnapshot#incomeBank.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`dashboard_rail_density_trace_test.dart`/main().",
+      "sha256": "5f8f9215a4548a4f89a2de7613aef7e7d9a7d0b42c450dfdfa690f2580ff4546"
     },
     {
       "path": "symbols/part-006.jsonl",
-      "record_count": 166,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_data_runtime_test.dart`/_PendingIndex#completer.",
+      "record_count": 290,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`dashboard_rail_density_trace_test.dart`/percentile().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "c0ad4553776e20bff8ff3368a64186a9a9fc68a5ad118e4fc403be34408419f8"
+      "sha256": "2598942647e0790789101f05dc700d506e66d4127e72c8cf115becb2ef63031c"
     }
   ]
 }
