@@ -440,6 +440,33 @@ void main() {
         find.byKey(const ValueKey<String>('balance-linked-detail-latest')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey<String>('balance-carousel-latest-topic-row')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-primary-row'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-carousel-latest-date-row')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-carousel-latest-avatar')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('balance-carousel-card-latest-transaction'),
+          ),
+          matching: find.text('350,00 Ft'),
+        ),
+        findsNothing,
+      );
       carousel.controller.jumpToIndex(8);
       await tester.pump();
       expect(
@@ -1528,6 +1555,8 @@ DashboardBalanceLinkedPresentation _linked() {
         entryId: 'latest-in-scope',
         title: 'Piac',
         categoryTitle: 'Élelmiszer',
+        categoryColorId: 'color_07',
+        categoryIconId: 'icon_17',
         amountMinor: 35000,
         direction: LedgerDirection.expense,
         occurredOrder: 20632 * 1440,

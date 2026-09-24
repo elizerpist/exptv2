@@ -123,6 +123,8 @@ final class DashboardBalanceScopedTransaction {
     required this.entryId,
     required this.title,
     required this.categoryTitle,
+    required this.categoryColorId,
+    required this.categoryIconId,
     required this.amountMinor,
     required this.direction,
     required this.occurredOrder,
@@ -132,6 +134,8 @@ final class DashboardBalanceScopedTransaction {
   final String entryId;
   final String title;
   final String categoryTitle;
+  final String categoryColorId;
+  final String categoryIconId;
   final int amountMinor;
   final LedgerDirection direction;
   final int occurredOrder;
@@ -256,7 +260,7 @@ final class DashboardBalanceLinkedPresentation {
     for (final transaction in latestTransactions.take(
       _balanceLinkedMaximumRows,
     ))
-      '${transaction.entryId}:${transaction.occurredOrder}',
+      '${transaction.entryId}:${transaction.occurredOrder}:${transaction.categoryColorId}:${transaction.categoryIconId}',
     for (final category in topCategories.take(_balanceLinkedMaximumRows))
       '${category.id}:${category.amountMinor}:${category.transactionCount}',
     for (final partner in topPartners.take(_balanceLinkedMaximumRows))
@@ -631,6 +635,8 @@ abstract final class DashboardBalanceLinkedProjection {
       entryId: entry.id,
       title: _transactionTitle(entry),
       categoryTitle: _categoryLabel(entry),
+      categoryColorId: entry.categoryColorId ?? 'fallback',
+      categoryIconId: entry.categoryIconId ?? 'fallback',
       amountMinor: entry.amountMinor.abs(),
       direction: direction,
       occurredOrder: _occurredOrder(entry),

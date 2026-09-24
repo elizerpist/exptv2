@@ -166,6 +166,34 @@ void main() {
   );
 
   test(
+    'LATEST-VISUAL-RED: latest projection retains admitted category visual metadata',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+        selectedDirection: LedgerDirection.expense,
+        incomeEntries: const <DashboardLedgerEntry>[],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry(
+            'latest-with-visuals',
+            'expense',
+            -5000,
+            2026,
+            7,
+            28,
+            categoryColorId: 'color_07',
+            categoryIconId: 'icon_17',
+          ),
+        ],
+      );
+
+      final latest = linked.latestTransactions.single;
+      expect(latest.categoryColorId, 'color_07');
+      expect(latest.categoryIconId, 'icon_17');
+    },
+  );
+
+  test(
     'L5-RED: linked top category ranks absolute amount on active direction only',
     () {
       final linked = DashboardBalanceLinkedProjection.build(

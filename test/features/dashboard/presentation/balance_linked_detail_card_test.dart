@@ -344,6 +344,116 @@ void main() {
   });
 
   testWidgets(
+    'LATEST-MAIN-RED: all bounded rows use canonical avatars in one fixed no-separator layout',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.latestTransaction,
+          presentation: _linked(),
+          height: 320,
+        ),
+      );
+
+      expect(find.byType(Scrollable), findsNothing);
+      expect(find.byType(Divider), findsNothing);
+      for (var index = 0; index < 5; index += 1) {
+        final entryId = 'entry-$index';
+        expect(
+          find.byKey(ValueKey<String>('balance-linked-latest-$entryId')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ValueKey<String>('balance-linked-latest-avatar-$entryId')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ValueKey<String>('balance-linked-latest-amount-$entryId')),
+          findsOneWidget,
+        );
+      }
+      expect(find.text('Tétel 0'), findsOneWidget);
+      expect(find.textContaining('Kategória 0 ·'), findsOneWidget);
+      expect(
+        tester
+            .getRect(
+              find.byKey(
+                const ValueKey<String>('balance-linked-latest-avatar-entry-0'),
+              ),
+            )
+            .left,
+        lessThan(
+          tester
+              .getRect(
+                find.byKey(
+                  const ValueKey<String>(
+                    'balance-linked-latest-amount-entry-0',
+                  ),
+                ),
+              )
+              .left,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'CATEGORY-REFERENCE-RED: fixed category face promotes the existing median rather than total/share/profile',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(
+            categoryInsights: <String, DashboardBalanceCategoryInsight>{
+              'category-0': _categoryInsight(
+                amountMinor: 9900,
+                medianAmountMinor: 1200,
+              ),
+            },
+          ),
+          height: 320,
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.pump();
+
+      expect(find.byType(Scrollable), findsNothing);
+      expect(find.text('MEDIÁN'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-insight-median')),
+        findsOneWidget,
+      );
+      expect(find.text('12,00 Ft'), findsOneWidget);
+      expect(find.text('99,00 Ft'), findsNothing);
+      expect(find.text('Időbeli profil'), findsNothing);
+      expect(find.textContaining('domináns sávban'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-insight-avatar')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-insight-distribution'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('0–5k'), findsOneWidget);
+      expect(find.text('5–10k'), findsOneWidget);
+      expect(find.text('10–20k'), findsOneWidget);
+      expect(find.text('20k+'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+        matchesGoldenFile(
+          '../../../goldens/balance_category_reference_detail.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'L5-L7: category and partner detail retain their rank composition',
     (tester) async {
       await tester.pumpWidget(
@@ -412,7 +522,7 @@ void main() {
         find.byKey(const ValueKey<String>('balance-category-insight-detail')),
         findsOneWidget,
       );
-      expect(find.text('12,00 Ft'), findsNWidgets(2));
+      expect(find.text('6,00 Ft'), findsOneWidget);
 
       await tester.pumpWidget(
         _host(
@@ -425,7 +535,7 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('34,00 Ft'), findsOneWidget);
+      expect(find.text('17,00 Ft'), findsOneWidget);
       await tester.tap(
         find.byKey(const ValueKey<String>('balance-category-insight-back')),
       );
@@ -612,6 +722,8 @@ DashboardBalanceLinkedPresentation _linked({
       entryId: 'entry-$index',
       title: 'Tétel $index',
       categoryTitle: 'Kategória $index',
+      categoryColorId: 'color_07',
+      categoryIconId: 'icon_17',
       amountMinor: index + 1,
       direction: index.isEven
           ? LedgerDirection.income
@@ -627,34 +739,38 @@ DashboardBalanceLinkedPresentation _linked({
   partnerInsights: partnerInsights,
 );
 
-DashboardBalanceCategoryInsight _categoryInsight({required int amountMinor}) =>
-    DashboardBalanceCategoryInsight(
-      id: 'category-0',
-      label: 'category 0',
-      direction: LedgerDirection.income,
-      amountMinor: amountMinor,
-      activeDirectionScopeAmountMinor: 10000,
-      transactionCount: 4,
-      activeDayCount: 2,
-      medianAmountTimesTwo: amountMinor,
-      temporalBuckets: const <DashboardBalanceEntityTemporalBucket>[
-        DashboardBalanceEntityTemporalBucket(
-          id: '2026',
-          label: '2026',
-          value: 1200,
-        ),
-      ],
-      distribution: const DashboardBalanceTransactionSizeDistribution(
-        zeroToFiveKCount: 1,
-        fiveToTenKCount: 2,
-        tenToTwentyKCount: 1,
-        twentyKPlusCount: 0,
-      ),
-      minimumAmountMinor: 100,
-      maximumAmountMinor: 1000,
-      dayOccurrences: const <DashboardBalanceEntityOccurrence>[],
-      hiddenDayOccurrenceCount: 0,
-    );
+DashboardBalanceCategoryInsight _categoryInsight({
+  required int amountMinor,
+  int? medianAmountMinor,
+}) => DashboardBalanceCategoryInsight(
+  id: 'category-0',
+  label: 'category 0',
+  direction: LedgerDirection.income,
+  amountMinor: amountMinor,
+  activeDirectionScopeAmountMinor: 10000,
+  transactionCount: 4,
+  activeDayCount: 2,
+  medianAmountTimesTwo: medianAmountMinor == null
+      ? amountMinor
+      : medianAmountMinor * 2,
+  temporalBuckets: const <DashboardBalanceEntityTemporalBucket>[
+    DashboardBalanceEntityTemporalBucket(
+      id: '2026',
+      label: '2026',
+      value: 1200,
+    ),
+  ],
+  distribution: const DashboardBalanceTransactionSizeDistribution(
+    zeroToFiveKCount: 1,
+    fiveToTenKCount: 2,
+    tenToTwentyKCount: 1,
+    twentyKPlusCount: 0,
+  ),
+  minimumAmountMinor: 100,
+  maximumAmountMinor: 1000,
+  dayOccurrences: const <DashboardBalanceEntityOccurrence>[],
+  hiddenDayOccurrenceCount: 0,
+);
 
 DashboardBalancePartnerInsight _partnerInsight() {
   const occurrence = DashboardBalanceEntityOccurrence(

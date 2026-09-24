@@ -16,6 +16,7 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
+import 'balance_category_visual_badge.dart';
 import 'balance_linked_detail_card.dart';
 import 'balance_cashflow_stability_card.dart';
 import 'balance_momentum_card.dart';
@@ -81,6 +82,7 @@ final class BalanceCarouselCard {
     required this.title,
     required this.amount,
     this.detail,
+    this.latestTransaction,
   });
 
   final String id;
@@ -88,6 +90,7 @@ final class BalanceCarouselCard {
   final String title;
   final String amount;
   final String? detail;
+  final DashboardBalanceScopedTransaction? latestTransaction;
 }
 
 List<BalanceCarouselCard> balanceCarouselCardsFor(
@@ -165,6 +168,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       kind: BalanceCarouselCardKind.latestTransaction,
       title: 'Legutóbbi tétel',
       amount: latest?.title ?? 'Nincs tétel',
+      latestTransaction: latest,
     ),
     BalanceCarouselCard._(
       id: 'top-category',
@@ -771,6 +775,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
     // only its neighbours down, so no selected visual relies on paint-only
     // overflow or an undersized interactive parent.
     final compact = itemHeight < 42;
+    final latest = card.latestTransaction;
     // A transformed side-card can retain the normal logical item height while
     // receiving only a short physical content box. Preserve its primary value
     // and omit the optional Momentum state line there; the selected card keeps
@@ -805,18 +810,25 @@ final class _BalanceCarouselCard extends StatelessWidget {
                 vertical: compact ? 2 : 7,
               ),
               child: compact
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        card.amount,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: FluviVisualTokens.textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    )
+                  ? card.kind == BalanceCarouselCardKind.latestTransaction &&
+                            latest != null
+                        ? _CompactLatestCarouselPreview(transaction: latest)
+                        : Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              card.amount,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: FluviVisualTokens.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          )
+                  : card.kind == BalanceCarouselCardKind.latestTransaction &&
+                        latest != null
+                  ? _LatestCarouselPreview(transaction: latest)
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -863,4 +875,113 @@ final class _BalanceCarouselCard extends StatelessWidget {
       ),
     );
   }
+}
+
+final class _CompactLatestCarouselPreview extends StatelessWidget {
+  const _CompactLatestCarouselPreview({required this.transaction});
+
+  final DashboardBalanceScopedTransaction transaction;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      BalanceCategoryVisualBadge(
+        semanticLabel: transaction.categoryTitle,
+        categoryColorId: transaction.categoryColorId,
+        categoryIconId: transaction.categoryIconId,
+        size: 15,
+        iconSize: 8,
+      ),
+      const SizedBox(width: 4),
+      Expanded(
+        child: Text(
+          transaction.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: FluviVisualTokens.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+final class _LatestCarouselPreview extends StatelessWidget {
+  const _LatestCarouselPreview({required this.transaction});
+
+  final DashboardBalanceScopedTransaction transaction;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Row(
+        key: const ValueKey<String>('balance-carousel-latest-topic-row'),
+        children: <Widget>[
+          const Icon(
+            Icons.receipt_long_rounded,
+            key: ValueKey<String>('balance-carousel-latest-topic-icon'),
+            size: 13,
+            color: FluviVisualTokens.textSecondary,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              'Legutóbbi tétel',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: FluviVisualTokens.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 3),
+      Row(
+        key: const ValueKey<String>('balance-carousel-latest-primary-row'),
+        children: <Widget>[
+          BalanceCategoryVisualBadge(
+            key: const ValueKey<String>('balance-carousel-latest-avatar'),
+            semanticLabel: transaction.categoryTitle,
+            categoryColorId: transaction.categoryColorId,
+            categoryIconId: transaction.categoryIconId,
+            size: 18,
+            iconSize: 10,
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              transaction.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: FluviVisualTokens.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 2),
+      Text(
+        key: const ValueKey<String>('balance-carousel-latest-date-row'),
+        _formatLatestCarouselDate(transaction.epochDay),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: FluviVisualTokens.textSecondary,
+        ),
+      ),
+    ],
+  );
+}
+
+String _formatLatestCarouselDate(int epochDay) {
+  final date = DateTime.utc(1970).add(Duration(days: epochDay));
+  return '${date.year}. ${date.month.toString().padLeft(2, '0')}. ${date.day.toString().padLeft(2, '0')}.';
 }
