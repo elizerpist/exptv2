@@ -12,6 +12,6 @@
 | ICO-03 | User prompt 2 | Header mode host / primitive | Mode-icon taps remain the sole mode-cycle action but do not start a Header tap-wave; a non-icon Header tap still starts it. | DONE — no-ink/no-wave widget regression |
 | ICO-04 | User prompt 2 | widget tests | Base and 100% bounds are bounded, hit-testable and semantic; no carousel/header gesture ownership changes. | DONE — bounds, semantic and hit-test regression |
 | REG-01 | User / milestone | affected focused and protected tests | No Query, financial, palette interpolation, carousel, Header shader, mode-selection or motion-owner regression. | DONE — focused and fast suites |
-| DELIVERY-01 | Global workflow | app branch / Actions | Atomic application commit is pushed; exact-source human diagnostic APK is downloaded, signed/integrity/embedded-SHA verified. | NOT DONE |
-| DELIVERY-02 | Graph provenance | tooling branch | Separate SCIP commit has `manifest.source_head` equal to final application SHA. | NOT DONE |
+| DELIVERY-01 | Global workflow | app branch / Actions | Atomic application commit `90d3a756...` is pushed; Actions `36040370925` human APK is downloaded, ZIP/v2-signature/integrity/embedded-SHA verified. | DONE |
+| DELIVERY-02 | Graph provenance | tooling branch | Separate tooling commit `e0ca6c9d...` has `manifest.source_head = 90d3a756...`. | DONE |
 | PHYSICAL-01 | User | device | User visual/install acceptance. | BLOCKED — USER ONLY |
