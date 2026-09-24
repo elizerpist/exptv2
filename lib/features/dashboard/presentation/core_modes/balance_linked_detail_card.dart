@@ -315,7 +315,7 @@ final class _RankedDetailState extends State<_RankedDetail> {
   void _clearSelection() => setState(() => _selectedEntityId = null);
 }
 
-/// The read-only Spendee hierarchy adapted to Fluvi's bounded lower-card
+/// The approved ranked hierarchy adapted to Fluvi's bounded lower-card
 /// surface. Both kinds deliberately share one master renderer: only their
 /// supporting copy differs, while ranking order remains the immutable input.
 final class _RankedOverview extends StatelessWidget {

@@ -23,7 +23,7 @@ void main() {
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
         ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden)
         ..setLatestTransactionCardPresentation(
-          BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+          BalanceLatestTransactionCardPresentation.threeLine,
         );
       expect(
         controller.value.chartMode,
@@ -32,13 +32,13 @@ void main() {
       expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
       expect(
         controller.value.latestTransactionCardPresentation,
-        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+        BalanceLatestTransactionCardPresentation.threeLine,
       );
       expect(controller.value.revision, 3);
 
       final unchangedRevision = controller.value.revision;
       controller.setLatestTransactionCardPresentation(
-        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+        BalanceLatestTransactionCardPresentation.threeLine,
       );
       expect(controller.value.revision, unchangedRevision);
       expect(

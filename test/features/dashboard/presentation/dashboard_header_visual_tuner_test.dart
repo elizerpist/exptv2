@@ -243,16 +243,14 @@ void main() {
       );
       await tester.ensureVisible(latestDefault);
       expect(latestDefault, findsOneWidget);
-      final latestSpendee = find.byKey(
-        const ValueKey<String>(
-          'balance-latest-card-presentation-spendeeThreeLine',
-        ),
+      final latestThreeLine = find.byKey(
+        const ValueKey<String>('balance-latest-card-presentation-threeLine'),
       );
-      await tester.tap(latestSpendee);
+      await tester.tap(latestThreeLine);
       await tester.pump();
       expect(
         balance.value.latestTransactionCardPresentation,
-        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+        BalanceLatestTransactionCardPresentation.threeLine,
       );
 
       expect(

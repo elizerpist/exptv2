@@ -672,7 +672,7 @@ void main() {
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-spendee-header'),
+          const ValueKey<String>('balance-carousel-latest-reference-header'),
         ),
         findsOneWidget,
       );
@@ -731,12 +731,12 @@ void main() {
       );
 
       settings.setLatestTransactionCardPresentation(
-        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+        BalanceLatestTransactionCardPresentation.threeLine,
       );
       await tester.pump();
       expect(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-spendee-three-line'),
+          const ValueKey<String>('balance-carousel-latest-three-line'),
         ),
         findsOneWidget,
       );
@@ -746,7 +746,7 @@ void main() {
       expect(amount.style!.height, 1.05);
       final threeLinePartner = find.descendant(
         of: find.byKey(
-          const ValueKey<String>('balance-carousel-latest-spendee-three-line'),
+          const ValueKey<String>('balance-carousel-latest-three-line'),
         ),
         matching: find.text('Piac'),
       );

@@ -19,13 +19,12 @@ enum BalanceHeaderChartTimeLabels {
 /// alter Balance selection, financial values or carousel motion.
 enum BalanceLatestTransactionCardPresentation {
   avatarPartner,
-  spendeeThreeLine;
+  threeLine;
 
   String get tunerLabel => switch (this) {
     BalanceLatestTransactionCardPresentation.avatarPartner =>
       'Avatar + partner',
-    BalanceLatestTransactionCardPresentation.spendeeThreeLine =>
-      'Spendee 3 sor',
+    BalanceLatestTransactionCardPresentation.threeLine => '3 soros',
   };
 }
 

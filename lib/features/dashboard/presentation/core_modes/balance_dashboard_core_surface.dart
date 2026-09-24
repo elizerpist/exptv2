@@ -911,7 +911,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
                   !compact &&
                       card.kind == BalanceCarouselCardKind.latestTransaction &&
                       latest != null
-                  ? _SpendeeLatestCarouselVisualSpec.cardPadding
+                  ? _LatestCarouselReferenceVisualSpec.cardPadding
                   : EdgeInsets.symmetric(
                       horizontal: compact ? 4 : 8,
                       vertical: compact ? 2 : 7,
@@ -1030,17 +1030,14 @@ final class _LatestCarouselPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) => switch (presentation) {
     BalanceLatestTransactionCardPresentation.avatarPartner =>
-      _SpendeeLatestAvatarPartnerPreview(transaction: transaction),
-    BalanceLatestTransactionCardPresentation.spendeeThreeLine =>
-      _SpendeeLatestThreeLinePreview(transaction: transaction),
+      _LatestAvatarPartnerPreview(transaction: transaction),
+    BalanceLatestTransactionCardPresentation.threeLine =>
+      _LatestThreeLinePreview(transaction: transaction),
   };
 }
 
-/// Source-parity tokens from `spendeetest@144d78c`,
-/// `spendee_balance_cards.dart` `_LatestTransactionFastInfo` and
-/// `_FastInfoLayout`. They are local to Fluvi's independently-owned renderer;
-/// production does not import the experimental Spendee widgets.
-abstract final class _SpendeeLatestCarouselVisualSpec {
+/// Approved source-parity tokens owned locally by the Fluvi renderer.
+abstract final class _LatestCarouselReferenceVisualSpec {
   static const cardPadding = EdgeInsets.fromLTRB(9, 7, 9, 18);
   static const headerSize = 20.0;
   static const headerIconSize = 12.0;
@@ -1077,8 +1074,8 @@ abstract final class _SpendeeLatestCarouselVisualSpec {
   static const headerIconBackground = Color(0xFFEDF3FF);
 }
 
-final class _SpendeeLatestAvatarPartnerPreview extends StatelessWidget {
-  const _SpendeeLatestAvatarPartnerPreview({required this.transaction});
+final class _LatestAvatarPartnerPreview extends StatelessWidget {
+  const _LatestAvatarPartnerPreview({required this.transaction});
 
   final DashboardBalanceScopedTransaction transaction;
 
@@ -1089,8 +1086,8 @@ final class _SpendeeLatestAvatarPartnerPreview extends StatelessWidget {
     ),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      _SpendeeLatestHeader(transaction: transaction),
-      const SizedBox(height: _SpendeeLatestCarouselVisualSpec.headerBodyGap),
+      _LatestCarouselHeader(transaction: transaction),
+      const SizedBox(height: _LatestCarouselReferenceVisualSpec.headerBodyGap),
       SizedBox(
         height: 15,
         child: Row(
@@ -1112,7 +1109,7 @@ final class _SpendeeLatestAvatarPartnerPreview extends StatelessWidget {
                 transaction.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _SpendeeLatestCarouselVisualSpec.primaryText,
+                style: _LatestCarouselReferenceVisualSpec.primaryText,
               ),
             ),
           ],
@@ -1122,18 +1119,18 @@ final class _SpendeeLatestAvatarPartnerPreview extends StatelessWidget {
   );
 }
 
-final class _SpendeeLatestThreeLinePreview extends StatelessWidget {
-  const _SpendeeLatestThreeLinePreview({required this.transaction});
+final class _LatestThreeLinePreview extends StatelessWidget {
+  const _LatestThreeLinePreview({required this.transaction});
 
   final DashboardBalanceScopedTransaction transaction;
 
   @override
   Widget build(BuildContext context) => Column(
-    key: const ValueKey<String>('balance-carousel-latest-spendee-three-line'),
+    key: const ValueKey<String>('balance-carousel-latest-three-line'),
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      _SpendeeLatestHeader(transaction: transaction),
-      const SizedBox(height: _SpendeeLatestCarouselVisualSpec.headerBodyGap),
+      _LatestCarouselHeader(transaction: transaction),
+      const SizedBox(height: _LatestCarouselReferenceVisualSpec.headerBodyGap),
       SizedBox(
         height: 14,
         child: Align(
@@ -1144,7 +1141,7 @@ final class _SpendeeLatestThreeLinePreview extends StatelessWidget {
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _SpendeeLatestCarouselVisualSpec.amountText,
+            style: _LatestCarouselReferenceVisualSpec.amountText,
           ),
         ),
       ),
@@ -1156,7 +1153,7 @@ final class _SpendeeLatestThreeLinePreview extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: _SpendeeLatestCarouselVisualSpec.partnerText,
+            style: _LatestCarouselReferenceVisualSpec.partnerText,
           ),
         ),
       ),
@@ -1164,39 +1161,39 @@ final class _SpendeeLatestThreeLinePreview extends StatelessWidget {
   );
 }
 
-final class _SpendeeLatestHeader extends StatelessWidget {
-  const _SpendeeLatestHeader({required this.transaction});
+final class _LatestCarouselHeader extends StatelessWidget {
+  const _LatestCarouselHeader({required this.transaction});
 
   final DashboardBalanceScopedTransaction transaction;
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    key: const ValueKey<String>('balance-carousel-latest-spendee-header'),
-    height: _SpendeeLatestCarouselVisualSpec.headerSize,
+    key: const ValueKey<String>('balance-carousel-latest-reference-header'),
+    height: _LatestCarouselReferenceVisualSpec.headerSize,
     child: Row(
       key: const ValueKey<String>('balance-carousel-latest-topic-row'),
       children: <Widget>[
         DecoratedBox(
           key: const ValueKey<String>('balance-carousel-latest-topic-badge'),
           decoration: const BoxDecoration(
-            color: _SpendeeLatestCarouselVisualSpec.headerIconBackground,
+            color: _LatestCarouselReferenceVisualSpec.headerIconBackground,
             shape: BoxShape.circle,
           ),
           child: SizedBox(
-            width: _SpendeeLatestCarouselVisualSpec.headerSize,
-            height: _SpendeeLatestCarouselVisualSpec.headerSize,
+            width: _LatestCarouselReferenceVisualSpec.headerSize,
+            height: _LatestCarouselReferenceVisualSpec.headerSize,
             child: _LatestTransactionCategoryHeaderIcon(
               categoryIconId: transaction.categoryIconId,
             ),
           ),
         ),
-        const SizedBox(width: _SpendeeLatestCarouselVisualSpec.headerGap),
+        const SizedBox(width: _LatestCarouselReferenceVisualSpec.headerGap),
         const Expanded(
           child: Text(
             'Utolsó tranzakció',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _SpendeeLatestCarouselVisualSpec.headerTitle,
+            style: _LatestCarouselReferenceVisualSpec.headerTitle,
           ),
         ),
       ],
@@ -1221,8 +1218,8 @@ final class _LatestTransactionCategoryHeaderIcon extends StatelessWidget {
           picture: atlas.categoryIcon(
             CategoryIconCatalog.handleOf(categoryIconId),
           ),
-          size: _SpendeeLatestCarouselVisualSpec.headerIconSize,
-          color: _SpendeeLatestCarouselVisualSpec.headerIconColor,
+          size: _LatestCarouselReferenceVisualSpec.headerIconSize,
+          color: _LatestCarouselReferenceVisualSpec.headerIconColor,
           semanticsLabel: CategoryIconCatalog.resolve(
             categoryIconId,
           ).semanticName,
@@ -1232,8 +1229,8 @@ final class _LatestTransactionCategoryHeaderIcon extends StatelessWidget {
     return const Icon(
       Icons.category_rounded,
       key: ValueKey<String>('balance-carousel-latest-header-category-icon'),
-      size: _SpendeeLatestCarouselVisualSpec.headerIconSize,
-      color: _SpendeeLatestCarouselVisualSpec.headerIconColor,
+      size: _LatestCarouselReferenceVisualSpec.headerIconSize,
+      color: _LatestCarouselReferenceVisualSpec.headerIconColor,
     );
   }
 }
