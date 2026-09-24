@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 12746,
+  "record_count": 12758,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -27,29 +27,29 @@
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_linked_detail_card.dart`/_RankedDetail#ranks.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`mind_dashboard_core_surface.dart`/_MindQueryAmountRangeBinding#onInteractionEnded.",
-      "sha256": "8fcf7cc6259852329dbbc1e7fd0a13fe6c8f14ce94fa04797fd77a5d2d31998d"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`mind_dashboard_core_surface.dart`/_MindHeaderScoreDetail#temporalContext.",
+      "sha256": "5fc226495114bfc5b015013b65ef056700dbe4f76d72349b4c2a6aef055e3929"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`mind_dashboard_core_surface.dart`/_MindQueryAmountRangeBinding#onInteractionStarted.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_presentation_controller.dart`/DashboardPresentationController#selectDirection().",
-      "sha256": "452e57543dadff1f52fa6a6a2deb2df168c06a3e371aa26d84a2404b76d893c2"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`mind_dashboard_core_surface.dart`/_MindHeatmapInlineLegend#`<constructor>`().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_presentation_controller.dart`/DashboardPresentationController#promotePaintedExperimentalTemporalCandidate().",
+      "sha256": "befbb194f5e8f3641fb95012d47a25a12d089fc8a4c56fefc35af25fc59bde33"
     },
     {
       "path": "symbols/part-005.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_presentation_controller.dart`/DashboardPresentationController#semanticCrossed().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/mind/presentation/`mind_year_heatmap_viewport_test.dart`/chart().",
-      "sha256": "c178c5e0195f098104f912fdf27112d94b6e5a02109e2f341553800f4148c1a6"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/application/`dashboard_presentation_controller.dart`/DashboardPresentationController#promotePreparedExperimentalTemporalCandidate().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/mind/presentation/`mind_temporal_heatmap_viewports_test.dart`/mount().",
+      "sha256": "0ac48ce31c3480d174d571fd311ebd7955b9af2b15a8fad71b5bf7652f4359b1"
     },
     {
       "path": "symbols/part-006.jsonl",
-      "record_count": 746,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/mind/presentation/`mind_year_heatmap_viewport_test.dart`/color().",
+      "record_count": 758,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/mind/presentation/`mind_temporal_heatmap_viewports_test.dart`/mountAndMeasure().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "0aa5779ca7ca0a89017c00d52d3d91a786c1931e7b18ee3f9f3ee5a0d3ebe925"
+      "sha256": "c119e4c1dff228a69c47c88686c0d3d903e8aad869abe1cd6cca0e34f79af3c2"
     }
   ]
 }
