@@ -506,7 +506,172 @@ void main() {
         find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
         findsOneWidget,
       );
-      expect(find.text('5 tranzakció'), findsOneWidget);
+      expect(find.text('5 tranzakció · 1. hely'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'SPENDEE-RANKED-RED: category master is a fixed leader plus four circular followers',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(),
+          width: 390,
+          height: 320,
+        ),
+      );
+
+      expect(find.byType(Scrollable), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-ranked-overview-category'),
+        ),
+        findsOneWidget,
+      );
+      for (var index = 0; index < 5; index += 1) {
+        expect(
+          find.byKey(ValueKey<String>('balance-linked-rank-category-$index')),
+          findsOneWidget,
+        );
+        expect(find.text('${index + 1}. hely'), findsOneWidget);
+      }
+      expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey<String>('balance-linked-rank-category-0'),
+              ),
+            )
+            .height,
+        greaterThan(
+          tester
+              .getSize(
+                find.byKey(
+                  const ValueKey<String>('balance-linked-rank-category-1'),
+                ),
+              )
+              .height,
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-ranked-divider-category')),
+        findsOneWidget,
+      );
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-ranked-follower-avatar-category-1',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .shape,
+        BoxShape.circle,
+      );
+      expect(
+        tester
+            .getBottomRight(
+              find.byKey(
+                const ValueKey<String>('balance-linked-rank-category-4'),
+              ),
+            )
+            .dy,
+        lessThanOrEqualTo(320),
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(),
+          width: 280,
+          height: 320,
+        ),
+      );
+      expect(find.byType(Scrollable), findsNothing);
+      expect(
+        tester
+            .getBottomRight(
+              find.byKey(
+                const ValueKey<String>('balance-linked-rank-category-4'),
+              ),
+            )
+            .dy,
+        lessThanOrEqualTo(320),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'SPENDEE-RANKED-RED: partner remains count-ranked while displaying aggregate amount',
+    (tester) async {
+      final partners = <DashboardBalanceRankedItem>[
+        _rankedItem(
+          id: 'count-winner',
+          label: 'Count winner',
+          amountMinor: 10000,
+          transactionCount: 30,
+        ),
+        _rankedItem(
+          id: 'amount-winner',
+          label: 'Amount winner',
+          amountMinor: 900000,
+          transactionCount: 2,
+        ),
+        for (var index = 2; index < 5; index += 1)
+          _rankedItem(
+            id: 'partner-$index',
+            label: 'Partner $index',
+            amountMinor: 1000 * index,
+            transactionCount: 5 - index,
+          ),
+      ];
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topPartner,
+          presentation: _linked(topPartners: partners),
+          width: 390,
+          height: 320,
+        ),
+      );
+
+      expect(find.byType(Scrollable), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-count-winner')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Count winner'),
+        findsOneWidget,
+        reason: 'The first published count winner remains the visual leader.',
+      );
+      expect(find.text('30 tranzakció · 1. hely'), findsOneWidget);
+      expect(find.text('100 Ft'), findsOneWidget);
+      expect(find.text('9000 Ft'), findsOneWidget);
+      expect(
+        tester.widget<Text>(find.text('100 Ft')).style!.color,
+        const Color(0xFFFB4276),
+      );
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-ranked-follower-avatar-amount-winner',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .shape,
+        BoxShape.circle,
+      );
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -764,6 +929,8 @@ DashboardBalanceLinkedPresentation _linked({
       const <String, DashboardBalanceCategoryInsight>{},
   Map<String, DashboardBalancePartnerInsight> partnerInsights =
       const <String, DashboardBalancePartnerInsight>{},
+  List<DashboardBalanceRankedItem>? topCategories,
+  List<DashboardBalanceRankedItem>? topPartners,
 }) => DashboardBalanceLinkedPresentation(
   identity: _identity,
   timeScope: const AllTimeScope(),
@@ -800,8 +967,8 @@ DashboardBalanceLinkedPresentation _linked({
     ),
     growable: false,
   ),
-  topCategories: _ranks('category', amountBase: 50000),
-  topPartners: _ranks('partner', amountBase: 1000),
+  topCategories: topCategories ?? _ranks('category', amountBase: 50000),
+  topPartners: topPartners ?? _ranks('partner', amountBase: 1000),
   categoryInsights: categoryInsights,
   partnerInsights: partnerInsights,
 );
@@ -979,6 +1146,21 @@ List<DashboardBalanceRankedItem> _ranks(
     categoryIconId: 'icon_17',
   ),
   growable: false,
+);
+
+DashboardBalanceRankedItem _rankedItem({
+  required String id,
+  required String label,
+  required int amountMinor,
+  required int transactionCount,
+}) => DashboardBalanceRankedItem(
+  id: id,
+  label: label,
+  direction: LedgerDirection.income,
+  amountMinor: amountMinor,
+  transactionCount: transactionCount,
+  categoryColorId: 'color_07',
+  categoryIconId: 'icon_17',
 );
 
 DashboardBalanceMomentumPresentation _strengtheningMomentum() =>

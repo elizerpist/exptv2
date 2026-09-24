@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -10,9 +11,14 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_present
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_host.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_placeholder_card.dart';
 
+import '../../../support/dashboard_render_resources.dart';
+
 void main() {
+  setUpAll(prepareDashboardTestRenderResources);
+
   testWidgets(
     'BALANCE-HEADER-ROUTE/BUTTON RED: production Header relay inspects Balance points and the tuner sits in the brand lane',
     (tester) async {
@@ -93,36 +99,50 @@ void main() {
           const ValueKey<String>('dashboard-core-mode-balance-header'),
         ),
       );
-      final modeLabel = tester.getRect(
-        find.byKey(const ValueKey<String>('dashboard-core-mode-label-balance')),
+      final modeIcon = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-mode-icon-balance'),
+        ),
       );
       expect(button.bottom, lessThanOrEqualTo(header.top));
       expect(button.right, closeTo(header.right - 8, .01));
       expect(
-        modeLabel.right,
+        modeIcon.right,
         closeTo(header.right - 14, .01),
-        reason: 'The former in-Header tuner reservation must be gone.',
+        reason: 'The mode action remains in the Header right corner.',
       );
       final balanceModeLabel = find.byKey(
         const ValueKey<String>('dashboard-core-mode-label-balance'),
       );
+      expect(balanceModeLabel, findsNothing);
+      final balanceModeIcon = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-icon-balance'),
+      );
+      expect(balanceModeIcon, findsOneWidget);
+      headerVisual.setBalanceHeaderIconColor(
+        DashboardHeaderForegroundColor.black,
+      );
+      await tester.pump();
       expect(
-        tester.widget<Text>(balanceModeLabel).style!.fontFamily,
-        'Roboto',
-        reason: 'App typography must retain the existing mode-label style.',
+        tester
+            .widget<PreparedVectorPictureView>(
+              find.descendant(
+                of: balanceModeIcon,
+                matching: find.byType(PreparedVectorPictureView),
+              ),
+            )
+            .color,
+        Colors.black,
+        reason: 'The Header action consumes the mode-local icon channel.',
       );
       headerVisual.setHeaderTypography(
         DashboardHeaderTypographyProfile.colorLab,
       );
       await tester.pump();
-      expect(
-        tester.widget<Text>(balanceModeLabel).style!.fontFamily,
-        'FluviColorLabInter',
-        reason: 'Only the Header-local Color Lab profile changes the label.',
-      );
+      expect(balanceModeIcon, findsOneWidget);
       headerVisual.setHeaderTypography(DashboardHeaderTypographyProfile.app);
       await tester.pump();
-      expect(tester.widget<Text>(balanceModeLabel).style!.fontFamily, 'Roboto');
+      expect(balanceModeIcon, findsOneWidget);
       await tester.tap(
         find.byKey(
           const ValueKey<String>('dashboard-header-visual-tuner-button'),
@@ -174,7 +194,7 @@ void main() {
       );
       expect(_mountedModeRootCount(tester), 1);
       expect(
-        find.byKey(ValueKey('dashboard-core-mode-label-${mode.mode.name}')),
+        find.byKey(ValueKey('dashboard-header-mode-icon-${mode.mode.name}')),
         findsOneWidget,
       );
 
@@ -207,6 +227,87 @@ void main() {
       }
     }
   });
+
+  testWidgets(
+    'HEADER-MODE-ACTION-RED: local white mode icons replace labels and are the only Header mode switch affordance',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_ModeHostHarness(controller: controller));
+
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-core-mode-label-balance')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-mode-icon-balance'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        DashboardHeaderModeIconButton.assetFor(DashboardMode.balance),
+        'assets/fluvi/header_mode_icons/balance-scale.svg',
+      );
+      final balanceAsset = tester.widget<PreparedVectorPictureView>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('dashboard-header-mode-icon-balance'),
+          ),
+          matching: find.byType(PreparedVectorPictureView),
+        ),
+      );
+      expect(balanceAsset.color, Colors.white);
+      final headerGesture = find.byKey(
+        const ValueKey<String>('dashboard-core-mode-header-gesture-region'),
+      );
+      await tester.drag(headerGesture, const Offset(-260, 0));
+      await tester.pump();
+      expect(
+        controller.committedMode,
+        DashboardModeSpec.balance,
+        reason: 'Horizontal Header swipes no longer own mode selection.',
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('dashboard-header-mode-icon-balance'),
+        ),
+      );
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.budget);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-header-mode-icon-budget')),
+        findsOneWidget,
+      );
+      expect(
+        DashboardHeaderModeIconButton.assetFor(DashboardMode.budget),
+        'assets/fluvi/header_mode_icons/budget-sliders-vertical.svg',
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-header-mode-icon-budget')),
+      );
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.mind);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-header-mode-icon-mind')),
+        findsOneWidget,
+      );
+      expect(
+        DashboardHeaderModeIconButton.assetFor(DashboardMode.mind),
+        'assets/fluvi/header_mode_icons/mind-brain.svg',
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('dashboard-header-mode-icon-mind')),
+      );
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.balance);
+    },
+  );
 
   test('Mind uses the central unified envelope endpoints', () {
     final split = _presentationFor(DashboardModeSpec.balance).geometry;
@@ -295,7 +396,7 @@ void main() {
   });
 
   testWidgets(
-    'accepted left header intent immediately replaces Balance with Budget',
+    'long left header swipe remains inert after mode navigation moved to the icon',
     (tester) async {
       final controller = DashboardCoreModeController(
         initialMode: DashboardModeSpec.balance,
@@ -307,17 +408,13 @@ void main() {
       await gesture.moveBy(const Offset(-160, 0));
       await tester.pump();
 
-      expect(controller.committedMode, DashboardModeSpec.budget);
+      expect(controller.committedMode, DashboardModeSpec.balance);
       expect(
         find.byKey(const ValueKey('dashboard-core-mode-balance')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('dashboard-core-mode-budget')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('dashboard-core-mode-mind')),
+        find.byKey(const ValueKey('dashboard-core-mode-budget')),
         findsNothing,
       );
       expect(_mountedModeRootCount(tester), 1);
@@ -325,27 +422,28 @@ void main() {
     },
   );
 
-  testWidgets('one long header swipe changes exactly one logical mode', (
-    tester,
-  ) async {
-    final controller = DashboardCoreModeController(
-      initialMode: DashboardModeSpec.balance,
-    );
-    addTearDown(controller.dispose);
-    await tester.pumpWidget(_ModeHostHarness(controller: controller));
+  testWidgets(
+    'repeated horizontal header movement never changes a logical mode',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_ModeHostHarness(controller: controller));
 
-    final gesture = await _startHeaderGesture(tester);
-    await gesture.moveBy(const Offset(-160, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(-600, 0));
-    await tester.pump();
+      final gesture = await _startHeaderGesture(tester);
+      await gesture.moveBy(const Offset(-160, 0));
+      await tester.pump();
+      await gesture.moveBy(const Offset(-600, 0));
+      await tester.pump();
 
-    expect(controller.committedMode, DashboardModeSpec.budget);
-    expect(_mountedModeRootCount(tester), 1);
-    await gesture.up();
-  });
+      expect(controller.committedMode, DashboardModeSpec.balance);
+      expect(_mountedModeRootCount(tester), 1);
+      await gesture.up();
+    },
+  );
 
-  testWidgets('pointer up resets the one-shot latch for the next swipe', (
+  testWidgets('pointer up leaves the inert Header horizontal contract intact', (
     tester,
   ) async {
     final controller = DashboardCoreModeController(
@@ -355,14 +453,12 @@ void main() {
     await tester.pumpWidget(_ModeHostHarness(controller: controller));
 
     await _dragHeader(tester, const Offset(-260, 0));
-    expect(controller.committedMode, DashboardModeSpec.budget);
+    expect(controller.committedMode, DashboardModeSpec.balance);
     await _dragHeader(tester, const Offset(-260, 0));
-    expect(controller.committedMode.mode, DashboardMode.mind);
+    expect(controller.committedMode, DashboardModeSpec.balance);
   });
 
-  testWidgets('right header swipe immediately cycles Balance to Mind', (
-    tester,
-  ) async {
+  testWidgets('right header swipe remains inert', (tester) async {
     final controller = DashboardCoreModeController(
       initialMode: DashboardModeSpec.balance,
     );
@@ -371,9 +467,9 @@ void main() {
 
     await _dragHeader(tester, const Offset(260, 0));
 
-    expect(controller.committedMode, DashboardModeSpec.mind);
+    expect(controller.committedMode, DashboardModeSpec.balance);
     expect(
-      find.byKey(const ValueKey('dashboard-core-mode-mind')),
+      find.byKey(const ValueKey('dashboard-core-mode-balance')),
       findsOneWidget,
     );
     expect(_mountedModeRootCount(tester), 1);
@@ -400,7 +496,7 @@ void main() {
     expect(_mountedModeRootCount(tester), 1);
   });
 
-  testWidgets('ambiguous movement stays inert until vertical dominance wins', (
+  testWidgets('diagonal Header movement only claims vertical expansion', (
     tester,
   ) async {
     final controller = DashboardCoreModeController(
@@ -415,7 +511,7 @@ void main() {
     final gesture = await _startHeaderGesture(tester);
     await gesture.moveBy(const Offset(-36, -31));
     await tester.pump();
-    expect(expansion.starts, 0);
+    expect(expansion.starts, 1);
     expect(controller.committedMode.mode, DashboardMode.balance);
     expect(_mountedModeRootCount(tester), 1);
 
@@ -497,7 +593,10 @@ void main() {
     final balanceHeader = tester.getRect(
       find.byKey(const ValueKey('dashboard-core-mode-balance-header')),
     );
-    await _dragHeader(tester, const Offset(-160, 0));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dashboard-header-mode-icon-balance')),
+    );
+    await tester.pump();
     final budgetHeader = tester.getRect(
       find.byKey(const ValueKey('dashboard-core-mode-budget-header')),
     );

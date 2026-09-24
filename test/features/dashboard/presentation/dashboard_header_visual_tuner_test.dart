@@ -30,12 +30,14 @@ void main() {
   testWidgets(
     'Balance Header tuner exposes the approved palette selector and manual position/window controls',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final controller = DashboardHeaderVisualController(vsync: tester);
       await tester.pumpWidget(
         MaterialApp(
           home: SizedBox(
             width: 360,
-            height: 520,
+            height: 2500,
             child: DashboardHeaderVisualTuner(controller: controller),
           ),
         ),
@@ -104,6 +106,31 @@ void main() {
         controller.tuning.value.balanceHeader.chartColor,
         DashboardHeaderForegroundColor.white,
       );
+      final balanceIconSoftened = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-icon-softenedDark'),
+      );
+      final balanceVeilBlack = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-veil-black'),
+      );
+      await tester.ensureVisible(balanceIconSoftened);
+      await tester.tap(balanceIconSoftened);
+      await tester.ensureVisible(balanceVeilBlack);
+      await tester.tap(balanceVeilBlack);
+      final balanceVeilEnabled = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-veil-enabled'),
+      );
+      await tester.ensureVisible(balanceVeilEnabled);
+      await tester.tap(balanceVeilEnabled);
+      await tester.pump();
+      expect(
+        controller.tuning.value.balanceHeader.iconColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(
+        controller.tuning.value.balanceHeader.chartVeilColor,
+        DashboardHeaderForegroundColor.black,
+      );
+      expect(controller.tuning.value.balanceHeader.chartVeilEnabled, isFalse);
 
       final mindSelector = find.byKey(
         const ValueKey<String>('dashboard-header-mind-palette-selector'),
@@ -135,6 +162,36 @@ void main() {
       );
       expect(
         controller.tuning.value.mindHeader.chartColor,
+        DashboardHeaderForegroundColor.black,
+      );
+      final mindIconBlack = find.byKey(
+        const ValueKey<String>('dashboard-header-mind-icon-black'),
+      );
+      final mindVeilSoftened = find.byKey(
+        const ValueKey<String>('dashboard-header-mind-veil-softenedDark'),
+      );
+      for (final control in <Finder>[mindIconBlack, mindVeilSoftened]) {
+        await tester.ensureVisible(control);
+        await tester.tap(control);
+      }
+      await tester.pump();
+      expect(
+        controller.tuning.value.mindHeader.iconColor,
+        DashboardHeaderForegroundColor.black,
+      );
+      expect(
+        controller.tuning.value.mindHeader.chartVeilColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+
+      final budgetIconBlack = find.byKey(
+        const ValueKey<String>('dashboard-header-budget-icon-black'),
+      );
+      expect(budgetIconBlack, findsOneWidget);
+      controller.setBudgetHeaderIconColor(DashboardHeaderForegroundColor.black);
+      await tester.pump();
+      expect(
+        controller.tuning.value.budgetHeader.iconColor,
         DashboardHeaderForegroundColor.black,
       );
       await tester.pumpWidget(const SizedBox.shrink());
@@ -178,6 +235,25 @@ void main() {
       await tester.tap(labels);
       await tester.pump();
       expect(balance.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
+
+      final latestDefault = find.byKey(
+        const ValueKey<String>(
+          'balance-latest-card-presentation-avatarPartner',
+        ),
+      );
+      await tester.ensureVisible(latestDefault);
+      expect(latestDefault, findsOneWidget);
+      final latestSpendee = find.byKey(
+        const ValueKey<String>(
+          'balance-latest-card-presentation-spendeeThreeLine',
+        ),
+      );
+      await tester.tap(latestSpendee);
+      await tester.pump();
+      expect(
+        balance.value.latestTransactionCardPresentation,
+        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+      );
 
       expect(
         find.byKey(const ValueKey<String>('balance-carousel-width-boost')),

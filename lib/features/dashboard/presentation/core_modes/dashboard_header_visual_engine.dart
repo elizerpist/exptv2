@@ -2208,27 +2208,45 @@ final class DashboardHeaderModeVisualState {
     required this.opacityPercent,
     required this.textColor,
     required this.chartColor,
+    required this.iconColor,
+    required this.chartVeilColor,
+    required this.chartVeilEnabled,
   });
 
   const DashboardHeaderModeVisualState.defaults()
     : opacityPercent = 50,
       textColor = DashboardHeaderForegroundColor.white,
-      chartColor = DashboardHeaderForegroundColor.white;
+      chartColor = DashboardHeaderForegroundColor.white,
+      iconColor = DashboardHeaderForegroundColor.white,
+      chartVeilColor = DashboardHeaderForegroundColor.white,
+      chartVeilEnabled = true;
 
   final double opacityPercent;
   final DashboardHeaderForegroundColor textColor;
   final DashboardHeaderForegroundColor chartColor;
+  final DashboardHeaderForegroundColor iconColor;
+
+  /// The under-line fade is independently user-selectable for the two chart
+  /// modes. Budget retains these defaults but has no chart consumer.
+  final DashboardHeaderForegroundColor chartVeilColor;
+  final bool chartVeilEnabled;
 
   DashboardHeaderModeVisualState copyWith({
     double? opacityPercent,
     DashboardHeaderForegroundColor? textColor,
     DashboardHeaderForegroundColor? chartColor,
+    DashboardHeaderForegroundColor? iconColor,
+    DashboardHeaderForegroundColor? chartVeilColor,
+    bool? chartVeilEnabled,
   }) => DashboardHeaderModeVisualState(
     opacityPercent: (opacityPercent ?? this.opacityPercent)
         .clamp(0.0, 100.0)
         .toDouble(),
     textColor: textColor ?? this.textColor,
     chartColor: chartColor ?? this.chartColor,
+    iconColor: iconColor ?? this.iconColor,
+    chartVeilColor: chartVeilColor ?? this.chartVeilColor,
+    chartVeilEnabled: chartVeilEnabled ?? this.chartVeilEnabled,
   );
 
   @override
@@ -2236,10 +2254,20 @@ final class DashboardHeaderModeVisualState {
       other is DashboardHeaderModeVisualState &&
       opacityPercent == other.opacityPercent &&
       textColor == other.textColor &&
-      chartColor == other.chartColor;
+      chartColor == other.chartColor &&
+      iconColor == other.iconColor &&
+      chartVeilColor == other.chartVeilColor &&
+      chartVeilEnabled == other.chartVeilEnabled;
 
   @override
-  int get hashCode => Object.hash(opacityPercent, textColor, chartColor);
+  int get hashCode => Object.hash(
+    opacityPercent,
+    textColor,
+    chartColor,
+    iconColor,
+    chartVeilColor,
+    chartVeilEnabled,
+  );
 }
 
 @immutable
@@ -2657,6 +2685,36 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  void setBalanceHeaderIconColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'balance',
+      current: tuning.value.balanceHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(balanceHeader: next),
+      iconColor: value,
+    );
+  }
+
+  void setBalanceHeaderChartVeilColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'balance',
+      current: tuning.value.balanceHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(balanceHeader: next),
+      chartVeilColor: value,
+    );
+  }
+
+  void setBalanceHeaderChartVeilEnabled(bool value) {
+    _setModeHeaderVisual(
+      mode: 'balance',
+      current: tuning.value.balanceHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(balanceHeader: next),
+      chartVeilEnabled: value,
+    );
+  }
+
   /// Mind's center is a behavioural-score domain result. The only
   /// user-editable state is the visual sample-window width.
   void setMindHeaderScoreWindowWidthPercent(double value) {
@@ -2710,6 +2768,33 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  void setMindHeaderIconColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'mind',
+      current: tuning.value.mindHeader,
+      update: (next) => tuning.value = tuning.value.copyWith(mindHeader: next),
+      iconColor: value,
+    );
+  }
+
+  void setMindHeaderChartVeilColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'mind',
+      current: tuning.value.mindHeader,
+      update: (next) => tuning.value = tuning.value.copyWith(mindHeader: next),
+      chartVeilColor: value,
+    );
+  }
+
+  void setMindHeaderChartVeilEnabled(bool value) {
+    _setModeHeaderVisual(
+      mode: 'mind',
+      current: tuning.value.mindHeader,
+      update: (next) => tuning.value = tuning.value.copyWith(mindHeader: next),
+      chartVeilEnabled: value,
+    );
+  }
+
   void setBudgetHeaderOpacityPercent(double value) {
     _setModeHeaderVisual(
       mode: 'budget',
@@ -2720,6 +2805,16 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  void setBudgetHeaderIconColor(DashboardHeaderForegroundColor value) {
+    _setModeHeaderVisual(
+      mode: 'budget',
+      current: tuning.value.budgetHeader,
+      update: (next) =>
+          tuning.value = tuning.value.copyWith(budgetHeader: next),
+      iconColor: value,
+    );
+  }
+
   void _setModeHeaderVisual({
     required String mode,
     required DashboardHeaderModeVisualState current,
@@ -2727,12 +2822,18 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     double? opacityPercent,
     DashboardHeaderForegroundColor? textColor,
     DashboardHeaderForegroundColor? chartColor,
+    DashboardHeaderForegroundColor? iconColor,
+    DashboardHeaderForegroundColor? chartVeilColor,
+    bool? chartVeilEnabled,
   }) {
     if (_disposed) return;
     final next = current.copyWith(
       opacityPercent: opacityPercent,
       textColor: textColor,
       chartColor: chartColor,
+      iconColor: iconColor,
+      chartVeilColor: chartVeilColor,
+      chartVeilEnabled: chartVeilEnabled,
     );
     if (next == current) return;
     update(next);
@@ -2740,6 +2841,8 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       'HEADER_MODE_VISUAL_CHANGED',
       'mode=$mode opacityPct=${next.opacityPercent} '
           'text=${next.textColor.name} chart=${next.chartColor.name} '
+          'icon=${next.iconColor.name} veil=${next.chartVeilColor.name} '
+          'veilEnabled=${next.chartVeilEnabled} '
           'settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
@@ -3120,6 +3223,9 @@ final class DashboardHeaderVisualFrame {
     required this.colorB,
     this.foregroundTextColor = Colors.white,
     this.chartColor = Colors.white,
+    this.headerIconColor = Colors.white,
+    this.chartVeilColor = Colors.white,
+    this.showsChartVeil = true,
     this.typography = DashboardHeaderTypographyProfile.app,
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
@@ -3139,6 +3245,9 @@ final class DashboardHeaderVisualFrame {
   final Color colorB;
   final Color foregroundTextColor;
   final Color chartColor;
+  final Color headerIconColor;
+  final Color chartVeilColor;
+  final bool showsChartVeil;
   final DashboardHeaderTypographyProfile typography;
   final double paletteSplitPercent;
   final double? windowLeftPercent;
@@ -3187,6 +3296,9 @@ final class DashboardHeaderVisualFrame {
       colorB == other.colorB &&
       foregroundTextColor == other.foregroundTextColor &&
       chartColor == other.chartColor &&
+      headerIconColor == other.headerIconColor &&
+      chartVeilColor == other.chartVeilColor &&
+      showsChartVeil == other.showsChartVeil &&
       typography == other.typography &&
       paletteSplitPercent == other.paletteSplitPercent &&
       windowLeftPercent == other.windowLeftPercent &&
@@ -3211,6 +3323,9 @@ final class DashboardHeaderVisualFrame {
     colorB,
     foregroundTextColor,
     chartColor,
+    headerIconColor,
+    chartVeilColor,
+    showsChartVeil,
     typography,
     paletteSplitPercent,
     windowLeftPercent,
@@ -3280,6 +3395,9 @@ final class DashboardBalanceHeaderColorPolicy
     colorB: window.colorB,
     foregroundTextColor: tuning.balanceHeader.textColor.color,
     chartColor: tuning.balanceHeader.chartColor.color,
+    headerIconColor: tuning.balanceHeader.iconColor.color,
+    chartVeilColor: tuning.balanceHeader.chartVeilColor.color,
+    showsChartVeil: tuning.balanceHeader.chartVeilEnabled,
     typography: tuning.headerTypography,
     paletteSplitPercent: window.state.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
@@ -3313,6 +3431,9 @@ abstract final class MindHeaderScoreColorScale {
     colorB: window.colorB,
     foregroundTextColor: modeVisual.textColor.color,
     chartColor: modeVisual.chartColor.color,
+    headerIconColor: modeVisual.iconColor.color,
+    chartVeilColor: modeVisual.chartVeilColor.color,
+    showsChartVeil: modeVisual.chartVeilEnabled,
     typography: typography,
     paletteSplitPercent: window.centerPercent,
     windowLeftPercent: window.leftSamplePercent,
@@ -3446,12 +3567,14 @@ abstract final class BudgetHeaderCoolColorScale {
     required BudgetHeaderCoolWindow window,
     required double opacityScalePosition,
     required int staticSettingsGeneration,
+    Color headerIconColor = Colors.white,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
     stops: window.stops,
     opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
     colorA: window.colorA,
     colorB: window.colorB,
+    headerIconColor: headerIconColor,
     paletteSplitPercent: window.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3466,12 +3589,14 @@ abstract final class BudgetHeaderCategoryColorScale {
     required DashboardHeaderCategoryWindow window,
     required double opacityScalePosition,
     required int staticSettingsGeneration,
+    Color headerIconColor = Colors.white,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
     stops: window.stops,
     opacity: DashboardHeaderOpacityScale.valueAt(opacityScalePosition),
     colorA: window.colorA,
     colorB: window.colorB,
+    headerIconColor: headerIconColor,
     paletteSplitPercent: window.centerPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3615,11 +3740,13 @@ final class DashboardBudgetHeaderColorPolicy
           window: window,
           opacityScalePosition: tuning.budgetHeader.opacityPercent,
           staticSettingsGeneration: tuning.generation,
+          headerIconColor: tuning.budgetHeader.iconColor.color,
         )
       : BudgetHeaderCategoryColorScale.fromWindow(
           window: categoryWindow,
           opacityScalePosition: tuning.budgetHeader.opacityPercent,
           staticSettingsGeneration: tuning.generation,
+          headerIconColor: tuning.budgetHeader.iconColor.color,
         );
 
   static DashboardHeaderCategoryWindow? _categoryWindowFor(

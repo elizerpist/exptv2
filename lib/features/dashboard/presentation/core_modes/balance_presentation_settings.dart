@@ -14,6 +14,21 @@ enum BalanceHeaderChartTimeLabels {
   };
 }
 
+/// Render-only alternatives for the selected Balance Latest carousel card.
+/// Both variants consume the same immutable scoped transaction; neither can
+/// alter Balance selection, financial values or carousel motion.
+enum BalanceLatestTransactionCardPresentation {
+  avatarPartner,
+  spendeeThreeLine;
+
+  String get tunerLabel => switch (this) {
+    BalanceLatestTransactionCardPresentation.avatarPartner =>
+      'Avatar + partner',
+    BalanceLatestTransactionCardPresentation.spendeeThreeLine =>
+      'Spendee 3 sor',
+  };
+}
+
 /// Session-only alternatives over the immutable all-time Balance history.
 /// Financial totals and the latest transaction are never settings-dependent.
 @immutable
@@ -21,16 +36,21 @@ final class BalancePresentationSettings {
   const BalancePresentationSettings({
     required this.chartMode,
     required this.timeLabels,
+    required this.latestTransactionCardPresentation,
     required this.revision,
   });
 
   const BalancePresentationSettings.defaults()
     : chartMode = BalanceHeaderChartMode.allTime,
       timeLabels = BalanceHeaderChartTimeLabels.visible,
+      latestTransactionCardPresentation =
+          BalanceLatestTransactionCardPresentation.avatarPartner,
       revision = 0;
 
   final BalanceHeaderChartMode chartMode;
   final BalanceHeaderChartTimeLabels timeLabels;
+  final BalanceLatestTransactionCardPresentation
+  latestTransactionCardPresentation;
   final int revision;
 
   bool get showsTimeLabels =>
@@ -39,10 +59,14 @@ final class BalancePresentationSettings {
   BalancePresentationSettings copyWith({
     BalanceHeaderChartMode? chartMode,
     BalanceHeaderChartTimeLabels? timeLabels,
+    BalanceLatestTransactionCardPresentation? latestTransactionCardPresentation,
     int? revision,
   }) => BalancePresentationSettings(
     chartMode: chartMode ?? this.chartMode,
     timeLabels: timeLabels ?? this.timeLabels,
+    latestTransactionCardPresentation:
+        latestTransactionCardPresentation ??
+        this.latestTransactionCardPresentation,
     revision: revision ?? this.revision,
   );
 
@@ -51,10 +75,17 @@ final class BalancePresentationSettings {
       other is BalancePresentationSettings &&
       other.chartMode == chartMode &&
       other.timeLabels == timeLabels &&
+      other.latestTransactionCardPresentation ==
+          latestTransactionCardPresentation &&
       other.revision == revision;
 
   @override
-  int get hashCode => Object.hash(chartMode, timeLabels, revision);
+  int get hashCode => Object.hash(
+    chartMode,
+    timeLabels,
+    latestTransactionCardPresentation,
+    revision,
+  );
 }
 
 /// The one Dashboard-lifetime presentation owner for Balance-only chart and
@@ -74,5 +105,16 @@ final class BalancePresentationController
     final current = value;
     if (current.timeLabels == next) return;
     value = current.copyWith(timeLabels: next, revision: current.revision + 1);
+  }
+
+  void setLatestTransactionCardPresentation(
+    BalanceLatestTransactionCardPresentation next,
+  ) {
+    final current = value;
+    if (current.latestTransactionCardPresentation == next) return;
+    value = current.copyWith(
+      latestTransactionCardPresentation: next,
+      revision: current.revision + 1,
+    );
   }
 }

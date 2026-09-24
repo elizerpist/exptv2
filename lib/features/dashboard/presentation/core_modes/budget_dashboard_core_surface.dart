@@ -188,6 +188,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 headerKey: const ValueKey('dashboard-core-mode-budget-header'),
                 labelKey: const ValueKey('dashboard-core-mode-label-budget'),
                 label: 'budget',
+                showModeLabel: false,
                 labelContent: presentationController == null
                     ? null
                     : ValueListenableBuilder<DashboardBudgetPresentationState>(

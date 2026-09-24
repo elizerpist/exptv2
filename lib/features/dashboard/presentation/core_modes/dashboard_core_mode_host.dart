@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart' show Listenable, ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../core/motion/gesture_direction_arbiter.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
@@ -31,6 +30,7 @@ import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
+import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
 import 'dashboard_header_visual_tuner.dart';
 import 'mind_dashboard_core_surface.dart';
@@ -43,10 +43,9 @@ typedef DashboardCoreModePresentationLookup =
 
 /// The one-root presentation boundary for the committed dashboard core mode.
 ///
-/// Its header arbitrates one pointer sequence between the existing vertical
-/// expansion lane and one immediate horizontal mode command. It deliberately
-/// has neither progress nor a target surface: mode switching is a stationary,
-/// atomic replacement rather than a visual transition.
+/// Its header keeps the existing vertical expansion lane. Mode switching is a
+/// stationary, atomic replacement commanded only by the explicit Header icon;
+/// Header horizontal drags are intentionally not a navigation affordance.
 class DashboardCoreModeHost extends StatefulWidget {
   const DashboardCoreModeHost({
     super.key,
@@ -165,11 +164,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
   final BalanceHeaderHistoryChartPointerObserver
   _balanceHeaderHistoryChartPointers =
       BalanceHeaderHistoryChartPointerObserver();
-  GestureDirectionIntent? _pointerAxis;
-  Offset? _pointerOrigin;
-  double _appliedVerticalDisplacement = 0;
   bool _verticalExpansionStarted = false;
-  bool _horizontalModeSwitched = false;
 
   @override
   void initState() {
@@ -196,74 +191,11 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     if (mounted) setState(() {});
   }
 
-  void _onPanStart(DragStartDetails details) {
-    _pointerAxis = null;
-    _pointerOrigin = details.globalPosition;
-    _appliedVerticalDisplacement = 0;
+  void _beginVerticalSequence() {
     _verticalExpansionStarted = false;
-    _horizontalModeSwitched = false;
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
-    final origin = _pointerOrigin;
-    if (origin == null) return;
-    final displacement = details.globalPosition - origin;
-    final axis =
-        _pointerAxis ??
-        GestureDirectionArbiter.resolve(
-          dx: displacement.dx,
-          dy: displacement.dy,
-          touchSlop: kTouchSlop,
-        );
-    if (axis == null) return;
-    _pointerAxis ??= axis;
-
-    switch (_pointerAxis!) {
-      case GestureDirectionIntent.vertical:
-        _applyVerticalDisplacement(displacement.dy);
-      case GestureDirectionIntent.horizontal:
-        _switchHorizontalModeOnce(displacement.dx);
-    }
-  }
-
-  void _applyVerticalDisplacement(double displacement) {
-    if (!_verticalExpansionStarted) {
-      _verticalExpansionStarted = true;
-      widget.onVerticalExpansionStart();
-    }
-    final delta = displacement - _appliedVerticalDisplacement;
-    _appliedVerticalDisplacement = displacement;
-    widget.onVerticalExpansionDragBy(delta);
-  }
-
-  void _switchHorizontalModeOnce(double displacement) {
-    if (_horizontalModeSwitched) return;
-    _horizontalModeSwitched = true;
-    widget.controller.switchMode(
-      displacement < 0
-          ? DashboardCoreModeDirection.forward
-          : DashboardCoreModeDirection.backward,
-    );
-  }
-
-  void _onPanEnd(DragEndDetails _) => _finishPointerSequence();
-
-  void _onPanCancel() => _finishPointerSequence();
-
-  /// Content cards are an extension of Header vertical expansion, never a
-  /// mode-switch surface. Keeping this separate from the Header's pan path
-  /// prevents a vertical recognizer that observes a diagonal/horizontal
-  /// displacement from reaching [_switchHorizontalModeOnce].
-  void _onContentVerticalStart(DragStartDetails details) {
-    _pointerAxis = GestureDirectionIntent.vertical;
-    _pointerOrigin = details.globalPosition;
-    _appliedVerticalDisplacement = 0;
-    _verticalExpansionStarted = false;
-    _horizontalModeSwitched = false;
-  }
-
-  void _onContentVerticalUpdate(DragUpdateDetails details) {
-    final delta = details.delta.dy;
+  void _applyVerticalDelta(double delta) {
     if (delta == 0) return;
     if (!_verticalExpansionStarted) {
       _verticalExpansionStarted = true;
@@ -272,18 +204,35 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
     widget.onVerticalExpansionDragBy(delta);
   }
 
+  void _onHeaderVerticalStart(DragStartDetails _) => _beginVerticalSequence();
+
+  void _onHeaderVerticalUpdate(DragUpdateDetails details) =>
+      _applyVerticalDelta(details.delta.dy);
+
+  void _onHeaderVerticalEnd(DragEndDetails _) => _finishPointerSequence();
+
+  void _switchModeFromHeaderIcon() {
+    widget.controller.switchMode(DashboardCoreModeDirection.forward);
+  }
+
+  /// Content cards are an extension of Header vertical expansion, never a
+  /// mode-switch surface. Keeping this separate from the Header's pan path
+  /// keeps horizontal card motion outside both navigation and expansion.
+  void _onContentVerticalStart(DragStartDetails details) {
+    _beginVerticalSequence();
+  }
+
+  void _onContentVerticalUpdate(DragUpdateDetails details) {
+    _applyVerticalDelta(details.delta.dy);
+  }
+
   void _onContentVerticalEnd(DragEndDetails _) => _finishPointerSequence();
 
   void _finishPointerSequence() {
-    if (_pointerAxis == GestureDirectionIntent.vertical &&
-        _verticalExpansionStarted) {
+    if (_verticalExpansionStarted) {
       widget.onVerticalExpansionEnd();
     }
-    _pointerAxis = null;
-    _pointerOrigin = null;
-    _appliedVerticalDisplacement = 0;
     _verticalExpansionStarted = false;
-    _horizontalModeSwitched = false;
   }
 
   @override
@@ -355,14 +304,26 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                 _balanceHeaderHistoryChartPointers.observePointerCancel,
               DashboardMode.budget => null,
             },
-            child: GestureDetector(
-              key: const ValueKey('dashboard-core-mode-header-gesture-region'),
-              behavior: HitTestBehavior.translucent,
-              dragStartBehavior: DragStartBehavior.down,
-              onPanStart: _onPanStart,
-              onPanUpdate: _onPanUpdate,
-              onPanEnd: _onPanEnd,
-              onPanCancel: _onPanCancel,
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                GestureDetector(
+                  key: const ValueKey(
+                    'dashboard-core-mode-header-gesture-region',
+                  ),
+                  behavior: HitTestBehavior.translucent,
+                  dragStartBehavior: DragStartBehavior.down,
+                  onVerticalDragStart: _onHeaderVerticalStart,
+                  onVerticalDragUpdate: _onHeaderVerticalUpdate,
+                  onVerticalDragEnd: _onHeaderVerticalEnd,
+                  onVerticalDragCancel: _finishPointerSequence,
+                ),
+                Positioned(
+                  top: 12,
+                  right: 14,
+                  child: _modeHeaderIcon(mode.mode),
+                ),
+              ],
             ),
           ),
         ),
@@ -375,6 +336,28 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             child: DashboardHeaderVisualTunerButton(controller: controller),
           ),
       ],
+    );
+  }
+
+  Widget _modeHeaderIcon(DashboardMode mode) {
+    final frames = switch (mode) {
+      DashboardMode.balance => widget.balanceHeaderVisualFrame,
+      DashboardMode.budget => widget.budgetHeaderVisualFrame,
+      DashboardMode.mind => widget.mindHeaderVisualFrame,
+    };
+    if (frames == null) {
+      return DashboardHeaderModeIconButton(
+        mode: mode,
+        onPressed: _switchModeFromHeaderIcon,
+      );
+    }
+    return ValueListenableBuilder<DashboardHeaderVisualFrame>(
+      valueListenable: frames,
+      builder: (context, frame, _) => DashboardHeaderModeIconButton(
+        mode: mode,
+        color: frame.headerIconColor,
+        onPressed: _switchModeFromHeaderIcon,
+      ),
     );
   }
 

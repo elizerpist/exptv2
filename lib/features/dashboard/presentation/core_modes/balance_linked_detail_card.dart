@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/catalog/category_icon_catalog.dart';
+import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../application/dashboard_balance_entity_insights_projection.dart';
@@ -62,7 +65,6 @@ class BalanceLinkedDetailCard extends StatelessWidget {
       key: const ValueKey<String>('balance-linked-detail-top-category'),
       title: 'Top 5 kategória',
       ranks: presentation.topCategories,
-      metric: _RankMetric.amount,
       kind: _RankDetailKind.category,
       categoryInsights: presentation.categoryInsights,
     ),
@@ -70,7 +72,6 @@ class BalanceLinkedDetailCard extends StatelessWidget {
       key: const ValueKey<String>('balance-linked-detail-top-partner'),
       title: 'Top 5 partner',
       ranks: presentation.topPartners,
-      metric: _RankMetric.count,
       kind: _RankDetailKind.partner,
       partnerInsights: presentation.partnerInsights,
     ),
@@ -217,8 +218,6 @@ final class _LatestTransactionRow extends StatelessWidget {
   }
 }
 
-enum _RankMetric { amount, count }
-
 enum _RankDetailKind { category, partner }
 
 /// The master/detail state intentionally lives only in this lower-card
@@ -228,7 +227,6 @@ final class _RankedDetail extends StatefulWidget {
     super.key,
     required this.title,
     required this.ranks,
-    required this.metric,
     required this.kind,
     this.categoryInsights = const <String, DashboardBalanceCategoryInsight>{},
     this.partnerInsights = const <String, DashboardBalancePartnerInsight>{},
@@ -236,7 +234,6 @@ final class _RankedDetail extends StatefulWidget {
 
   final String title;
   final List<DashboardBalanceRankedItem> ranks;
-  final _RankMetric metric;
   final _RankDetailKind kind;
   final Map<String, DashboardBalanceCategoryInsight> categoryInsights;
   final Map<String, DashboardBalancePartnerInsight> partnerInsights;
@@ -294,35 +291,20 @@ final class _RankedDetailState extends State<_RankedDetail> {
           Expanded(
             child: widget.ranks.isEmpty
                 ? const _BalanceDetailEmpty(label: 'Nincs rangsorolható adat')
-                : ListView.separated(
+                : _RankedOverview(
                     key: ValueKey<String>(
-                      'balance-linked-rank-list-${widget.kind.name}',
+                      'balance-linked-ranked-overview-${widget.kind.name}',
                     ),
-                    padding: EdgeInsets.zero,
-                    itemCount: widget.ranks.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 3),
-                    itemBuilder: (context, index) {
-                      final item = widget.ranks[index];
-                      final hasCurrentInsight = switch (widget.kind) {
-                        _RankDetailKind.category =>
-                          widget.categoryInsights.containsKey(item.id),
-                        _RankDetailKind.partner =>
-                          widget.partnerInsights.containsKey(item.id),
-                      };
-                      return _RankedRow(
-                        item: item,
-                        rank: index + 1,
-                        featured: index == 0,
-                        metric: widget.metric,
-                        // A rank must never open an absent/stale DTO.  The
-                        // production projection publishes these maps together,
-                        // while this guard also keeps partial test fixtures and
-                        // a transitional publication truthful.
-                        onTap: hasCurrentInsight
-                            ? () => setState(() => _selectedEntityId = item.id)
-                            : null,
-                      );
+                    ranks: widget.ranks.take(5).toList(growable: false),
+                    kind: widget.kind,
+                    hasCurrentInsight: (item) => switch (widget.kind) {
+                      _RankDetailKind.category =>
+                        widget.categoryInsights.containsKey(item.id),
+                      _RankDetailKind.partner =>
+                        widget.partnerInsights.containsKey(item.id),
                     },
+                    onRankTap: (item) =>
+                        setState(() => _selectedEntityId = item.id),
                   ),
           ),
         ],
@@ -333,92 +315,317 @@ final class _RankedDetailState extends State<_RankedDetail> {
   void _clearSelection() => setState(() => _selectedEntityId = null);
 }
 
-final class _RankedRow extends StatelessWidget {
-  const _RankedRow({
+/// The read-only Spendee hierarchy adapted to Fluvi's bounded lower-card
+/// surface. Both kinds deliberately share one master renderer: only their
+/// supporting copy differs, while ranking order remains the immutable input.
+final class _RankedOverview extends StatelessWidget {
+  const _RankedOverview({
+    super.key,
+    required this.ranks,
+    required this.kind,
+    required this.hasCurrentInsight,
+    required this.onRankTap,
+  });
+
+  final List<DashboardBalanceRankedItem> ranks;
+  final _RankDetailKind kind;
+  final bool Function(DashboardBalanceRankedItem item) hasCurrentInsight;
+  final ValueChanged<DashboardBalanceRankedItem> onRankTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final leader = ranks.first;
+    final followers = ranks.skip(1).toList(growable: false);
+    return Column(
+      key: ValueKey<String>('balance-linked-rank-list-${kind.name}'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _RankedLeaderRow(
+          item: leader,
+          kind: kind,
+          onTap: hasCurrentInsight(leader) ? () => onRankTap(leader) : null,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Divider(
+            key: ValueKey<String>('balance-ranked-divider-${kind.name}'),
+            height: 1,
+            thickness: 1,
+            color: const Color(0xFFE5E9F2),
+          ),
+        ),
+        for (var index = 0; index < followers.length; index += 1) ...<Widget>[
+          _RankedFollowerRow(
+            item: followers[index],
+            rank: index + 2,
+            kind: kind,
+            onTap: hasCurrentInsight(followers[index])
+                ? () => onRankTap(followers[index])
+                : null,
+          ),
+          if (index < followers.length - 1) const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+}
+
+abstract final class _RankedOverviewVisualSpec {
+  static const leaderAmount = Color(0xFFFB4276);
+  static const followerAmount = Color(0xFF26355A);
+  static const leaderCopy = Color(0xFF1D2B50);
+  static const secondaryCopy = Color(0xFF77829D);
+  static const leaderHeight = 52.0;
+  static const followerHeight = 28.0;
+}
+
+final class _RankedLeaderRow extends StatelessWidget {
+  const _RankedLeaderRow({
     required this.item,
-    required this.rank,
-    required this.featured,
-    required this.metric,
+    required this.kind,
     required this.onTap,
   });
 
   final DashboardBalanceRankedItem item;
-  final int rank;
-  final bool featured;
-  final _RankMetric metric;
+  final _RankDetailKind kind;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final value = switch (metric) {
-      _RankMetric.amount => DashboardPreparedFormatter.amountMinor(
-        item.amountMinor.abs(),
-      ),
-      _RankMetric.count => '${item.transactionCount} tranzakció',
-    };
+    const rank = 1;
+    final metadata = _rankMetadata(item: item, rank: rank, kind: kind);
+    final amount = DashboardPreparedFormatter.amountMinor(
+      item.amountMinor.abs(),
+    );
     return Semantics(
       button: onTap != null,
-      label: '$rank. ${item.label}, $value',
+      label: '${item.label}, $metadata, $amount',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey<String>('balance-linked-rank-${item.id}'),
-          borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: Container(
-            height: featured ? 58 : 42,
-            padding: EdgeInsets.symmetric(
-              horizontal: featured ? 10 : 6,
-              vertical: featured ? 8 : 4,
-            ),
-            decoration: featured
-                ? BoxDecoration(
-                    color: CategoryColorCatalog.resolve(
-                      item.categoryColorId,
-                    ).middleColor.withValues(alpha: .10),
-                    borderRadius: BorderRadius.circular(14),
-                  )
-                : null,
+          child: SizedBox(
+            height: _RankedOverviewVisualSpec.leaderHeight,
             child: Row(
               children: <Widget>[
-                SizedBox(
-                  width: 20,
-                  child: Text(
-                    '$rank.',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: FluviVisualTokens.textSecondary,
-                      fontWeight: FontWeight.w700,
+                ExcludeSemantics(
+                  child: BalanceCategoryVisualBadge(
+                    key: ValueKey<String>(
+                      'balance-ranked-leader-avatar-${item.id}',
                     ),
+                    semanticLabel: item.label,
+                    categoryColorId: item.categoryColorId,
+                    categoryIconId: item.categoryIconId,
+                    size: 46,
+                    iconSize: 24,
                   ),
                 ),
-                _RankAvatar(item: item, featured: featured),
-                const SizedBox(width: 9),
+                const SizedBox(width: 11),
                 Expanded(
-                  child: Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: FluviVisualTokens.textPrimary,
-                      fontWeight: featured ? FontWeight.w700 : FontWeight.w600,
-                    ),
+                  child: _RankedCopy(
+                    primary: item.label,
+                    secondary: metadata,
+                    leader: true,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  value,
-                  textAlign: TextAlign.end,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: FluviVisualTokens.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                const SizedBox(width: 11),
+                _RankedAmount(value: amount, leader: true),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+final class _RankedFollowerRow extends StatelessWidget {
+  const _RankedFollowerRow({
+    required this.item,
+    required this.rank,
+    required this.kind,
+    required this.onTap,
+  });
+
+  final DashboardBalanceRankedItem item;
+  final int rank;
+  final _RankDetailKind kind;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final metadata = _rankMetadata(item: item, rank: rank, kind: kind);
+    final amount = DashboardPreparedFormatter.amountMinor(
+      item.amountMinor.abs(),
+    );
+    return Semantics(
+      button: onTap != null,
+      label: '${item.label}, $metadata, $amount',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey<String>('balance-linked-rank-${item.id}'),
+          onTap: onTap,
+          child: SizedBox(
+            height: _RankedOverviewVisualSpec.followerHeight,
+            child: Row(
+              children: <Widget>[
+                ExcludeSemantics(child: _RankedFollowerAvatar(item: item)),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: _RankedCopy(
+                    primary: item.label,
+                    secondary: metadata,
+                    leader: false,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _RankedAmount(value: amount, leader: false),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _rankMetadata({
+  required DashboardBalanceRankedItem item,
+  required int rank,
+  required _RankDetailKind kind,
+}) => switch (kind) {
+  _RankDetailKind.category => '$rank. hely',
+  _RankDetailKind.partner =>
+    '${item.transactionCount} tranzakció · $rank. hely',
+};
+
+final class _RankedCopy extends StatelessWidget {
+  const _RankedCopy({
+    required this.primary,
+    required this.secondary,
+    required this.leader,
+  });
+
+  final String primary;
+  final String secondary;
+  final bool leader;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text(
+        primary,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: leader
+              ? _RankedOverviewVisualSpec.leaderCopy
+              : _RankedOverviewVisualSpec.followerAmount,
+          fontSize: leader ? 13 : 11.5,
+          height: leader ? 1.05 : 1,
+          fontWeight: FontWeight.w900,
+          fontVariations: leader
+              ? const <FontVariation>[FontVariation('wght', 950)]
+              : null,
+        ),
+      ),
+      SizedBox(height: leader ? 4 : 2),
+      Text(
+        secondary,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: _RankedOverviewVisualSpec.secondaryCopy,
+          fontSize: leader ? 8 : 8.2,
+          height: leader ? 1.08 : 1,
+          fontWeight: leader ? FontWeight.w700 : FontWeight.w900,
+        ),
+      ),
+    ],
+  );
+}
+
+final class _RankedAmount extends StatelessWidget {
+  const _RankedAmount({required this.value, required this.leader});
+
+  final String value;
+  final bool leader;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(maxWidth: leader ? 170 : 96),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Text(
+        value,
+        maxLines: 1,
+        softWrap: false,
+        textAlign: TextAlign.end,
+        style: TextStyle(
+          color: leader
+              ? _RankedOverviewVisualSpec.leaderAmount
+              : _RankedOverviewVisualSpec.followerAmount,
+          fontSize: leader ? 21 : 12.5,
+          height: 1,
+          fontWeight: FontWeight.w900,
+          fontVariations: leader
+              ? const <FontVariation>[FontVariation('wght', 950)]
+              : null,
+        ),
+      ),
+    ),
+  );
+}
+
+/// A local circle adapter preserves the same category color/icon catalogs used
+/// by the rounded-square badge without changing its other consumers.
+final class _RankedFollowerAvatar extends StatelessWidget {
+  const _RankedFollowerAvatar({required this.item});
+
+  final DashboardBalanceRankedItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final atlas = PreparedVectorAssetAtlas.instance;
+    final visual = DecoratedBox(
+      key: ValueKey<String>('balance-ranked-follower-avatar-${item.id}'),
+      decoration: BoxDecoration(
+        color: CategoryColorCatalog.resolve(item.categoryColorId).middleColor,
+        shape: BoxShape.circle,
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x57FFFFFF),
+            offset: Offset(0, 1),
+            blurStyle: BlurStyle.inner,
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: 26,
+        height: 26,
+        child: Center(
+          child: atlas.isReady
+              ? CategoryIconView(
+                  picture: atlas.categoryIcon(
+                    CategoryIconCatalog.handleOf(item.categoryIconId),
+                  ),
+                  size: 14,
+                  color: Colors.white,
+                )
+              : const Icon(
+                  Icons.category_rounded,
+                  size: 14,
+                  color: Colors.white,
+                ),
+        ),
+      ),
+    );
+    return Semantics(label: item.label, child: visual);
   }
 }
 
@@ -968,26 +1175,6 @@ String _formatCadence(int minutes) {
     return '${(minutes / (24 * 60)).toStringAsFixed(1).replaceAll('.', ',')} nap';
   }
   return '$minutes perc';
-}
-
-final class _RankAvatar extends StatelessWidget {
-  const _RankAvatar({required this.item, required this.featured});
-
-  final DashboardBalanceRankedItem item;
-  final bool featured;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = featured ? 42.0 : 30.0;
-    return BalanceCategoryVisualBadge(
-      semanticLabel: item.label,
-      categoryColorId: item.categoryColorId,
-      categoryIconId: item.categoryIconId,
-      size: size,
-      iconSize: featured ? 20 : 15,
-      selected: featured,
-    );
-  }
 }
 
 final class _BalanceDetailEmpty extends StatelessWidget {

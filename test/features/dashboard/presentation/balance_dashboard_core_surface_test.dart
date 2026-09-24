@@ -488,28 +488,30 @@ void main() {
         findsOneWidget,
       );
       expect(
-        tester
-            .widget<Icon>(
-              find.byKey(
-                const ValueKey<String>('balance-carousel-latest-topic-icon'),
-              ),
-            )
-            .color,
-        Colors.white,
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-latest-header-category-icon',
+          ),
+        ),
+        findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('balance-carousel-latest-avatar')),
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-avatar-partner'),
+        ),
         findsOneWidget,
       );
       expect(
         tester
             .getSize(
               find.byKey(
-                const ValueKey<String>('balance-carousel-latest-avatar'),
+                const ValueKey<String>(
+                  'balance-carousel-latest-avatar-partner',
+                ),
               ),
             )
             .width,
-        greaterThan(18),
+        15,
       );
       expect(
         find.descendant(
@@ -630,6 +632,143 @@ void main() {
         identical(rebuilt.controller.scrollController.position, position),
         isTrue,
       );
+    },
+  );
+
+  testWidgets(
+    'SPENDEE-LATEST-RED: the existing Balance setting switches only the selected Latest card presentation',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final immutablePayload = linked.value;
+      final settings = BalancePresentationController();
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final controller = carousel.controller;
+      final position = controller.scrollController.position;
+      controller.jumpToIndex(7);
+      await tester.pump();
+
+      expect(
+        settings.value.latestTransactionCardPresentation,
+        BalanceLatestTransactionCardPresentation.avatarPartner,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-spendee-header'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Utolsó tranzakció'), findsOneWidget);
+      final title = tester.widget<Text>(find.text('Utolsó tranzakció'));
+      expect(title.style!.color, const Color(0xFF1B294D));
+      expect(title.style!.fontSize, 8);
+      expect(title.style!.height, 1.18);
+      expect(title.style!.fontWeight, FontWeight.w900);
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-latest-header-category-icon',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-avatar-partner'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey<String>('balance-carousel-latest-avatar-partner'),
+          ),
+        ),
+        const Size(15, 15),
+      );
+      final partner = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>(
+              'balance-carousel-latest-avatar-partner-preview',
+            ),
+          ),
+          matching: find.text('Piac'),
+        ),
+      );
+      expect(partner.style!.color, const Color(0xFF19274C));
+      expect(partner.style!.fontSize, 13);
+      expect(partner.style!.height, 1.05);
+      expect(find.text('350 Ft'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>(
+              'balance-carousel-latest-avatar-partner-preview',
+            ),
+          ),
+          matching: find.textContaining('12:00'),
+        ),
+        findsNothing,
+      );
+
+      settings.setLatestTransactionCardPresentation(
+        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-spendee-three-line'),
+        ),
+        findsOneWidget,
+      );
+      final amount = tester.widget<Text>(find.text('350 Ft'));
+      expect(amount.style!.color, const Color(0xFF526FC5));
+      expect(amount.style!.fontSize, 13);
+      expect(amount.style!.height, 1.05);
+      final threeLinePartner = find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('balance-carousel-latest-spendee-three-line'),
+        ),
+        matching: find.text('Piac'),
+      );
+      expect(threeLinePartner, findsOneWidget);
+      expect(
+        tester.widget<Text>(threeLinePartner).style!.color,
+        const Color(0xFF65718E),
+      );
+      expect(
+        identical(
+          tester
+              .widget<CenteredCarousel<BalanceCarouselCard>>(
+                find.byType(CenteredCarousel<BalanceCarouselCard>),
+              )
+              .controller,
+          controller,
+        ),
+        isTrue,
+      );
+      expect(identical(controller.scrollController.position, position), isTrue);
+      expect(identical(linked.value, immutablePayload), isTrue);
+      expect(tester.takeException(), isNull);
     },
   );
 

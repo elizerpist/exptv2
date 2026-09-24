@@ -3,12 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/header_cascade_motion.dart';
+import '../../application/dashboard_mode_spec.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
@@ -170,6 +172,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     required this.labelKey,
     required this.label,
     this.labelContent,
+    this.showModeLabel = true,
     this.visualController,
     this.visualFrameListenable,
     this.detail,
@@ -186,6 +189,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final Key labelKey;
   final String label;
   final Widget? labelContent;
+  final bool showModeLabel;
   final DashboardHeaderVisualController? visualController;
   final ValueListenable<DashboardHeaderVisualFrame>? visualFrameListenable;
   final Widget? detail;
@@ -215,18 +219,19 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             visualFrameListenable: visualFrameListenable,
             borderRadius: borderRadius,
           ),
-          Positioned(
-            top: 12,
-            right: 14,
-            child:
-                labelContent ??
-                _HeaderModeLabel(
-                  frame: visualFrameListenable,
-                  label: label,
-                  labelKey: labelKey,
-                  usesVisualForeground: usesVisualForeground,
-                ),
-          ),
+          if (showModeLabel)
+            Positioned(
+              top: 12,
+              right: 14,
+              child:
+                  labelContent ??
+                  _HeaderModeLabel(
+                    frame: visualFrameListenable,
+                    label: label,
+                    labelKey: labelKey,
+                    usesVisualForeground: usesVisualForeground,
+                  ),
+            ),
           if (detail case final detail?)
             Positioned(
               left: detailLeft,
@@ -236,6 +241,73 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
               child: detail,
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The sole Header mode-change affordance. The visual is intentionally a
+/// bundled local asset, while [DashboardCoreModeHost] remains the controller
+/// and navigation owner that receives [onPressed].
+class DashboardHeaderModeIconButton extends StatelessWidget {
+  const DashboardHeaderModeIconButton({
+    super.key,
+    required this.mode,
+    required this.onPressed,
+    this.color = Colors.white,
+  });
+
+  final DashboardMode mode;
+  final VoidCallback onPressed;
+  final Color color;
+
+  static String assetFor(DashboardMode mode) => switch (mode) {
+    DashboardMode.balance => 'assets/fluvi/header_mode_icons/balance-scale.svg',
+    DashboardMode.mind => 'assets/fluvi/header_mode_icons/mind-brain.svg',
+    DashboardMode.budget =>
+      'assets/fluvi/header_mode_icons/budget-sliders-vertical.svg',
+  };
+
+  static int atlasHandleFor(DashboardMode mode) => switch (mode) {
+    DashboardMode.balance => PreparedVectorAssetAtlas.balanceHeaderModeHandle,
+    DashboardMode.mind => PreparedVectorAssetAtlas.mindHeaderModeHandle,
+    DashboardMode.budget => PreparedVectorAssetAtlas.budgetHeaderModeHandle,
+  };
+
+  static String semanticLabelFor(DashboardMode mode) => switch (mode) {
+    DashboardMode.balance => 'Balance mód, következő mód',
+    DashboardMode.mind => 'Mind mód, következő mód',
+    DashboardMode.budget => 'Budget mód, következő mód',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final picture = PreparedVectorAssetAtlas.instance.picture(
+      atlasHandleFor(mode),
+    );
+    return Semantics(
+      button: true,
+      label: semanticLabelFor(mode),
+      child: Material(
+        color: Colors.transparent,
+        child: InkResponse(
+          key: ValueKey<String>('dashboard-header-mode-icon-${mode.name}'),
+          onTap: onPressed,
+          radius: 22,
+          containedInkWell: true,
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Center(
+              child: PreparedVectorPictureView(
+                picture: picture,
+                width: 20,
+                height: 20,
+                color: color,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

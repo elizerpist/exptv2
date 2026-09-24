@@ -8,22 +8,44 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
-    'Balance presentation settings retain only all-time chart and time-label choices',
+    'Balance presentation settings retain chart/time choices and own only the Latest render alternative',
     () {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
       expect(controller.value.chartMode, BalanceHeaderChartMode.allTime);
       expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.visible);
+      expect(
+        controller.value.latestTransactionCardPresentation,
+        BalanceLatestTransactionCardPresentation.avatarPartner,
+      );
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
-        ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden);
+        ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden)
+        ..setLatestTransactionCardPresentation(
+          BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+        );
       expect(
         controller.value.chartMode,
         BalanceHeaderChartMode.adaptiveSummary,
       );
       expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
-      expect(controller.value.revision, 2);
+      expect(
+        controller.value.latestTransactionCardPresentation,
+        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+      );
+      expect(controller.value.revision, 3);
+
+      final unchangedRevision = controller.value.revision;
+      controller.setLatestTransactionCardPresentation(
+        BalanceLatestTransactionCardPresentation.spendeeThreeLine,
+      );
+      expect(controller.value.revision, unchangedRevision);
+      expect(
+        controller.value.copyWith(),
+        controller.value,
+        reason: 'The render-only setting participates in value identity.',
+      );
     },
   );
 

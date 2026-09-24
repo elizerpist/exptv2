@@ -22,7 +22,11 @@ import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/time_plane.dart';
 
+import '../../../support/dashboard_render_resources.dart';
+
 void main() {
+  setUpAll(prepareDashboardTestRenderResources);
+
   testWidgets(
     'RED MYH-01/10/11: Mind Year owns card scroll while header expansion remains available',
     (tester) async {

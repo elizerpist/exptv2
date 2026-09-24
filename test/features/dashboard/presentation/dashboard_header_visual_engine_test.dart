@@ -1918,6 +1918,64 @@ void main() {
       expect(mind.value.chartColor, Colors.black);
     },
   );
+
+  test(
+    'HIV-RED: icon and chart-underlay foreground channels are independent per mode',
+    () {
+      final controller = DashboardHeaderVisualController(
+        vsync: const TestVSync(),
+      );
+      final score = ValueNotifier<MindBehavioralScoreFrame?>(null);
+      final balance = DashboardBalanceHeaderColorPolicy(
+        tuning: controller.tuning,
+      );
+      final budget = DashboardBudgetHeaderColorPolicy(
+        tuning: controller.tuning,
+      );
+      final mind = DashboardMindHeaderColorPolicy(
+        tuning: controller.tuning,
+        score: score,
+      );
+      addTearDown(() {
+        mind.dispose();
+        budget.dispose();
+        balance.dispose();
+        score.dispose();
+        controller.dispose();
+      });
+
+      final ticker = controller.tickerIdentity;
+      expect(balance.value.headerIconColor, Colors.white);
+      expect(mind.value.chartVeilColor, Colors.white);
+      expect(mind.value.showsChartVeil, isTrue);
+
+      controller.setBalanceHeaderIconColor(
+        DashboardHeaderForegroundColor.black,
+      );
+      controller.setMindHeaderIconColor(
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      controller.setBudgetHeaderIconColor(DashboardHeaderForegroundColor.black);
+      controller.setBalanceHeaderChartVeilColor(
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      controller.setBalanceHeaderChartVeilEnabled(false);
+      controller.setMindHeaderChartVeilColor(
+        DashboardHeaderForegroundColor.black,
+      );
+
+      expect(balance.value.headerIconColor, Colors.black);
+      expect(mind.value.headerIconColor, const Color(0xd114213a));
+      expect(budget.value.headerIconColor, Colors.black);
+      expect(balance.value.chartVeilColor, const Color(0xd114213a));
+      expect(balance.value.showsChartVeil, isFalse);
+      expect(mind.value.chartVeilColor, Colors.black);
+      expect(mind.value.showsChartVeil, isTrue);
+      expect(balance.value.chartColor, Colors.white);
+      expect(mind.value.chartColor, Colors.white);
+      expect(controller.tickerIdentity, same(ticker));
+    },
+  );
 }
 
 Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {

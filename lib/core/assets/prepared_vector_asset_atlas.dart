@@ -143,16 +143,19 @@ final class PreparedVectorAssetAtlas {
   static const int expenseBagHandle = 52;
   static const int brandMarkHandle = 53;
   static const int budgetIncomeGoalBanknoteHandle = 54;
+  static const int balanceHeaderModeHandle = 55;
+  static const int mindHeaderModeHandle = 56;
+  static const int budgetHeaderModeHandle = 57;
 
-  /// Normal dashboard icon handles plus the four non-category dashboard
+  /// Normal dashboard icon handles plus the seven non-category dashboard
   /// pictures. The fallback deliberately aliases the first catalog icon.
-  static const int assetCount = 55;
+  static const int assetCount = 58;
   static const int logBoxGlyphAssetCount = 51;
   static const int uniqueLogBoxGlyphAssetCount = 50;
 
   /// All unique normal and dedicated LogBox-white source pictures are decoded
   /// once by this single atlas owner.
-  static const int uniqueAssetCount = 105;
+  static const int uniqueAssetCount = 108;
   static const double logBoxBadgeLogicalSize = 34;
   static const double logBoxIconLogicalSize = 18;
 
@@ -171,6 +174,24 @@ final class PreparedVectorAssetAtlas {
   static const _VectorAssetSpec _budgetIncomeGoalBanknote = _VectorAssetSpec(
     path: 'assets/fluvi/budget/banknote.svg.vec',
     loader: AssetBytesLoader('assets/fluvi/budget/banknote.svg.vec'),
+  );
+  static const _VectorAssetSpec _balanceHeaderMode = _VectorAssetSpec(
+    path: 'assets/fluvi/header_mode_icons/balance-scale.svg.vec',
+    loader: AssetBytesLoader(
+      'assets/fluvi/header_mode_icons/balance-scale.svg.vec',
+    ),
+  );
+  static const _VectorAssetSpec _mindHeaderMode = _VectorAssetSpec(
+    path: 'assets/fluvi/header_mode_icons/mind-brain.svg.vec',
+    loader: AssetBytesLoader(
+      'assets/fluvi/header_mode_icons/mind-brain.svg.vec',
+    ),
+  );
+  static const _VectorAssetSpec _budgetHeaderMode = _VectorAssetSpec(
+    path: 'assets/fluvi/header_mode_icons/budget-sliders-vertical.svg.vec',
+    loader: AssetBytesLoader(
+      'assets/fluvi/header_mode_icons/budget-sliders-vertical.svg.vec',
+    ),
   );
   static const _VectorAssetSpec _logBoxEditPlaceholder = _VectorAssetSpec(
     path: 'assets/icons/lucide/pencil.svg.vec',
@@ -312,6 +333,9 @@ final class PreparedVectorAssetAtlas {
       _expenseBag,
       _brandMark,
       _budgetIncomeGoalBanknote,
+      _balanceHeaderMode,
+      _mindHeaderMode,
+      _budgetHeaderMode,
     ];
     final logBoxGlyphSpecs = <_VectorAssetSpec>[
       for (final token in CategoryIconCatalog.allWithFallback)

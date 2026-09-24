@@ -141,13 +141,18 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
     required this.maximumValue,
     this.selectedTemporalCoordinate,
     this.lineColor = DashboardHeaderTrendChartStyle.lineColor,
-  }) : assert(maximumValue >= minimumValue);
+    Color? areaFadeColor,
+    this.showsAreaFade = true,
+  }) : areaFadeColor = areaFadeColor ?? lineColor,
+       assert(maximumValue >= minimumValue);
 
   final DashboardHeaderTrendSeries series;
   final double minimumValue;
   final double maximumValue;
   final int? selectedTemporalCoordinate;
   final Color lineColor;
+  final Color areaFadeColor;
+  final bool showsAreaFade;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -184,22 +189,24 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
-    canvas.drawPath(
-      area,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[
-            lineColor.withValues(
-              alpha: DashboardHeaderTrendChartStyle.areaFadeStartOpacity,
-            ),
-            lineColor.withValues(
-              alpha: DashboardHeaderTrendChartStyle.areaFadeEndOpacity,
-            ),
-          ],
-        ).createShader(Offset.zero & size),
-    );
+    if (showsAreaFade) {
+      canvas.drawPath(
+        area,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              areaFadeColor.withValues(
+                alpha: DashboardHeaderTrendChartStyle.areaFadeStartOpacity,
+              ),
+              areaFadeColor.withValues(
+                alpha: DashboardHeaderTrendChartStyle.areaFadeEndOpacity,
+              ),
+            ],
+          ).createShader(Offset.zero & size),
+      );
+    }
     canvas.drawPath(
       line,
       Paint()
@@ -310,5 +317,7 @@ final class DashboardHeaderTrendPainter extends CustomPainter {
       oldDelegate.minimumValue != minimumValue ||
       oldDelegate.maximumValue != maximumValue ||
       oldDelegate.selectedTemporalCoordinate != selectedTemporalCoordinate ||
-      oldDelegate.lineColor != lineColor;
+      oldDelegate.lineColor != lineColor ||
+      oldDelegate.areaFadeColor != areaFadeColor ||
+      oldDelegate.showsAreaFade != showsAreaFade;
 }

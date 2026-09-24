@@ -41,6 +41,27 @@ void main() {
   });
 
   testWidgets(
+    'HIV: Mind receives an independent optional chart-underlay veil',
+    (tester) async {
+      await tester.pumpWidget(
+        _chart(
+          series: series,
+          expansion: 1,
+          lineColor: const Color(0xff000000),
+          areaFadeColor: const Color(0xd114213a),
+          showsAreaFade: false,
+        ),
+      );
+
+      final painter = _painter(tester);
+      expect(painter.lineColor, const Color(0xff000000));
+      expect(painter.areaFadeColor, const Color(0xd114213a));
+      expect(painter.showsAreaFade, isFalse);
+      expect(painter.points, series.points);
+    },
+  );
+
+  testWidgets(
     'MHC-01 chart reveal is continuously clipped by existing Header expansion',
     (tester) async {
       await tester.pumpWidget(_chart(series: series, expansion: .5));
@@ -564,6 +585,8 @@ Widget _chart({
   MindHeaderScoreChartTemporalContext temporalContext =
       MindHeaderScoreChartTemporalContext.year,
   Color lineColor = MindHeaderScoreChartStyle.lineColor,
+  Color? areaFadeColor,
+  bool showsAreaFade = true,
 }) => Directionality(
   textDirection: TextDirection.ltr,
   child: SizedBox(
@@ -577,6 +600,8 @@ Widget _chart({
           showTimeLabels: showTimeLabels,
           temporalContext: temporalContext,
           lineColor: lineColor,
+          areaFadeColor: areaFadeColor,
+          showsAreaFade: showsAreaFade,
         ),
       ],
     ),

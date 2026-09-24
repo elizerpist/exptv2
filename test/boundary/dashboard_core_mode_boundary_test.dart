@@ -65,7 +65,9 @@ void main() {
     ]) {
       expect(source, isNot(contains(forbidden)));
     }
-    expect(source, contains('GestureDirectionArbiter.resolve'));
+    expect(source, isNot(contains('GestureDirectionArbiter.resolve')));
+    expect(source, contains('DashboardHeaderModeIconButton'));
+    expect(source, contains('_switchModeFromHeaderIcon'));
     expect(source, contains('DragStartBehavior.down'));
     expect(source, contains('switch (mode.mode)'));
   });
@@ -88,8 +90,11 @@ void main() {
 
     expect(source, contains('DashboardCoreModeHost'));
     expect(
-      RegExp(r'\bDashboardLogBoxViewport\b').allMatches(source),
+      RegExp(r'\bchild:\s*DashboardLogBoxViewport\(').allMatches(source),
       hasLength(1),
+      reason:
+          'Only the mounted LogBox constructor is an ownership boundary; '
+          'the import and the diagnostic paint-order string are not mounts.',
     );
     expect(source, isNot(contains('PageView')));
     expect(source, isNot(contains('IndexedStack')));

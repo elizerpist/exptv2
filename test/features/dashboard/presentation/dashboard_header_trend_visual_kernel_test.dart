@@ -163,4 +163,59 @@ void main() {
       );
     },
   );
+
+  test(
+    'HIV-RED: the chart-underlay veil is independently colourized and optional',
+    () {
+      final painter = DashboardHeaderTrendPainter(
+        series: DashboardHeaderTrendSeries(
+          startInclusiveTemporalCoordinate: 0,
+          endInclusiveTemporalCoordinate: 1,
+          points: <DashboardHeaderTrendPoint>[
+            DashboardHeaderTrendPoint(temporalCoordinate: 0, value: 1),
+            DashboardHeaderTrendPoint(temporalCoordinate: 1, value: 2),
+          ],
+        ),
+        minimumValue: 1,
+        maximumValue: 2,
+        lineColor: const Color(0xff000000),
+        areaFadeColor: DashboardHeaderForegroundColor.softenedDark.color,
+        showsAreaFade: false,
+      );
+
+      expect(painter.lineColor, const Color(0xff000000));
+      expect(painter.areaFadeColor, const Color(0xd114213a));
+      expect(painter.showsAreaFade, isFalse);
+      final baseline = DashboardHeaderTrendPainter(
+        series: painter.series,
+        minimumValue: painter.minimumValue,
+        maximumValue: painter.maximumValue,
+        lineColor: painter.lineColor,
+      );
+      expect(
+        painter.pointOffsetAt(
+          1,
+          const Size(
+            DashboardHeaderTrendChartStyle.plotWidth,
+            DashboardHeaderTrendChartStyle.plotHeight,
+          ),
+          const DashboardHeaderTrendTemporalProjection(
+            startInclusiveTemporalCoordinate: 0,
+            endInclusiveTemporalCoordinate: 1,
+          ),
+        ),
+        baseline.pointOffsetAt(
+          1,
+          const Size(
+            DashboardHeaderTrendChartStyle.plotWidth,
+            DashboardHeaderTrendChartStyle.plotHeight,
+          ),
+          const DashboardHeaderTrendTemporalProjection(
+            startInclusiveTemporalCoordinate: 0,
+            endInclusiveTemporalCoordinate: 1,
+          ),
+        ),
+      );
+    },
+  );
 }

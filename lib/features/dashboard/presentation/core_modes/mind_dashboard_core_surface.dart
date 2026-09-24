@@ -147,6 +147,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
             headerKey: const ValueKey('dashboard-core-mode-mind-header'),
             labelKey: const ValueKey('dashboard-core-mode-label-mind'),
             label: 'mind',
+            showModeLabel: false,
             visualController: headerVisualController,
             visualFrameListenable: headerVisualFrame,
             usesVisualForeground: true,
@@ -466,6 +467,10 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                   lineColor:
                       headerFrame?.chartColor ??
                       MindHeaderScoreChartStyle.lineColor,
+                  areaFadeColor:
+                      headerFrame?.chartVeilColor ??
+                      MindHeaderScoreChartStyle.lineColor,
+                  showsAreaFade: headerFrame?.showsChartVeil ?? true,
                   temporalContext: temporalContext,
                   pointerObserver: pointerObserver,
                 ),

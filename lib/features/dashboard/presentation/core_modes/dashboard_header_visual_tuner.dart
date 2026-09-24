@@ -337,15 +337,27 @@ final class _HeaderForegroundControls extends StatelessWidget {
     required this.keyPrefix,
     required this.textColor,
     required this.chartColor,
+    required this.iconColor,
+    required this.chartVeilColor,
+    required this.chartVeilEnabled,
     required this.onTextColorChanged,
     required this.onChartColorChanged,
+    required this.onIconColorChanged,
+    required this.onChartVeilColorChanged,
+    required this.onChartVeilEnabledChanged,
   });
 
   final String keyPrefix;
   final DashboardHeaderForegroundColor textColor;
   final DashboardHeaderForegroundColor chartColor;
+  final DashboardHeaderForegroundColor iconColor;
+  final DashboardHeaderForegroundColor chartVeilColor;
+  final bool chartVeilEnabled;
   final ValueChanged<DashboardHeaderForegroundColor> onTextColorChanged;
   final ValueChanged<DashboardHeaderForegroundColor> onChartColorChanged;
+  final ValueChanged<DashboardHeaderForegroundColor> onIconColorChanged;
+  final ValueChanged<DashboardHeaderForegroundColor> onChartVeilColorChanged;
+  final ValueChanged<bool> onChartVeilEnabledChanged;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -370,6 +382,63 @@ final class _HeaderForegroundControls extends StatelessWidget {
           if (value != null) onChartColorChanged(value);
         },
         child: _ForegroundChoiceWrap(keyPrefix: '$keyPrefix-chart'),
+      ),
+      Text('Ikon színe', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<DashboardHeaderForegroundColor>(
+        groupValue: iconColor,
+        onChanged: (value) {
+          if (value != null) onIconColorChanged(value);
+        },
+        child: _ForegroundChoiceWrap(keyPrefix: '$keyPrefix-icon'),
+      ),
+      SwitchListTile(
+        key: ValueKey<String>('$keyPrefix-veil-enabled'),
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(
+          'Vonal alatti fátyol',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        value: chartVeilEnabled,
+        onChanged: onChartVeilEnabledChanged,
+      ),
+      Text('Fátyol színe', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<DashboardHeaderForegroundColor>(
+        groupValue: chartVeilColor,
+        onChanged: (value) {
+          if (value != null) onChartVeilColorChanged(value);
+        },
+        child: _ForegroundChoiceWrap(keyPrefix: '$keyPrefix-veil'),
+      ),
+    ],
+  );
+}
+
+/// Budget has no Header line chart, but its Header mode icon consumes the
+/// same existing foreground catalog and dashboard-lifetime tuning owner.
+final class _HeaderIconColorControls extends StatelessWidget {
+  const _HeaderIconColorControls({
+    required this.keyPrefix,
+    required this.iconColor,
+    required this.onIconColorChanged,
+  });
+
+  final String keyPrefix;
+  final DashboardHeaderForegroundColor iconColor;
+  final ValueChanged<DashboardHeaderForegroundColor> onIconColorChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      const SizedBox(height: 4),
+      Text('Ikon színe', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<DashboardHeaderForegroundColor>(
+        groupValue: iconColor,
+        onChanged: (value) {
+          if (value != null) onIconColorChanged(value);
+        },
+        child: _ForegroundChoiceWrap(keyPrefix: '$keyPrefix-icon'),
       ),
     ],
   );
@@ -629,6 +698,33 @@ final class _BalancePresentationSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Text(visibility.tunerLabel),
                   value: visibility,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Utolsó tranzakció kártya'),
+        ),
+        RadioGroup<BalanceLatestTransactionCardPresentation>(
+          groupValue: settings.latestTransactionCardPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.setLatestTransactionCardPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation
+                  in BalanceLatestTransactionCardPresentation.values)
+                RadioListTile<BalanceLatestTransactionCardPresentation>(
+                  key: ValueKey(
+                    'balance-latest-card-presentation-${presentation.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(presentation.tunerLabel),
+                  value: presentation,
                 ),
             ],
           ),
@@ -1302,10 +1398,21 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               keyPrefix: 'dashboard-header-balance',
                               textColor: tuning.balanceHeader.textColor,
                               chartColor: tuning.balanceHeader.chartColor,
+                              iconColor: tuning.balanceHeader.iconColor,
+                              chartVeilColor:
+                                  tuning.balanceHeader.chartVeilColor,
+                              chartVeilEnabled:
+                                  tuning.balanceHeader.chartVeilEnabled,
                               onTextColorChanged:
                                   controller.setBalanceHeaderTextColor,
                               onChartColorChanged:
                                   controller.setBalanceHeaderChartColor,
+                              onIconColorChanged:
+                                  controller.setBalanceHeaderIconColor,
+                              onChartVeilColorChanged:
+                                  controller.setBalanceHeaderChartVeilColor,
+                              onChartVeilEnabledChanged:
+                                  controller.setBalanceHeaderChartVeilEnabled,
                             ),
                             _TunerSlider(
                               key: const ValueKey<String>(
@@ -1416,6 +1523,12 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                 onChanged: controller
                                     .setBudgetCategoryWindowWidthPercent,
                               ),
+                            _HeaderIconColorControls(
+                              keyPrefix: 'dashboard-header-budget',
+                              iconColor: tuning.budgetHeader.iconColor,
+                              onIconColorChanged:
+                                  controller.setBudgetHeaderIconColor,
+                            ),
                             _TunerSlider(
                               key: const ValueKey<String>(
                                 'dashboard-header-budget-opacity-slider',
@@ -1486,10 +1599,20 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               keyPrefix: 'dashboard-header-mind',
                               textColor: tuning.mindHeader.textColor,
                               chartColor: tuning.mindHeader.chartColor,
+                              iconColor: tuning.mindHeader.iconColor,
+                              chartVeilColor: tuning.mindHeader.chartVeilColor,
+                              chartVeilEnabled:
+                                  tuning.mindHeader.chartVeilEnabled,
                               onTextColorChanged:
                                   controller.setMindHeaderTextColor,
                               onChartColorChanged:
                                   controller.setMindHeaderChartColor,
+                              onIconColorChanged:
+                                  controller.setMindHeaderIconColor,
+                              onChartVeilColorChanged:
+                                  controller.setMindHeaderChartVeilColor,
+                              onChartVeilEnabledChanged:
+                                  controller.setMindHeaderChartVeilEnabled,
                             ),
                             _TunerSlider(
                               key: const ValueKey<String>(
