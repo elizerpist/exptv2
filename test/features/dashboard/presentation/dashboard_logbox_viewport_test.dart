@@ -311,7 +311,7 @@ void main() {
       _frame(
         totalRows: 6,
         totalMinor: 70700000,
-        formattedAmount: '707000,00 Ft',
+        formattedAmount: '707000 Ft',
         scope: incomeScope,
       ),
     );
@@ -342,7 +342,7 @@ void main() {
       _frame(
         totalRows: 1,
         totalMinor: -100000,
-        formattedAmount: '-1000,00 Ft',
+        formattedAmount: '-1000 Ft',
         scope: expenseScope,
         coreRevision: 2,
         presentationEpoch: 2,
@@ -360,7 +360,7 @@ void main() {
       _frame(
         totalRows: 0,
         totalMinor: 0,
-        formattedAmount: '0,00 Ft',
+        formattedAmount: '0 Ft',
         scope: filteredScope,
         coreRevision: 3,
         presentationEpoch: 3,
@@ -523,7 +523,7 @@ void main() {
         _frame(
           totalRows: 123456,
           totalMinor: 98765432100,
-          formattedAmount: '987654321,00 Ft',
+          formattedAmount: '987654321 Ft',
         ),
       );
 
@@ -2163,12 +2163,12 @@ DashboardLogRowViewModel _row(int index) => DashboardLogRowViewModel(
   entryId: 'paged-$index',
   displayName: 'Partner $index',
   categoryDisplayName: 'Category',
-  formattedAmount: '-1,00 Ft',
+  formattedAmount: '-1 Ft',
   displayTime: '12:00',
   amountStyle: LogAmountStyle.expense,
   categoryColorId: 'fallback',
   categoryIconId: 'fallback',
-  semanticLabel: 'Partner $index, -1,00 Ft, kiadás, Category',
+  semanticLabel: 'Partner $index, -1 Ft, kiadás, Category',
   partnerId: 'partner-$index',
   partnerDisplayName: 'Partner $index',
 );

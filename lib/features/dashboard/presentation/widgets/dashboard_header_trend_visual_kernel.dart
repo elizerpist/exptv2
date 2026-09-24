@@ -7,6 +7,16 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 abstract final class DashboardHeaderTrendChartStyle {
   static const detailLeft = 16.0;
   static const detailTop = 16.0;
+
+  /// Shared value-lane metrics for the Balance total and Mind score.
+  /// Callers merge this with their inherited style so the selected Header
+  /// typography profile remains local to each Header value.
+  static const primaryValueTextMetrics = TextStyle(
+    fontSize: 19,
+    height: .96,
+    letterSpacing: -.76,
+    fontWeight: FontWeight.w900,
+  );
   static const plotLeft = 16.0;
   static const plotTop = 48.0;
   static const plotWidth = 346.0;

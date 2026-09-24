@@ -30,7 +30,7 @@ void main() {
           incomeTotalMinor: 1000,
           expenseTotalMinor: 100,
           netTotalMinor: 900,
-          formattedNetTotal: '9,00 Ft',
+          formattedNetTotal: '9 Ft',
           presentationId: 1,
           history: DashboardBalanceHistorySeries(
             startInclusiveEpochMinute: 20000 * 1440,

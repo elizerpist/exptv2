@@ -135,20 +135,20 @@ void main() {
     addTearDown(navigation.dispose);
     addTearDown(visible.dispose);
     addTearDown(motion.dispose);
-    visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+    visible.publish(_frame(day: 14, amount: '123 Ft', generation: 1));
 
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: _pill(navigation, visible, motion))),
     );
     expect(find.text('2026 július 14'), findsOneWidget);
-    expect(find.text('123,45 Ft'), findsOneWidget);
+    expect(find.text('123 Ft'), findsOneWidget);
 
-    visible.publish(_frame(day: 15, amount: '456,78 Ft', generation: 2));
+    visible.publish(_frame(day: 15, amount: '456 Ft', generation: 2));
     await tester.pump();
 
     expect(find.text('2026 július 15'), findsOneWidget);
-    expect(find.text('456,78 Ft'), findsOneWidget);
-    expect(find.text('123,45 Ft'), findsNothing);
+    expect(find.text('456 Ft'), findsOneWidget);
+    expect(find.text('123 Ft'), findsNothing);
   });
 
   testWidgets('settle promotion of the same value starts no amount animation', (
@@ -164,12 +164,12 @@ void main() {
     addTearDown(navigation.dispose);
     addTearDown(visible.dispose);
     addTearDown(motion.dispose);
-    final frame = _frame(day: 14, amount: '123,45 Ft', generation: 1);
+    final frame = _frame(day: 14, amount: '123 Ft', generation: 1);
     visible.publish(frame);
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: _pill(navigation, visible, motion))),
     );
-    final amountElement = tester.element(find.text('123,45 Ft'));
+    final amountElement = tester.element(find.text('123 Ft'));
 
     expect(
       visible.promoteCommitted(
@@ -181,7 +181,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 140));
 
     expect(
-      identical(tester.element(find.text('123,45 Ft')), amountElement),
+      identical(tester.element(find.text('123 Ft')), amountElement),
       isTrue,
     );
     expect(visible.visiblePublishCount, 1);
@@ -382,7 +382,7 @@ void main() {
     addTearDown(navigation.dispose);
     addTearDown(visible.dispose);
     addTearDown(motion.dispose);
-    visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+    visible.publish(_frame(day: 14, amount: '123 Ft', generation: 1));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -425,7 +425,7 @@ void main() {
     addTearDown(navigation.dispose);
     addTearDown(visible.dispose);
     addTearDown(motion.dispose);
-    visible.publish(_frame(day: 14, amount: '123,45 Ft', generation: 1));
+    visible.publish(_frame(day: 14, amount: '123 Ft', generation: 1));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

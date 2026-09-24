@@ -8,31 +8,22 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
-    'BALANCE-PRESENTATION-SETTINGS RED: defaults preserve current all-time labels and neutral carousel geometry',
+    'Balance presentation settings retain only all-time chart and time-label choices',
     () {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
       expect(controller.value.chartMode, BalanceHeaderChartMode.allTime);
       expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.visible);
-      expect(controller.value.cardWidthBoost, 0);
-      expect(controller.value.carouselSpacingAdjustment, 0);
-      expect(BalancePresentationSettings.maximumCardWidthBoost, .30);
-      expect(BalancePresentationSettings.maximumCarouselSpacingAdjustment, .12);
-
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
-        ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden)
-        ..setCardWidthBoost(.30)
-        ..setCarouselSpacingAdjustment(.12);
+        ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden);
       expect(
         controller.value.chartMode,
         BalanceHeaderChartMode.adaptiveSummary,
       );
       expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
-      expect(controller.value.cardWidthBoost, .30);
-      expect(controller.value.carouselSpacingAdjustment, .12);
-      expect(controller.value.revision, 4);
+      expect(controller.value.revision, 2);
     },
   );
 

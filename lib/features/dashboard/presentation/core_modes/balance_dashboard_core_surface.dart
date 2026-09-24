@@ -172,7 +172,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
     BalanceCarouselCard._(
       id: 'latest-transaction',
       kind: BalanceCarouselCardKind.latestTransaction,
-      title: 'Legutóbbi tétel',
+      title: 'Utolsó tranzakció',
       amount: latest?.title ?? 'Nincs tétel',
       latestTransaction: latest,
     ),
@@ -287,7 +287,8 @@ final class _BalanceDashboardCoreSurfaceState
             showPlaceholderSurface: false,
             content: _BalanceUpperCarouselHost(
               presentation: widget.balanceLinkedPresentation,
-              presentationSettings: widget.presentationSettings,
+              summaryToUpperGap:
+                  local.upperBounds.top - geometry.summaryBounds.bottom,
               onMotionInterrupted: widget.onCarouselMotionInterrupted,
               onCardSelected: (card) {
                 final selected = switch (card.kind) {
@@ -559,12 +560,15 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: (frame?.typography ?? DashboardHeaderTypographyProfile.app)
               .applyTo(
-                Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color:
-                      frame?.foregroundTextColor ??
-                      FluviVisualTokens.textOnAction,
-                  fontWeight: FontWeight.w700,
-                ),
+                DefaultTextStyle.of(context).style
+                    .merge(
+                      DashboardHeaderTrendChartStyle.primaryValueTextMetrics,
+                    )
+                    .copyWith(
+                      color:
+                          frame?.foregroundTextColor ??
+                          FluviVisualTokens.textOnAction,
+                    ),
               ),
         ),
       ),
@@ -575,13 +579,13 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
 final class _BalanceUpperCarouselHost extends StatelessWidget {
   const _BalanceUpperCarouselHost({
     required this.presentation,
-    required this.presentationSettings,
+    required this.summaryToUpperGap,
     required this.onMotionInterrupted,
     required this.onCardSelected,
   });
 
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
-  final ValueListenable<BalancePresentationSettings>? presentationSettings;
+  final double summaryToUpperGap;
   final VoidCallback? onMotionInterrupted;
   final ValueChanged<BalanceCarouselCard> onCardSelected;
 
@@ -589,21 +593,9 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
   Widget build(BuildContext context) {
     final listenable = presentation;
     if (listenable == null) {
-      final settings = presentationSettings;
-      if (settings != null) {
-        return ValueListenableBuilder<BalancePresentationSettings>(
-          valueListenable: settings,
-          builder: (context, value, _) => _BalanceUpperCarousel(
-            cards: balanceCarouselCardsFor(null),
-            settings: value,
-            onMotionInterrupted: onMotionInterrupted,
-            onCardSelected: onCardSelected,
-          ),
-        );
-      }
       return _BalanceUpperCarousel(
         cards: balanceCarouselCardsFor(null),
-        settings: const BalancePresentationSettings.defaults(),
+        summaryToUpperGap: summaryToUpperGap,
         onMotionInterrupted: onMotionInterrupted,
         onCardSelected: onCardSelected,
       );
@@ -611,23 +603,11 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
     return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
       valueListenable: listenable,
       builder: (context, presentation, _) {
-        final settings = presentationSettings;
-        if (settings == null) {
-          return _BalanceUpperCarousel(
-            cards: balanceCarouselCardsFor(presentation),
-            settings: const BalancePresentationSettings.defaults(),
-            onMotionInterrupted: onMotionInterrupted,
-            onCardSelected: onCardSelected,
-          );
-        }
-        return ValueListenableBuilder<BalancePresentationSettings>(
-          valueListenable: settings,
-          builder: (context, value, _) => _BalanceUpperCarousel(
-            cards: balanceCarouselCardsFor(presentation),
-            settings: value,
-            onMotionInterrupted: onMotionInterrupted,
-            onCardSelected: onCardSelected,
-          ),
+        return _BalanceUpperCarousel(
+          cards: balanceCarouselCardsFor(presentation),
+          summaryToUpperGap: summaryToUpperGap,
+          onMotionInterrupted: onMotionInterrupted,
+          onCardSelected: onCardSelected,
         );
       },
     );
@@ -637,18 +617,83 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
 final class _BalanceUpperCarousel extends StatefulWidget {
   const _BalanceUpperCarousel({
     required this.cards,
-    required this.settings,
+    required this.summaryToUpperGap,
     required this.onMotionInterrupted,
     required this.onCardSelected,
   });
 
   final List<BalanceCarouselCard> cards;
-  final BalancePresentationSettings settings;
+  final double summaryToUpperGap;
   final VoidCallback? onMotionInterrupted;
   final ValueChanged<BalanceCarouselCard> onCardSelected;
 
   @override
   State<_BalanceUpperCarousel> createState() => _BalanceUpperCarouselState();
+}
+
+/// Fixed Balance-only rail geometry. It retains the pre-retirement 30%/zero
+/// outer-card envelope while solving the selected-card width and item extent
+/// together from the actual Summary-to-rail vertical gap. The shared carousel
+/// remains the sole scroll, gesture and semantics owner.
+@immutable
+final class _BalanceFixedCarouselGeometry {
+  const _BalanceFixedCarouselGeometry({
+    required this.cardWidth,
+    required this.itemExtent,
+    required this.viewportTrailingGap,
+    required this.inwardVisualOffset,
+  });
+
+  static const _legacyCardFraction = .82 * 1.30;
+  static const _neighborScale = .78;
+
+  final double cardWidth;
+  final double itemExtent;
+  final double viewportTrailingGap;
+  final double inwardVisualOffset;
+
+  factory _BalanceFixedCarouselGeometry.resolve({
+    required double availableWidth,
+    required double summaryToUpperGap,
+  }) {
+    final neutralSlotExtent = math.max(1.0, availableWidth / 3);
+    final legacyCardWidth = neutralSlotExtent * _legacyCardFraction;
+    final targetGap = math.max(0.0, summaryToUpperGap);
+    // At the legacy 30%/zero state, a side outer edge sits this far from the
+    // selected center. The selected/neighbor interior gap is solved against
+    // [targetGap], then the side cards are translated inward by the exact
+    // compensation that keeps their viewport-facing edges fixed.
+    final legacyOuterHalfDistance = legacyCardWidth * (1 + _neighborScale / 2);
+    final cardWidth =
+        (legacyOuterHalfDistance - targetGap) / (.5 + _neighborScale);
+    final inwardVisualOffset =
+        cardWidth * (1 + _neighborScale / 2) - legacyOuterHalfDistance;
+    assert(cardWidth > legacyCardWidth);
+    assert(inwardVisualOffset >= 0);
+    assert(
+      inwardVisualOffset <= cardWidth * (1 - _neighborScale) / 2,
+      'The visual side-card shift must stay inside the interactive item slot.',
+    );
+    return _BalanceFixedCarouselGeometry(
+      cardWidth: cardWidth,
+      itemExtent: cardWidth,
+      viewportTrailingGap: math.max(0.0, cardWidth * 3 - availableWidth),
+      inwardVisualOffset: inwardVisualOffset,
+    );
+  }
+
+  double inwardOffsetFor(CenteredCarouselItemMetrics metrics) {
+    if (metrics.signedDistanceItems == 0) return 0;
+    final boundedDistance = metrics.signedDistanceItems
+        .clamp(-1.0, 1.0)
+        .toDouble();
+    // The shared scale wraps this local transform. Dividing by the current
+    // scale keeps the on-screen edge lock continuous while every painted edge
+    // remains within the existing interactive item extent.
+    return -boundedDistance *
+        inwardVisualOffset /
+        math.max(.001, metrics.scale);
+  }
 }
 
 final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
@@ -664,25 +709,15 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final neutralSlotExtent = math.max(1.0, constraints.maxWidth / 3);
-      final cardWidth =
-          neutralSlotExtent * .82 * (1 + widget.settings.cardWidthBoost);
-      // At +30% the card consumes its full real slot (1.066× the neutral
-      // slot); the trailing-gap compensation retains exactly three slots in
-      // the same physical rail. Extra spacing can only increase that canvas,
-      // so it cannot create painted-but-noninteractive card edges.
-      final itemExtent =
-          math.max(neutralSlotExtent, cardWidth) +
-          neutralSlotExtent * widget.settings.carouselSpacingAdjustment;
-      final viewportTrailingGap = math.max(
-        0.0,
-        itemExtent * 3 - constraints.maxWidth,
+      final geometry = _BalanceFixedCarouselGeometry.resolve(
+        availableWidth: constraints.maxWidth,
+        summaryToUpperGap: widget.summaryToUpperGap,
       );
       final carouselHeight = math.max(1.0, constraints.maxHeight);
       final spec = CenteredCarouselSpec(
-        itemExtent: itemExtent,
+        itemExtent: geometry.itemExtent,
         visibleItemCount: 3,
-        viewportTrailingGap: viewportTrailingGap,
+        viewportTrailingGap: geometry.viewportTrailingGap,
         selectorHeight: carouselHeight,
         minScale: .70,
         maxScale: 1,
@@ -722,7 +757,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           BalanceCarouselCardKind.ghost => 'Fix terhek: ${card.amount}',
           BalanceCarouselCardKind.forecast => 'Forecast: ${card.amount}',
           BalanceCarouselCardKind.latestTransaction =>
-            'Legutóbbi tranzakció: ${card.amount}',
+            'Utolsó tranzakció: ${card.amount}',
           BalanceCarouselCardKind.categoryMovers =>
             'Legnagyobb kategóriaváltozás: ${card.amount}',
           BalanceCarouselCardKind.topCategory =>
@@ -730,10 +765,14 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           BalanceCarouselCardKind.topPartner => 'Top partner: ${card.amount}',
         },
         itemBuilder: (context, card, metrics) => _BalanceCarouselPressFeedback(
-          child: _BalanceCarouselCard(
-            card: card,
-            width: cardWidth,
-            itemHeight: carouselHeight,
+          child: Transform.translate(
+            offset: Offset(geometry.inwardOffsetFor(metrics), 0),
+            transformHitTests: true,
+            child: _BalanceCarouselCard(
+              card: card,
+              width: geometry.cardWidth,
+              itemHeight: carouselHeight,
+            ),
           ),
         ),
       );
@@ -935,43 +974,43 @@ final class _LatestCarouselPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    mainAxisAlignment: MainAxisAlignment.center,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
       Row(
         key: const ValueKey<String>('balance-carousel-latest-topic-row'),
         children: <Widget>[
-          const Icon(
-            Icons.receipt_long_rounded,
-            key: ValueKey<String>('balance-carousel-latest-topic-icon'),
-            size: 13,
-            color: FluviVisualTokens.textSecondary,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              'Legutóbbi tétel',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: FluviVisualTokens.textSecondary,
-                fontWeight: FontWeight.w600,
+          const DecoratedBox(
+            key: ValueKey<String>('balance-carousel-latest-topic-badge'),
+            decoration: BoxDecoration(
+              color: FluviVisualTokens.appHighlightPressedColor,
+              shape: BoxShape.circle,
+            ),
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: Icon(
+                Icons.receipt_long_rounded,
+                key: ValueKey<String>('balance-carousel-latest-topic-icon'),
+                size: 13,
+                color: Colors.white,
               ),
             ),
           ),
-          const SizedBox(width: 4),
-          Text(
-            key: const ValueKey<String>('balance-carousel-latest-inline-date'),
-            _formatLatestCarouselDate(transaction.epochDay),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: FluviVisualTokens.textSecondary,
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Utolsó tranzakció',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: FluviVisualTokens.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
       ),
-      const SizedBox(height: 3),
+      const SizedBox(height: 6),
       Row(
         key: const ValueKey<String>('balance-carousel-latest-primary-row'),
         children: <Widget>[
@@ -980,16 +1019,16 @@ final class _LatestCarouselPreview extends StatelessWidget {
             semanticLabel: transaction.categoryTitle,
             categoryColorId: transaction.categoryColorId,
             categoryIconId: transaction.categoryIconId,
-            size: 18,
-            iconSize: 10,
+            size: 26,
+            iconSize: 14,
           ),
-          const SizedBox(width: 5),
+          const SizedBox(width: 7),
           Expanded(
             child: Text(
               transaction.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color: FluviVisualTokens.textPrimary,
                 fontWeight: FontWeight.w800,
               ),
@@ -999,9 +1038,4 @@ final class _LatestCarouselPreview extends StatelessWidget {
       ),
     ],
   );
-}
-
-String _formatLatestCarouselDate(int epochDay) {
-  final date = DateTime.utc(1970).add(Duration(days: epochDay));
-  return '${date.year}. ${date.month.toString().padLeft(2, '0')}. ${date.day.toString().padLeft(2, '0')}.';
 }

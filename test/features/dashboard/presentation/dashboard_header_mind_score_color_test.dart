@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_mind_score_color.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/mind_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_header_trend_visual_kernel.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 
@@ -254,6 +255,27 @@ void main() {
           .style!
           .fontFamily,
       'Roboto',
+    );
+    final mindScore = tester.widget<Text>(
+      find.byKey(const ValueKey<String>('mind-header-score-text')),
+    );
+    expect(mindScore.style?.fontSize, 19);
+    expect(mindScore.style?.height, .96);
+    expect(mindScore.style?.letterSpacing, -.76);
+    expect(mindScore.style?.fontWeight, FontWeight.w900);
+    final mindHeader = tester.getRect(
+      find.byKey(const ValueKey<String>('dashboard-core-mode-mind-header')),
+    );
+    final mindScoreTopLeft = tester.getTopLeft(
+      find.byKey(const ValueKey<String>('mind-header-score-text')),
+    );
+    expect(
+      mindScoreTopLeft.dx,
+      closeTo(mindHeader.left + DashboardHeaderTrendChartStyle.detailLeft, .01),
+    );
+    expect(
+      mindScoreTopLeft.dy,
+      closeTo(mindHeader.top + DashboardHeaderTrendChartStyle.detailTop, .01),
     );
     final before = score.value;
     header.value = const DashboardHeaderVisualFrame(

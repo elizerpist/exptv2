@@ -46,7 +46,7 @@ void main() {
       await tester.ensureVisible(selector);
       final dropdown = tester
           .widget<DropdownButton<DashboardBalanceHeaderPalette>>(selector);
-      expect(dropdown.items, hasLength(11));
+      expect(dropdown.items, hasLength(4));
       final variantSelector = find.byKey(
         const ValueKey<String>('dashboard-header-balance-variant-selector'),
       );
@@ -56,7 +56,7 @@ void main() {
           );
       expect(variantDropdown.items, hasLength(3));
       variantDropdown.onChanged!(DashboardBalanceHeaderPaletteVariant.vivid);
-      dropdown.onChanged!(DashboardBalanceHeaderPalette.misticLevanderFields);
+      dropdown.onChanged!(DashboardBalanceHeaderPalette.limitColorLab);
       final position = find.byKey(
         const ValueKey<String>('dashboard-header-balance-position-slider'),
       );
@@ -76,7 +76,7 @@ void main() {
       await tester.pump();
       expect(
         controller.tuning.value.balanceColor.palette,
-        DashboardBalanceHeaderPalette.misticLevanderFields,
+        DashboardBalanceHeaderPalette.limitColorLab,
       );
       expect(
         controller.tuning.value.balanceColor.variant,
@@ -143,7 +143,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-PRESENTATION-TUNER RED: chart and carousel controls use one Balance-only session owner',
+    'BALANCE-PRESENTATION-TUNER: chart controls remain while retired geometry controls are absent',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
       final balance = BalancePresentationController();
@@ -179,27 +179,14 @@ void main() {
       await tester.pump();
       expect(balance.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
 
-      final width = find.byKey(
-        const ValueKey<String>('balance-carousel-width-boost'),
+      expect(
+        find.byKey(const ValueKey<String>('balance-carousel-width-boost')),
+        findsNothing,
       );
-      await tester.ensureVisible(width);
-      tester
-          .widget<Slider>(
-            find.descendant(of: width, matching: find.byType(Slider)),
-          )
-          .onChanged!(.30);
-      final spacing = find.byKey(
-        const ValueKey<String>('balance-carousel-spacing'),
+      expect(
+        find.byKey(const ValueKey<String>('balance-carousel-spacing')),
+        findsNothing,
       );
-      await tester.ensureVisible(spacing);
-      tester
-          .widget<Slider>(
-            find.descendant(of: spacing, matching: find.byType(Slider)),
-          )
-          .onChanged!(.12);
-      await tester.pump();
-      expect(balance.value.cardWidthBoost, .30);
-      expect(balance.value.carouselSpacingAdjustment, .12);
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
     },

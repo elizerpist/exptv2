@@ -429,7 +429,7 @@ DashboardLogRowViewModel _row(int index) => DashboardLogRowViewModel(
   entryId: 'approved-$index',
   displayName: 'Approved row $index',
   categoryDisplayName: 'Category',
-  formattedAmount: '-1,00 Ft',
+  formattedAmount: '-1 Ft',
   displayTime: '12:00',
   amountStyle: LogAmountStyle.expense,
   categoryColorId: 'fallback',

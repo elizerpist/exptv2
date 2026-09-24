@@ -718,7 +718,7 @@ DashboardVisibleFrame _frame({
     parentQueryKey: parent.key,
     coreRevision: 3,
     totalMinor: content * 100,
-    formattedAmount: '$content,00 Ft',
+    formattedAmount: '$content Ft',
     entryCount: content,
     formattedEntryCount: '$content',
     logBox: DashboardLogViewportState(

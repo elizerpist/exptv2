@@ -476,15 +476,16 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                   '${frame?.point.roundedScore ?? 50}/100',
                   key: const ValueKey<String>('mind-header-score-text'),
                   style: typography.applyTo(
-                    DefaultTextStyle.of(context).style.copyWith(
-                      color:
-                          headerFrame?.foregroundTextColor ??
-                          FluviVisualTokens.textOnAction,
-                      fontSize: 19,
-                      height: .96,
-                      letterSpacing: -.76,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    DefaultTextStyle.of(context).style
+                        .merge(
+                          DashboardHeaderTrendChartStyle
+                              .primaryValueTextMetrics,
+                        )
+                        .copyWith(
+                          color:
+                              headerFrame?.foregroundTextColor ??
+                              FluviVisualTokens.textOnAction,
+                        ),
                   ),
                 ),
               ),

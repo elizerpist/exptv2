@@ -675,7 +675,7 @@ void main() {
       );
       expect(firstReadable, isNotNull);
       expect(firstReadable!.titleText, 'Fixture transaction 0');
-      expect(firstReadable.amountText, '-0,01 Ft');
+      expect(firstReadable.amountText, '0 Ft');
       expect(firstReadable.secondaryText, 'Fixture category');
       expect(firstReadable.timeText, '12:00');
 

@@ -73,7 +73,7 @@ DashboardPreparedFrame _preparedFrame() {
     parentQueryKey: _parentScope().key,
     coreRevision: 3,
     totalMinor: 12345,
-    formattedAmount: '123,45 Ft',
+    formattedAmount: '123 Ft',
     entryCount: 2,
     formattedEntryCount: '2',
     logBox: DashboardLogViewportState(

@@ -55,7 +55,7 @@ void main() {
       );
       await tester.pump();
       expect(find.text('2026'), findsOneWidget);
-      expect(find.text('Egyenleg  2000,00 Ft'), findsOneWidget);
+      expect(find.text('Egyenleg  2000 Ft'), findsOneWidget);
     },
   );
 
@@ -101,9 +101,9 @@ void main() {
         Offset(chart.left + chart.width * 17 / 30, chart.center.dy),
       );
       await tester.pump();
-      expect(find.text('Bevétel eddig  7070,00 Ft'), findsOneWidget);
-      expect(find.text('Kiadás eddig  3824,60 Ft'), findsOneWidget);
-      expect(find.text('Egyenleg  3245,40 Ft'), findsOneWidget);
+      expect(find.text('Bevétel eddig  7070 Ft'), findsOneWidget);
+      expect(find.text('Kiadás eddig  3824 Ft'), findsOneWidget);
+      expect(find.text('Egyenleg  3245 Ft'), findsOneWidget);
     },
   );
 

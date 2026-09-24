@@ -838,7 +838,7 @@ void main() {
               'A Summary ${state.scope.runtimeType} frame is not Balance '
               'data identity and must not republish all-time content.',
         );
-        expect(core.balancePresentation.value?.formattedNetTotal, '850,00 Ft');
+        expect(core.balancePresentation.value?.formattedNetTotal, '850 Ft');
         expect(
           core.balancePresentation.value?.latestTransaction?.entryId,
           'expense-balance-latest',
@@ -952,7 +952,7 @@ void main() {
           core.balancePresentation.value?.presentationId,
           initial.presentationId,
         );
-        expect(core.balancePresentation.value?.formattedNetTotal, '850,00 Ft');
+        expect(core.balancePresentation.value?.formattedNetTotal, '850 Ft');
         expect(
           core.balancePresentation.value?.latestTransaction?.entryId,
           'expense-balance-latest',

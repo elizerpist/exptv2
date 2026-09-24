@@ -110,7 +110,7 @@ DashboardVisibleFrame _frame({required int day, required int generation}) {
     parentQueryKey: parent.key,
     coreRevision: 3,
     totalMinor: day * 100,
-    formattedAmount: '$day,00 Ft',
+    formattedAmount: '$day Ft',
     entryCount: day,
     formattedEntryCount: '$day',
     logBox: DashboardLogViewportState(

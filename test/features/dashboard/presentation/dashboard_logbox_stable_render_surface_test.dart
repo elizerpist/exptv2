@@ -390,7 +390,7 @@ void main() {
     await tester.pump();
 
     final rowSemantics = find.semantics.byLabel(
-      'Partner row-0, -1,00 Ft, kiadás, Category',
+      'Partner row-0, -1 Ft, kiadás, Category',
     );
     expect(rowSemantics, findsOne);
     expect(
@@ -461,7 +461,7 @@ void main() {
       final semantics = tester.ensureSemantics();
       await tester.pump();
       expect(
-        find.semantics.byLabel('Partner row-0, -1,00 Ft, kiadás, Category'),
+        find.semantics.byLabel('Partner row-0, -1 Ft, kiadás, Category'),
         findsOne,
       );
       semantics.dispose();
@@ -686,7 +686,7 @@ void main() {
         ),
       );
       expect(event.scope, isNot(contains('Partner row-0')));
-      expect(event.scope, isNot(contains('-1,00 Ft')));
+      expect(event.scope, isNot(contains('-1 Ft')));
     },
   );
 }
@@ -789,7 +789,7 @@ DashboardVisibleFrame _visible({
     parentQueryKey: scope.key,
     coreRevision: 1,
     totalMinor: epoch * 100,
-    formattedAmount: '$epoch,00 Ft',
+    formattedAmount: '$epoch Ft',
     entryCount: entryCount ?? groups.length,
     formattedEntryCount: '${entryCount ?? groups.length}',
     logBox: logBox,
@@ -822,7 +822,7 @@ List<DashboardDayLogGroupViewModel> _groups(
         entryId: '$idPrefix-$index',
         displayName: 'Partner $idPrefix-$index',
         categoryDisplayName: 'Category',
-        formattedAmount: '-1,00 Ft',
+        formattedAmount: '-1 Ft',
         displayTime: '12:00',
         amountStyle: LogAmountStyle.expense,
         categoryColorId: 'fallback',
@@ -830,7 +830,7 @@ List<DashboardDayLogGroupViewModel> _groups(
         categoryId: 'category-$idPrefix-$index',
         partnerId: 'partner-$idPrefix-$index',
         partnerDisplayName: 'Partner $idPrefix-$index',
-        semanticLabel: 'Partner $idPrefix-$index, -1,00 Ft, kiadás, Category',
+        semanticLabel: 'Partner $idPrefix-$index, -1 Ft, kiadás, Category',
       ),
     ],
   ),
@@ -848,7 +848,7 @@ List<DashboardDayLogGroupViewModel> _groupsWithIconIds(List<String> iconIds) =>
             entryId: 'glyph-row-$index',
             displayName: 'Prepared glyph row $index',
             categoryDisplayName: 'Category',
-            formattedAmount: '-1,00 Ft',
+            formattedAmount: '-1 Ft',
             displayTime: '12:00',
             amountStyle: LogAmountStyle.expense,
             categoryColorId: 'fallback',

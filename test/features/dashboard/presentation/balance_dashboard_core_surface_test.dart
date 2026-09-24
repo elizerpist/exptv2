@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
@@ -51,12 +52,12 @@ void main() {
           incomeTotalMinor: 120000,
           expenseTotalMinor: 20000,
           netTotalMinor: 100000,
-          formattedNetTotal: '1 000,00 Ft',
+          formattedNetTotal: '1 000 Ft',
           presentationId: 1,
           latestTransaction: DashboardBalanceLatestTransactionPresentation(
             entryId: 'latest',
             title: 'Teszt',
-            formattedAmount: '1 000,00 Ft',
+            formattedAmount: '1 000 Ft',
             direction: LedgerDirection.income,
             occurredOrder: 1,
           ),
@@ -459,18 +460,63 @@ void main() {
         find.byKey(
           const ValueKey<String>('balance-carousel-latest-inline-date'),
         ),
+        findsNothing,
+      );
+      expect(find.text('Utolsó tranzakció'), findsOneWidget);
+      expect(
+        tester
+            .renderObject<RenderParagraph>(find.text('Utolsó tranzakció'))
+            .didExceedMaxLines,
+        isFalse,
+        reason: 'The final compact title must remain whole after date removal.',
+      );
+      final latestSurface = tester.getRect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-surface-latest-transaction',
+          ),
+        ),
+      );
+      final latestTopic = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-carousel-latest-topic-row')),
+      );
+      expect(latestTopic.top - latestSurface.top, lessThanOrEqualTo(8));
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-topic-badge'),
+        ),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<Icon>(
+              find.byKey(
+                const ValueKey<String>('balance-carousel-latest-topic-icon'),
+              ),
+            )
+            .color,
+        Colors.white,
       );
       expect(
         find.byKey(const ValueKey<String>('balance-carousel-latest-avatar')),
         findsOneWidget,
       );
       expect(
+        tester
+            .getSize(
+              find.byKey(
+                const ValueKey<String>('balance-carousel-latest-avatar'),
+              ),
+            )
+            .width,
+        greaterThan(18),
+      );
+      expect(
         find.descendant(
           of: find.byKey(
             const ValueKey<String>('balance-carousel-card-latest-transaction'),
           ),
-          matching: find.text('350,00 Ft'),
+          matching: find.text('350 Ft'),
         ),
         findsNothing,
       );
@@ -610,12 +656,12 @@ void main() {
           incomeTotalMinor: 150000,
           expenseTotalMinor: 210000,
           netTotalMinor: -60000,
-          formattedNetTotal: '-600,00 Ft',
+          formattedNetTotal: '-600 Ft',
           presentationId: 1,
           latestTransaction: DashboardBalanceLatestTransactionPresentation(
             entryId: 'expense-latest',
             title: 'Piac',
-            formattedAmount: '-30,00 Ft',
+            formattedAmount: '-30 Ft',
             direction: LedgerDirection.expense,
             occurredOrder: 42,
           ),
@@ -658,7 +704,7 @@ void main() {
 
       await pump();
       await tester.pumpAndSettle();
-      expect(find.text('-600,00 Ft'), findsOneWidget);
+      expect(find.text('-600 Ft'), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('balance-header-net-amount')),
         findsOneWidget,
@@ -760,7 +806,7 @@ void main() {
       expect(rebuilt.controller.selectedLogicalIndex, 0);
       expect(
         rebuiltSource.items.first.amount,
-        '-460,00 Ft',
+        '-460 Ft',
         reason:
             'A scope/direction linked payload frissíti a Cashflow hőskártyát '
             'anélkül, hogy a közös Carousel újraindulna.',
@@ -799,7 +845,7 @@ void main() {
           incomeTotalMinor: 150000,
           expenseTotalMinor: 210000,
           netTotalMinor: -60000,
-          formattedNetTotal: '-600,00 Ft',
+          formattedNetTotal: '-600 Ft',
           presentationId: 1,
         ),
       );
@@ -831,7 +877,7 @@ void main() {
       final amount = tester.widget<Text>(
         find.byKey(const ValueKey<String>('balance-header-net-amount')),
       );
-      expect(amount.data, '-600,00 Ft');
+      expect(amount.data, '-600 Ft');
       expect(amount.style?.color, FluviVisualTokens.textOnAction);
       expect(
         amount.style?.color,
@@ -841,11 +887,11 @@ void main() {
 
       balance.value = balance.value!.copyWith(
         netTotalMinor: 60000,
-        formattedNetTotal: '600,00 Ft',
+        formattedNetTotal: '600 Ft',
         presentationId: 2,
       );
       await tester.pump();
-      expect(find.text('600,00 Ft'), findsOneWidget);
+      expect(find.text('600 Ft'), findsOneWidget);
       expect(
         tester
             .widget<Text>(
@@ -868,12 +914,12 @@ void main() {
           incomeTotalMinor: 1000000,
           expenseTotalMinor: 400000,
           netTotalMinor: 600000,
-          formattedNetTotal: '6 000,00 Ft',
+          formattedNetTotal: '6 000 Ft',
           presentationId: 7,
           latestTransaction: DashboardBalanceLatestTransactionPresentation(
             entryId: 'latest',
             title: 'Latest',
-            formattedAmount: '100,00 Ft',
+            formattedAmount: '100 Ft',
             direction: LedgerDirection.income,
             occurredOrder: 1,
           ),
@@ -914,22 +960,23 @@ void main() {
         expect(decoration.color, FluviVisualTokens.surface, reason: id);
       }
 
-      expectSurface('cashflow');
-      expectSurface('closings');
-      expectSurface('momentum');
-      carousel.controller.jumpToIndex(4);
-      await tester.pump();
-      expectSurface('retention');
-      expectSurface('stability');
-      expectSurface('ghost');
-      carousel.controller.jumpToIndex(6);
-      await tester.pump();
-      expectSurface('forecast');
-      expectSurface('latest-transaction');
-      carousel.controller.jumpToIndex(8);
-      await tester.pump();
-      expectSurface('top-category');
-      expectSurface('top-partner');
+      for (final (index, id) in <(int, String)>[
+        (0, 'cashflow'),
+        (1, 'closings'),
+        (2, 'momentum'),
+        (3, 'retention'),
+        (4, 'stability'),
+        (5, 'ghost'),
+        (6, 'forecast'),
+        (7, 'latest-transaction'),
+        (8, 'category-movers'),
+        (9, 'top-category'),
+        (10, 'top-partner'),
+      ]) {
+        carousel.controller.jumpToIndex(index);
+        await tester.pump();
+        expectSurface(id);
+      }
     },
   );
 
@@ -943,12 +990,12 @@ void main() {
           incomeTotalMinor: 150000,
           expenseTotalMinor: 210000,
           netTotalMinor: -60000,
-          formattedNetTotal: '-600,00 Ft',
+          formattedNetTotal: '-600 Ft',
           presentationId: 1,
           latestTransaction: DashboardBalanceLatestTransactionPresentation(
             entryId: 'expense-latest',
             title: 'Piac',
-            formattedAmount: '-30,00 Ft',
+            formattedAmount: '-30 Ft',
             direction: LedgerDirection.expense,
             occurredOrder: 42,
           ),
@@ -1052,7 +1099,7 @@ void main() {
           incomeTotalMinor: 1000000,
           expenseTotalMinor: 400000,
           netTotalMinor: 600000,
-          formattedNetTotal: '6 000,00 Ft',
+          formattedNetTotal: '6 000 Ft',
           presentationId: 7,
           history: DashboardBalanceHistorySeries(
             startInclusiveEpochMinute: 20000 * 1440,
@@ -1118,6 +1165,13 @@ void main() {
         amount.dy,
         closeTo(header.top + DashboardHeaderTrendChartStyle.detailTop, .01),
       );
+      final balanceAmount = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('balance-header-net-amount')),
+      );
+      expect(balanceAmount.style?.fontSize, 19);
+      expect(balanceAmount.style?.height, .96);
+      expect(balanceAmount.style?.letterSpacing, -.76);
+      expect(balanceAmount.style?.fontWeight, FontWeight.w900);
 
       final plot = tester.getRect(
         find.byKey(
@@ -1303,7 +1357,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-CHART-LABELS/CAROUSEL-CONTROLS RED: Balance-only settings hide static labels and keep the shared rail identity at safe extremes',
+    'BALANCE-FIXED-CAROUSEL RED: fixed geometry locks baseline outer edges and matches the Summary gap',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(
         _balance().copyWith(history: _history()),
@@ -1335,20 +1389,7 @@ void main() {
       );
       final controller = initial.controller;
       final position = controller.scrollController.position;
-      final initialWidth = tester
-          .getSize(
-            find.byKey(
-              const ValueKey<String>('balance-carousel-card-cashflow'),
-            ),
-          )
-          .width;
-      final neutralExtent = initial.spec.itemExtent;
-
-      settings.setTimeLabels(BalanceHeaderChartTimeLabels.hidden);
-      settings.setCardWidthBoost(.30);
-      settings.setCarouselSpacingAdjustment(.12);
-      await tester.pump();
-      final expanded = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+      final viewport = tester.getRect(
         find.byType(CenteredCarousel<BalanceCarouselCard>),
       );
       final selected = tester.getRect(
@@ -1360,30 +1401,140 @@ void main() {
       final right = tester.getRect(
         find.byKey(const ValueKey<String>('balance-carousel-card-closings')),
       );
+      final legacyCardWidth = viewport.width / 3 * .82 * 1.30;
+      final legacyOuterHalfDistance = legacyCardWidth * (1 + .78 / 2);
+      final verticalGap =
+          modePresentation.geometry.subheaderOneBounds.top -
+          modePresentation.geometry.summaryBounds.bottom;
+
+      settings.setTimeLabels(BalanceHeaderChartTimeLabels.hidden);
+      await tester.pump();
+      final fixed = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
       expect(
         find.byKey(
           const ValueKey<String>('balance-header-history-chart-time-label-0'),
         ),
         findsNothing,
       );
-      expect(selected.width, closeTo(initialWidth * 1.30, .01));
-      expect(expanded.spec.itemExtent, greaterThan(neutralExtent));
-      expect(expanded.spec.visibleItemCount, 3);
-      expect(expanded.spec.itemExtent, greaterThanOrEqualTo(selected.width));
+      expect(selected.width, greaterThan(legacyCardWidth));
+      expect(fixed.spec.itemExtent, closeTo(selected.width, .01));
+      expect(fixed.spec.visibleItemCount, 3);
+      expect(selected.left - left.right, closeTo(verticalGap, 1));
+      expect(right.left - selected.right, closeTo(verticalGap, 1));
+      expect(
+        left.left,
+        closeTo(selected.center.dx - legacyOuterHalfDistance, 1),
+      );
+      expect(
+        right.right,
+        closeTo(selected.center.dx + legacyOuterHalfDistance, 1),
+      );
       expect(selected.overlaps(left), isFalse);
       expect(selected.overlaps(right), isFalse);
-      expect(identical(expanded.controller, controller), isTrue);
+      final legacyLeftInnerEdge = left.left + .78 * legacyCardWidth;
+      expect(left.right, greaterThan(legacyLeftInnerEdge));
+      final gainedLeftPoint = Offset(
+        (legacyLeftInnerEdge + left.right) / 2,
+        left.center.dy,
+      );
+      expect(left.contains(gainedLeftPoint), isTrue);
       expect(
-        identical(expanded.controller.scrollController.position, position),
+        tester
+            .widgetList<Semantics>(find.byType(Semantics))
+            .where(
+              (semantics) =>
+                  semantics.properties.label?.startsWith('Top partner:') ==
+                  true,
+            ),
+        isNotEmpty,
+        reason:
+            'The widened visible neighbor stays inside the shared semantic item.',
+      );
+      await tester.tapAt(gainedLeftPoint);
+      await tester.pumpAndSettle();
+      expect(fixed.controller.selectedLogicalIndex, -1);
+      expect(identical(fixed.controller, controller), isTrue);
+      expect(
+        identical(fixed.controller.scrollController.position, position),
         isTrue,
       );
       expect(
         identical(
-          expanded.spec.motionProfile,
+          fixed.spec.motionProfile,
           CenteredCarouselMotionProfiles.timeRefinementRail,
         ),
         isTrue,
       );
+    },
+  );
+
+  testWidgets(
+    'BALANCE-FIXED-CAROUSEL: reference, narrow and wide production metrics retain the edge and gap contract',
+    (tester) async {
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final viewport in <Size>[
+        const Size(412, 892),
+        const Size(360, 780),
+        const Size(480, 1040),
+      ]) {
+        await tester.binding.setSurfaceSize(viewport);
+        final metrics = DashboardLayoutMetrics.reference.fitToViewport(
+          viewport,
+        );
+        final mode = _balanceModePresentation(metrics: metrics);
+        final balance = ValueNotifier<DashboardBalancePresentation?>(
+          _balance(),
+        );
+        addTearDown(balance.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: BalanceDashboardCoreSurface(
+                presentation: mode,
+                balancePresentation: balance,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final selected = tester.getRect(
+          find.byKey(const ValueKey<String>('balance-carousel-card-cashflow')),
+        );
+        final left = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-carousel-card-top-partner'),
+          ),
+        );
+        final right = tester.getRect(
+          find.byKey(const ValueKey<String>('balance-carousel-card-closings')),
+        );
+        final legacyWidth =
+            tester
+                .getRect(find.byType(CenteredCarousel<BalanceCarouselCard>))
+                .width /
+            3 *
+            .82 *
+            1.30;
+        final legacyOuterHalfDistance = legacyWidth * (1 + .78 / 2);
+        final gap =
+            mode.geometry.subheaderOneBounds.top -
+            mode.geometry.summaryBounds.bottom;
+        expect(selected.width, greaterThan(legacyWidth));
+        expect(selected.left - left.right, closeTo(gap, 1));
+        expect(right.left - selected.right, closeTo(gap, 1));
+        expect(
+          left.left,
+          closeTo(selected.center.dx - legacyOuterHalfDistance, 1),
+        );
+        expect(
+          right.right,
+          closeTo(selected.center.dx + legacyOuterHalfDistance, 1),
+        );
+        expect(selected.overlaps(left), isFalse);
+        expect(selected.overlaps(right), isFalse);
+      }
     },
   );
 
@@ -1484,16 +1635,17 @@ void main() {
   );
 }
 
-DashboardCoreModePresentation _balanceModePresentation() =>
-    DashboardCoreModePresentation(
-      geometry: DashboardGeometryResolver.resolve(
-        metrics: DashboardLayoutMetrics.reference,
-        mode: DashboardModeSpec.balance,
-        collapseProgress: 0,
-        isRailExpanded: false,
-      ),
-      palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
-    );
+DashboardCoreModePresentation _balanceModePresentation({
+  DashboardLayoutMetrics metrics = DashboardLayoutMetrics.reference,
+}) => DashboardCoreModePresentation(
+  geometry: DashboardGeometryResolver.resolve(
+    metrics: metrics,
+    mode: DashboardModeSpec.balance,
+    collapseProgress: 0,
+    isRailExpanded: false,
+  ),
+  palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
+);
 
 DashboardBalancePresentation _balance() => const DashboardBalancePresentation(
   scopeKey: 'income|all|expense|all',
@@ -1501,12 +1653,12 @@ DashboardBalancePresentation _balance() => const DashboardBalancePresentation(
   incomeTotalMinor: 1000000,
   expenseTotalMinor: 400000,
   netTotalMinor: 600000,
-  formattedNetTotal: '6 000,00 Ft',
+  formattedNetTotal: '6 000 Ft',
   presentationId: 7,
   latestTransaction: DashboardBalanceLatestTransactionPresentation(
     entryId: 'latest',
     title: 'Latest',
-    formattedAmount: '100,00 Ft',
+    formattedAmount: '100 Ft',
     direction: LedgerDirection.income,
     occurredOrder: 1,
   ),

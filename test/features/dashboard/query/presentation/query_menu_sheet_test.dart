@@ -12,9 +12,20 @@ import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_menu_data.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_menu_sheet.dart';
 import 'package:fluvi/features/dashboard/query/presentation/query_amount_range_control.dart';
+import 'package:fluvi/features/dashboard/query/presentation/query_menu_formatters.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 void main() {
+  test(
+    'Query exact-HUF formatter keeps the established whole-forint policy',
+    () {
+      expect(QueryMenuFormatters.money(550000), '5 500 Ft');
+      expect(QueryMenuFormatters.money(-550000), '-5 500 Ft');
+      expect(QueryMenuFormatters.money(12345), '123 Ft');
+      expect(QueryMenuFormatters.money(12345), isNot(contains(',')));
+    },
+  );
+
   testWidgets(
     'opens the HTML query hierarchy and its category picker in one sheet',
     (tester) async {

@@ -226,14 +226,14 @@ void main() {
     () {
       expect(
         formatBalanceMomentumRate(1450000, DashboardBalanceMomentumUnit.perDay),
-        '+14500,00 Ft/nap',
+        '+14500 Ft/nap',
       );
       expect(
         formatBalanceMomentumRate(
           -2900000,
           DashboardBalanceMomentumUnit.perHour,
         ),
-        '−29000,00 Ft/óra',
+        '−29000 Ft/óra',
       );
     },
   );
@@ -434,8 +434,8 @@ void main() {
         find.byKey(const ValueKey<String>('balance-category-insight-median')),
         findsOneWidget,
       );
-      expect(find.text('12,00 Ft'), findsOneWidget);
-      expect(find.text('99,00 Ft'), findsNothing);
+      expect(find.text('12 Ft'), findsOneWidget);
+      expect(find.text('99 Ft'), findsNothing);
       expect(find.text('Időbeli profil'), findsNothing);
       expect(find.textContaining('domináns sávban'), findsNothing);
       expect(
@@ -531,7 +531,7 @@ void main() {
         find.byKey(const ValueKey<String>('balance-category-insight-detail')),
         findsOneWidget,
       );
-      expect(find.text('6,00 Ft'), findsOneWidget);
+      expect(find.text('6 Ft'), findsOneWidget);
 
       await tester.pumpWidget(
         _host(
@@ -544,7 +544,7 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('17,00 Ft'), findsOneWidget);
+      expect(find.text('17 Ft'), findsOneWidget);
       await tester.tap(
         find.byKey(const ValueKey<String>('balance-category-insight-back')),
       );

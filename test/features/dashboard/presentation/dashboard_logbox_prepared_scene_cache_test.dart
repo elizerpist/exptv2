@@ -1364,7 +1364,7 @@ void main() {
       expect(first, isNotNull);
       expect(first!.entryId, 'deferred-7-0');
       expect(first.titleText, 'Partner 0');
-      expect(first.amountText, '0,01 Ft');
+      expect(first.amountText, '0 Ft');
       expect(first.secondaryText, 'Category');
       expect(first.timeText, '10:00');
       expect(first.textLayout.title.debugDisposed, isFalse);

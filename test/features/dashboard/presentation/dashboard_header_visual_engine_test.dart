@@ -39,15 +39,15 @@ void main() {
         expect(
           DashboardBalanceHeaderPaletteCatalog.palettes.length *
               DashboardBalanceHeaderPaletteVariant.values.length,
-          33,
+          12,
         );
       },
     );
 
     test(
-      'all eleven supplied palette identities retain exact ARGB endpoints',
+      'all four approved palette identities retain exact ARGB endpoints',
       () {
-        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(11));
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(4));
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
             DashboardBalanceHeaderPalette.softRainbow,
@@ -56,21 +56,21 @@ void main() {
         );
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
-            DashboardBalanceHeaderPalette.whimiscalUnicornDream,
+            DashboardBalanceHeaderPalette.customBalance,
           ).colors,
-          hasLength(11),
+          hasLength(10),
         );
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
-            DashboardBalanceHeaderPalette.whimiscalUnicornDream,
+            DashboardBalanceHeaderPalette.customBalance,
           ).colors.last,
-          const Color(0xff8447ff),
+          const Color(0xffffb36b),
         );
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
-            DashboardBalanceHeaderPalette.magicalLevanderHaze,
+            DashboardBalanceHeaderPalette.limitColorLab,
           ).colors.last,
-          const Color(0xffef7a85),
+          const Color(0xffdb2777),
         );
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
@@ -201,7 +201,7 @@ void main() {
         );
         final before = policy.value;
         controller.selectBalanceHeaderPalette(
-          DashboardBalanceHeaderPalette.magicalLevanderHaze,
+          DashboardBalanceHeaderPalette.limitColorLab,
         );
         controller.setBalanceHeaderPositionPercent(100);
         controller.setBalanceHeaderWindowWidthPercent(10);
@@ -209,7 +209,7 @@ void main() {
         expect(policy.value, isNot(before));
         expect(
           policy.value.balanceColorWindow!.state.palette,
-          DashboardBalanceHeaderPalette.magicalLevanderHaze,
+          DashboardBalanceHeaderPalette.limitColorLab,
         );
         expect(policy.value.opacity, 0);
         controller.setBalanceHeaderOpacityPercent(50);
@@ -247,7 +247,7 @@ void main() {
         expect(controller.tickerIdentity, same(ticker));
 
         controller.selectBalanceHeaderPalette(
-          DashboardBalanceHeaderPalette.magicalLevanderHaze,
+          DashboardBalanceHeaderPalette.limitColorLab,
         );
         expect(
           controller.tuning.value.balanceColor.variant,

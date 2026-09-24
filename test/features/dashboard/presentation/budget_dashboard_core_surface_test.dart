@@ -50,7 +50,7 @@ void main() {
         '${DashboardPreparedFormatter.amountMinorPerDay(120000)} / '
         '${DashboardPreparedFormatter.amountMinorPerDay(96774)}',
       );
-      expect(amount.data, isNot(contains('12000,00 Ft / 30000,00 Ft')));
+      expect(amount.data, isNot(contains(',00 Ft')));
       expect(find.text('Napi tempó'), findsOneWidget);
       expect(find.text('tempó'), findsOneWidget);
     },

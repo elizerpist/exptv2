@@ -1304,7 +1304,7 @@ DashboardPreparedFrame _prepared(
     parentQueryKey: scope.key,
     coreRevision: 7,
     totalMinor: 100,
-    formattedAmount: '1,00 Ft',
+    formattedAmount: '1 Ft',
     entryCount: entryCount,
     formattedEntryCount: '$entryCount',
     logBox: DashboardLogViewportState(
@@ -1397,7 +1397,7 @@ DashboardLogRowViewModel _row(int index) => DashboardLogRowViewModel(
   entryId: 'row-$index',
   displayName: 'Partner $index',
   categoryDisplayName: 'Kategória',
-  formattedAmount: '1,00 Ft',
+  formattedAmount: '1 Ft',
   displayTime: '12:00',
   amountStyle: LogAmountStyle.income,
   categoryColorId: 'fallback',

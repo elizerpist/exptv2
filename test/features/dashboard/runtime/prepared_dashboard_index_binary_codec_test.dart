@@ -69,7 +69,7 @@ void main() {
           'the deterministic zero expense universe; only an explicitly '
           'requested directional partition may omit it.',
     );
-    expect(dayFrame.amount.formattedAmount, '123,45 Ft');
+    expect(dayFrame.amount.formattedAmount, '123 Ft');
     expect(dayFrame.parentQueryKey, incomeMonth.key);
     expect(allFrame.parentQueryKey, allIncome.key);
     expect(dayFrame.logBox.groups.single.dayLabel, '2026. június 15.');
