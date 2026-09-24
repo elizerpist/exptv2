@@ -11,12 +11,12 @@
 | RANK-07 | Explicit exception | no new selector | no Havi/Éves/Össz state or UI | DONE |
 | LATEST-01 | Spendee FastInfo header source | Balance selected Latest renderer | exact local visual spec: padding 9/7/9/18, 20px disc/header, category icon, colors, gap/title metrics | DONE |
 | LATEST-02 | User default layout | `BalancePresentationSettings` + renderer | default `avatarPartner`: header then compact 15/8 badge + primary partner; no amount/date/time/category text | DONE |
-| LATEST-03 | Spendee alternative | same renderer | selectable `spendeeThreeLine`: header, exact whole-HUF amount, partner secondary metrics | DONE |
+| LATEST-03 | Approved reference alternative | same renderer | selectable `threeLine` / `3 soros`: header, exact whole-HUF amount, partner secondary metrics | DONE |
 | LATEST-04 | Existing Settings ownership | `BalancePresentationController` | enum/default/copy/equality/hash/revision/setter; switching changes render only and retains carousel identity/order | DONE |
 | HDR-01 | User SVG sources | bundled assets + Header primitive | balance/mind/budget white local SVG icon replaces textual mode label in Header right corner | DONE |
 | HDR-02 | User navigation contract | `DashboardCoreModeHost` | icon tap invokes existing forward mode switch; Header horizontal swipe no longer switches; vertical expansion remains | DONE |
 | HDR-03 | owner/layer contract | Header action/host tests | icon semantics/hit area visible and interactive above Header gesture layer; no new controller/physics owner | DONE |
 | HDR-04 | User follow-up: icon foreground | `DashboardHeaderVisualTuning` → `DashboardHeaderVisualFrame` → Header action | Balance/Mind/Budget icons independently select Fehér/Fekete/Lágyított; no text/chart setting is silently changed | DONE |
 | HDR-05 | User follow-up: chart under-line veil | same Header visual owner → shared trend painter | Balance/Mind independently select veil enabled state and Fehér/Fekete/Lágyított color; line path/points/width and data are unchanged | DONE |
-| DELIVERY-01 | Global workflow | tests + CI | focus/protected tests, formatting, analysis/diff, online exact-source signed APK download/verification, final SCIP | NOT DONE |
+| DELIVERY-01 | Global workflow | tests + CI | focus/protected tests, formatting, analysis/diff, online exact-source signed APK download/verification, final SCIP | DONE — app `5eaee448...`, Actions `36008373291`, APK SHA-256 `523d3439...`, final graph `e0b25457...` |
 | DELIVERY-02 | Physical acceptance | user only | final physical validation reported PENDING — USER ONLY | BLOCKED |
