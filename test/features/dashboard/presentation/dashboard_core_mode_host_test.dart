@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
@@ -309,6 +310,79 @@ void main() {
     },
   );
 
+  testWidgets(
+    'HEADER-MODE-ICON-SIZE/WAVE RED: the icon scales from its base without owning Header tap waves',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final visual = DashboardHeaderVisualController(vsync: tester);
+      final balanceFrame = DashboardBalanceHeaderColorPolicy(
+        tuning: visual.tuning,
+      );
+      addTearDown(mode.dispose);
+      addTearDown(balanceFrame.dispose);
+      await tester.pumpWidget(
+        _ModeHostHarness(
+          controller: mode,
+          headerVisual: visual,
+          balanceHeaderVisualFrame: balanceFrame,
+        ),
+      );
+
+      final icon = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-icon-balance'),
+      );
+      final semantics = tester.ensureSemantics();
+      expect(
+        find.bySemanticsLabel('Balance mód, következő mód'),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget(icon),
+        isNot(isA<InkResponse>()),
+        reason: 'A mode action must not own a second local ink splash.',
+      );
+      final initial = tester.getRect(icon);
+      expect(initial.width, DashboardHeaderModeIconButton.buttonExtentFor(0));
+      visual.setHeaderModeIconSizePercent(100);
+      await tester.pump();
+      final enlarged = tester.getRect(icon);
+      expect(
+        enlarged.width,
+        DashboardHeaderModeIconButton.buttonExtentFor(100),
+      );
+      expect(
+        tester
+            .widget<PreparedVectorPictureView>(
+              find.descendant(
+                of: icon,
+                matching: find.byType(PreparedVectorPictureView),
+              ),
+            )
+            .width,
+        DashboardHeaderModeIconButton.glyphExtentFor(100),
+      );
+
+      await tester.tapAt(Offset(enlarged.right - 2, enlarged.center.dy));
+      await tester.pump();
+      expect(mode.committedMode, DashboardModeSpec.budget);
+      expect(
+        visual.tapWave.rippleCount,
+        0,
+        reason: 'The mode action must not seed the Header splash.',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
+      );
+      await tester.pump();
+      expect(visual.tapWave.rippleCount, 1);
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      visual.dispose();
+    },
+  );
+
   test('Mind uses the central unified envelope endpoints', () {
     final split = _presentationFor(DashboardModeSpec.balance).geometry;
     final mind = _presentationFor(DashboardModeSpec.mind).geometry;
@@ -611,11 +685,15 @@ class _ModeHostHarness extends StatelessWidget {
   const _ModeHostHarness({
     required this.controller,
     this.expansion,
+    this.headerVisual,
+    this.balanceHeaderVisualFrame,
     this.collapseProgress = 0,
   });
 
   final DashboardCoreModeController controller;
   final _ExpansionRecorder? expansion;
+  final DashboardHeaderVisualController? headerVisual;
+  final ValueListenable<DashboardHeaderVisualFrame>? balanceHeaderVisualFrame;
   final double collapseProgress;
 
   @override
@@ -635,6 +713,8 @@ class _ModeHostHarness extends StatelessWidget {
               onVerticalExpansionStart: expansion.begin,
               onVerticalExpansionDragBy: expansion.dragBy,
               onVerticalExpansionEnd: expansion.end,
+              headerVisualController: headerVisual,
+              balanceHeaderVisualFrame: balanceHeaderVisualFrame,
             ),
           ),
         ),

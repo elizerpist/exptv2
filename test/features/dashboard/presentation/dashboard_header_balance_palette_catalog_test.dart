@@ -4,7 +4,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 
 void main() {
   test(
-    'only the four approved Balance family × variant anchors remain exact',
+    'the four pre-existing Balance family × variant anchors remain exact',
     () {
       final expected =
           <
@@ -133,7 +133,7 @@ void main() {
           };
 
       expect(
-        DashboardBalanceHeaderPaletteCatalog.palettes,
+        DashboardBalanceHeaderPaletteCatalog.palettes.take(4),
         <DashboardBalanceHeaderPalette>[
           DashboardBalanceHeaderPalette.softRainbow,
           DashboardBalanceHeaderPalette.levanderRoseEmbrace,
@@ -141,12 +141,13 @@ void main() {
           DashboardBalanceHeaderPalette.customBalance,
         ],
       );
+      expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(8));
       expect(DashboardBalanceHeaderPaletteCatalog.variants, hasLength(3));
       expect(
         expected.length * DashboardBalanceHeaderPaletteCatalog.variants.length,
         12,
       );
-      for (final family in DashboardBalanceHeaderPaletteCatalog.palettes) {
+      for (final family in expected.keys) {
         final variants = expected[family]!;
         for (final variant in DashboardBalanceHeaderPaletteCatalog.variants) {
           final actual = DashboardBalanceHeaderPaletteCatalog.scaleFor(

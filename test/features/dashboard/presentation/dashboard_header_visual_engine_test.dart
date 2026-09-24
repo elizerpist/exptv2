@@ -26,7 +26,7 @@ void main() {
 
   group('Balance manual palette and per-mode opacity contract', () {
     test(
-      'BALANCE-PALETTE-VARIANT-RED: every family exposes the exact three explicit variants',
+      'PAL-01 RED: eight families expose the exact three explicit variants',
       () {
         expect(
           DashboardBalanceHeaderPaletteVariant.values,
@@ -39,15 +39,316 @@ void main() {
         expect(
           DashboardBalanceHeaderPaletteCatalog.palettes.length *
               DashboardBalanceHeaderPaletteVariant.values.length,
-          12,
+          24,
         );
+      },
+    );
+
+    test(
+      'PAL-02/03 RED: the four curated remix families retain every anchor',
+      () {
+        const expected =
+            <
+              DashboardBalanceHeaderPalette,
+              Map<DashboardBalanceHeaderPaletteVariant, List<Color>>
+            >{
+              DashboardBalanceHeaderPalette.balanceDiverging:
+                  <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+                    DashboardBalanceHeaderPaletteVariant.original: <Color>[
+                      Color(0xffa3c4f3),
+                      Color(0xffaf99ff),
+                      Color(0xffb794ff),
+                      Color(0xffcfbaf0),
+                      Color(0xfff1c0e8),
+                      Color(0xfffbf8cc),
+                      Color(0xfffde4cf),
+                      Color(0xffffcfd2),
+                      Color(0xffffc2e2),
+                      Color(0xffffadc7),
+                      Color(0xffff99b6),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+                      Color(0xff6eaaff),
+                      Color(0xff9678ff),
+                      Color(0xffa272ff),
+                      Color(0xffb382ff),
+                      Color(0xffff89e9),
+                      Color(0xfffff99f),
+                      Color(0xffffcea4),
+                      Color(0xffffa6ac),
+                      Color(0xffff9ed6),
+                      Color(0xffff7fae),
+                      Color(0xffff6a95),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+                      Color(0xff3d84f7),
+                      Color(0xff7a52ff),
+                      Color(0xff8a5cff),
+                      Color(0xff924eff),
+                      Color(0xfff044c7),
+                      Color(0xffffd81a),
+                      Color(0xffff9d45),
+                      Color(0xffff6674),
+                      Color(0xffff78cb),
+                      Color(0xffff4f96),
+                      Color(0xffff3380),
+                    ],
+                  },
+              DashboardBalanceHeaderPalette.limitColorLabNoWhite:
+                  <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+                    DashboardBalanceHeaderPaletteVariant.original: <Color>[
+                      Color(0xff6d28d9),
+                      Color(0xff8b5cf6),
+                      Color(0xff9b7bff),
+                      Color(0xffb794ff),
+                      Color(0xffd9a1f3),
+                      Color(0xfff08bd6),
+                      Color(0xffff7bb7),
+                      Color(0xffff6ea4),
+                      Color(0xfff472b6),
+                      Color(0xffec4899),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+                      Color(0xff5b1acf),
+                      Color(0xff7c3ff2),
+                      Color(0xff8758ff),
+                      Color(0xffa272ff),
+                      Color(0xffca78ec),
+                      Color(0xffed5ac6),
+                      Color(0xfff678bf),
+                      Color(0xffff4ba4),
+                      Color(0xffec409f),
+                      Color(0xffe51e7e),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+                      Color(0xff4a0fbf),
+                      Color(0xff6829e8),
+                      Color(0xff7139ff),
+                      Color(0xff924eff),
+                      Color(0xffbb4fe8),
+                      Color(0xffe331b7),
+                      Color(0xfff43ea8),
+                      Color(0xffff228c),
+                      Color(0xffe91a85),
+                      Color(0xffd7006b),
+                    ],
+                  },
+              DashboardBalanceHeaderPalette.softRainbowNoYellowLeft:
+                  <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+                    DashboardBalanceHeaderPaletteVariant.original: <Color>[
+                      Color(0xfffde4cf),
+                      Color(0xffffcfd2),
+                      Color(0xfff1c0e8),
+                      Color(0xffcfbaf0),
+                      Color(0xffcaadff),
+                      Color(0xffa3c4f3),
+                      Color(0xff90dbf4),
+                      Color(0xff8eecf5),
+                      Color(0xff98f5e1),
+                      Color(0xffb9fbc0),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+                      Color(0xffffcea4),
+                      Color(0xffffa6ac),
+                      Color(0xffff89e9),
+                      Color(0xffb382ff),
+                      Color(0xff9678ff),
+                      Color(0xff6eaaff),
+                      Color(0xff5cd6ff),
+                      Color(0xff5bf1ff),
+                      Color(0xff65ffde),
+                      Color(0xff8cff98),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+                      Color(0xffff9d45),
+                      Color(0xffff6674),
+                      Color(0xfff044c7),
+                      Color(0xff8a5cff),
+                      Color(0xff7a52ff),
+                      Color(0xff3d84f7),
+                      Color(0xff27c0eb),
+                      Color(0xff20dde4),
+                      Color(0xff28ddb4),
+                      Color(0xff58e66b),
+                    ],
+                  },
+              DashboardBalanceHeaderPalette.softRainbowReordered:
+                  <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+                    DashboardBalanceHeaderPaletteVariant.original: <Color>[
+                      Color(0xffaf99ff),
+                      Color(0xffcfbaf0),
+                      Color(0xffa3c4f3),
+                      Color(0xff90dbf4),
+                      Color(0xfff1c0e8),
+                      Color(0xffffcfd2),
+                      Color(0xffffadc7),
+                      Color(0xfffbf8cc),
+                      Color(0xff98f5e1),
+                      Color(0xffb9fbc0),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+                      Color(0xff9678ff),
+                      Color(0xffb382ff),
+                      Color(0xff6eaaff),
+                      Color(0xff5cd6ff),
+                      Color(0xffff89e9),
+                      Color(0xffff9ed6),
+                      Color(0xffff7fae),
+                      Color(0xfffff99f),
+                      Color(0xff65ffde),
+                      Color(0xff8cff98),
+                    ],
+                    DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+                      Color(0xff7a52ff),
+                      Color(0xff8a5cff),
+                      Color(0xff3d84f7),
+                      Color(0xff27c0eb),
+                      Color(0xfff044c7),
+                      Color(0xffff78cb),
+                      Color(0xffff4f96),
+                      Color(0xffffd81a),
+                      Color(0xff28ddb4),
+                      Color(0xff58e66b),
+                    ],
+                  },
+            };
+
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.palettes,
+          <DashboardBalanceHeaderPalette>[
+            DashboardBalanceHeaderPalette.softRainbow,
+            DashboardBalanceHeaderPalette.levanderRoseEmbrace,
+            DashboardBalanceHeaderPalette.limitColorLab,
+            DashboardBalanceHeaderPalette.customBalance,
+            DashboardBalanceHeaderPalette.balanceDiverging,
+            DashboardBalanceHeaderPalette.limitColorLabNoWhite,
+            DashboardBalanceHeaderPalette.softRainbowNoYellowLeft,
+            DashboardBalanceHeaderPalette.softRainbowReordered,
+          ],
+        );
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(8));
+
+        for (final family in expected.entries) {
+          for (final variant in family.value.entries) {
+            expect(
+              DashboardBalanceHeaderPaletteCatalog.scaleFor(
+                family.key,
+                variant.key,
+              ).colors,
+              variant.value,
+              reason: '${family.key.name}/${variant.key.name} is authored data',
+            );
+          }
+        }
+
+        for (final variant in DashboardBalanceHeaderPaletteVariant.values) {
+          final diverging =
+              expected[DashboardBalanceHeaderPalette
+                  .balanceDiverging]![variant]!;
+          expect(diverging, hasLength(11));
+          expect(diverging[5], switch (variant) {
+            DashboardBalanceHeaderPaletteVariant.original => const Color(
+              0xfffbf8cc,
+            ),
+            DashboardBalanceHeaderPaletteVariant.saturated => const Color(
+              0xfffff99f,
+            ),
+            DashboardBalanceHeaderPaletteVariant.vivid => const Color(
+              0xffffd81a,
+            ),
+          });
+          expect(
+            expected[DashboardBalanceHeaderPalette
+                .limitColorLabNoWhite]![variant]!,
+            hasLength(10),
+          );
+          expect(
+            expected[DashboardBalanceHeaderPalette
+                .softRainbowNoYellowLeft]![variant]!,
+            hasLength(10),
+          );
+          expect(
+            expected[DashboardBalanceHeaderPalette
+                .softRainbowReordered]![variant]!,
+            hasLength(10),
+          );
+        }
+
+        const paleLimitMiddle = <Color>[
+          Color(0xffd8b4fe),
+          Color(0xfffbcfe8),
+          Color(0xfff9a8d4),
+        ];
+        for (final scale
+            in expected[DashboardBalanceHeaderPalette.limitColorLabNoWhite]!
+                .values) {
+          expect(scale, isNot(contains(anyOf(paleLimitMiddle))));
+        }
+        expect(
+          expected[DashboardBalanceHeaderPalette
+              .softRainbowNoYellowLeft]![DashboardBalanceHeaderPaletteVariant
+              .original]!,
+          isNot(contains(const Color(0xfffbf8cc))),
+        );
+        expect(
+          expected[DashboardBalanceHeaderPalette
+              .softRainbowNoYellowLeft]![DashboardBalanceHeaderPaletteVariant
+              .saturated]!,
+          isNot(contains(const Color(0xfffff99f))),
+        );
+        expect(
+          expected[DashboardBalanceHeaderPalette
+              .softRainbowNoYellowLeft]![DashboardBalanceHeaderPaletteVariant
+              .vivid]!,
+          isNot(contains(const Color(0xffffd81a))),
+        );
+        final reordered =
+            expected[DashboardBalanceHeaderPalette.softRainbowReordered]!;
+        for (final scale in reordered.values) {
+          final yellowIndex = scale.indexWhere(
+            (color) => <int>{
+              0xfffbf8cc,
+              0xfffff99f,
+              0xffffd81a,
+            }.contains(color.toARGB32()),
+          );
+          expect(yellowIndex, greaterThan(4));
+          expect(yellowIndex, lessThan(9));
+        }
+
+        for (final family in _legacyPaletteScales.entries) {
+          for (final variant in family.value.entries) {
+            expect(
+              DashboardBalanceHeaderPaletteCatalog.scaleFor(
+                family.key,
+                variant.key,
+              ).colors,
+              variant.value,
+              reason:
+                  'The pre-existing ${family.key.name}/${variant.key.name} '
+                  'scale is protected byte-for-byte.',
+            );
+          }
+        }
+        final legacyAnchors = _legacyPaletteScales.values
+            .expand((variants) => variants.values)
+            .expand((colors) => colors)
+            .map((color) => color.toARGB32())
+            .toSet();
+        for (final variants in expected.values) {
+          for (final colors in variants.values) {
+            for (final color in colors) {
+              expect(legacyAnchors, contains(color.toARGB32()));
+            }
+          }
+        }
       },
     );
 
     test(
       'all four approved palette identities retain exact ARGB endpoints',
       () {
-        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(4));
+        expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(8));
         expect(
           DashboardBalanceHeaderPaletteCatalog.scaleFor(
             DashboardBalanceHeaderPalette.softRainbow,
@@ -261,6 +562,91 @@ void main() {
         );
         expect(controller.tuning.value.generation, beforeGeneration + 2);
         controller.dispose();
+      },
+    );
+
+    test(
+      'PAL-04: every remix family uses the existing policy frame without resetting visual state',
+      () {
+        final controller = DashboardHeaderVisualController(
+          vsync: const TestVSync(),
+        );
+        final policy = DashboardBalanceHeaderColorPolicy(
+          tuning: controller.tuning,
+        );
+        addTearDown(() {
+          policy.dispose();
+          controller.dispose();
+        });
+        final ticker = controller.tickerIdentity;
+        controller.selectBalanceHeaderPaletteVariant(
+          DashboardBalanceHeaderPaletteVariant.vivid,
+        );
+        controller.setBalanceHeaderPositionPercent(73);
+        controller.setBalanceHeaderWindowWidthPercent(41);
+        controller.setBalanceHeaderOpacityPercent(50);
+        controller.setBalanceHeaderTextColor(
+          DashboardHeaderForegroundColor.softenedDark,
+        );
+        controller.setBalanceHeaderChartColor(
+          DashboardHeaderForegroundColor.black,
+        );
+        for (final palette in const <DashboardBalanceHeaderPalette>[
+          DashboardBalanceHeaderPalette.balanceDiverging,
+          DashboardBalanceHeaderPalette.limitColorLabNoWhite,
+          DashboardBalanceHeaderPalette.softRainbowNoYellowLeft,
+          DashboardBalanceHeaderPalette.softRainbowReordered,
+        ]) {
+          controller.selectBalanceHeaderPalette(palette);
+          final state = policy.value.balanceColorWindow!.state;
+          expect(state.palette, palette);
+          expect(state.variant, DashboardBalanceHeaderPaletteVariant.vivid);
+          expect(state.positionPercent, 73);
+          expect(state.windowWidthPercent, 41);
+          expect(policy.value.opacity, .5);
+          expect(policy.value.foregroundTextColor, const Color(0xd114213a));
+          expect(policy.value.chartColor, Colors.black);
+          expect(controller.tickerIdentity, same(ticker));
+        }
+      },
+    );
+
+    test(
+      'ICO-01/02: Header mode icon scaling is one semantic tuning update',
+      () {
+        final controller = DashboardHeaderVisualController(
+          vsync: const TestVSync(),
+        );
+        final score = ValueNotifier<MindBehavioralScoreFrame?>(null);
+        final balance = DashboardBalanceHeaderColorPolicy(
+          tuning: controller.tuning,
+        );
+        final mind = DashboardMindHeaderColorPolicy(
+          tuning: controller.tuning,
+          score: score,
+        );
+        final budget = DashboardBudgetHeaderColorPolicy(
+          tuning: controller.tuning,
+        );
+        addTearDown(() {
+          budget.dispose();
+          mind.dispose();
+          balance.dispose();
+          score.dispose();
+          controller.dispose();
+        });
+        final ticker = controller.tickerIdentity;
+        final beforeGeneration = controller.tuning.value.generation;
+        expect(controller.tuning.value.headerModeIconSizePercent, 0);
+        controller.setHeaderModeIconSizePercent(100);
+        expect(controller.tuning.value.headerModeIconSizePercent, 100);
+        expect(controller.tuning.value.generation, beforeGeneration + 1);
+        expect(balance.value.headerModeIconSizePercent, 100);
+        expect(mind.value.headerModeIconSizePercent, 100);
+        expect(budget.value.headerModeIconSizePercent, 100);
+        expect(controller.tickerIdentity, same(ticker));
+        controller.setHeaderModeIconSizePercent(100);
+        expect(controller.tuning.value.generation, beforeGeneration + 1);
       },
     );
 
@@ -1977,6 +2363,156 @@ void main() {
     },
   );
 }
+
+/// Exact pre-change catalog source. This stays test-only so curated remix
+/// provenance has no production allocation or lookup cost.
+const _legacyPaletteScales =
+    <
+      DashboardBalanceHeaderPalette,
+      Map<DashboardBalanceHeaderPaletteVariant, List<Color>>
+    >{
+      DashboardBalanceHeaderPalette.softRainbow:
+          <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+            DashboardBalanceHeaderPaletteVariant.original: <Color>[
+              Color(0xfffbf8cc),
+              Color(0xfffde4cf),
+              Color(0xffffcfd2),
+              Color(0xfff1c0e8),
+              Color(0xffcfbaf0),
+              Color(0xffa3c4f3),
+              Color(0xff90dbf4),
+              Color(0xff8eecf5),
+              Color(0xff98f5e1),
+              Color(0xffb9fbc0),
+            ],
+            DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+              Color(0xfffff99f),
+              Color(0xffffcea4),
+              Color(0xffffa6ac),
+              Color(0xffff89e9),
+              Color(0xffb382ff),
+              Color(0xff6eaaff),
+              Color(0xff5cd6ff),
+              Color(0xff5bf1ff),
+              Color(0xff65ffde),
+              Color(0xff8cff98),
+            ],
+            DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+              Color(0xffffd81a),
+              Color(0xffff9d45),
+              Color(0xffff6674),
+              Color(0xfff044c7),
+              Color(0xff8a5cff),
+              Color(0xff3d84f7),
+              Color(0xff27c0eb),
+              Color(0xff20dde4),
+              Color(0xff28ddb4),
+              Color(0xff58e66b),
+            ],
+          },
+      DashboardBalanceHeaderPalette.levanderRoseEmbrace:
+          <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+            DashboardBalanceHeaderPaletteVariant.original: <Color>[
+              Color(0xffaf99ff),
+              Color(0xffcaadff),
+              Color(0xffffc2e2),
+              Color(0xffffadc7),
+              Color(0xffff99b6),
+            ],
+            DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+              Color(0xff9678ff),
+              Color(0xffb388ff),
+              Color(0xffff9ed6),
+              Color(0xffff7fae),
+              Color(0xffff6a95),
+            ],
+            DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+              Color(0xff7a52ff),
+              Color(0xff9f66ff),
+              Color(0xffff78cb),
+              Color(0xffff4f96),
+              Color(0xffff3380),
+            ],
+          },
+      DashboardBalanceHeaderPalette.limitColorLab:
+          <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+            DashboardBalanceHeaderPaletteVariant.original: <Color>[
+              Color(0xff6d28d9),
+              Color(0xff8b5cf6),
+              Color(0xffa78bfa),
+              Color(0xffd8b4fe),
+              Color(0xfffbcfe8),
+              Color(0xfff9a8d4),
+              Color(0xfff472b6),
+              Color(0xffec4899),
+              Color(0xffe23883),
+              Color(0xffdb2777),
+            ],
+            DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+              Color(0xff5b1acf),
+              Color(0xff7c3ff2),
+              Color(0xff9568f7),
+              Color(0xffc99afd),
+              Color(0xfff8a8d8),
+              Color(0xfff678bf),
+              Color(0xffec409f),
+              Color(0xffe51e7e),
+              Color(0xffd81f6e),
+              Color(0xffc9165f),
+            ],
+            DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+              Color(0xff4a0fbf),
+              Color(0xff6829e8),
+              Color(0xff7e3ef5),
+              Color(0xffb876fb),
+              Color(0xfff48ace),
+              Color(0xfff43ea8),
+              Color(0xffe91a85),
+              Color(0xffd7006b),
+              Color(0xffc10058),
+              Color(0xffad004b),
+            ],
+          },
+      DashboardBalanceHeaderPalette.customBalance:
+          <DashboardBalanceHeaderPaletteVariant, List<Color>>{
+            DashboardBalanceHeaderPaletteVariant.original: <Color>[
+              Color(0xff7c5cff),
+              Color(0xff9b7bff),
+              Color(0xffb794ff),
+              Color(0xffd9a1f3),
+              Color(0xfff08bd6),
+              Color(0xffff7bb7),
+              Color(0xffff6ea4),
+              Color(0xffff8a7a),
+              Color(0xffff9b5f),
+              Color(0xffffb36b),
+            ],
+            DashboardBalanceHeaderPaletteVariant.saturated: <Color>[
+              Color(0xff6842ff),
+              Color(0xff8758ff),
+              Color(0xffa272ff),
+              Color(0xffca78ec),
+              Color(0xffed5ac6),
+              Color(0xffff4ba4),
+              Color(0xffff3b8a),
+              Color(0xffff6a58),
+              Color(0xffff7f36),
+              Color(0xffffa74a),
+            ],
+            DashboardBalanceHeaderPaletteVariant.vivid: <Color>[
+              Color(0xff5628ff),
+              Color(0xff7139ff),
+              Color(0xff924eff),
+              Color(0xffbb4fe8),
+              Color(0xffe331b7),
+              Color(0xffff228c),
+              Color(0xffff0f6e),
+              Color(0xffff4b36),
+              Color(0xffff6a14),
+              Color(0xffff9526),
+            ],
+          },
+    };
 
 Future<ByteData> _headerRgba(WidgetTester tester, GlobalKey boundary) async {
   final renderBoundary =

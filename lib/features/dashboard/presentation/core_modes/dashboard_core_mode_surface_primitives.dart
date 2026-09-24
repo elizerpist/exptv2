@@ -255,11 +255,26 @@ class DashboardHeaderModeIconButton extends StatelessWidget {
     required this.mode,
     required this.onPressed,
     this.color = Colors.white,
+    this.sizePercent = 0,
   });
 
   final DashboardMode mode;
   final VoidCallback onPressed;
   final Color color;
+  final double sizePercent;
+
+  static const double _baseGlyphExtent = 20;
+  static const double _baseButtonExtent = 32;
+  static const double _glyphPadding = 12;
+
+  static double glyphExtentFor(double sizePercent) =>
+      _baseGlyphExtent * (1 + _boundedPercent(sizePercent) / 100);
+
+  static double buttonExtentFor(double sizePercent) =>
+      math.max(_baseButtonExtent, glyphExtentFor(sizePercent) + _glyphPadding);
+
+  static double _boundedPercent(double value) =>
+      (value.isFinite ? value : 0).clamp(0.0, 100.0).toDouble();
 
   static String assetFor(DashboardMode mode) => switch (mode) {
     DashboardMode.balance => 'assets/fluvi/header_mode_icons/balance-scale.svg',
@@ -285,26 +300,26 @@ class DashboardHeaderModeIconButton extends StatelessWidget {
     final picture = PreparedVectorAssetAtlas.instance.picture(
       atlasHandleFor(mode),
     );
+    final glyphExtent = glyphExtentFor(sizePercent);
+    final buttonExtent = buttonExtentFor(sizePercent);
     return Semantics(
       button: true,
       label: semanticLabelFor(mode),
-      child: Material(
-        color: Colors.transparent,
-        child: InkResponse(
-          key: ValueKey<String>('dashboard-header-mode-icon-${mode.name}'),
-          onTap: onPressed,
-          radius: 22,
-          containedInkWell: true,
-          child: SizedBox(
-            width: 32,
-            height: 32,
-            child: Center(
-              child: PreparedVectorPictureView(
-                picture: picture,
-                width: 20,
-                height: 20,
-                color: color,
-              ),
+      onTap: onPressed,
+      child: GestureDetector(
+        key: ValueKey<String>('dashboard-header-mode-icon-${mode.name}'),
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: onPressed,
+        child: SizedBox(
+          width: buttonExtent,
+          height: buttonExtent,
+          child: Center(
+            child: PreparedVectorPictureView(
+              picture: picture,
+              width: glyphExtent,
+              height: glyphExtent,
+              color: color,
             ),
           ),
         ),

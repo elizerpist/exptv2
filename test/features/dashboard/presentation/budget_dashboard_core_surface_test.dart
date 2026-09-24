@@ -52,7 +52,9 @@ void main() {
       );
       expect(amount.data, isNot(contains(',00 Ft')));
       expect(find.text('Napi tempó'), findsOneWidget);
-      expect(find.text('tempó'), findsOneWidget);
+      // Mode naming is intentionally owned by the Header's right-corner
+      // action icon, not duplicated as a standalone Budget Header label.
+      expect(find.text('tempó'), findsNothing);
     },
   );
 
@@ -153,9 +155,6 @@ void main() {
       final partition = tester.getRect(
         find.byKey(const ValueKey('budget-header-allocation-partition')),
       );
-      final modeLabel = tester.getRect(
-        find.byKey(const ValueKey('dashboard-core-mode-label-budget')),
-      );
       final partitionPainter = tester
           .widget<CustomPaint>(
             find.byKey(const ValueKey('budget-header-allocation-partition')),
@@ -185,7 +184,7 @@ void main() {
       expect(partition.left, greaterThanOrEqualTo(expandedHeader.left));
       expect(partition.right, lessThanOrEqualTo(expandedHeader.right));
       expect(partition.bottom, lessThanOrEqualTo(expandedHeader.bottom));
-      expect(expandedTitle.right, lessThan(modeLabel.left));
+      expect(expandedTitle.right, lessThanOrEqualTo(expandedHeader.right));
       expect(partitionPainter, isA<BudgetAllocationPartitionPainter>());
     },
   );

@@ -2284,6 +2284,7 @@ final class DashboardHeaderVisualTuning {
     required this.mindHeader,
     required this.budgetHeader,
     required this.headerTypography,
+    required this.headerModeIconSizePercent,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
     required this.generation,
   }) : settingsByEffect =
@@ -2306,6 +2307,7 @@ final class DashboardHeaderVisualTuning {
     mindHeader: const DashboardHeaderModeVisualState.defaults(),
     budgetHeader: const DashboardHeaderModeVisualState.defaults(),
     headerTypography: DashboardHeaderTypographyProfile.app,
+    headerModeIconSizePercent: 0,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
       for (final spec in DashboardHeaderEffectCatalog.effects)
         spec.id: spec.defaultSettings,
@@ -2324,6 +2326,10 @@ final class DashboardHeaderVisualTuning {
   final DashboardHeaderModeVisualState mindHeader;
   final DashboardHeaderModeVisualState budgetHeader;
   final DashboardHeaderTypographyProfile headerTypography;
+
+  /// Presentation-only scale input for the sole Header mode action. Zero
+  /// preserves the delivered glyph; 100 makes the glyph exactly twice as big.
+  final double headerModeIconSizePercent;
   final Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect;
   final int generation;
 
@@ -2342,6 +2348,7 @@ final class DashboardHeaderVisualTuning {
     DashboardHeaderModeVisualState? mindHeader,
     DashboardHeaderModeVisualState? budgetHeader,
     DashboardHeaderTypographyProfile? headerTypography,
+    double? headerModeIconSizePercent,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
     effect: effect ?? this.effect,
@@ -2355,6 +2362,10 @@ final class DashboardHeaderVisualTuning {
     mindHeader: mindHeader ?? this.mindHeader,
     budgetHeader: budgetHeader ?? this.budgetHeader,
     headerTypography: headerTypography ?? this.headerTypography,
+    headerModeIconSizePercent:
+        (headerModeIconSizePercent ?? this.headerModeIconSizePercent)
+            .clamp(0.0, 100.0)
+            .roundToDouble(),
     settingsByEffect: settingsByEffect ?? this.settingsByEffect,
     generation: generation + 1,
   );
@@ -2651,6 +2662,21 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     _record(
       'HEADER_TYPOGRAPHY_CHANGED',
       'profile=${value.name} settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
+  /// Resizes only the existing Header mode-action glyph. It shares the
+  /// dashboard-lifetime visual settings owner and never affects mode choice,
+  /// data, Header material or the one shared ticker.
+  void setHeaderModeIconSizePercent(double value) {
+    if (_disposed) return;
+    final next = (value.isFinite ? value : 0).clamp(0.0, 100.0).roundToDouble();
+    if (tuning.value.headerModeIconSizePercent == next) return;
+    tuning.value = tuning.value.copyWith(headerModeIconSizePercent: next);
+    _record(
+      'HEADER_MODE_ICON_SIZE_CHANGED',
+      'sizePct=$next settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
   }
@@ -3224,6 +3250,7 @@ final class DashboardHeaderVisualFrame {
     this.foregroundTextColor = Colors.white,
     this.chartColor = Colors.white,
     this.headerIconColor = Colors.white,
+    this.headerModeIconSizePercent = 0,
     this.chartVeilColor = Colors.white,
     this.showsChartVeil = true,
     this.typography = DashboardHeaderTypographyProfile.app,
@@ -3246,6 +3273,7 @@ final class DashboardHeaderVisualFrame {
   final Color foregroundTextColor;
   final Color chartColor;
   final Color headerIconColor;
+  final double headerModeIconSizePercent;
   final Color chartVeilColor;
   final bool showsChartVeil;
   final DashboardHeaderTypographyProfile typography;
@@ -3297,6 +3325,7 @@ final class DashboardHeaderVisualFrame {
       foregroundTextColor == other.foregroundTextColor &&
       chartColor == other.chartColor &&
       headerIconColor == other.headerIconColor &&
+      headerModeIconSizePercent == other.headerModeIconSizePercent &&
       chartVeilColor == other.chartVeilColor &&
       showsChartVeil == other.showsChartVeil &&
       typography == other.typography &&
@@ -3315,7 +3344,7 @@ final class DashboardHeaderVisualFrame {
       other is DashboardHeaderVisualFrame && sameAs(other);
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll(<Object?>[
     Object.hashAll(colors),
     Object.hashAll(stops),
     opacity,
@@ -3324,6 +3353,7 @@ final class DashboardHeaderVisualFrame {
     foregroundTextColor,
     chartColor,
     headerIconColor,
+    headerModeIconSizePercent,
     chartVeilColor,
     showsChartVeil,
     typography,
@@ -3336,7 +3366,7 @@ final class DashboardHeaderVisualFrame {
     balanceColorWindow,
     mindScoreWindow,
     staticSettingsGeneration,
-  );
+  ]);
 }
 
 /// Trivial adapter for modes whose future color algorithm is intentionally not
@@ -3396,6 +3426,7 @@ final class DashboardBalanceHeaderColorPolicy
     foregroundTextColor: tuning.balanceHeader.textColor.color,
     chartColor: tuning.balanceHeader.chartColor.color,
     headerIconColor: tuning.balanceHeader.iconColor.color,
+    headerModeIconSizePercent: tuning.headerModeIconSizePercent,
     chartVeilColor: tuning.balanceHeader.chartVeilColor.color,
     showsChartVeil: tuning.balanceHeader.chartVeilEnabled,
     typography: tuning.headerTypography,
@@ -3422,6 +3453,7 @@ abstract final class MindHeaderScoreColorScale {
     required MindHeaderScoreWindow window,
     required DashboardHeaderModeVisualState modeVisual,
     required DashboardHeaderTypographyProfile typography,
+    required double headerModeIconSizePercent,
     required int staticSettingsGeneration,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
@@ -3432,6 +3464,7 @@ abstract final class MindHeaderScoreColorScale {
     foregroundTextColor: modeVisual.textColor.color,
     chartColor: modeVisual.chartColor.color,
     headerIconColor: modeVisual.iconColor.color,
+    headerModeIconSizePercent: headerModeIconSizePercent,
     chartVeilColor: modeVisual.chartVeilColor.color,
     showsChartVeil: modeVisual.chartVeilEnabled,
     typography: typography,
@@ -3512,6 +3545,7 @@ final class DashboardMindHeaderColorPolicy
     window: window,
     modeVisual: tuning.mindHeader,
     typography: tuning.headerTypography,
+    headerModeIconSizePercent: tuning.headerModeIconSizePercent,
     staticSettingsGeneration: tuning.generation,
   );
 
@@ -3568,6 +3602,7 @@ abstract final class BudgetHeaderCoolColorScale {
     required double opacityScalePosition,
     required int staticSettingsGeneration,
     Color headerIconColor = Colors.white,
+    double headerModeIconSizePercent = 0,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
     stops: window.stops,
@@ -3575,6 +3610,7 @@ abstract final class BudgetHeaderCoolColorScale {
     colorA: window.colorA,
     colorB: window.colorB,
     headerIconColor: headerIconColor,
+    headerModeIconSizePercent: headerModeIconSizePercent,
     paletteSplitPercent: window.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3590,6 +3626,7 @@ abstract final class BudgetHeaderCategoryColorScale {
     required double opacityScalePosition,
     required int staticSettingsGeneration,
     Color headerIconColor = Colors.white,
+    double headerModeIconSizePercent = 0,
   }) => DashboardHeaderVisualFrame(
     colors: window.colors,
     stops: window.stops,
@@ -3597,6 +3634,7 @@ abstract final class BudgetHeaderCategoryColorScale {
     colorA: window.colorA,
     colorB: window.colorB,
     headerIconColor: headerIconColor,
+    headerModeIconSizePercent: headerModeIconSizePercent,
     paletteSplitPercent: window.centerPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3741,12 +3779,14 @@ final class DashboardBudgetHeaderColorPolicy
           opacityScalePosition: tuning.budgetHeader.opacityPercent,
           staticSettingsGeneration: tuning.generation,
           headerIconColor: tuning.budgetHeader.iconColor.color,
+          headerModeIconSizePercent: tuning.headerModeIconSizePercent,
         )
       : BudgetHeaderCategoryColorScale.fromWindow(
           window: categoryWindow,
           opacityScalePosition: tuning.budgetHeader.opacityPercent,
           staticSettingsGeneration: tuning.generation,
           headerIconColor: tuning.budgetHeader.iconColor.color,
+          headerModeIconSizePercent: tuning.headerModeIconSizePercent,
         );
 
   static DashboardHeaderCategoryWindow? _categoryWindowFor(

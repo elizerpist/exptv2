@@ -274,40 +274,40 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
           top: headerBounds.top,
           width: headerBounds.width,
           height: headerBounds.height,
-          child: DashboardHeaderTapWaveGestureLayer(
-            controller: widget.headerVisualController,
-            onPointerDown: switch (mode.mode) {
-              DashboardMode.mind =>
-                _mindHeaderScoreChartPointers.observePointerDown,
-              DashboardMode.balance =>
-                _balanceHeaderHistoryChartPointers.observePointerDown,
-              DashboardMode.budget => null,
-            },
-            onPointerMove: switch (mode.mode) {
-              DashboardMode.mind =>
-                _mindHeaderScoreChartPointers.observePointerMove,
-              DashboardMode.balance =>
-                _balanceHeaderHistoryChartPointers.observePointerMove,
-              DashboardMode.budget => null,
-            },
-            onPointerUp: switch (mode.mode) {
-              DashboardMode.mind =>
-                _mindHeaderScoreChartPointers.observePointerUp,
-              DashboardMode.balance =>
-                _balanceHeaderHistoryChartPointers.observePointerUp,
-              DashboardMode.budget => null,
-            },
-            onPointerCancel: switch (mode.mode) {
-              DashboardMode.mind =>
-                _mindHeaderScoreChartPointers.observePointerCancel,
-              DashboardMode.balance =>
-                _balanceHeaderHistoryChartPointers.observePointerCancel,
-              DashboardMode.budget => null,
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                GestureDetector(
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              DashboardHeaderTapWaveGestureLayer(
+                controller: widget.headerVisualController,
+                onPointerDown: switch (mode.mode) {
+                  DashboardMode.mind =>
+                    _mindHeaderScoreChartPointers.observePointerDown,
+                  DashboardMode.balance =>
+                    _balanceHeaderHistoryChartPointers.observePointerDown,
+                  DashboardMode.budget => null,
+                },
+                onPointerMove: switch (mode.mode) {
+                  DashboardMode.mind =>
+                    _mindHeaderScoreChartPointers.observePointerMove,
+                  DashboardMode.balance =>
+                    _balanceHeaderHistoryChartPointers.observePointerMove,
+                  DashboardMode.budget => null,
+                },
+                onPointerUp: switch (mode.mode) {
+                  DashboardMode.mind =>
+                    _mindHeaderScoreChartPointers.observePointerUp,
+                  DashboardMode.balance =>
+                    _balanceHeaderHistoryChartPointers.observePointerUp,
+                  DashboardMode.budget => null,
+                },
+                onPointerCancel: switch (mode.mode) {
+                  DashboardMode.mind =>
+                    _mindHeaderScoreChartPointers.observePointerCancel,
+                  DashboardMode.balance =>
+                    _balanceHeaderHistoryChartPointers.observePointerCancel,
+                  DashboardMode.budget => null,
+                },
+                child: GestureDetector(
                   key: const ValueKey(
                     'dashboard-core-mode-header-gesture-region',
                   ),
@@ -318,13 +318,12 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                   onVerticalDragEnd: _onHeaderVerticalEnd,
                   onVerticalDragCancel: _finishPointerSequence,
                 ),
-                Positioned(
-                  top: 12,
-                  right: 14,
-                  child: _modeHeaderIcon(mode.mode),
-                ),
-              ],
-            ),
+              ),
+              // This is deliberately a sibling above the passive wave
+              // Listener. A pointer on the actual mode action must cycle
+              // mode without also seeding the decorative Header splash.
+              Positioned(top: 12, right: 14, child: _modeHeaderIcon(mode.mode)),
+            ],
           ),
         ),
         if (widget.headerVisualController case final controller?)
@@ -356,6 +355,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       builder: (context, frame, _) => DashboardHeaderModeIconButton(
         mode: mode,
         color: frame.headerIconColor,
+        sizePercent: frame.headerModeIconSizePercent,
         onPressed: _switchModeFromHeaderIcon,
       ),
     );

@@ -1289,6 +1289,20 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                               profile: tuning.headerTypography,
                               onChanged: controller.setHeaderTypography,
                             ),
+                            _TunerSlider(
+                              key: const ValueKey<String>(
+                                'dashboard-header-mode-icon-size-slider',
+                              ),
+                              label: 'Módikon mérete',
+                              valueLabel:
+                                  '${tuning.headerModeIconSizePercent.toStringAsFixed(0)}%',
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              value: tuning.headerModeIconSizePercent,
+                              onChanged:
+                                  controller.setHeaderModeIconSizePercent,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),

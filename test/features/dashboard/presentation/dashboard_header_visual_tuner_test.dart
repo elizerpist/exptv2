@@ -48,7 +48,7 @@ void main() {
       await tester.ensureVisible(selector);
       final dropdown = tester
           .widget<DropdownButton<DashboardBalanceHeaderPalette>>(selector);
-      expect(dropdown.items, hasLength(4));
+      expect(dropdown.items, hasLength(8));
       final variantSelector = find.byKey(
         const ValueKey<String>('dashboard-header-balance-variant-selector'),
       );
@@ -58,13 +58,29 @@ void main() {
           );
       expect(variantDropdown.items, hasLength(3));
       variantDropdown.onChanged!(DashboardBalanceHeaderPaletteVariant.vivid);
-      dropdown.onChanged!(DashboardBalanceHeaderPalette.limitColorLab);
+      for (final palette in const <DashboardBalanceHeaderPalette>[
+        DashboardBalanceHeaderPalette.balanceDiverging,
+        DashboardBalanceHeaderPalette.limitColorLabNoWhite,
+        DashboardBalanceHeaderPalette.softRainbowNoYellowLeft,
+        DashboardBalanceHeaderPalette.softRainbowReordered,
+      ]) {
+        dropdown.onChanged!(palette);
+        expect(controller.tuning.value.balanceColor.palette, palette);
+        expect(
+          controller.tuning.value.balanceColor.variant,
+          DashboardBalanceHeaderPaletteVariant.vivid,
+        );
+      }
       final position = find.byKey(
         const ValueKey<String>('dashboard-header-balance-position-slider'),
       );
       final window = find.byKey(
         const ValueKey<String>('dashboard-header-balance-window-width-slider'),
       );
+      // The all-family loop deliberately leaves the last remix selected. Switch
+      // back to a deterministic family before asserting position/window
+      // preservation through the same selector path.
+      dropdown.onChanged!(DashboardBalanceHeaderPalette.balanceDiverging);
       tester
           .widget<Slider>(
             find.descendant(of: position, matching: find.byType(Slider)),
@@ -78,7 +94,7 @@ void main() {
       await tester.pump();
       expect(
         controller.tuning.value.balanceColor.palette,
-        DashboardBalanceHeaderPalette.limitColorLab,
+        DashboardBalanceHeaderPalette.balanceDiverging,
       );
       expect(
         controller.tuning.value.balanceColor.variant,
@@ -86,6 +102,18 @@ void main() {
       );
       expect(controller.tuning.value.balanceColor.positionPercent, 100);
       expect(controller.tuning.value.balanceColor.windowWidthPercent, 10);
+
+      final iconSize = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-icon-size-slider'),
+      );
+      await tester.ensureVisible(iconSize);
+      tester
+          .widget<Slider>(
+            find.descendant(of: iconSize, matching: find.byType(Slider)),
+          )
+          .onChanged!(100);
+      await tester.pump();
+      expect(controller.tuning.value.headerModeIconSizePercent, 100);
 
       final balanceTextBlack = find.byKey(
         const ValueKey<String>('dashboard-header-balance-text-black'),
