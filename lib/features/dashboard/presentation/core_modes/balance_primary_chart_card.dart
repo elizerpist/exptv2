@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
+import '../../../../core/design/fluvi_typography_scope.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../application/dashboard_mode_spec.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
@@ -238,6 +240,7 @@ final class _BalancePairChartSurface extends StatelessWidget {
                   incomeColor: incomeColor,
                   expenseColor: expenseColor,
                   selectedValue: selectedValue,
+                  typography: FluviTypographyScope.of(context),
                 ),
               ),
             ),
@@ -302,6 +305,7 @@ final class _BalanceMonthlySteps extends StatelessWidget {
                   incomeColor: incomeColor,
                   expenseColor: expenseColor,
                   selectedDay: selectedDay,
+                  typography: FluviTypographyScope.of(context),
                 ),
               ),
             ),
@@ -439,6 +443,7 @@ final class _BalancePairChartPainter extends CustomPainter {
     required this.incomeColor,
     required this.expenseColor,
     required this.selectedValue,
+    required this.typography,
   });
 
   final List<DashboardBalancePrimaryPeriodPair> pairs;
@@ -446,6 +451,7 @@ final class _BalancePairChartPainter extends CustomPainter {
   final Color incomeColor;
   final Color expenseColor;
   final int? selectedValue;
+  final FluviTypographyProfile typography;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -524,7 +530,7 @@ final class _BalancePairChartPainter extends CustomPainter {
               'D',
             ][pair.value - 1]
           : '${pair.value}';
-      _paintLabel(canvas, label, Offset(center, plot.bottom + 3));
+      _paintLabel(canvas, label, Offset(center, plot.bottom + 3), typography);
     }
   }
 
@@ -553,7 +559,8 @@ final class _BalancePairChartPainter extends CustomPainter {
       oldDelegate.isYear != isYear ||
       oldDelegate.incomeColor != incomeColor ||
       oldDelegate.expenseColor != expenseColor ||
-      oldDelegate.selectedValue != selectedValue;
+      oldDelegate.selectedValue != selectedValue ||
+      oldDelegate.typography != typography;
 }
 
 final class _BalanceStepChartPainter extends CustomPainter {
@@ -562,12 +569,14 @@ final class _BalanceStepChartPainter extends CustomPainter {
     required this.incomeColor,
     required this.expenseColor,
     required this.selectedDay,
+    required this.typography,
   });
 
   final List<DashboardBalancePrimaryDayPoint> points;
   final Color incomeColor;
   final Color expenseColor;
   final int? selectedDay;
+  final FluviTypographyProfile typography;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -611,11 +620,12 @@ final class _BalanceStepChartPainter extends CustomPainter {
       (point) => point.expenseMinor,
       expenseColor,
     );
-    _paintLabel(canvas, '1', Offset(plot.left, plot.bottom + 3));
+    _paintLabel(canvas, '1', Offset(plot.left, plot.bottom + 3), typography);
     _paintLabel(
       canvas,
       '${points.length}',
       Offset(plot.right, plot.bottom + 3),
+      typography,
     );
   }
 
@@ -655,7 +665,8 @@ final class _BalanceStepChartPainter extends CustomPainter {
       oldDelegate.points != points ||
       oldDelegate.incomeColor != incomeColor ||
       oldDelegate.expenseColor != expenseColor ||
-      oldDelegate.selectedDay != selectedDay;
+      oldDelegate.selectedDay != selectedDay ||
+      oldDelegate.typography != typography;
 }
 
 double _xFor(int index, int count, Rect plot) =>
@@ -664,13 +675,17 @@ double _xFor(int index, int count, Rect plot) =>
 int _dayForOffset(double dx, double width, int count) =>
     (dx.clamp(0, width) / math.max(1, width) * (count - 1)).round() + 1;
 
-void _paintLabel(Canvas canvas, String label, Offset anchor) {
+void _paintLabel(
+  Canvas canvas,
+  String label,
+  Offset anchor,
+  FluviTypographyProfile typography,
+) {
   final painter = TextPainter(
     text: TextSpan(
       text: label,
-      style: const TextStyle(
-        fontSize: 9,
-        color: FluviVisualTokens.textSecondary,
+      style: typography.applyTo(
+        const TextStyle(fontSize: 9, color: FluviVisualTokens.textSecondary),
       ),
     ),
     textDirection: TextDirection.ltr,

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/fluvi_global_appearance.dart';
+
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -293,7 +295,8 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     this.maximumRetainedBytes = 2 * 1024 * 1024,
     this.maximumCursorAnchors = 8192,
     this.pagePreparationPolicy = const CommittedPagePreparationPolicy(),
-  }) {
+    FluviTypographyProfile typography = FluviTypographyProfile.app,
+  }) : _typography = typography {
     if (pageSize <= 0 ||
         maximumRetainedPages < 3 ||
         maximumRetainedBytes < 1 ||
@@ -320,6 +323,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
   final int maximumRetainedBytes;
   final int maximumCursorAnchors;
   final CommittedPagePreparationPolicy pagePreparationPolicy;
+  FluviTypographyProfile _typography;
   final Stopwatch _pagePreparationClock = Stopwatch()..start();
 
   // Page zero is the committed scope's root. It has one bounded page of row
@@ -451,6 +455,29 @@ final class CommittedLogViewportCache extends ChangeNotifier {
       _lastCommitRejection;
   int get pageFailureCount => _pageFailureCount;
   double? get surfaceWidth => _surfaceWidth;
+  FluviTypographyProfile get typography => _typography;
+
+  /// Rebuilds only the width-bound committed text resources for the one global
+  /// typeface setting. It preserves committed row payloads, query scope,
+  /// geometry and financial data.
+  void setTypography(FluviTypographyProfile typography) {
+    _ensureUsable();
+    if (_typography == typography) return;
+    _typography = typography;
+    _invalidateVerticalInteractionArming();
+    _invalidateRootFallbackPreparation();
+    _invalidatePrearmedPreviewRoot();
+    _disposePreparedPages();
+    _recalculateRetainedPageEstimatedBytes();
+    _refreshRootEstimatedBytes();
+    _refreshEstimatedBytes();
+    _presentationGeneration += 1;
+    _renderGeneration += 1;
+    _notifyResourceChanges();
+    final width = _surfaceWidth;
+    if (width != null) configureSurfaceWidth(width);
+  }
+
   Map<String, Object?>? get nextCursor => _nextCursor;
   bool get hasMorePages => _nextCursor != null;
   bool get isVerticalRenderingActive => _verticalRenderingActive;
@@ -809,6 +836,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final preparation = _PrivateCommittedPagePreparation(
       page: page,
       surfaceWidth: width,
+      typography: _typography,
     );
     try {
       while (!preparation.isComplete) {
@@ -1191,6 +1219,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final preparation = _PrivateCommittedPagePreparation(
       page: page,
       surfaceWidth: width,
+      typography: _typography,
     );
     final totalStopwatch = Stopwatch()..start();
     final yieldsAtStart = _pagePreparationYieldCount;
@@ -2353,6 +2382,7 @@ final class CommittedLogViewportCache extends ChangeNotifier {
     final preparation = _PrivateCommittedPagePreparation(
       page: page,
       surfaceWidth: width,
+      typography: _typography,
     );
     try {
       while (!preparation.isComplete) {
@@ -2456,10 +2486,12 @@ final class _PrivateCommittedPagePreparation {
   _PrivateCommittedPagePreparation({
     required this.page,
     required this.surfaceWidth,
+    required this.typography,
   });
 
   final CommittedLogPage page;
   final double surfaceWidth;
+  final FluviTypographyProfile typography;
   final Map<String, DashboardPreparedLogBoxRowTextLayout> _rows =
       <String, DashboardPreparedLogBoxRowTextLayout>{};
   final Map<String, TextPainter> _headers = <String, TextPainter>{};
@@ -2475,13 +2507,14 @@ final class _PrivateCommittedPagePreparation {
       row: item.row,
       surfaceWidth: surfaceWidth,
       contentIdentity: item.row.textLayoutId,
+      typography: typography,
     );
     if (item.dayLabel case final String label) {
       _headers.putIfAbsent(
         label,
         () => prepareDashboardLogBoxTextPainter(
           label,
-          FluviVisualTokens.logBoxDayHeaderTextStyle,
+          typography.applyTo(FluviVisualTokens.logBoxDayHeaderTextStyle),
           surfaceWidth,
         ),
       );

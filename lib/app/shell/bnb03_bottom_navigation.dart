@@ -238,7 +238,7 @@ class Bnb03BottomNavigation extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.width,
-    this.fontFamily = 'SF Pro Text',
+    this.fontFamily,
     this.edgeShape = DashboardBottomNavEdgeShape.rounded,
     this.topBorder = DashboardBottomNavTopBorder.off,
     this.layoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
@@ -250,9 +250,9 @@ class Bnb03BottomNavigation extends StatelessWidget {
   /// Leave null to use the available width.
   final double? width;
 
-  /// The Figma file uses SF Pro Text Regular.
-  /// Add that font to your own app assets for exact typography.
-  final String fontFamily;
+  /// An optional explicit family for isolated previews. Production inherits the
+  /// one app-wide user-selected typeface from [Theme].
+  final String? fontFamily;
   final DashboardBottomNavEdgeShape edgeShape;
   final DashboardBottomNavTopBorder topBorder;
   final DashboardBottomNavLayoutStyle layoutStyle;
@@ -500,12 +500,14 @@ class _NavItem extends StatelessWidget {
   final IconData boldIcon;
   final double iconLeft;
   final double textLeft;
-  final String fontFamily;
+  final String? fontFamily;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     double s(double value) => value * scale;
+    final resolvedFontFamily =
+        fontFamily ?? Theme.of(context).textTheme.labelSmall?.fontFamily;
     final color = selected
         ? FluviVisualTokens.appHighlightPressedColor
         : Bnb03BottomNavigation._unselected;
@@ -551,7 +553,7 @@ class _NavItem extends StatelessWidget {
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w400,
-                              fontFamily: fontFamily,
+                              fontFamily: resolvedFontFamily,
                               fontSize: s(12),
                               height: 14 / 12,
                               leadingDistribution: TextLeadingDistribution.even,
@@ -565,7 +567,7 @@ class _NavItem extends StatelessWidget {
                           style: TextStyle(
                             color: color,
                             fontWeight: FontWeight.w400,
-                            fontFamily: fontFamily,
+                            fontFamily: resolvedFontFamily,
                             fontSize: s(12),
                             height: 14 / 12,
                             leadingDistribution: TextLeadingDistribution.even,

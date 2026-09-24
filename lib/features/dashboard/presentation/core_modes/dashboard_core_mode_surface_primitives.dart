@@ -8,6 +8,7 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../application/dashboard_mode_spec.dart';
@@ -346,20 +347,18 @@ final class _HeaderModeLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget text(Color color, DashboardHeaderTypographyProfile typography) =>
-        Text(
-          label,
-          key: labelKey,
-          style: typography.applyTo(
-            Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
-          ),
-        );
+    Widget text(Color color, FluviTypographyProfile typography) => Text(
+      label,
+      key: labelKey,
+      style: typography.applyTo(
+        (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
+          color: color,
+        ),
+      ),
+    );
     final frames = frame;
     if (!usesVisualForeground || frames == null) {
-      return text(
-        FluviVisualTokens.textSecondary,
-        DashboardHeaderTypographyProfile.app,
-      );
+      return text(FluviVisualTokens.textSecondary, FluviTypographyProfile.app);
     }
     return ValueListenableBuilder<DashboardHeaderVisualFrame>(
       valueListenable: frames,

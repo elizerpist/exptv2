@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
@@ -455,7 +456,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
           DashboardHeaderVisualFrame? headerFrame,
         ) {
           final typography =
-              headerFrame?.typography ?? DashboardHeaderTypographyProfile.app;
+              headerFrame?.typography ?? FluviTypographyProfile.app;
           return Stack(
             fit: StackFit.expand,
             children: <Widget>[

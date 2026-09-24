@@ -1,10 +1,37 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/logbox/presentation/dashboard_logbox_prepared_row_text_layout.dart';
 
 void main() {
+  test(
+    'global Color Lab profile is embedded in every prepared LogBox paragraph',
+    () {
+      final layout = DashboardPreparedLogBoxRowTextLayout.prepare(
+        row: _row(),
+        surfaceWidth: 378,
+        contentIdentity: 1,
+        typography: FluviTypographyProfile.colorLab,
+      );
+      addTearDown(layout.dispose);
+
+      for (final painter in <TextPainter>[
+        layout.title,
+        layout.secondary,
+        layout.amount,
+        layout.time,
+      ]) {
+        expect(
+          (painter.text! as TextSpan).style!.fontFamily,
+          'FluviColorLabInter',
+        );
+      }
+    },
+  );
+
   test(
     'RED: cooperative row layout yields between distinct paragraph layouts',
     () async {

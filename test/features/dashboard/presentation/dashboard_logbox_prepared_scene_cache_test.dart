@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_prepared_scene_cache.dart';
@@ -18,6 +19,36 @@ void main() {
       1000,
     );
   });
+
+  test(
+    'global typography invalidates only cached LogBox scenes and reuses the immutable payload',
+    () async {
+      final cache = DashboardLogBoxPreparedSceneCache();
+      addTearDown(cache.dispose);
+      final payload = _payload(month: 7, rowCount: 1);
+      final window = DashboardLogBoxSceneWindow(
+        identity: 'typography-only-window',
+        payloads: <DashboardLogViewportState>[payload],
+      );
+
+      await cache.prepareWindow(window: window, surfaceWidth: 378);
+      cache.activateWindow(window);
+      final beforeGeneration = cache.generation;
+      final beforeIdentity = window.identity;
+
+      cache.setTypography(FluviTypographyProfile.colorLab);
+
+      expect(cache.typography, FluviTypographyProfile.colorLab);
+      expect(cache.generation, beforeGeneration + 1);
+      expect(cache.activeWindowManifest, isNull);
+      expect(window.identity, beforeIdentity);
+      expect(payload.flatItems, isNotEmpty);
+
+      await cache.prepareWindow(window: window, surfaceWidth: 378);
+      cache.activateWindow(window);
+      expect(cache.activeWindowIdentity, beforeIdentity);
+    },
+  );
 
   test(
     'an empty retained window reuses the active canonical empty scene without construction',

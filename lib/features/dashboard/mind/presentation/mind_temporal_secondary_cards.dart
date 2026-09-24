@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
+import '../../../../core/design/fluvi_typography_scope.dart';
 import '../../query/presentation/query_menu_formatters.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
@@ -152,6 +154,7 @@ final class _MindMonthRhythmPlot extends StatelessWidget {
               fullPoints: fullPoints,
               average: average,
               barColor: barColor,
+              typography: FluviTypographyScope.of(context),
             ),
           ),
           Positioned(
@@ -190,12 +193,14 @@ final class _MindMonthRhythmPainter extends CustomPainter {
     required this.fullPoints,
     required this.average,
     required this.barColor,
+    required this.typography,
   });
 
   final List<MindAggregateLinePoint> points;
   final List<MindAggregateLinePoint> fullPoints;
   final double average;
   final Color barColor;
+  final FluviTypographyProfile typography;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -270,9 +275,8 @@ final class _MindMonthRhythmPainter extends CustomPainter {
       if (day <= 0 || day > points.length) continue;
       labelPainter.text = TextSpan(
         text: '$day',
-        style: const TextStyle(
-          color: FluviVisualTokens.textSecondary,
-          fontSize: 7,
+        style: typography.applyTo(
+          const TextStyle(color: FluviVisualTokens.textSecondary, fontSize: 7),
         ),
       );
       labelPainter.layout();
@@ -289,7 +293,8 @@ final class _MindMonthRhythmPainter extends CustomPainter {
       oldDelegate.points != points ||
       oldDelegate.fullPoints != fullPoints ||
       oldDelegate.average != average ||
-      oldDelegate.barColor != barColor;
+      oldDelegate.barColor != barColor ||
+      oldDelegate.typography != typography;
 }
 
 /// Additive Month comparison card. Unlike the original rhythm chart, its
@@ -418,6 +423,7 @@ final class _MindMonthComparisonRhythmPlot extends StatelessWidget {
               points: points,
               paletteStyle: paletteStyle,
               scaleResolution: scaleResolution,
+              typography: FluviTypographyScope.of(context),
             ),
           ),
           for (var index = 0; index < points.length; index += 1)
@@ -443,11 +449,13 @@ final class _MindMonthComparisonRhythmPainter extends CustomPainter {
     required this.points,
     required this.paletteStyle,
     required this.scaleResolution,
+    required this.typography,
   });
 
   final List<MindAggregateLinePoint> points;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final FluviTypographyProfile typography;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -498,9 +506,8 @@ final class _MindMonthComparisonRhythmPainter extends CustomPainter {
       if (day <= 0 || day > points.length) continue;
       labelPainter.text = TextSpan(
         text: '$day',
-        style: const TextStyle(
-          color: FluviVisualTokens.textSecondary,
-          fontSize: 7,
+        style: typography.applyTo(
+          const TextStyle(color: FluviVisualTokens.textSecondary, fontSize: 7),
         ),
       );
       labelPainter.layout();
@@ -516,7 +523,8 @@ final class _MindMonthComparisonRhythmPainter extends CustomPainter {
   bool shouldRepaint(covariant _MindMonthComparisonRhythmPainter oldDelegate) =>
       oldDelegate.points != points ||
       oldDelegate.paletteStyle != paletteStyle ||
-      oldDelegate.scaleResolution != scaleResolution;
+      oldDelegate.scaleResolution != scaleResolution ||
+      oldDelegate.typography != typography;
 }
 
 /// Presentation-only Day secondary card. It plots the exact local time and
@@ -707,6 +715,7 @@ final class _MindDayTimelinePlot extends StatelessWidget {
               events: events,
               fullEvents: fullEvents,
               markerColor: markerColor,
+              typography: FluviTypographyScope.of(context),
             ),
           ),
           for (final event in events)
@@ -734,11 +743,13 @@ final class _MindDayTimelinePainter extends CustomPainter {
     required this.events,
     required this.fullEvents,
     required this.markerColor,
+    required this.typography,
   });
 
   final List<MindDayTimelineEvent> events;
   final List<MindDayTimelineEvent> fullEvents;
   final Color markerColor;
+  final FluviTypographyProfile typography;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -757,10 +768,12 @@ final class _MindDayTimelinePainter extends CustomPainter {
         event.ordinal: TextPainter(
           text: TextSpan(
             text: _timelinePrimaryLabel(event),
-            style: TextStyle(
-              color: markerColor,
-              fontSize: 7,
-              fontWeight: FontWeight.w800,
+            style: typography.applyTo(
+              TextStyle(
+                color: markerColor,
+                fontSize: 7,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           textDirection: TextDirection.ltr,
@@ -788,9 +801,8 @@ final class _MindDayTimelinePainter extends CustomPainter {
       canvas.drawLine(Offset(x, axisY - 3), Offset(x, axisY + 3), axis);
       label.text = TextSpan(
         text: hour == 24 ? '24' : hour.toString().padLeft(2, '0'),
-        style: const TextStyle(
-          color: FluviVisualTokens.textSecondary,
-          fontSize: 7,
+        style: typography.applyTo(
+          const TextStyle(color: FluviVisualTokens.textSecondary, fontSize: 7),
         ),
       );
       label.layout();
@@ -841,7 +853,8 @@ final class _MindDayTimelinePainter extends CustomPainter {
   bool shouldRepaint(covariant _MindDayTimelinePainter oldDelegate) =>
       oldDelegate.events != events ||
       oldDelegate.fullEvents != fullEvents ||
-      oldDelegate.markerColor != markerColor;
+      oldDelegate.markerColor != markerColor ||
+      oldDelegate.typography != typography;
 }
 
 /// Explicit bounds for a measured timeline label and its marker tip.

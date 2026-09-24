@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../mind/domain/mind_behavioral_score_projection.dart';
 import 'dashboard_header_budget_cool_source.dart';
@@ -2179,29 +2180,6 @@ extension DashboardHeaderForegroundColorPresentation
   };
 }
 
-/// Header-local type comparison. It deliberately does not change the app-wide
-/// theme: only Balance and Mind Header text consumers read this token.
-enum DashboardHeaderTypographyProfile { app, colorLab }
-
-extension DashboardHeaderTypographyProfilePresentation
-    on DashboardHeaderTypographyProfile {
-  String get label => switch (this) {
-    DashboardHeaderTypographyProfile.app => 'App',
-    DashboardHeaderTypographyProfile.colorLab => 'Color Lab',
-  };
-
-  /// App preserves the existing inherited TextStyle exactly. Color Lab uses
-  /// the locally bundled Inter variable font authored first in the prototype's
-  /// portal Header font stack; it is not a claim about browser fallback.
-  String? get fontFamily => switch (this) {
-    DashboardHeaderTypographyProfile.app => null,
-    DashboardHeaderTypographyProfile.colorLab => 'FluviColorLabInter',
-  };
-
-  TextStyle? applyTo(TextStyle? style) =>
-      fontFamily == null ? style : style?.copyWith(fontFamily: fontFamily);
-}
-
 @immutable
 final class DashboardHeaderModeVisualState {
   const DashboardHeaderModeVisualState({
@@ -2283,7 +2261,7 @@ final class DashboardHeaderVisualTuning {
     required this.balanceHeader,
     required this.mindHeader,
     required this.budgetHeader,
-    required this.headerTypography,
+    required this.globalAppearance,
     required this.headerModeIconSizePercent,
     required Map<DashboardHeaderEffectId, Map<String, double>> settingsByEffect,
     required this.generation,
@@ -2306,7 +2284,7 @@ final class DashboardHeaderVisualTuning {
     balanceHeader: const DashboardHeaderModeVisualState.defaults(),
     mindHeader: const DashboardHeaderModeVisualState.defaults(),
     budgetHeader: const DashboardHeaderModeVisualState.defaults(),
-    headerTypography: DashboardHeaderTypographyProfile.app,
+    globalAppearance: const FluviGlobalAppearance.defaults(),
     headerModeIconSizePercent: 0,
     settingsByEffect: <DashboardHeaderEffectId, Map<String, double>>{
       for (final spec in DashboardHeaderEffectCatalog.effects)
@@ -2325,7 +2303,7 @@ final class DashboardHeaderVisualTuning {
   final DashboardHeaderModeVisualState balanceHeader;
   final DashboardHeaderModeVisualState mindHeader;
   final DashboardHeaderModeVisualState budgetHeader;
-  final DashboardHeaderTypographyProfile headerTypography;
+  final FluviGlobalAppearance globalAppearance;
 
   /// Presentation-only scale input for the sole Header mode action. Zero
   /// preserves the delivered glyph; 100 makes the glyph exactly twice as big.
@@ -2347,7 +2325,7 @@ final class DashboardHeaderVisualTuning {
     DashboardHeaderModeVisualState? balanceHeader,
     DashboardHeaderModeVisualState? mindHeader,
     DashboardHeaderModeVisualState? budgetHeader,
-    DashboardHeaderTypographyProfile? headerTypography,
+    FluviGlobalAppearance? globalAppearance,
     double? headerModeIconSizePercent,
     Map<DashboardHeaderEffectId, Map<String, double>>? settingsByEffect,
   }) => DashboardHeaderVisualTuning(
@@ -2361,7 +2339,7 @@ final class DashboardHeaderVisualTuning {
     balanceHeader: balanceHeader ?? this.balanceHeader,
     mindHeader: mindHeader ?? this.mindHeader,
     budgetHeader: budgetHeader ?? this.budgetHeader,
-    headerTypography: headerTypography ?? this.headerTypography,
+    globalAppearance: globalAppearance ?? this.globalAppearance,
     headerModeIconSizePercent:
         (headerModeIconSizePercent ?? this.headerModeIconSizePercent)
             .clamp(0.0, 100.0)
@@ -2654,14 +2632,46 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Switches only the Header-local comparison profile. Financial and score
-  /// publications, chart geometry, and the shared visual ticker are untouched.
-  void setHeaderTypography(DashboardHeaderTypographyProfile value) {
-    if (_disposed || tuning.value.headerTypography == value) return;
-    tuning.value = tuning.value.copyWith(headerTypography: value);
+  void setDirectionColorProfile(FluviDirectionColorProfile value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(directionColorProfile: value),
+      'DIRECTION_COLOR_PROFILE_CHANGED',
+    );
+  }
+
+  void setAvatarColorProfile(CategoryAvatarColorProfile value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(avatarColorProfile: value),
+      'AVATAR_COLOR_PROFILE_CHANGED',
+    );
+  }
+
+  void setShowsDirectionArtwork(bool value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(showsDirectionArtwork: value),
+      'DIRECTION_ARTWORK_VISIBILITY_CHANGED',
+    );
+  }
+
+  /// Switches the one app-wide typeface authority. Header frames project this
+  /// value, while the shell applies the same profile to inherited typography.
+  void setGlobalTypography(FluviTypographyProfile value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(typography: value),
+      'GLOBAL_TYPOGRAPHY_CHANGED',
+    );
+  }
+
+  void _setGlobalAppearance(FluviGlobalAppearance next, String stage) {
+    if (_disposed || tuning.value.globalAppearance == next) return;
+    tuning.value = tuning.value.copyWith(globalAppearance: next);
     _record(
-      'HEADER_TYPOGRAPHY_CHANGED',
-      'profile=${value.name} settingsGeneration=${tuning.value.generation}',
+      stage,
+      'direction=${next.directionColorProfile.name} '
+      'avatar=${next.avatarColorProfile.name} '
+      'artwork=${next.showsDirectionArtwork} '
+      'typography=${next.typography.name} '
+      'settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
   }
@@ -3253,7 +3263,7 @@ final class DashboardHeaderVisualFrame {
     this.headerModeIconSizePercent = 0,
     this.chartVeilColor = Colors.white,
     this.showsChartVeil = true,
-    this.typography = DashboardHeaderTypographyProfile.app,
+    this.typography = FluviTypographyProfile.app,
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
     this.windowRightPercent,
@@ -3276,7 +3286,7 @@ final class DashboardHeaderVisualFrame {
   final double headerModeIconSizePercent;
   final Color chartVeilColor;
   final bool showsChartVeil;
-  final DashboardHeaderTypographyProfile typography;
+  final FluviTypographyProfile typography;
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
@@ -3429,7 +3439,7 @@ final class DashboardBalanceHeaderColorPolicy
     headerModeIconSizePercent: tuning.headerModeIconSizePercent,
     chartVeilColor: tuning.balanceHeader.chartVeilColor.color,
     showsChartVeil: tuning.balanceHeader.chartVeilEnabled,
-    typography: tuning.headerTypography,
+    typography: tuning.globalAppearance.typography,
     paletteSplitPercent: window.state.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3452,7 +3462,7 @@ abstract final class MindHeaderScoreColorScale {
   static DashboardHeaderVisualFrame fromWindow({
     required MindHeaderScoreWindow window,
     required DashboardHeaderModeVisualState modeVisual,
-    required DashboardHeaderTypographyProfile typography,
+    required FluviTypographyProfile typography,
     required double headerModeIconSizePercent,
     required int staticSettingsGeneration,
   }) => DashboardHeaderVisualFrame(
@@ -3544,7 +3554,7 @@ final class DashboardMindHeaderColorPolicy
   ) => MindHeaderScoreColorScale.fromWindow(
     window: window,
     modeVisual: tuning.mindHeader,
-    typography: tuning.headerTypography,
+    typography: tuning.globalAppearance.typography,
     headerModeIconSizePercent: tuning.headerModeIconSizePercent,
     staticSettingsGeneration: tuning.generation,
   );

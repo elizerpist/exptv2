@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../assets/prepared_vector_asset_atlas.dart';
 import '../catalog/category_icon_catalog.dart';
+import 'category_avatar_palette_scope.dart';
 import 'category_icon_view.dart';
 
 class CategoryVisualBadge extends StatelessWidget {
@@ -24,7 +25,10 @@ class CategoryVisualBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final atlas = PreparedVectorAssetAtlas.instance;
     final picture = atlas.categoryIcon(iconHandle);
-    final gradient = atlas.categoryGradient(colorHandle);
+    final gradient = atlas.categoryGradient(
+      colorHandle,
+      profile: CategoryAvatarColorProfileScope.profileOf(context),
+    );
     final semanticName = CategoryIconCatalog.tokenForHandle(
       iconHandle,
     ).semanticName;

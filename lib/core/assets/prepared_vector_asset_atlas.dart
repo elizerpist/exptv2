@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:vector_graphics/vector_graphics.dart';
 
-import '../categories/catalog/category_color_catalog.dart';
 import '../categories/catalog/category_icon_catalog.dart';
+import '../categories/presentation/category_avatar_palette_catalog.dart';
 import '../design/dashboard_mode_palette.dart';
+import '../design/fluvi_global_appearance.dart';
 
 /// A process-retained, already decoded vector picture.
 ///
@@ -73,6 +75,7 @@ final class PreparedLogBoxVectorBadge extends PreparedLogBoxVectorResource {
 final class PreparedLogBoxRasterSet {
   const PreparedLogBoxRasterSet._({
     required this.devicePixelRatio,
+    required this.profile,
     required this.logicalBadgeSize,
     required this.logicalIconSize,
     required this.badges,
@@ -82,6 +85,7 @@ final class PreparedLogBoxRasterSet {
   });
 
   final double devicePixelRatio;
+  final CategoryAvatarColorProfile profile;
   final double logicalBadgeSize;
   final double logicalIconSize;
   final List<PreparedLogBoxVectorBadge> badges;
@@ -200,11 +204,12 @@ final class PreparedVectorAssetAtlas {
 
   final int _maximumConcurrentDecodes;
   List<PreparedVectorPicture>? _pictures;
-  List<LinearGradient>? _categoryGradients;
+  Map<CategoryAvatarColorProfile, List<LinearGradient>>? _categoryGradients;
   Future<void>? _inFlight;
   Future<void>? _logBoxRasterInFlight;
-  PreparedLogBoxRasterSet? _logBoxRasters;
-  List<PreparedLogBoxVectorBadge>? _logBoxBadges;
+  Map<CategoryAvatarColorProfile, PreparedLogBoxRasterSet>? _logBoxRasters;
+  Map<CategoryAvatarColorProfile, List<PreparedLogBoxVectorBadge>>?
+  _logBoxBadges;
   List<PreparedLogBoxVectorGlyph>? _logBoxGlyphs;
   PreparedLogBoxVectorGlyph? _logBoxEditPlaceholderGlyph;
   int _pictureDecodeCount = 0;
@@ -230,8 +235,19 @@ final class PreparedVectorAssetAtlas {
   int get logBoxGlyphBuildCount => _logBoxGlyphBuildCount;
   int get logBoxRasterPrepareDurationMicros =>
       _logBoxRasterPrepareDurationMicros;
-  int get logBoxRasterByteEstimate => _logBoxRasters?.estimatedBytes ?? 0;
-  int get logBoxRasterSurfaceCount => _logBoxRasters?.rasterSurfaceCount ?? 0;
+  int get profiledBadgeBankCount => _logBoxBadges?.length ?? 0;
+  int get logBoxRasterByteEstimate =>
+      _logBoxRasters?.values.fold<int>(
+        0,
+        (total, rasters) => total + rasters.estimatedBytes,
+      ) ??
+      0;
+  int get logBoxRasterSurfaceCount =>
+      _logBoxRasters?.values.fold<int>(
+        0,
+        (total, rasters) => total + rasters.rasterSurfaceCount,
+      ) ??
+      0;
   bool get hasLogBoxRasters => _logBoxRasters != null;
 
   Future<void> prepare() {
@@ -260,7 +276,7 @@ final class PreparedVectorAssetAtlas {
         'must be finite and greater than zero',
       );
     }
-    final current = _logBoxRasters;
+    final current = _logBoxRasters?[CategoryAvatarColorProfile.original];
     if (current != null && current.matches(devicePixelRatio)) {
       return Future<void>.value();
     }
@@ -276,8 +292,11 @@ final class PreparedVectorAssetAtlas {
     return operation;
   }
 
-  PreparedLogBoxRasterSet logBoxRastersFor(double devicePixelRatio) {
-    final result = _logBoxRasters;
+  PreparedLogBoxRasterSet logBoxRastersFor(
+    double devicePixelRatio, {
+    CategoryAvatarColorProfile profile = CategoryAvatarColorProfile.original,
+  }) {
+    final result = _logBoxRasters?[profile];
     if (result == null || !result.matches(devicePixelRatio)) {
       throw StateError(
         'LogBox raster resources are not prepared for DPR '
@@ -299,8 +318,11 @@ final class PreparedVectorAssetAtlas {
     return picture(handle);
   }
 
-  LinearGradient categoryGradient(int handle) {
-    final gradients = _categoryGradients;
+  LinearGradient categoryGradient(
+    int handle, {
+    CategoryAvatarColorProfile profile = CategoryAvatarColorProfile.original,
+  }) {
+    final gradients = _categoryGradients?[profile];
     if (gradients == null) {
       throw StateError('Prepared vector asset atlas is not ready.');
     }
@@ -423,18 +445,36 @@ final class PreparedVectorAssetAtlas {
         },
         growable: false,
       );
-      final gradients = <LinearGradient>[
-        for (final token in CategoryColorCatalog.allWithFallback)
-          token.gradient,
-      ];
-      for (final gradient in gradients) {
-        createdBadges.add(_recordLogBoxBadge(gradient));
+      final gradientsByProfile =
+          <CategoryAvatarColorProfile, List<LinearGradient>>{};
+      final badgesByProfile =
+          <CategoryAvatarColorProfile, List<PreparedLogBoxVectorBadge>>{};
+      for (final profile in CategoryAvatarColorProfile.values) {
+        final gradients = List<LinearGradient>.unmodifiable(<LinearGradient>[
+          for (final token in CategoryAvatarPaletteCatalog.allWithFallback(
+            profile,
+          ))
+            token.gradient,
+        ]);
+        final badges = <PreparedLogBoxVectorBadge>[
+          for (final gradient in gradients) _recordLogBoxBadge(gradient),
+        ];
+        createdBadges.addAll(badges);
+        gradientsByProfile[profile] = gradients;
+        badgesByProfile[profile] = List<PreparedLogBoxVectorBadge>.unmodifiable(
+          badges,
+        );
       }
-      _categoryGradients = List<LinearGradient>.unmodifiable(gradients);
+      _categoryGradients =
+          UnmodifiableMapView<CategoryAvatarColorProfile, List<LinearGradient>>(
+            gradientsByProfile,
+          );
       _pictures = List<PreparedVectorPicture>.unmodifiable(pictures);
-      _logBoxBadges = List<PreparedLogBoxVectorBadge>.unmodifiable(
-        createdBadges,
-      );
+      _logBoxBadges =
+          UnmodifiableMapView<
+            CategoryAvatarColorProfile,
+            List<PreparedLogBoxVectorBadge>
+          >(badgesByProfile);
       _logBoxGlyphs = List<PreparedLogBoxVectorGlyph>.unmodifiable(glyphs);
       final editPlaceholderInfo = decodedInfo(_logBoxEditPlaceholder);
       if (editPlaceholderInfo.size.isEmpty) {
@@ -446,7 +486,7 @@ final class PreparedVectorAssetAtlas {
         color: DashboardLogBoxTokens.editPlaceholderGlyphColor,
       );
       editPlaceholderInfo.picture.dispose();
-      _logBoxBadgeBuildCount += 1;
+      _logBoxBadgeBuildCount += CategoryAvatarColorProfile.values.length;
       _logBoxGlyphBuildCount += 1;
       prepareTimer.stop();
       _prepareDurationMicros = prepareTimer.elapsedMicroseconds;
@@ -466,36 +506,45 @@ final class PreparedVectorAssetAtlas {
     await prepare();
     final timer = Stopwatch()..start();
     try {
-      final badges = _logBoxBadges;
+      final badgesByProfile = _logBoxBadges;
       final glyphs = _logBoxGlyphs;
       final editPlaceholderGlyph = _logBoxEditPlaceholderGlyph;
-      if (badges == null || glyphs == null || editPlaceholderGlyph == null) {
+      if (badgesByProfile == null ||
+          glyphs == null ||
+          editPlaceholderGlyph == null) {
         throw StateError('Prepared LogBox vector avatars are not ready.');
       }
       if (_disposed) {
         throw StateError('Prepared vector asset atlas was disposed.');
       }
-      final result = PreparedLogBoxRasterSet._(
-        devicePixelRatio: devicePixelRatio,
-        logicalBadgeSize: logBoxBadgeLogicalSize,
-        logicalIconSize: logBoxIconLogicalSize,
-        badges: badges,
-        glyphs: glyphs,
-        editPlaceholderGlyph: editPlaceholderGlyph,
-        estimatedBytes:
-            badges.fold<int>(
-              0,
-              (total, badge) => total + badge.picture.approximateBytesUsed,
-            ) +
-            glyphs.fold<int>(
-              0,
-              (total, glyph) => total + glyph.picture.approximateBytesUsed,
-            ) +
-            editPlaceholderGlyph.picture.approximateBytesUsed,
-      );
+      final result = <CategoryAvatarColorProfile, PreparedLogBoxRasterSet>{
+        for (final profile in CategoryAvatarColorProfile.values)
+          profile: PreparedLogBoxRasterSet._(
+            devicePixelRatio: devicePixelRatio,
+            profile: profile,
+            logicalBadgeSize: logBoxBadgeLogicalSize,
+            logicalIconSize: logBoxIconLogicalSize,
+            badges: badgesByProfile[profile]!,
+            glyphs: glyphs,
+            editPlaceholderGlyph: editPlaceholderGlyph,
+            estimatedBytes:
+                badgesByProfile[profile]!.fold<int>(
+                  0,
+                  (total, badge) => total + badge.picture.approximateBytesUsed,
+                ) +
+                glyphs.fold<int>(
+                  0,
+                  (total, glyph) => total + glyph.picture.approximateBytesUsed,
+                ) +
+                editPlaceholderGlyph.picture.approximateBytesUsed,
+          ),
+      };
       final previous = _logBoxRasters;
       _logBoxRasters = result;
-      previous?.dispose();
+      for (final rasters
+          in previous?.values ?? const <PreparedLogBoxRasterSet>[]) {
+        rasters.dispose();
+      }
       timer.stop();
       _logBoxRasterBuildCount += 1;
       _logBoxRasterPrepareDurationMicros = timer.elapsedMicroseconds;
@@ -556,10 +605,16 @@ final class PreparedVectorAssetAtlas {
     }
     _pictures = null;
     _categoryGradients = null;
-    _logBoxRasters?.dispose();
+    for (final rasters
+        in _logBoxRasters?.values ?? const <PreparedLogBoxRasterSet>[]) {
+      rasters.dispose();
+    }
     _logBoxRasters = null;
-    for (final badge in _logBoxBadges ?? const <PreparedLogBoxVectorBadge>[]) {
-      if (disposedPictures.add(badge.picture)) badge.dispose();
+    for (final bank
+        in _logBoxBadges?.values ?? const <List<PreparedLogBoxVectorBadge>>[]) {
+      for (final badge in bank) {
+        if (disposedPictures.add(badge.picture)) badge.dispose();
+      }
     }
     _logBoxBadges = null;
     for (final glyph in _logBoxGlyphs ?? const <PreparedLogBoxVectorGlyph>[]) {

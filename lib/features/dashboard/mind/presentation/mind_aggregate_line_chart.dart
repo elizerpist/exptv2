@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
+import '../../../../core/design/fluvi_typography_scope.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 
 /// Shared, presentation-local aggregate chart. Its points are immutable
@@ -137,6 +139,7 @@ final class _MindAggregateLineChartState extends State<MindAggregateLineChart> {
                             points: widget.points,
                             lineColor: widget.lineColor,
                             selectedIndex: _selectedIndex,
+                            typography: FluviTypographyScope.of(context),
                           ),
                         ),
                       ),
@@ -290,10 +293,12 @@ final class _MindAggregateLinePainter extends CustomPainter {
     required this.points,
     required this.lineColor,
     required this.selectedIndex,
+    required this.typography,
   });
   final List<MindAggregateLinePoint> points;
   final Color lineColor;
   final int? selectedIndex;
+  final FluviTypographyProfile typography;
   @override
   void paint(Canvas canvas, Size size) {
     final plot = Rect.fromLTWH(0, 22, size.width, size.height - 46);
@@ -368,10 +373,12 @@ final class _MindAggregateLinePainter extends CustomPainter {
       final label = TextPainter(
         text: TextSpan(
           text: points[i].label,
-          style: const TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
+          style: typography.applyTo(
+            const TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: 8,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -391,5 +398,6 @@ final class _MindAggregateLinePainter extends CustomPainter {
   bool shouldRepaint(covariant _MindAggregateLinePainter old) =>
       old.points != points ||
       old.lineColor != lineColor ||
-      old.selectedIndex != selectedIndex;
+      old.selectedIndex != selectedIndex ||
+      old.typography != typography;
 }

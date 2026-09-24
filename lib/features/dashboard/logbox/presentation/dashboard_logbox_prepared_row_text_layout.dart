@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../application/dashboard_log_viewport_state.dart';
 
 /// Shared exact-width paragraph resource used by both bounded LogBox domains.
@@ -28,11 +29,13 @@ final class DashboardPreparedLogBoxRowTextLayout {
     required DashboardLogRowViewModel row,
     required double surfaceWidth,
     required int contentIdentity,
+    FluviTypographyProfile typography = FluviTypographyProfile.app,
   }) {
     final preparation = _DashboardLogBoxRowTextLayoutPreparation(
       row: row,
       surfaceWidth: surfaceWidth,
       contentIdentity: contentIdentity,
+      typography: typography,
     );
     try {
       preparation
@@ -57,11 +60,13 @@ final class DashboardPreparedLogBoxRowTextLayout {
     required bool Function() shouldCheckpoint,
     required Future<void> Function() checkpoint,
     void Function(String paragraph, int elapsedMicros)? onParagraphPrepared,
+    FluviTypographyProfile typography = FluviTypographyProfile.app,
   }) async {
     final preparation = _DashboardLogBoxRowTextLayoutPreparation(
       row: row,
       surfaceWidth: surfaceWidth,
       contentIdentity: contentIdentity,
+      typography: typography,
     );
     try {
       void prepareParagraph(String paragraph, void Function() work) {
@@ -177,6 +182,7 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
     required this.row,
     required double surfaceWidth,
     required this.contentIdentity,
+    required this.typography,
   }) : contentLeft =
            DashboardLogBoxTokens.rowHorizontalInset +
            DashboardLogBoxTokens.avatarSize +
@@ -187,6 +193,7 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
 
   final DashboardLogRowViewModel row;
   final int contentIdentity;
+  final FluviTypographyProfile typography;
   final double contentLeft;
   final double rightEdge;
   TextPainter? _amount;
@@ -218,8 +225,10 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
     assert(_amount == null);
     _amount = prepareDashboardLogBoxTextPainter(
       row.formattedAmount,
-      FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(
-        color: _defaultAmountColor,
+      typography.applyTo(
+        FluviVisualTokens.logBoxRowAmountTextStyle.copyWith(
+          color: _defaultAmountColor,
+        ),
       ),
       _rightColumnMaxWidth,
       textAlign: TextAlign.right,
@@ -230,7 +239,7 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
     assert(_time == null);
     _time = prepareDashboardLogBoxTextPainter(
       row.displayTime,
-      FluviVisualTokens.logBoxRowSecondaryTextStyle,
+      typography.applyTo(FluviVisualTokens.logBoxRowSecondaryTextStyle),
       _rightColumnMaxWidth,
       textAlign: TextAlign.right,
     );
@@ -240,7 +249,7 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
     assert(_title == null);
     _title = prepareDashboardLogBoxTextPainter(
       row.displayName,
-      FluviVisualTokens.logBoxRowTitleTextStyle,
+      typography.applyTo(FluviVisualTokens.logBoxRowTitleTextStyle),
       _leftColumnWidth,
     );
   }
@@ -249,7 +258,7 @@ final class _DashboardLogBoxRowTextLayoutPreparation {
     assert(_secondary == null);
     _secondary = prepareDashboardLogBoxTextPainter(
       row.categoryDisplayName,
-      FluviVisualTokens.logBoxRowSecondaryTextStyle,
+      typography.applyTo(FluviVisualTokens.logBoxRowSecondaryTextStyle),
       _leftColumnWidth,
     );
   }

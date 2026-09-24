@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/categories/catalog/category_visual_resolver.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../application/dashboard_ephemeral_focus_controller.dart';
 import '../dashboard_logbox_search_pill_visibility.dart';
 import '../../query/application/current_query_controller.dart';
@@ -265,6 +266,7 @@ final class _QueryFacetChip extends StatelessWidget {
     final visual = CategoryVisualResolver.resolve(
       colorId: model.colorId,
       iconId: model.iconId,
+      profile: CategoryAvatarColorProfileScope.profileOf(context),
     );
     final tint = visual.gradient.middleColor;
     final kind = model.isPartner ? 'partner' : 'category';

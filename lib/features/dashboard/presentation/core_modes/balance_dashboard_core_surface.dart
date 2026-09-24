@@ -7,6 +7,7 @@ import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
@@ -566,18 +567,15 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
           key: const ValueKey<String>('balance-header-net-amount'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: (frame?.typography ?? DashboardHeaderTypographyProfile.app)
-              .applyTo(
-                DefaultTextStyle.of(context).style
-                    .merge(
-                      DashboardHeaderTrendChartStyle.primaryValueTextMetrics,
-                    )
-                    .copyWith(
-                      color:
-                          frame?.foregroundTextColor ??
-                          FluviVisualTokens.textOnAction,
-                    ),
-              ),
+          style: (frame?.typography ?? FluviTypographyProfile.app).applyTo(
+            DefaultTextStyle.of(context).style
+                .merge(DashboardHeaderTrendChartStyle.primaryValueTextMetrics)
+                .copyWith(
+                  color:
+                      frame?.foregroundTextColor ??
+                      FluviVisualTokens.textOnAction,
+                ),
+          ),
         ),
       ),
     ],

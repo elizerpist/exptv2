@@ -15,6 +15,7 @@ import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_logbox_layout_profile.dart';
+import '../../../core/design/fluvi_global_appearance.dart';
 import '../../../core/design/dashboard_body_order.dart';
 import '../../../core/motion/dashboard_motion_host.dart';
 import '../application/dashboard_core_controller.dart';
@@ -33,6 +34,7 @@ import '../query/presentation/query_amount_range_control.dart';
 import '../mind/domain/mind_behavioral_score_settings.dart';
 import '../mind/domain/mind_header_score_chart_presentation.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
+import '../logbox/application/dashboard_logbox_scene_window.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
 import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
@@ -90,6 +92,7 @@ class CoreDashboard extends StatefulWidget {
     this.onLogBoxWarmupError,
     this.initialLogBoxReadinessActive = false,
     this.shellPresentation,
+    this.headerVisualController,
     this.mindQueryFacetLoader,
     this.initialSummaryPillVariant = SummaryPillVariant.segmented,
   });
@@ -106,6 +109,11 @@ class CoreDashboard extends StatefulWidget {
   final DashboardLogBoxWarmupErrorCallback? onLogBoxWarmupError;
   final bool initialLogBoxReadinessActive;
   final DashboardShellPresentationController? shellPresentation;
+
+  /// The app shell may provide the one session-wide appearance owner.
+  /// Standalone dashboard hosts retain the existing local ownership for tests
+  /// and embedded use.
+  final DashboardHeaderVisualController? headerVisualController;
   final DashboardAppliedQueryFacetLoader? mindQueryFacetLoader;
   final SummaryPillVariant initialSummaryPillVariant;
 
@@ -142,6 +150,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final BudgetTargetAvatarRailController _budgetAvatarRailController;
   late final BudgetDistributionPageController _budgetDistributionPageController;
   late final DashboardHeaderVisualController _headerVisualController;
+  late final bool _ownsHeaderVisualController;
   late final BalancePresentationController _balancePresentationSettings;
   late final DashboardBalanceHeaderColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
@@ -154,6 +163,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   int? _lastMindRangeDiagnosticSignature;
   bool _mindAmountInteractionActive = false;
   int? _lastLayerStackDiagnosticSignature;
+  late FluviGlobalAppearance _globalAppearance;
   late SummaryPillVariant _lastSummaryPillVariant;
   int _lastSummaryVariantTransitionLayoutEpoch = 0;
   int? _lastRejectedSummaryVariantCallbackEpoch;
@@ -219,7 +229,13 @@ class _CoreDashboardState extends State<CoreDashboard>
       limitEditController: _budgetLimitEdit,
       onInputUpdated: widget.onBudgetCategoryInputUpdated,
     );
-    _headerVisualController = DashboardHeaderVisualController(vsync: this);
+    final suppliedHeaderVisualController = widget.headerVisualController;
+    _ownsHeaderVisualController = suppliedHeaderVisualController == null;
+    _headerVisualController =
+        suppliedHeaderVisualController ??
+        DashboardHeaderVisualController(vsync: this);
+    _globalAppearance = _headerVisualController.tuning.value.globalAppearance;
+    _headerVisualController.tuning.addListener(_onGlobalAppearanceChanged);
     _balancePresentationSettings = BalancePresentationController();
     _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
@@ -416,6 +432,49 @@ class _CoreDashboardState extends State<CoreDashboard>
       DashboardMotionLane.summaryText,
       _summaryMotionController.stagedText.isAxisMotionActive,
     );
+  }
+
+  void _onGlobalAppearanceChanged() {
+    final next = _headerVisualController.tuning.value.globalAppearance;
+    if (next == _globalAppearance || !mounted) return;
+    final typographyChanged = next.typography != _globalAppearance.typography;
+    final currentWindow = _preparedSceneCache.railCriticalSceneBank.window;
+    final currentSurfaceWidth = _preparedSceneCache.surfaceWidth;
+    if (typographyChanged) {
+      _preparedSceneCache.setTypography(next.typography);
+      controller.committedLogViewport.setTypography(next.typography);
+    }
+    setState(() => _globalAppearance = next);
+    if (typographyChanged &&
+        currentWindow != null &&
+        currentSurfaceWidth != null) {
+      unawaited(
+        _reprepareVisibleLogBoxTypography(currentWindow, currentSurfaceWidth),
+      );
+    }
+  }
+
+  /// Reuses the currently visible immutable payload only to replace cached
+  /// paragraphs after a typeface choice. It performs no repository, Query,
+  /// index, or financial presentation work.
+  Future<void> _reprepareVisibleLogBoxTypography(
+    DashboardLogBoxSceneWindow window,
+    double surfaceWidth,
+  ) async {
+    try {
+      await _preparedSceneCache.prepareWindow(
+        window: window,
+        surfaceWidth: surfaceWidth,
+        devicePixelRatio: _devicePixelRatio,
+        intent: DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+        maxContiguousUiSliceMicros:
+            DashboardLogBoxPreparedSceneCache.defaultMaxContiguousUiSliceMicros,
+        yieldToBackground: _yieldScenePreparationToScheduler,
+      );
+      if (mounted) _preparedSceneCache.activateWindow(window);
+    } on DashboardLogBoxScenePreparationCancelled {
+      // A foreground interaction owns the newer exact window.
+    }
   }
 
   void _onLogBoxHeightChanged() {
@@ -632,7 +691,10 @@ class _CoreDashboardState extends State<CoreDashboard>
     _balanceHeaderColorPolicy.dispose();
     _budgetHeaderColorPolicy.dispose();
     _mindHeaderColorPolicy.dispose();
-    _headerVisualController.dispose();
+    _headerVisualController.tuning.removeListener(_onGlobalAppearanceChanged);
+    if (_ownsHeaderVisualController) {
+      _headerVisualController.dispose();
+    }
     _balancePresentationSettings.dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
@@ -645,11 +707,16 @@ class _CoreDashboardState extends State<CoreDashboard>
   @override
   Widget build(BuildContext context) {
     _devicePixelRatio = View.of(context).devicePixelRatio;
+    final suppliedLogBoxRasters = widget.preparedLogBoxRasters;
     final logBoxRasters =
-        widget.preparedLogBoxRasters ??
-        PreparedVectorAssetAtlas.instance.logBoxRastersFor(
-          View.of(context).devicePixelRatio,
-        );
+        suppliedLogBoxRasters != null &&
+            suppliedLogBoxRasters.profile ==
+                _globalAppearance.avatarColorProfile
+        ? suppliedLogBoxRasters
+        : PreparedVectorAssetAtlas.instance.logBoxRastersFor(
+            View.of(context).devicePixelRatio,
+            profile: _globalAppearance.avatarColorProfile,
+          );
     final layoutMetrics = kIsWeb
         ? controller.metrics.forWebContentOrigin
         : controller.metrics;
@@ -908,7 +975,12 @@ class _CoreDashboardState extends State<CoreDashboard>
                                               : 'Kiadás',
                                           child: TransactionDirectionToggle(
                                             bounds: geometry.actionBounds,
-                                            palette: frame.palette,
+                                            directionColorProfile:
+                                                _globalAppearance
+                                                    .directionColorProfile,
+                                            showsDirectionArtwork:
+                                                _globalAppearance
+                                                    .showsDirectionArtwork,
                                             selectedDirection:
                                                 frame.selectedDirection,
                                             incomeIconScale:

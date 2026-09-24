@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_typography_scope.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../presentation/dashboard_upper_vertical_gesture_coordinator.dart';
@@ -821,6 +822,7 @@ final class _MindSumMonthlyOverlayYear extends StatelessWidget {
               painter: MindMonthlyOverlayBarPainter(
                 series: series,
                 foregroundForValue: colorFor,
+                typography: FluviTypographyScope.of(context),
                 paintIdentity: Object.hash(
                   frame,
                   paletteStyle,

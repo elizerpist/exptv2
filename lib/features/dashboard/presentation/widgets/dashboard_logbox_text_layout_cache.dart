@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../logbox/application/dashboard_log_viewport_state.dart';
 import '../../logbox/presentation/dashboard_logbox_prepared_row_text_layout.dart';
 
@@ -20,8 +21,11 @@ typedef DashboardLogBoxCriticalPayloadProvider =
 /// and replaced as one explicit pin set, so a large database cannot turn the
 /// cache into an unbounded copy of every transaction.
 final class DashboardLogBoxTextLayoutCache {
-  DashboardLogBoxTextLayoutCache({this.maximumPinnedRows = 8192})
-    : assert(maximumPinnedRows > 0);
+  DashboardLogBoxTextLayoutCache({
+    this.maximumPinnedRows = 8192,
+    FluviTypographyProfile typography = FluviTypographyProfile.app,
+  }) : _typography = typography,
+       assert(maximumPinnedRows > 0);
 
   final int maximumPinnedRows;
   final Map<String, DashboardPreparedLogBoxRowTextLayout> _rows =
@@ -33,6 +37,7 @@ final class DashboardLogBoxTextLayoutCache {
   bool _prepared = false;
   int _generation = 0;
   int _estimatedBytes = 0;
+  FluviTypographyProfile _typography;
   Completer<void>? _yieldCompleter;
 
   bool get isPrepared => _prepared;
@@ -41,6 +46,16 @@ final class DashboardLogBoxTextLayoutCache {
   int get preparedDayHeaderCount => _dayHeaders.length;
   int get estimatedBytes => _estimatedBytes;
   double? get surfaceWidth => _surfaceWidth;
+  FluviTypographyProfile get typography => _typography;
+
+  /// Drops only prepared paragraph resources. Semantic row payloads remain
+  /// owned by the caller and are not queried or recomputed here.
+  void setTypography(FluviTypographyProfile typography) {
+    if (_typography == typography) return;
+    _typography = typography;
+    _clearLayouts();
+    _generation += 1;
+  }
 
   DashboardPreparedLogBoxRowTextLayout? rowFor(DashboardLogRowViewModel row) {
     final layout = _rows[row.entryId];
@@ -120,6 +135,7 @@ final class DashboardLogBoxTextLayoutCache {
         row: row,
         surfaceWidth: surfaceWidth,
         contentIdentity: identity,
+        typography: _typography,
       );
       preparedSinceYield += 1;
       if (preparedSinceYield == yieldEveryRows) {
@@ -133,14 +149,14 @@ final class DashboardLogBoxTextLayoutCache {
         label,
         () => _preparedPainter(
           label,
-          FluviVisualTokens.logBoxDayHeaderTextStyle,
+          _typography.applyTo(FluviVisualTokens.logBoxDayHeaderTextStyle),
           surfaceWidth,
         ),
       );
     }
     _empty ??= _preparedPainter(
       'Nincs tranzakció ebben az időszakban.',
-      FluviVisualTokens.logBoxHeaderTextStyle,
+      _typography.applyTo(FluviVisualTokens.logBoxHeaderTextStyle),
       math.max(0, surfaceWidth - 32),
     );
 

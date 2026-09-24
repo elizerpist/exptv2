@@ -10,6 +10,8 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/core/categories/presentation/budget_category_avatar_artwork.dart';
+import 'package:fluvi/core/categories/presentation/category_avatar_palette_scope.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -44,6 +46,63 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 
 void main() {
   setUpAll(() => PreparedVectorAssetAtlas.instance.prepare());
+
+  testWidgets('avatar colour profile replaces only prepared category artwork', (
+    tester,
+  ) async {
+    final harness = _Harness(_categories(1));
+    final profile = ValueNotifier(CategoryAvatarColorProfile.original);
+    addTearDown(harness.dispose);
+    addTearDown(profile.dispose);
+
+    await tester.pumpWidget(
+      ValueListenableBuilder<CategoryAvatarColorProfile>(
+        valueListenable: profile,
+        builder: (context, selectedProfile, child) => MaterialApp(
+          home: CategoryAvatarColorProfileScope(
+            profile: selectedProfile,
+            child: Center(
+              child: SizedBox(
+                width: 378,
+                height: BudgetTargetAvatarRail.selectedInputSurfaceHeight,
+                child: BudgetTargetAvatarRail(
+                  presentation: harness.presentation,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    Iterable<String> sources() => tester
+        .widgetList<BudgetCategoryAvatarArtwork>(
+          find.byType(BudgetCategoryAvatarArtwork),
+        )
+        .map((artwork) => artwork.svgSource);
+
+    expect(sources().join(), contains('#ff5268'));
+    final carousel = find.byKey(
+      const ValueKey('budget-target-avatar-carousel'),
+    );
+    final scrollable = find.descendant(
+      of: carousel,
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+
+    profile.value = CategoryAvatarColorProfile.pastel;
+    await tester.pump();
+
+    expect(sources().join(), contains('#f8a8aa'));
+    expect(sources().join(), isNot(contains('#ff5268')));
+    expect(
+      tester.state<ScrollableState>(scrollable).position,
+      same(position),
+      reason: 'a visual profile must not recreate the carousel owner',
+    );
+  });
 
   test('all scope strategies retain the one Fluvi ring geometry authority', () {
     final states = <BudgetCategoryAvatarSelectedLimitVisualState>[

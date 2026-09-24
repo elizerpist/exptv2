@@ -413,7 +413,6 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   maxLines: 10,
                   style: const TextStyle(
                     color: Color(0xFFBAC2DE),
-                    fontFamily: 'monospace',
                     fontSize: 10.5,
                     height: 1.35,
                   ),
@@ -483,7 +482,6 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     key: const ValueKey('debug-console-capture-status'),
                     style: const TextStyle(
                       color: Color(0xFF94A3B8),
-                      fontFamily: 'monospace',
                       fontSize: 10,
                     ),
                   ),
@@ -581,7 +579,6 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                       child: SelectableText(
                         event.toLine(),
                         style: const TextStyle(
-                          fontFamily: 'monospace',
                           fontSize: 11.5,
                           height: 1.35,
                           color: Color(0xFFCDD6F4),
@@ -684,7 +681,6 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
           readOnly: true,
           maxLines: null,
           style: const TextStyle(
-            fontFamily: 'monospace',
             fontSize: 11.5,
             height: 1.45,
             color: Color(0xFFCDD6F4),

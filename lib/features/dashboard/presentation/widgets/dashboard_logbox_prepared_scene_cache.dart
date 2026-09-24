@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -187,6 +188,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   _DashboardLogBoxActivePreparation? _activePreparation;
   _DashboardLogBoxStagedSceneBank? _privatelyLeasedPreparationBank;
   bool _disposed = false;
+  FluviTypographyProfile _typography = FluviTypographyProfile.app;
 
   Map<String, DashboardPreparedLogBoxScene> get _scenes => _activeBank.scenes;
   Set<String> get _emptyQueryKeys => _activeBank.emptyQueryKeys;
@@ -231,6 +233,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   int get lastPrepareLargestContiguousUiSliceMicros =>
       _lastPrepareLargestContiguousUiSliceMicros;
   int get lastPrepareYieldCount => _lastPrepareYieldCount;
+  FluviTypographyProfile get typography => _typography;
 
   /// Monotonic marker for a bank that reached complete staged ownership.
   ///
@@ -301,7 +304,25 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
     Object.hashAll(_emptyQueryKeys),
     Object.hashAll(_rowLayouts.keys),
     Object.hashAll(_dayHeaders.keys),
+    _activeBank.typography,
   );
+
+  /// Rebuilds only cached paragraph resources for a global typeface change.
+  /// It deliberately does not touch Query, repository, prepared-index, or row
+  /// semantic identity. The production owner immediately re-prepares the
+  /// current visible window with this selected profile.
+  void setTypography(FluviTypographyProfile typography) {
+    _ensureUsable();
+    if (typography == _typography) return;
+    cancelInFlightPreparation(
+      intent: DashboardLogBoxScenePreparationIntent.renderCriticalReadiness,
+      allowEqualPriorityTakeover: true,
+    );
+    _typography = typography;
+    _clear();
+    _generation += 1;
+    notifyListeners();
+  }
 
   DashboardLogBoxSceneWindowManifest? get activeWindowManifest =>
       _activeManifest;
@@ -1835,6 +1856,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
                 row: entry.value,
                 surfaceWidth: width,
                 contentIdentity: entry.value.textLayoutId,
+                typography: _typography,
                 shouldCheckpoint: shouldCheckpointBeforeNextParagraph,
                 checkpoint: () => checkpoint(boundary: 'rowTextParagraph'),
                 onParagraphPrepared: (paragraph, elapsedMicros) {
@@ -2355,6 +2377,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
       resourceLeaseOwner: resourceLeaseOwner,
       surfaceWidth: surfaceWidth,
       devicePixelRatio: devicePixelRatio,
+      typography: _typography,
     );
     if (previousLeaseOwner != null &&
         !identical(previousLeaseOwner, resourceLeaseOwner)) {
@@ -2433,7 +2456,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   TextPainter _headerPainter(String label, double width) => TextPainter(
     text: TextSpan(
       text: label,
-      style: FluviVisualTokens.logBoxDayHeaderTextStyle,
+      style: _typography.applyTo(FluviVisualTokens.logBoxDayHeaderTextStyle),
     ),
     textDirection: TextDirection.ltr,
     maxLines: 1,
@@ -2443,7 +2466,7 @@ final class DashboardLogBoxPreparedSceneCache extends ChangeNotifier {
   TextPainter _emptyPainter(double width) => TextPainter(
     text: TextSpan(
       text: 'Nincs tranzakció ebben az időszakban.',
-      style: FluviVisualTokens.logBoxHeaderTextStyle,
+      style: _typography.applyTo(FluviVisualTokens.logBoxHeaderTextStyle),
     ),
     textDirection: TextDirection.ltr,
     textAlign: TextAlign.center,
@@ -2974,6 +2997,7 @@ final class RailCriticalSceneBank {
     required _DashboardLogBoxStagedSceneBank? resourceLeaseOwner,
     required this.surfaceWidth,
     required this.devicePixelRatio,
+    required this.typography,
   }) : _resourceLeaseOwner = resourceLeaseOwner,
        scenes = Map<String, DashboardPreparedLogBoxScene>.unmodifiable(scenes),
        emptyQueryKeys = Set<String>.unmodifiable(emptyQueryKeys),
@@ -3002,6 +3026,7 @@ final class RailCriticalSceneBank {
     resourceLeaseOwner: null,
     surfaceWidth: null,
     devicePixelRatio: null,
+    typography: FluviTypographyProfile.app,
   );
 
   final DashboardLogBoxSceneWindow? window;
@@ -3017,6 +3042,7 @@ final class RailCriticalSceneBank {
   final _DashboardLogBoxStagedSceneBank? _resourceLeaseOwner;
   final double? surfaceWidth;
   final double? devicePixelRatio;
+  final FluviTypographyProfile typography;
 
   /// The active rail bank is publishable only when its completion proof and
   /// exact surface key both exist. Empty is a bootstrap sentinel, never a

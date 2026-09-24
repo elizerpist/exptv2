@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_scope_analysis.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_target.dart';
@@ -2217,7 +2218,7 @@ void main() {
   );
 
   test(
-    'HTY-01 RED: typography profile is Header-local, repeatable and frame-projected',
+    'HTY-01: global typography profile is repeatable and frame-projected',
     () {
       final controller = DashboardHeaderVisualController(
         vsync: const TestVSync(),
@@ -2233,33 +2234,27 @@ void main() {
       final ticker = controller.tickerIdentity;
       final beforeFrame = policy.value;
       expect(
-        controller.tuning.value.headerTypography,
-        DashboardHeaderTypographyProfile.app,
+        controller.tuning.value.globalAppearance.typography,
+        FluviTypographyProfile.app,
       );
-      expect(DashboardHeaderTypographyProfile.app.fontFamily, isNull);
-      expect(
-        DashboardHeaderTypographyProfile.colorLab.fontFamily,
-        'FluviColorLabInter',
-      );
+      expect(FluviTypographyProfile.app.fontFamily, isNull);
+      expect(FluviTypographyProfile.colorLab.fontFamily, 'FluviColorLabInter');
 
-      controller.setHeaderTypography(DashboardHeaderTypographyProfile.colorLab);
+      controller.setGlobalTypography(FluviTypographyProfile.colorLab);
       expect(
-        controller.tuning.value.headerTypography,
-        DashboardHeaderTypographyProfile.colorLab,
+        controller.tuning.value.globalAppearance.typography,
+        FluviTypographyProfile.colorLab,
       );
-      expect(
-        policy.value.typography,
-        DashboardHeaderTypographyProfile.colorLab,
-      );
+      expect(policy.value.typography, FluviTypographyProfile.colorLab);
       expect(controller.tickerIdentity, same(ticker));
       expect(policy.value.colors, beforeFrame.colors);
 
-      controller.setHeaderTypography(DashboardHeaderTypographyProfile.app);
+      controller.setGlobalTypography(FluviTypographyProfile.app);
       expect(
-        controller.tuning.value.headerTypography,
-        DashboardHeaderTypographyProfile.app,
+        controller.tuning.value.globalAppearance.typography,
+        FluviTypographyProfile.app,
       );
-      expect(policy.value.typography, DashboardHeaderTypographyProfile.app);
+      expect(policy.value.typography, FluviTypographyProfile.app);
       expect(controller.tickerIdentity, same(ticker));
     },
   );

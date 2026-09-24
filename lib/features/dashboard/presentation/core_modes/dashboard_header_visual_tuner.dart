@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_body_order.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
@@ -474,43 +475,112 @@ final class _ForegroundChoiceWrap extends StatelessWidget {
   );
 }
 
-/// One dashboard-lifetime Header-local comparison profile. This deliberately
-/// does not use a global Theme or create a second visual settings owner.
-final class _HeaderTypographyControls extends StatelessWidget {
-  const _HeaderTypographyControls({
-    required this.profile,
-    required this.onChanged,
+/// The one dashboard-session appearance owner. These controls deliberately
+/// bind the app-wide [FluviGlobalAppearance] rather than keeping an independent
+/// Header-only typeface or palette selection.
+final class _GlobalAppearanceControls extends StatelessWidget {
+  const _GlobalAppearanceControls({
+    required this.appearance,
+    required this.controller,
   });
 
-  final DashboardHeaderTypographyProfile profile;
-  final ValueChanged<DashboardHeaderTypographyProfile> onChanged;
+  final FluviGlobalAppearance appearance;
+  final DashboardHeaderVisualController controller;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      Text('Header tipográfia', style: Theme.of(context).textTheme.labelMedium),
-      RadioGroup<DashboardHeaderTypographyProfile>(
-        groupValue: profile,
-        onChanged: (value) {
-          if (value != null) onChanged(value);
-        },
-        child: Wrap(
-          children: <Widget>[
-            for (final candidate in DashboardHeaderTypographyProfile.values)
-              SizedBox(
-                width: 132,
-                child: RadioListTile<DashboardHeaderTypographyProfile>(
-                  key: ValueKey<String>(
-                    'dashboard-header-typography-${candidate.name}',
+      Text('Direction színek', style: Theme.of(context).textTheme.labelMedium),
+      KeyedSubtree(
+        key: const ValueKey<String>('fluvi-direction-color-profile-selector'),
+        child: RadioGroup<FluviDirectionColorProfile>(
+          groupValue: appearance.directionColorProfile,
+          onChanged: (value) {
+            if (value != null) controller.setDirectionColorProfile(value);
+          },
+          child: Wrap(
+            children: <Widget>[
+              for (final candidate in FluviDirectionColorProfile.values)
+                SizedBox(
+                  width: 132,
+                  child: RadioListTile<FluviDirectionColorProfile>(
+                    key: ValueKey<String>(
+                      'fluvi-direction-color-profile-${candidate.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(candidate.label),
+                    value: candidate,
                   ),
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(candidate.label),
-                  value: candidate,
                 ),
-              ),
-          ],
+            ],
+          ),
+        ),
+      ),
+      Text('Avatar színek', style: Theme.of(context).textTheme.labelMedium),
+      KeyedSubtree(
+        key: const ValueKey<String>('fluvi-avatar-color-profile-selector'),
+        child: RadioGroup<CategoryAvatarColorProfile>(
+          groupValue: appearance.avatarColorProfile,
+          onChanged: (value) {
+            if (value != null) controller.setAvatarColorProfile(value);
+          },
+          child: Wrap(
+            children: <Widget>[
+              for (final candidate in CategoryAvatarColorProfile.values)
+                SizedBox(
+                  width: 132,
+                  child: RadioListTile<CategoryAvatarColorProfile>(
+                    key: ValueKey<String>(
+                      'fluvi-avatar-color-profile-${candidate.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(candidate.label),
+                    value: candidate,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      SwitchListTile(
+        key: const ValueKey<String>('fluvi-direction-artwork-toggle'),
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(
+          'Direction artwork',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        value: appearance.showsDirectionArtwork,
+        onChanged: controller.setShowsDirectionArtwork,
+      ),
+      Text('Betűtípus', style: Theme.of(context).textTheme.labelMedium),
+      KeyedSubtree(
+        key: const ValueKey<String>('fluvi-global-typography-selector'),
+        child: RadioGroup<FluviTypographyProfile>(
+          groupValue: appearance.typography,
+          onChanged: (value) {
+            if (value != null) controller.setGlobalTypography(value);
+          },
+          child: Wrap(
+            children: <Widget>[
+              for (final candidate in FluviTypographyProfile.values)
+                SizedBox(
+                  width: 132,
+                  child: RadioListTile<FluviTypographyProfile>(
+                    key: ValueKey<String>(
+                      'fluvi-global-typography-${candidate.name}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(candidate.label),
+                    value: candidate,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     ],
@@ -1137,6 +1207,16 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              _TunerSection(
+                title: 'MEGJELENÉS',
+                children: <Widget>[
+                  _GlobalAppearanceControls(
+                    appearance: tuning.globalAppearance,
+                    controller: controller,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               if (summaryPillVariants case final variants?) ...<Widget>[
                 _SummaryPillExperimentSection(controller: variants),
                 const SizedBox(height: 14),
@@ -1283,12 +1363,8 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                       ),
                       children: <Widget>[
                         _TunerSection(
-                          title: 'Header tipográfia',
+                          title: 'Header ikon',
                           children: <Widget>[
-                            _HeaderTypographyControls(
-                              profile: tuning.headerTypography,
-                              onChanged: controller.setHeaderTypography,
-                            ),
                             _TunerSlider(
                               key: const ValueKey<String>(
                                 'dashboard-header-mode-icon-size-slider',

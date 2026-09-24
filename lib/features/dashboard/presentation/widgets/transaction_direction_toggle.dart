@@ -6,6 +6,7 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../application/transaction_direction_controller.dart';
 import '../../application/dashboard_performance_counters.dart';
@@ -18,11 +19,12 @@ class TransactionDirectionToggle extends StatelessWidget {
   const TransactionDirectionToggle({
     super.key,
     required this.bounds,
-    required this.palette,
     required this.selectedDirection,
     required this.incomeIconScale,
     required this.expenseIconScale,
     required this.onSelected,
+    this.directionColorProfile = FluviDirectionColorProfile.original,
+    this.showsDirectionArtwork = true,
     this.selectedIconScaleAnimation,
     this.performanceCounters,
     this.onVerticalDragStart,
@@ -31,11 +33,12 @@ class TransactionDirectionToggle extends StatelessWidget {
   });
 
   final DashboardBounds bounds;
-  final DashboardModePalette palette;
   final TransactionDirection selectedDirection;
   final double incomeIconScale;
   final double expenseIconScale;
   final ValueChanged<TransactionDirection> onSelected;
+  final FluviDirectionColorProfile directionColorProfile;
+  final bool showsDirectionArtwork;
   final Animation<double>? selectedIconScaleAnimation;
   final DashboardPerformanceCounters? performanceCounters;
   final GestureDragStartCallback? onVerticalDragStart;
@@ -64,9 +67,12 @@ class TransactionDirectionToggle extends StatelessWidget {
                 PreparedVectorAssetAtlas.incomeWalletHandle,
               ),
               assetKey: const ValueKey('fluvi-income-wallet'),
-              activeGradient: FluviVisualTokens.incomeButtonHighlightGradient,
+              activeGradient: FluviDirectionColorPaletteCatalog.income(
+                directionColorProfile,
+              ),
               selected: selectedDirection == TransactionDirection.income,
               iconScale: incomeIconScale,
+              showsArtwork: showsDirectionArtwork,
               iconScaleAnimation:
                   selectedDirection == TransactionDirection.income
                   ? selectedIconScaleAnimation
@@ -88,9 +94,12 @@ class TransactionDirectionToggle extends StatelessWidget {
                 PreparedVectorAssetAtlas.expenseBagHandle,
               ),
               assetKey: const ValueKey('fluvi-expense-bag'),
-              activeGradient: palette.expenseGradient,
+              activeGradient: FluviDirectionColorPaletteCatalog.expense(
+                directionColorProfile,
+              ),
               selected: selectedDirection == TransactionDirection.expense,
               iconScale: expenseIconScale,
+              showsArtwork: showsDirectionArtwork,
               iconScaleAnimation:
                   selectedDirection == TransactionDirection.expense
                   ? selectedIconScaleAnimation
@@ -118,6 +127,7 @@ class _DirectionButton extends StatelessWidget {
     required this.activeGradient,
     required this.selected,
     required this.iconScale,
+    required this.showsArtwork,
     required this.iconScaleAnimation,
     required this.onTap,
     required this.performanceCounters,
@@ -134,6 +144,7 @@ class _DirectionButton extends StatelessWidget {
   final LinearGradient activeGradient;
   final bool selected;
   final double iconScale;
+  final bool showsArtwork;
   final Animation<double>? iconScaleAnimation;
   final ValueChanged<TransactionDirection> onTap;
   final DashboardPerformanceCounters? performanceCounters;
@@ -173,15 +184,18 @@ class _DirectionButton extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _DirectionIcon(
-                  picture: picture,
-                  assetKey: assetKey,
-                  iconScale: iconScale,
-                  iconScaleAnimation: iconScaleAnimation,
-                  performanceCounters: performanceCounters,
-                ),
-                const SizedBox(width: FluviVisualTokens.controlInnerGap),
+                if (showsArtwork) ...<Widget>[
+                  _DirectionIcon(
+                    picture: picture,
+                    assetKey: assetKey,
+                    iconScale: iconScale,
+                    iconScaleAnimation: iconScaleAnimation,
+                    performanceCounters: performanceCounters,
+                  ),
+                  const SizedBox(width: FluviVisualTokens.controlInnerGap),
+                ],
                 Text(
                   label,
                   style: selected

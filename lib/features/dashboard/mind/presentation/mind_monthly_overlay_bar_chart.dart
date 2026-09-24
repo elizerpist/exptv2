@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../query/presentation/query_menu_formatters.dart';
 import '../domain/mind_monthly_overlay_series.dart';
 
@@ -14,11 +15,13 @@ class MindMonthlyOverlayBarPainter extends CustomPainter {
     required this.series,
     required this.foregroundForValue,
     required this.paintIdentity,
+    this.typography = FluviTypographyProfile.app,
   });
 
   final MindMonthlyOverlaySeries series;
   final Color Function(MindMonthlyOverlayValue value) foregroundForValue;
   final Object paintIdentity;
+  final FluviTypographyProfile typography;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -35,10 +38,11 @@ class MindMonthlyOverlayBarPainter extends CustomPainter {
     final grid = Paint()
       ..color = FluviVisualTokens.surfaceMuted
       ..strokeWidth = .75;
-    const labelStyle = TextStyle(
+    const baseLabelStyle = TextStyle(
       color: FluviVisualTokens.textSecondary,
       fontSize: 7,
     );
+    final labelStyle = typography.applyTo(baseLabelStyle);
     for (final level in series.scale.levels) {
       final fraction = series.scale.top == 0 ? 0.0 : level / series.scale.top;
       final y = plot.bottom - plot.height * fraction;
@@ -90,5 +94,6 @@ class MindMonthlyOverlayBarPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant MindMonthlyOverlayBarPainter oldDelegate) =>
       series != oldDelegate.series ||
-      paintIdentity != oldDelegate.paintIdentity;
+      paintIdentity != oldDelegate.paintIdentity ||
+      typography != oldDelegate.typography;
 }

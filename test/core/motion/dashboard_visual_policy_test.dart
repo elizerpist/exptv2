@@ -1,6 +1,7 @@
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/core/motion/dashboard_motion_host.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
@@ -229,14 +230,13 @@ void main() {
   );
 
   testWidgets(
-    'direction toggle renders the supplied palette without resolving a mode',
+    'direction toggle resolves the original global direction profile',
     (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: TransactionDirectionToggle(
               bounds: _bounds,
-              palette: _togglePalette,
               selectedDirection: TransactionDirection.expense,
               incomeIconScale: 1,
               expenseIconScale: 1,
@@ -258,7 +258,12 @@ void main() {
                   )
                   .decoration
               as BoxDecoration;
-      expect(selectedDecoration.gradient, _togglePalette.expenseGradient);
+      expect(
+        selectedDecoration.gradient,
+        FluviDirectionColorPaletteCatalog.expense(
+          FluviDirectionColorProfile.original,
+        ),
+      );
     },
   );
 
@@ -272,7 +277,6 @@ void main() {
           home: Scaffold(
             body: TransactionDirectionToggle(
               bounds: _bounds,
-              palette: _togglePalette,
               selectedDirection: TransactionDirection.expense,
               incomeIconScale: 1,
               expenseIconScale: 1,
@@ -315,7 +319,6 @@ void main() {
           child: Scaffold(
             body: TransactionDirectionToggle(
               bounds: _bounds,
-              palette: _togglePalette,
               selectedDirection: TransactionDirection.income,
               incomeIconScale: 1,
               expenseIconScale: 1,
@@ -342,6 +345,46 @@ void main() {
       ),
     );
   });
+
+  testWidgets(
+    'direction appearance changes selected material without artwork placeholders',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TransactionDirectionToggle(
+              bounds: _bounds,
+              selectedDirection: TransactionDirection.income,
+              incomeIconScale: 1,
+              expenseIconScale: 1,
+              directionColorProfile: FluviDirectionColorProfile.vivid,
+              showsDirectionArtwork: false,
+              onSelected: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      final selected = tester.widget<FluviRoundedBox>(
+        find.byKey(const ValueKey('fluvi-income-button')),
+      );
+      expect(selected.decoration.gradient!.colors, const <Color>[
+        Color(0xFF7A52FF),
+        Color(0xFF9F66FF),
+        Color(0xFFFF78CB),
+      ]);
+      expect(find.byKey(const ValueKey('fluvi-income-wallet')), findsNothing);
+      expect(find.byKey(const ValueKey('fluvi-expense-bag')), findsNothing);
+      final row = tester.widget<Row>(
+        find.descendant(
+          of: find.byKey(const ValueKey('fluvi-income-button')),
+          matching: find.byType(Row),
+        ),
+      );
+      expect(row.mainAxisAlignment, MainAxisAlignment.center);
+      expect(find.text('Bevétel'), findsOneWidget);
+    },
+  );
 
   testWidgets('motion host runs the exact selected-direction pulse policy', (
     tester,

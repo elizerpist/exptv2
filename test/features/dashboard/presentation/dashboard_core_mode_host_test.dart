@@ -5,6 +5,7 @@ import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -136,12 +137,10 @@ void main() {
         Colors.black,
         reason: 'The Header action consumes the mode-local icon channel.',
       );
-      headerVisual.setHeaderTypography(
-        DashboardHeaderTypographyProfile.colorLab,
-      );
+      headerVisual.setGlobalTypography(FluviTypographyProfile.colorLab);
       await tester.pump();
       expect(balanceModeIcon, findsOneWidget);
-      headerVisual.setHeaderTypography(DashboardHeaderTypographyProfile.app);
+      headerVisual.setGlobalTypography(FluviTypographyProfile.app);
       await tester.pump();
       expect(balanceModeIcon, findsOneWidget);
       await tester.tap(

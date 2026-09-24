@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
@@ -305,7 +306,7 @@ void main() {
       colorB: Colors.red,
       foregroundTextColor: Color(0xD114213A),
       chartColor: Colors.black,
-      typography: DashboardHeaderTypographyProfile.colorLab,
+      typography: FluviTypographyProfile.colorLab,
     );
     await tester.pump();
     final colorLabScore = tester.widget<Text>(

@@ -5,6 +5,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_portal_material_field.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/core/design/dashboard_corner_profile.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/dashboard_logbox_layout_profile.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_content_card_style.dart';
 import 'package:fluvi/features/dashboard/presentation/budget_section_order.dart';
@@ -27,6 +28,67 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'global appearance controls select independent direction, avatar, artwork and typeface settings',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            child: DashboardHeaderVisualTuner(controller: controller),
+          ),
+        ),
+      );
+
+      for (final key in <ValueKey<String>>[
+        const ValueKey<String>('fluvi-direction-color-profile-selector'),
+        const ValueKey<String>('fluvi-avatar-color-profile-selector'),
+        const ValueKey<String>('fluvi-direction-artwork-toggle'),
+        const ValueKey<String>('fluvi-global-typography-selector'),
+      ]) {
+        expect(find.byKey(key), findsOneWidget);
+      }
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('fluvi-direction-color-profile-vivid'),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fluvi-avatar-color-profile-pastel')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fluvi-direction-artwork-toggle')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fluvi-global-typography-colorLab')),
+      );
+      await tester.pump();
+
+      expect(
+        controller.tuning.value.globalAppearance.directionColorProfile,
+        FluviDirectionColorProfile.vivid,
+      );
+      expect(
+        controller.tuning.value.globalAppearance.avatarColorProfile,
+        CategoryAvatarColorProfile.pastel,
+      );
+      expect(
+        controller.tuning.value.globalAppearance.showsDirectionArtwork,
+        isFalse,
+      );
+      expect(
+        controller.tuning.value.globalAppearance.typography,
+        FluviTypographyProfile.colorLab,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
+
   testWidgets(
     'Balance Header tuner exposes the approved palette selector and manual position/window controls',
     (tester) async {
@@ -350,10 +412,10 @@ void main() {
       );
 
       final app = find.byKey(
-        const ValueKey<String>('dashboard-header-typography-app'),
+        const ValueKey<String>('fluvi-global-typography-app'),
       );
       final colorLab = find.byKey(
-        const ValueKey<String>('dashboard-header-typography-colorLab'),
+        const ValueKey<String>('fluvi-global-typography-colorLab'),
       );
       for (final control in <Finder>[app, colorLab]) {
         await tester.ensureVisible(control);
@@ -362,8 +424,8 @@ void main() {
       await tester.tap(colorLab);
       await tester.pump();
       expect(
-        controller.tuning.value.headerTypography,
-        DashboardHeaderTypographyProfile.colorLab,
+        controller.tuning.value.globalAppearance.typography,
+        FluviTypographyProfile.colorLab,
       );
 
       final controls = <Finder>[
@@ -704,6 +766,8 @@ void main() {
   testWidgets(
     'SUM controls and Header presentation settings remain independent',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 3000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final controller = DashboardHeaderVisualController(vsync: tester);
       final ring = BudgetRingPresentationController();
       final header = DashboardBudgetHeaderPresentationController();
@@ -711,7 +775,7 @@ void main() {
         MaterialApp(
           home: SizedBox(
             width: 360,
-            height: 520,
+            height: 2500,
             child: DashboardHeaderVisualTuner(
               controller: controller,
               budgetRingPresentation: ring,
@@ -745,6 +809,7 @@ void main() {
       );
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
+      await tester.pump();
       ring.dispose();
       header.dispose();
     },

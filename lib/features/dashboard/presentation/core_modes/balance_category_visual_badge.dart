@@ -4,6 +4,8 @@ import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/category_visual_badge.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 
 /// Reuses the canonical category visual when the prepared vector atlas is
 /// available, while retaining the same rounded-square identity during early
@@ -38,6 +40,7 @@ class BalanceCategoryVisualBadge extends StatelessWidget {
         selected: selected,
       );
     }
+    final colorHandle = CategoryColorCatalog.handleOf(categoryColorId);
     return Semantics(
       label: semanticLabel,
       selected: selected,
@@ -45,7 +48,10 @@ class BalanceCategoryVisualBadge extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          gradient: CategoryColorCatalog.resolve(categoryColorId).gradient,
+          gradient: CategoryAvatarPaletteCatalog.gradientFor(
+            CategoryAvatarColorProfileScope.profileOf(context),
+            colorHandle,
+          ),
           borderRadius: BorderRadius.circular(size * .28),
         ),
         alignment: Alignment.center,

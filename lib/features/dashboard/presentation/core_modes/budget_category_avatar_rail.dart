@@ -11,6 +11,9 @@ import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
@@ -199,6 +202,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   int? _lastBudgetProgressStaleSignature;
   int _motionAvatarRailBuilds = 0;
   _AvatarFirstTargetPipeline? _firstTargetPipeline;
+  CategoryAvatarColorProfile _avatarColorProfile =
+      CategoryAvatarColorProfile.original;
 
   @override
   void initState() {
@@ -221,6 +226,21 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
       _frameTimingsCallback = _onFrameTimings;
       SchedulerBinding.instance.addTimingsCallback(_frameTimingsCallback!);
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextProfile = CategoryAvatarColorProfileScope.profileOf(context);
+    if (nextProfile == _avatarColorProfile) return;
+    _avatarColorProfile = nextProfile;
+    // This is a bounded presentation-only bank replacement. It changes the
+    // prepared SVG sources for the existing semantic items; it neither reads
+    // data nor installs a new carousel domain/controller.
+    _replaceItems(
+      widget.presentation.value.items,
+      installSemanticDomain: false,
+    );
   }
 
   @override
@@ -292,6 +312,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
   bool _replaceItems(
     List<DashboardBudgetTargetPresentationItem> next, {
     bool initial = false,
+    bool installSemanticDomain = true,
   }) {
     final presentation = widget.presentation.value;
     final nextDirection = presentation.liveSelection.direction.name;
@@ -315,7 +336,7 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
         : prepared.indexWhere((item) => item.stableId == previousCenterId);
     _items = prepared;
     _installedCatalogDirection = nextDirection;
-    if (!initial && prepared.isNotEmpty) {
+    if (!initial && installSemanticDomain && prepared.isNotEmpty) {
       _controller.installSemanticDomain(
         dataMode: CenteredCarouselDataMode.cyclic,
         finiteLength: prepared.length,
@@ -333,7 +354,11 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
     if (!atlas.isReady) return const <_PreparedBudgetTargetAvatar>[];
     return List<_PreparedBudgetTargetAvatar>.unmodifiable([
       for (final item in source)
-        _PreparedBudgetTargetAvatar.prepare(item, atlas),
+        _PreparedBudgetTargetAvatar.prepare(
+          item,
+          atlas,
+          avatarColorProfile: _avatarColorProfile,
+        ),
     ]);
   }
 
@@ -352,7 +377,8 @@ class _BudgetTargetAvatarRailState extends State<BudgetTargetAvatarRail>
           existing.colorId != candidate.colorId ||
           existing.iconId != candidate.iconId ||
           existing.gradientStartArgb != candidate.gradientStartArgb ||
-          existing.gradientEndArgb != candidate.gradientEndArgb) {
+          existing.gradientEndArgb != candidate.gradientEndArgb ||
+          existing.avatarColorProfile != _avatarColorProfile) {
         return false;
       }
     }
@@ -1713,6 +1739,7 @@ final class _PreparedBudgetTargetAvatar {
     required this.iconId,
     required this.gradientStartArgb,
     required this.gradientEndArgb,
+    required this.avatarColorProfile,
     required this.color,
     required this.icon,
     required this.artworkIdentity,
@@ -1745,11 +1772,22 @@ final class _PreparedBudgetTargetAvatar {
 
   factory _PreparedBudgetTargetAvatar.prepare(
     DashboardBudgetTargetPresentationItem item,
-    PreparedVectorAssetAtlas atlas,
-  ) {
-    final categoryColor = item.colorId == null
-        ? Color(item.baseColorArgb)
-        : CategoryColorCatalog.resolve(item.colorId!).middleColor;
+    PreparedVectorAssetAtlas atlas, {
+    required CategoryAvatarColorProfile avatarColorProfile,
+  }) {
+    final categoryPalette =
+        item.colorId == null ||
+            avatarColorProfile == CategoryAvatarColorProfile.original
+        ? null
+        : CategoryAvatarPaletteCatalog.tokenFor(
+            avatarColorProfile,
+            CategoryColorCatalog.handleOf(item.colorId!),
+          );
+    final categoryColor =
+        categoryPalette?.middleColor ??
+        (item.colorId == null
+            ? Color(item.baseColorArgb)
+            : CategoryColorCatalog.resolve(item.colorId!).middleColor);
     final icon = switch (item.iconAssetKey) {
       'dollar-sign' => atlas.categoryIcon(
         CategoryIconCatalog.handleOf('icon_17'),
@@ -1759,8 +1797,8 @@ final class _PreparedBudgetTargetAvatar {
       ),
       _ => atlas.categoryIcon(CategoryIconCatalog.handleOf(item.iconId!)),
     };
-    final start = item.gradientStartArgb;
-    final end = item.gradientEndArgb;
+    final start = categoryPalette?.colorA.toARGB32() ?? item.gradientStartArgb;
+    final end = categoryPalette?.colorB.toARGB32() ?? item.gradientEndArgb;
     return _PreparedBudgetTargetAvatar._(
       targetHandle: item.target.handle,
       stableId: item.stableId,
@@ -1771,9 +1809,16 @@ final class _PreparedBudgetTargetAvatar {
       iconId: item.iconId,
       gradientStartArgb: start,
       gradientEndArgb: end,
+      avatarColorProfile: avatarColorProfile,
       color: categoryColor,
       icon: icon,
-      artworkIdentity: Object.hash(item.stableId, categoryColor.toARGB32()),
+      artworkIdentity: Object.hash(
+        item.stableId,
+        avatarColorProfile,
+        categoryColor.toARGB32(),
+        start,
+        end,
+      ),
       faceGradient: start == null || end == null
           ? null
           : BudgetCategoryAvatarFaceGradient(
@@ -1793,6 +1838,7 @@ final class _PreparedBudgetTargetAvatar {
   final String? iconId;
   final int? gradientStartArgb;
   final int? gradientEndArgb;
+  final CategoryAvatarColorProfile avatarColorProfile;
   final Color color;
   final PreparedVectorPicture icon;
   final int artworkIdentity;

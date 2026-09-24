@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
@@ -595,7 +597,10 @@ final class _RankedFollowerAvatar extends StatelessWidget {
     final visual = DecoratedBox(
       key: ValueKey<String>('balance-ranked-follower-avatar-${item.id}'),
       decoration: BoxDecoration(
-        color: CategoryColorCatalog.resolve(item.categoryColorId).middleColor,
+        color: CategoryAvatarPaletteCatalog.tokenFor(
+          CategoryAvatarColorProfileScope.profileOf(context),
+          CategoryColorCatalog.handleOf(item.categoryColorId),
+        ).middleColor,
         shape: BoxShape.circle,
         boxShadow: const <BoxShadow>[
           BoxShadow(

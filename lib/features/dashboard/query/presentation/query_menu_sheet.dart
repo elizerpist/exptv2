@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../../../core/categories/catalog/category_icon_catalog.dart';
 import '../../../../core/categories/catalog/category_visual_resolver.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../application/query_composer_controller.dart';
 import '../application/query_menu_data_controller.dart';
@@ -1130,6 +1131,7 @@ final class _PartnerChip extends StatelessWidget {
     final visual = CategoryVisualResolver.resolve(
       colorId: facet.categoryColorId,
       iconId: facet.categoryIconId,
+      profile: CategoryAvatarColorProfileScope.profileOf(context),
     );
     final tint = visual.gradient.middleColor;
     return TextButton(
@@ -1702,6 +1704,7 @@ final class _CategoryVisualObject extends StatelessWidget {
     final visual = CategoryVisualResolver.resolve(
       colorId: colorId,
       iconId: iconId,
+      profile: CategoryAvatarColorProfileScope.profileOf(context),
     );
     final tint = visual.gradient.middleColor;
     final atlas = PreparedVectorAssetAtlas.instance;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../../../core/categories/catalog/category_visual_resolver.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_key_digest.dart';
@@ -1475,6 +1476,7 @@ final class _MindYearHeatmapScopedInformationMetric extends StatelessWidget {
         ? CategoryVisualResolver.resolve(
             colorId: facets.single.colorId,
             iconId: facets.single.iconId,
+            profile: CategoryAvatarColorProfileScope.profileOf(context),
           ).gradient.middleColor
         : FluviVisualTokens.textSecondary;
     final label = facets.map((facet) => facet.displayName).join(' · ');
@@ -1505,6 +1507,9 @@ final class _MindYearHeatmapScopedInformationMetric extends StatelessWidget {
                           color: CategoryVisualResolver.resolve(
                             colorId: facets[index].colorId,
                             iconId: facets[index].iconId,
+                            profile: CategoryAvatarColorProfileScope.profileOf(
+                              context,
+                            ),
                           ).gradient.middleColor,
                           fontSize: 7,
                           fontWeight: FontWeight.w900,

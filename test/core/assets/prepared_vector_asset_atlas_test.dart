@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/categories/catalog/category_icon_catalog.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -251,7 +252,7 @@ void main() {
       expect(editPlaceholder.picture, isA<ui.Picture>());
       expect(editPlaceholder.picture.debugDisposed, isFalse);
       expect(atlas.pictureDecodeCount, decodeCount);
-      expect(atlas.logBoxBadgeBuildCount, 1);
+      expect(atlas.logBoxBadgeBuildCount, 4);
       expect(atlas.logBoxGlyphBuildCount, 1);
       expect(atlas.logBoxRasterByteEstimate, greaterThan(0));
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
@@ -264,7 +265,7 @@ void main() {
 
       await atlas.prepareLogBoxRasters(devicePixelRatio: 2);
       expect(atlas.logBoxRasterBuildCount, 2);
-      expect(atlas.logBoxBadgeBuildCount, 1);
+      expect(atlas.logBoxBadgeBuildCount, 4);
       expect(atlas.logBoxGlyphBuildCount, 1);
       expect(atlas.pictureDecodeCount, decodeCount);
       expect(atlas.logBoxRastersFor(2).badge(0), same(badge));
@@ -282,6 +283,55 @@ void main() {
     expect(() => atlas.logBoxRastersFor(3), throwsStateError);
     atlas.dispose();
   });
+
+  testWidgets(
+    'prepares a bounded profile-specific avatar and LogBox badge bank',
+    (tester) async {
+      final atlas = PreparedVectorAssetAtlas();
+      addTearDown(atlas.dispose);
+      await atlas.prepare();
+      await atlas.prepareLogBoxRasters(devicePixelRatio: 1);
+
+      const handle = 7;
+      final original = atlas.categoryGradient(
+        handle,
+        profile: CategoryAvatarColorProfile.original,
+      );
+      final pastel = atlas.categoryGradient(
+        handle,
+        profile: CategoryAvatarColorProfile.pastel,
+      );
+      expect(pastel.colors, isNot(original.colors));
+      expect(
+        atlas.categoryGradient(
+          handle,
+          profile: CategoryAvatarColorProfile.pastel,
+        ),
+        same(pastel),
+      );
+
+      final originalRasters = atlas.logBoxRastersFor(
+        1,
+        profile: CategoryAvatarColorProfile.original,
+      );
+      final vividRasters = atlas.logBoxRastersFor(
+        1,
+        profile: CategoryAvatarColorProfile.vivid,
+      );
+      expect(originalRasters.profile, CategoryAvatarColorProfile.original);
+      expect(vividRasters.profile, CategoryAvatarColorProfile.vivid);
+      expect(
+        vividRasters.badge(handle),
+        isNot(same(originalRasters.badge(handle))),
+      );
+      expect(atlas.logBoxBadgeBuildCount, 4);
+      expect(atlas.profiledBadgeBankCount, 4);
+      expect(
+        atlas.pictureDecodeCount,
+        PreparedVectorAssetAtlas.uniqueAssetCount,
+      );
+    },
+  );
 }
 
 const _canvasSentinel = Color(0xff102030);

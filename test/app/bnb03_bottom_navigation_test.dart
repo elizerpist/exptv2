@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
 
@@ -460,6 +461,30 @@ void main() {
     } finally {
       image.dispose();
     }
+  });
+
+  testWidgets('bottom navigation inherits the one selected global typeface', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FluviTypographyProfile.colorLab.applyToTheme(ThemeData()),
+        home: Bnb03BottomNavigation(
+          selected: Bnb03Item.home,
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<Text>(find.text('Home')).style!.fontFamily,
+      'FluviColorLabInter',
+    );
+    expect(
+      find.textContaining('SF Pro Text'),
+      findsNothing,
+      reason: 'The former hardcoded bottom-navigation family must not survive.',
+    );
   });
 }
 

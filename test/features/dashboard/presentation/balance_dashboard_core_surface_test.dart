@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
@@ -133,7 +134,7 @@ void main() {
         colorB: Colors.red,
         foregroundTextColor: Color(0xD114213A),
         chartColor: Colors.black,
-        typography: DashboardHeaderTypographyProfile.colorLab,
+        typography: FluviTypographyProfile.colorLab,
       );
       await tester.pump();
       final colorLabAmount = tester.widget<Text>(
@@ -141,15 +142,6 @@ void main() {
       );
       expect(colorLabAmount.style!.color, const Color(0xD114213A));
       expect(colorLabAmount.style!.fontFamily, 'FluviColorLabInter');
-      expect(
-        Theme.of(
-          tester.element(
-            find.byKey(const ValueKey<String>('balance-header-net-amount')),
-          ),
-        ).textTheme.titleMedium!.fontFamily,
-        'Roboto',
-        reason: 'Color Lab must not mutate the app-wide Material typography.',
-      );
       expect(balance.value, same(before));
       await tester.pumpWidget(const SizedBox.shrink());
       visual.dispose();
