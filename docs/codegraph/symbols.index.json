@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 12558,
+  "record_count": 12576,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
@@ -21,35 +21,35 @@
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/logbox/presentation/`dashboard_logbox_prepared_row_text_layout.dart`/_DashboardLogBoxRowTextLayoutPreparation#contentLeft.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_primary_chart_card.dart`/_BalancePairedBars#onSelected.",
-      "sha256": "255d998ae17a4c57ed6a71df5f5d3957eeac3a504745b4e52c61200940851822"
+      "sha256": "0777b5e4c37b1fef9c08e72c305dbca4f36acad140d3cdf8a59165a757598293"
     },
     {
       "path": "symbols/part-003.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_primary_chart_card.dart`/_BalancePairedBars#presentation.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/_DashboardLogBoxSearchPill#focusNode.",
-      "sha256": "182d3dbb5b651f9696f2e8d0795d844aea900c16e3ed09385a1eeb1ed5807548"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/DashboardLogBoxHeader#showInsideFacets.",
+      "sha256": "44860bb6e2172c56394164719a69de497c449351314727a8e70cb4421d9a5c66"
     },
     {
       "path": "symbols/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/_DashboardLogBoxSearchPill#insideFacetChips.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`prepared_budget_limit_snapshot_binary_codec.dart`/DashboardPreparedBudgetLimitSnapshotBinaryCodec#spendingRhythmPartsPerPoint.",
-      "sha256": "c9ccae7e8be5f6c56dc92a9358d78ab5c5ab59fd645cad3b43663279664fa4bf"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_header.dart`/DashboardLogBoxHeader#showsSearchPill.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`method_channel_dashboard_data_runtime_repository.dart`/MethodChannelDashboardDataRuntimeRepository#`<constructor>`().",
+      "sha256": "ce652d5b91d3df31340d63d71189ba5655e7954f047105c0e9929f49cff8ddcd"
     },
     {
       "path": "symbols/part-005.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`prepared_budget_limit_snapshot_binary_codec.dart`/DashboardPreparedBudgetLimitSnapshotBinaryCodec#version.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`core_dashboard_test.dart`/rhythm().",
-      "sha256": "1ac39770791c38145c0f7330d867dd1fe127201be915a4203e31a99e2b1f28ca"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`method_channel_dashboard_data_runtime_repository.dart`/MethodChannelDashboardDataRuntimeRepository#cancelPreparedIndex().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`core_dashboard_test.dart`/_FailMindFacetRepository#noSuchMethod().",
+      "sha256": "63bd6d1064d629643aeb873cdfa19cc77c87109236f0544aeab70cee2cf566c8"
     },
     {
       "path": "symbols/part-006.jsonl",
-      "record_count": 558,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`core_dashboard_test.dart`/selectTunerOption().",
+      "record_count": 576,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/presentation/`core_dashboard_test.dart`/_FailMindFacetRepository#readFacets().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "88e709407eb62c9c4a44a31580ba7bca875bb75293b715cffa10fc1f34119a53"
+      "sha256": "14e12d4af1dfe03b3eecd65f08b16eee22537c218ad875c6f3ee0734f8852ccc"
     }
   ]
 }
