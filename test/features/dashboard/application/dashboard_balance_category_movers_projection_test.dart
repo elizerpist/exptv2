@@ -162,6 +162,38 @@ void main() {
     );
     expect(result.movers.map((item) => item.id), <String>['a', 'z']);
   });
+
+  test(
+    'MOVERS-RECONNECT-RED: linked presentation retains only the ranked five movers',
+    () {
+      final result = movers(
+        scope: const DayScope(LocalDate(year: 2026, month: 2, day: 2)),
+        asOf: const LocalDate(year: 2026, month: 2, day: 3),
+        entries: <DashboardLedgerEntry>[
+          for (var index = 0; index < 6; index += 1) ...<DashboardLedgerEntry>[
+            _entry('before-$index', 'category-$index', 10, 2026, 2, 1),
+            _entry(
+              'now-$index',
+              'category-$index',
+              (index + 1) * 100,
+              2026,
+              2,
+              2,
+            ),
+          ],
+        ],
+      );
+
+      expect(result.movers, hasLength(5));
+      expect(result.movers.map((mover) => mover.id), <String>[
+        'category-5',
+        'category-4',
+        'category-3',
+        'category-2',
+        'category-1',
+      ]);
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(

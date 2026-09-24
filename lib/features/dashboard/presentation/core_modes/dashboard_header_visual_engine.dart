@@ -2573,6 +2573,22 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectBalanceHeaderPaletteVariant(
+    DashboardBalanceHeaderPaletteVariant variant,
+  ) {
+    final next = tuning.value.balanceColor.copyWith(variant: variant);
+    if (next == tuning.value.balanceColor) return;
+    tuning.value = tuning.value.copyWith(balanceColor: next);
+    _record(
+      'BALANCE_HEADER_PALETTE_VARIANT_CHANGED',
+      'palette=${next.palette.name} variant=${next.variant.name} '
+          'positionPct=${next.positionPercent} '
+          'windowWidthPct=${next.windowWidthPercent} '
+          'settingsGeneration=${tuning.value.generation}',
+    );
+    notifyListeners();
+  }
+
   void setBalanceHeaderPositionPercent(double value) {
     final next = tuning.value.balanceColor.copyWith(positionPercent: value);
     if (next == tuning.value.balanceColor) return;

@@ -5,7 +5,7 @@ import '../query/domain/ledger_direction.dart';
 import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
-import 'dashboard_balance_primary_projection.dart';
+import 'dashboard_balance_primary_identity.dart';
 
 /// An inclusive calendar comparison range. It is intentionally a value object
 /// so Core can publish the exact selected and reference periods alongside the
@@ -103,7 +103,8 @@ final class DashboardBalanceCategoryMoversPresentation {
          currentWindow,
          referenceWindow,
          for (final mover in movers)
-           '${mover.id}:${mover.currentMinor}:${mover.referenceMinor}',
+           '${mover.id}:${mover.currentMinor}:${mover.referenceMinor}:'
+               '${mover.trend.map((point) => '${point.bucket}:${point.currentMinor}:${point.referenceMinor}').join(',')}',
        ]);
 
   final DashboardBalancePrimaryIdentity identity;
@@ -149,33 +150,43 @@ abstract final class DashboardBalanceCategoryMoversProjection {
       if (current) accumulator.currentMinor += amount;
       if (reference) accumulator.referenceMinor += amount;
     }
-    final movers =
+    // First rank every category by the existing comparison rule. Detailed
+    // trends are deliberately built only for the bounded rendered Top 5, so a
+    // high-cardinality ledger never triggers a category-count × ledger scan.
+    final ranked =
         accumulators.values
             .where((item) => item.currentMinor != item.referenceMinor)
-            .map(
-              (item) => DashboardBalanceCategoryMover(
-                id: item.id,
-                label: item.label,
-                categoryColorId: item.categoryColorId,
-                categoryIconId: item.categoryIconId,
-                currentMinor: item.currentMinor,
-                referenceMinor: item.referenceMinor,
-                trend: _trendFor(
-                  item.id,
-                  timeScope,
-                  windows.current,
-                  windows.reference,
-                  entries,
-                ),
-              ),
-            )
             .toList(growable: false)
           ..sort((left, right) {
-            final impact = right.impactMinor.compareTo(left.impactMinor);
+            final impact = (right.currentMinor - right.referenceMinor)
+                .abs()
+                .compareTo((left.currentMinor - left.referenceMinor).abs());
             if (impact != 0) return impact;
             final current = right.currentMinor.compareTo(left.currentMinor);
             return current != 0 ? current : left.id.compareTo(right.id);
           });
+    final movers = List<DashboardBalanceCategoryMover>.unmodifiable(
+      ranked
+          .take(5)
+          .map(
+            (item) => DashboardBalanceCategoryMover(
+              id: item.id,
+              label: item.label,
+              categoryColorId: item.categoryColorId,
+              categoryIconId: item.categoryIconId,
+              currentMinor: item.currentMinor,
+              referenceMinor: item.referenceMinor,
+              trend: _trendFor(
+                item.id,
+                timeScope,
+                windows.current,
+                windows.reference,
+                entries,
+              ),
+            ),
+          )
+          .toList(growable: false),
+    );
     return DashboardBalanceCategoryMoversPresentation(
       identity: identity,
       timeScope: timeScope,

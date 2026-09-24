@@ -17,6 +17,7 @@ import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
+import 'balance_category_movers_presentation.dart';
 import 'balance_linked_detail_card.dart';
 import 'balance_cashflow_stability_card.dart';
 import 'balance_momentum_card.dart';
@@ -41,6 +42,7 @@ enum BalanceCarouselCardKind {
   ghost,
   forecast,
   latestTransaction,
+  categoryMovers,
   topCategory,
   topPartner,
 }
@@ -54,6 +56,7 @@ const _balanceInsightIndicatorIds = <String>[
   'ghost',
   'forecast',
   'latest-transaction',
+  'category-movers',
   'top-category',
   'top-partner',
 ];
@@ -67,6 +70,7 @@ String _indicatorIdFor(BalanceLinkedDetailTopic topic) => switch (topic) {
   BalanceLinkedDetailTopic.ghost => 'ghost',
   BalanceLinkedDetailTopic.forecast => 'forecast',
   BalanceLinkedDetailTopic.latestTransaction => 'latest-transaction',
+  BalanceLinkedDetailTopic.categoryMovers => 'category-movers',
   BalanceLinkedDetailTopic.topCategory => 'top-category',
   BalanceLinkedDetailTopic.topPartner => 'top-partner',
 };
@@ -97,6 +101,8 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
   DashboardBalanceLinkedPresentation? presentation,
 ) {
   final latest = presentation?.latestTransactions.firstOrNull;
+  final moverPresentation = presentation?.categoryMovers;
+  final topMover = moverPresentation?.movers.firstOrNull;
   final topCategory = presentation?.topCategories.firstOrNull;
   final topPartner = presentation?.topPartners.firstOrNull;
   final closings = presentation?.closings;
@@ -169,6 +175,16 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       title: 'Legutóbbi tétel',
       amount: latest?.title ?? 'Nincs tétel',
       latestTransaction: latest,
+    ),
+    BalanceCarouselCard._(
+      id: 'category-movers',
+      kind: BalanceCarouselCardKind.categoryMovers,
+      title: 'Legnagyobb kategóriaváltozás',
+      amount: topMover?.label ?? 'Nincs kategóriaváltozás',
+      detail: topMover == null
+          ? null
+          : '${balanceCategoryMoverPercentageLabel(topMover)} · '
+                '${balanceCategoryMoverCompactComparisonLabel(moverPresentation!)}',
     ),
     BalanceCarouselCard._(
       id: 'top-category',
@@ -291,6 +307,8 @@ final class _BalanceDashboardCoreSurfaceState
                     BalanceLinkedDetailTopic.forecast,
                   BalanceCarouselCardKind.latestTransaction =>
                     BalanceLinkedDetailTopic.latestTransaction,
+                  BalanceCarouselCardKind.categoryMovers =>
+                    BalanceLinkedDetailTopic.categoryMovers,
                   BalanceCarouselCardKind.topCategory =>
                     BalanceLinkedDetailTopic.topCategory,
                   BalanceCarouselCardKind.topPartner =>
@@ -705,6 +723,8 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           BalanceCarouselCardKind.forecast => 'Forecast: ${card.amount}',
           BalanceCarouselCardKind.latestTransaction =>
             'Legutóbbi tranzakció: ${card.amount}',
+          BalanceCarouselCardKind.categoryMovers =>
+            'Legnagyobb kategóriaváltozás: ${card.amount}',
           BalanceCarouselCardKind.topCategory =>
             'Top kategória: ${card.amount}',
           BalanceCarouselCardKind.topPartner => 'Top partner: ${card.amount}',
@@ -928,7 +948,7 @@ final class _LatestCarouselPreview extends StatelessWidget {
             color: FluviVisualTokens.textSecondary,
           ),
           const SizedBox(width: 4),
-          Expanded(
+          Flexible(
             child: Text(
               'Legutóbbi tétel',
               maxLines: 1,
@@ -937,6 +957,16 @@ final class _LatestCarouselPreview extends StatelessWidget {
                 color: FluviVisualTokens.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            key: const ValueKey<String>('balance-carousel-latest-inline-date'),
+            _formatLatestCarouselDate(transaction.epochDay),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: FluviVisualTokens.textSecondary,
             ),
           ),
         ],
@@ -966,16 +996,6 @@ final class _LatestCarouselPreview extends StatelessWidget {
             ),
           ),
         ],
-      ),
-      const SizedBox(height: 2),
-      Text(
-        key: const ValueKey<String>('balance-carousel-latest-date-row'),
-        _formatLatestCarouselDate(transaction.epochDay),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: FluviVisualTokens.textSecondary,
-        ),
       ),
     ],
   );

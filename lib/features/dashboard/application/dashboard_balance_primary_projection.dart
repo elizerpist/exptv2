@@ -6,39 +6,14 @@ import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import 'dashboard_balance_closings_momentum_projection.dart';
+import 'dashboard_balance_category_movers_projection.dart';
 import 'dashboard_balance_entity_insights_projection.dart';
+import 'dashboard_balance_primary_identity.dart';
 import 'dashboard_balance_retention_stability_projection.dart';
 
+export 'dashboard_balance_primary_identity.dart';
+
 const _balanceLinkedMaximumRows = 5;
-
-/// Immutable upstream provenance for one Balance primary-card projection.
-///
-/// Its input is limited to the already admitted directional prepared
-/// memberships. It intentionally has no repository, Query, scene, or widget
-/// capability.
-@immutable
-final class DashboardBalancePrimaryIdentity {
-  const DashboardBalancePrimaryIdentity({
-    required this.upstreamScopeKey,
-    required this.indexGeneration,
-    required this.coreRevision,
-  });
-
-  final String upstreamScopeKey;
-  final int indexGeneration;
-  final int coreRevision;
-
-  @override
-  bool operator ==(Object other) =>
-      other is DashboardBalancePrimaryIdentity &&
-      other.upstreamScopeKey == upstreamScopeKey &&
-      other.indexGeneration == indexGeneration &&
-      other.coreRevision == coreRevision;
-
-  @override
-  int get hashCode =>
-      Object.hash(upstreamScopeKey, indexGeneration, coreRevision);
-}
 
 enum DashboardBalancePrimaryMode { sum, year, month, unsupportedDay }
 
@@ -129,6 +104,7 @@ final class DashboardBalanceScopedTransaction {
     required this.direction,
     required this.occurredOrder,
     required this.epochDay,
+    required this.localTimeMinutes,
   });
 
   final String entryId;
@@ -140,6 +116,7 @@ final class DashboardBalanceScopedTransaction {
   final LedgerDirection direction;
   final int occurredOrder;
   final int epochDay;
+  final int localTimeMinutes;
 }
 
 /// One active-direction rank for Balance's Category or Partner detail.
@@ -180,6 +157,7 @@ final class DashboardBalanceLinkedPresentation {
     DashboardBalanceMomentumPresentation? momentum,
     DashboardBalanceRetentionPresentation? retention,
     DashboardBalanceStabilityPresentation? stability,
+    this.categoryMovers,
     Map<String, DashboardBalanceCategoryInsight> categoryInsights =
         const <String, DashboardBalanceCategoryInsight>{},
     Map<String, DashboardBalancePartnerInsight> partnerInsights =
@@ -243,6 +221,7 @@ final class DashboardBalanceLinkedPresentation {
   final DashboardBalanceMomentumPresentation momentum;
   final DashboardBalanceRetentionPresentation retention;
   final DashboardBalanceStabilityPresentation stability;
+  final DashboardBalanceCategoryMoversPresentation? categoryMovers;
   final Map<String, DashboardBalanceCategoryInsight> categoryInsights;
   final Map<String, DashboardBalancePartnerInsight> partnerInsights;
   final List<DashboardBalanceScopedTransaction> latestTransactions;
@@ -257,10 +236,11 @@ final class DashboardBalanceLinkedPresentation {
     momentum.presentationId,
     retention.presentationId,
     stability.presentationId,
+    categoryMovers?.presentationId,
     for (final transaction in latestTransactions.take(
       _balanceLinkedMaximumRows,
     ))
-      '${transaction.entryId}:${transaction.occurredOrder}:${transaction.categoryColorId}:${transaction.categoryIconId}',
+      '${transaction.entryId}:${transaction.occurredOrder}:${transaction.epochDay}:${transaction.localTimeMinutes}:${transaction.categoryColorId}:${transaction.categoryIconId}',
     for (final category in topCategories.take(_balanceLinkedMaximumRows))
       '${category.id}:${category.amountMinor}:${category.transactionCount}',
     for (final partner in topPartners.take(_balanceLinkedMaximumRows))
@@ -587,6 +567,15 @@ abstract final class DashboardBalanceLinkedProjection {
         incomeEntries: incomeEntries,
         expenseEntries: expenseEntries,
       ),
+      categoryMovers: DashboardBalanceCategoryMoversProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        selectedDirection: selectedDirection,
+        logicalAsOfDate: logicalAsOfDate,
+        entries: selectedDirection == LedgerDirection.income
+            ? incomeEntries
+            : expenseEntries,
+      ),
       latestTransactions: _latestTransactions(income, expense),
       topCategories: topCategories,
       topPartners: topPartners,
@@ -641,6 +630,7 @@ abstract final class DashboardBalanceLinkedProjection {
       direction: direction,
       occurredOrder: _occurredOrder(entry),
       epochDay: entry.bookedLocalEpochDay,
+      localTimeMinutes: entry.bookedLocalTimeMinutes,
     );
   }
 

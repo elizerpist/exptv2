@@ -194,6 +194,64 @@ void main() {
   );
 
   test(
+    'LATEST-TIME-RED: latest projection retains the authoritative local minutes',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+        selectedDirection: LedgerDirection.expense,
+        incomeEntries: const <DashboardLedgerEntry>[],
+        expenseEntries: <DashboardLedgerEntry>[
+          _entry(
+            'latest-local-time',
+            'expense',
+            -5000,
+            2026,
+            7,
+            28,
+            localTimeMinutes: 8 * 60 + 7,
+          ),
+        ],
+      );
+
+      expect(linked.latestTransactions.single.localTimeMinutes, 8 * 60 + 7);
+    },
+  );
+
+  test(
+    'LATEST-TIME: a visible local-time change invalidates linked presentation even with fixed UTC ordering',
+    () {
+      DashboardBalanceLinkedPresentation build(int localMinutes) =>
+          DashboardBalanceLinkedProjection.build(
+            identity: identity,
+            timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+            selectedDirection: LedgerDirection.expense,
+            incomeEntries: const <DashboardLedgerEntry>[],
+            expenseEntries: <DashboardLedgerEntry>[
+              _entry(
+                'fixed-utc-order',
+                'expense',
+                -5000,
+                2026,
+                7,
+                28,
+                localTimeMinutes: localMinutes,
+                occurredAtUtcMs: 1722168000000,
+              ),
+            ],
+          );
+
+      final noon = build(12 * 60);
+      final evening = build(18 * 60 + 7);
+      expect(
+        noon.latestTransactions.single.occurredOrder,
+        evening.latestTransactions.single.occurredOrder,
+      );
+      expect(noon.presentationId, isNot(evening.presentationId));
+    },
+  );
+
+  test(
     'L5-RED: linked top category ranks absolute amount on active direction only',
     () {
       final linked = DashboardBalanceLinkedProjection.build(
@@ -323,6 +381,59 @@ void main() {
   );
 
   test(
+    'MOVERS: linked payload publishes the bounded selected-direction projection',
+    () {
+      final linked = DashboardBalanceLinkedProjection.build(
+        identity: identity,
+        timeScope: const YearScope(2026),
+        selectedDirection: LedgerDirection.expense,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 24),
+        incomeEntries: <DashboardLedgerEntry>[
+          _entry(
+            'income-only',
+            'income',
+            999999,
+            2026,
+            8,
+            1,
+            categoryId: 'income',
+          ),
+        ],
+        expenseEntries: <DashboardLedgerEntry>[
+          for (var index = 0; index < 6; index += 1) ...<DashboardLedgerEntry>[
+            _entry(
+              'old-$index',
+              'expense',
+              -(100 + index),
+              2025,
+              8,
+              1,
+              categoryId: 'category-$index',
+            ),
+            _entry(
+              'now-$index',
+              'expense',
+              -(1000 + index),
+              2026,
+              8,
+              1,
+              categoryId: 'category-$index',
+            ),
+          ],
+        ],
+      );
+
+      expect(linked.categoryMovers, isNotNull);
+      expect(linked.categoryMovers!.selectedDirection, LedgerDirection.expense);
+      expect(linked.categoryMovers!.movers, hasLength(5));
+      expect(
+        linked.categoryMovers!.movers.map((mover) => mover.id),
+        isNot(contains('income')),
+      );
+    },
+  );
+
+  test(
     'PC1/BM1 RED: one linked Balance payload carries dual-direction Closings and Momentum from resident histories',
     () {
       final linked = DashboardBalanceLinkedProjection.build(
@@ -391,6 +502,8 @@ DashboardLedgerEntry _entry(
   String? partnerDisplayName,
   String? categoryColorId,
   String? categoryIconId,
+  int localTimeMinutes = 12 * 60,
+  int? occurredAtUtcMs,
 }) => DashboardLedgerEntry(
   id: id,
   partnerId: partnerId ?? 'partner-$id',
@@ -398,7 +511,8 @@ DashboardLedgerEntry _entry(
   direction: direction,
   amountMinor: amount,
   bookedLocalEpochDay: LocalDate(year: year, month: month, day: day).epochDay,
-  bookedLocalTimeMinutes: 12 * 60,
+  bookedLocalTimeMinutes: localTimeMinutes,
+  occurredAtUtcMs: occurredAtUtcMs,
   categoryDisplayName: categoryDisplayName,
   partnerDisplayName: partnerDisplayName,
   categoryColorId: categoryColorId,

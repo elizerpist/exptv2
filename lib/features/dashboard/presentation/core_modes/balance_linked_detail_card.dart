@@ -9,6 +9,7 @@ import '../../query/domain/ledger_direction.dart';
 import 'balance_closings_card.dart';
 import 'balance_cashflow_stability_card.dart';
 import 'balance_category_visual_badge.dart';
+import 'balance_category_movers_card.dart';
 import 'balance_future_placeholder_card.dart';
 import 'balance_momentum_card.dart';
 import 'balance_primary_chart_card.dart';
@@ -51,6 +52,9 @@ class BalanceLinkedDetailCard extends StatelessWidget {
       const BalanceFuturePlaceholderCard.ghost(),
     BalanceLinkedDetailTopic.forecast =>
       const BalanceFuturePlaceholderCard.forecast(),
+    BalanceLinkedDetailTopic.categoryMovers => BalanceCategoryMoversCard(
+      presentation: presentation.categoryMovers,
+    ),
     BalanceLinkedDetailTopic.latestTransaction => _LatestTransactionsDetail(
       transactions: presentation.latestTransactions,
     ),
@@ -84,6 +88,7 @@ enum BalanceLinkedDetailTopic {
   ghost,
   forecast,
   latestTransaction,
+  categoryMovers,
   topCategory,
   topPartner,
 }
@@ -143,7 +148,7 @@ final class _LatestTransactionRow extends StatelessWidget {
         : transaction.amountMinor.abs();
     return Semantics(
       label:
-          '${transaction.title}, ${transaction.categoryTitle}, ${_formatEpochDay(transaction.epochDay)}, ${DashboardPreparedFormatter.amountMinor(signedAmount)}',
+          '${transaction.title}, ${transaction.categoryTitle}, ${_formatEpochDay(transaction.epochDay)}, ${_formatClock(transaction.localTimeMinutes)}, ${DashboardPreparedFormatter.amountMinor(signedAmount)}',
       child: Padding(
         key: ValueKey<String>('balance-linked-latest-${transaction.entryId}'),
         padding: const EdgeInsets.symmetric(vertical: 2),
@@ -176,7 +181,7 @@ final class _LatestTransactionRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    '${transaction.categoryTitle} · ${_formatEpochDay(transaction.epochDay)}',
+                    '${transaction.categoryTitle} · ${_formatEpochDay(transaction.epochDay)} · ${_formatClock(transaction.localTimeMinutes)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(

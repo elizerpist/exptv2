@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_entity_insights_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_retention_stability_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_cashflow_stability_card.dart';
@@ -373,6 +374,14 @@ void main() {
       }
       expect(find.text('Tétel 0'), findsOneWidget);
       expect(find.textContaining('Kategória 0 ·'), findsOneWidget);
+      expect(find.textContaining('12:00'), findsOneWidget);
+      expect(find.textContaining('08:07'), findsNWidgets(4));
+      expect(
+        find.bySemanticsLabel(
+          RegExp(r'Tétel 0, Kategória 0, 2024\. 10\. 04\., 12:00'),
+        ),
+        findsOneWidget,
+      );
       expect(
         tester
             .getRect(
@@ -667,6 +676,61 @@ void main() {
       expect(source, isNot(contains('PreparedDashboardIndex')));
     },
   );
+
+  testWidgets(
+    'Movers stays inside the linked lower card and Back clears only local selection',
+    (tester) async {
+      final presentation = _movers();
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: presentation),
+        ),
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-mover-housing')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: _movers(id: 'food')),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-list')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-mover-food')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-movers-back')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-list')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 const _identity = DashboardBalancePrimaryIdentity(
@@ -695,6 +759,7 @@ DashboardBalanceLinkedPresentation _linked({
   DashboardBalanceMomentumPresentation? momentum,
   DashboardBalanceRetentionPresentation? retention,
   DashboardBalanceStabilityPresentation? stability,
+  DashboardBalanceCategoryMoversPresentation? categoryMovers,
   Map<String, DashboardBalanceCategoryInsight> categoryInsights =
       const <String, DashboardBalanceCategoryInsight>{},
   Map<String, DashboardBalancePartnerInsight> partnerInsights =
@@ -716,6 +781,7 @@ DashboardBalanceLinkedPresentation _linked({
   momentum: momentum,
   retention: retention,
   stability: stability,
+  categoryMovers: categoryMovers,
   latestTransactions: List<DashboardBalanceScopedTransaction>.generate(
     5,
     (index) => DashboardBalanceScopedTransaction(
@@ -730,6 +796,7 @@ DashboardBalanceLinkedPresentation _linked({
           : LedgerDirection.expense,
       occurredOrder: 100 - index,
       epochDay: 20000 - index,
+      localTimeMinutes: index == 0 ? 12 * 60 : 8 * 60 + 7,
     ),
     growable: false,
   ),
@@ -738,6 +805,39 @@ DashboardBalanceLinkedPresentation _linked({
   categoryInsights: categoryInsights,
   partnerInsights: partnerInsights,
 );
+
+DashboardBalanceCategoryMoversPresentation _movers({String id = 'housing'}) =>
+    DashboardBalanceCategoryMoversPresentation(
+      identity: _identity,
+      timeScope: const AllTimeScope(),
+      selectedDirection: LedgerDirection.income,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 24),
+      currentWindow: const DashboardBalanceCategoryComparisonWindow(
+        startInclusive: LocalDate(year: 2026, month: 1, day: 1),
+        endInclusive: LocalDate(year: 2026, month: 9, day: 24),
+      ),
+      referenceWindow: const DashboardBalanceCategoryComparisonWindow(
+        startInclusive: LocalDate(year: 2025, month: 1, day: 1),
+        endInclusive: LocalDate(year: 2025, month: 9, day: 24),
+      ),
+      movers: <DashboardBalanceCategoryMover>[
+        DashboardBalanceCategoryMover(
+          id: id,
+          label: 'Lakhatás',
+          categoryColorId: 'color_07',
+          categoryIconId: 'icon_17',
+          currentMinor: 260000,
+          referenceMinor: 120000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 1,
+              currentMinor: 260000,
+              referenceMinor: 120000,
+            ),
+          ],
+        ),
+      ],
+    );
 
 DashboardBalanceCategoryInsight _categoryInsight({
   required int amountMinor,

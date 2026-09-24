@@ -26,6 +26,25 @@ void main() {
 
   group('Balance manual palette and per-mode opacity contract', () {
     test(
+      'BALANCE-PALETTE-VARIANT-RED: every family exposes the exact three explicit variants',
+      () {
+        expect(
+          DashboardBalanceHeaderPaletteVariant.values,
+          <DashboardBalanceHeaderPaletteVariant>[
+            DashboardBalanceHeaderPaletteVariant.original,
+            DashboardBalanceHeaderPaletteVariant.saturated,
+            DashboardBalanceHeaderPaletteVariant.vivid,
+          ],
+        );
+        expect(
+          DashboardBalanceHeaderPaletteCatalog.palettes.length *
+              DashboardBalanceHeaderPaletteVariant.values.length,
+          33,
+        );
+      },
+    );
+
+    test(
       'all eleven supplied palette identities retain exact ARGB endpoints',
       () {
         expect(DashboardBalanceHeaderPaletteCatalog.palettes, hasLength(11));
@@ -199,6 +218,48 @@ void main() {
         expect(policy.value.opacity, 1);
         expect(controller.tickerIdentity, same(ticker));
         policy.dispose();
+        controller.dispose();
+      },
+    );
+
+    test(
+      'Balance palette variant publishes once without resetting settings',
+      () {
+        final controller = DashboardHeaderVisualController(
+          vsync: const TestVSync(),
+        );
+        final ticker = controller.tickerIdentity;
+        controller.selectBalanceHeaderPalette(
+          DashboardBalanceHeaderPalette.customBalance,
+        );
+        controller.setBalanceHeaderPositionPercent(73);
+        controller.setBalanceHeaderWindowWidthPercent(41);
+        final beforeGeneration = controller.tuning.value.generation;
+        controller.selectBalanceHeaderPaletteVariant(
+          DashboardBalanceHeaderPaletteVariant.vivid,
+        );
+        final selected = controller.tuning.value.balanceColor;
+        expect(selected.palette, DashboardBalanceHeaderPalette.customBalance);
+        expect(selected.variant, DashboardBalanceHeaderPaletteVariant.vivid);
+        expect(selected.positionPercent, 73);
+        expect(selected.windowWidthPercent, 41);
+        expect(controller.tuning.value.generation, beforeGeneration + 1);
+        expect(controller.tickerIdentity, same(ticker));
+
+        controller.selectBalanceHeaderPalette(
+          DashboardBalanceHeaderPalette.magicalLevanderHaze,
+        );
+        expect(
+          controller.tuning.value.balanceColor.variant,
+          DashboardBalanceHeaderPaletteVariant.vivid,
+        );
+        expect(controller.tuning.value.balanceColor.positionPercent, 73);
+        expect(controller.tuning.value.balanceColor.windowWidthPercent, 41);
+
+        controller.selectBalanceHeaderPaletteVariant(
+          DashboardBalanceHeaderPaletteVariant.vivid,
+        );
+        expect(controller.tuning.value.generation, beforeGeneration + 2);
         controller.dispose();
       },
     );

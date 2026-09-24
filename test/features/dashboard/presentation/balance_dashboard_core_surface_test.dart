@@ -157,7 +157,7 @@ void main() {
     },
   );
 
-  test('BX1 RED: Balance has ten real linked topics and no prototype', () {
+  test('BX1: Balance has eleven real linked topics and no prototype', () {
     expect(
       balanceCarouselCardsFor(null).map((card) => card.kind),
       <BalanceCarouselCardKind>[
@@ -169,6 +169,7 @@ void main() {
         BalanceCarouselCardKind.ghost,
         BalanceCarouselCardKind.forecast,
         BalanceCarouselCardKind.latestTransaction,
+        BalanceCarouselCardKind.categoryMovers,
         BalanceCarouselCardKind.topCategory,
         BalanceCarouselCardKind.topPartner,
       ],
@@ -452,6 +453,12 @@ void main() {
       );
       expect(
         find.byKey(const ValueKey<String>('balance-carousel-latest-date-row')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-latest-inline-date'),
+        ),
         findsOneWidget,
       );
       expect(
@@ -468,6 +475,14 @@ void main() {
         findsNothing,
       );
       carousel.controller.jumpToIndex(8);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers-empty'),
+        ),
+        findsOneWidget,
+      );
+      carousel.controller.jumpToIndex(9);
       await tester.pump();
       expect(
         find.byKey(
@@ -515,7 +530,7 @@ void main() {
         find.byKey(const ValueKey<String>('balance-linked-rank-salary')),
         findsOneWidget,
       );
-      carousel.controller.jumpToIndex(9);
+      carousel.controller.jumpToIndex(10);
       await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
@@ -586,7 +601,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-HEADER/CAROUSEL RED: prepared net uses the Header detail seam and the upper card owns one shared-engine six-card rail',
+    'BALANCE-HEADER/CAROUSEL: prepared net uses the Header detail seam and the upper card owns one shared-engine eleven-topic rail',
     (tester) async {
       final presentation = ValueNotifier<DashboardBalancePresentation?>(
         const DashboardBalancePresentation(
@@ -654,7 +669,7 @@ void main() {
       );
       final source =
           carousel.dataSource! as CyclicCarouselDataSource<BalanceCarouselCard>;
-      expect(source.items, hasLength(10));
+      expect(source.items, hasLength(11));
       expect(source.items.first.kind, BalanceCarouselCardKind.cashflow);
       expect(carousel.controller.selectedLogicalIndex, 0);
       expect(carousel.spec.visibleItemCount, 3);
@@ -1561,6 +1576,7 @@ DashboardBalanceLinkedPresentation _linked() {
         direction: LedgerDirection.expense,
         occurredOrder: 20632 * 1440,
         epochDay: 20632,
+        localTimeMinutes: 12 * 60,
       ),
     ],
     topCategories: const <DashboardBalanceRankedItem>[

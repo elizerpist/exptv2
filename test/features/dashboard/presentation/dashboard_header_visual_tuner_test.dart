@@ -47,6 +47,15 @@ void main() {
       final dropdown = tester
           .widget<DropdownButton<DashboardBalanceHeaderPalette>>(selector);
       expect(dropdown.items, hasLength(11));
+      final variantSelector = find.byKey(
+        const ValueKey<String>('dashboard-header-balance-variant-selector'),
+      );
+      final variantDropdown = tester
+          .widget<DropdownButton<DashboardBalanceHeaderPaletteVariant>>(
+            variantSelector,
+          );
+      expect(variantDropdown.items, hasLength(3));
+      variantDropdown.onChanged!(DashboardBalanceHeaderPaletteVariant.vivid);
       dropdown.onChanged!(DashboardBalanceHeaderPalette.misticLevanderFields);
       final position = find.byKey(
         const ValueKey<String>('dashboard-header-balance-position-slider'),
@@ -68,6 +77,10 @@ void main() {
       expect(
         controller.tuning.value.balanceColor.palette,
         DashboardBalanceHeaderPalette.misticLevanderFields,
+      );
+      expect(
+        controller.tuning.value.balanceColor.variant,
+        DashboardBalanceHeaderPaletteVariant.vivid,
       );
       expect(controller.tuning.value.balanceColor.positionPercent, 100);
       expect(controller.tuning.value.balanceColor.windowWidthPercent, 10);

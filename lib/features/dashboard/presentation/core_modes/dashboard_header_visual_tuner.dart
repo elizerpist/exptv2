@@ -1252,6 +1252,44 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 10),
+                            InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Színerősség',
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child:
+                                    DropdownButton<
+                                      DashboardBalanceHeaderPaletteVariant
+                                    >(
+                                      key: const ValueKey<String>(
+                                        'dashboard-header-balance-variant-selector',
+                                      ),
+                                      value: tuning.balanceColor.variant,
+                                      isExpanded: true,
+                                      items: DashboardBalanceHeaderPaletteCatalog
+                                          .variants
+                                          .map(
+                                            (variant) =>
+                                                DropdownMenuItem<
+                                                  DashboardBalanceHeaderPaletteVariant
+                                                >(
+                                                  value: variant,
+                                                  child: Text(variant.label),
+                                                ),
+                                          )
+                                          .toList(growable: false),
+                                      onChanged: (variant) {
+                                        if (variant != null) {
+                                          controller
+                                              .selectBalanceHeaderPaletteVariant(
+                                                variant,
+                                              );
+                                        }
+                                      },
+                                    ),
+                              ),
+                            ),
                             _TunerSlider(
                               key: const ValueKey<String>(
                                 'dashboard-header-balance-position-slider',
