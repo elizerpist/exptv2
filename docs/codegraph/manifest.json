@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
-  "source_head": "fef29410ed82cdff79fe1a744ed461598fb91bda",
-  "source_parent": "c1bf550017aff5a3b0bd689c83c18ec815bbd8bc",
-  "source_ref": "fef29410ed82cdff79fe1a744ed461598fb91bda",
+  "source_head": "c4fa5536fd13d616fceb0bea853376e0d847ac91",
+  "source_parent": "36992cda6e6bd2831db5d127785db0ba5ece9052",
+  "source_ref": "c4fa5536fd13d616fceb0bea853376e0d847ac91",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "37f0d51300eb4060f9912df35fafc110e3afb5662a9d50e193f19128fdc40465",
-  "document_count": 518,
-  "occurrence_count": 368156,
-  "defined_symbol_count": 50091,
-  "repository_defined_symbol_count": 12576,
+  "index_sha256": "100fcbd2d41824d65a1ad2da93edd653ec64878623133a0cef5e8750a51f1117",
+  "document_count": 519,
+  "occurrence_count": 368962,
+  "defined_symbol_count": 50153,
+  "repository_defined_symbol_count": 12603,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
   "artifacts": [
     {
       "name": "symbols",
       "storage": "jsonl_shards",
-      "record_count": 12576,
+      "record_count": 12603,
       "paths": [
         "symbols.index.json",
         "symbols/part-000.jsonl",
@@ -25,12 +25,12 @@
         "symbols/part-005.jsonl",
         "symbols/part-006.jsonl"
       ],
-      "byte_count": 5334505
+      "byte_count": 5346008
     },
     {
       "name": "refs",
       "storage": "jsonl_shards",
-      "record_count": 93359,
+      "record_count": 93475,
       "paths": [
         "refs.index.json",
         "refs/part-000.jsonl",
@@ -81,12 +81,12 @@
         "refs/part-045.jsonl",
         "refs/part-046.jsonl"
       ],
-      "byte_count": 30216403
+      "byte_count": 30254055
     },
     {
       "name": "edges",
       "storage": "jsonl_shards",
-      "record_count": 27024,
+      "record_count": 27054,
       "paths": [
         "edges.index.json",
         "edges/part-000.jsonl",
@@ -104,16 +104,16 @@
         "edges/part-012.jsonl",
         "edges/part-013.jsonl"
       ],
-      "byte_count": 9549736
+      "byte_count": 9560760
     },
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 30,
+      "record_count": 19,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 501417
+      "byte_count": 205288
     }
   ]
 }
