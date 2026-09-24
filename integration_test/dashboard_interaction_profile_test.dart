@@ -1291,13 +1291,12 @@ Future<void> _prepareScenario(
   }
 }
 
-/// Reaches Budget through the real production header gesture. This keeps the
+/// Reaches Budget through the real production Header mode icon. This keeps the
 /// Avatar profile on the same persistent FluviApp/CoreDashboard composition as
 /// the Time matrix and deliberately does not install a category scene itself.
 Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
-  await tester.drag(
-    find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
-    const Offset(-260, 0),
+  await tester.tap(
+    find.byKey(const ValueKey('dashboard-header-mode-icon-balance')),
   );
   final deadline = DateTime.now().add(const Duration(seconds: 8));
   while (DateTime.now().isBefore(deadline)) {
@@ -1315,7 +1314,7 @@ Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
     }
     await Future<void>.delayed(const Duration(milliseconds: 16));
   }
-  fail('Budget Avatar rail did not mount after the real header mode gesture.');
+  fail('Budget Avatar rail did not mount after the real Header mode icon tap.');
 }
 
 Future<void> _resetRailToIndex(
