@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "source_head": "4543dc60f18cec16132ec342bc2565a65d75f769",
-  "source_parent": "6be09c3288f4f4d5863b04115f193dc269a298ad",
+  "source_head": "5eaee4488ce29a0437dc4033f0e46191e422da87",
+  "source_parent": "4543dc60f18cec16132ec342bc2565a65d75f769",
   "source_ref": "feature/balance-carousel-v1",
   "scip_dart_version": "1.6.2",
-  "index_sha256": "9d812eda16331a0cb50ed5473f23ed3f93aeda47fff345efa6a4ec8fa480de55",
+  "index_sha256": "459a0caab5fde6fd7294a3556a86ff412a707329b39f022a45ecf081b8bd881e",
   "document_count": 523,
-  "occurrence_count": 373349,
+  "occurrence_count": 373348,
   "defined_symbol_count": 50604,
   "repository_defined_symbol_count": 12746,
   "graph_artifact_commit_relation": "The Git commit containing this graph may differ from source_head; source_head is the indexed application source.",
@@ -110,11 +110,11 @@
     {
       "name": "changed-impact",
       "storage": "json",
-      "record_count": 11,
+      "record_count": 1,
       "paths": [
         "changed-impact.json"
       ],
-      "byte_count": 149375
+      "byte_count": 16696
     }
   ]
 }
