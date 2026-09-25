@@ -181,7 +181,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   StreamSubscription? _diagnosticSubscription;
   Bnb03Item _selectedNavigationItem = Bnb03Item.home;
   double? _devicePixelRatio;
-  PreparedLogBoxRasterSet? _preparedLogBoxRasters;
+  PreparedLogBoxRasterBank? _preparedLogBoxRasters;
   bool _queryMenuOpen = false;
   bool _queryApplying = false;
 
@@ -284,7 +284,7 @@ class _FluviAppShellState extends State<FluviAppShell>
           final atlas = PreparedVectorAssetAtlas.instance;
           await atlas.prepare();
           await atlas.prepareLogBoxRasters(devicePixelRatio: devicePixelRatio);
-          _preparedLogBoxRasters = atlas.logBoxRastersFor(devicePixelRatio);
+          _preparedLogBoxRasters = atlas.logBoxRasterBankFor(devicePixelRatio);
           timer.stop();
           _controller.renderReadinessDiagnostics.recordFirstUseCompleted(
             subsystem: DashboardRenderSubsystem.categoryRaster,

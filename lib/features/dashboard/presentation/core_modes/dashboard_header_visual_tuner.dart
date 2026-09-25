@@ -275,14 +275,41 @@ final class _TunerSection extends StatelessWidget {
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      Text(title, style: Theme.of(context).textTheme.labelLarge),
-      const SizedBox(height: 4),
-      ...children,
-    ],
-  );
+  Widget build(BuildContext context) {
+    final hidesHeading = _TunerSectionHeadingScope.hidesHeading(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (!hidesHeading) ...<Widget>[
+          Text(title, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 4),
+        ],
+        ...children,
+      ],
+    );
+  }
+}
+
+/// The collapsible chrome owns a top-level topic heading. Its direct body
+/// keeps the existing setting widgets, but must not repeat that same heading.
+/// Nested Header-animation subtopics deliberately use their own headings.
+final class _TunerSectionHeadingScope extends InheritedWidget {
+  const _TunerSectionHeadingScope({
+    required this.hidesChildHeading,
+    required super.child,
+  });
+
+  final bool hidesChildHeading;
+
+  static bool hidesHeading(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_TunerSectionHeadingScope>()
+          ?.hidesChildHeading ??
+      false;
+
+  @override
+  bool updateShouldNotify(_TunerSectionHeadingScope oldWidget) =>
+      hidesChildHeading != oldWidget.hidesChildHeading;
 }
 
 final class _TunerSlider extends StatelessWidget {
@@ -1207,7 +1234,12 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              _TunerSection(
+              _DashboardHeaderTunerTopic(
+                key: const ValueKey<String>(
+                  'dashboard-header-tuner-section-appearance',
+                ),
+                controller: controller,
+                section: DashboardHeaderTunerSection.appearance,
                 title: 'MEGJELENÉS',
                 children: <Widget>[
                   _GlobalAppearanceControls(
@@ -1218,74 +1250,228 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               if (summaryPillVariants case final variants?) ...<Widget>[
-                _SummaryPillExperimentSection(controller: variants),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-summary-pill-variants',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.summaryPillVariants,
+                  title: 'Időnavigáció / SummaryPill',
+                  children: <Widget>[
+                    _SummaryPillExperimentSection(controller: variants),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (summaryPresentation case final summary?) ...<Widget>[
-                _DashboardSummaryPresentationSection(controller: summary),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-summary-presentation',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.summaryPresentation,
+                  title: 'Summary megjelenés',
+                  children: <Widget>[
+                    _DashboardSummaryPresentationSection(controller: summary),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (bodyOrder case final order?) ...<Widget>[
-                _DashboardBodyOrderSection(controller: order),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-body-order',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.bodyOrder,
+                  title: 'Fejléc sorrend',
+                  children: <Widget>[
+                    _DashboardBodyOrderSection(controller: order),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (budgetContentCardStyle case final cardStyle?) ...<Widget>[
-                _BudgetContentCardStyleSection(controller: cardStyle),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-budget-content-card-style',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.budgetContentCardStyle,
+                  title: 'Budget megjelenés',
+                  children: <Widget>[
+                    _BudgetContentCardStyleSection(controller: cardStyle),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (budgetSectionOrder case final order?) ...<Widget>[
-                _BudgetSectionOrderSection(controller: order),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-budget-section-order',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.budgetSectionOrder,
+                  title: 'Budget szekciósorrend',
+                  children: <Widget>[
+                    _BudgetSectionOrderSection(controller: order),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (shadowStyle case final shadows?) ...<Widget>[
-                _DashboardShadowStyleSection(controller: shadows),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-shadow-style',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.shadowStyle,
+                  title: 'Árnyék',
+                  children: <Widget>[
+                    _DashboardShadowStyleSection(controller: shadows),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (logBoxHeight case final height?) ...<Widget>[
-                _DashboardLogBoxHeightSection(controller: height),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-logbox-height',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.logBoxHeight,
+                  title: 'LogBox magasság',
+                  children: <Widget>[
+                    _DashboardLogBoxHeightSection(controller: height),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (searchPillVisibility case final searchPill?) ...<Widget>[
-                _DashboardSearchPillVisibilitySection(controller: searchPill),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-search-pill-visibility',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.searchPillVisibility,
+                  title: 'LogBox keresés',
+                  children: <Widget>[
+                    _DashboardSearchPillVisibilitySection(
+                      controller: searchPill,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (budgetHeaderPresentation
                   case final budgetHeader?) ...<Widget>[
-                _DashboardBudgetHeaderPresentationSection(
-                  controller: budgetHeader,
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-budget-header-presentation',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.budgetHeaderPresentation,
+                  title: 'Budget Header',
+                  children: <Widget>[
+                    _DashboardBudgetHeaderPresentationSection(
+                      controller: budgetHeader,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
               ],
               if (budgetRingPresentation case final ring?) ...<Widget>[
-                _BudgetRingPresentationSection(controller: ring),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-budget-ring-presentation',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.budgetRingPresentation,
+                  title: 'SUM Budget',
+                  children: <Widget>[
+                    _BudgetRingPresentationSection(controller: ring),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (shellPresentation case final shell?) ...<Widget>[
-                _DashboardBottomNavPresentationSection(controller: shell),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-shell-presentation',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.shellPresentation,
+                  title: 'BottomNav',
+                  children: <Widget>[
+                    _DashboardBottomNavPresentationSection(controller: shell),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (mindBehavioralScoreSettings
                   case final scoreSettings?) ...<Widget>[
-                _MindBehavioralScoreSettingsSection(controller: scoreSettings),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-mind-behavioral-score',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.mindBehavioralScore,
+                  title: 'Mind score',
+                  children: <Widget>[
+                    _MindBehavioralScoreSettingsSection(
+                      controller: scoreSettings,
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               if (mindHeaderScoreChartPresentation
                   case final chartPresentation?) ...<Widget>[
-                _MindHeaderScoreChartPresentationSection(
-                  controller: chartPresentation,
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-mind-header-score-chart',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.mindHeaderScoreChart,
+                  title: 'Mind chart',
+                  children: <Widget>[
+                    _MindHeaderScoreChartPresentationSection(
+                      controller: chartPresentation,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
               ],
               if (mindYearHeatmapPresentation
                   case final heatmapPresentation?) ...<Widget>[
-                _MindYearHeatmapPresentationSection(
-                  controller: heatmapPresentation,
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-mind-year-heatmap',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.mindYearHeatmap,
+                  title: 'Mind hőtérkép',
+                  children: <Widget>[
+                    _MindYearHeatmapPresentationSection(
+                      controller: heatmapPresentation,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
               ],
               if (balancePresentationSettings
                   case final balanceSettings?) ...<Widget>[
-                _BalancePresentationSection(controller: balanceSettings),
+                _DashboardHeaderTunerTopic(
+                  key: const ValueKey<String>(
+                    'dashboard-header-tuner-section-balance-presentation',
+                  ),
+                  controller: controller,
+                  section: DashboardHeaderTunerSection.balancePresentation,
+                  title: 'Balance',
+                  children: <Widget>[
+                    _BalancePresentationSection(controller: balanceSettings),
+                  ],
+                ),
                 const SizedBox(height: 14),
               ],
               ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
@@ -1361,6 +1547,7 @@ final class DashboardHeaderVisualTuner extends StatelessWidget {
                       onToggle: () => controller.toggleTunerSection(
                         DashboardHeaderTunerSection.animation,
                       ),
+                      suppressChildTunerHeading: false,
                       children: <Widget>[
                         _TunerSection(
                           title: 'Header ikon',
@@ -2850,6 +3037,35 @@ final class _DashboardBodyOrderSection extends StatelessWidget {
       );
 }
 
+/// Connects one named tuner topic to the dashboard-lifetime collapse-state
+/// owner. It does not own or mutate the visual setting rendered in [children].
+final class _DashboardHeaderTunerTopic extends StatelessWidget {
+  const _DashboardHeaderTunerTopic({
+    super.key,
+    required this.controller,
+    required this.section,
+    required this.title,
+    required this.children,
+  });
+
+  final DashboardHeaderVisualController controller;
+  final DashboardHeaderTunerSection section;
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<Set<DashboardHeaderTunerSection>>(
+        valueListenable: controller.expandedTunerSections,
+        builder: (context, expandedSections, child) => _CollapsibleTunerSection(
+          title: title,
+          expanded: expandedSections.contains(section),
+          onToggle: () => controller.toggleTunerSection(section),
+          children: children,
+        ),
+      );
+}
+
 /// A top-level section keeps the bounded sheet compact without creating a
 /// second control surface. Its state is supplied by the dashboard-lifetime
 /// Header controller, never by a ticker or local `setState`.
@@ -2860,12 +3076,14 @@ final class _CollapsibleTunerSection extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.children,
+    this.suppressChildTunerHeading = true,
   });
 
   final String title;
   final bool expanded;
   final VoidCallback onToggle;
   final List<Widget> children;
+  final bool suppressChildTunerHeading;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -2908,9 +3126,12 @@ final class _CollapsibleTunerSection extends StatelessWidget {
         if (expanded)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 2, 12, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
+            child: _TunerSectionHeadingScope(
+              hidesChildHeading: suppressChildTunerHeading,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children,
+              ),
             ),
           ),
       ],

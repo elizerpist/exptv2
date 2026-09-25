@@ -117,6 +117,47 @@ final class PreparedLogBoxRasterSet {
   void dispose() {}
 }
 
+/// The complete, immutable LogBox avatar bank for one prepared display
+/// context.
+///
+/// Avatar-profile switching is a presentation operation. It must therefore
+/// select a prebuilt set from this bounded bank instead of acquiring an atlas
+/// resource from a dashboard build.
+@immutable
+final class PreparedLogBoxRasterBank {
+  PreparedLogBoxRasterBank._({
+    required this.devicePixelRatio,
+    required Map<CategoryAvatarColorProfile, PreparedLogBoxRasterSet> sets,
+  }) : _sets =
+           Map<
+             CategoryAvatarColorProfile,
+             PreparedLogBoxRasterSet
+           >.unmodifiable(sets) {
+    for (final profile in CategoryAvatarColorProfile.values) {
+      if (!_sets.containsKey(profile)) {
+        throw ArgumentError.value(
+          sets,
+          'sets',
+          'must contain every CategoryAvatarColorProfile',
+        );
+      }
+    }
+  }
+
+  final double devicePixelRatio;
+  final Map<CategoryAvatarColorProfile, PreparedLogBoxRasterSet> _sets;
+
+  Set<CategoryAvatarColorProfile> get profiles => _sets.keys.toSet();
+
+  bool matches(double ratio) => (devicePixelRatio - ratio).abs() < .001;
+
+  /// All production banks are exhaustive. The Original fallback is retained
+  /// as crash containment for a malformed future bank: a visual choice must
+  /// never replace CoreDashboard with an ErrorWidget.
+  PreparedLogBoxRasterSet forProfile(CategoryAvatarColorProfile profile) =>
+      _sets[profile] ?? _sets[CategoryAvatarColorProfile.original]!;
+}
+
 final class _VectorAssetSpec {
   const _VectorAssetSpec({required this.path, required this.loader});
 
@@ -250,6 +291,14 @@ final class PreparedVectorAssetAtlas {
       0;
   bool get hasLogBoxRasters => _logBoxRasters != null;
 
+  bool hasLogBoxRastersFor(
+    double devicePixelRatio, {
+    required CategoryAvatarColorProfile profile,
+  }) {
+    final rasters = _logBoxRasters?[profile];
+    return rasters != null && rasters.matches(devicePixelRatio);
+  }
+
   Future<void> prepare() {
     if (_disposed) {
       throw StateError('Prepared vector asset atlas has been disposed.');
@@ -276,8 +325,11 @@ final class PreparedVectorAssetAtlas {
         'must be finite and greater than zero',
       );
     }
-    final current = _logBoxRasters?[CategoryAvatarColorProfile.original];
-    if (current != null && current.matches(devicePixelRatio)) {
+    final current = _logBoxRasters;
+    if (current != null &&
+        CategoryAvatarColorProfile.values.every(
+          (profile) => current[profile]?.matches(devicePixelRatio) ?? false,
+        )) {
       return Future<void>.value();
     }
     final existing = _logBoxRasterInFlight;
@@ -304,6 +356,27 @@ final class PreparedVectorAssetAtlas {
       );
     }
     return result;
+  }
+
+  /// Returns every profile-specific set prepared for [devicePixelRatio].
+  ///
+  /// This is the explicit dependency passed from shell bootstrap to the
+  /// dashboard. It keeps profile switching a bounded in-memory selection.
+  PreparedLogBoxRasterBank logBoxRasterBankFor(double devicePixelRatio) {
+    final sets = _logBoxRasters;
+    if (sets == null ||
+        !CategoryAvatarColorProfile.values.every(
+          (profile) => sets[profile]?.matches(devicePixelRatio) ?? false,
+        )) {
+      throw StateError(
+        'LogBox raster profile bank is not prepared for DPR '
+        '$devicePixelRatio.',
+      );
+    }
+    return PreparedLogBoxRasterBank._(
+      devicePixelRatio: devicePixelRatio,
+      sets: sets,
+    );
   }
 
   PreparedVectorPicture categoryIcon(int handle) {

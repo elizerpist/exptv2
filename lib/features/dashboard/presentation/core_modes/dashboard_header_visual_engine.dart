@@ -65,6 +65,22 @@ extension DashboardHeaderAnimationFamilyPresentation
 
 /// The dashboard-lifetime Header tuner owns only this compact UI chrome state.
 enum DashboardHeaderTunerSection {
+  appearance,
+  summaryPillVariants,
+  summaryPresentation,
+  bodyOrder,
+  budgetContentCardStyle,
+  budgetSectionOrder,
+  shadowStyle,
+  logBoxHeight,
+  searchPillVisibility,
+  budgetHeaderPresentation,
+  budgetRingPresentation,
+  shellPresentation,
+  mindBehavioralScore,
+  mindHeaderScoreChart,
+  mindYearHeatmap,
+  balancePresentation,
   animation,
   cornerRoundness,
   borders,
@@ -2359,9 +2375,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       ),
       tunerOpen = ValueNotifier<bool>(false),
       expandedTunerSections = ValueNotifier<Set<DashboardHeaderTunerSection>>(
-        const <DashboardHeaderTunerSection>{
-          DashboardHeaderTunerSection.animation,
-        },
+        const <DashboardHeaderTunerSection>{},
       ),
       portalSettingsGeneration = ValueNotifier<int>(0),
       tapWaveTuning = ValueNotifier<DashboardHeaderTapWaveTuning>(

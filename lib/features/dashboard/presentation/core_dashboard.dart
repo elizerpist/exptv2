@@ -102,7 +102,11 @@ class CoreDashboard extends StatefulWidget {
   final ValueListenable<List<FluviCategory>> categoryCollection;
   final FinancialLimitRepository? financialLimitRepository;
   final ValueChanged<int>? onBudgetCategoryInputUpdated;
-  final PreparedLogBoxRasterSet? preparedLogBoxRasters;
+
+  /// Shell-bootstrap-owned, exhaustive profile bank for the visible LogBox.
+  /// CoreDashboard selects from it during appearance changes; it does not
+  /// acquire DPR-keyed atlas resources while building.
+  final PreparedLogBoxRasterBank? preparedLogBoxRasters;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceAttached;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupSurfaceLaidOut;
   final DashboardLogBoxWarmupTaskCallback? onLogBoxWarmupTextLayoutsPrepared;
@@ -158,6 +162,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardSummaryAutoResetController _summaryAutoResetController;
   late final DashboardSummaryAutoResetMotionRegistry _summaryAutoResetMotions;
   late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
+  PreparedLogBoxRasterBank? _logBoxRasterBank;
   DashboardBudgetLimitEditController? _budgetLimitEdit;
   double _devicePixelRatio = 1;
   int? _lastMindRangeDiagnosticSignature;
@@ -399,6 +404,19 @@ class _CoreDashboardState extends State<CoreDashboard>
       scheduleRebase: _scheduleSceneRebaseOnNextFrame,
       report: _preparedSceneCache.report,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The production shell supplies the exhaustive bank. Standalone dashboard
+    // hosts retain their existing bootstrap seam, but acquire it before build
+    // rather than during an Avatar-profile render mutation.
+    _logBoxRasterBank ??=
+        widget.preparedLogBoxRasters ??
+        PreparedVectorAssetAtlas.instance.logBoxRasterBankFor(
+          View.of(context).devicePixelRatio,
+        );
   }
 
   void _scheduleSceneRebaseOnNextFrame(void Function() task) {
@@ -707,16 +725,9 @@ class _CoreDashboardState extends State<CoreDashboard>
   @override
   Widget build(BuildContext context) {
     _devicePixelRatio = View.of(context).devicePixelRatio;
-    final suppliedLogBoxRasters = widget.preparedLogBoxRasters;
-    final logBoxRasters =
-        suppliedLogBoxRasters != null &&
-            suppliedLogBoxRasters.profile ==
-                _globalAppearance.avatarColorProfile
-        ? suppliedLogBoxRasters
-        : PreparedVectorAssetAtlas.instance.logBoxRastersFor(
-            View.of(context).devicePixelRatio,
-            profile: _globalAppearance.avatarColorProfile,
-          );
+    final logBoxRasters = _logBoxRasterBank!.forProfile(
+      _globalAppearance.avatarColorProfile,
+    );
     final layoutMetrics = kIsWeb
         ? controller.metrics.forWebContentOrigin
         : controller.metrics;

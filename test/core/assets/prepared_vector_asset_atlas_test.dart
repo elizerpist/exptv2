@@ -231,6 +231,7 @@ void main() {
       ]);
 
       final rasters = atlas.logBoxRastersFor(1);
+      final profileBank = atlas.logBoxRasterBankFor(1);
       expect(
         rasters.rasterSurfaceCount,
         0,
@@ -258,6 +259,11 @@ void main() {
       expect(atlas.logBoxRasterByteEstimate, lessThan(4 * 1024 * 1024));
       expect(atlas.logBoxRasterSurfaceCount, 0);
       expect(atlas.logBoxRasterBuildCount, 1);
+      expect(profileBank.profiles, CategoryAvatarColorProfile.values.toSet());
+      for (final profile in CategoryAvatarColorProfile.values) {
+        expect(atlas.hasLogBoxRastersFor(1, profile: profile), isTrue);
+        expect(profileBank.forProfile(profile).profile, profile);
+      }
 
       await atlas.prepareLogBoxRasters(devicePixelRatio: 1);
       expect(atlas.logBoxRasterBuildCount, 1);
@@ -270,6 +276,9 @@ void main() {
       expect(atlas.pictureDecodeCount, decodeCount);
       expect(atlas.logBoxRastersFor(2).badge(0), same(badge));
       expect(atlas.logBoxRastersFor(2).glyph(0), same(glyph));
+      for (final profile in CategoryAvatarColorProfile.values) {
+        expect(atlas.hasLogBoxRastersFor(2, profile: profile), isTrue);
+      }
       atlas.dispose();
       expect(badge.picture.debugDisposed, isTrue);
       expect(glyph.picture.debugDisposed, isTrue);

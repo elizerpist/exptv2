@@ -4,15 +4,18 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/fluvi_app_shell.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/app/shell/fluvi_bottom_navigation.dart';
+import 'package:fluvi/core/assets/prepared_vector_asset_atlas.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/categories/domain/category_repository.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/logbox/application/committed_log_viewport_cache.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_performance_counters.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/widgets/dashboard_logbox_viewport.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/runtime/data/dashboard_data_runtime_repository.dart';
 import 'package:fluvi/features/dashboard/runtime/data/empty_dashboard_data_runtime_repository.dart';
@@ -93,6 +96,229 @@ void main() {
   });
 
   testWidgets(
+    'RED physical regression: a ready dashboard survives every Avatar profile switch',
+    (tester) async {
+      tester.view.devicePixelRatio = 3;
+      tester.view.physicalSize = const Size(1084, 2412);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final repository = _PopulatedDashboardRepository();
+      await tester.pumpWidget(
+        FluviApp(
+          dashboardRepository: repository,
+          initialDate: DateTime(2026, 7, 14),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      final coreDashboard = find.byType(CoreDashboard);
+      final originalCoreState = tester.state(coreDashboard);
+      final appearance = tester
+          .widget<CoreDashboard>(coreDashboard)
+          .headerVisualController!;
+      final dashboardController = tester
+          .widget<CoreDashboard>(coreDashboard)
+          .controller;
+      for (var frame = 0; frame < 240; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        if (dashboardController.visibleFrames.value?.logBox.previewRowCount ==
+            2) {
+          break;
+        }
+      }
+      expect(
+        dashboardController.visibleFrames.value?.logBox.previewRowCount,
+        2,
+      );
+      final originalLogBoxState = tester.state(
+        find.byType(DashboardLogBoxViewport),
+      );
+      final originalBalanceCarouselState = tester.state(
+        find.byKey(const ValueKey<String>('balance-carousel')),
+      );
+      final preparedAtlas = PreparedVectorAssetAtlas.instance;
+      final decodeCount = preparedAtlas.pictureDecodeCount;
+      final rasterBuildCount = preparedAtlas.logBoxRasterBuildCount;
+      final indexPrepareCount = repository.prepareIndexCalls;
+      final navigationState = dashboardController.navigation.state;
+      final queryGeneration = dashboardController.currentQuery.generation;
+      final selectedDirection =
+          dashboardController.transactionDirection.direction;
+
+      for (final profile in <CategoryAvatarColorProfile>[
+        CategoryAvatarColorProfile.pastel,
+        CategoryAvatarColorProfile.saturated,
+        CategoryAvatarColorProfile.vivid,
+        CategoryAvatarColorProfile.original,
+      ]) {
+        appearance.setAvatarColorProfile(profile);
+        await tester.pump();
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason:
+              'A physical Avatar profile change must not throw while '
+              'CoreDashboard rebuilds.',
+        );
+        expect(
+          find.byKey(const ValueKey('ready-core-dashboard')),
+          findsOneWidget,
+        );
+        expect(find.byType(CoreDashboard), findsOneWidget);
+        expect(tester.state(coreDashboard), same(originalCoreState));
+        expect(
+          tester.state(find.byType(DashboardLogBoxViewport)),
+          same(originalLogBoxState),
+        );
+        expect(
+          tester.state(find.byKey(const ValueKey<String>('balance-carousel'))),
+          same(originalBalanceCarouselState),
+        );
+        expect(find.byType(ErrorWidget), findsNothing);
+        expect(
+          find.byKey(const ValueKey('dashboard-header-visual-paint')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('dashboard-summary-amount-slot')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('dashboard-core-mode-balance')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('dashboard-logbox-viewport')),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<DashboardLogBoxViewport>(
+                find.byType(DashboardLogBoxViewport),
+              )
+              .preparedRasters
+              .profile,
+          profile,
+          reason:
+              'The live LogBox must select the requested prebuilt Avatar '
+              'profile bank without changing its rows.',
+        );
+        expect(repository.prepareIndexCalls, indexPrepareCount);
+        expect(preparedAtlas.pictureDecodeCount, decodeCount);
+        expect(preparedAtlas.logBoxRasterBuildCount, rasterBuildCount);
+        expect(dashboardController.navigation.state, same(navigationState));
+        expect(dashboardController.currentQuery.generation, queryGeneration);
+        expect(
+          dashboardController.transactionDirection.direction,
+          selectedDirection,
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'RED resource regression: an Avatar profile switch cannot error when the view DPR changes after readiness',
+    (tester) async {
+      tester.view.devicePixelRatio = 3;
+      tester.view.physicalSize = const Size(1084, 2412);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        const FluviApp(
+          dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+        ),
+      );
+      await _pumpInteractiveDashboard(tester);
+
+      final coreDashboard = find.byType(CoreDashboard);
+      final originalCoreState = tester.state(coreDashboard);
+      final appearance = tester
+          .widget<CoreDashboard>(coreDashboard)
+          .headerVisualController!;
+
+      // The shell was ready at 3.0. A profile choice must not make a
+      // presentation-only resource lookup throw if the FlutterView reports a
+      // new valid device ratio before the next CoreDashboard build.
+      tester.view.devicePixelRatio = 2.625;
+      appearance.setAvatarColorProfile(CategoryAvatarColorProfile.pastel);
+      await tester.pump();
+
+      expect(
+        tester.takeException(),
+        isNull,
+        reason:
+            'A profile switch must not let a DPR-keyed LogBox resource '
+            'lookup replace CoreDashboard with an ErrorWidget.',
+      );
+      expect(
+        find.byKey(const ValueKey('ready-core-dashboard')),
+        findsOneWidget,
+      );
+      expect(tester.state(coreDashboard), same(originalCoreState));
+      expect(
+        find.byKey(const ValueKey('dashboard-logbox-viewport')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Avatar profile switching keeps the production dashboard alive in Balance, Mind and Budget',
+    (tester) async {
+      for (final mode in DashboardModeSpec.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: FluviAppShell(
+              mode: mode,
+              dashboardRepository: _PopulatedDashboardRepository(),
+            ),
+          ),
+        );
+        await _pumpInteractiveDashboard(tester);
+
+        final coreDashboard = find.byType(CoreDashboard);
+        final originalCoreState = tester.state(coreDashboard);
+        final appearance = tester
+            .widget<CoreDashboard>(coreDashboard)
+            .headerVisualController!;
+
+        for (final profile in <CategoryAvatarColorProfile>[
+          CategoryAvatarColorProfile.pastel,
+          CategoryAvatarColorProfile.vivid,
+          CategoryAvatarColorProfile.original,
+        ]) {
+          appearance.setAvatarColorProfile(profile);
+          await tester.pump();
+
+          expect(tester.takeException(), isNull, reason: 'mode=${mode.mode}');
+          expect(
+            find.byKey(const ValueKey('ready-core-dashboard')),
+            findsOneWidget,
+          );
+          expect(tester.state(coreDashboard), same(originalCoreState));
+          expect(
+            find.byKey(
+              ValueKey<String>('dashboard-core-mode-${mode.mode.name}'),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const ValueKey('dashboard-logbox-viewport')),
+            findsOneWidget,
+          );
+        }
+      }
+    },
+  );
+
+  testWidgets(
     'a Legacy profile fixture explicitly mounts its protected Time rail',
     (tester) async {
       await tester.pumpWidget(
@@ -104,10 +330,7 @@ void main() {
       );
       await _pumpInteractiveDashboard(tester);
 
-      expect(
-        find.byKey(const ValueKey('dashboard-time-rail')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('dashboard-time-rail')), findsOneWidget);
     },
   );
 
@@ -1023,6 +1246,7 @@ final class _PopulatedDashboardRepository
     implements DashboardDataRuntimeRepository {
   final EmptyDashboardDataRuntimeRepository _empty =
       const EmptyDashboardDataRuntimeRepository();
+  int prepareIndexCalls = 0;
 
   @override
   Stream<int> watchCoreRevision() => Stream<int>.value(1);
@@ -1032,6 +1256,7 @@ final class _PopulatedDashboardRepository
     PreparedDashboardIndexRequest request,
     DashboardIndexPreparationToken token,
   ) async {
+    prepareIndexCalls += 1;
     request.reason.requireIndexBuild();
     if (token.isCancelled) {
       throw StateError('Index preparation was cancelled.');

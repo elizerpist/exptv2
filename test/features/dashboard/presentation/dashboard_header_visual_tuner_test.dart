@@ -27,7 +27,108 @@ import 'package:fluvi/core/financial_limits/presentation/budget_ring_presentatio
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+Future<void> _openTunerTopics(
+  WidgetTester tester,
+  DashboardHeaderVisualController controller,
+  Iterable<DashboardHeaderTunerSection> sections,
+) async {
+  for (final section in sections) {
+    if (!controller.isTunerSectionExpanded(section)) {
+      controller.toggleTunerSection(section);
+    }
+  }
+  await tester.pump();
+}
+
 void main() {
+  testWidgets(
+    'custom settings use compact topic collapsibles without resetting controls',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final borders = DashboardBorderController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              border: borders,
+            ),
+          ),
+        ),
+      );
+
+      final appearanceSection = find.byKey(
+        const ValueKey<String>('dashboard-header-tuner-section-appearance'),
+      );
+      final borderSection = find.byKey(
+        const ValueKey<String>('dashboard-header-tuner-section-borders'),
+      );
+      expect(controller.expandedTunerSections.value, isEmpty);
+      expect(appearanceSection, findsOneWidget);
+      expect(borderSection, findsOneWidget);
+      expect(find.text('Körvonalak'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('fluvi-avatar-color-profile-selector'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-border-incomeDirection')),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find
+            .descendant(of: appearanceSection, matching: find.byType(InkWell))
+            .first,
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('fluvi-avatar-color-profile-selector'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find
+            .descendant(of: borderSection, matching: find.byType(InkWell))
+            .first,
+      );
+      await tester.pump();
+      final incomeBorder = find.byKey(
+        const ValueKey<String>('dashboard-border-incomeDirection'),
+      );
+      expect(incomeBorder, findsOneWidget);
+      expect(
+        find.text('Körvonalak'),
+        findsOneWidget,
+        reason: 'The collapsible chrome is the only section heading.',
+      );
+      await tester.tap(incomeBorder);
+      await tester.pump();
+      expect(borders.value.incomeDirection, isTrue);
+
+      await tester.tap(
+        find
+            .descendant(of: borderSection, matching: find.byType(InkWell))
+            .first,
+      );
+      await tester.pump();
+      expect(incomeBorder, findsNothing);
+      expect(borders.value.incomeDirection, isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      borders.dispose();
+    },
+  );
+
   testWidgets(
     'global appearance controls select independent direction, avatar, artwork and typeface settings',
     (tester) async {
@@ -43,6 +144,9 @@ void main() {
           ),
         ),
       );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.appearance,
+      ]);
 
       for (final key in <ValueKey<String>>[
         const ValueKey<String>('fluvi-direction-color-profile-selector'),
@@ -104,6 +208,9 @@ void main() {
           ),
         ),
       );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.animation,
+      ]);
       final selector = find.byKey(
         const ValueKey<String>('dashboard-header-balance-palette-selector'),
       );
@@ -307,6 +414,9 @@ void main() {
           ),
         ),
       );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.balancePresentation,
+      ]);
 
       final adaptive = find.byKey(
         const ValueKey<String>('balance-header-chart-mode-adaptiveSummary'),
@@ -373,6 +483,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.shellPresentation,
+    ]);
 
     expect(
       shell.value.bottomNavLayoutStyle,
@@ -410,6 +523,10 @@ void main() {
           ),
         ),
       );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.appearance,
+        DashboardHeaderTunerSection.animation,
+      ]);
 
       final app = find.byKey(
         const ValueKey<String>('fluvi-global-typography-app'),
@@ -495,6 +612,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.budgetContentCardStyle,
+    ]);
 
     final control = find.byKey(
       const ValueKey<String>('dashboard-budget-content-unifiedCard'),
@@ -573,6 +693,10 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.shadowStyle,
+      DashboardHeaderTunerSection.logBoxHeight,
+    ]);
 
     expect(shadow.value, DashboardShadowStyle.current);
     final soft = find.byKey(
@@ -693,6 +817,10 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.summaryPresentation,
+      DashboardHeaderTunerSection.budgetSectionOrder,
+    ]);
 
     final separators = find.byKey(
       const ValueKey<String>('dashboard-summary-separators'),
@@ -784,6 +912,10 @@ void main() {
           ),
         ),
       );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.budgetRingPresentation,
+        DashboardHeaderTunerSection.budgetHeaderPresentation,
+      ]);
 
       final arc = find.text('Színes skála + fehér szegmens');
       await tester.ensureVisible(arc);
@@ -842,6 +974,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.animation,
+    ]);
 
     expect(
       find.byKey(
@@ -1013,6 +1148,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.animation,
+    ]);
 
     final innerTitle = find.text('PORTÁL BELSŐ MOZGÁS');
     await tester.ensureVisible(innerTitle);
@@ -1102,6 +1240,9 @@ void main() {
           ),
         ),
       );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.animation,
+      ]);
       final control = find.byKey(
         const ValueKey<String>(
           'dashboard-header-tap-wave-control-interactionOpacity',
@@ -1139,6 +1280,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.animation,
+    ]);
 
     final selector = tester.widget<DropdownButton<DashboardHeaderEffectId>>(
       find.byKey(const ValueKey<String>('dashboard-header-effect-selector')),
@@ -1181,6 +1325,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.animation,
+    ]);
     expect(
       find.byKey(
         const ValueKey<String>('dashboard-header-animation-family-selector'),
@@ -1245,6 +1392,9 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.animation,
+    ]);
     final sliderKey = const ValueKey<String>(
       'dashboard-header-mind-score-window-width-slider',
     );
@@ -1285,6 +1435,11 @@ void main() {
         ),
       ),
     );
+    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+      DashboardHeaderTunerSection.mindBehavioralScore,
+      DashboardHeaderTunerSection.mindHeaderScoreChart,
+      DashboardHeaderTunerSection.mindYearHeatmap,
+    ]);
 
     final htmlTrailing = find.byKey(
       const ValueKey('mind-expense-score-algorithm-htmlTrailing'),
