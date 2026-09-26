@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
+import 'package:fluvi/core/categories/presentation/category_avatar_palette_catalog.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -621,7 +622,9 @@ void main() {
       expect(updatedContentBorder.top.width, initialContentBorder.top.width);
       expect(
         updatedContentBorder.top.color.a,
-        closeTo(initialContentBorder.top.color.a * .3, .01),
+        initialContentBorder.top.color.a,
+        reason:
+            'The stored colored-border opacity must not affect the neutral baseline.',
       );
       expect(tester.getRect(cardFinder), cardRect);
       expect(
@@ -653,7 +656,10 @@ void main() {
       expect(transparentOutline.top.color.a, 0);
       expect(transparentOutline.top.width, initialOutline.top.width);
       expect(_balanceCarouselWaveOpacity(tester, 'top-category'), 0);
-      expect(transparentContentBorder.top.color.a, 0);
+      expect(
+        transparentContentBorder.top.color.a,
+        initialContentBorder.top.color.a,
+      );
       expect(
         transparentContentBorder.top.width,
         initialContentBorder.top.width,
@@ -673,13 +679,237 @@ void main() {
           tester.widget<FluviRoundedBox>(contentShell).border! as Border;
       expect(hiddenOutline.top.color.a, 0);
       expect(hiddenOutline.top.width, initialOutline.top.width);
-      expect(contentAfterCarouselChange.top.color.a, 0);
+      expect(
+        contentAfterCarouselChange.top.color.a,
+        initialContentBorder.top.color.a,
+      );
       expect(
         contentAfterCarouselChange.top.width,
         initialContentBorder.top.width,
       );
       expect(settings.value.balanceCarouselBorderOpacity, .9);
       expect(tester.getRect(cardFinder), cardRect);
+    },
+  );
+
+  testWidgets(
+    'BWD-WAVE RED: one carousel wave phase animates only when enabled and stays static for reduced motion',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = ValueNotifier<BalancePresentationSettings>(
+        const BalancePresentationSettings.defaults(),
+      );
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      carousel.controller.jumpToIndex(9);
+      await tester.pumpAndSettle();
+
+      double phase(String cardId) => _balanceCarouselWavePhase(tester, cardId);
+      final cardBounds = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-card-top-category'),
+        ),
+      );
+      final before = phase('top-category');
+      await tester.pump(const Duration(seconds: 1));
+      expect(phase('top-category'), before);
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-carousel-card-top-category'),
+          ),
+        ),
+        cardBounds,
+        reason: 'Static wave paint must not move the card geometry.',
+      );
+
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceCarouselWaveAnimationEnabled: true,
+                revision: 1,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+      final animatedStart = phase('top-category');
+      await tester.pump(const Duration(seconds: 1));
+      final animatedLater = phase('top-category');
+      expect(animatedLater, isNot(animatedStart));
+      expect(phase('top-partner'), closeTo(animatedLater, .001));
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-carousel-card-top-category'),
+          ),
+        ),
+        cardBounds,
+        reason: 'Ambient wave animation must remain paint-only.',
+      );
+
+      carousel.controller.jumpToIndex(10);
+      await tester.pump();
+      expect(
+        phase('top-category'),
+        closeTo(animatedLater, .01),
+        reason: 'Changing selection must not reset the shared wave phase.',
+      );
+
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceCarouselWaveAnimationEnabled: false,
+                revision: 2,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+      expect(
+        phase('top-category'),
+        0,
+        reason: 'Disabling animation must restore the authored static wave.',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              body: BalanceDashboardCoreSurface(
+                presentation: _balanceModePresentation(),
+                balanceLinkedPresentation: linked,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      tester
+          .widget<CenteredCarousel<BalanceCarouselCard>>(
+            find.byType(CenteredCarousel<BalanceCarouselCard>),
+          )
+          .controller
+          .jumpToIndex(9);
+      await tester.pump();
+      final reducedStart = phase('top-category');
+      expect(reducedStart, 0);
+      await tester.pump(const Duration(seconds: 1));
+      expect(phase('top-category'), reducedStart);
+    },
+  );
+
+  testWidgets(
+    'BWD-CONTENT-BORDER RED: optional colored content border uses the selected carousel accent without changing its geometry',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = ValueNotifier<BalancePresentationSettings>(
+        const BalancePresentationSettings.defaults(),
+      );
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<CenteredCarousel<BalanceCarouselCard>>(
+            find.byType(CenteredCarousel<BalanceCarouselCard>),
+          )
+          .controller
+          .jumpToIndex(9);
+      await tester.pumpAndSettle();
+
+      final contentShell = find.descendant(
+        of: find.byKey(const ValueKey<String>('balance-primary-card')),
+        matching: find.byType(FluviRoundedBox),
+      );
+      final baseline =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceContentCardColoredBorderEnabled: true,
+                balanceContentCardBorderOpacity: .5,
+                revision: 1,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+
+      final colored =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      final accent = CategoryAvatarPaletteCatalog.gradientFor(
+        CategoryAvatarColorProfile.original,
+        CategoryColorCatalog.handleOf('color_07'),
+      ).colors[1];
+      expect(colored.top.width, baseline.top.width);
+      expect(colored.top.color, accent.withValues(alpha: .5));
+
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceContentCardBorderOpacity: 0.0,
+                balanceCarouselBorderOpacity: .2,
+                revision: 2,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+      final transparent =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(transparent.top.width, baseline.top.width);
+      expect(transparent.top.color, accent.withValues(alpha: 0));
+
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceContentCardBorderOpacity: 1.0,
+                balanceCarouselBorderOpacity: .8,
+                revision: 3,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+      final opaque =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(opaque.top.width, baseline.top.width);
+      expect(opaque.top.color, accent);
+
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceContentCardColoredBorderEnabled: false,
+                balanceContentCardBorderOpacity: .2,
+                revision: 4,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+      final neutral =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(neutral, baseline);
     },
   );
 
@@ -2576,6 +2806,17 @@ double _balanceCarouselWaveOpacity(WidgetTester tester, String cardId) {
       )
       .painter!;
   return (painter as dynamic).opacity as double;
+}
+
+double _balanceCarouselWavePhase(WidgetTester tester, String cardId) {
+  final painter = tester
+      .widget<CustomPaint>(
+        find.byKey(
+          ValueKey<String>('balance-carousel-card-reference-wave-$cardId'),
+        ),
+      )
+      .painter!;
+  return (painter as dynamic).phase as double;
 }
 
 List<double> _balanceCarouselWaveGeometry(WidgetTester tester, String cardId) {

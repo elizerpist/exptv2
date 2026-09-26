@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_behavioral_score_settings.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 
@@ -20,6 +21,11 @@ void main() {
       indexGeneration: 1,
       coreRevision: 1,
       direction: direction,
+      settings: const MindBehavioralScoreSettings(
+        expenseAlgorithm: MindExpenseScoreAlgorithm.causalTrailing,
+        causalHistoryOrigin: MindCausalHistoryOrigin.fullFilteredHistory,
+        revision: 0,
+      ),
     ),
     contributions: contributions,
   );

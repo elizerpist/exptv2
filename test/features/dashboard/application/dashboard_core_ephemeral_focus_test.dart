@@ -2712,7 +2712,7 @@ void main() {
       final preparesBefore = repository.prepareCalls;
       expect(
         initial.identity.settings.expenseAlgorithm,
-        MindExpenseScoreAlgorithm.causalTrailing,
+        MindExpenseScoreAlgorithm.htmlCentered,
       );
       expect(initial.point, initial.chartSeries!.points.last);
 

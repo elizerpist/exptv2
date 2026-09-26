@@ -13,7 +13,7 @@ void main() {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
-      expect(controller.value.chartMode, BalanceHeaderChartMode.allTime);
+      expect(controller.value.chartMode, BalanceHeaderChartMode.compound);
       expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.visible);
       expect(
         controller.value.latestTransactionCardPresentation,
@@ -23,6 +23,8 @@ void main() {
       expect(controller.value.balanceCarouselBorderOpacity, 1);
       expect(controller.value.balanceCarouselWaveOpacity, 1);
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
+      expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
@@ -92,6 +94,51 @@ void main() {
         ..setBalanceCarouselWaveOpacity(1)
         ..setBalanceContentCardBorderOpacity(.5);
       expect(controller.value.revision, revision);
+    },
+  );
+
+  test(
+    'BWD-SETTINGS RED: wave animation and colored content border retain independent stored opacity defaults',
+    () {
+      final dynamic controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
+      expect(controller.value.balanceCarouselBorderOpacity, 1);
+      expect(controller.value.balanceContentCardBorderOpacity, 1);
+
+      controller
+        ..setBalanceCarouselWaveAnimationEnabled(true)
+        ..setBalanceContentCardColoredBorderEnabled(true)
+        ..setBalanceCarouselBorderOpacity(.37)
+        ..setBalanceContentCardBorderOpacity(.63)
+        ..setBalanceCarouselWaveAnimationEnabled(false)
+        ..setBalanceContentCardColoredBorderEnabled(false);
+
+      expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
+      expect(
+        controller.value.balanceCarouselBorderOpacity,
+        .37,
+        reason:
+            'The carousel visibility choices must not rewrite border alpha.',
+      );
+      expect(
+        controller.value.balanceContentCardBorderOpacity,
+        .63,
+        reason: 'The content color toggle must not rewrite its border alpha.',
+      );
+    },
+  );
+
+  test(
+    'BWD-DEFAULTS RED: Balance starts with the compound header function',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(controller.value.chartMode, BalanceHeaderChartMode.compound);
     },
   );
 

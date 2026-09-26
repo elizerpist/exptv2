@@ -467,6 +467,12 @@ void main() {
       final waveOpacity = find.byKey(
         const ValueKey<String>('balance-carousel-wave-opacity'),
       );
+      final waveAnimation = find.byKey(
+        const ValueKey<String>('balance-carousel-wave-animation-enabled'),
+      );
+      final contentColoredBorder = find.byKey(
+        const ValueKey<String>('balance-content-card-colored-border-enabled'),
+      );
       final contentBorderOpacity = find.byKey(
         const ValueKey<String>('balance-content-card-border-opacity'),
       );
@@ -474,7 +480,33 @@ void main() {
       expect(borderEnabled, findsOneWidget);
       expect(borderOpacity, findsOneWidget);
       expect(waveOpacity, findsOneWidget);
+      expect(waveAnimation, findsOneWidget);
+      expect(contentColoredBorder, findsOneWidget);
       expect(contentBorderOpacity, findsOneWidget);
+
+      final waveAnimationOn = find.byKey(
+        const ValueKey<String>('balance-carousel-wave-animation-enabled-on'),
+      );
+      await tester.ensureVisible(waveAnimationOn);
+      await tester.tap(waveAnimationOn);
+      await tester.pump();
+      expect(
+        (balance.value as dynamic).balanceCarouselWaveAnimationEnabled,
+        isTrue,
+      );
+
+      final contentColoredBorderOn = find.byKey(
+        const ValueKey<String>(
+          'balance-content-card-colored-border-enabled-on',
+        ),
+      );
+      await tester.ensureVisible(contentColoredBorderOn);
+      await tester.tap(contentColoredBorderOn);
+      await tester.pump();
+      expect(
+        (balance.value as dynamic).balanceContentCardColoredBorderEnabled,
+        isTrue,
+      );
 
       final tintOff = find.byKey(
         const ValueKey<String>(

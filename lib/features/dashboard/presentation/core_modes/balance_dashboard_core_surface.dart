@@ -230,6 +230,19 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
   ]);
 }
 
+/// Maps the already selected semantic detail topic back to its canonical rail
+/// item. This keeps content-card coloring on the same accent resolver as the
+/// accepted mini-card system without adding a second topic palette.
+BalanceCarouselCard _balanceCarouselCardForTopic(
+  DashboardBalanceLinkedPresentation? presentation,
+  BalanceLinkedDetailTopic topic,
+) {
+  final id = _indicatorIdFor(topic);
+  return balanceCarouselCardsFor(
+    presentation,
+  ).firstWhere((card) => card.id == id);
+}
+
 /// Compact Closings wording is deliberately a read-only view of the exact
 /// immutable bucket list supplied to the lower Closings renderer.
 String balanceClosingsCompactSummary(
@@ -445,9 +458,10 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
           bounds: bounds,
           fillParent: true,
           semanticKey: const ValueKey<String>('balance-primary-card'),
-          borderOverride: _balanceContentBorderWithOpacity(
-            context,
-            settings.balanceContentCardBorderOpacity,
+          borderOverride: _balanceContentBorder(
+            context: context,
+            settings: settings,
+            card: _balanceCarouselCardForTopic(value, selectedTopic),
           ),
           child: BalanceLinkedDetailCard(
             presentation: value,
@@ -466,29 +480,35 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
     bounds: bounds,
     fillParent: true,
     semanticKey: const ValueKey<String>('balance-primary-card-placeholder'),
-    borderOverride: _balanceContentBorderWithOpacity(
-      context,
-      settings.balanceContentCardBorderOpacity,
+    borderOverride: _balanceContentBorder(
+      context: context,
+      settings: settings,
+      card: _balanceCarouselCardForTopic(null, selectedTopic),
     ),
   );
 }
 
-BoxBorder? _balanceContentBorderWithOpacity(
-  BuildContext context,
-  double opacity,
-) {
+BoxBorder? _balanceContentBorder({
+  required BuildContext context,
+  required BalancePresentationSettings settings,
+  required BalanceCarouselCard card,
+}) {
   final configured = DashboardBorderScope.profileOf(
     context,
   ).borderFor(DashboardBorderSurface.balanceContent);
-  if (configured is! Border) return configured;
-  BorderSide faded(BorderSide side) => side.copyWith(
-    color: side.color.withValues(alpha: side.color.a * opacity),
+  if (!settings.balanceContentCardColoredBorderEnabled) return configured;
+  final base = configured is Border
+      ? configured
+      : DashboardBorderProfile.searchPillSourceBorder;
+  final accent = _BalanceCarouselReferenceAccent.resolve(context, card).color;
+  BorderSide colored(BorderSide side) => side.copyWith(
+    color: accent.withValues(alpha: settings.balanceContentCardBorderOpacity),
   );
   return Border(
-    top: faded(configured.top),
-    right: faded(configured.right),
-    bottom: faded(configured.bottom),
-    left: faded(configured.left),
+    top: colored(base.top),
+    right: colored(base.right),
+    bottom: colored(base.bottom),
+    left: colored(base.left),
   );
 }
 
@@ -668,21 +688,24 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
               ),
             ),
           ),
-        Positioned(
-          left: DashboardHeaderTrendChartStyle.detailLeft,
-          top: chartLayout.valueTop,
-          child: Text(
-            balance?.formattedNetTotal ?? '—',
-            key: const ValueKey<String>('balance-header-net-amount'),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: typography.applyTo(
-              DefaultTextStyle.of(context).style
-                  .merge(DashboardHeaderTrendChartStyle.primaryValueTextMetrics)
-                  .copyWith(color: foreground),
+        if (balance case final balance?)
+          Positioned(
+            left: DashboardHeaderTrendChartStyle.detailLeft,
+            top: chartLayout.valueTop,
+            child: Text(
+              balance.formattedNetTotal,
+              key: const ValueKey<String>('balance-header-net-amount'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: typography.applyTo(
+                DefaultTextStyle.of(context).style
+                    .merge(
+                      DashboardHeaderTrendChartStyle.primaryValueTextMetrics,
+                    )
+                    .copyWith(color: foreground),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -837,12 +860,47 @@ final class _BalanceFixedCarouselGeometry {
   }
 }
 
-final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
+final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
+    with SingleTickerProviderStateMixin {
   late final CenteredCarouselController _controller =
       CenteredCarouselController(initialIndex: 0);
+  late final AnimationController _wavePhaseController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 6),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncWaveAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BalanceUpperCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncWaveAnimation();
+  }
+
+  void _syncWaveAnimation() {
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final shouldAnimate =
+        widget.presentationSettings.balanceCarouselWaveAnimationEnabled &&
+        !reducedMotion;
+    if (shouldAnimate) {
+      if (!_wavePhaseController.isAnimating) _wavePhaseController.repeat();
+    } else {
+      _wavePhaseController.stop();
+      // Phase zero is the authored, reference-locked static wave. Returning
+      // here makes both the explicit toggle and reduced-motion state fully
+      // static instead of freezing a partially deformed animation frame.
+      if (_wavePhaseController.value != 0) _wavePhaseController.value = 0;
+    }
+  }
 
   @override
   void dispose() {
+    _wavePhaseController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -915,6 +973,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
               itemHeight: carouselHeight,
               isSelected: metrics.isSelected,
               presentationSettings: widget.presentationSettings,
+              wavePhase: _wavePhaseController,
             ),
           ),
         ),
@@ -966,6 +1025,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
     required this.itemHeight,
     required this.isSelected,
     required this.presentationSettings,
+    required this.wavePhase,
   });
 
   final BalanceCarouselCard card;
@@ -973,6 +1033,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
   final double itemHeight;
   final bool isSelected;
   final BalancePresentationSettings presentationSettings;
+  final Animation<double> wavePhase;
 
   @override
   Widget build(BuildContext context) {
@@ -1033,15 +1094,19 @@ final class _BalanceCarouselCard extends StatelessWidget {
                       borderRadius: borderRadius,
                     ),
                   ),
-                  CustomPaint(
-                    key: ValueKey<String>(
+                  _BalanceCarouselAmbientWave(
+                    paintKey: ValueKey<String>(
                       'balance-carousel-card-reference-wave-${card.id}',
                     ),
-                    painter: _BalanceCarouselSoftWavePainter(
-                      accentColor: accent.color,
-                      spec: visualSpec,
-                      opacity: paint.waveOpacity,
-                    ),
+                    phase: wavePhase,
+                    animated:
+                        presentationSettings
+                            .balanceCarouselWaveAnimationEnabled &&
+                        !(MediaQuery.maybeOf(context)?.disableAnimations ??
+                            false),
+                    accentColor: accent.color,
+                    spec: visualSpec,
+                    opacity: paint.waveOpacity,
                   ),
                   _BalanceCarouselMiniCardContent(
                     card: card,
@@ -1420,33 +1485,45 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
     required this.accentColor,
     required this.spec,
     required this.opacity,
+    required this.phase,
   });
 
   final Color accentColor;
   final _BalanceCarouselReferenceVisualSpec spec;
   final double opacity;
+  final double phase;
 
   @override
   void paint(Canvas canvas, Size size) {
     final height = size.height;
     final width = size.width;
+    final radians = phase * math.pi * 2;
+    final verticalAmplitude = math.min(4.0, math.max(2.0, height * .045));
+    final verticalDrift = math.sin(radians) * verticalAmplitude;
+    final horizontalDrift =
+        math.sin(radians * .7) * math.min(3.0, width * .015);
     final path = Path()
-      ..moveTo(0, height * spec.waveLeadingHeightFactor)
-      ..cubicTo(
-        width * spec.waveFirstControlWidthFactor,
-        height * spec.waveFirstControlHeightFactor,
-        width * spec.waveSecondControlWidthFactor,
-        height * spec.waveSecondControlHeightFactor,
-        width * spec.waveFirstCurveEndWidthFactor,
-        height * spec.waveTrailingHeightFactor,
+      ..moveTo(
+        horizontalDrift,
+        height * spec.waveLeadingHeightFactor + verticalDrift,
       )
       ..cubicTo(
-        width * spec.waveTrailingFirstControlWidthFactor,
-        height * spec.waveTrailingFirstControlHeightFactor,
-        width * spec.waveTrailingSecondControlWidthFactor,
-        height * spec.waveTrailingSecondControlHeightFactor,
-        width,
-        height * spec.waveTrailingEndHeightFactor,
+        width * spec.waveFirstControlWidthFactor + horizontalDrift,
+        height * spec.waveFirstControlHeightFactor + verticalDrift * .72,
+        width * spec.waveSecondControlWidthFactor + horizontalDrift,
+        height * spec.waveSecondControlHeightFactor - verticalDrift * .58,
+        width * spec.waveFirstCurveEndWidthFactor + horizontalDrift,
+        height * spec.waveTrailingHeightFactor + verticalDrift,
+      )
+      ..cubicTo(
+        width * spec.waveTrailingFirstControlWidthFactor + horizontalDrift,
+        height * spec.waveTrailingFirstControlHeightFactor +
+            verticalDrift * .55,
+        width * spec.waveTrailingSecondControlWidthFactor + horizontalDrift,
+        height * spec.waveTrailingSecondControlHeightFactor -
+            verticalDrift * .65,
+        width + horizontalDrift,
+        height * spec.waveTrailingEndHeightFactor + verticalDrift,
       )
       ..lineTo(width, height)
       ..lineTo(0, height)
@@ -1463,5 +1540,45 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
   bool shouldRepaint(covariant _BalanceCarouselSoftWavePainter oldDelegate) =>
       oldDelegate.accentColor != accentColor ||
       oldDelegate.spec != spec ||
-      oldDelegate.opacity != opacity;
+      oldDelegate.opacity != opacity ||
+      oldDelegate.phase != phase;
+}
+
+/// Paint-only wrapper around the one carousel-owned phase. It intentionally
+/// avoids an [AnimatedBuilder] while static, so disabled/reduced-motion waves
+/// schedule no frame work and preserve the accepted reference geometry.
+final class _BalanceCarouselAmbientWave extends StatelessWidget {
+  const _BalanceCarouselAmbientWave({
+    required this.paintKey,
+    required this.phase,
+    required this.animated,
+    required this.accentColor,
+    required this.spec,
+    required this.opacity,
+  });
+
+  final Key paintKey;
+  final Animation<double> phase;
+  final bool animated;
+  final Color accentColor;
+  final _BalanceCarouselReferenceVisualSpec spec;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    CustomPaint paintFor(double value) => CustomPaint(
+      key: paintKey,
+      painter: _BalanceCarouselSoftWavePainter(
+        accentColor: accentColor,
+        spec: spec,
+        opacity: opacity,
+        phase: value,
+      ),
+    );
+    if (!animated) return paintFor(phase.value);
+    return AnimatedBuilder(
+      animation: phase,
+      builder: (context, child) => paintFor(phase.value),
+    );
+  }
 }

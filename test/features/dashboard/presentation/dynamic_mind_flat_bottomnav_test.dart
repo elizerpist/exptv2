@@ -78,20 +78,20 @@ void main() {
   ];
 
   test(
-    'DMS-RED-01: Mind settings default to static scale and normal handles',
+    'DMS-RED-01: Mind settings default to dynamic mixed scale and normal handles',
     () {
       const settings = MindYearHeatmapPresentationSettings.defaults();
 
-      expect(settings.scaleMode, MindHeatmapScaleMode.existing);
+      expect(settings.scaleMode, MindHeatmapScaleMode.dynamicMixed);
       expect(settings.sliderHandleSize, MindSliderHandleSize.normal);
 
       final changed = settings.copyWith(
-        scaleMode: MindHeatmapScaleMode.dynamicMixed,
+        scaleMode: MindHeatmapScaleMode.existing,
         sliderHandleSize: MindSliderHandleSize.tenPercentSmaller,
       );
       expect(changed.paletteStyle, settings.paletteStyle);
       expect(changed.scaleResolution, settings.scaleResolution);
-      expect(changed.scaleMode, MindHeatmapScaleMode.dynamicMixed);
+      expect(changed.scaleMode, MindHeatmapScaleMode.existing);
       expect(changed.sliderHandleSize, MindSliderHandleSize.tenPercentSmaller);
     },
   );

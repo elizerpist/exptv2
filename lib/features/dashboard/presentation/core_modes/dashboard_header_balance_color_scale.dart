@@ -62,7 +62,7 @@ final class DashboardBalanceHeaderColorState {
     : palette = DashboardBalanceHeaderPalette.softRainbow,
       variant = DashboardBalanceHeaderPaletteVariant.original,
       positionPercent = 50,
-      windowWidthPercent = 28;
+      windowWidthPercent = 15;
 
   final DashboardBalanceHeaderPalette palette;
   final DashboardBalanceHeaderPaletteVariant variant;

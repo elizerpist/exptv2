@@ -40,6 +40,8 @@ final class BalancePresentationSettings {
     required this.balanceCarouselBorderOpacity,
     required this.balanceCarouselWaveOpacity,
     required this.balanceCarouselTintedBackgroundEnabled,
+    required this.balanceCarouselWaveAnimationEnabled,
+    required this.balanceContentCardColoredBorderEnabled,
     required this.balanceContentCardBorderOpacity,
     required this.revision,
   }) : assert(
@@ -54,7 +56,7 @@ final class BalancePresentationSettings {
        );
 
   const BalancePresentationSettings.defaults()
-    : chartMode = BalanceHeaderChartMode.allTime,
+    : chartMode = BalanceHeaderChartMode.compound,
       timeLabels = BalanceHeaderChartTimeLabels.visible,
       latestTransactionCardPresentation =
           BalanceLatestTransactionCardPresentation.avatarPartner,
@@ -62,6 +64,8 @@ final class BalancePresentationSettings {
       balanceCarouselBorderOpacity = 1,
       balanceCarouselWaveOpacity = 1,
       balanceCarouselTintedBackgroundEnabled = true,
+      balanceCarouselWaveAnimationEnabled = false,
+      balanceContentCardColoredBorderEnabled = false,
       balanceContentCardBorderOpacity = 1,
       revision = 0;
 
@@ -73,6 +77,8 @@ final class BalancePresentationSettings {
   final double balanceCarouselBorderOpacity;
   final double balanceCarouselWaveOpacity;
   final bool balanceCarouselTintedBackgroundEnabled;
+  final bool balanceCarouselWaveAnimationEnabled;
+  final bool balanceContentCardColoredBorderEnabled;
   final double balanceContentCardBorderOpacity;
   final int revision;
 
@@ -87,6 +93,8 @@ final class BalancePresentationSettings {
     double? balanceCarouselBorderOpacity,
     double? balanceCarouselWaveOpacity,
     bool? balanceCarouselTintedBackgroundEnabled,
+    bool? balanceCarouselWaveAnimationEnabled,
+    bool? balanceContentCardColoredBorderEnabled,
     double? balanceContentCardBorderOpacity,
     int? revision,
   }) => BalancePresentationSettings(
@@ -104,6 +112,12 @@ final class BalancePresentationSettings {
     balanceCarouselTintedBackgroundEnabled:
         balanceCarouselTintedBackgroundEnabled ??
         this.balanceCarouselTintedBackgroundEnabled,
+    balanceCarouselWaveAnimationEnabled:
+        balanceCarouselWaveAnimationEnabled ??
+        this.balanceCarouselWaveAnimationEnabled,
+    balanceContentCardColoredBorderEnabled:
+        balanceContentCardColoredBorderEnabled ??
+        this.balanceContentCardColoredBorderEnabled,
     balanceContentCardBorderOpacity:
         balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
     revision: revision ?? this.revision,
@@ -121,6 +135,10 @@ final class BalancePresentationSettings {
       other.balanceCarouselWaveOpacity == balanceCarouselWaveOpacity &&
       other.balanceCarouselTintedBackgroundEnabled ==
           balanceCarouselTintedBackgroundEnabled &&
+      other.balanceCarouselWaveAnimationEnabled ==
+          balanceCarouselWaveAnimationEnabled &&
+      other.balanceContentCardColoredBorderEnabled ==
+          balanceContentCardColoredBorderEnabled &&
       other.balanceContentCardBorderOpacity ==
           balanceContentCardBorderOpacity &&
       other.revision == revision;
@@ -134,6 +152,8 @@ final class BalancePresentationSettings {
     balanceCarouselBorderOpacity,
     balanceCarouselWaveOpacity,
     balanceCarouselTintedBackgroundEnabled,
+    balanceCarouselWaveAnimationEnabled,
+    balanceContentCardColoredBorderEnabled,
     balanceContentCardBorderOpacity,
     revision,
   );
@@ -203,6 +223,24 @@ final class BalancePresentationController
     if (current.balanceCarouselTintedBackgroundEnabled == next) return;
     value = current.copyWith(
       balanceCarouselTintedBackgroundEnabled: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceCarouselWaveAnimationEnabled(bool next) {
+    final current = value;
+    if (current.balanceCarouselWaveAnimationEnabled == next) return;
+    value = current.copyWith(
+      balanceCarouselWaveAnimationEnabled: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceContentCardColoredBorderEnabled(bool next) {
+    final current = value;
+    if (current.balanceContentCardColoredBorderEnabled == next) return;
+    value = current.copyWith(
+      balanceContentCardColoredBorderEnabled: next,
       revision: current.revision + 1,
     );
   }

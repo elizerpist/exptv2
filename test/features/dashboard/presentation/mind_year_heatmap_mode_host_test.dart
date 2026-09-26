@@ -687,6 +687,10 @@ void main() {
         ),
       );
 
+      // Dynamic mixed is the startup default and deliberately always exposes
+      // its authored ten-stop mixed scale. The static-resolution contract
+      // below must therefore opt in explicitly before asking for twenty.
+      settings.setScaleMode(MindHeatmapScaleMode.existing);
       settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
       await tester.pump();
       for (var index = 0; index < 20; index += 1) {
@@ -832,6 +836,7 @@ void main() {
       final rangeElement = tester.element(
         find.byKey(const ValueKey<String>('mind-query-amount-range')),
       );
+      settings.setScaleMode(MindHeatmapScaleMode.existing);
       settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
       await tester.pump();
       expect(
@@ -898,6 +903,7 @@ void main() {
         expect(swatch.height, closeTo(6, .01));
       }
 
+      settings.setScaleMode(MindHeatmapScaleMode.existing);
       settings.setScaleResolution(MindHeatmapScaleResolution.twenty);
       await tester.pump();
       expect(tester.element(range), same(rangeElement));

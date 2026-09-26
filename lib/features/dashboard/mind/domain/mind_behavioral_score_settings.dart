@@ -37,7 +37,7 @@ final class MindBehavioralScoreSettings {
   });
 
   const MindBehavioralScoreSettings.defaults()
-    : expenseAlgorithm = MindExpenseScoreAlgorithm.causalTrailing,
+    : expenseAlgorithm = MindExpenseScoreAlgorithm.htmlCentered,
       causalHistoryOrigin = MindCausalHistoryOrigin.fullFilteredHistory,
       revision = 0;
 

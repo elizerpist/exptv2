@@ -146,7 +146,7 @@ final class MindYearHeatmapPresentationSettings {
     required this.paletteStyle,
     required this.revision,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
-    this.scaleMode = MindHeatmapScaleMode.existing,
+    this.scaleMode = MindHeatmapScaleMode.dynamicMixed,
     this.sliderHandleSize = MindSliderHandleSize.normal,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
@@ -165,7 +165,7 @@ final class MindYearHeatmapPresentationSettings {
   const MindYearHeatmapPresentationSettings.defaults()
     : paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
       scaleResolution = MindHeatmapScaleResolution.ten,
-      scaleMode = MindHeatmapScaleMode.existing,
+      scaleMode = MindHeatmapScaleMode.dynamicMixed,
       sliderHandleSize = MindSliderHandleSize.normal,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,

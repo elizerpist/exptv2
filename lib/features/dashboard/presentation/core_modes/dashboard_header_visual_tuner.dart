@@ -1079,9 +1079,31 @@ final class _BalancePresentationSection extends StatelessWidget {
           value: settings.balanceCarouselWaveOpacity,
           onChanged: controller.setBalanceCarouselWaveOpacity,
         ),
+        KeyedSubtree(
+          key: const ValueKey<String>(
+            'balance-carousel-wave-animation-enabled',
+          ),
+          child: _BalanceBooleanChoice(
+            label: 'Carousel hullám animáció',
+            value: settings.balanceCarouselWaveAnimationEnabled,
+            onChanged: controller.setBalanceCarouselWaveAnimationEnabled,
+            keyPrefix: 'balance-carousel-wave-animation-enabled',
+          ),
+        ),
         const Padding(
           padding: EdgeInsets.only(top: 12),
           child: Text('BALANCE CONTENT CARD'),
+        ),
+        KeyedSubtree(
+          key: const ValueKey<String>(
+            'balance-content-card-colored-border-enabled',
+          ),
+          child: _BalanceBooleanChoice(
+            label: 'Content kártya színes körvonal',
+            value: settings.balanceContentCardColoredBorderEnabled,
+            onChanged: controller.setBalanceContentCardColoredBorderEnabled,
+            keyPrefix: 'balance-content-card-colored-border-enabled',
+          ),
         ),
         _TunerSlider(
           key: const ValueKey<String>('balance-content-card-border-opacity'),

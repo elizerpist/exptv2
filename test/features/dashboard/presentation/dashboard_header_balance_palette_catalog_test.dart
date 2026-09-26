@@ -171,7 +171,7 @@ void main() {
     expect(defaults.palette, DashboardBalanceHeaderPalette.softRainbow);
     expect(defaults.variant, DashboardBalanceHeaderPaletteVariant.original);
     expect(defaults.positionPercent, 50);
-    expect(defaults.windowWidthPercent, 28);
+    expect(defaults.windowWidthPercent, 15);
 
     final vivid = defaults.copyWith(
       variant: DashboardBalanceHeaderPaletteVariant.vivid,

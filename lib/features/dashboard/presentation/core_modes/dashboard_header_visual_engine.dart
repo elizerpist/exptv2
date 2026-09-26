@@ -2207,12 +2207,11 @@ final class DashboardHeaderModeVisualState {
     required this.chartVeilEnabled,
   });
 
-  const DashboardHeaderModeVisualState.defaults()
-    : opacityPercent = 50,
-      textColor = DashboardHeaderForegroundColor.white,
-      chartColor = DashboardHeaderForegroundColor.white,
-      iconColor = DashboardHeaderForegroundColor.white,
-      chartVeilColor = DashboardHeaderForegroundColor.white,
+  const DashboardHeaderModeVisualState.defaults({this.opacityPercent = 50})
+    : textColor = DashboardHeaderForegroundColor.softenedDark,
+      chartColor = DashboardHeaderForegroundColor.softenedDark,
+      iconColor = DashboardHeaderForegroundColor.softenedDark,
+      chartVeilColor = DashboardHeaderForegroundColor.softenedDark,
       chartVeilEnabled = true;
 
   final double opacityPercent;
@@ -2297,7 +2296,9 @@ final class DashboardHeaderVisualTuning {
     budgetCategory: const DashboardBudgetHeaderCategoryState.defaults(),
     balanceColor: const DashboardBalanceHeaderColorState.defaults(),
     mindScore: const MindHeaderScoreWindowState.defaults(),
-    balanceHeader: const DashboardHeaderModeVisualState.defaults(),
+    balanceHeader: const DashboardHeaderModeVisualState.defaults(
+      opacityPercent: 100,
+    ),
     mindHeader: const DashboardHeaderModeVisualState.defaults(),
     budgetHeader: const DashboardHeaderModeVisualState.defaults(),
     globalAppearance: const FluviGlobalAppearance.defaults(),

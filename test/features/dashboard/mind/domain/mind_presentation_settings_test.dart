@@ -4,20 +4,23 @@ import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentat
 
 void main() {
   group('Mind behavioural score settings', () {
-    test('defaults to causal trailing with full filtered history', () {
-      final controller = MindBehavioralScoreSettingsController();
-      addTearDown(controller.dispose);
+    test(
+      'BWD-DEFAULTS RED: defaults to centered with full filtered history',
+      () {
+        final controller = MindBehavioralScoreSettingsController();
+        addTearDown(controller.dispose);
 
-      expect(
-        controller.value.expenseAlgorithm,
-        MindExpenseScoreAlgorithm.causalTrailing,
-      );
-      expect(
-        controller.value.causalHistoryOrigin,
-        MindCausalHistoryOrigin.fullFilteredHistory,
-      );
-      expect(controller.value.revision, 0);
-    });
+        expect(
+          controller.value.expenseAlgorithm,
+          MindExpenseScoreAlgorithm.htmlCentered,
+        );
+        expect(
+          controller.value.causalHistoryOrigin,
+          MindCausalHistoryOrigin.fullFilteredHistory,
+        );
+        expect(controller.value.revision, 0);
+      },
+    );
 
     test(
       'publishes a new semantic revision only for a real setting change',
@@ -27,11 +30,11 @@ void main() {
         var notifications = 0;
         controller.addListener(() => notifications += 1);
 
-        controller.setExpenseAlgorithm(MindExpenseScoreAlgorithm.htmlCentered);
+        controller.setExpenseAlgorithm(MindExpenseScoreAlgorithm.htmlTrailing);
         expect(controller.value.revision, 1);
         expect(notifications, 1);
 
-        controller.setExpenseAlgorithm(MindExpenseScoreAlgorithm.htmlCentered);
+        controller.setExpenseAlgorithm(MindExpenseScoreAlgorithm.htmlTrailing);
         expect(controller.value.revision, 1);
         expect(notifications, 1);
 
@@ -50,6 +53,7 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.value.paletteStyle, MindYearHeatmapPaletteStyle.fluvi);
+      expect(controller.value.scaleMode, MindHeatmapScaleMode.dynamicMixed);
       expect(
         controller.value.sumYearRowLayout,
         MindSumYearRowLayout.twoRowExpanded,

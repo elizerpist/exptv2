@@ -25,6 +25,32 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'BWD-DEFAULTS RED: Header startup defaults use the requested soft treatments',
+    () {
+      final defaults = DashboardHeaderVisualTuning.defaults();
+
+      for (final header in <DashboardHeaderModeVisualState>[
+        defaults.balanceHeader,
+        defaults.mindHeader,
+        defaults.budgetHeader,
+      ]) {
+        expect(header.textColor, DashboardHeaderForegroundColor.softenedDark);
+        expect(header.iconColor, DashboardHeaderForegroundColor.softenedDark);
+      }
+      expect(
+        defaults.balanceHeader.chartColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(
+        defaults.mindHeader.chartColor,
+        DashboardHeaderForegroundColor.softenedDark,
+      );
+      expect(defaults.balanceHeader.opacityPercent, 100);
+      expect(defaults.balanceColor.windowWidthPercent, 15);
+    },
+  );
+
   group('Balance manual palette and per-mode opacity contract', () {
     test(
       'PAL-01 RED: eight families expose the exact three explicit variants',
@@ -2286,8 +2312,8 @@ void main() {
       controller.setBalanceHeaderChartColor(
         DashboardHeaderForegroundColor.softenedDark,
       );
-      expect(mind.value.foregroundTextColor, Colors.white);
-      expect(mind.value.chartColor, Colors.white);
+      expect(mind.value.foregroundTextColor, const Color(0xd114213a));
+      expect(mind.value.chartColor, const Color(0xd114213a));
       controller.setMindHeaderTextColor(
         DashboardHeaderForegroundColor.softenedDark,
       );
@@ -2326,8 +2352,8 @@ void main() {
       });
 
       final ticker = controller.tickerIdentity;
-      expect(balance.value.headerIconColor, Colors.white);
-      expect(mind.value.chartVeilColor, Colors.white);
+      expect(balance.value.headerIconColor, const Color(0xd114213a));
+      expect(mind.value.chartVeilColor, const Color(0xd114213a));
       expect(mind.value.showsChartVeil, isTrue);
 
       controller.setBalanceHeaderIconColor(
@@ -2352,8 +2378,8 @@ void main() {
       expect(balance.value.showsChartVeil, isFalse);
       expect(mind.value.chartVeilColor, Colors.black);
       expect(mind.value.showsChartVeil, isTrue);
-      expect(balance.value.chartColor, Colors.white);
-      expect(mind.value.chartColor, Colors.white);
+      expect(balance.value.chartColor, const Color(0xd114213a));
+      expect(mind.value.chartColor, const Color(0xd114213a));
       expect(controller.tickerIdentity, same(ticker));
     },
   );
