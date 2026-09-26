@@ -20,8 +20,8 @@ The prompts are a complete implementation approval; visual/device acceptance rem
 | FBS-06 | At full expansion SearchPill top aligns to BottomNav top; count remains visible with existing gap | resolved Ledger layout | exact relation tests | DONE |
 | FBS-07 | All three modes, all handle styles, and seamless Mind preserve shared downstream geometry and controllers | core dashboard/mode hosts | cross-mode regression tests | DONE |
 | FBS-08 | No query, repository, financial, BottomNav, SearchPill semantic, scroll, or carousel-physics change | dependency boundary + regressions | focused regression and source audit | DONE |
-| DEL-01 | One application commit, push, exact-source online human APK downloaded to Android Download folder | GitHub Actions/release | SHA-256, APK validation, embedded source identity | NOT DONE |
-| DEL-02 | Exact final source SCIP graph and separate factual journal entry | tooling + journal | manifest source SHA, deterministic graph evidence | NOT DONE |
+| DEL-01 | One application commit, push, exact-source online human APK downloaded to Android Download folder | GitHub Actions/release | SHA-256, APK validation, embedded source identity | DONE — `81e5ccfa...`; workflow `36228421127`; `fluvi_HUMAN_DIAGNOSTIC_81e5ccf.apk`; SHA-256 `6e8ed1a797dfefa3b5931d9c6f364573d30c554bc6a3b5a09d19dcb7e2c77b05` |
+| DEL-02 | Exact final source SCIP graph and separate factual journal entry | tooling + journal | manifest source SHA, deterministic graph evidence | DONE — tooling `3317d82d...` pins `manifest.source_head=81e5ccfa...`; two graph generations were identical |
 | DEL-03 | Device validation is never overstated | delivery report | `PENDING — USER ONLY` | DONE |
 
 ## Re-read gate before commit/build
