@@ -18,6 +18,7 @@ import '../../application/dashboard_balance_closings_momentum_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
+import 'balance_carousel_wave_motion.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
@@ -1077,41 +1078,70 @@ final class _BalanceCarouselCard extends StatelessWidget {
             child: ClipRRect(
               borderRadius: borderRadius,
               child: Stack(
+                key: ValueKey<String>(
+                  'balance-carousel-card-decoration-stack-${card.id}',
+                ),
                 fit: StackFit.expand,
                 children: <Widget>[
                   DecoratedBox(
                     key: ValueKey<String>(
-                      'balance-carousel-card-reference-shell-${card.id}',
+                      'balance-carousel-card-reference-tint-${card.id}',
                     ),
                     decoration: BoxDecoration(
                       color: accent.color.withValues(alpha: paint.tintOpacity),
-                      border: Border.all(
-                        color: accent.color.withValues(
-                          alpha: paint.outlineOpacity,
-                        ),
-                        width: paint.outlineWidth,
+                    ),
+                  ),
+                  KeyedSubtree(
+                    key: ValueKey<String>(
+                      'balance-carousel-card-wave-layer-${card.id}',
+                    ),
+                    child: _BalanceCarouselAmbientWave(
+                      paintKey: ValueKey<String>(
+                        'balance-carousel-card-reference-wave-${card.id}',
                       ),
-                      borderRadius: borderRadius,
+                      phase: wavePhase,
+                      animated:
+                          presentationSettings
+                              .balanceCarouselWaveAnimationEnabled &&
+                          !(MediaQuery.maybeOf(context)?.disableAnimations ??
+                              false),
+                      accentColor: accent.color,
+                      profile: BalanceCarouselWaveMotion.profileForCardId(
+                        card.id,
+                      ),
+                      opacity: paint.waveOpacity,
                     ),
                   ),
-                  _BalanceCarouselAmbientWave(
-                    paintKey: ValueKey<String>(
-                      'balance-carousel-card-reference-wave-${card.id}',
+                  KeyedSubtree(
+                    key: ValueKey<String>(
+                      'balance-carousel-card-content-layer-${card.id}',
                     ),
-                    phase: wavePhase,
-                    animated:
-                        presentationSettings
-                            .balanceCarouselWaveAnimationEnabled &&
-                        !(MediaQuery.maybeOf(context)?.disableAnimations ??
-                            false),
-                    accentColor: accent.color,
-                    spec: visualSpec,
-                    opacity: paint.waveOpacity,
+                    child: _BalanceCarouselMiniCardContent(
+                      card: card,
+                      visualSpec: visualSpec,
+                      accent: accent,
+                    ),
                   ),
-                  _BalanceCarouselMiniCardContent(
-                    card: card,
-                    visualSpec: visualSpec,
-                    accent: accent,
+                  KeyedSubtree(
+                    key: ValueKey<String>(
+                      'balance-carousel-card-outline-layer-${card.id}',
+                    ),
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        key: ValueKey<String>(
+                          'balance-carousel-card-reference-shell-${card.id}',
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: accent.color.withValues(
+                              alpha: paint.outlineOpacity,
+                            ),
+                            width: paint.outlineWidth,
+                          ),
+                          borderRadius: borderRadius,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1148,18 +1178,6 @@ final class _BalanceCarouselReferenceVisualSpec {
     required this.selectedOutlineWidth,
     required this.normalWaveOpacity,
     required this.selectedWaveOpacity,
-    required this.waveLeadingHeightFactor,
-    required this.waveFirstControlWidthFactor,
-    required this.waveFirstControlHeightFactor,
-    required this.waveSecondControlWidthFactor,
-    required this.waveSecondControlHeightFactor,
-    required this.waveFirstCurveEndWidthFactor,
-    required this.waveTrailingHeightFactor,
-    required this.waveTrailingFirstControlWidthFactor,
-    required this.waveTrailingFirstControlHeightFactor,
-    required this.waveTrailingSecondControlWidthFactor,
-    required this.waveTrailingSecondControlHeightFactor,
-    required this.waveTrailingEndHeightFactor,
   });
 
   final double horizontalPadding;
@@ -1181,18 +1199,6 @@ final class _BalanceCarouselReferenceVisualSpec {
   final double selectedOutlineWidth;
   final double normalWaveOpacity;
   final double selectedWaveOpacity;
-  final double waveLeadingHeightFactor;
-  final double waveFirstControlWidthFactor;
-  final double waveFirstControlHeightFactor;
-  final double waveSecondControlWidthFactor;
-  final double waveSecondControlHeightFactor;
-  final double waveFirstCurveEndWidthFactor;
-  final double waveTrailingHeightFactor;
-  final double waveTrailingFirstControlWidthFactor;
-  final double waveTrailingFirstControlHeightFactor;
-  final double waveTrailingSecondControlWidthFactor;
-  final double waveTrailingSecondControlHeightFactor;
-  final double waveTrailingEndHeightFactor;
 
   static _BalanceCarouselReferenceVisualSpec resolve({required Size size}) {
     // The existing outer envelope is intentionally preserved. The reference
@@ -1219,18 +1225,6 @@ final class _BalanceCarouselReferenceVisualSpec {
       selectedOutlineWidth: 1.35,
       normalWaveOpacity: .095,
       selectedWaveOpacity: .15,
-      waveLeadingHeightFactor: .78,
-      waveFirstControlWidthFactor: .22,
-      waveFirstControlHeightFactor: .64,
-      waveSecondControlWidthFactor: .47,
-      waveSecondControlHeightFactor: .97,
-      waveFirstCurveEndWidthFactor: .68,
-      waveTrailingHeightFactor: .72,
-      waveTrailingFirstControlWidthFactor: .82,
-      waveTrailingFirstControlHeightFactor: .58,
-      waveTrailingSecondControlWidthFactor: .93,
-      waveTrailingSecondControlHeightFactor: .78,
-      waveTrailingEndHeightFactor: .66,
     );
   }
 
@@ -1274,7 +1268,7 @@ final class _BalanceCarouselReferencePaint {
     final authoredWave = visualSpec.waveOpacityFor(isSelected);
     return _BalanceCarouselReferencePaint._(
       tintOpacity: presentationSettings.balanceCarouselTintedBackgroundEnabled
-          ? authoredTint
+          ? authoredTint * presentationSettings.balanceCarouselBackgroundOpacity
           : 0,
       outlineOpacity: presentationSettings.balanceCarouselBorderEnabled
           ? authoredOutline * presentationSettings.balanceCarouselBorderOpacity
@@ -1481,79 +1475,83 @@ final class _BalanceCarouselIconTile extends StatelessWidget {
 }
 
 final class _BalanceCarouselSoftWavePainter extends CustomPainter {
-  const _BalanceCarouselSoftWavePainter({
+  _BalanceCarouselSoftWavePainter({
     required this.accentColor,
-    required this.spec,
     required this.opacity,
-    required this.phase,
-  });
+    required this.profile,
+    required Animation<double>? phaseClock,
+    required this.staticPhase,
+  }) : _phaseClock = phaseClock,
+       super(repaint: phaseClock);
 
   final Color accentColor;
-  final _BalanceCarouselReferenceVisualSpec spec;
   final double opacity;
-  final double phase;
+  final BalanceCarouselWaveProfile profile;
+  final Animation<double>? _phaseClock;
+  final double staticPhase;
+  final Path _path = Path();
+  final Paint _paint = Paint()..style = PaintingStyle.fill;
+
+  /// Exposed to focused presentation tests: the live geometry is identity
+  /// based and periodic, never selected-position based.
+  double get phase => _phaseClock?.value ?? staticPhase;
+
+  BalanceCarouselWaveGeometry get geometry =>
+      BalanceCarouselWaveMotion.geometryFor(
+        profile: profile,
+        clockPhase: phase,
+      );
 
   @override
   void paint(Canvas canvas, Size size) {
-    final height = size.height;
-    final width = size.width;
-    final radians = phase * math.pi * 2;
-    final verticalAmplitude = math.min(4.0, math.max(2.0, height * .045));
-    final verticalDrift = math.sin(radians) * verticalAmplitude;
-    final horizontalDrift =
-        math.sin(radians * .7) * math.min(3.0, width * .015);
-    final path = Path()
-      ..moveTo(
-        horizontalDrift,
-        height * spec.waveLeadingHeightFactor + verticalDrift,
+    final points = geometry.normalizedControlPoints;
+    final path = _path
+      ..reset()
+      ..moveTo(size.width * points[0], size.height * points[1])
+      ..cubicTo(
+        size.width * points[2],
+        size.height * points[3],
+        size.width * points[4],
+        size.height * points[5],
+        size.width * points[6],
+        size.height * points[7],
       )
       ..cubicTo(
-        width * spec.waveFirstControlWidthFactor + horizontalDrift,
-        height * spec.waveFirstControlHeightFactor + verticalDrift * .72,
-        width * spec.waveSecondControlWidthFactor + horizontalDrift,
-        height * spec.waveSecondControlHeightFactor - verticalDrift * .58,
-        width * spec.waveFirstCurveEndWidthFactor + horizontalDrift,
-        height * spec.waveTrailingHeightFactor + verticalDrift,
+        size.width * points[8],
+        size.height * points[9],
+        size.width * points[10],
+        size.height * points[11],
+        size.width * points[12],
+        size.height * points[13],
       )
-      ..cubicTo(
-        width * spec.waveTrailingFirstControlWidthFactor + horizontalDrift,
-        height * spec.waveTrailingFirstControlHeightFactor +
-            verticalDrift * .55,
-        width * spec.waveTrailingSecondControlWidthFactor + horizontalDrift,
-        height * spec.waveTrailingSecondControlHeightFactor -
-            verticalDrift * .65,
-        width + horizontalDrift,
-        height * spec.waveTrailingEndHeightFactor + verticalDrift,
-      )
-      ..lineTo(width, height)
-      ..lineTo(0, height)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
       ..close();
     canvas.drawPath(
       path,
-      Paint()
-        ..color = accentColor.withValues(alpha: opacity)
-        ..style = PaintingStyle.fill,
+      _paint..color = accentColor.withValues(alpha: opacity),
     );
   }
 
   @override
   bool shouldRepaint(covariant _BalanceCarouselSoftWavePainter oldDelegate) =>
       oldDelegate.accentColor != accentColor ||
-      oldDelegate.spec != spec ||
       oldDelegate.opacity != opacity ||
-      oldDelegate.phase != phase;
+      oldDelegate.profile != profile ||
+      oldDelegate._phaseClock != _phaseClock ||
+      oldDelegate.staticPhase != staticPhase;
 }
 
-/// Paint-only wrapper around the one carousel-owned phase. It intentionally
-/// avoids an [AnimatedBuilder] while static, so disabled/reduced-motion waves
-/// schedule no frame work and preserve the accepted reference geometry.
+/// Paint-only wrapper around the carousel-owned clock. [CustomPainter.repaint]
+/// makes phase ticks repaint just this boundary rather than rebuilding card
+/// layout, content, carousel geometry, or financial projections.
 final class _BalanceCarouselAmbientWave extends StatelessWidget {
   const _BalanceCarouselAmbientWave({
     required this.paintKey,
     required this.phase,
     required this.animated,
     required this.accentColor,
-    required this.spec,
+    required this.profile,
     required this.opacity,
   });
 
@@ -1561,24 +1559,20 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
   final Animation<double> phase;
   final bool animated;
   final Color accentColor;
-  final _BalanceCarouselReferenceVisualSpec spec;
+  final BalanceCarouselWaveProfile profile;
   final double opacity;
 
   @override
-  Widget build(BuildContext context) {
-    CustomPaint paintFor(double value) => CustomPaint(
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(
       key: paintKey,
       painter: _BalanceCarouselSoftWavePainter(
         accentColor: accentColor,
-        spec: spec,
         opacity: opacity,
-        phase: value,
+        profile: profile,
+        phaseClock: animated ? phase : null,
+        staticPhase: 0,
       ),
-    );
-    if (!animated) return paintFor(phase.value);
-    return AnimatedBuilder(
-      animation: phase,
-      builder: (context, child) => paintFor(phase.value),
-    );
-  }
+    ),
+  );
 }

@@ -1070,6 +1070,17 @@ final class _BalancePresentationSection extends StatelessWidget {
           onChanged: controller.setBalanceCarouselBorderOpacity,
         ),
         _TunerSlider(
+          key: const ValueKey<String>('balance-carousel-background-opacity'),
+          label: 'Carousel háttér erőssége',
+          valueLabel:
+              '${(settings.balanceCarouselBackgroundOpacity * 100).round()}%',
+          min: 0,
+          max: 1,
+          divisions: 100,
+          value: settings.balanceCarouselBackgroundOpacity,
+          onChanged: controller.setBalanceCarouselBackgroundOpacity,
+        ),
+        _TunerSlider(
           key: const ValueKey<String>('balance-carousel-wave-opacity'),
           label: 'Carousel hullám erőssége',
           valueLabel: '${(settings.balanceCarouselWaveOpacity * 100).round()}%',

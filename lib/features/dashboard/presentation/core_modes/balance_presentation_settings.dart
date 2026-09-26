@@ -38,6 +38,7 @@ final class BalancePresentationSettings {
     required this.latestTransactionCardPresentation,
     required this.balanceCarouselBorderEnabled,
     required this.balanceCarouselBorderOpacity,
+    required this.balanceCarouselBackgroundOpacity,
     required this.balanceCarouselWaveOpacity,
     required this.balanceCarouselTintedBackgroundEnabled,
     required this.balanceCarouselWaveAnimationEnabled,
@@ -46,6 +47,10 @@ final class BalancePresentationSettings {
     required this.revision,
   }) : assert(
          balanceCarouselBorderOpacity >= 0 && balanceCarouselBorderOpacity <= 1,
+       ),
+       assert(
+         balanceCarouselBackgroundOpacity >= 0 &&
+             balanceCarouselBackgroundOpacity <= 1,
        ),
        assert(
          balanceCarouselWaveOpacity >= 0 && balanceCarouselWaveOpacity <= 1,
@@ -57,11 +62,12 @@ final class BalancePresentationSettings {
 
   const BalancePresentationSettings.defaults()
     : chartMode = BalanceHeaderChartMode.compound,
-      timeLabels = BalanceHeaderChartTimeLabels.visible,
+      timeLabels = BalanceHeaderChartTimeLabels.hidden,
       latestTransactionCardPresentation =
           BalanceLatestTransactionCardPresentation.avatarPartner,
       balanceCarouselBorderEnabled = true,
       balanceCarouselBorderOpacity = 1,
+      balanceCarouselBackgroundOpacity = 1,
       balanceCarouselWaveOpacity = 1,
       balanceCarouselTintedBackgroundEnabled = true,
       balanceCarouselWaveAnimationEnabled = false,
@@ -75,6 +81,7 @@ final class BalancePresentationSettings {
   latestTransactionCardPresentation;
   final bool balanceCarouselBorderEnabled;
   final double balanceCarouselBorderOpacity;
+  final double balanceCarouselBackgroundOpacity;
   final double balanceCarouselWaveOpacity;
   final bool balanceCarouselTintedBackgroundEnabled;
   final bool balanceCarouselWaveAnimationEnabled;
@@ -91,6 +98,7 @@ final class BalancePresentationSettings {
     BalanceLatestTransactionCardPresentation? latestTransactionCardPresentation,
     bool? balanceCarouselBorderEnabled,
     double? balanceCarouselBorderOpacity,
+    double? balanceCarouselBackgroundOpacity,
     double? balanceCarouselWaveOpacity,
     bool? balanceCarouselTintedBackgroundEnabled,
     bool? balanceCarouselWaveAnimationEnabled,
@@ -107,6 +115,9 @@ final class BalancePresentationSettings {
         balanceCarouselBorderEnabled ?? this.balanceCarouselBorderEnabled,
     balanceCarouselBorderOpacity:
         balanceCarouselBorderOpacity ?? this.balanceCarouselBorderOpacity,
+    balanceCarouselBackgroundOpacity:
+        balanceCarouselBackgroundOpacity ??
+        this.balanceCarouselBackgroundOpacity,
     balanceCarouselWaveOpacity:
         balanceCarouselWaveOpacity ?? this.balanceCarouselWaveOpacity,
     balanceCarouselTintedBackgroundEnabled:
@@ -132,6 +143,8 @@ final class BalancePresentationSettings {
           latestTransactionCardPresentation &&
       other.balanceCarouselBorderEnabled == balanceCarouselBorderEnabled &&
       other.balanceCarouselBorderOpacity == balanceCarouselBorderOpacity &&
+      other.balanceCarouselBackgroundOpacity ==
+          balanceCarouselBackgroundOpacity &&
       other.balanceCarouselWaveOpacity == balanceCarouselWaveOpacity &&
       other.balanceCarouselTintedBackgroundEnabled ==
           balanceCarouselTintedBackgroundEnabled &&
@@ -150,6 +163,7 @@ final class BalancePresentationSettings {
     latestTransactionCardPresentation,
     balanceCarouselBorderEnabled,
     balanceCarouselBorderOpacity,
+    balanceCarouselBackgroundOpacity,
     balanceCarouselWaveOpacity,
     balanceCarouselTintedBackgroundEnabled,
     balanceCarouselWaveAnimationEnabled,
@@ -204,6 +218,16 @@ final class BalancePresentationController
     if (current.balanceCarouselBorderOpacity == normalized) return;
     value = current.copyWith(
       balanceCarouselBorderOpacity: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceCarouselBackgroundOpacity(double next) {
+    final normalized = _normalizedOpacity(next);
+    final current = value;
+    if (current.balanceCarouselBackgroundOpacity == normalized) return;
+    value = current.copyWith(
+      balanceCarouselBackgroundOpacity: normalized,
       revision: current.revision + 1,
     );
   }

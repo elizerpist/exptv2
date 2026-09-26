@@ -46,6 +46,11 @@ void main() {
         defaults.mindHeader.chartColor,
         DashboardHeaderForegroundColor.softenedDark,
       );
+      expect(defaults.balanceHeader.chartVeilEnabled, isTrue);
+      expect(
+        defaults.balanceHeader.chartVeilColor,
+        DashboardHeaderForegroundColor.white,
+      );
       expect(defaults.balanceHeader.opacityPercent, 100);
       expect(defaults.balanceColor.windowWidthPercent, 15);
     },
@@ -2353,6 +2358,8 @@ void main() {
 
       final ticker = controller.tickerIdentity;
       expect(balance.value.headerIconColor, const Color(0xd114213a));
+      expect(balance.value.chartVeilColor, Colors.white);
+      expect(balance.value.showsChartVeil, isTrue);
       expect(mind.value.chartVeilColor, const Color(0xd114213a));
       expect(mind.value.showsChartVeil, isTrue);
 

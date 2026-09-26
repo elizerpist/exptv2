@@ -464,6 +464,9 @@ void main() {
       final borderOpacity = find.byKey(
         const ValueKey<String>('balance-carousel-border-opacity'),
       );
+      final backgroundOpacity = find.byKey(
+        const ValueKey<String>('balance-carousel-background-opacity'),
+      );
       final waveOpacity = find.byKey(
         const ValueKey<String>('balance-carousel-wave-opacity'),
       );
@@ -479,6 +482,7 @@ void main() {
       expect(tintedBackground, findsOneWidget);
       expect(borderEnabled, findsOneWidget);
       expect(borderOpacity, findsOneWidget);
+      expect(backgroundOpacity, findsOneWidget);
       expect(waveOpacity, findsOneWidget);
       expect(waveAnimation, findsOneWidget);
       expect(contentColoredBorder, findsOneWidget);
@@ -513,8 +517,11 @@ void main() {
           'balance-carousel-tinted-background-enabled-off',
         ),
       );
-      await tester.ensureVisible(tintOff);
-      await tester.tap(tintOff);
+      tester
+          .widget<RadioGroup<bool>>(
+            find.ancestor(of: tintOff, matching: find.byType(RadioGroup<bool>)),
+          )
+          .onChanged(false);
       await tester.pump();
       expect(balance.value.balanceCarouselTintedBackgroundEnabled, isFalse);
       expect(balance.value.balanceCarouselBorderEnabled, isTrue);
@@ -522,8 +529,14 @@ void main() {
       final borderOff = find.byKey(
         const ValueKey<String>('balance-carousel-border-enabled-off'),
       );
-      await tester.ensureVisible(borderOff);
-      await tester.tap(borderOff);
+      tester
+          .widget<RadioGroup<bool>>(
+            find.ancestor(
+              of: borderOff,
+              matching: find.byType(RadioGroup<bool>),
+            ),
+          )
+          .onChanged(false);
       await tester.pump();
       expect(balance.value.balanceCarouselBorderEnabled, isFalse);
       expect(balance.value.balanceCarouselTintedBackgroundEnabled, isFalse);
@@ -533,6 +546,14 @@ void main() {
             find.descendant(of: borderOpacity, matching: find.byType(Slider)),
           )
           .onChanged!(.4);
+      tester
+          .widget<Slider>(
+            find.descendant(
+              of: backgroundOpacity,
+              matching: find.byType(Slider),
+            ),
+          )
+          .onChanged!(.7);
       tester
           .widget<Slider>(
             find.descendant(of: waveOpacity, matching: find.byType(Slider)),
@@ -548,9 +569,11 @@ void main() {
           .onChanged!(.2);
       await tester.pump();
       expect(balance.value.balanceCarouselBorderOpacity, .4);
+      expect(balance.value.balanceCarouselBackgroundOpacity, .7);
       expect(balance.value.balanceCarouselWaveOpacity, .6);
       expect(balance.value.balanceContentCardBorderOpacity, .2);
       expect(find.text('40%'), findsOneWidget);
+      expect(find.text('70%'), findsOneWidget);
       expect(find.text('60%'), findsOneWidget);
       expect(find.text('20%'), findsOneWidget);
 

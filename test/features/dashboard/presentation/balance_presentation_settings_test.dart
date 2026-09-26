@@ -14,13 +14,14 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.value.chartMode, BalanceHeaderChartMode.compound);
-      expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.visible);
+      expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
       expect(
         controller.value.latestTransactionCardPresentation,
         BalanceLatestTransactionCardPresentation.avatarPartner,
       );
       expect(controller.value.balanceCarouselBorderEnabled, isTrue);
       expect(controller.value.balanceCarouselBorderOpacity, 1);
+      expect(controller.value.balanceCarouselBackgroundOpacity, 1);
       expect(controller.value.balanceCarouselWaveOpacity, 1);
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
@@ -28,12 +29,13 @@ void main() {
       expect(controller.value.balanceContentCardBorderOpacity, 1);
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
-        ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden)
+        ..setTimeLabels(BalanceHeaderChartTimeLabels.visible)
         ..setLatestTransactionCardPresentation(
           BalanceLatestTransactionCardPresentation.threeLine,
         )
         ..setBalanceCarouselBorderEnabled(false)
         ..setBalanceCarouselBorderOpacity(.42)
+        ..setBalanceCarouselBackgroundOpacity(.73)
         ..setBalanceCarouselWaveOpacity(.61)
         ..setBalanceCarouselTintedBackgroundEnabled(false)
         ..setBalanceContentCardBorderOpacity(.27);
@@ -41,7 +43,7 @@ void main() {
         controller.value.chartMode,
         BalanceHeaderChartMode.adaptiveSummary,
       );
-      expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.hidden);
+      expect(controller.value.timeLabels, BalanceHeaderChartTimeLabels.visible);
       expect(
         controller.value.latestTransactionCardPresentation,
         BalanceLatestTransactionCardPresentation.threeLine,
@@ -53,10 +55,11 @@ void main() {
         reason:
             'Disabling the outline must preserve the independently chosen opacity.',
       );
+      expect(controller.value.balanceCarouselBackgroundOpacity, .73);
       expect(controller.value.balanceCarouselWaveOpacity, .61);
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isFalse);
       expect(controller.value.balanceContentCardBorderOpacity, .27);
-      expect(controller.value.revision, 8);
+      expect(controller.value.revision, 9);
 
       final unchangedRevision = controller.value.revision;
       controller.setLatestTransactionCardPresentation(
@@ -79,10 +82,12 @@ void main() {
 
       controller
         ..setBalanceCarouselBorderOpacity(-.2)
+        ..setBalanceCarouselBackgroundOpacity(1.2)
         ..setBalanceCarouselWaveOpacity(1.4)
         ..setBalanceContentCardBorderOpacity(.5);
 
       expect(controller.value.balanceCarouselBorderOpacity, 0);
+      expect(controller.value.balanceCarouselBackgroundOpacity, 1);
       expect(controller.value.balanceCarouselWaveOpacity, 1);
       expect(controller.value.balanceContentCardBorderOpacity, .5);
       expect(controller.value.balanceCarouselBorderEnabled, isTrue);
@@ -91,9 +96,35 @@ void main() {
       final revision = controller.value.revision;
       controller
         ..setBalanceCarouselBorderOpacity(0)
+        ..setBalanceCarouselBackgroundOpacity(1)
         ..setBalanceCarouselWaveOpacity(1)
         ..setBalanceContentCardBorderOpacity(.5);
       expect(controller.value.revision, revision);
+    },
+  );
+
+  test(
+    'BWA-SETTINGS RED: tint visibility gates stored background opacity without changing wave or border choices',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      controller
+        ..setBalanceCarouselBorderOpacity(.42)
+        ..setBalanceCarouselWaveOpacity(.61)
+        ..setBalanceCarouselBackgroundOpacity(.38)
+        ..setBalanceCarouselTintedBackgroundEnabled(false);
+
+      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isFalse);
+      expect(controller.value.balanceCarouselBackgroundOpacity, .38);
+      expect(controller.value.balanceCarouselBorderOpacity, .42);
+      expect(controller.value.balanceCarouselWaveOpacity, .61);
+
+      controller.setBalanceCarouselTintedBackgroundEnabled(true);
+      expect(controller.value.balanceCarouselBackgroundOpacity, .38);
+      controller.setBalanceCarouselWaveOpacity(.17);
+      expect(controller.value.balanceCarouselBackgroundOpacity, .38);
+      expect(controller.value.balanceCarouselBorderOpacity, .42);
     },
   );
 

@@ -2296,8 +2296,13 @@ final class DashboardHeaderVisualTuning {
     budgetCategory: const DashboardBudgetHeaderCategoryState.defaults(),
     balanceColor: const DashboardBalanceHeaderColorState.defaults(),
     mindScore: const MindHeaderScoreWindowState.defaults(),
-    balanceHeader: const DashboardHeaderModeVisualState.defaults(
+    balanceHeader: const DashboardHeaderModeVisualState(
       opacityPercent: 100,
+      textColor: DashboardHeaderForegroundColor.softenedDark,
+      chartColor: DashboardHeaderForegroundColor.softenedDark,
+      iconColor: DashboardHeaderForegroundColor.softenedDark,
+      chartVeilColor: DashboardHeaderForegroundColor.white,
+      chartVeilEnabled: true,
     ),
     mindHeader: const DashboardHeaderModeVisualState.defaults(),
     budgetHeader: const DashboardHeaderModeVisualState.defaults(),

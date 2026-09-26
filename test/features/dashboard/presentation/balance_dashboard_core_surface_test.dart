@@ -471,6 +471,46 @@ void main() {
           ),
           findsOneWidget,
         );
+        final waveFinder = find.byKey(
+          ValueKey<String>('balance-carousel-card-reference-wave-${card.id}'),
+        );
+        final decorationStack = tester.widget<Stack>(
+          find.byKey(
+            ValueKey<String>(
+              'balance-carousel-card-decoration-stack-${card.id}',
+            ),
+          ),
+        );
+        expect(
+          decorationStack.children.map((child) => child.key).toList(),
+          <Key>[
+            ValueKey<String>('balance-carousel-card-reference-tint-${card.id}'),
+            ValueKey<String>('balance-carousel-card-wave-layer-${card.id}'),
+            ValueKey<String>('balance-carousel-card-content-layer-${card.id}'),
+            ValueKey<String>('balance-carousel-card-outline-layer-${card.id}'),
+          ],
+          reason: 'Tint, wave, content, then crisp outline is the paint order.',
+        );
+        expect(
+          find.ancestor(of: waveFinder, matching: find.byType(ClipRRect)),
+          findsOneWidget,
+          reason: 'The inner rounded clip must own decoration containment.',
+        );
+        expect(
+          find.ancestor(of: waveFinder, matching: find.byType(RepaintBoundary)),
+          findsAtLeastNWidgets(1),
+          reason: 'Wave ticks must stay inside a dedicated repaint boundary.',
+        );
+        expect(
+          tester.getRect(waveFinder),
+          cardRect,
+          reason: 'The wave gets the complete already-clipped card interior.',
+        );
+        final tint = tester.widget<DecoratedBox>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-reference-tint-${card.id}'),
+          ),
+        );
         final shell = tester.widget<DecoratedBox>(
           find.byKey(
             ValueKey<String>(
@@ -479,8 +519,9 @@ void main() {
           ),
         );
         final shellDecoration = shell.decoration as BoxDecoration;
+        final tintDecoration = tint.decoration as BoxDecoration;
         final outline = shellDecoration.border! as Border;
-        expect(shellDecoration.color!.a, inInclusiveRange(.01, .10));
+        expect(tintDecoration.color!.a, inInclusiveRange(.01, .10));
         expect(outline.top.width, greaterThan(0));
         expect(outline.top.color.a, greaterThan(0));
         expect(cardRect.width, closeTo(carousel.spec.itemExtent, .01));
@@ -519,9 +560,30 @@ void main() {
         selectedOutline.top.width,
         greaterThan(neighboringOutline.top.width),
       );
-      final selectedTint = (selectedShell.decoration as BoxDecoration).color!;
       final neighboringTint =
-          (neighboringShell.decoration as BoxDecoration).color!;
+          (tester
+                      .widget<DecoratedBox>(
+                        find.byKey(
+                          const ValueKey<String>(
+                            'balance-carousel-card-reference-tint-top-category',
+                          ),
+                        ),
+                      )
+                      .decoration
+                  as BoxDecoration)
+              .color!;
+      final selectedTint =
+          (tester
+                      .widget<DecoratedBox>(
+                        find.byKey(
+                          const ValueKey<String>(
+                            'balance-carousel-card-reference-tint-top-partner',
+                          ),
+                        ),
+                      )
+                      .decoration
+                  as BoxDecoration)
+              .color!;
       expect(selectedTint.a, greaterThan(neighboringTint.a));
       expect(tester.takeException(), isNull);
     },
@@ -567,14 +629,21 @@ void main() {
         const ValueKey<String>('balance-carousel-card-top-category'),
       );
       final cardRect = tester.getRect(cardFinder);
-      final shellFinder = find.byKey(
+      final outlineFinder = find.byKey(
         const ValueKey<String>(
           'balance-carousel-card-reference-shell-top-category',
         ),
       );
-      final initialShell = tester.widget<DecoratedBox>(shellFinder);
-      final initialDecoration = initialShell.decoration as BoxDecoration;
-      final initialOutline = initialDecoration.border! as Border;
+      final tintFinder = find.byKey(
+        const ValueKey<String>(
+          'balance-carousel-card-reference-tint-top-category',
+        ),
+      );
+      final initialOutline =
+          (tester.widget<DecoratedBox>(outlineFinder).decoration
+                      as BoxDecoration)
+                  .border!
+              as Border;
       final initialWaveOpacity = _balanceCarouselWaveOpacity(
         tester,
         'top-category',
@@ -583,6 +652,10 @@ void main() {
         tester,
         'top-category',
       );
+      final initialTintOpacity =
+          (tester.widget<DecoratedBox>(tintFinder).decoration as BoxDecoration)
+              .color!
+              .a;
       final contentShell = find.descendant(
         of: find.byKey(const ValueKey<String>('balance-primary-card')),
         matching: find.byType(FluviRoundedBox),
@@ -591,17 +664,56 @@ void main() {
           tester.widget<FluviRoundedBox>(contentShell).border! as Border;
 
       settings.value = settings.value.copyWith(
+        balanceCarouselBackgroundOpacity: .5,
+        revision: 1,
+      );
+      await tester.pump();
+      final halfTintDecoration =
+          tester.widget<DecoratedBox>(tintFinder).decoration as BoxDecoration;
+      expect(
+        halfTintDecoration.color!.a,
+        closeTo(initialTintOpacity * .5, .01),
+        reason: 'Background opacity owns tint alpha only.',
+      );
+      expect(
+        _balanceCarouselWaveOpacity(tester, 'top-category'),
+        initialWaveOpacity,
+      );
+
+      settings.value = settings.value.copyWith(
+        balanceCarouselBackgroundOpacity: 0,
+        revision: 2,
+      );
+      await tester.pump();
+      final noTintDecoration =
+          tester.widget<DecoratedBox>(tintFinder).decoration as BoxDecoration;
+      expect(
+        noTintDecoration.color!.a,
+        0,
+        reason:
+            'Zero background opacity is neutral even while tint is enabled.',
+      );
+      expect(
+        _balanceCarouselWaveOpacity(tester, 'top-category'),
+        initialWaveOpacity,
+      );
+
+      settings.value = settings.value.copyWith(
         balanceCarouselBorderOpacity: .4,
         balanceCarouselWaveOpacity: .5,
         balanceCarouselTintedBackgroundEnabled: false,
         balanceContentCardBorderOpacity: .3,
-        revision: 1,
+        revision: 3,
       );
       await tester.pump();
 
       final updatedDecoration =
-          tester.widget<DecoratedBox>(shellFinder).decoration as BoxDecoration;
-      final updatedOutline = updatedDecoration.border! as Border;
+          tester.widget<DecoratedBox>(tintFinder).decoration as BoxDecoration;
+      final updatedOutline =
+          (tester.widget<DecoratedBox>(outlineFinder).decoration
+                      as BoxDecoration)
+                  .border!
+              as Border;
       final updatedContentBorder =
           tester.widget<FluviRoundedBox>(contentShell).border! as Border;
       expect(updatedDecoration.color!.a, 0);
@@ -644,11 +756,12 @@ void main() {
         balanceCarouselBorderOpacity: 0,
         balanceCarouselWaveOpacity: 0,
         balanceContentCardBorderOpacity: 0,
-        revision: 2,
+        revision: 4,
       );
       await tester.pump();
       final transparentOutline =
-          (tester.widget<DecoratedBox>(shellFinder).decoration as BoxDecoration)
+          (tester.widget<DecoratedBox>(outlineFinder).decoration
+                      as BoxDecoration)
                   .border!
               as Border;
       final transparentContentBorder =
@@ -668,11 +781,12 @@ void main() {
       settings.value = settings.value.copyWith(
         balanceCarouselBorderEnabled: false,
         balanceCarouselBorderOpacity: .9,
-        revision: 3,
+        revision: 5,
       );
       await tester.pump();
       final hiddenOutline =
-          (tester.widget<DecoratedBox>(shellFinder).decoration as BoxDecoration)
+          (tester.widget<DecoratedBox>(outlineFinder).decoration
+                      as BoxDecoration)
                   .border!
               as Border;
       final contentAfterCarouselChange =
@@ -756,6 +870,20 @@ void main() {
       final animatedLater = phase('top-category');
       expect(animatedLater, isNot(animatedStart));
       expect(phase('top-partner'), closeTo(animatedLater, .001));
+      final categoryGeometry = _balanceCarouselWaveGeometry(
+        tester,
+        'top-category',
+      );
+      final partnerGeometry = _balanceCarouselWaveGeometry(
+        tester,
+        'top-partner',
+      );
+      expect(
+        categoryGeometry,
+        isNot(equals(partnerGeometry)),
+        reason:
+            'One shared clock must not make distinct card identities paint the same wave.',
+      );
       expect(
         tester.getRect(
           find.byKey(
@@ -773,6 +901,11 @@ void main() {
         closeTo(animatedLater, .01),
         reason: 'Changing selection must not reset the shared wave phase.',
       );
+      expect(
+        _balanceCarouselWaveGeometry(tester, 'top-category'),
+        categoryGeometry,
+        reason: 'Center/side position must not replace a card wave identity.',
+      );
 
       settings.value =
           (settings.value as dynamic).copyWith(
@@ -785,6 +918,11 @@ void main() {
         phase('top-category'),
         0,
         reason: 'Disabling animation must restore the authored static wave.',
+      );
+
+      settings.value = settings.value.copyWith(
+        balanceCarouselWaveAnimationEnabled: true,
+        revision: 3,
       );
 
       await tester.pumpWidget(
@@ -1541,6 +1679,22 @@ void main() {
     },
   );
 
+  test(
+    'BWA-PERF: one carousel clock drives paint-only decoration without per-card builders',
+    () {
+      final source = File(
+        'lib/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart',
+      ).readAsStringSync();
+      expect(source.split('AnimationController(').length - 1, 1);
+      expect(source, contains('super(repaint: phaseClock)'));
+      expect(source, contains('RepaintBoundary('));
+      expect(source, isNot(contains('AnimatedBuilder(')));
+      expect(source, contains('final Path _path = Path();'));
+      expect(source, contains('final Paint _paint = Paint()'));
+      expect(source, isNot(contains('final path = Path(')));
+    },
+  );
+
   testWidgets(
     'BALANCE-HEADER/CAROUSEL: prepared net uses the Header detail seam and the upper card owns one shared-engine eleven-topic rail',
     (tester) async {
@@ -2277,7 +2431,7 @@ void main() {
         find.byKey(
           const ValueKey<String>('balance-header-history-chart-time-label-0'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       final initial = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
         find.byType(CenteredCarousel<BalanceCarouselCard>),
@@ -2302,6 +2456,14 @@ void main() {
           modePresentation.geometry.subheaderOneBounds.top -
           modePresentation.geometry.summaryBounds.bottom;
 
+      settings.setTimeLabels(BalanceHeaderChartTimeLabels.visible);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-header-history-chart-time-label-0'),
+        ),
+        findsOneWidget,
+      );
       settings.setTimeLabels(BalanceHeaderChartTimeLabels.hidden);
       await tester.pump();
       final fixed = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
@@ -2831,19 +2993,7 @@ List<double> _balanceCarouselWaveGeometry(WidgetTester tester, String cardId) {
               )
               .painter!
           as dynamic;
-  final spec = painter.spec as dynamic;
-  return <double>[
-    spec.waveLeadingHeightFactor as double,
-    spec.waveFirstControlWidthFactor as double,
-    spec.waveFirstControlHeightFactor as double,
-    spec.waveSecondControlWidthFactor as double,
-    spec.waveSecondControlHeightFactor as double,
-    spec.waveFirstCurveEndWidthFactor as double,
-    spec.waveTrailingHeightFactor as double,
-    spec.waveTrailingFirstControlWidthFactor as double,
-    spec.waveTrailingFirstControlHeightFactor as double,
-    spec.waveTrailingSecondControlWidthFactor as double,
-    spec.waveTrailingSecondControlHeightFactor as double,
-    spec.waveTrailingEndHeightFactor as double,
-  ];
+  return List<double>.from(
+    (painter.geometry as dynamic).normalizedControlPoints as List<double>,
+  );
 }
