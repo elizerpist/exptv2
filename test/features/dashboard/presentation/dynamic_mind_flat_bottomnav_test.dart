@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_layout_frame.dart';
@@ -334,10 +336,41 @@ void main() {
     });
 
     test(
-      'FBS-RED-CLAMP: the body extension is clamped by the count-safe Ledger geometry, not the FAB artwork envelope',
+      'FBS-RED-CLAMP: the body extension never exceeds the released contained-FAB envelope or count-safe clearance',
       () {
+        const standardViewport = Size(428, 926);
+        final standardBaseline = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+        );
+        final standard = layoutFor(
+          settingsFor(),
+          deviceViewport: standardViewport,
+        );
+        final independentlyCalculatedCountSafeGain = math.max(
+          0.0,
+          standard.physicalBottomNavTop -
+              (standardBaseline.logBoxHeaderBounds.top +
+                  standard.scaledLedgerHeaderTopInset +
+                  standard.scaledLedgerCountHeight) -
+              math.max(
+                standard.scaledCountToSearchGap,
+                standard.scaledLedgerCountHeight,
+              ),
+        );
+        expect(
+          standard.countSafeGain,
+          closeTo(independentlyCalculatedCountSafeGain, .001),
+        );
+        expect(standard.releasedFlatBottomNavEnvelopeGain, greaterThan(0));
+        expect(standard.countSafeGain, greaterThan(0));
+        expect(standard.desiredGain, greaterThan(0));
+        expect(standard.delta, greaterThan(0));
+
         for (final deviceViewport in <Size>[
-          const Size(428, 926),
+          standardViewport,
           viewport,
           const Size(360, 780),
         ]) {
@@ -345,21 +378,35 @@ void main() {
             settingsFor(),
             deviceViewport: deviceViewport,
           );
+          final expectedReleasedEnvelope =
+              DashboardFlatBottomNavStretchLayout
+                  .referenceRaisedFabOverflowTop *
+              deviceViewport.width /
+              DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
+          expect(
+            layout.releasedFlatBottomNavEnvelopeGain,
+            closeTo(expectedReleasedEnvelope, .001),
+          );
+          expect(
+            layout.availableGain,
+            closeTo(
+              math.min(
+                layout.releasedFlatBottomNavEnvelopeGain,
+                layout.countSafeGain,
+              ),
+              .001,
+            ),
+          );
           expect(
             layout.delta,
-            closeTo(layout.desiredGain, .001),
-            reason:
-                'The count row and its authored gap define the usable body '
-                'extent. A 24px FAB-artwork offset is not a Dashboard '
-                'geometry clamp.',
+            closeTo(math.min(layout.availableGain, layout.desiredGain), .001),
           );
-          expect(layout.availableGain, closeTo(layout.desiredGain, .001));
         }
       },
     );
 
     test(
-      'FBS-03: both stretch targets use the count-safe clamped real-body gain',
+      'FBS-03: both stretch targets use the released-envelope and count-safe clamped real-body gain',
       () {
         for (final stretch in <DashboardFlatBottomNavBodyStretch>[
           DashboardFlatBottomNavBodyStretch.expandedHeader,
@@ -369,6 +416,12 @@ void main() {
           for (final deviceViewport in <Size>[const Size(428, 926), viewport]) {
             final layout = layoutFor(shell, deviceViewport: deviceViewport);
             for (final mode in DashboardModeSpec.values) {
+              final baseline = DashboardGeometryResolver.resolve(
+                metrics: metrics,
+                mode: mode,
+                collapseProgress: 0,
+                isRailExpanded: false,
+              );
               final frame = DashboardGeometryResolver.resolve(
                 metrics: metrics,
                 mode: mode,
@@ -389,19 +442,30 @@ void main() {
               expect(
                 layout.delta,
                 closeTo(
-                  layout.availableGain < layout.desiredGain
-                      ? layout.availableGain
-                      : layout.desiredGain,
+                  math.min(layout.availableGain, layout.desiredGain),
                   .001,
                 ),
               );
-              expect(searchPillTop, closeTo(layout.physicalBottomNavTop, .001));
+              expect(
+                layout.delta,
+                lessThanOrEqualTo(layout.releasedFlatBottomNavEnvelopeGain),
+              );
+              expect(
+                searchPillTop,
+                closeTo(
+                  layout.searchPillTopFor(
+                        logBoxHeaderTop: baseline.logBoxHeaderBounds.top,
+                      ) +
+                      layout.delta,
+                  .001,
+                ),
+              );
               expect(
                 layout.physicalBottomNavTop -
                     layout.countBottomFor(
                       logBoxHeaderTop: frame.logBoxHeaderBounds.top,
                     ),
-                closeTo(layout.scaledCountToSearchGap, .001),
+                greaterThanOrEqualTo(layout.scaledLedgerCountHeight),
               );
             }
           }
@@ -500,7 +564,7 @@ void main() {
     );
 
     test(
-      'FBS-06: integrated handles and seamless Mind retain count-safe Ledger placement',
+      'FBS-06: integrated handles and seamless Mind retain the global released-envelope clamp',
       () {
         const shell = DashboardShellPresentationSettings(
           bottomNavEdgeShape: DashboardBottomNavEdgeShape.straight,
@@ -537,18 +601,20 @@ void main() {
             seamlessHeaderContent: configuration.seamless,
             principalModeContentExtraHeight: layout.delta,
           );
-          expect(
-            layout.searchPillTopFor(
-              logBoxHeaderTop: stretched.logBoxHeaderBounds.top,
-            ),
-            closeTo(layout.physicalBottomNavTop, .001),
+          final searchPillTop = layout.searchPillTopFor(
+            logBoxHeaderTop: stretched.logBoxHeaderBounds.top,
           );
+          expect(
+            layout.delta,
+            lessThanOrEqualTo(layout.releasedFlatBottomNavEnvelopeGain),
+          );
+          expect(searchPillTop, lessThanOrEqualTo(layout.physicalBottomNavTop));
           expect(
             layout.physicalBottomNavTop -
                 layout.countBottomFor(
                   logBoxHeaderTop: stretched.logBoxHeaderBounds.top,
                 ),
-            closeTo(layout.scaledCountToSearchGap, .001),
+            greaterThanOrEqualTo(layout.scaledMinimumCountToNavClearance),
           );
         }
       },

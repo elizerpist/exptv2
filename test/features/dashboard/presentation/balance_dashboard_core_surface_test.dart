@@ -395,6 +395,96 @@ void main() {
   );
 
   testWidgets(
+    'BCP-RED-01: every carousel topic uses the same professional leading slot and copy hierarchy',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      addTearDown(linked.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(
+                metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                  const Size(412, 892),
+                ),
+              ),
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final cards =
+          (carousel.dataSource!
+                  as CyclicCarouselDataSource<BalanceCarouselCard>)
+              .items;
+      for (var index = 0; index < cards.length; index += 1) {
+        final card = cards[index];
+        carousel.controller.jumpToIndex(index);
+        await tester.pump();
+        final title = tester.widget<Text>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-title-${card.id}'),
+          ),
+        );
+        final primary = tester.widget<Text>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-primary-${card.id}'),
+          ),
+        );
+        final secondary = tester.widget<Text>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-secondary-${card.id}'),
+          ),
+        );
+        final visual = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-visual-${card.id}'),
+          ),
+        );
+        final cardRect = tester.getRect(
+          find.byKey(ValueKey<String>('balance-carousel-card-${card.id}')),
+        );
+        final titleRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-title-${card.id}'),
+          ),
+        );
+        final primaryRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-primary-${card.id}'),
+          ),
+        );
+        final secondaryRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-secondary-${card.id}'),
+          ),
+        );
+
+        expect(visual.width, greaterThanOrEqualTo(40));
+        expect(visual.height, greaterThanOrEqualTo(40));
+        expect(title.style!.fontSize, greaterThanOrEqualTo(11));
+        expect(primary.style!.fontSize, greaterThanOrEqualTo(14));
+        expect(secondary.style!.fontSize, greaterThanOrEqualTo(11));
+        expect(titleRect.top - cardRect.top, greaterThanOrEqualTo(12));
+        expect(visual.left - cardRect.left, greaterThanOrEqualTo(14));
+        expect(titleRect.bottom, lessThanOrEqualTo(visual.top));
+        expect(visual.right, lessThan(primaryRect.left));
+        expect(primaryRect.top, lessThan(secondaryRect.top));
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'BALANCE-LOWER-ENVELOPE: the existing lower card retains its geometry for Cashflow',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(_balance());

@@ -109,7 +109,7 @@ void main() {
   );
 
   testWidgets(
-    'FBS-RED-E2E: the real app shell keeps Ledger count visible while the SearchPill meets a contained flat BottomNav',
+    'FBS-RED-E2E: the real app shell gives Ledger count priority over exact SearchPill occlusion at a contained flat BottomNav',
     (tester) async {
       final shell = DashboardShellPresentationController();
       addTearDown(shell.dispose);
@@ -128,6 +128,9 @@ void main() {
         find.byKey(const ValueKey('ready-core-dashboard')),
         findsOneWidget,
       );
+      final baselineSearchTop = tester
+          .getRect(find.byKey(const ValueKey('dashboard-logbox-search-pill')))
+          .top;
       for (final stretch in <DashboardFlatBottomNavBodyStretch>[
         DashboardFlatBottomNavBodyStretch.expandedHeader,
         DashboardFlatBottomNavBodyStretch.modeContent,
@@ -150,18 +153,25 @@ void main() {
         );
         expect(
           search.top,
-          closeTo(navTop, .5),
+          lessThanOrEqualTo(navTop),
           reason:
-              'The actual shell/nav and CoreDashboard must share one body '
-              'geometry contract; SearchPill starts at the flat bar edge.',
+              'The mounted SearchPill is pushed as far down as the count-safe '
+              'geometry permits, but never receives priority over the count.',
+        );
+        expect(
+          search.top - baselineSearchTop,
+          greaterThan(0),
+          reason:
+              'An eligible contained-flat BottomNav must apply a real body '
+              'gain, not merely report a zero-gain-safe layout.',
         );
         expect(count.bottom, lessThanOrEqualTo(navTop));
         expect(
           navTop - count.bottom,
-          greaterThanOrEqualTo(10),
+          greaterThanOrEqualTo(count.height),
           reason:
-              'The real visible count row retains its authored breathing gap '
-              'instead of being sacrificed to hide SearchPill.',
+              'The real visible count row retains a full count-lane '
+              'clearance instead of being sacrificed to hide SearchPill.',
         );
         expect(tester.takeException(), isNull);
       }

@@ -27,12 +27,15 @@ final class DashboardFlatBottomNavStretchLayout {
   const DashboardFlatBottomNavStretchLayout._({
     required this.isEligible,
     required this.physicalBottomNavTop,
+    required this.releasedFlatBottomNavEnvelopeGain,
+    required this.countSafeGain,
     required this.availableGain,
     required this.desiredGain,
     required this.delta,
     required this.scaledLedgerHeaderTopInset,
     required this.scaledLedgerCountHeight,
     required this.scaledCountToSearchGap,
+    required this.scaledMinimumCountToNavClearance,
   });
 
   static const referenceBottomNavWidth = 428.0;
@@ -42,24 +45,39 @@ final class DashboardFlatBottomNavStretchLayout {
   final bool isEligible;
   final double physicalBottomNavTop;
 
-  /// The greatest gain that preserves the Ledger count and its authored
-  /// breathing gap immediately above the physical flat-navigation edge.
+  /// The exact vertical envelope released by replacing the raised BNB FAB
+  /// with the contained-flat FAB at this physical BottomNav width.
   ///
-  /// It is deliberately resolved from the live Dashboard and BottomNav
-  /// coordinate systems rather than assuming the BNB's 24 reference-pixel
-  /// FAB protrusion is the usable body extent.
+  /// It is zero while the shell configuration is ineligible, so a stored
+  /// target cannot move the body outside the straight + contained-flat mode.
+  final double releasedFlatBottomNavEnvelopeGain;
+
+  /// The greatest downstream gain that keeps the rendered Ledger count and
+  /// its required breathing clearance above the physical navigation edge.
+  final double countSafeGain;
+
+  /// The usable gain: the smaller of the actually released Flat BottomNav
+  /// envelope and the count-safe gain. This prevents the Dashboard from
+  /// consuming arbitrary remaining viewport space merely because it happens
+  /// to be free below the Ledger.
   final double availableGain;
 
   /// The gain that would place the real SearchPill origin at the nav edge.
   final double desiredGain;
 
-  /// The safe gain applied to Dashboard geometry: never more than the
-  /// count-safe available extent, so the SearchPill starts at the nav edge
-  /// while the transaction count stays visible above it.
+  /// The safe gain applied to Dashboard geometry: never more than both the
+  /// released envelope and the count-safe extent. On constrained viewports
+  /// this intentionally prefers a small SearchPill remainder over clipping
+  /// the count row.
   final double delta;
   final double scaledLedgerHeaderTopInset;
   final double scaledLedgerCountHeight;
   final double scaledCountToSearchGap;
+
+  /// The count text owns at least one whole rendered count-lane of clearance
+  /// above a flat navigation bar. This makes the physical count row more
+  /// important than perfect SearchPill occlusion on constrained viewports.
+  final double scaledMinimumCountToNavClearance;
 
   double searchPillTopFor({required double logBoxHeaderTop}) =>
       logBoxHeaderTop +
@@ -82,6 +100,7 @@ final class DashboardFlatBottomNavStretchLayout {
         settings.bottomNavLayoutStyle ==
             DashboardBottomNavLayoutStyle.containedFlat;
     final bottomNavScale = viewport.width / referenceBottomNavWidth;
+    final releasedEnvelope = referenceRaisedFabOverflowTop * bottomNavScale;
     final physicalTop =
         viewport.height -
         safeBottomInset -
@@ -93,19 +112,36 @@ final class DashboardFlatBottomNavStretchLayout {
     final gap = DashboardLogBoxTokens.ledgerCountToSearchGap * dashboardScale;
     final currentSearchTop = logBoxHeaderTop + inset + count + gap;
     final desiredGain = math.max(0.0, physicalTop - currentSearchTop);
-    // SearchPill begins after the count's authored gap. Therefore this is the
-    // exact maximum downstream shift that keeps the count row fully visible
-    // and leaves that gap above the stationary physical BottomNav.
-    final countSafeGain = math.max(0.0, physicalTop - currentSearchTop);
+    // SearchPill begins after the count's authored gap. Keeping its top flush
+    // with the navigation edge therefore puts the count just one small gap
+    // above the bar, which is too fragile on physical devices. The count owns
+    // a full lane clearance; if that conflicts with SearchPill occlusion, the
+    // latter is allowed to retain only the minimal visible remainder.
+    final minimumCountToNavClearance = math.max(gap, count);
+    final countSafeGain = math.max(
+      0.0,
+      physicalTop -
+          (logBoxHeaderTop + inset + count) -
+          minimumCountToNavClearance,
+    );
+    final effectiveReleasedEnvelope = eligible ? releasedEnvelope : 0.0;
+    final effectiveCountSafeGain = eligible ? countSafeGain : 0.0;
+    final availableGain = math.min(
+      effectiveReleasedEnvelope,
+      effectiveCountSafeGain,
+    );
     return DashboardFlatBottomNavStretchLayout._(
       isEligible: eligible,
       physicalBottomNavTop: physicalTop,
-      availableGain: eligible ? countSafeGain : 0,
+      releasedFlatBottomNavEnvelopeGain: effectiveReleasedEnvelope,
+      countSafeGain: effectiveCountSafeGain,
+      availableGain: availableGain,
       desiredGain: eligible ? desiredGain : 0,
-      delta: eligible ? math.min(countSafeGain, desiredGain) : 0,
+      delta: eligible ? math.min(availableGain, desiredGain) : 0,
       scaledLedgerHeaderTopInset: inset,
       scaledLedgerCountHeight: count,
       scaledCountToSearchGap: gap,
+      scaledMinimumCountToNavClearance: minimumCountToNavClearance,
     );
   }
 }

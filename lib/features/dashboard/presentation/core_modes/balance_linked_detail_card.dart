@@ -273,6 +273,7 @@ final class _RankedDetailState extends State<_RankedDetail> {
         ),
         _RankDetailKind.partner => _PartnerInsightDetail(
           insight: widget.partnerInsights[selected]!,
+          visual: widget.ranks.firstWhere((item) => item.id == selected),
           onBack: _clearSelection,
         ),
       };
@@ -513,8 +514,7 @@ String _rankMetadata({
   required _RankDetailKind kind,
 }) => switch (kind) {
   _RankDetailKind.category => '$rank. hely',
-  _RankDetailKind.partner =>
-    '${item.transactionCount} tranzakció · $rank. hely',
+  _RankDetailKind.partner => '$rank. hely',
 };
 
 final class _RankedCopy extends StatelessWidget {
@@ -661,34 +661,85 @@ final class _CategoryInsightDetail extends StatelessWidget {
   final VoidCallback onBack;
 
   @override
+  Widget build(BuildContext context) => _RankedEntityDetailTemplate(
+    entityKey: 'category',
+    label: insight.label,
+    visual: visual,
+    medianAmountMinor: insight.roundedMedianAmountMinor,
+    transactionCount: insight.transactionCount,
+    activeDayCount: insight.activeDayCount,
+    onBack: onBack,
+    lowerSectionTitle: 'Tipikus tranzakcióméret',
+    lowerContentBuilder: (context, compact, accentColor) =>
+        insight.temporalBuckets.isEmpty && insight.usesDayLowSampleFallback
+        ? Align(
+            alignment: Alignment.topLeft,
+            child: _MetricLine(
+              key: const ValueKey<String>(
+                'balance-category-insight-day-fallback',
+              ),
+              text:
+                  'Min. ${DashboardPreparedFormatter.amountMinor(insight.minimumAmountMinor)} · Medián ${DashboardPreparedFormatter.amountMinor(insight.roundedMedianAmountMinor)} · Max. ${DashboardPreparedFormatter.amountMinor(insight.maximumAmountMinor)}',
+            ),
+          )
+        : _TransactionSizeDistribution(
+            distribution: insight.distribution,
+            accentColor: accentColor,
+          ),
+  );
+}
+
+typedef _RankedEntityLowerContentBuilder =
+    Widget Function(BuildContext context, bool compact, Color accentColor);
+
+/// The sole page-two layout system for both Balance rank concepts. Category
+/// and partner values differ, but their local-detail hierarchy and bounds do
+/// not: a change here cannot make either topic drift into a second detail UI.
+final class _RankedEntityDetailTemplate extends StatelessWidget {
+  const _RankedEntityDetailTemplate({
+    required this.entityKey,
+    required this.label,
+    required this.visual,
+    required this.medianAmountMinor,
+    required this.transactionCount,
+    required this.activeDayCount,
+    required this.onBack,
+    required this.lowerSectionTitle,
+    required this.lowerContentBuilder,
+  });
+
+  final String entityKey;
+  final String label;
+  final DashboardBalanceRankedItem visual;
+  final int medianAmountMinor;
+  final int transactionCount;
+  final int activeDayCount;
+  final VoidCallback onBack;
+  final String lowerSectionTitle;
+  final _RankedEntityLowerContentBuilder lowerContentBuilder;
+
+  String _key(String suffix) => 'balance-$entityKey-insight-$suffix';
+
+  @override
   Widget build(BuildContext context) {
-    final categoryColor = _categoryAccentColor(context, visual.categoryColorId);
+    final accentColor = _categoryAccentColor(context, visual.categoryColorId);
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The real lower Balance slot is ~210px. Preserve the shared master
-        // title/leader bands there, then compact only supporting spacing so
-        // the chart still occupies the remaining lower surface.
         final compact = constraints.maxHeight <= 230;
         return KeyedSubtree(
-          key: const ValueKey<String>('balance-category-insight-detail'),
+          key: ValueKey<String>(_key('detail')),
           child: Padding(
-            // Matches the master page title rhythm exactly: the detail's return
-            // row occupies the same 20px title lane at the same 12px top inset.
             padding: EdgeInsets.fromLTRB(14, 12, 14, compact ? 2 : 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 SizedBox(
-                  key: const ValueKey<String>(
-                    'balance-category-insight-return-row',
-                  ),
+                  key: ValueKey<String>(_key('return-row')),
                   height: _RankedDetailPageVisualSpec.titleRowHeight,
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(
-                      key: const ValueKey<String>(
-                        'balance-category-insight-back',
-                      ),
+                      key: ValueKey<String>(_key('back')),
                       onPressed: onBack,
                       style: TextButton.styleFrom(
                         minimumSize: Size.zero,
@@ -699,12 +750,12 @@ final class _CategoryInsightDetail extends StatelessWidget {
                       icon: Icon(
                         Icons.arrow_back_rounded,
                         size: 18,
-                        color: categoryColor,
+                        color: accentColor,
                       ),
                       label: Text(
                         'Vissza',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: categoryColor,
+                          color: accentColor,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -715,17 +766,13 @@ final class _CategoryInsightDetail extends StatelessWidget {
                   height: _RankedDetailPageVisualSpec.titleToHeroGap,
                 ),
                 SizedBox(
-                  key: const ValueKey<String>(
-                    'balance-category-insight-hero-row',
-                  ),
+                  key: ValueKey<String>(_key('hero-row')),
                   height: _RankedOverviewVisualSpec.leaderHeight,
                   child: Row(
                     children: <Widget>[
                       BalanceCategoryVisualBadge(
-                        key: const ValueKey<String>(
-                          'balance-category-insight-avatar',
-                        ),
-                        semanticLabel: insight.label,
+                        key: ValueKey<String>(_key('avatar')),
+                        semanticLabel: label,
                         categoryColorId: visual.categoryColorId,
                         categoryIconId: visual.categoryIconId,
                         size: 46,
@@ -739,7 +786,7 @@ final class _CategoryInsightDetail extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Text(
-                              insight.label,
+                              label,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleSmall
@@ -749,66 +796,49 @@ final class _CategoryInsightDetail extends StatelessWidget {
                                   ),
                             ),
                             const SizedBox(height: 4),
-                            _CategoryMedianPill(color: categoryColor),
+                            _EntityMedianPill(
+                              pillKey: ValueKey<String>(_key('median-pill')),
+                              color: accentColor,
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
-                      _CategoryMedianAmount(
-                        amountMinor: insight.roundedMedianAmountMinor,
-                        color: categoryColor,
+                      _EntityMedianAmount(
+                        textKey: ValueKey<String>(_key('median')),
+                        amountMinor: medianAmountMinor,
+                        color: accentColor,
                       ),
                     ],
                   ),
                 ),
                 SizedBox(height: compact ? 3 : 6),
                 Wrap(
-                  key: const ValueKey<String>(
-                    'balance-category-insight-metrics',
-                  ),
+                  key: ValueKey<String>(_key('metrics')),
                   spacing: 7,
                   runSpacing: 4,
                   children: <Widget>[
-                    _CategoryMetricPill(
-                      text: '${insight.transactionCount} tranzakció',
+                    _EntityMetricPill(
+                      text: '$transactionCount tranzakció',
                       compact: compact,
                     ),
-                    _CategoryMetricPill(
-                      text: '${insight.activeDayCount} aktív nap',
+                    _EntityMetricPill(
+                      text: '$activeDayCount aktív nap',
                       compact: compact,
                     ),
                   ],
                 ),
                 Padding(
                   padding: EdgeInsets.symmetric(vertical: compact ? 3 : 8),
-                  child: Divider(height: 1),
+                  child: const Divider(height: 1),
                 ),
-                _DetailSectionTitle(
-                  'Tipikus tranzakcióméret',
-                  compact: compact,
-                ),
+                _DetailSectionTitle(lowerSectionTitle, compact: compact),
                 SizedBox(height: compact ? 2 : 4),
                 Expanded(
-                  child:
-                      insight.temporalBuckets.isEmpty &&
-                          insight.usesDayLowSampleFallback
-                      ? Align(
-                          alignment: Alignment.topLeft,
-                          child: _MetricLine(
-                            key: const ValueKey<String>(
-                              'balance-category-insight-day-fallback',
-                            ),
-                            text:
-                                'Min. ${DashboardPreparedFormatter.amountMinor(insight.minimumAmountMinor)} · Medián ${DashboardPreparedFormatter.amountMinor(insight.roundedMedianAmountMinor)} · Max. ${DashboardPreparedFormatter.amountMinor(insight.maximumAmountMinor)}',
-                          ),
-                        )
-                      : _TransactionSizeDistribution(
-                          key: const ValueKey<String>(
-                            'balance-category-insight-distribution',
-                          ),
-                          distribution: insight.distribution,
-                          accentColor: categoryColor,
-                        ),
+                  child: KeyedSubtree(
+                    key: ValueKey<String>(_key('distribution')),
+                    child: lowerContentBuilder(context, compact, accentColor),
+                  ),
                 ),
               ],
             ),
@@ -830,9 +860,14 @@ Color _categoryAccentColor(BuildContext context, String categoryColorId) =>
       CategoryColorCatalog.handleOf(categoryColorId),
     ).middleColor;
 
-final class _CategoryMedianAmount extends StatelessWidget {
-  const _CategoryMedianAmount({required this.amountMinor, required this.color});
+final class _EntityMedianAmount extends StatelessWidget {
+  const _EntityMedianAmount({
+    required this.textKey,
+    required this.amountMinor,
+    required this.color,
+  });
 
+  final Key textKey;
   final int amountMinor;
   final Color color;
 
@@ -843,7 +878,7 @@ final class _CategoryMedianAmount extends StatelessWidget {
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerRight,
       child: Text(
-        key: const ValueKey<String>('balance-category-insight-median'),
+        key: textKey,
         DashboardPreparedFormatter.amountMinor(amountMinor),
         maxLines: 1,
         softWrap: false,
@@ -860,14 +895,15 @@ final class _CategoryMedianAmount extends StatelessWidget {
   );
 }
 
-final class _CategoryMedianPill extends StatelessWidget {
-  const _CategoryMedianPill({required this.color});
+final class _EntityMedianPill extends StatelessWidget {
+  const _EntityMedianPill({required this.pillKey, required this.color});
 
+  final Key pillKey;
   final Color color;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-    key: const ValueKey<String>('balance-category-insight-median-pill'),
+    key: pillKey,
     decoration: BoxDecoration(
       color: color,
       borderRadius: BorderRadius.circular(99),
@@ -886,8 +922,8 @@ final class _CategoryMedianPill extends StatelessWidget {
   );
 }
 
-final class _CategoryMetricPill extends StatelessWidget {
-  const _CategoryMetricPill({required this.text, this.compact = false});
+final class _EntityMetricPill extends StatelessWidget {
+  const _EntityMetricPill({required this.text, this.compact = false});
 
   final String text;
   final bool compact;
@@ -912,152 +948,123 @@ final class _CategoryMetricPill extends StatelessWidget {
 }
 
 final class _PartnerInsightDetail extends StatelessWidget {
-  const _PartnerInsightDetail({required this.insight, required this.onBack});
+  const _PartnerInsightDetail({
+    required this.insight,
+    required this.visual,
+    required this.onBack,
+  });
 
   final DashboardBalancePartnerInsight insight;
+  final DashboardBalanceRankedItem visual;
   final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) => _RankedEntityDetailTemplate(
+    entityKey: 'partner',
+    label: insight.label,
+    visual: visual,
+    medianAmountMinor: insight.relationship.roundedMedianAmountMinor,
+    transactionCount: insight.transactionCount,
+    activeDayCount: insight.activeDayCount,
+    onBack: onBack,
+    lowerSectionTitle: 'Tipikus tranzakciósáv',
+    lowerContentBuilder: (context, compact, accentColor) =>
+        _PartnerTransactionRangeDistribution(
+          relationship: insight.relationship,
+          latestScopeOccurrence: insight.latestScopeOccurrence,
+          accentColor: accentColor,
+          compact: compact,
+        ),
+  );
+}
+
+/// Partner details do not own the category distribution counts, so they show
+/// the already-projected Q1/median/Q3/latest transaction range in the exact
+/// same lower template envelope. No value is re-ranked or inferred here.
+final class _PartnerTransactionRangeDistribution extends StatelessWidget {
+  const _PartnerTransactionRangeDistribution({
+    required this.relationship,
+    required this.latestScopeOccurrence,
+    required this.accentColor,
+    required this.compact,
+  });
+
+  final DashboardBalancePartnerRelationship relationship;
+  final DashboardBalanceEntityOccurrence latestScopeOccurrence;
+  final Color accentColor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final relationship = insight.relationship;
-    final cadence = relationship.roundedTypicalCadenceMinutes;
-    return _EntityDetailScaffold(
-      listKey: const ValueKey<String>('balance-partner-insight-detail'),
-      backKey: const ValueKey<String>('balance-partner-insight-back'),
-      onBack: onBack,
-      title: insight.label,
-      children: <Widget>[
-        _DetailHero(
-          amountMinor: insight.amountMinor,
-          subtitle: '${insight.transactionCount} tranzakció',
-        ),
-        _MetricLine(
-          key: const ValueKey<String>('balance-partner-insight-metrics'),
-          text:
-              '${insight.activeDayCount} aktív nap · Legutóbbi: ${_formatOccurrenceDate(insight.latestScopeOccurrence)}',
-        ),
-        const SizedBox(height: 14),
-        const _DetailSectionTitle('Aktivitás az időszakban'),
-        _TemporalProfile(buckets: insight.temporalBuckets, money: false),
-        const SizedBox(height: 14),
-        const _DetailSectionTitle('Tipikus idő két tranzakció között'),
-        _MetricLine(
-          key: const ValueKey<String>('balance-partner-insight-cadence'),
-          text: cadence == null
-              ? 'Nincs elég ritmusadat'
-              : _formatCadence(cadence),
-        ),
-        if (relationship.cadenceOccurrences.isNotEmpty)
-          _CadenceStrip(occurrences: relationship.cadenceOccurrences),
-        const SizedBox(height: 14),
-        const _DetailSectionTitle('Tipikus tranzakció'),
-        _MetricLine(
-          key: const ValueKey<String>('balance-partner-insight-amount-band'),
-          text:
-              '${DashboardPreparedFormatter.amountMinor(relationship.firstQuartileAmountMinor)} — ${DashboardPreparedFormatter.amountMinor(relationship.thirdQuartileAmountMinor)} · medián ${DashboardPreparedFormatter.amountMinor(relationship.roundedMedianAmountMinor)}',
-        ),
-        const SizedBox(height: 14),
-        const _DetailSectionTitle('Kapcsolati előzmény · teljes időszak'),
-        _MetricLine(
-          key: const ValueKey<String>('balance-partner-insight-history'),
-          text:
-              'Első: ${_formatOccurrenceDate(relationship.firstOccurrence)} · Legutóbbi: ${_formatOccurrenceDate(relationship.latestOccurrence)} · Összesen: ${relationship.allHistoryTransactionCount} tranzakció',
-        ),
-        const SizedBox(height: 14),
-        const _DetailSectionTitle('Legutóbbi előfordulások'),
-        _OccurrenceList(
-          occurrences: insight.recentScopeOccurrences,
-          oldestFirst: false,
-        ),
-      ],
+    final labels = <String>['Q1', 'Medián', 'Q3', 'Utolsó'];
+    final values = <int>[
+      relationship.firstQuartileAmountMinor,
+      relationship.roundedMedianAmountMinor,
+      relationship.thirdQuartileAmountMinor,
+      latestScopeOccurrence.amountMinor.abs(),
+    ];
+    final opacities = <double>[.32, .56, .78, .62];
+    return Semantics(
+      label: 'Partner tipikus tranzakciósáv: ${values.join(', ')}',
+      child: Column(
+        mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+        mainAxisAlignment: compact
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.spaceEvenly,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              for (var index = 0; index < values.length; index += 1)
+                Expanded(
+                  child: Container(
+                    height: compact ? 10 : 14,
+                    margin: EdgeInsets.only(
+                      right: index == values.length - 1 ? 0 : 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: opacities[index]),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          Row(
+            children: <Widget>[
+              for (final label in labels)
+                Expanded(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: FluviVisualTokens.textSecondary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (!compact)
+            Row(
+              children: <Widget>[
+                for (final value in values)
+                  Expanded(
+                    child: Text(
+                      DashboardPreparedFormatter.compactAmountMinor(value),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: FluviVisualTokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
     );
   }
-}
-
-final class _EntityDetailScaffold extends StatelessWidget {
-  const _EntityDetailScaffold({
-    required this.listKey,
-    required this.backKey,
-    required this.onBack,
-    required this.title,
-    required this.children,
-  });
-
-  final Key listKey;
-  final Key backKey;
-  final VoidCallback onBack;
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-    child: ListView(
-      key: listKey,
-      padding: EdgeInsets.zero,
-      children: <Widget>[
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            key: backKey,
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_rounded, size: 17),
-            label: const Text('Vissza'),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: FluviVisualTokens.textPrimary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: children,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-final class _DetailHero extends StatelessWidget {
-  const _DetailHero({required this.amountMinor, required this.subtitle});
-
-  final int amountMinor;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: '${DashboardPreparedFormatter.amountMinor(amountMinor)}, $subtitle',
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          DashboardPreparedFormatter.amountMinor(amountMinor),
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: FluviVisualTokens.textPrimary,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        Text(
-          subtitle,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: FluviVisualTokens.textSecondary,
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 final class _DetailSectionTitle extends StatelessWidget {
@@ -1097,76 +1104,8 @@ final class _MetricLine extends StatelessWidget {
   );
 }
 
-final class _TemporalProfile extends StatelessWidget {
-  const _TemporalProfile({required this.buckets, required this.money});
-
-  final List<DashboardBalanceEntityTemporalBucket> buckets;
-  final bool money;
-
-  @override
-  Widget build(BuildContext context) {
-    if (buckets.isEmpty) {
-      return const _MetricLine(text: 'Nincs külön periódusos bontás');
-    }
-    final extent = buckets.fold<int>(
-      0,
-      (max, item) => item.value > max ? item.value : max,
-    );
-    return Column(
-      children: <Widget>[
-        for (final bucket in buckets)
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Row(
-              children: <Widget>[
-                SizedBox(
-                  width: 36,
-                  child: Text(
-                    bucket.label,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: FluviVisualTokens.textSecondary,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      minHeight: 5,
-                      value: extent == 0 ? 0 : bucket.value / extent,
-                      backgroundColor: FluviVisualTokens.border.withValues(
-                        alpha: .45,
-                      ),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        FluviVisualTokens.textPrimary.withValues(alpha: .58),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 68,
-                  child: Text(
-                    money
-                        ? DashboardPreparedFormatter.amountMinor(bucket.value)
-                        : '${bucket.value} db',
-                    textAlign: TextAlign.end,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: FluviVisualTokens.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 final class _TransactionSizeDistribution extends StatelessWidget {
   const _TransactionSizeDistribution({
-    super.key,
     required this.distribution,
     required this.accentColor,
   });
@@ -1252,50 +1191,6 @@ final class _TransactionSizeDistribution extends StatelessWidget {
   }
 }
 
-final class _OccurrenceList extends StatelessWidget {
-  const _OccurrenceList({required this.occurrences, required this.oldestFirst});
-
-  final List<DashboardBalanceEntityOccurrence> occurrences;
-  final bool oldestFirst;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      for (final occurrence in occurrences)
-        _MetricLine(
-          text:
-              '${_formatOccurrenceDate(occurrence)} · ${_formatClock(occurrence.localTimeMinutes)} · ${DashboardPreparedFormatter.amountMinor(occurrence.amountMinor)}',
-        ),
-    ],
-  );
-}
-
-final class _CadenceStrip extends StatelessWidget {
-  const _CadenceStrip({required this.occurrences});
-
-  final List<DashboardBalanceEntityOccurrence> occurrences;
-
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 4,
-    runSpacing: 3,
-    children: <Widget>[
-      for (final occurrence in occurrences)
-        Chip(
-          visualDensity: VisualDensity.compact,
-          label: Text(
-            '${_formatOccurrenceDate(occurrence)} ${_formatClock(occurrence.localTimeMinutes)}',
-          ),
-        ),
-    ],
-  );
-}
-
-String _formatOccurrenceDate(DashboardBalanceEntityOccurrence occurrence) {
-  return _formatEpochDay(occurrence.epochDay);
-}
-
 String _formatEpochDay(int epochDay) {
   final date = DateTime.utc(1970).add(Duration(days: epochDay));
   return '${date.year}. ${date.month.toString().padLeft(2, '0')}. ${date.day.toString().padLeft(2, '0')}.';
@@ -1303,13 +1198,6 @@ String _formatEpochDay(int epochDay) {
 
 String _formatClock(int minutes) =>
     '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
-
-String _formatCadence(int minutes) {
-  if (minutes >= 24 * 60) {
-    return '${(minutes / (24 * 60)).toStringAsFixed(1).replaceAll('.', ',')} nap';
-  }
-  return '$minutes perc';
-}
 
 final class _BalanceDetailEmpty extends StatelessWidget {
   const _BalanceDetailEmpty({required this.label});

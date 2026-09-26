@@ -616,6 +616,144 @@ void main() {
   );
 
   testWidgets(
+    'BCP-RED-02: Top Partner is a metric twin of Top kategória on both ranked and detail pages',
+    (tester) async {
+      final categoryPresentation = _linked(
+        categoryInsights: <String, DashboardBalanceCategoryInsight>{
+          'category-0': _categoryInsight(amountMinor: 1200),
+        },
+      );
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: categoryPresentation,
+          height: 320,
+        ),
+      );
+      final categoryMasterTitle = tester.getRect(find.text('Top 5 kategória'));
+      final categoryLeader = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.pump();
+      final categoryReturn = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-category-insight-return-row'),
+        ),
+      );
+      final categoryHero = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-insight-hero-row')),
+      );
+      final categoryMetrics = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-insight-metrics')),
+      );
+      final categoryDistribution = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-category-insight-distribution'),
+        ),
+      );
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topPartner,
+          presentation: _linked(
+            partnerInsights: <String, DashboardBalancePartnerInsight>{
+              'partner-0': _partnerInsight(),
+            },
+          ),
+          height: 320,
+        ),
+      );
+      final partnerMasterTitle = tester.getRect(find.text('Top 5 partner'));
+      final partnerLeader = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-partner-0')),
+      );
+      expect(
+        partnerMasterTitle.height,
+        closeTo(categoryMasterTitle.height, .01),
+      );
+      expect(partnerLeader.height, closeTo(categoryLeader.height, .01));
+      expect(find.text('1. hely'), findsOneWidget);
+      expect(find.text('3 tranzakció · 1. hely'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-partner-0')),
+      );
+      await tester.pump();
+
+      expect(find.byType(Scrollable), findsNothing);
+      final partnerReturn = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-partner-insight-return-row'),
+        ),
+      );
+      final partnerHero = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-partner-insight-hero-row')),
+      );
+      final partnerMetrics = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-partner-insight-metrics')),
+      );
+      final partnerDistribution = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-partner-insight-distribution'),
+        ),
+      );
+      expect(partnerReturn.size, categoryReturn.size);
+      expect(partnerHero.size, categoryHero.size);
+      expect(partnerMetrics.size, categoryMetrics.size);
+      expect(partnerDistribution.size, categoryDistribution.size);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'BCP-RED-03: the shared entity-detail template fills the real 210px lower-card envelope for Top Partner too',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topPartner,
+          presentation: _linked(
+            partnerInsights: <String, DashboardBalancePartnerInsight>{
+              'partner-0': _partnerInsight(),
+            },
+          ),
+          height: 210,
+        ),
+      );
+      for (var index = 0; index < 5; index += 1) {
+        expect(
+          find.byKey(ValueKey<String>('balance-linked-rank-partner-$index')),
+          findsOneWidget,
+        );
+      }
+      expect(find.byType(Scrollable), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-partner-0')),
+      );
+      await tester.pump();
+
+      final detail = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-partner-insight-detail')),
+      );
+      final distribution = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-partner-insight-distribution'),
+        ),
+      );
+      expect(detail.bottom - distribution.bottom, lessThanOrEqualTo(12));
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-partner-insight-detail')),
+        matchesGoldenFile(
+          '../../../goldens/balance_partner_reference_detail_production_compact.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'L5-L7: category and partner detail retain their rank composition',
     (tester) async {
       await tester.pumpWidget(
@@ -659,7 +797,7 @@ void main() {
         find.byKey(const ValueKey<String>('balance-linked-detail-top-partner')),
         findsOneWidget,
       );
-      expect(find.text('5 tranzakció · 1. hely'), findsOneWidget);
+      expect(find.text('1. hely'), findsOneWidget);
     },
   );
 
@@ -803,7 +941,7 @@ void main() {
         findsOneWidget,
         reason: 'The first published count winner remains the visual leader.',
       );
-      expect(find.text('30 tranzakció · 1. hely'), findsOneWidget);
+      expect(find.text('1. hely'), findsOneWidget);
       expect(find.text('100 Ft'), findsOneWidget);
       expect(find.text('9000 Ft'), findsOneWidget);
       expect(
@@ -912,7 +1050,13 @@ void main() {
         find.byKey(const ValueKey<String>('balance-partner-insight-detail')),
         findsOneWidget,
       );
-      expect(find.textContaining('Kapcsolati előzmény'), findsOneWidget);
+      expect(find.text('MEDIÁN'), findsOneWidget);
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-partner-insight-distribution'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(
         find.byKey(const ValueKey<String>('balance-partner-insight-back')),
       );
