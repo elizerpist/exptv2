@@ -89,5 +89,5 @@ final class BalanceCarouselCard {
 
 - [x] **Step 1: Format and run all affected focused tests, full fast suite and analyzer in proot.**
 - [x] **Step 2: Reinspect both reference PNGs and the final diff; audit the no-go boundaries.**
-- [ ] **Step 3: Commit production source, push, monitor the exact GitHub Actions Human APK job, download the exact normal APK and hash it.**
-- [ ] **Step 4: Regenerate exact-source SCIP if project workflow supports it; then write and separately commit the factual journal entry.**
+- [x] **Step 3: Commit production source, push, monitor the exact GitHub Actions Human APK job, download the exact normal APK and hash it.**
+- [x] **Step 4: Regenerate exact-source SCIP if project workflow supports it; then write and separately commit the factual journal entry.**

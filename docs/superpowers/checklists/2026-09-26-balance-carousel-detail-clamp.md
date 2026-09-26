@@ -20,7 +20,7 @@ images are guidance only; the written prompt is authoritative.
 | FBC-02 | §4.1–4.3 | same plus `FluviAppShell` | Count row stays entirely above the rendered BottomNav with its breathing gap; SearchPill meets the physical nav edge. | Pure relationship test plus real app-shell rect regression for both targets. | DONE |
 | FBC-03 | §4.4–4.5 | common geometry / `DashboardMotionHost` inputs | Balance, Mind and Budget share the same clamped delta and existing target choice/motion behavior. | Cross-mode geometry regression. | DONE |
 | SCOPE-01 | §6 | all touched files | No Query, repository, financial/ranking/median logic, BottomNav behavior or carousel engine changes. | Source boundary test, diff review and focused regressions. | DONE |
-| BUILD-01 | user delivery instruction | exact final application SHA | All checklist rows are `DONE`; exact SHA is pushed; normal Human APK is built online, downloaded to `/storage/emulated/0/Download/fluvi`, and hashed. | GitHub Actions and local SHA-256. | NOT DONE |
+| BUILD-01 | user delivery instruction | exact final application SHA | All implementation rows are `DONE`; application SHA `601c3e80…` is pushed; normal Human APK was built online, downloaded to `/storage/emulated/0/Download/fluvi`, hash-checked and its embedded source identity verified. | Actions `36244018984`, APK SHA-256 and ARM64 payload inspection. | DONE |
 | PHYSICAL-01 | user delivery instruction | user device | New APK physical validation. | User-only verification. | NOT DONE |
 
 ## Architecture card
