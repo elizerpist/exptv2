@@ -22,5 +22,5 @@
 | BUDGET-04 | Avatar rail is behind unchanged avatar anchors; the center avatar alone visibly escapes the rail and the content remains a distinct detail surface | Budget surface/layout | mounted bounds/visual-layer test | DONE |
 | BUDGET-05 | Budget relationship choice is live and does not alter Mind, Balance, Budget semantics, selection or controllers | CoreDashboard/mode host | cross-mode/controller regression | DONE |
 | PERF-01 | No data/query/repository/physics owner changes | code review/protected tests | source/diff audit | DONE |
-| DEL-01 | Exact source has CI, human APK, and SCIP evidence | delivery | workflow/APK/graph | NOT DONE |
+| DEL-01 | Exact source has CI, human APK, and SCIP evidence | delivery | workflow/APK/graph | DONE — app `c7579273…`; Actions `36218541043` core/Flutter/APK gates PASS; downloaded human APK and exact-source graph `8b46e53b…`. |
 | PHYS-01 | Device visual/installation validation | user | user-only | PENDING — USER ONLY |
