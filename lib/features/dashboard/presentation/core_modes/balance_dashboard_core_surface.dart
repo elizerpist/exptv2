@@ -9,9 +9,6 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/header_cascade_motion.dart';
-import '../../../../core/assets/prepared_vector_asset_atlas.dart';
-import '../../../../core/categories/catalog/category_icon_catalog.dart';
-import '../../../../core/categories/presentation/category_icon_view.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
@@ -90,7 +87,8 @@ final class BalanceCarouselCard {
     required this.title,
     required this.amount,
     this.detail,
-    this.latestTransaction,
+    this.categoryColorId,
+    this.categoryIconId,
   });
 
   final String id;
@@ -98,7 +96,8 @@ final class BalanceCarouselCard {
   final String title;
   final String amount;
   final String? detail;
-  final DashboardBalanceScopedTransaction? latestTransaction;
+  final String? categoryColorId;
+  final String? categoryIconId;
 }
 
 List<BalanceCarouselCard> balanceCarouselCardsFor(
@@ -120,15 +119,17 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       title: 'Cashflow',
       amount: presentation == null
           ? '—'
-          : DashboardPreparedFormatter.amountMinor(
+          : DashboardPreparedFormatter.compactAmountMinor(
               presentation.cashflow.netTotalMinor,
             ),
+      detail: 'Nettó cashflow',
     ),
     BalanceCarouselCard._(
       id: 'closings',
       kind: BalanceCarouselCardKind.closings,
       title: 'Zárások',
       amount: closings == null ? '—' : balanceClosingsCompactSummary(closings),
+      detail: 'Pozitív zárások',
     ),
     BalanceCarouselCard._(
       id: 'momentum',
@@ -138,13 +139,13 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
           ? 'Nincs adat'
           : formatBalanceMomentumRate(momentum.momentum, momentum.unit),
       detail: momentum == null
-          ? null
+          ? 'Állapot nem elérhető'
           : balanceMomentumStateLabel(momentum.state),
     ),
     BalanceCarouselCard._(
       id: 'retention',
       kind: BalanceCarouselCardKind.retention,
-      title: 'Megtartási arány',
+      title: 'Megtakarítási arány',
       amount: formatBalanceRetentionPeriod(retention?.selectedPeriod),
       detail: 'bevételből megtartva',
     ),
@@ -178,7 +179,13 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       kind: BalanceCarouselCardKind.latestTransaction,
       title: 'Utolsó tranzakció',
       amount: latest?.title ?? 'Nincs tétel',
-      latestTransaction: latest,
+      detail: latest == null
+          ? 'Nincs összeg'
+          : DashboardPreparedFormatter.compactAmountMinor(
+              latest.amountMinor.abs(),
+            ),
+      categoryColorId: latest?.categoryColorId,
+      categoryIconId: latest?.categoryIconId,
     ),
     BalanceCarouselCard._(
       id: 'category-movers',
@@ -186,21 +193,36 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       title: 'Legnagyobb kategóriaváltozás',
       amount: topMover?.label ?? 'Nincs kategóriaváltozás',
       detail: topMover == null
-          ? null
-          : '${balanceCategoryMoverPercentageLabel(topMover)} · '
-                '${balanceCategoryMoverCompactComparisonLabel(moverPresentation!)}',
+          ? 'Nincs összehasonlítható időszak'
+          : balanceCategoryMoverPercentageLabel(topMover),
+      categoryColorId: topMover?.categoryColorId,
+      categoryIconId: topMover?.categoryIconId,
     ),
     BalanceCarouselCard._(
       id: 'top-category',
       kind: BalanceCarouselCardKind.topCategory,
       title: 'Top kategória',
       amount: topCategory?.label ?? 'Nincs adat',
+      detail: topCategory == null
+          ? 'Nincs összeg'
+          : DashboardPreparedFormatter.compactAmountMinor(
+              topCategory.amountMinor.abs(),
+            ),
+      categoryColorId: topCategory?.categoryColorId,
+      categoryIconId: topCategory?.categoryIconId,
     ),
     BalanceCarouselCard._(
       id: 'top-partner',
       kind: BalanceCarouselCardKind.topPartner,
       title: 'Top partner',
       amount: topPartner?.label ?? 'Nincs adat',
+      detail: topPartner == null
+          ? 'Nincs összeg'
+          : DashboardPreparedFormatter.compactAmountMinor(
+              topPartner.amountMinor.abs(),
+            ),
+      categoryColorId: topPartner?.categoryColorId,
+      categoryIconId: topPartner?.categoryIconId,
     ),
   ]);
 }
@@ -628,27 +650,19 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = presentationSettings;
     if (settings == null) {
-      return _withSettings(
-        context,
-        const BalancePresentationSettings.defaults(),
-      );
+      return _withSettings(context);
     }
     return ValueListenableBuilder<BalancePresentationSettings>(
       valueListenable: settings,
-      builder: (context, value, _) => _withSettings(context, value),
+      builder: (context, _, _) => _withSettings(context),
     );
   }
 
-  Widget _withSettings(
-    BuildContext context,
-    BalancePresentationSettings settings,
-  ) {
+  Widget _withSettings(BuildContext context) {
     final listenable = presentation;
     if (listenable == null) {
       return _BalanceUpperCarousel(
         cards: balanceCarouselCardsFor(null),
-        latestTransactionPresentation:
-            settings.latestTransactionCardPresentation,
         summaryToUpperGap: summaryToUpperGap,
         onMotionInterrupted: onMotionInterrupted,
         onCardSelected: onCardSelected,
@@ -659,8 +673,6 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
       builder: (context, presentation, _) {
         return _BalanceUpperCarousel(
           cards: balanceCarouselCardsFor(presentation),
-          latestTransactionPresentation:
-              settings.latestTransactionCardPresentation,
           summaryToUpperGap: summaryToUpperGap,
           onMotionInterrupted: onMotionInterrupted,
           onCardSelected: onCardSelected,
@@ -673,14 +685,12 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
 final class _BalanceUpperCarousel extends StatefulWidget {
   const _BalanceUpperCarousel({
     required this.cards,
-    required this.latestTransactionPresentation,
     required this.summaryToUpperGap,
     required this.onMotionInterrupted,
     required this.onCardSelected,
   });
 
   final List<BalanceCarouselCard> cards;
-  final BalanceLatestTransactionCardPresentation latestTransactionPresentation;
   final double summaryToUpperGap;
   final VoidCallback? onMotionInterrupted;
   final ValueChanged<BalanceCarouselCard> onCardSelected;
@@ -815,7 +825,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
           BalanceCarouselCardKind.momentum =>
             'Balance momentum: ${card.amount}',
           BalanceCarouselCardKind.retention =>
-            'Megtartási arány: ${card.amount}',
+            'Megtakarítási arány: ${card.amount}',
           BalanceCarouselCardKind.stability =>
             'Cashflow stabilitás: ${card.amount}',
           BalanceCarouselCardKind.ghost => 'Fix terhek: ${card.amount}',
@@ -836,8 +846,6 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
               card: card,
               width: geometry.cardWidth,
               itemHeight: carouselHeight,
-              latestTransactionPresentation:
-                  widget.latestTransactionPresentation,
             ),
           ),
         ),
@@ -887,13 +895,11 @@ final class _BalanceCarouselCard extends StatelessWidget {
     required this.card,
     required this.width,
     required this.itemHeight,
-    required this.latestTransactionPresentation,
   });
 
   final BalanceCarouselCard card;
   final double width;
   final double itemHeight;
-  final BalanceLatestTransactionCardPresentation latestTransactionPresentation;
 
   @override
   Widget build(BuildContext context) {
@@ -902,12 +908,6 @@ final class _BalanceCarouselCard extends StatelessWidget {
     // only its neighbours down, so no selected visual relies on paint-only
     // overflow or an undersized interactive parent.
     final compact = itemHeight < 42;
-    final latest = card.latestTransaction;
-    // A transformed side-card can retain the normal logical item height while
-    // receiving only a short physical content box. Preserve its primary value
-    // and omit the optional Momentum state line there; the selected card keeps
-    // the full preview at its normal height.
-    final showDetail = !compact && itemHeight >= 60;
     return SizedBox(
       key: ValueKey<String>('balance-carousel-card-${card.id}'),
       width: width,
@@ -932,78 +932,14 @@ final class _BalanceCarouselCard extends StatelessWidget {
               boxShadow: depth.shadows,
             ),
             child: Padding(
-              padding:
-                  !compact &&
-                      card.kind == BalanceCarouselCardKind.latestTransaction &&
-                      latest != null
-                  ? _LatestCarouselReferenceVisualSpec.cardPadding
-                  : EdgeInsets.symmetric(
-                      horizontal: compact ? 4 : 8,
-                      vertical: compact ? 2 : 7,
-                    ),
-              child: compact
-                  ? card.kind == BalanceCarouselCardKind.latestTransaction &&
-                            latest != null
-                        ? _CompactLatestCarouselPreview(transaction: latest)
-                        : Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              card.amount,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: FluviVisualTokens.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          )
-                  : card.kind == BalanceCarouselCardKind.latestTransaction &&
-                        latest != null
-                  ? _LatestCarouselPreview(
-                      transaction: latest,
-                      presentation: latestTransactionPresentation,
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          card.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: FluviVisualTokens.textSecondary,
-                              ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          card.amount,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: FluviVisualTokens.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        if (showDetail)
-                          if (card.detail case final detail?) ...<Widget>[
-                            const SizedBox(height: 2),
-                            Text(
-                              detail,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: FluviVisualTokens.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ],
-                      ],
-                    ),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 4 : 8,
+                vertical: compact ? 2 : 6,
+              ),
+              child: _BalanceCarouselMiniCardContent(
+                card: card,
+                compact: compact,
+              ),
             ),
           );
         },
@@ -1012,250 +948,155 @@ final class _BalanceCarouselCard extends StatelessWidget {
   }
 }
 
-final class _CompactLatestCarouselPreview extends StatelessWidget {
-  const _CompactLatestCarouselPreview({required this.transaction});
-
-  final DashboardBalanceScopedTransaction transaction;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: <Widget>[
-      BalanceCategoryVisualBadge(
-        semanticLabel: transaction.categoryTitle,
-        categoryColorId: transaction.categoryColorId,
-        categoryIconId: transaction.categoryIconId,
-        size: 15,
-        iconSize: 8,
-      ),
-      const SizedBox(width: 4),
-      Expanded(
-        child: Text(
-          transaction.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: FluviVisualTokens.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-final class _LatestCarouselPreview extends StatelessWidget {
-  const _LatestCarouselPreview({
-    required this.transaction,
-    required this.presentation,
+/// One canonical card grammar for all Balance carousel topics. Compact cards
+/// shrink the same title/visual/two-line composition; they never fall back to
+/// a separate text-only or Latest-specific layout family.
+final class _BalanceCarouselMiniCardContent extends StatelessWidget {
+  const _BalanceCarouselMiniCardContent({
+    required this.card,
+    required this.compact,
   });
 
-  final DashboardBalanceScopedTransaction transaction;
-  final BalanceLatestTransactionCardPresentation presentation;
-
-  @override
-  Widget build(BuildContext context) => switch (presentation) {
-    BalanceLatestTransactionCardPresentation.avatarPartner =>
-      _LatestAvatarPartnerPreview(transaction: transaction),
-    BalanceLatestTransactionCardPresentation.threeLine =>
-      _LatestThreeLinePreview(transaction: transaction),
-  };
-}
-
-/// Approved source-parity tokens owned locally by the Fluvi renderer.
-abstract final class _LatestCarouselReferenceVisualSpec {
-  static const cardPadding = EdgeInsets.fromLTRB(9, 7, 9, 18);
-  static const headerSize = 20.0;
-  static const headerIconSize = 12.0;
-  static const headerGap = 5.0;
-  static const headerBodyGap = 3.0;
-  static const headerTitle = TextStyle(
-    color: Color(0xFF1B294D),
-    fontSize: 8,
-    height: 1.18,
-    fontWeight: FontWeight.w900,
-  );
-  static const primaryText = TextStyle(
-    color: Color(0xFF19274C),
-    fontSize: 13,
-    height: 1.05,
-    fontWeight: FontWeight.w900,
-    fontVariations: <FontVariation>[FontVariation('wght', 950)],
-  );
-  static const amountText = TextStyle(
-    color: Color(0xFF526FC5),
-    fontSize: 13,
-    height: 1.05,
-    fontWeight: FontWeight.w900,
-    fontVariations: <FontVariation>[FontVariation('wght', 950)],
-  );
-  static const partnerText = TextStyle(
-    color: Color(0xFF65718E),
-    fontSize: 6.5,
-    height: 1.1,
-    fontWeight: FontWeight.w700,
-    fontVariations: <FontVariation>[FontVariation('wght', 750)],
-  );
-  static const headerIconColor = Color(0xFF5277D3);
-  static const headerIconBackground = Color(0xFFEDF3FF);
-}
-
-final class _LatestAvatarPartnerPreview extends StatelessWidget {
-  const _LatestAvatarPartnerPreview({required this.transaction});
-
-  final DashboardBalanceScopedTransaction transaction;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    key: const ValueKey<String>(
-      'balance-carousel-latest-avatar-partner-preview',
-    ),
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      _LatestCarouselHeader(transaction: transaction),
-      const SizedBox(height: _LatestCarouselReferenceVisualSpec.headerBodyGap),
-      SizedBox(
-        height: 15,
-        child: Row(
-          key: const ValueKey<String>('balance-carousel-latest-primary-row'),
-          children: <Widget>[
-            BalanceCategoryVisualBadge(
-              key: const ValueKey<String>(
-                'balance-carousel-latest-avatar-partner',
-              ),
-              semanticLabel: transaction.categoryTitle,
-              categoryColorId: transaction.categoryColorId,
-              categoryIconId: transaction.categoryIconId,
-              size: 15,
-              iconSize: 8,
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                transaction.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _LatestCarouselReferenceVisualSpec.primaryText,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
-final class _LatestThreeLinePreview extends StatelessWidget {
-  const _LatestThreeLinePreview({required this.transaction});
-
-  final DashboardBalanceScopedTransaction transaction;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    key: const ValueKey<String>('balance-carousel-latest-three-line'),
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      _LatestCarouselHeader(transaction: transaction),
-      const SizedBox(height: _LatestCarouselReferenceVisualSpec.headerBodyGap),
-      SizedBox(
-        height: 14,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            DashboardPreparedFormatter.amountMinor(
-              transaction.amountMinor.abs(),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _LatestCarouselReferenceVisualSpec.amountText,
-          ),
-        ),
-      ),
-      Expanded(
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Text(
-            transaction.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: _LatestCarouselReferenceVisualSpec.partnerText,
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-final class _LatestCarouselHeader extends StatelessWidget {
-  const _LatestCarouselHeader({required this.transaction});
-
-  final DashboardBalanceScopedTransaction transaction;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    key: const ValueKey<String>('balance-carousel-latest-reference-header'),
-    height: _LatestCarouselReferenceVisualSpec.headerSize,
-    child: Row(
-      key: const ValueKey<String>('balance-carousel-latest-topic-row'),
-      children: <Widget>[
-        DecoratedBox(
-          key: const ValueKey<String>('balance-carousel-latest-topic-badge'),
-          decoration: const BoxDecoration(
-            color: _LatestCarouselReferenceVisualSpec.headerIconBackground,
-            shape: BoxShape.circle,
-          ),
-          child: SizedBox(
-            width: _LatestCarouselReferenceVisualSpec.headerSize,
-            height: _LatestCarouselReferenceVisualSpec.headerSize,
-            child: _LatestTransactionCategoryHeaderIcon(
-              categoryIconId: transaction.categoryIconId,
-            ),
-          ),
-        ),
-        const SizedBox(width: _LatestCarouselReferenceVisualSpec.headerGap),
-        const Expanded(
-          child: Text(
-            'Utolsó tranzakció',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _LatestCarouselReferenceVisualSpec.headerTitle,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-final class _LatestTransactionCategoryHeaderIcon extends StatelessWidget {
-  const _LatestTransactionCategoryHeaderIcon({required this.categoryIconId});
-
-  final String categoryIconId;
+  final BalanceCarouselCard card;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final atlas = PreparedVectorAssetAtlas.instance;
-    if (atlas.isReady) {
-      return Center(
-        child: CategoryIconView(
-          key: const ValueKey<String>(
-            'balance-carousel-latest-header-category-icon',
+    // The carousel-wide canonical grammar deliberately takes precedence over
+    // the older Latest-specific presentation choice: every topic exposes its
+    // semantic primary on line one and compact context on line two.
+    final primary = card.amount;
+    final secondary = card.detail ?? '—';
+    final visualSize = compact ? 15.0 : 32.0;
+    final iconSize = compact ? 8.0 : 16.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          card.title,
+          key: ValueKey<String>('balance-carousel-card-title-${card.id}'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: FluviVisualTokens.textSecondary,
+            fontSize: compact ? 6.5 : 10,
+            height: 1,
+            fontWeight: FontWeight.w600,
           ),
-          picture: atlas.categoryIcon(
-            CategoryIconCatalog.handleOf(categoryIconId),
-          ),
-          size: _LatestCarouselReferenceVisualSpec.headerIconSize,
-          color: _LatestCarouselReferenceVisualSpec.headerIconColor,
-          semanticsLabel: CategoryIconCatalog.resolve(
-            categoryIconId,
-          ).semanticName,
         ),
-      );
-    }
-    return const Icon(
-      Icons.category_rounded,
-      key: ValueKey<String>('balance-carousel-latest-header-category-icon'),
-      size: _LatestCarouselReferenceVisualSpec.headerIconSize,
-      color: _LatestCarouselReferenceVisualSpec.headerIconColor,
+        SizedBox(height: compact ? 1 : 4),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              _BalanceCarouselVisual(
+                key: ValueKey<String>(
+                  'balance-carousel-card-visual-${card.id}',
+                ),
+                card: card,
+                size: visualSize,
+                iconSize: iconSize,
+              ),
+              SizedBox(width: compact ? 4 : 9),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      primary,
+                      key: ValueKey<String>(
+                        'balance-carousel-card-primary-${card.id}',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: FluviVisualTokens.textPrimary,
+                        fontSize: compact ? 8 : 13,
+                        height: 1.05,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 1 : 3),
+                    Text(
+                      secondary,
+                      key: ValueKey<String>(
+                        'balance-carousel-card-secondary-${card.id}',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color:
+                            FluviVisualTokens.appHighlightGradient.colors.first,
+                        fontSize: compact ? 6.5 : 10,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
+}
+
+final class _BalanceCarouselVisual extends StatelessWidget {
+  const _BalanceCarouselVisual({
+    super.key,
+    required this.card,
+    required this.size,
+    required this.iconSize,
+  });
+
+  final BalanceCarouselCard card;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorId = card.categoryColorId;
+    final iconId = card.categoryIconId;
+    if (colorId != null && iconId != null) {
+      return BalanceCategoryVisualBadge(
+        semanticLabel: card.amount,
+        categoryColorId: colorId,
+        categoryIconId: iconId,
+        size: size,
+        iconSize: iconSize,
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: FluviVisualTokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(size * .34),
+      ),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Icon(
+          _iconFor(card.kind),
+          color: FluviVisualTokens.appHighlightGradient.colors.first,
+          size: iconSize,
+        ),
+      ),
+    );
+  }
+
+  IconData _iconFor(BalanceCarouselCardKind kind) => switch (kind) {
+    BalanceCarouselCardKind.cashflow => Icons.account_balance_wallet_rounded,
+    BalanceCarouselCardKind.closings => Icons.event_available_rounded,
+    BalanceCarouselCardKind.momentum => Icons.trending_up_rounded,
+    BalanceCarouselCardKind.retention => Icons.savings_rounded,
+    BalanceCarouselCardKind.stability => Icons.monitor_heart_rounded,
+    BalanceCarouselCardKind.ghost => Icons.repeat_rounded,
+    BalanceCarouselCardKind.forecast => Icons.auto_graph_rounded,
+    BalanceCarouselCardKind.latestTransaction ||
+    BalanceCarouselCardKind.categoryMovers ||
+    BalanceCarouselCardKind.topCategory ||
+    BalanceCarouselCardKind.topPartner => Icons.category_rounded,
+  };
 }

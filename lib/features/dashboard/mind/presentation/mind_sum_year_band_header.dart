@@ -1,22 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_mode_palette.dart';
+import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 
 /// Format an already-admitted annual total for the compact Sum band header.
 /// This is formatting only; the immutable frame remains the financial owner.
-String formatMindCompactForints(int forints) {
-  final absolute = forints.abs();
-  final sign = forints < 0 ? '-' : '';
-  if (absolute >= 1000000) {
-    final millions = (absolute / 1000000)
-        .toStringAsFixed(2)
-        .replaceAll('.', ',');
-    return '$sign$millions M Ft';
-  }
-  if (absolute >= 1000) return '$sign${(absolute / 1000).round()} k Ft';
-  return '$forints Ft';
-}
+String formatMindCompactForints(int forints) =>
+    DashboardPreparedFormatter.compactForints(forints);
 
 /// Shared visual header for every annually stacked Sum renderer. Detailed
 /// lines and monthly overlay bars therefore share year placement, typography,

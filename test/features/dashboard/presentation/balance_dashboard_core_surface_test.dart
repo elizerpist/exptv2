@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
@@ -9,6 +8,7 @@ import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_entity_insights_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
@@ -264,6 +264,136 @@ void main() {
     },
   );
 
+  test(
+    'BCL-RED-01: every carousel topic supplies the canonical primary and secondary preview copy',
+    () {
+      final cards = balanceCarouselCardsFor(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      final byId = <String, BalanceCarouselCard>{
+        for (final card in cards) card.id: card,
+      };
+
+      expect(byId['latest-transaction']!.amount, 'Piac');
+      expect(byId['latest-transaction']!.detail, '350 Ft');
+      expect(byId['top-category']!.amount, 'Fizetés');
+      expect(byId['top-category']!.detail, '7 k Ft');
+      expect(byId['top-partner']!.amount, 'Munkahely');
+      expect(byId['top-partner']!.detail, '7 k Ft');
+      expect(
+        byId['category-movers']!.detail,
+        '+117%',
+        reason: 'The mover secondary line must be the percentage only.',
+      );
+      for (final id in <String>[
+        'cashflow',
+        'closings',
+        'momentum',
+        'retention',
+        'stability',
+        'ghost',
+        'forecast',
+      ]) {
+        expect(
+          byId[id]!.detail,
+          isNotNull,
+          reason: '$id must participate in the same two-line grammar.',
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'BCL-02: every selected Balance topic renders one title, visual, primary and secondary mini-card structure',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      addTearDown(linked.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final cards =
+          (carousel.dataSource!
+                  as CyclicCarouselDataSource<BalanceCarouselCard>)
+              .items;
+      for (var index = 0; index < cards.length; index += 1) {
+        final card = cards[index];
+        carousel.controller.jumpToIndex(index);
+        await tester.pump();
+        for (final part in <String>[
+          'title',
+          'visual',
+          'primary',
+          'secondary',
+        ]) {
+          expect(
+            find.byKey(
+              ValueKey<String>('balance-carousel-card-$part-${card.id}'),
+            ),
+            findsOneWidget,
+            reason: '${card.id} must keep the canonical $part slot.',
+          );
+        }
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'BCL-03: the selected carousel card preserves the approved title-avatar-two-line visual grammar',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      addTearDown(linked.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(
+                metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                  const Size(412, 892),
+                ),
+              ),
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      carousel.controller.jumpToIndex(9);
+      await tester.pumpAndSettle();
+
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('balance-carousel-card-top-category'),
+        ),
+        matchesGoldenFile(
+          '../../../goldens/balance_carousel_canonical_layout.png',
+        ),
+      );
+    },
+  );
+
   testWidgets(
     'BALANCE-LOWER-ENVELOPE: the existing lower card retains its geometry for Cashflow',
     (tester) async {
@@ -476,82 +606,68 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('balance-carousel-latest-topic-row')),
-        findsOneWidget,
-      );
-      expect(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-primary-row'),
+          const ValueKey<String>(
+            'balance-carousel-card-title-latest-transaction',
+          ),
         ),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('balance-carousel-latest-date-row')),
-        findsNothing,
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-visual-latest-transaction',
+          ),
+        ),
+        findsOneWidget,
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-inline-date'),
+          const ValueKey<String>(
+            'balance-carousel-card-primary-latest-transaction',
+          ),
         ),
-        findsNothing,
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-secondary-latest-transaction',
+          ),
+        ),
+        findsOneWidget,
       );
       expect(find.text('Utolsó tranzakció'), findsOneWidget);
       expect(
         tester
-            .renderObject<RenderParagraph>(find.text('Utolsó tranzakció'))
-            .didExceedMaxLines,
-        isFalse,
-        reason: 'The final compact title must remain whole after date removal.',
-      );
-      final latestSurface = tester.getRect(
-        find.byKey(
-          const ValueKey<String>(
-            'balance-carousel-card-surface-latest-transaction',
-          ),
-        ),
-      );
-      final latestTopic = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-carousel-latest-topic-row')),
-      );
-      expect(latestTopic.top - latestSurface.top, lessThanOrEqualTo(8));
-      expect(
-        find.byKey(
-          const ValueKey<String>('balance-carousel-latest-topic-badge'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>(
-            'balance-carousel-latest-header-category-icon',
-          ),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(
-          const ValueKey<String>('balance-carousel-latest-avatar-partner'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        tester
-            .getSize(
+            .widget<Text>(
               find.byKey(
                 const ValueKey<String>(
-                  'balance-carousel-latest-avatar-partner',
+                  'balance-carousel-card-primary-latest-transaction',
                 ),
               ),
             )
-            .width,
-        15,
+            .data,
+        'Piac',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey<String>(
+                  'balance-carousel-card-secondary-latest-transaction',
+                ),
+              ),
+            )
+            .data,
+        '350 Ft',
       );
       expect(
         find.descendant(
           of: find.byKey(
             const ValueKey<String>('balance-carousel-card-latest-transaction'),
           ),
-          matching: find.text('350 Ft'),
+          matching: find.textContaining('12:00'),
         ),
         findsNothing,
       );
@@ -669,7 +785,7 @@ void main() {
   );
 
   testWidgets(
-    'SPENDEE-LATEST-RED: the existing Balance setting switches only the selected Latest card presentation',
+    'BALANCE-CAROUSEL-LATEST: the canonical grammar remains partner then compact amount for every retained setting',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
@@ -705,58 +821,62 @@ void main() {
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-reference-header'),
+          const ValueKey<String>(
+            'balance-carousel-card-title-latest-transaction',
+          ),
         ),
         findsOneWidget,
       );
       expect(find.text('Utolsó tranzakció'), findsOneWidget);
-      final title = tester.widget<Text>(find.text('Utolsó tranzakció'));
-      expect(title.style!.color, const Color(0xFF1B294D));
-      expect(title.style!.fontSize, 8);
-      expect(title.style!.height, 1.18);
-      expect(title.style!.fontWeight, FontWeight.w900);
       expect(
         find.byKey(
           const ValueKey<String>(
-            'balance-carousel-latest-header-category-icon',
+            'balance-carousel-card-visual-latest-transaction',
           ),
         ),
         findsOneWidget,
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-avatar-partner'),
+          const ValueKey<String>(
+            'balance-carousel-card-primary-latest-transaction',
+          ),
         ),
         findsOneWidget,
       );
       expect(
-        tester.getSize(
-          find.byKey(
-            const ValueKey<String>('balance-carousel-latest-avatar-partner'),
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-secondary-latest-transaction',
           ),
         ),
-        const Size(15, 15),
+        findsOneWidget,
       );
-      final partner = tester.widget<Text>(
-        find.descendant(
-          of: find.byKey(
-            const ValueKey<String>(
-              'balance-carousel-latest-avatar-partner-preview',
-            ),
+      final defaultPrimary = tester.widget<Text>(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-primary-latest-transaction',
           ),
-          matching: find.text('Piac'),
         ),
       );
-      expect(partner.style!.color, const Color(0xFF19274C));
-      expect(partner.style!.fontSize, 13);
-      expect(partner.style!.height, 1.05);
-      expect(find.text('350 Ft'), findsNothing);
+      final defaultSecondary = tester.widget<Text>(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-secondary-latest-transaction',
+          ),
+        ),
+      );
+      expect(defaultPrimary.data, 'Piac');
+      expect(defaultSecondary.data, '350 Ft');
+      expect(defaultPrimary.style!.color, FluviVisualTokens.textPrimary);
+      expect(
+        defaultSecondary.style!.color,
+        FluviVisualTokens.appHighlightGradient.colors.first,
+      );
       expect(
         find.descendant(
           of: find.byKey(
-            const ValueKey<String>(
-              'balance-carousel-latest-avatar-partner-preview',
-            ),
+            const ValueKey<String>('balance-carousel-card-latest-transaction'),
           ),
           matching: find.textContaining('12:00'),
         ),
@@ -767,26 +887,30 @@ void main() {
         BalanceLatestTransactionCardPresentation.threeLine,
       );
       await tester.pump();
-      expect(
+      final alternatePrimary = tester.widget<Text>(
         find.byKey(
-          const ValueKey<String>('balance-carousel-latest-three-line'),
+          const ValueKey<String>(
+            'balance-carousel-card-primary-latest-transaction',
+          ),
         ),
-        findsOneWidget,
       );
-      final amount = tester.widget<Text>(find.text('350 Ft'));
-      expect(amount.style!.color, const Color(0xFF526FC5));
-      expect(amount.style!.fontSize, 13);
-      expect(amount.style!.height, 1.05);
-      final threeLinePartner = find.descendant(
-        of: find.byKey(
-          const ValueKey<String>('balance-carousel-latest-three-line'),
+      final alternateSecondary = tester.widget<Text>(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-secondary-latest-transaction',
+          ),
         ),
-        matching: find.text('Piac'),
       );
-      expect(threeLinePartner, findsOneWidget);
+      expect(alternatePrimary.data, 'Piac');
+      expect(alternateSecondary.data, '350 Ft');
       expect(
-        tester.widget<Text>(threeLinePartner).style!.color,
-        const Color(0xFF65718E),
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('balance-carousel-card-latest-transaction'),
+          ),
+          matching: find.textContaining('12:00'),
+        ),
+        findsNothing,
       );
       expect(
         identical(
@@ -1859,7 +1983,9 @@ DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(
   ],
 );
 
-DashboardBalanceLinkedPresentation _linked() {
+DashboardBalanceLinkedPresentation _linked({
+  DashboardBalanceCategoryMoversPresentation? categoryMovers,
+}) {
   const identity = DashboardBalancePrimaryIdentity(
     upstreamScopeKey: 'income|expense',
     indexGeneration: 3,
@@ -1925,6 +2051,7 @@ DashboardBalanceLinkedPresentation _linked() {
         categoryIconId: 'icon_17',
       ),
     ],
+    categoryMovers: categoryMovers,
     categoryInsights: <String, DashboardBalanceCategoryInsight>{
       'salary': _salaryCategoryInsight(),
     },
@@ -1933,6 +2060,43 @@ DashboardBalanceLinkedPresentation _linked() {
     },
   );
 }
+
+DashboardBalanceCategoryMoversPresentation _moverPresentation() =>
+    DashboardBalanceCategoryMoversPresentation(
+      identity: const DashboardBalancePrimaryIdentity(
+        upstreamScopeKey: 'income|expense',
+        indexGeneration: 3,
+        coreRevision: 7,
+      ),
+      timeScope: const AllTimeScope(),
+      selectedDirection: LedgerDirection.income,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 24),
+      currentWindow: const DashboardBalanceCategoryComparisonWindow(
+        startInclusive: LocalDate(year: 2026, month: 1, day: 1),
+        endInclusive: LocalDate(year: 2026, month: 9, day: 24),
+      ),
+      referenceWindow: const DashboardBalanceCategoryComparisonWindow(
+        startInclusive: LocalDate(year: 2025, month: 1, day: 1),
+        endInclusive: LocalDate(year: 2025, month: 9, day: 24),
+      ),
+      movers: <DashboardBalanceCategoryMover>[
+        DashboardBalanceCategoryMover(
+          id: 'housing',
+          label: 'Lakhatás',
+          categoryColorId: 'color_07',
+          categoryIconId: 'icon_17',
+          currentMinor: 260000,
+          referenceMinor: 120000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 1,
+              currentMinor: 260000,
+              referenceMinor: 120000,
+            ),
+          ],
+        ),
+      ],
+    );
 
 DashboardBalanceCategoryInsight _salaryCategoryInsight() =>
     DashboardBalanceCategoryInsight(

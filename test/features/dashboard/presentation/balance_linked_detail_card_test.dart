@@ -463,6 +463,159 @@ void main() {
   );
 
   testWidgets(
+    'TCD-RED-01: category page two shares the master rhythm and category-coloured hero hierarchy',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(
+            categoryInsights: <String, DashboardBalanceCategoryInsight>{
+              'category-0': _categoryInsight(
+                amountMinor: 9900,
+                medianAmountMinor: 1200,
+              ),
+            },
+          ),
+          height: 320,
+        ),
+      );
+
+      final masterTitle = tester.getRect(find.text('Top 5 kategória'));
+      final firstRankBand = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.pump();
+
+      final returnRow = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-category-insight-return-row'),
+        ),
+      );
+      final hero = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-insight-hero-row')),
+      );
+      final detail = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+      );
+      final distribution = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-category-insight-distribution'),
+        ),
+      );
+      expect(returnRow.top, closeTo(masterTitle.top, .01));
+      expect(hero.top, closeTo(firstRankBand.top, .01));
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey<String>('balance-category-insight-median'),
+              ),
+            )
+            .style!
+            .color,
+        const Color(0xFF5BD265),
+      );
+      expect(
+        (tester
+                    .widget<DecoratedBox>(
+                      find.byKey(
+                        const ValueKey<String>(
+                          'balance-category-insight-median-pill',
+                        ),
+                      ),
+                    )
+                    .decoration
+                as BoxDecoration)
+            .color,
+        const Color(0xFF5BD265),
+      );
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(
+                const ValueKey<String>('balance-category-insight-metrics'),
+              ),
+            )
+            .dy,
+        greaterThan(hero.bottom),
+      );
+      expect(
+        detail.bottom - distribution.bottom,
+        lessThanOrEqualTo(20),
+        reason:
+            'The segment chart must occupy the previously empty lower band.',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'TCD-RED-02: category page two fills the production lower-card envelope without dead lower space',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.topCategory,
+          presentation: _linked(
+            categoryInsights: <String, DashboardBalanceCategoryInsight>{
+              'category-0': _categoryInsight(
+                amountMinor: 9900,
+                medianAmountMinor: 1200,
+              ),
+            },
+          ),
+          // The real Balance local transfer resolves the lower card to about
+          // 210 logical pixels at the reference viewport.
+          height: 210,
+        ),
+      );
+      for (var index = 0; index < 5; index += 1) {
+        expect(
+          find.byKey(ValueKey<String>('balance-linked-rank-category-$index')),
+          findsOneWidget,
+          reason:
+              'All five ranks remain simultaneously visible at production height.',
+        );
+      }
+      expect(find.byType(Scrollable), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-linked-rank-category-0')),
+      );
+      await tester.pump();
+
+      final detail = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+      );
+      final distribution = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-category-insight-distribution'),
+        ),
+      );
+      final metrics = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-insight-metrics')),
+      );
+      expect(metrics.bottom, lessThan(distribution.top));
+      expect(
+        detail.bottom - distribution.bottom,
+        lessThanOrEqualTo(12),
+        reason:
+            'The compact production envelope must use its lower chart band, '
+            'rather than keeping the old empty lower half.',
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-category-insight-detail')),
+        matchesGoldenFile(
+          '../../../goldens/balance_category_reference_detail_compact.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'L5-L7: category and partner detail retain their rank composition',
     (tester) async {
       await tester.pumpWidget(

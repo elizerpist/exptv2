@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -26,6 +27,8 @@ final class DashboardFlatBottomNavStretchLayout {
   const DashboardFlatBottomNavStretchLayout._({
     required this.isEligible,
     required this.physicalBottomNavTop,
+    required this.availableGain,
+    required this.desiredGain,
     required this.delta,
     required this.scaledLedgerHeaderTopInset,
     required this.scaledLedgerCountHeight,
@@ -38,6 +41,21 @@ final class DashboardFlatBottomNavStretchLayout {
 
   final bool isEligible;
   final double physicalBottomNavTop;
+
+  /// The greatest gain that preserves the Ledger count and its authored
+  /// breathing gap immediately above the physical flat-navigation edge.
+  ///
+  /// It is deliberately resolved from the live Dashboard and BottomNav
+  /// coordinate systems rather than assuming the BNB's 24 reference-pixel
+  /// FAB protrusion is the usable body extent.
+  final double availableGain;
+
+  /// The gain that would place the real SearchPill origin at the nav edge.
+  final double desiredGain;
+
+  /// The safe gain applied to Dashboard geometry: never more than the
+  /// count-safe available extent, so the SearchPill starts at the nav edge
+  /// while the transaction count stays visible above it.
   final double delta;
   final double scaledLedgerHeaderTopInset;
   final double scaledLedgerCountHeight;
@@ -74,12 +92,17 @@ final class DashboardFlatBottomNavStretchLayout {
     final count = DashboardLogBoxTokens.ledgerCountHeight * dashboardScale;
     final gap = DashboardLogBoxTokens.ledgerCountToSearchGap * dashboardScale;
     final currentSearchTop = logBoxHeaderTop + inset + count + gap;
+    final desiredGain = math.max(0.0, physicalTop - currentSearchTop);
+    // SearchPill begins after the count's authored gap. Therefore this is the
+    // exact maximum downstream shift that keeps the count row fully visible
+    // and leaves that gap above the stationary physical BottomNav.
+    final countSafeGain = math.max(0.0, physicalTop - currentSearchTop);
     return DashboardFlatBottomNavStretchLayout._(
       isEligible: eligible,
       physicalBottomNavTop: physicalTop,
-      delta: eligible
-          ? (physicalTop - currentSearchTop).clamp(0.0, double.infinity)
-          : 0,
+      availableGain: eligible ? countSafeGain : 0,
+      desiredGain: eligible ? desiredGain : 0,
+      delta: eligible ? math.min(countSafeGain, desiredGain) : 0,
       scaledLedgerHeaderTopInset: inset,
       scaledLedgerCountHeight: count,
       scaledCountToSearchGap: gap,

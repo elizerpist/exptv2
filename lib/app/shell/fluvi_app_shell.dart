@@ -90,6 +90,7 @@ class FluviAppShell extends StatefulWidget {
     this.initialRailOpen = false,
     this.initialDirection = LedgerDirection.income,
     this.initialSummaryPillVariant,
+    this.shellPresentation,
   });
 
   final DashboardModeSpec mode;
@@ -102,6 +103,7 @@ class FluviAppShell extends StatefulWidget {
   final bool initialRailOpen;
   final LedgerDirection initialDirection;
   final SummaryPillVariant? initialSummaryPillVariant;
+  final DashboardShellPresentationController? shellPresentation;
 
   @override
   State<FluviAppShell> createState() => _FluviAppShellState();
@@ -171,6 +173,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final DashboardAppliedQueryFacetLoader _appliedQueryFacets;
   late final SavedQueryController _savedQueries;
   late final DashboardShellPresentationController _shellPresentation;
+  late final bool _ownsShellPresentation;
   late final DashboardHeaderVisualController _headerVisualController;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
@@ -238,7 +241,9 @@ class _FluviAppShellState extends State<FluviAppShell>
       repository: _queryRepository,
     );
     _savedQueries = SavedQueryController(repository: _queryRepository);
-    _shellPresentation = DashboardShellPresentationController();
+    _shellPresentation =
+        widget.shellPresentation ?? DashboardShellPresentationController();
+    _ownsShellPresentation = widget.shellPresentation == null;
     _readiness = DashboardInteractionReadiness(
       diagnostics: _controller.renderReadinessDiagnostics,
       buildInitialFrame: () async {
@@ -544,7 +549,9 @@ class _FluviAppShellState extends State<FluviAppShell>
     _appliedQueryFacets.dispose();
     _queryData.dispose();
     _savedQueries.dispose();
-    _shellPresentation.dispose();
+    if (_ownsShellPresentation) {
+      _shellPresentation.dispose();
+    }
     _headerVisualController.dispose();
     _modeController.dispose();
     _controller.dispose();

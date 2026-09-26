@@ -334,7 +334,32 @@ void main() {
     });
 
     test(
-      'FBS-RED-03: both stretch targets align real SearchPill top to nav top',
+      'FBS-RED-CLAMP: the body extension is clamped by the count-safe Ledger geometry, not the FAB artwork envelope',
+      () {
+        for (final deviceViewport in <Size>[
+          const Size(428, 926),
+          viewport,
+          const Size(360, 780),
+        ]) {
+          final layout = layoutFor(
+            settingsFor(),
+            deviceViewport: deviceViewport,
+          );
+          expect(
+            layout.delta,
+            closeTo(layout.desiredGain, .001),
+            reason:
+                'The count row and its authored gap define the usable body '
+                'extent. A 24px FAB-artwork offset is not a Dashboard '
+                'geometry clamp.',
+          );
+          expect(layout.availableGain, closeTo(layout.desiredGain, .001));
+        }
+      },
+    );
+
+    test(
+      'FBS-03: both stretch targets use the count-safe clamped real-body gain',
       () {
         for (final stretch in <DashboardFlatBottomNavBodyStretch>[
           DashboardFlatBottomNavBodyStretch.expandedHeader,
@@ -360,6 +385,15 @@ void main() {
               );
               final searchPillTop = layout.searchPillTopFor(
                 logBoxHeaderTop: frame.logBoxHeaderBounds.top,
+              );
+              expect(
+                layout.delta,
+                closeTo(
+                  layout.availableGain < layout.desiredGain
+                      ? layout.availableGain
+                      : layout.desiredGain,
+                  .001,
+                ),
               );
               expect(searchPillTop, closeTo(layout.physicalBottomNavTop, .001));
               expect(
@@ -466,7 +500,7 @@ void main() {
     );
 
     test(
-      'FBS-RED-06: integrated handles and seamless Mind retain exact Ledger alignment',
+      'FBS-06: integrated handles and seamless Mind retain count-safe Ledger placement',
       () {
         const shell = DashboardShellPresentationSettings(
           bottomNavEdgeShape: DashboardBottomNavEdgeShape.straight,
@@ -508,6 +542,13 @@ void main() {
               logBoxHeaderTop: stretched.logBoxHeaderBounds.top,
             ),
             closeTo(layout.physicalBottomNavTop, .001),
+          );
+          expect(
+            layout.physicalBottomNavTop -
+                layout.countBottomFor(
+                  logBoxHeaderTop: stretched.logBoxHeaderBounds.top,
+                ),
+            closeTo(layout.scaledCountToSearchGap, .001),
           );
         }
       },

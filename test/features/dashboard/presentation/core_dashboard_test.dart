@@ -17,6 +17,7 @@ import 'package:fluvi/features/dashboard/application/dashboard_core_mode_control
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -104,6 +105,66 @@ void main() {
         tester.getRect(scrollView).bottom,
         greaterThan(tester.getRect(bottomNavigation).top),
       );
+    },
+  );
+
+  testWidgets(
+    'FBS-RED-E2E: the real app shell keeps Ledger count visible while the SearchPill meets a contained flat BottomNav',
+    (tester) async {
+      final shell = DashboardShellPresentationController();
+      addTearDown(shell.dispose);
+      await pumpDashboardSurface(
+        tester,
+        FluviApp(
+          dashboardRepository: EmptyDashboardDataRuntimeRepository(),
+          categoryRepository: EmptyCategoryRepository(),
+          shellPresentation: shell,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('ready-core-dashboard')),
+        findsOneWidget,
+      );
+      for (final stretch in <DashboardFlatBottomNavBodyStretch>[
+        DashboardFlatBottomNavBodyStretch.expandedHeader,
+        DashboardFlatBottomNavBodyStretch.modeContent,
+      ]) {
+        shell.selectBottomNavEdgeShape(DashboardBottomNavEdgeShape.straight);
+        shell.selectBottomNavLayoutStyle(
+          DashboardBottomNavLayoutStyle.containedFlat,
+        );
+        shell.selectFlatBottomNavBodyStretch(stretch);
+        await tester.pump();
+
+        final navTop = tester
+            .getRect(find.byKey(const ValueKey('bnb03-physical-bar-surface')))
+            .top;
+        final count = tester.getRect(
+          find.byKey(const ValueKey('dashboard-logbox-entry-count')),
+        );
+        final search = tester.getRect(
+          find.byKey(const ValueKey('dashboard-logbox-search-pill')),
+        );
+        expect(
+          search.top,
+          closeTo(navTop, .5),
+          reason:
+              'The actual shell/nav and CoreDashboard must share one body '
+              'geometry contract; SearchPill starts at the flat bar edge.',
+        );
+        expect(count.bottom, lessThanOrEqualTo(navTop));
+        expect(
+          navTop - count.bottom,
+          greaterThanOrEqualTo(10),
+          reason:
+              'The real visible count row retains its authored breathing gap '
+              'instead of being sacrificed to hide SearchPill.',
+        );
+        expect(tester.takeException(), isNull);
+      }
     },
   );
 

@@ -335,41 +335,49 @@ final class _RankedOverview extends StatelessWidget {
   final ValueChanged<DashboardBalanceRankedItem> onRankTap;
 
   @override
-  Widget build(BuildContext context) {
-    final leader = ranks.first;
-    final followers = ranks.skip(1).toList(growable: false);
-    return Column(
-      key: ValueKey<String>('balance-linked-rank-list-${kind.name}'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _RankedLeaderRow(
-          item: leader,
-          kind: kind,
-          onTap: hasCurrentInsight(leader) ? () => onRankTap(leader) : null,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Divider(
-            key: ValueKey<String>('balance-ranked-divider-${kind.name}'),
-            height: 1,
-            thickness: 1,
-            color: const Color(0xFFE5E9F2),
-          ),
-        ),
-        for (var index = 0; index < followers.length; index += 1) ...<Widget>[
-          _RankedFollowerRow(
-            item: followers[index],
-            rank: index + 2,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // The bounded Balance lower card resolves to the compact ~210px
+      // production envelope. Keep all five real ranks visible there by
+      // tightening only their local presentation dimensions.
+      final compact = constraints.maxHeight < 170;
+      final leader = ranks.first;
+      final followers = ranks.skip(1).toList(growable: false);
+      return Column(
+        key: ValueKey<String>('balance-linked-rank-list-${kind.name}'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _RankedLeaderRow(
+            item: leader,
             kind: kind,
-            onTap: hasCurrentInsight(followers[index])
-                ? () => onRankTap(followers[index])
-                : null,
+            compact: compact,
+            onTap: hasCurrentInsight(leader) ? () => onRankTap(leader) : null,
           ),
-          if (index < followers.length - 1) const SizedBox(height: 4),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: compact ? 2 : 6),
+            child: Divider(
+              key: ValueKey<String>('balance-ranked-divider-${kind.name}'),
+              height: 1,
+              thickness: 1,
+              color: const Color(0xFFE5E9F2),
+            ),
+          ),
+          for (var index = 0; index < followers.length; index += 1) ...<Widget>[
+            _RankedFollowerRow(
+              item: followers[index],
+              rank: index + 2,
+              kind: kind,
+              compact: compact,
+              onTap: hasCurrentInsight(followers[index])
+                  ? () => onRankTap(followers[index])
+                  : null,
+            ),
+            if (index < followers.length - 1) SizedBox(height: compact ? 1 : 4),
+          ],
         ],
-      ],
-    );
-  }
+      );
+    },
+  );
 }
 
 abstract final class _RankedOverviewVisualSpec {
@@ -385,11 +393,13 @@ final class _RankedLeaderRow extends StatelessWidget {
   const _RankedLeaderRow({
     required this.item,
     required this.kind,
+    required this.compact,
     required this.onTap,
   });
 
   final DashboardBalanceRankedItem item;
   final _RankDetailKind kind;
+  final bool compact;
   final VoidCallback? onTap;
 
   @override
@@ -408,7 +418,7 @@ final class _RankedLeaderRow extends StatelessWidget {
           key: ValueKey<String>('balance-linked-rank-${item.id}'),
           onTap: onTap,
           child: SizedBox(
-            height: _RankedOverviewVisualSpec.leaderHeight,
+            height: compact ? 44 : _RankedOverviewVisualSpec.leaderHeight,
             child: Row(
               children: <Widget>[
                 ExcludeSemantics(
@@ -419,11 +429,11 @@ final class _RankedLeaderRow extends StatelessWidget {
                     semanticLabel: item.label,
                     categoryColorId: item.categoryColorId,
                     categoryIconId: item.categoryIconId,
-                    size: 46,
-                    iconSize: 24,
+                    size: compact ? 40 : 46,
+                    iconSize: compact ? 20 : 24,
                   ),
                 ),
-                const SizedBox(width: 11),
+                SizedBox(width: compact ? 8 : 11),
                 Expanded(
                   child: _RankedCopy(
                     primary: item.label,
@@ -431,7 +441,7 @@ final class _RankedLeaderRow extends StatelessWidget {
                     leader: true,
                   ),
                 ),
-                const SizedBox(width: 11),
+                SizedBox(width: compact ? 8 : 11),
                 _RankedAmount(value: amount, leader: true),
               ],
             ),
@@ -447,12 +457,14 @@ final class _RankedFollowerRow extends StatelessWidget {
     required this.item,
     required this.rank,
     required this.kind,
+    required this.compact,
     required this.onTap,
   });
 
   final DashboardBalanceRankedItem item;
   final int rank;
   final _RankDetailKind kind;
+  final bool compact;
   final VoidCallback? onTap;
 
   @override
@@ -470,11 +482,13 @@ final class _RankedFollowerRow extends StatelessWidget {
           key: ValueKey<String>('balance-linked-rank-${item.id}'),
           onTap: onTap,
           child: SizedBox(
-            height: _RankedOverviewVisualSpec.followerHeight,
+            height: compact ? 23 : _RankedOverviewVisualSpec.followerHeight,
             child: Row(
               children: <Widget>[
-                ExcludeSemantics(child: _RankedFollowerAvatar(item: item)),
-                const SizedBox(width: 9),
+                ExcludeSemantics(
+                  child: _RankedFollowerAvatar(item: item, compact: compact),
+                ),
+                SizedBox(width: compact ? 7 : 9),
                 Expanded(
                   child: _RankedCopy(
                     primary: item.label,
@@ -482,7 +496,7 @@ final class _RankedFollowerRow extends StatelessWidget {
                     leader: false,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: compact ? 6 : 8),
                 _RankedAmount(value: amount, leader: false),
               ],
             ),
@@ -587,9 +601,10 @@ final class _RankedAmount extends StatelessWidget {
 /// A local circle adapter preserves the same category color/icon catalogs used
 /// by the rounded-square badge without changing its other consumers.
 final class _RankedFollowerAvatar extends StatelessWidget {
-  const _RankedFollowerAvatar({required this.item});
+  const _RankedFollowerAvatar({required this.item, required this.compact});
 
   final DashboardBalanceRankedItem item;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -611,20 +626,20 @@ final class _RankedFollowerAvatar extends StatelessWidget {
         ],
       ),
       child: SizedBox(
-        width: 26,
-        height: 26,
+        width: compact ? 22 : 26,
+        height: compact ? 22 : 26,
         child: Center(
           child: atlas.isReady
               ? CategoryIconView(
                   picture: atlas.categoryIcon(
                     CategoryIconCatalog.handleOf(item.categoryIconId),
                   ),
-                  size: 14,
+                  size: compact ? 12 : 14,
                   color: Colors.white,
                 )
-              : const Icon(
+              : Icon(
                   Icons.category_rounded,
-                  size: 14,
+                  size: compact ? 12 : 14,
                   color: Colors.white,
                 ),
         ),
@@ -646,159 +661,236 @@ final class _CategoryInsightDetail extends StatelessWidget {
   final VoidCallback onBack;
 
   @override
-  Widget build(BuildContext context) => KeyedSubtree(
-    key: const ValueKey<String>('balance-category-insight-detail'),
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey<String>('balance-category-insight-back'),
-              onPressed: onBack,
-              style: TextButton.styleFrom(
-                minimumSize: Size.zero,
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-              icon: Icon(
-                Icons.arrow_back_rounded,
-                size: 18,
-                color: FluviVisualTokens.appHighlightGradient.colors.first,
-              ),
-              label: Text(
-                'Vissza',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: FluviVisualTokens.appHighlightGradient.colors.first,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 1),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              BalanceCategoryVisualBadge(
-                key: const ValueKey<String>('balance-category-insight-avatar'),
-                semanticLabel: insight.label,
-                categoryColorId: visual.categoryColorId,
-                categoryIconId: visual.categoryIconId,
-                size: 48,
-                iconSize: 23,
-                selected: true,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      insight.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: FluviVisualTokens.textPrimary,
-                        fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) {
+    final categoryColor = _categoryAccentColor(context, visual.categoryColorId);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The real lower Balance slot is ~210px. Preserve the shared master
+        // title/leader bands there, then compact only supporting spacing so
+        // the chart still occupies the remaining lower surface.
+        final compact = constraints.maxHeight <= 230;
+        return KeyedSubtree(
+          key: const ValueKey<String>('balance-category-insight-detail'),
+          child: Padding(
+            // Matches the master page title rhythm exactly: the detail's return
+            // row occupies the same 20px title lane at the same 12px top inset.
+            padding: EdgeInsets.fromLTRB(14, 12, 14, compact ? 2 : 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SizedBox(
+                  key: const ValueKey<String>(
+                    'balance-category-insight-return-row',
+                  ),
+                  height: _RankedDetailPageVisualSpec.titleRowHeight,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey<String>(
+                        'balance-category-insight-back',
+                      ),
+                      onPressed: onBack,
+                      style: TextButton.styleFrom(
+                        minimumSize: Size.zero,
+                        padding: EdgeInsets.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: Icon(
+                        Icons.arrow_back_rounded,
+                        size: 18,
+                        color: categoryColor,
+                      ),
+                      label: Text(
+                        'Vissza',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: categoryColor,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    _CategoryMedianHero(
-                      amountMinor: insight.roundedMedianAmountMinor,
+                  ),
+                ),
+                const SizedBox(
+                  height: _RankedDetailPageVisualSpec.titleToHeroGap,
+                ),
+                SizedBox(
+                  key: const ValueKey<String>(
+                    'balance-category-insight-hero-row',
+                  ),
+                  height: _RankedOverviewVisualSpec.leaderHeight,
+                  child: Row(
+                    children: <Widget>[
+                      BalanceCategoryVisualBadge(
+                        key: const ValueKey<String>(
+                          'balance-category-insight-avatar',
+                        ),
+                        semanticLabel: insight.label,
+                        categoryColorId: visual.categoryColorId,
+                        categoryIconId: visual.categoryIconId,
+                        size: 46,
+                        iconSize: 24,
+                        selected: true,
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              insight.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(
+                                    color: FluviVisualTokens.textPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            _CategoryMedianPill(color: categoryColor),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _CategoryMedianAmount(
+                        amountMinor: insight.roundedMedianAmountMinor,
+                        color: categoryColor,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: compact ? 3 : 6),
+                Wrap(
+                  key: const ValueKey<String>(
+                    'balance-category-insight-metrics',
+                  ),
+                  spacing: 7,
+                  runSpacing: 4,
+                  children: <Widget>[
+                    _CategoryMetricPill(
+                      text: '${insight.transactionCount} tranzakció',
+                      compact: compact,
+                    ),
+                    _CategoryMetricPill(
+                      text: '${insight.activeDayCount} aktív nap',
+                      compact: compact,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Wrap(
-            key: const ValueKey<String>('balance-category-insight-metrics'),
-            spacing: 7,
-            runSpacing: 4,
-            children: <Widget>[
-              _CategoryMetricPill(
-                text: '${insight.transactionCount} tranzakció',
-              ),
-              _CategoryMetricPill(text: '${insight.activeDayCount} aktív nap'),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 6),
-            child: Divider(height: 1),
-          ),
-          const _DetailSectionTitle('Tipikus tranzakcióméret'),
-          const SizedBox(height: 3),
-          if (insight.temporalBuckets.isEmpty &&
-              insight.usesDayLowSampleFallback)
-            _MetricLine(
-              key: const ValueKey<String>(
-                'balance-category-insight-day-fallback',
-              ),
-              text:
-                  'Min. ${DashboardPreparedFormatter.amountMinor(insight.minimumAmountMinor)} · Medián ${DashboardPreparedFormatter.amountMinor(insight.roundedMedianAmountMinor)} · Max. ${DashboardPreparedFormatter.amountMinor(insight.maximumAmountMinor)}',
-            )
-          else
-            _TransactionSizeDistribution(
-              key: const ValueKey<String>(
-                'balance-category-insight-distribution',
-              ),
-              distribution: insight.distribution,
+                Padding(
+                  padding: EdgeInsets.symmetric(vertical: compact ? 3 : 8),
+                  child: Divider(height: 1),
+                ),
+                _DetailSectionTitle(
+                  'Tipikus tranzakcióméret',
+                  compact: compact,
+                ),
+                SizedBox(height: compact ? 2 : 4),
+                Expanded(
+                  child:
+                      insight.temporalBuckets.isEmpty &&
+                          insight.usesDayLowSampleFallback
+                      ? Align(
+                          alignment: Alignment.topLeft,
+                          child: _MetricLine(
+                            key: const ValueKey<String>(
+                              'balance-category-insight-day-fallback',
+                            ),
+                            text:
+                                'Min. ${DashboardPreparedFormatter.amountMinor(insight.minimumAmountMinor)} · Medián ${DashboardPreparedFormatter.amountMinor(insight.roundedMedianAmountMinor)} · Max. ${DashboardPreparedFormatter.amountMinor(insight.maximumAmountMinor)}',
+                          ),
+                        )
+                      : _TransactionSizeDistribution(
+                          key: const ValueKey<String>(
+                            'balance-category-insight-distribution',
+                          ),
+                          distribution: insight.distribution,
+                          accentColor: categoryColor,
+                        ),
+                ),
+              ],
             ),
-        ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+abstract final class _RankedDetailPageVisualSpec {
+  static const titleRowHeight = 20.0;
+  static const titleToHeroGap = 8.0;
+}
+
+Color _categoryAccentColor(BuildContext context, String categoryColorId) =>
+    CategoryAvatarPaletteCatalog.tokenFor(
+      CategoryAvatarColorProfileScope.profileOf(context),
+      CategoryColorCatalog.handleOf(categoryColorId),
+    ).middleColor;
+
+final class _CategoryMedianAmount extends StatelessWidget {
+  const _CategoryMedianAmount({required this.amountMinor, required this.color});
+
+  final int amountMinor;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 170),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Text(
+        key: const ValueKey<String>('balance-category-insight-median'),
+        DashboardPreparedFormatter.amountMinor(amountMinor),
+        maxLines: 1,
+        softWrap: false,
+        textAlign: TextAlign.end,
+        style: TextStyle(
+          color: color,
+          fontSize: 21,
+          height: 1,
+          fontWeight: FontWeight.w900,
+          fontVariations: const <FontVariation>[FontVariation('wght', 950)],
+        ),
       ),
     ),
   );
 }
 
-final class _CategoryMedianHero extends StatelessWidget {
-  const _CategoryMedianHero({required this.amountMinor});
+final class _CategoryMedianPill extends StatelessWidget {
+  const _CategoryMedianPill({required this.color});
 
-  final int amountMinor;
+  final Color color;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: FluviVisualTokens.appHighlightGradient,
-          borderRadius: BorderRadius.circular(99),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          child: Text(
-            'MEDIÁN',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: FluviVisualTokens.textOnAction,
-              fontWeight: FontWeight.w800,
-              letterSpacing: .4,
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 1),
-      Text(
-        key: const ValueKey<String>('balance-category-insight-median'),
-        DashboardPreparedFormatter.amountMinor(amountMinor),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: FluviVisualTokens.textPrimary,
+  Widget build(BuildContext context) => DecoratedBox(
+    key: const ValueKey<String>('balance-category-insight-median-pill'),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(99),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Text(
+        'MEDIÁN',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: FluviVisualTokens.textOnAction,
           fontWeight: FontWeight.w800,
+          letterSpacing: .4,
         ),
       ),
-    ],
+    ),
   );
 }
 
 final class _CategoryMetricPill extends StatelessWidget {
-  const _CategoryMetricPill({required this.text});
+  const _CategoryMetricPill({required this.text, this.compact = false});
 
   final String text;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -807,7 +899,7 @@ final class _CategoryMetricPill extends StatelessWidget {
       borderRadius: BorderRadius.circular(99),
     ),
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: EdgeInsets.symmetric(horizontal: 9, vertical: compact ? 1 : 3),
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -969,17 +1061,22 @@ final class _DetailHero extends StatelessWidget {
 }
 
 final class _DetailSectionTitle extends StatelessWidget {
-  const _DetailSectionTitle(this.title);
+  const _DetailSectionTitle(this.title, {this.compact = false});
 
   final String title;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Text(
     title,
-    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-      color: FluviVisualTokens.textPrimary,
-      fontWeight: FontWeight.w800,
-    ),
+    style:
+        (compact
+                ? Theme.of(context).textTheme.labelMedium
+                : Theme.of(context).textTheme.labelLarge)
+            ?.copyWith(
+              color: FluviVisualTokens.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
   );
 }
 
@@ -1068,17 +1165,34 @@ final class _TemporalProfile extends StatelessWidget {
 }
 
 final class _TransactionSizeDistribution extends StatelessWidget {
-  const _TransactionSizeDistribution({super.key, required this.distribution});
+  const _TransactionSizeDistribution({
+    super.key,
+    required this.distribution,
+    required this.accentColor,
+  });
 
   final DashboardBalanceTransactionSizeDistribution distribution;
+  final Color accentColor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact = constraints.maxHeight < 60;
+      return _buildDistribution(context, compact: compact);
+    },
+  );
+
+  Widget _buildDistribution(BuildContext context, {required bool compact}) {
     const labels = <String>['0–5k', '5–10k', '10–20k', '20k+'];
     final counts = distribution.counts;
+    final total = counts.fold<int>(0, (sum, count) => sum + count);
     return Semantics(
       label: 'Tranzakcióméret eloszlás: ${counts.join(', ')}',
       child: Column(
+        mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+        mainAxisAlignment: compact
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.spaceEvenly,
         children: <Widget>[
           Row(
             children: <Widget>[
@@ -1086,13 +1200,13 @@ final class _TransactionSizeDistribution extends StatelessWidget {
                 Expanded(
                   flex: counts[index] == 0 ? 1 : counts[index],
                   child: Container(
-                    height: 12,
+                    height: compact ? 10 : 14,
                     margin: EdgeInsets.only(
                       right: index == counts.length - 1 ? 0 : 2,
                     ),
                     decoration: BoxDecoration(
                       color: index == distribution.dominantBucketIndex
-                          ? FluviVisualTokens.textPrimary.withValues(alpha: .70)
+                          ? accentColor.withValues(alpha: .78)
                           : FluviVisualTokens.textSecondary.withValues(
                               alpha: .32,
                             ),
@@ -1102,7 +1216,6 @@ final class _TransactionSizeDistribution extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 4),
           Row(
             children: <Widget>[
               for (final label in labels)
@@ -1117,6 +1230,22 @@ final class _TransactionSizeDistribution extends StatelessWidget {
                 ),
             ],
           ),
+          if (!compact)
+            Row(
+              children: <Widget>[
+                for (final count in counts)
+                  Expanded(
+                    child: Text(
+                      total == 0 ? '0%' : '${(count * 100 / total).round()}%',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: FluviVisualTokens.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );
