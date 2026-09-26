@@ -1,104 +1,111 @@
 {
   "schema_version": 1,
-  "record_count": 27725,
+  "record_count": 28123,
   "shards": [
     {
       "path": "edges/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/core/design/`dashboard_layout_metrics.dart`/DashboardLayoutMetrics#brandLockupWidth.",
-      "sha256": "1e271da0b214c44647dc6e61580cad4a2b9346186d44eb747c1e896d21ca8159"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/core/design/`dashboard_layout_frame.dart`/DashboardLayoutFrame#zone2Scale.",
+      "sha256": "ec1aa0fb55bf6b4b2370a746b736ac33988476fb01ecf42b7b6509d950132f7e"
     },
     {
       "path": "edges/part-001.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/core/design/`dashboard_layout_metrics.dart`/DashboardLayoutMetrics#brandLockupWidth.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_balance_closings_momentum_projection.dart`/DashboardBalanceClosingBucket#incomeMinor.",
-      "sha256": "a68a4eda46c5cd6c55e39da0c29139a2090db29addbf9724d3da2c980e1fef08"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/core/design/`dashboard_layout_frame.dart`/DashboardLayoutFrame#zone2Shift.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_avatar_resource_window.dart`/AvatarPreviewTerminal#acceptedExactEmptyPainted.",
+      "sha256": "4caf9c652d5f45660bca78894c90ef33a50106c38ad2caea758c176fd7d14a44"
     },
     {
       "path": "edges/part-002.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_balance_closings_momentum_projection.dart`/DashboardBalanceClosingBucket#incomeMinor.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_target.dart`/DashboardBudgetTargetCatalog#targetAtHandle().",
-      "sha256": "96abe2dd62670ccabdb18feccb50ded3d60fab6475e6e0e02c9f67be336bee52"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_avatar_resource_window.dart`/AvatarPreviewTerminal#acceptedExactNonEmptyPainted.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_presentation_controller.dart`/DashboardBudgetTargetPresentationItem#target.",
+      "sha256": "c8b2a6bbdec8fa032576bd1c746b4c198da7794646ab59caa7c88e7000748cae"
     },
     {
       "path": "edges/part-003.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_target.dart`/DashboardBudgetTargetCatalog#targetAtHandle().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_rail_flight_recorder.dart`/DashboardRailFlightEvent#rootRebuildCount.",
-      "sha256": "1d3c7edfb745454e5e4fe6d2d004e358d76f06b713242436946eb35ec3fe8076"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_budget_presentation_controller.dart`/DashboardBudgetTargetPresentationItem#target.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_performance_counters.dart`/DashboardPerformanceMetric#platformCallsDuringMotion.",
+      "sha256": "ec1c026e4102a8e189b978c76131ce5251f63388bfdc3744ebf2a2f7942a0ee2"
     },
     {
       "path": "edges/part-004.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_rail_flight_recorder.dart`/DashboardRailFlightEvent#sampleCount.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/logbox/application/`dashboard_logbox_scene_window.dart`/DashboardLogBoxRetainedSceneWindowAdmission#`<constructor>`().",
-      "sha256": "046f73ef6193c43ea013c91d94706e2cf090215e62bef7e0202a24667a787f80"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/application/`dashboard_performance_counters.dart`/DashboardPerformanceMetric#platformCallsDuringMotion.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/logbox/application/`dashboard_log_viewport_state.dart`/LogAmountStyle#income.",
+      "sha256": "2aa32e7a4a714c605d665d1dfbba034a63c73b305c8e8681faab69982e3ec92f"
     },
     {
       "path": "edges/part-005.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/logbox/application/`dashboard_logbox_scene_window.dart`/DashboardLogBoxRetainedSceneWindowAdmission#`<constructor>`().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/_MindDetailedSumPainter#year.",
-      "sha256": "545a9e9e260d0acc358d379e5acf3b28e8e5a216c634035580f8bcb2825c467d"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/logbox/application/`dashboard_log_viewport_state.dart`/LogAmountStyle#income.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_projection.dart`/MindYearHeatmapPaletteIntensity#maximum.",
+      "sha256": "638faf825997396614c0aba754f9a332e701a0d237a6f268e2ca6091926e7bcd"
     },
     {
       "path": "edges/part-006.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/presentation/`mind_detailed_sum_chart.dart`/_MindDetailedSumPointInfoCard#`<constructor>`().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_dashboard_core_surface.dart`/_LatestCarouselHeader#transaction.",
-      "sha256": "19cd9bcd9f4b0dab6d387bba66574e0843499a2ed582c0151b170718c59ad4c7"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_year_heatmap_projection.dart`/MindYearHeatmapPaletteIntensity#maximum.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`summary_pill_variant.dart`/SummaryPillVariant#",
+      "sha256": "fad21ac9ed2729d16ae70f9297b784c1539d2c7c4633efcd05ef2b1f0f4901ec"
     },
     {
       "path": "edges/part-007.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_dashboard_core_surface.dart`/_LatestCarouselPreview#`<constructor>`().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_portal_material_field.dart`/DashboardHeaderPortalChannel#innerMotion.",
-      "sha256": "191e5aa8cc7e0e59620c9fb0c3bff8a34422def5b60db9d4faa9de37b8b79cdb"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`summary_pill_variant.dart`/SummaryPillVariant#",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_fragment_backend.dart`/DashboardHeaderFragmentPaintInput#elapsed.",
+      "sha256": "2b97a80571beea83348f5849be21d2d9a1608a25a14fe5d62ac663b9b61da397"
     },
     {
       "path": "edges/part-008.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_portal_material_field.dart`/DashboardHeaderPortalChannel#innerMotion.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_prepared_scene_cache.dart`/DashboardLogBoxPreparedSceneCache#railCriticalSceneFor().",
-      "sha256": "c62893570b4b710da5cff53bb7fa2b878f9e45944b098b5253c5623eb43c42e2"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_fragment_backend.dart`/DashboardHeaderFragmentPaintInput#interior.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_partner_swipe.dart`/DashboardLogBoxPartnerSwipeGestureRecognizer#onSwipeCancelled.",
+      "sha256": "2ee1c37a196f764fa387d29ccac32a57c5a8fedd49111bddd3abd27edffd271f"
     },
     {
       "path": "edges/part-009.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_prepared_scene_cache.dart`/DashboardLogBoxPreparedSceneCache#railCriticalSceneFor().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/domain/`ledger_direction.dart`/LedgerDirection#",
-      "sha256": "679a1a06d4f1e94c687720b5b8f7498567aace2c5bda48f6a6fb329708b8f307"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/widgets/`dashboard_logbox_partner_swipe.dart`/DashboardLogBoxPartnerSwipeGestureRecognizer#onSwipeCancelled.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/domain/`current_ledger_query_scope.dart`/CurrentLedgerQueryScope#copyWith().",
+      "sha256": "aaf917cd0273984234389cc0bc42e877790b74d4380cea18678c2df7a68b895d"
     },
     {
       "path": "edges/part-010.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/domain/`ledger_direction.dart`/LedgerDirection#",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`dashboard_ephemeral_focus_deriver.dart`/_DashboardEphemeralFocusedOverlay#`<get>direction`.",
-      "sha256": "db0bbe31e466e6f33f948494520ed540c374630b6312648b221bdf464f7d5a49"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/query/domain/`current_ledger_query_scope.dart`/CurrentLedgerQueryScope#copyWith().",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`dashboard_data_runtime_repository.dart`/DashboardCommittedPageRequest#pageOrdinal.",
+      "sha256": "40c63a211e2baa22baa6f66def4f8ad08aaa2c2c0e23ab76a9ea22f3eb59d5fe"
     },
     {
       "path": "edges/part-011.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`dashboard_ephemeral_focus_deriver.dart`/_DashboardEphemeralFocusedOverlay#`<get>knownScopes`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_time_navigation_state.dart`/DashboardTimeNavigationChange#kind.",
-      "sha256": "aa5faa79198817403142c723d07146defbd32a77ee9921bb59e70fc064116771"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/data/`dashboard_data_runtime_repository.dart`/DashboardCommittedPageRequest#pageOrdinal.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_segmented_target_acceptance.dart`/DashboardSegmentedTargetAcceptance#acceptedDeferredForPainterResource.",
+      "sha256": "81296764b06cef3dda41c04e1b817681f8e5a8d1b9dc4acbe73f3be308f24448"
     },
     {
       "path": "edges/part-012.jsonl",
       "record_count": 2000,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_time_navigation_state.dart`/DashboardTimeNavigationChange#kind.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel.dart`/CenteredCarousel#spec.",
-      "sha256": "5472ba715c62849a192afd4c41d73fe698bac409ebcc9b313faf2b29e573d568"
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/application/`dashboard_segmented_target_acceptance.dart`/DashboardSegmentedTargetAcceptance#acceptedDeferredForPainterResource.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/visible/domain/`dashboard_visible_frame.dart`/DashboardVisibleFrame#asCommitted().",
+      "sha256": "5bfbc09840b42204ec1feac0756faf216581d5b46b5e29e2ccf022ec2b74746e"
     },
     {
       "path": "edges/part-013.jsonl",
-      "record_count": 1725,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel.dart`/CenteredCarousel#viewportKey.",
+      "record_count": 2000,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/visible/domain/`dashboard_visible_frame.dart`/DashboardVisibleFrame#childLabel.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_navigation_zero_io_acceptance_test.dart`/_CountingRuntimeRepository#sqlCount.",
+      "sha256": "8110d9ee9ab862bf172fb5911be248e28e21dae62d48e2ecef80a9dd59e6488a"
+    },
+    {
+      "path": "edges/part-014.jsonl",
+      "record_count": 123,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_navigation_zero_io_acceptance_test.dart`/_DisplayFrameScheduler#currentFrameNumber.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_pump.dart`/pumpDashboardSurface().",
-      "sha256": "af830d986cbf82b75a6681bdbc97a38b76cec0e8983d3ed72be871d7e0c8ca9e"
+      "sha256": "14ad9ddd453d60571b7bb4eecab3b1dbba182adcb3d89552f5fa6ce5016493aa"
     }
   ]
 }
