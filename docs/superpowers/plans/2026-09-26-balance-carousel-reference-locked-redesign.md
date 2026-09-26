@@ -25,9 +25,9 @@
 - Consumes: existing Balance surface fixture, card keys, and `CenteredCarouselController`.
 - Produces: `RCR-RED-01` structural/geometry evidence and the unchanged-card-envelope assertion used by Task 2.
 
-- [ ] Add `RCR-RED-01`, rendering the existing Balance surface at `Size(412, 892)`, selecting each card, and requiring keyed accent shell, wave layer, and icon tile for every topic.
-- [ ] In the same test, compare rects: title begins in the top-left lane, icon tile is right of the card midpoint and above the primary line, and primary/secondary copy stays in the lower-left lane with increasing vertical positions.
-- [ ] Preserve/extend the existing fixed-carousel assertion so selected and neighbour sizes/engine scales do not change.
+- [x] Add `RCR-RED-01`, rendering the existing Balance surface at `Size(412, 892)`, selecting each card, and requiring keyed accent shell, wave layer, and icon tile for every topic.
+- [x] In the same test, compare rects: title begins in the top-left lane, icon tile is right of the card midpoint and above the primary line, and primary/secondary copy stays in the lower-left lane with increasing vertical positions.
+- [x] Preserve/extend the existing fixed-carousel assertion so selected and neighbour sizes/engine scales do not change.
 - [ ] Run:
 
   ```bash
@@ -46,11 +46,11 @@
 - Consumes: `BalanceCarouselCard`, existing `CenteredCarouselItemMetrics.isSelected`, category identity/visual palette, Dashboard corner/shadow scopes.
 - Produces: `_BalanceCarouselReferenceVisualSpec`, `_BalanceCarouselReferenceAccent`, `_BalanceCarouselSoftWave`, `_BalanceCarouselIconTile`, and the unchanged public/interaction surface.
 
-- [ ] Change only the existing item-builder adapter to pass `metrics.isSelected` to `_BalanceCarouselCard`; retain all existing `CenteredCarouselSpec`, controller, offsets, transforms, callbacks, and hit bounds.
-- [ ] Resolve one accent from `CategoryAvatarPaletteCatalog.gradientFor(CategoryAvatarColorProfileScope.profileOf(context), CategoryColorCatalog.handleOf(card.categoryColorId))`; use `FluviVisualTokens.appHighlightGradient` only for cards lacking category identity.
-- [ ] Replace the current title-plus-leading-row composition with a clipped `Stack`: reference-tinted shell plus fine accent border, passive lower wave, top-left title, top-right  icon tile, and lower-left one-line primary/secondary copy.
-- [ ] Keep reference proportions in `_BalanceCarouselReferenceVisualSpec.resolve(Size)`: title, tile, primary/secondary font scale, side/top/bottom insets, lane reservation and wave curve constants have one source. Preserve ellipsis rather than reflowing text.
-- [ ] Keep `BalanceCategoryVisualBadge` as the category icon renderer inside the tile and use the existing semantic icon fallback for non-category cards.
+- [x] Change only the existing item-builder adapter to pass `metrics.isSelected` to `_BalanceCarouselCard`; retain all existing `CenteredCarouselSpec`, controller, offsets, transforms, callbacks, and hit bounds.
+- [x] Resolve one accent from `CategoryAvatarPaletteCatalog.gradientFor(CategoryAvatarColorProfileScope.profileOf(context), CategoryColorCatalog.handleOf(card.categoryColorId))`; use `FluviVisualTokens.appHighlightGradient` only for cards lacking category identity.
+- [x] Replace the current title-plus-leading-row composition with a clipped `Stack`: reference-tinted shell plus fine accent border, passive lower wave, top-left title, top-right  icon tile, and lower-left one-line primary/secondary copy.
+- [x] Keep reference proportions in `_BalanceCarouselReferenceVisualSpec.resolve(Size)`: title, tile, primary/secondary font scale, side/top/bottom insets, lane reservation and wave curve constants have one source. Preserve ellipsis rather than reflowing text.
+- [x] Keep `BalanceCategoryVisualBadge` as the category icon renderer inside the tile and use the existing semantic icon fallback for non-category cards.
 - [ ] Run the Task 1 command again. Expected: PASS.
 
 ### Task 3: Reference screenshot evidence and regression verification
@@ -63,14 +63,14 @@
 - Consumes: the Task 2 renderer and existing golden harness.
 - Produces: inspected proof of the exact selected-card reference grammar.
 
-- [ ] Update `BCL-03` only with `--update-goldens` after Task 2 is green:
+- [x] Update `BCL-03` only with `--update-goldens` after Task 2 is green:
 
   ```bash
   proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/fluvi-balance-carousel-recovery && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart --plain-name "BCL-03" --update-goldens'
   ```
 
-- [ ] Inspect `test/goldens/balance_carousel_canonical_layout.png` next to the direct source reference; verify outline, tint, lower wave, top-left title, top-right tile and lower-left hierarchy.
-- [ ] Run the complete focused surface suite and analyzer:
+- [x] Inspect `test/goldens/balance_carousel_canonical_layout.png` next to the direct source reference; verify outline, tint, lower wave, top-left title, top-right tile and lower-left hierarchy.
+- [x] Run the complete focused surface suite and analyzer:
 
   ```bash
   proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/fluvi-balance-carousel-recovery && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/balance_dashboard_core_surface_test.dart'

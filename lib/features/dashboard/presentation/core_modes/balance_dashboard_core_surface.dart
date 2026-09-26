@@ -9,6 +9,9 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/design/header_cascade_motion.dart';
+import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
@@ -846,6 +849,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
               card: card,
               width: geometry.cardWidth,
               itemHeight: carouselHeight,
+              isSelected: metrics.isSelected,
             ),
           ),
         ),
@@ -895,11 +899,13 @@ final class _BalanceCarouselCard extends StatelessWidget {
     required this.card,
     required this.width,
     required this.itemHeight,
+    required this.isSelected,
   });
 
   final BalanceCarouselCard card;
   final double width;
   final double itemHeight;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -907,9 +913,10 @@ final class _BalanceCarouselCard extends StatelessWidget {
     // layout/hit bounds. The shared carousel keeps it at scale 1 and scales
     // only its neighbours down, so no selected visual relies on paint-only
     // overflow or an undersized interactive parent.
-    final visualSpec = _BalanceCarouselMiniCardVisualSpec.resolve(
+    final visualSpec = _BalanceCarouselReferenceVisualSpec.resolve(
       size: Size(width, itemHeight),
     );
+    final accent = _BalanceCarouselReferenceAccent.resolve(context, card);
     return SizedBox(
       key: ValueKey<String>('balance-carousel-card-${card.id}'),
       width: width,
@@ -919,6 +926,11 @@ final class _BalanceCarouselCard extends StatelessWidget {
           final depth = DashboardShadowStyleScope.profileOf(
             context,
           ).depthFor(DashboardCornerSurfaceFamily.contentCard);
+          final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
+              .borderRadiusFor(
+                DashboardCornerSurfaceFamily.contentCard,
+                size: Size(width, itemHeight),
+              );
           return DecoratedBox(
             key: ValueKey<String>('balance-carousel-card-surface-${card.id}'),
             decoration: BoxDecoration(
@@ -926,23 +938,47 @@ final class _BalanceCarouselCard extends StatelessWidget {
               border: DashboardBorderScope.profileOf(
                 context,
               ).borderFor(DashboardBorderSurface.balanceContent),
-              borderRadius: DashboardCornerRoundnessScope.profileOf(context)
-                  .borderRadiusFor(
-                    DashboardCornerSurfaceFamily.contentCard,
-                    size: Size(width, itemHeight),
-                  ),
+              borderRadius: borderRadius,
               boxShadow: depth.shadows,
             ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                visualSpec.horizontalPadding,
-                visualSpec.topPadding,
-                visualSpec.horizontalPadding,
-                visualSpec.bottomPadding,
-              ),
-              child: _BalanceCarouselMiniCardContent(
-                card: card,
-                visualSpec: visualSpec,
+            child: ClipRRect(
+              borderRadius: borderRadius,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  DecoratedBox(
+                    key: ValueKey<String>(
+                      'balance-carousel-card-reference-shell-${card.id}',
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.color.withValues(
+                        alpha: visualSpec.tintOpacityFor(isSelected),
+                      ),
+                      border: Border.all(
+                        color: accent.color.withValues(
+                          alpha: visualSpec.outlineOpacityFor(isSelected),
+                        ),
+                        width: visualSpec.outlineWidthFor(isSelected),
+                      ),
+                      borderRadius: borderRadius,
+                    ),
+                  ),
+                  CustomPaint(
+                    key: ValueKey<String>(
+                      'balance-carousel-card-reference-wave-${card.id}',
+                    ),
+                    painter: _BalanceCarouselSoftWavePainter(
+                      accentColor: accent.color,
+                      spec: visualSpec,
+                      isSelected: isSelected,
+                    ),
+                  ),
+                  _BalanceCarouselMiniCardContent(
+                    card: card,
+                    visualSpec: visualSpec,
+                    accent: accent,
+                  ),
+                ],
               ),
             ),
           );
@@ -952,70 +988,165 @@ final class _BalanceCarouselCard extends StatelessWidget {
   }
 }
 
-/// One responsive metric source for every Balance carousel card. The carousel
-/// itself is the only owner of selected/neighbor scale; this spec only adapts
-/// the one internal anatomy when an embedding gives it a genuinely smaller
-/// height.
+/// The sole reference-derived metric source for every Balance mini card. The
+/// shared carousel owns all focus/side scaling; this object owns only the
+/// internal card anatomy and scales it as one unit for constrained embeds.
 @immutable
-final class _BalanceCarouselMiniCardVisualSpec {
-  const _BalanceCarouselMiniCardVisualSpec._({
+final class _BalanceCarouselReferenceVisualSpec {
+  const _BalanceCarouselReferenceVisualSpec._({
     required this.horizontalPadding,
     required this.topPadding,
     required this.bottomPadding,
-    required this.titleToContentGap,
-    required this.visualSize,
-    required this.visualToCopyGap,
+    required this.titleTrailingGap,
+    required this.iconTileSize,
     required this.titleFontSize,
     required this.primaryFontSize,
     required this.secondaryFontSize,
     required this.primaryToSecondaryGap,
+    required this.normalTintOpacity,
+    required this.selectedTintOpacity,
+    required this.normalOutlineOpacity,
+    required this.selectedOutlineOpacity,
+    required this.normalOutlineWidth,
+    required this.selectedOutlineWidth,
+    required this.normalWaveOpacity,
+    required this.selectedWaveOpacity,
+    required this.waveLeadingHeightFactor,
+    required this.waveFirstControlWidthFactor,
+    required this.waveFirstControlHeightFactor,
+    required this.waveSecondControlWidthFactor,
+    required this.waveSecondControlHeightFactor,
+    required this.waveFirstCurveEndWidthFactor,
+    required this.waveTrailingHeightFactor,
+    required this.waveTrailingFirstControlWidthFactor,
+    required this.waveTrailingFirstControlHeightFactor,
+    required this.waveTrailingSecondControlWidthFactor,
+    required this.waveTrailingSecondControlHeightFactor,
+    required this.waveTrailingEndHeightFactor,
   });
 
   final double horizontalPadding;
   final double topPadding;
   final double bottomPadding;
-  final double titleToContentGap;
-  final double visualSize;
-  final double visualToCopyGap;
+  final double titleTrailingGap;
+  final double iconTileSize;
   final double titleFontSize;
   final double primaryFontSize;
   final double secondaryFontSize;
   final double primaryToSecondaryGap;
+  final double normalTintOpacity;
+  final double selectedTintOpacity;
+  final double normalOutlineOpacity;
+  final double selectedOutlineOpacity;
+  final double normalOutlineWidth;
+  final double selectedOutlineWidth;
+  final double normalWaveOpacity;
+  final double selectedWaveOpacity;
+  final double waveLeadingHeightFactor;
+  final double waveFirstControlWidthFactor;
+  final double waveFirstControlHeightFactor;
+  final double waveSecondControlWidthFactor;
+  final double waveSecondControlHeightFactor;
+  final double waveFirstCurveEndWidthFactor;
+  final double waveTrailingHeightFactor;
+  final double waveTrailingFirstControlWidthFactor;
+  final double waveTrailingFirstControlHeightFactor;
+  final double waveTrailingSecondControlWidthFactor;
+  final double waveTrailingSecondControlHeightFactor;
+  final double waveTrailingEndHeightFactor;
 
-  static _BalanceCarouselMiniCardVisualSpec resolve({required Size size}) {
-    // The normal Balance upper-card envelope is deliberately only 72 logical
-    // pixels high. Its canonical metrics retain the requested 42px leading
-    // visual, 14px side inset and 12px top inset. The title has no artificial
-    // spacer before the visual row, so this remains a real-layout envelope
-    // rather than relying on paint overflow. An unusually constrained embed
-    // scales the complete grammar together instead of creating a side-card
-    // variant.
-    final scale = ((size.height - 12) / 60).clamp(.55, 1.0).toDouble();
-    return _BalanceCarouselMiniCardVisualSpec._(
-      horizontalPadding: 14 * scale,
-      topPadding: 12 * scale,
-      bottomPadding: 2 * scale,
-      titleToContentGap: 0,
-      visualSize: 42 * scale,
-      visualToCopyGap: 10 * scale,
-      titleFontSize: 11 * scale,
-      primaryFontSize: 15 * scale,
-      secondaryFontSize: 12 * scale,
-      primaryToSecondaryGap: 2 * scale,
+  static _BalanceCarouselReferenceVisualSpec resolve({required Size size}) {
+    // The existing outer envelope is intentionally preserved. The reference
+    // grammar is therefore fitted inside the established 72px normal height,
+    // then uniformly reduced only for genuinely constrained embeddings.
+    final scale = (size.height / 72).clamp(.55, 1.0).toDouble();
+    return _BalanceCarouselReferenceVisualSpec._(
+      horizontalPadding: 12 * scale,
+      topPadding: 9 * scale,
+      bottomPadding: 6 * scale,
+      titleTrailingGap: 7 * scale,
+      iconTileSize: 24 * scale,
+      titleFontSize: 9.5 * scale,
+      primaryFontSize: 17 * scale,
+      secondaryFontSize: 14 * scale,
+      primaryToSecondaryGap: 1 * scale,
+      normalTintOpacity: .055,
+      selectedTintOpacity: .075,
+      normalOutlineOpacity: .30,
+      selectedOutlineOpacity: .58,
+      normalOutlineWidth: 1,
+      selectedOutlineWidth: 1.35,
+      normalWaveOpacity: .095,
+      selectedWaveOpacity: .15,
+      waveLeadingHeightFactor: .78,
+      waveFirstControlWidthFactor: .22,
+      waveFirstControlHeightFactor: .64,
+      waveSecondControlWidthFactor: .47,
+      waveSecondControlHeightFactor: .97,
+      waveFirstCurveEndWidthFactor: .68,
+      waveTrailingHeightFactor: .72,
+      waveTrailingFirstControlWidthFactor: .82,
+      waveTrailingFirstControlHeightFactor: .58,
+      waveTrailingSecondControlWidthFactor: .93,
+      waveTrailingSecondControlHeightFactor: .78,
+      waveTrailingEndHeightFactor: .66,
+    );
+  }
+
+  double tintOpacityFor(bool isSelected) =>
+      isSelected ? selectedTintOpacity : normalTintOpacity;
+
+  double outlineOpacityFor(bool isSelected) =>
+      isSelected ? selectedOutlineOpacity : normalOutlineOpacity;
+
+  double outlineWidthFor(bool isSelected) =>
+      isSelected ? selectedOutlineWidth : normalOutlineWidth;
+
+  double waveOpacityFor(bool isSelected) =>
+      isSelected ? selectedWaveOpacity : normalWaveOpacity;
+}
+
+@immutable
+final class _BalanceCarouselReferenceAccent {
+  const _BalanceCarouselReferenceAccent._({
+    required this.gradient,
+    required this.color,
+  });
+
+  final LinearGradient gradient;
+  final Color color;
+
+  static _BalanceCarouselReferenceAccent resolve(
+    BuildContext context,
+    BalanceCarouselCard card,
+  ) {
+    final colorId = card.categoryColorId;
+    final gradient = colorId == null
+        ? FluviVisualTokens.appHighlightGradient
+        : CategoryAvatarPaletteCatalog.gradientFor(
+            CategoryAvatarColorProfileScope.profileOf(context),
+            CategoryColorCatalog.handleOf(colorId),
+          );
+    final colors = gradient.colors;
+    return _BalanceCarouselReferenceAccent._(
+      gradient: gradient,
+      color: colors[colors.length ~/ 2],
     );
   }
 }
 
-/// One canonical card grammar for all Balance carousel topics. It never falls
-/// back to a topic-specific text-only or Latest-specific layout family.
+/// One canonical reference grammar for all Balance carousel topics. Topic
+/// differences are supplied only by immutable copy and accent identity.
 final class _BalanceCarouselMiniCardContent extends StatelessWidget {
   const _BalanceCarouselMiniCardContent({
     required this.card,
     required this.visualSpec,
+    required this.accent,
   });
 
   final BalanceCarouselCard card;
-  final _BalanceCarouselMiniCardVisualSpec visualSpec;
+  final _BalanceCarouselReferenceVisualSpec visualSpec;
+  final _BalanceCarouselReferenceAccent accent;
 
   @override
   Widget build(BuildContext context) {
@@ -1024,73 +1155,73 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
     // semantic primary on line one and compact context on line two.
     final primary = card.amount;
     final secondary = card.detail ?? '—';
-    final visualSize = visualSpec.visualSize;
-    final iconSize = visualSize * (16 / 42);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: <Widget>[
-        Text(
-          card.title,
-          key: ValueKey<String>('balance-carousel-card-title-${card.id}'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: FluviVisualTokens.textSecondary,
-            fontSize: visualSpec.titleFontSize,
-            height: 1,
-            fontWeight: FontWeight.w600,
+        Positioned(
+          left: visualSpec.horizontalPadding,
+          top: visualSpec.topPadding,
+          right:
+              visualSpec.horizontalPadding +
+              visualSpec.iconTileSize +
+              visualSpec.titleTrailingGap,
+          child: Text(
+            card.title,
+            key: ValueKey<String>('balance-carousel-card-title-${card.id}'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: FluviVisualTokens.textSecondary,
+              fontSize: visualSpec.titleFontSize,
+              height: 1,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
-        SizedBox(height: visualSpec.titleToContentGap),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+        Positioned(
+          top: visualSpec.topPadding,
+          right: visualSpec.horizontalPadding,
+          child: _BalanceCarouselIconTile(
+            key: ValueKey<String>('balance-carousel-card-icon-tile-${card.id}'),
+            card: card,
+            accent: accent,
+            size: visualSpec.iconTileSize,
+          ),
+        ),
+        Positioned(
+          left: visualSpec.horizontalPadding,
+          right: visualSpec.horizontalPadding,
+          bottom: visualSpec.bottomPadding,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _BalanceCarouselVisual(
+              Text(
+                primary,
                 key: ValueKey<String>(
-                  'balance-carousel-card-visual-${card.id}',
+                  'balance-carousel-card-primary-${card.id}',
                 ),
-                card: card,
-                size: visualSize,
-                iconSize: iconSize,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: FluviVisualTokens.textPrimary,
+                  fontSize: visualSpec.primaryFontSize,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              SizedBox(width: visualSpec.visualToCopyGap),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      primary,
-                      key: ValueKey<String>(
-                        'balance-carousel-card-primary-${card.id}',
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: FluviVisualTokens.textPrimary,
-                        fontSize: visualSpec.primaryFontSize,
-                        height: 1.05,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: visualSpec.primaryToSecondaryGap),
-                    Text(
-                      secondary,
-                      key: ValueKey<String>(
-                        'balance-carousel-card-secondary-${card.id}',
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color:
-                            FluviVisualTokens.appHighlightGradient.colors.first,
-                        fontSize: visualSpec.secondaryFontSize,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+              SizedBox(height: visualSpec.primaryToSecondaryGap),
+              Text(
+                secondary,
+                key: ValueKey<String>(
+                  'balance-carousel-card-secondary-${card.id}',
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: accent.color,
+                  fontSize: visualSpec.secondaryFontSize,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -1101,44 +1232,46 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
   }
 }
 
-final class _BalanceCarouselVisual extends StatelessWidget {
-  const _BalanceCarouselVisual({
+final class _BalanceCarouselIconTile extends StatelessWidget {
+  const _BalanceCarouselIconTile({
     super.key,
     required this.card,
+    required this.accent,
     required this.size,
-    required this.iconSize,
   });
 
   final BalanceCarouselCard card;
+  final _BalanceCarouselReferenceAccent accent;
   final double size;
-  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
     final colorId = card.categoryColorId;
     final iconId = card.categoryIconId;
     if (colorId != null && iconId != null) {
-      return BalanceCategoryVisualBadge(
-        semanticLabel: card.amount,
-        categoryColorId: colorId,
-        categoryIconId: iconId,
-        size: size,
-        iconSize: iconSize,
-      );
-    }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: FluviVisualTokens.surfaceMuted,
-        borderRadius: BorderRadius.circular(size * .34),
-      ),
-      child: SizedBox(
+      return SizedBox(
         width: size,
         height: size,
-        child: Icon(
-          _iconFor(card.kind),
-          color: FluviVisualTokens.appHighlightGradient.colors.first,
-          size: iconSize,
+        child: BalanceCategoryVisualBadge(
+          key: ValueKey<String>('balance-carousel-card-visual-${card.id}'),
+          semanticLabel: card.amount,
+          categoryColorId: colorId,
+          categoryIconId: iconId,
+          size: size,
+          iconSize: size * .52,
         ),
+      );
+    }
+    return SizedBox(
+      width: size,
+      height: size,
+      child: DecoratedBox(
+        key: ValueKey<String>('balance-carousel-card-visual-${card.id}'),
+        decoration: BoxDecoration(
+          gradient: accent.gradient,
+          borderRadius: BorderRadius.circular(size * .30),
+        ),
+        child: Icon(_iconFor(card.kind), color: Colors.white, size: size * .52),
       ),
     );
   }
@@ -1156,4 +1289,55 @@ final class _BalanceCarouselVisual extends StatelessWidget {
     BalanceCarouselCardKind.topCategory ||
     BalanceCarouselCardKind.topPartner => Icons.category_rounded,
   };
+}
+
+final class _BalanceCarouselSoftWavePainter extends CustomPainter {
+  const _BalanceCarouselSoftWavePainter({
+    required this.accentColor,
+    required this.spec,
+    required this.isSelected,
+  });
+
+  final Color accentColor;
+  final _BalanceCarouselReferenceVisualSpec spec;
+  final bool isSelected;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final height = size.height;
+    final width = size.width;
+    final path = Path()
+      ..moveTo(0, height * spec.waveLeadingHeightFactor)
+      ..cubicTo(
+        width * spec.waveFirstControlWidthFactor,
+        height * spec.waveFirstControlHeightFactor,
+        width * spec.waveSecondControlWidthFactor,
+        height * spec.waveSecondControlHeightFactor,
+        width * spec.waveFirstCurveEndWidthFactor,
+        height * spec.waveTrailingHeightFactor,
+      )
+      ..cubicTo(
+        width * spec.waveTrailingFirstControlWidthFactor,
+        height * spec.waveTrailingFirstControlHeightFactor,
+        width * spec.waveTrailingSecondControlWidthFactor,
+        height * spec.waveTrailingSecondControlHeightFactor,
+        width,
+        height * spec.waveTrailingEndHeightFactor,
+      )
+      ..lineTo(width, height)
+      ..lineTo(0, height)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = accentColor.withValues(alpha: spec.waveOpacityFor(isSelected))
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BalanceCarouselSoftWavePainter oldDelegate) =>
+      oldDelegate.accentColor != accentColor ||
+      oldDelegate.spec != spec ||
+      oldDelegate.isSelected != isSelected;
 }

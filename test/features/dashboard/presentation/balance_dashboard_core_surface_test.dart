@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/core/categories/catalog/category_color_catalog.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
@@ -395,7 +396,7 @@ void main() {
   );
 
   testWidgets(
-    'BCP-RED-01: every carousel topic uses the same professional leading slot and copy hierarchy',
+    'RCR-RED-01: every Balance mini card uses the reference-locked shell, lower wave, and top-right tile grammar',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(412, 892));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -430,26 +431,6 @@ void main() {
         final card = cards[index];
         carousel.controller.jumpToIndex(index);
         await tester.pump();
-        final title = tester.widget<Text>(
-          find.byKey(
-            ValueKey<String>('balance-carousel-card-title-${card.id}'),
-          ),
-        );
-        final primary = tester.widget<Text>(
-          find.byKey(
-            ValueKey<String>('balance-carousel-card-primary-${card.id}'),
-          ),
-        );
-        final secondary = tester.widget<Text>(
-          find.byKey(
-            ValueKey<String>('balance-carousel-card-secondary-${card.id}'),
-          ),
-        );
-        final visual = tester.getRect(
-          find.byKey(
-            ValueKey<String>('balance-carousel-card-visual-${card.id}'),
-          ),
-        );
         final cardRect = tester.getRect(
           find.byKey(ValueKey<String>('balance-carousel-card-${card.id}')),
         );
@@ -468,18 +449,70 @@ void main() {
             ValueKey<String>('balance-carousel-card-secondary-${card.id}'),
           ),
         );
+        final tileRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-icon-tile-${card.id}'),
+          ),
+        );
 
-        expect(visual.width, greaterThanOrEqualTo(40));
-        expect(visual.height, greaterThanOrEqualTo(40));
-        expect(title.style!.fontSize, greaterThanOrEqualTo(11));
-        expect(primary.style!.fontSize, greaterThanOrEqualTo(14));
-        expect(secondary.style!.fontSize, greaterThanOrEqualTo(11));
-        expect(titleRect.top - cardRect.top, greaterThanOrEqualTo(12));
-        expect(visual.left - cardRect.left, greaterThanOrEqualTo(14));
-        expect(titleRect.bottom, lessThanOrEqualTo(visual.top));
-        expect(visual.right, lessThan(primaryRect.left));
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              'balance-carousel-card-reference-shell-${card.id}',
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-reference-wave-${card.id}'),
+          ),
+          findsOneWidget,
+        );
+        final shell = tester.widget<DecoratedBox>(
+          find.byKey(
+            ValueKey<String>(
+              'balance-carousel-card-reference-shell-${card.id}',
+            ),
+          ),
+        );
+        final shellDecoration = shell.decoration as BoxDecoration;
+        final outline = shellDecoration.border! as Border;
+        expect(shellDecoration.color!.a, inInclusiveRange(.01, .10));
+        expect(outline.top.width, greaterThan(0));
+        expect(outline.top.color.a, greaterThan(0));
+        expect(cardRect.width, closeTo(carousel.spec.itemExtent, .01));
+        expect(titleRect.left, lessThan(cardRect.center.dx));
+        expect(titleRect.top, lessThan(primaryRect.top));
+        expect(tileRect.left, greaterThan(cardRect.center.dx));
+        expect(tileRect.top, lessThan(primaryRect.top));
+        expect(tileRect.width, lessThan(cardRect.width * .25));
+        expect(primaryRect.left, lessThan(tileRect.left));
         expect(primaryRect.top, lessThan(secondaryRect.top));
+        expect(secondaryRect.bottom, lessThanOrEqualTo(cardRect.bottom));
       }
+      final selectedShell = tester.widget<DecoratedBox>(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-reference-shell-top-partner',
+          ),
+        ),
+      );
+      final neighboringShell = tester.widget<DecoratedBox>(
+        find.byKey(
+          const ValueKey<String>(
+            'balance-carousel-card-reference-shell-top-category',
+          ),
+        ),
+      );
+      final selectedOutline =
+          (selectedShell.decoration as BoxDecoration).border! as Border;
+      final neighboringOutline =
+          (neighboringShell.decoration as BoxDecoration).border! as Border;
+      expect(
+        selectedOutline.top.width,
+        greaterThan(neighboringOutline.top.width),
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -961,7 +994,7 @@ void main() {
       expect(defaultPrimary.style!.color, FluviVisualTokens.textPrimary);
       expect(
         defaultSecondary.style!.color,
-        FluviVisualTokens.appHighlightGradient.colors.first,
+        CategoryColorCatalog.resolve('color_07').middleColor,
       );
       expect(
         find.descendant(
