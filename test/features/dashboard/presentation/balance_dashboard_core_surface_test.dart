@@ -488,6 +488,10 @@ void main() {
         expect(tileRect.top, lessThan(primaryRect.top));
         expect(tileRect.width, lessThan(cardRect.width * .25));
         expect(primaryRect.left, lessThan(tileRect.left));
+        expect(
+          primaryRect.top,
+          greaterThanOrEqualTo(cardRect.top + cardRect.height * .45),
+        );
         expect(primaryRect.top, lessThan(secondaryRect.top));
         expect(secondaryRect.bottom, lessThanOrEqualTo(cardRect.bottom));
       }
@@ -513,6 +517,10 @@ void main() {
         selectedOutline.top.width,
         greaterThan(neighboringOutline.top.width),
       );
+      final selectedTint = (selectedShell.decoration as BoxDecoration).color!;
+      final neighboringTint =
+          (neighboringShell.decoration as BoxDecoration).color!;
+      expect(selectedTint.a, greaterThan(neighboringTint.a));
       expect(tester.takeException(), isNull);
     },
   );

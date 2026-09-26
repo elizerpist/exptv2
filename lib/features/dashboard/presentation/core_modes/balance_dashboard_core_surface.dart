@@ -999,6 +999,8 @@ final class _BalanceCarouselReferenceVisualSpec {
     required this.bottomPadding,
     required this.titleTrailingGap,
     required this.iconTileSize,
+    required this.iconGlyphSizeFactor,
+    required this.iconTileCornerRadiusFactor,
     required this.titleFontSize,
     required this.primaryFontSize,
     required this.secondaryFontSize,
@@ -1030,6 +1032,8 @@ final class _BalanceCarouselReferenceVisualSpec {
   final double bottomPadding;
   final double titleTrailingGap;
   final double iconTileSize;
+  final double iconGlyphSizeFactor;
+  final double iconTileCornerRadiusFactor;
   final double titleFontSize;
   final double primaryFontSize;
   final double secondaryFontSize;
@@ -1066,6 +1070,8 @@ final class _BalanceCarouselReferenceVisualSpec {
       bottomPadding: 6 * scale,
       titleTrailingGap: 7 * scale,
       iconTileSize: 24 * scale,
+      iconGlyphSizeFactor: .52,
+      iconTileCornerRadiusFactor: .30,
       titleFontSize: 9.5 * scale,
       primaryFontSize: 17 * scale,
       secondaryFontSize: 14 * scale,
@@ -1185,6 +1191,7 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
             card: card,
             accent: accent,
             size: visualSpec.iconTileSize,
+            visualSpec: visualSpec,
           ),
         ),
         Positioned(
@@ -1238,11 +1245,13 @@ final class _BalanceCarouselIconTile extends StatelessWidget {
     required this.card,
     required this.accent,
     required this.size,
+    required this.visualSpec,
   });
 
   final BalanceCarouselCard card;
   final _BalanceCarouselReferenceAccent accent;
   final double size;
+  final _BalanceCarouselReferenceVisualSpec visualSpec;
 
   @override
   Widget build(BuildContext context) {
@@ -1258,7 +1267,7 @@ final class _BalanceCarouselIconTile extends StatelessWidget {
           categoryColorId: colorId,
           categoryIconId: iconId,
           size: size,
-          iconSize: size * .52,
+          iconSize: size * visualSpec.iconGlyphSizeFactor,
         ),
       );
     }
@@ -1269,9 +1278,15 @@ final class _BalanceCarouselIconTile extends StatelessWidget {
         key: ValueKey<String>('balance-carousel-card-visual-${card.id}'),
         decoration: BoxDecoration(
           gradient: accent.gradient,
-          borderRadius: BorderRadius.circular(size * .30),
+          borderRadius: BorderRadius.circular(
+            size * visualSpec.iconTileCornerRadiusFactor,
+          ),
         ),
-        child: Icon(_iconFor(card.kind), color: Colors.white, size: size * .52),
+        child: Icon(
+          _iconFor(card.kind),
+          color: Colors.white,
+          size: size * visualSpec.iconGlyphSizeFactor,
+        ),
       ),
     );
   }
