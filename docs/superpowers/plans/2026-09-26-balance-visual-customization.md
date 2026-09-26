@@ -47,4 +47,4 @@
 - [x] Format production and test Dart files.
 - [x] Run every focused suite, default golden regression and targeted `flutter analyze` inside Ubuntu proot.
 - [x] Re-read this plan, the checklist and the current reference implementation; update every acceptance status honestly.
-- [ ] Commit app code/tests, push the feature branch, monitor the exact GitHub human diagnostic APK job, download the normal human APK to `/storage/emulated/0/Download/fluvi`, and record its SHA-256.
+- [x] Commit app code/tests, push the feature branch, monitor the exact GitHub human diagnostic APK job, download the normal human APK to `/storage/emulated/0/Download/fluvi`, and record its SHA-256.
