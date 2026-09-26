@@ -176,6 +176,27 @@ class _CoreDashboardState extends State<CoreDashboard>
   DashboardCoreController get controller => widget.controller;
   DashboardCoreModeController get modeController => widget.modeController;
 
+  Widget _buildCollapseHandle({
+    required DashboardBounds bounds,
+    required FluviCollapseHandleStyle style,
+    required bool isDragging,
+  }) => DashboardRenderDiagnosticProbe(
+    candidate: 'collapseHandle',
+    material: 'DashboardCollapseHandle ${style.name}',
+    clip: 'none',
+    zOrder: 'modeContent<logBoxViewport<collapseHandle',
+    child: DashboardCollapseHandle(
+      bounds: bounds,
+      style: style,
+      isDragging: isDragging,
+      onTap: controller.expansion.toggle,
+      onVerticalDragStart: (_) => _upperVerticalGestures.begin(),
+      onVerticalDragUpdate: (details) =>
+          _upperVerticalGestures.dragByViewport(details.delta.dy),
+      onVerticalDragEnd: (_) => _upperVerticalGestures.end(),
+    ),
+  );
+
   @override
   void initState() {
     super.initState();
@@ -738,8 +759,25 @@ class _CoreDashboardState extends State<CoreDashboard>
       modeController: modeController,
       layoutMetrics: layoutMetrics,
       bodyOrder: _bodyOrderController.value,
+      bodyOrderResolver: (mode) =>
+          mode.mode == DashboardMode.mind &&
+              _globalAppearance.mindExpandedSurfaceStyle ==
+                  MindExpandedSurfaceStyle.seamlessCard
+          ? DashboardBodyOrder(<DashboardBodyComponent>[
+              DashboardBodyComponent.modeContent,
+              DashboardBodyComponent.direction,
+              DashboardBodyComponent.summary,
+            ])
+          : _bodyOrderController.value,
       hasPhysicalRail:
           _summaryPillVariantController.value == SummaryPillVariant.legacy,
+      hasStandaloneCollapseHandle:
+          _globalAppearance.collapseHandleStyle ==
+          FluviCollapseHandleStyle.standalone,
+      seamlessHeaderContentResolver: (mode) =>
+          mode.mode == DashboardMode.mind &&
+          _globalAppearance.mindExpandedSurfaceStyle ==
+              MindExpandedSurfaceStyle.seamlessCard,
       modeContentExtraHeightResolver: _modeContentExtraHeightFor,
       builder: (context, frame) {
         final geometry = frame.geometry;
@@ -912,6 +950,9 @@ class _CoreDashboardState extends State<CoreDashboard>
                                                     .state
                                                     .effectiveScope
                                                 is DayScope,
+                                        mindExpandedSurfaceStyle:
+                                            _globalAppearance
+                                                .mindExpandedSurfaceStyle,
                                         onMindQueryAmountRangeRetry:
                                             widget.mindQueryFacetLoader == null
                                             ? null
@@ -946,6 +987,9 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             _budgetSectionOrderController,
                                         budgetRhythm: _budgetRhythm,
                                         budgetDrilldown: _budgetDrilldown,
+                                        budgetAvatarContentStyle:
+                                            _globalAppearance
+                                                .budgetAvatarContentStyle,
                                         performanceCounters:
                                             controller.performanceCounters,
                                         onBudgetAvatarDirectInputStarted:
@@ -989,6 +1033,13 @@ class _CoreDashboardState extends State<CoreDashboard>
                                             directionColorProfile:
                                                 _globalAppearance
                                                     .directionColorProfile,
+                                            directionControlStyle:
+                                                _globalAppearance
+                                                    .directionControlStyle,
+                                            activeLabelTone: _globalAppearance
+                                                .activeDirectionLabelTone,
+                                            inactiveLabelTone: _globalAppearance
+                                                .inactiveDirectionLabelTone,
                                             showsDirectionArtwork:
                                                 _globalAppearance
                                                     .showsDirectionArtwork,
@@ -1337,33 +1388,31 @@ class _CoreDashboardState extends State<CoreDashboard>
                                           ),
                                         ),
                                       ),
-                                      _FramePosition(
-                                        bounds: geometry.collapseHandleBounds,
-                                        child: DashboardRenderDiagnosticProbe(
-                                          candidate: 'collapseHandle',
-                                          material:
-                                              'DashboardCollapseHandle rounded control',
-                                          clip: 'none',
-                                          zOrder:
-                                              'modeContent<logBoxViewport<collapseHandle',
-                                          child: DashboardCollapseHandle(
+                                      if (geometry.hasStandaloneCollapseHandle)
+                                        _FramePosition(
+                                          bounds: geometry.collapseHandleBounds,
+                                          child: _buildCollapseHandle(
                                             bounds:
                                                 geometry.collapseHandleBounds,
+                                            style: FluviCollapseHandleStyle
+                                                .standalone,
                                             isDragging:
                                                 frame.isExpansionDragging,
-                                            onTap: controller.expansion.toggle,
-                                            onVerticalDragStart: (_) =>
-                                                _upperVerticalGestures.begin(),
-                                            onVerticalDragUpdate: (details) =>
-                                                _upperVerticalGestures
-                                                    .dragByViewport(
-                                                      details.delta.dy,
-                                                    ),
-                                            onVerticalDragEnd: (_) =>
-                                                _upperVerticalGestures.end(),
+                                          ),
+                                        )
+                                      else
+                                        _FramePosition(
+                                          bounds: geometry
+                                              .headerCollapseHandleBounds!,
+                                          child: _buildCollapseHandle(
+                                            bounds: geometry
+                                                .headerCollapseHandleBounds!,
+                                            style: _globalAppearance
+                                                .collapseHandleStyle,
+                                            isDragging:
+                                                frame.isExpansionDragging,
                                           ),
                                         ),
-                                      ),
                                       _DashboardHeaderVisualTunerOverlay(
                                         controller: _headerVisualController,
                                         summaryPillVariants:
@@ -1463,6 +1512,11 @@ class _CoreDashboardState extends State<CoreDashboard>
             'zone2=${bounds(geometry.zone2Bounds)} '
             'modeContent=${bounds(geometry.modeContentBounds)} '
             'collapseHandle=${bounds(geometry.collapseHandleBounds)} '
+            'headerHandle=${geometry.headerCollapseHandleBounds == null ? '-' : bounds(geometry.headerCollapseHandleBounds!)} '
+            'standaloneHandle=${geometry.hasStandaloneCollapseHandle} '
+            'handleStyle=${_globalAppearance.collapseHandleStyle.name} '
+            'directionStyle=${_globalAppearance.directionControlStyle.name} '
+            'headerModeLabel=${_globalAppearance.showsHeaderModeLabelAboveValue} '
             'logBoxHeader=${bounds(geometry.logBoxHeaderBounds)} '
             'lowerOpacity=${lowerMotion?.opacity.toStringAsFixed(3) ?? '-'} '
             'lowerScale=${lowerMotion?.scale.toStringAsFixed(3) ?? '-'} '
@@ -1500,6 +1554,11 @@ class _CoreDashboardState extends State<CoreDashboard>
             'chart=${bounds(geometry.zone2Bounds)} '
             'modeContent=${bounds(geometry.modeContentBounds)} '
             'collapseHandle=${bounds(geometry.collapseHandleBounds)} '
+            'headerHandle=${geometry.headerCollapseHandleBounds == null ? '-' : bounds(geometry.headerCollapseHandleBounds!)} '
+            'standaloneHandle=${geometry.hasStandaloneCollapseHandle} '
+            'handleStyle=${_globalAppearance.collapseHandleStyle.name} '
+            'directionStyle=${_globalAppearance.directionControlStyle.name} '
+            'headerModeLabel=${_globalAppearance.showsHeaderModeLabelAboveValue} '
             'logBoxHeader=${bounds(geometry.logBoxHeaderBounds)} '
             'lowerOpacity=${lowerMotion?.opacity.toStringAsFixed(3) ?? '-'} '
             'lowerScale=${lowerMotion?.scale.toStringAsFixed(3) ?? '-'} '

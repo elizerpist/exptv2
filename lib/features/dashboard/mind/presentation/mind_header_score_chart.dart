@@ -145,6 +145,7 @@ final class MindHeaderScoreChart extends StatefulWidget {
     this.lineColor = MindHeaderScoreChartStyle.lineColor,
     this.areaFadeColor,
     this.showsAreaFade = true,
+    this.layout = const DashboardHeaderTrendChartLayout.normal(),
   });
 
   final MindBehavioralScoreChartSeries series;
@@ -155,6 +156,7 @@ final class MindHeaderScoreChart extends StatefulWidget {
   final Color lineColor;
   final Color? areaFadeColor;
   final bool showsAreaFade;
+  final DashboardHeaderTrendChartLayout layout;
 
   /// Five semantic quarter positions over the immutable score-series time
   /// domain. These are dates first and pixels second, so scope/range/history
@@ -239,9 +241,9 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
           children: <Widget>[
             Positioned(
               left: MindHeaderScoreChartStyle.plotLeft,
-              top: MindHeaderScoreChartStyle.plotTop,
+              top: widget.layout.plotTop,
               width: MindHeaderScoreChartStyle.plotWidth,
-              height: MindHeaderScoreChartStyle.plotHeight,
+              height: widget.layout.plotHeight,
               child: Listener(
                 key: _plotKey,
                 behavior: HitTestBehavior.translucent,
@@ -256,13 +258,13 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
                       'mind-header-score-chart-reveal',
                     ),
                     width: MindHeaderScoreChartStyle.plotWidth,
-                    height: MindHeaderScoreChartStyle.plotHeight * reveal,
+                    height: widget.layout.plotHeight * reveal,
                     child: ClipRect(
                       child: Align(
                         alignment: Alignment.topCenter,
                         child: SizedBox(
                           width: MindHeaderScoreChartStyle.plotWidth,
-                          height: MindHeaderScoreChartStyle.plotHeight,
+                          height: widget.layout.plotHeight,
                           child: RepaintBoundary(
                             child: CustomPaint(
                               key: const ValueKey<String>(
@@ -289,6 +291,7 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
               _MindHeaderScoreChartTimeLabels(
                 series: series,
                 expansionProgress: reveal,
+                layout: widget.layout,
               ),
             if (selected != null)
               _MindHeaderScoreChartSelectedLabels(
@@ -296,6 +299,7 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
                 projection: projection,
                 temporalContext: widget.temporalContext,
                 availableWidth: constraints.maxWidth,
+                layout: widget.layout,
               ),
           ],
         ),
@@ -388,6 +392,7 @@ final class _MindHeaderScoreChartSelectedLabels extends StatelessWidget {
     required this.projection,
     required this.temporalContext,
     required this.availableWidth,
+    required this.layout,
   });
 
   static const _scoreWidth = 46.0;
@@ -397,6 +402,7 @@ final class _MindHeaderScoreChartSelectedLabels extends StatelessWidget {
   final MindHeaderScoreChartTemporalProjection projection;
   final MindHeaderScoreChartTemporalContext temporalContext;
   final double availableWidth;
+  final DashboardHeaderTrendChartLayout layout;
 
   @override
   Widget build(BuildContext context) {
@@ -412,7 +418,7 @@ final class _MindHeaderScoreChartSelectedLabels extends StatelessWidget {
           key: const ValueKey<String>('mind-header-score-chart-selected-score'),
           text: '${point.roundedScore}/100',
           left: _clampedLeft(x, _scoreWidth),
-          top: MindHeaderScoreChartStyle.plotTop + 1,
+          top: layout.plotTop + 1,
           width: _scoreWidth,
         ),
         _label(
@@ -425,8 +431,8 @@ final class _MindHeaderScoreChartSelectedLabels extends StatelessWidget {
           ),
           left: _clampedLeft(x, _temporalWidth),
           top:
-              MindHeaderScoreChartStyle.plotTop +
-              MindHeaderScoreChartStyle.plotHeight -
+              layout.plotTop +
+              layout.plotHeight -
               MindHeaderScoreChartStyle.timeLabelHeight,
           width: _temporalWidth,
         ),
@@ -476,16 +482,18 @@ final class _MindHeaderScoreChartTimeLabels extends StatelessWidget {
   const _MindHeaderScoreChartTimeLabels({
     required this.series,
     required this.expansionProgress,
+    required this.layout,
   });
 
   final MindBehavioralScoreChartSeries series;
   final double expansionProgress;
+  final DashboardHeaderTrendChartLayout layout;
 
   @override
   Widget build(BuildContext context) {
     final visibleHeight =
-        (MindHeaderScoreChartStyle.timeLabelRevealExtent * expansionProgress -
-                MindHeaderScoreChartStyle.plotHeight -
+        (layout.timeLabelRevealExtent * expansionProgress -
+                layout.plotHeight -
                 4)
             .clamp(0.0, MindHeaderScoreChartStyle.timeLabelHeight)
             .toDouble();
@@ -506,7 +514,7 @@ final class _MindHeaderScoreChartTimeLabels extends StatelessWidget {
         .toList(growable: false);
     return Positioned(
       left: MindHeaderScoreChartStyle.plotLeft,
-      top: MindHeaderScoreChartStyle.timeLabelTop,
+      top: layout.timeLabelTop,
       width: MindHeaderScoreChartStyle.plotWidth,
       height: visibleHeight,
       child: ClipRect(

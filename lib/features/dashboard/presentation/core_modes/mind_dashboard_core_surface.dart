@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/design/dashboard_border_profile.dart';
+import '../../../../core/design/dashboard_corner_profile.dart';
+import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
@@ -26,6 +28,7 @@ import '../../time_navigation/domain/time_plane.dart';
 import '../widgets/dashboard_placeholder_card.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
+import '../dashboard_corner_roundness.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
 import 'dashboard_header_visual_engine.dart';
@@ -46,6 +49,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   const MindDashboardCoreSurface({
     super.key,
     required this.presentation,
+    this.expandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
     this.queryAmountRange,
     this.queryAmountRangeChanges,
     this.queryAmountRangeLifecycleChanges,
@@ -78,6 +82,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   });
 
   final DashboardCoreModePresentation presentation;
+  final MindExpandedSurfaceStyle expandedSurfaceStyle;
   final QueryAmountRangeValues? Function()? queryAmountRange;
   final Listenable? queryAmountRangeChanges;
   final Listenable? queryAmountRangeLifecycleChanges;
@@ -115,59 +120,118 @@ class MindDashboardCoreSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final geometry = presentation.geometry;
     final bodyBounds = geometry.unifiedSubheaderBounds!;
+    final isSeamless =
+        expandedSurfaceStyle == MindExpandedSurfaceStyle.seamlessCard &&
+        geometry.seamlessHeaderContent;
+    final headerRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.header,
+          size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
+        );
+    final contentRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.contentCard,
+          size: Size(bodyBounds.width, bodyBounds.height),
+        );
+    final surfaceShape = MindExpandedSurfaceShape.resolve(
+      seamless: isSeamless,
+      headerRadius: headerRadius,
+      contentRadius: contentRadius,
+      expansionProgress: geometry.headerExpansionProgress,
+    );
+    final combinedBounds = DashboardBounds(
+      left: geometry.headerBounds.left,
+      top: geometry.headerBounds.top,
+      width: geometry.headerBounds.width,
+      height:
+          geometry.headerBounds.height +
+          bodyBounds.height * geometry.headerExpansionProgress,
+    );
+    final header = DashboardCoreModeHeaderScaffold(
+      bounds: geometry.headerBounds,
+      surfaceColor: presentation.palette.upcomingHeaderTone,
+      headerKey: const ValueKey('dashboard-core-mode-mind-header'),
+      labelKey: const ValueKey('dashboard-core-mode-label-mind'),
+      label: 'mind',
+      showModeLabel: false,
+      visualController: headerVisualController,
+      visualFrameListenable: headerVisualFrame,
+      usesVisualForeground: true,
+      detailLeft: 0,
+      detailTop: 0,
+      detailRight: 0,
+      detailBottom: 0,
+      borderRadiusOverride: surfaceShape.headerRadius,
+      showsDepth: !isSeamless,
+      showsBorder: !isSeamless,
+      detail: behavioralScore == null
+          ? null
+          : _MindHeaderScoreDetail(
+              score: behavioralScore!,
+              headerVisualFrame: headerVisualFrame,
+              expansionProgress: geometry.headerExpansionProgress,
+              chartPresentation: headerScoreChartPresentation,
+              temporalContext: _headerScoreChartTemporalContext,
+              pointerObserver: headerScoreChartPointerObserver,
+              reporter: onTemporalEntryFrameStage,
+            ),
+    );
     return KeyedSubtree(
       key: const ValueKey('dashboard-core-mode-mind'),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          DashboardCoreModeOpacityPosition(
-            bounds: bodyBounds,
-            opacity: geometry.zone2Opacity,
-            offset: Offset(0, geometry.zone2Shift),
-            scale: geometry.zone2Scale,
-            child: DashboardPlaceholderCard(
+          if (isSeamless)
+            DashboardCoreModeFramePosition(
+              bounds: combinedBounds,
+              child: DashboardPlaceholderCard(
+                bounds: combinedBounds,
+                fillParent: true,
+                semanticKey: const ValueKey(
+                  'dashboard-core-mode-mind-seamless-surface',
+                ),
+                cornerFamily: DashboardCornerSurfaceFamily.contentCard,
+                borderSurface: DashboardBorderSurface.mindContent,
+                borderRadiusOverride: surfaceShape.outerRadius,
+              ),
+            ),
+          if (isSeamless)
+            DashboardCoreModeTopReveal(
               bounds: bodyBounds,
-              fillParent: true,
-              semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
-              borderSurface: DashboardBorderSurface.mindContent,
-              child: _bodyChild(),
+              reveal: geometry.headerExpansionProgress,
+              child: _MindSeamlessBodySurface(
+                bounds: bodyBounds,
+                dotsBounds: geometry.zone2IndicatorBounds,
+                borderRadius: surfaceShape.contentRadius,
+                headerVisualFrame: headerVisualFrame,
+                body: _bodyChild(),
+              ),
+            )
+          else
+            DashboardCoreModeOpacityPosition(
+              bounds: bodyBounds,
+              opacity: geometry.zone2Opacity,
+              offset: Offset(0, geometry.zone2Shift),
+              scale: geometry.zone2Scale,
+              child: DashboardPlaceholderCard(
+                bounds: bodyBounds,
+                fillParent: true,
+                semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
+                borderSurface: DashboardBorderSurface.mindContent,
+                child: _bodyChild(),
+              ),
             ),
-          ),
-          DashboardCoreModeOpacityPosition(
-            bounds: geometry.zone2IndicatorBounds,
-            opacity: geometry.zone2Opacity,
-            offset: Offset(0, geometry.zone2Shift),
-            child: DashboardPlaceholderDots(
+          if (!isSeamless)
+            DashboardCoreModeOpacityPosition(
               bounds: geometry.zone2IndicatorBounds,
-              semanticKey: const ValueKey('dashboard-core-mode-mind-dots'),
+              opacity: geometry.zone2Opacity,
+              offset: Offset(0, geometry.zone2Shift),
+              child: DashboardPlaceholderDots(
+                bounds: geometry.zone2IndicatorBounds,
+                semanticKey: const ValueKey('dashboard-core-mode-mind-dots'),
+              ),
             ),
-          ),
-          DashboardCoreModeHeaderScaffold(
-            bounds: geometry.headerBounds,
-            surfaceColor: presentation.palette.upcomingHeaderTone,
-            headerKey: const ValueKey('dashboard-core-mode-mind-header'),
-            labelKey: const ValueKey('dashboard-core-mode-label-mind'),
-            label: 'mind',
-            showModeLabel: false,
-            visualController: headerVisualController,
-            visualFrameListenable: headerVisualFrame,
-            usesVisualForeground: true,
-            detailLeft: 0,
-            detailTop: 0,
-            detailRight: 0,
-            detailBottom: 0,
-            detail: behavioralScore == null
-                ? null
-                : _MindHeaderScoreDetail(
-                    score: behavioralScore!,
-                    headerVisualFrame: headerVisualFrame,
-                    expansionProgress: geometry.headerExpansionProgress,
-                    chartPresentation: headerScoreChartPresentation,
-                    temporalContext: _headerScoreChartTemporalContext,
-                    pointerObserver: headerScoreChartPointerObserver,
-                    reporter: onTemporalEntryFrameStage,
-                  ),
-          ),
+          header,
         ],
       ),
     );
@@ -321,6 +385,144 @@ class MindDashboardCoreSurface extends StatelessWidget {
   }
 }
 
+/// Resolved physical silhouette for Mind's two presentation choices. Keeping
+/// the seam radii explicit makes it impossible for seamless mode to devolve
+/// into two independently rounded cards merely moved together.
+@immutable
+final class MindExpandedSurfaceShape {
+  const MindExpandedSurfaceShape({
+    required this.headerRadius,
+    required this.contentRadius,
+    required this.outerRadius,
+  });
+
+  final BorderRadius headerRadius;
+  final BorderRadius contentRadius;
+  final BorderRadius outerRadius;
+
+  static MindExpandedSurfaceShape resolve({
+    required bool seamless,
+    required BorderRadius headerRadius,
+    required BorderRadius contentRadius,
+    required double expansionProgress,
+  }) {
+    if (!seamless) {
+      return MindExpandedSurfaceShape(
+        headerRadius: headerRadius,
+        contentRadius: contentRadius,
+        outerRadius: contentRadius,
+      );
+    }
+    final reveal = expansionProgress.clamp(0.0, 1.0).toDouble();
+    final headerTopOnly = BorderRadius.only(
+      topLeft: headerRadius.topLeft,
+      topRight: headerRadius.topRight,
+    );
+    final contentBottomOnly = BorderRadius.only(
+      bottomLeft: contentRadius.bottomLeft,
+      bottomRight: contentRadius.bottomRight,
+    );
+    return MindExpandedSurfaceShape(
+      // The continuous interpolation removes the lower Header corners as its
+      // second section grows, so no one-frame radius pop can expose a slit.
+      headerRadius: BorderRadius.lerp(headerRadius, headerTopOnly, reveal)!,
+      contentRadius: BorderRadius.lerp(
+        contentRadius,
+        contentBottomOnly,
+        reveal,
+      )!,
+      outerRadius: BorderRadius.lerp(
+        headerRadius,
+        BorderRadius.only(
+          topLeft: headerRadius.topLeft,
+          topRight: headerRadius.topRight,
+          bottomLeft: contentRadius.bottomLeft,
+          bottomRight: contentRadius.bottomRight,
+        ),
+        reveal,
+      )!,
+    );
+  }
+}
+
+/// Mind's existing analytical body rendered inside the seamless outer shell.
+/// It retains the original body widget and dot content; only the container
+/// relationship changes. The small gradient is a shallow, non-interactive
+/// connection cue from the reactive Header to the otherwise white body.
+final class _MindSeamlessBodySurface extends StatelessWidget {
+  const _MindSeamlessBodySurface({
+    required this.bounds,
+    required this.dotsBounds,
+    required this.borderRadius,
+    required this.headerVisualFrame,
+    this.body,
+  });
+
+  final DashboardBounds bounds;
+  final DashboardBounds dotsBounds;
+  final BorderRadius borderRadius;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
+  final Widget? body;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: <Widget>[
+      DashboardPlaceholderCard(
+        bounds: bounds,
+        fillParent: true,
+        semanticKey: const ValueKey('dashboard-core-mode-mind-body'),
+        borderSurface: DashboardBorderSurface.mindContent,
+        borderRadiusOverride: borderRadius,
+        showsDepth: false,
+        showsBorder: false,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (headerVisualFrame case final frames?)
+              ValueListenableBuilder<DashboardHeaderVisualFrame>(
+                valueListenable: frames,
+                builder: (context, frame, _) => IgnorePointer(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      height: 34,
+                      child: DecoratedBox(
+                        key: const ValueKey('mind-seamless-header-color-bleed'),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              frame.colorB.withValues(alpha: .14),
+                              frame.colorA.withValues(alpha: .04),
+                              Colors.white.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            body ?? const SizedBox.expand(),
+          ],
+        ),
+      ),
+      Positioned(
+        left: dotsBounds.left - bounds.left,
+        top: dotsBounds.top - bounds.top,
+        width: dotsBounds.width,
+        height: dotsBounds.height,
+        child: DashboardPlaceholderDots(
+          bounds: dotsBounds,
+          semanticKey: const ValueKey('dashboard-core-mode-mind-dots'),
+        ),
+      ),
+    ],
+  );
+}
+
 final class _MindTemporalEntryFrameProbe<T> extends StatefulWidget {
   const _MindTemporalEntryFrameProbe({
     required this.frameListenable,
@@ -457,6 +659,13 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
         ) {
           final typography =
               headerFrame?.typography ?? FluviTypographyProfile.app;
+          final chartLayout = DashboardHeaderTrendChartLayout(
+            showsModeLabelAboveValue:
+                headerFrame?.showsHeaderModeLabelAboveValue ?? false,
+          );
+          final foreground =
+              headerFrame?.foregroundTextColor ??
+              FluviVisualTokens.textOnAction;
           return Stack(
             fit: StackFit.expand,
             children: <Widget>[
@@ -474,10 +683,24 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                   showsAreaFade: headerFrame?.showsChartVeil ?? true,
                   temporalContext: temporalContext,
                   pointerObserver: pointerObserver,
+                  layout: chartLayout,
+                ),
+              if (chartLayout.showsModeLabelAboveValue)
+                Positioned(
+                  left: DashboardHeaderTrendChartStyle.detailLeft,
+                  top: DashboardHeaderTrendChartStyle.detailTop,
+                  child: Text(
+                    'Mind',
+                    key: const ValueKey<String>('mind-header-mode-label'),
+                    style: typography.applyTo(
+                      DashboardHeaderTrendChartLayout.modeLabelTextMetrics
+                          .copyWith(color: foreground),
+                    ),
+                  ),
                 ),
               Positioned(
                 left: DashboardHeaderTrendChartStyle.detailLeft,
-                top: DashboardHeaderTrendChartStyle.detailTop,
+                top: chartLayout.valueTop,
                 child: Text(
                   '${frame?.point.roundedScore ?? 50}/100',
                   key: const ValueKey<String>('mind-header-score-text'),
@@ -487,11 +710,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
                           DashboardHeaderTrendChartStyle
                               .primaryValueTextMetrics,
                         )
-                        .copyWith(
-                          color:
-                              headerFrame?.foregroundTextColor ??
-                              FluviVisualTokens.textOnAction,
-                        ),
+                        .copyWith(color: foreground),
                   ),
                 ),
               ),

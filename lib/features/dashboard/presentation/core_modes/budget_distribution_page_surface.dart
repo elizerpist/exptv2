@@ -22,10 +22,12 @@ class BudgetDistributionCardShell extends StatelessWidget {
     super.key,
     required this.child,
     this.surfaceOwner = BudgetDistributionSurfaceOwner.splitCard2,
+    this.topGlowColor,
   });
 
   final Widget child;
   final BudgetDistributionSurfaceOwner surfaceOwner;
+  final Color? topGlowColor;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -61,6 +63,34 @@ class BudgetDistributionCardShell extends StatelessWidget {
                 borderRadius: borderRadius,
                 boxShadow: depth.shadows,
                 child: const SizedBox.expand(),
+              ),
+            if (topGlowColor case final color?)
+              ClipRRect(
+                borderRadius: borderRadius,
+                child: IgnorePointer(
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      height: 58,
+                      child: DecoratedBox(
+                        key: const ValueKey(
+                          'budget-selected-avatar-content-glow',
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[
+                              color.withValues(alpha: .20),
+                              color.withValues(alpha: .06),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ClipRRect(borderRadius: borderRadius, child: child),
           ],

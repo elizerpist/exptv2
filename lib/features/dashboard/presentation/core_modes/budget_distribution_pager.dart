@@ -91,6 +91,7 @@ class BudgetDistributionPager extends StatefulWidget {
     this.drilldown,
     this.upperVerticalGestures,
     this.surfaceOwner = BudgetDistributionSurfaceOwner.splitCard2,
+    this.topGlowColor,
   });
 
   final BudgetDistributionPageController controller;
@@ -103,6 +104,7 @@ class BudgetDistributionPager extends StatefulWidget {
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
   final BudgetDistributionSurfaceOwner surfaceOwner;
+  final Color? topGlowColor;
 
   @override
   State<BudgetDistributionPager> createState() =>
@@ -289,6 +291,7 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
     return BudgetDistributionCardShell(
       key: _shellKey,
       surfaceOwner: widget.surfaceOwner,
+      topGlowColor: widget.topGlowColor,
       child: pageView,
     );
   }

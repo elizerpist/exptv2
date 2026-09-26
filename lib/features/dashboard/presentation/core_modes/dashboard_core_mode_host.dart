@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart' show Listenable, ValueListenable;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/fluvi_global_appearance.dart';
+
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
@@ -64,6 +66,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.budgetSectionOrder,
     this.budgetRhythm,
     this.budgetDrilldown,
+    this.budgetAvatarContentStyle = BudgetAvatarContentStyle.separate,
     this.performanceCounters,
     this.onBudgetAvatarDirectInputStarted,
     this.onBudgetAvatarMotionActiveChanged,
@@ -85,6 +88,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindYearHeatmapVisible = false,
     this.mindTemporalHeatmapVisible = false,
     this.mindTemporalDayVisible = false,
+    this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
     this.onMindQueryAmountRangePreviewChanged,
@@ -116,6 +120,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final ValueListenable<BudgetSectionOrder>? budgetSectionOrder;
   final ValueListenable<DashboardSpendingRhythmState?>? budgetRhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? budgetDrilldown;
+  final BudgetAvatarContentStyle budgetAvatarContentStyle;
   final DashboardPerformanceCounters? performanceCounters;
   final VoidCallback? onBudgetAvatarDirectInputStarted;
   final ValueChanged<bool>? onBudgetAvatarMotionActiveChanged;
@@ -140,6 +145,7 @@ class DashboardCoreModeHost extends StatefulWidget {
   final bool mindYearHeatmapVisible;
   final bool mindTemporalHeatmapVisible;
   final bool mindTemporalDayVisible;
+  final MindExpandedSurfaceStyle mindExpandedSurfaceStyle;
   final VoidCallback? onMindQueryAmountRangeRetry;
   final ValueChanged<QueryAmountRangeValues>? onMindQueryAmountRangeCommitted;
   final ValueChanged<QueryAmountRangeValues>?
@@ -378,6 +384,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       ),
       DashboardMode.budget => BudgetDashboardCoreSurface(
         presentation: presentation,
+        avatarContentStyle: widget.budgetAvatarContentStyle,
         presentationController: widget.budgetPresentation,
         limitEditController: widget.budgetLimitEditController,
         distributionDrawables: widget.budgetDistributionDrawables,
@@ -396,6 +403,7 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
       ),
       DashboardMode.mind => MindDashboardCoreSurface(
         presentation: presentation,
+        expandedSurfaceStyle: widget.mindExpandedSurfaceStyle,
         queryAmountRange: widget.mindQueryAmountRange,
         queryAmountRangeChanges: widget.mindQueryAmountRangeChanges,
         queryAmountRangeLifecycleChanges:

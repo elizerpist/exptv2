@@ -583,6 +583,124 @@ final class _GlobalAppearanceControls extends StatelessWidget {
         value: appearance.showsDirectionArtwork,
         onChanged: controller.setShowsDirectionArtwork,
       ),
+      Text(
+        'Direction elrendezés',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      RadioGroup<FluviDirectionControlStyle>(
+        groupValue: appearance.directionControlStyle,
+        onChanged: (value) {
+          if (value != null) controller.setDirectionControlStyle(value);
+        },
+        child: Wrap(
+          children: <Widget>[
+            for (final candidate in FluviDirectionControlStyle.values)
+              SizedBox(
+                width: 160,
+                child: RadioListTile<FluviDirectionControlStyle>(
+                  key: ValueKey<String>(
+                    'fluvi-direction-control-style-${candidate.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(candidate.label),
+                  value: candidate,
+                ),
+              ),
+          ],
+        ),
+      ),
+      _DirectionRailToneControls(
+        appearance: appearance,
+        controller: controller,
+      ),
+      Text('Header handler', style: Theme.of(context).textTheme.labelMedium),
+      RadioGroup<FluviCollapseHandleStyle>(
+        groupValue: appearance.collapseHandleStyle,
+        onChanged: (value) {
+          if (value != null) controller.setCollapseHandleStyle(value);
+        },
+        child: Wrap(
+          children: <Widget>[
+            for (final candidate in FluviCollapseHandleStyle.values)
+              SizedBox(
+                width: 160,
+                child: RadioListTile<FluviCollapseHandleStyle>(
+                  key: ValueKey<String>(
+                    'fluvi-collapse-handle-style-${candidate.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(candidate.label),
+                  value: candidate,
+                ),
+              ),
+          ],
+        ),
+      ),
+      SwitchListTile(
+        key: const ValueKey<String>('fluvi-header-mode-label-enabled'),
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: Text(
+          'Mode felirat a Headerben',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        subtitle: const Text('Balance és Mind'),
+        value: appearance.showsHeaderModeLabelAboveValue,
+        onChanged: controller.setShowsHeaderModeLabelAboveValue,
+      ),
+      Text(
+        'Mind expanded megjelenés',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      RadioGroup<MindExpandedSurfaceStyle>(
+        groupValue: appearance.mindExpandedSurfaceStyle,
+        onChanged: (value) {
+          if (value != null) controller.setMindExpandedSurfaceStyle(value);
+        },
+        child: Column(
+          children: <Widget>[
+            for (final candidate in MindExpandedSurfaceStyle.values)
+              RadioListTile<MindExpandedSurfaceStyle>(
+                key: ValueKey<String>(
+                  'fluvi-mind-expanded-surface-${candidate.name}',
+                ),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(candidate.label),
+                value: candidate,
+              ),
+          ],
+        ),
+      ),
+      Text(
+        'Budget avatar–content kapcsolat',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+      RadioGroup<BudgetAvatarContentStyle>(
+        groupValue: appearance.budgetAvatarContentStyle,
+        onChanged: (value) {
+          if (value != null) controller.setBudgetAvatarContentStyle(value);
+        },
+        child: Wrap(
+          children: <Widget>[
+            for (final candidate in BudgetAvatarContentStyle.values)
+              SizedBox(
+                width: 160,
+                child: RadioListTile<BudgetAvatarContentStyle>(
+                  key: ValueKey<String>(
+                    'fluvi-budget-avatar-content-${candidate.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(candidate.label),
+                  value: candidate,
+                ),
+              ),
+          ],
+        ),
+      ),
       Text('Betűtípus', style: Theme.of(context).textTheme.labelMedium),
       KeyedSubtree(
         key: const ValueKey<String>('fluvi-global-typography-selector'),
@@ -612,6 +730,96 @@ final class _GlobalAppearanceControls extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// Rail-label settings remain owned even while the legacy split presentation
+/// is selected. Disabling their controls is visual only, so switching styles
+/// cannot erase a user choice.
+final class _DirectionRailToneControls extends StatelessWidget {
+  const _DirectionRailToneControls({
+    required this.appearance,
+    required this.controller,
+  });
+
+  final FluviGlobalAppearance appearance;
+  final DashboardHeaderVisualController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled =
+        appearance.directionControlStyle ==
+        FluviDirectionControlStyle.slidingRail;
+    return Opacity(
+      opacity: enabled ? 1 : .55,
+      child: IgnorePointer(
+        ignoring: !enabled,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Aktív direction felirat',
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            RadioGroup<FluviActiveDirectionLabelTone>(
+              groupValue: appearance.activeDirectionLabelTone,
+              onChanged: (value) {
+                if (value != null) {
+                  controller.setActiveDirectionLabelTone(value);
+                }
+              },
+              child: Wrap(
+                children: <Widget>[
+                  for (final candidate in FluviActiveDirectionLabelTone.values)
+                    SizedBox(
+                      width: 180,
+                      child: RadioListTile<FluviActiveDirectionLabelTone>(
+                        key: ValueKey<String>(
+                          'fluvi-direction-active-text-${candidate.name}',
+                        ),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(candidate.label),
+                        value: candidate,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Text(
+              'Inaktív direction felirat',
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            RadioGroup<FluviInactiveDirectionLabelTone>(
+              groupValue: appearance.inactiveDirectionLabelTone,
+              onChanged: (value) {
+                if (value != null) {
+                  controller.setInactiveDirectionLabelTone(value);
+                }
+              },
+              child: Wrap(
+                children: <Widget>[
+                  for (final candidate
+                      in FluviInactiveDirectionLabelTone.values)
+                    SizedBox(
+                      width: 180,
+                      child: RadioListTile<FluviInactiveDirectionLabelTone>(
+                        key: ValueKey<String>(
+                          'fluvi-direction-inactive-text-${candidate.name}',
+                        ),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(candidate.label),
+                        value: candidate,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// The Header menu renders these settings, while their separate controllers

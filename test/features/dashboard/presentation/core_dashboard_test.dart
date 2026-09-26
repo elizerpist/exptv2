@@ -10,6 +10,7 @@ import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
@@ -18,6 +19,7 @@ import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
@@ -185,6 +187,75 @@ void main() {
       }
     });
   }
+
+  testWidgets(
+    'global appearance switches Mind and Budget surface chrome live without remounting CoreDashboard',
+    (tester) async {
+      final controller = DashboardCoreController(initialCoreRevision: 1);
+      final mode = _modeControllerFor(DashboardModeSpec.mind);
+      final appearance = DashboardHeaderVisualController(vsync: tester);
+      addTearDown(controller.dispose);
+      addTearDown(appearance.dispose);
+      await controller.bootstrap();
+      final scope = controller.currentQuery.scope;
+      controller.currentQuery.replaceDirection(
+        scope.direction,
+        scope,
+        facetPresentation: _readyMindQueryMenuData,
+      );
+
+      await pumpDashboardSurface(
+        tester,
+        CoreDashboard(
+          controller: controller,
+          modeController: mode,
+          categoryCollection: emptyTestCategoryCollection,
+          headerVisualController: appearance,
+        ),
+      );
+      final coreState = tester.state(find.byType(CoreDashboard));
+      expect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind-seamless-surface')),
+        findsNothing,
+      );
+
+      appearance.setMindExpandedSurfaceStyle(
+        MindExpandedSurfaceStyle.seamlessCard,
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(tester.state(find.byType(CoreDashboard)), same(coreState));
+      final mindHeader = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind-header')),
+      );
+      final mindBody = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
+      );
+      expect(mindBody.top, mindHeader.bottom);
+      expect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind-seamless-surface')),
+        findsOneWidget,
+      );
+
+      mode.setProgrammaticMode(DashboardModeSpec.budget);
+      await tester.pump();
+      final avatar = find.byKey(
+        const ValueKey('dashboard-core-mode-budget-card-1'),
+      );
+      final avatarAnchor = tester.getRect(avatar);
+      appearance.setBudgetAvatarContentStyle(
+        BudgetAvatarContentStyle.avatarRail,
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(tester.state(find.byType(CoreDashboard)), same(coreState));
+      expect(tester.getRect(avatar), avatarAnchor);
+      expect(
+        find.byKey(const ValueKey('budget-avatar-content-rail-backplate')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'SUMMARY-DEFAULT-03/04: fresh CoreDashboard mounts segmented mirrored Summary at epoch zero without a synthetic Legacy transition',
@@ -550,6 +621,14 @@ void main() {
             .ignoring,
         isFalse,
       );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(
+            'dashboard-header-tuner-section-summary-pill-variants',
+          ),
+        ),
+      );
+      await tester.pump();
       await tester.tap(
         find.byKey(const ValueKey<String>('summary-pill-variant-segmented')),
       );
@@ -1430,11 +1509,16 @@ void main() {
         }
       }
 
-      Future<void> selectTunerOption(Finder option) async {
+      Future<void> selectTunerOption(
+        Finder option,
+        ValueKey<String> sectionKey,
+      ) async {
         await tester.tap(
           find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
         );
         await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.byKey(sectionKey));
+        await tester.pump();
         final scrollable = find.descendant(
           of: find.byKey(
             const ValueKey<String>('dashboard-header-visual-tuner-list'),
@@ -1532,6 +1616,9 @@ void main() {
             'dashboard-budget-section-order-chartThenAvatars',
           ),
         ),
+        const ValueKey<String>(
+          'dashboard-header-tuner-section-budget-section-order',
+        ),
       );
       expectTopology(unified: false, topology: 'Split chart→avatars');
       await assertNoSlabAcrossCollapse('Split chart→avatars', chartFirst: true);
@@ -1539,6 +1626,9 @@ void main() {
       await selectTunerOption(
         find.byKey(
           const ValueKey<String>('dashboard-budget-content-unifiedCard'),
+        ),
+        const ValueKey<String>(
+          'dashboard-header-tuner-section-budget-content-card-style',
         ),
       );
       expectTopology(unified: true, topology: 'Unified chart→avatars');
@@ -1552,6 +1642,9 @@ void main() {
           const ValueKey<String>(
             'dashboard-budget-section-order-avatarsThenChart',
           ),
+        ),
+        const ValueKey<String>(
+          'dashboard-header-tuner-section-budget-section-order',
         ),
       );
       expectTopology(unified: true, topology: 'Unified avatars→chart');
@@ -1609,6 +1702,14 @@ void main() {
           find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
         );
         await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>(
+              'dashboard-header-tuner-section-summary-pill-variants',
+            ),
+          ),
+        );
+        await tester.pump();
         await tester.tap(
           find.byKey(const ValueKey('summary-pill-variant-segmented')),
         );

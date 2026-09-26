@@ -2667,6 +2667,60 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
     );
   }
 
+  /// Changes only the renderer of the existing semantic direction selector.
+  void setDirectionControlStyle(FluviDirectionControlStyle value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(directionControlStyle: value),
+      'DIRECTION_CONTROL_STYLE_CHANGED',
+    );
+  }
+
+  /// Moves the existing expansion handle without creating another expansion
+  /// controller or changing the current expansion state.
+  void setCollapseHandleStyle(FluviCollapseHandleStyle value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(collapseHandleStyle: value),
+      'COLLAPSE_HANDLE_STYLE_CHANGED',
+    );
+  }
+
+  void setActiveDirectionLabelTone(FluviActiveDirectionLabelTone value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(activeDirectionLabelTone: value),
+      'DIRECTION_ACTIVE_LABEL_TONE_CHANGED',
+    );
+  }
+
+  void setInactiveDirectionLabelTone(FluviInactiveDirectionLabelTone value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(inactiveDirectionLabelTone: value),
+      'DIRECTION_INACTIVE_LABEL_TONE_CHANGED',
+    );
+  }
+
+  void setShowsHeaderModeLabelAboveValue(bool value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(
+        showsHeaderModeLabelAboveValue: value,
+      ),
+      'HEADER_MODE_LABEL_VISIBILITY_CHANGED',
+    );
+  }
+
+  void setMindExpandedSurfaceStyle(MindExpandedSurfaceStyle value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(mindExpandedSurfaceStyle: value),
+      'MIND_EXPANDED_SURFACE_STYLE_CHANGED',
+    );
+  }
+
+  void setBudgetAvatarContentStyle(BudgetAvatarContentStyle value) {
+    _setGlobalAppearance(
+      tuning.value.globalAppearance.copyWith(budgetAvatarContentStyle: value),
+      'BUDGET_AVATAR_CONTENT_STYLE_CHANGED',
+    );
+  }
+
   /// Switches the one app-wide typeface authority. Header frames project this
   /// value, while the shell applies the same profile to inherited typography.
   void setGlobalTypography(FluviTypographyProfile value) {
@@ -2685,6 +2739,13 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
       'avatar=${next.avatarColorProfile.name} '
       'artwork=${next.showsDirectionArtwork} '
       'typography=${next.typography.name} '
+      'directionStyle=${next.directionControlStyle.name} '
+      'handleStyle=${next.collapseHandleStyle.name} '
+      'activeLabel=${next.activeDirectionLabelTone.name} '
+      'inactiveLabel=${next.inactiveDirectionLabelTone.name} '
+      'headerModeLabel=${next.showsHeaderModeLabelAboveValue} '
+      'mindExpandedSurface=${next.mindExpandedSurfaceStyle.name} '
+      'budgetAvatarContent=${next.budgetAvatarContentStyle.name} '
       'settingsGeneration=${tuning.value.generation}',
     );
     notifyListeners();
@@ -3278,6 +3339,7 @@ final class DashboardHeaderVisualFrame {
     this.chartVeilColor = Colors.white,
     this.showsChartVeil = true,
     this.typography = FluviTypographyProfile.app,
+    this.showsHeaderModeLabelAboveValue = false,
     this.paletteSplitPercent = 50,
     this.windowLeftPercent,
     this.windowRightPercent,
@@ -3301,6 +3363,7 @@ final class DashboardHeaderVisualFrame {
   final Color chartVeilColor;
   final bool showsChartVeil;
   final FluviTypographyProfile typography;
+  final bool showsHeaderModeLabelAboveValue;
   final double paletteSplitPercent;
   final double? windowLeftPercent;
   final double? windowRightPercent;
@@ -3353,6 +3416,7 @@ final class DashboardHeaderVisualFrame {
       chartVeilColor == other.chartVeilColor &&
       showsChartVeil == other.showsChartVeil &&
       typography == other.typography &&
+      showsHeaderModeLabelAboveValue == other.showsHeaderModeLabelAboveValue &&
       paletteSplitPercent == other.paletteSplitPercent &&
       windowLeftPercent == other.windowLeftPercent &&
       windowRightPercent == other.windowRightPercent &&
@@ -3454,6 +3518,8 @@ final class DashboardBalanceHeaderColorPolicy
     chartVeilColor: tuning.balanceHeader.chartVeilColor.color,
     showsChartVeil: tuning.balanceHeader.chartVeilEnabled,
     typography: tuning.globalAppearance.typography,
+    showsHeaderModeLabelAboveValue:
+        tuning.globalAppearance.showsHeaderModeLabelAboveValue,
     paletteSplitPercent: window.state.positionPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3477,6 +3543,7 @@ abstract final class MindHeaderScoreColorScale {
     required MindHeaderScoreWindow window,
     required DashboardHeaderModeVisualState modeVisual,
     required FluviTypographyProfile typography,
+    required bool showsHeaderModeLabelAboveValue,
     required double headerModeIconSizePercent,
     required int staticSettingsGeneration,
   }) => DashboardHeaderVisualFrame(
@@ -3492,6 +3559,7 @@ abstract final class MindHeaderScoreColorScale {
     chartVeilColor: modeVisual.chartVeilColor.color,
     showsChartVeil: modeVisual.chartVeilEnabled,
     typography: typography,
+    showsHeaderModeLabelAboveValue: showsHeaderModeLabelAboveValue,
     paletteSplitPercent: window.centerPercent,
     windowLeftPercent: window.leftSamplePercent,
     windowRightPercent: window.rightSamplePercent,
@@ -3569,6 +3637,8 @@ final class DashboardMindHeaderColorPolicy
     window: window,
     modeVisual: tuning.mindHeader,
     typography: tuning.globalAppearance.typography,
+    showsHeaderModeLabelAboveValue:
+        tuning.globalAppearance.showsHeaderModeLabelAboveValue,
     headerModeIconSizePercent: tuning.headerModeIconSizePercent,
     staticSettingsGeneration: tuning.generation,
   );

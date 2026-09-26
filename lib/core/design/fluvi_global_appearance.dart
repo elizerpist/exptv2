@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard_mode_palette.dart';
+
 /// One session-lifetime user choice for the active income/expense treatment.
 enum FluviDirectionColorProfile { original, pastel, saturated, vivid }
 
@@ -39,6 +41,83 @@ extension FluviTypographyProfilePresentation on FluviTypographyProfile {
         );
 }
 
+/// The presentation of the one existing semantic income/expense selector.
+enum FluviDirectionControlStyle { splitButtons, slidingRail }
+
+extension FluviDirectionControlStylePresentation on FluviDirectionControlStyle {
+  String get label => switch (this) {
+    FluviDirectionControlStyle.splitButtons => 'Külön gombok',
+    FluviDirectionControlStyle.slidingRail => 'Csúszó rail',
+  };
+}
+
+/// The visual location of the one existing expansion tap/drag affordance.
+enum FluviCollapseHandleStyle { standalone, headerNotch, headerTranslucentPill }
+
+extension FluviCollapseHandleStylePresentation on FluviCollapseHandleStyle {
+  String get label => switch (this) {
+    FluviCollapseHandleStyle.standalone => 'Különálló',
+    FluviCollapseHandleStyle.headerNotch => 'Header bevágás',
+    FluviCollapseHandleStyle.headerTranslucentPill => 'Áttetsző pill',
+  };
+}
+
+/// Mind-only physical relationship between its reactive Header and analytics
+/// surface. This has no score, heatmap, range or navigation semantics.
+enum MindExpandedSurfaceStyle { separateCards, seamlessCard }
+
+extension MindExpandedSurfaceStylePresentation on MindExpandedSurfaceStyle {
+  String get label => switch (this) {
+    MindExpandedSurfaceStyle.separateCards => 'Jelenlegi — külön kártyák',
+    MindExpandedSurfaceStyle.seamlessCard => 'Egybefüggő kártya',
+  };
+}
+
+/// Budget-only physical relationship between the existing avatar selector and
+/// its detail card. It cannot change target/page selection or Budget data.
+enum BudgetAvatarContentStyle { separate, overlappingGlow, avatarRail }
+
+extension BudgetAvatarContentStylePresentation on BudgetAvatarContentStyle {
+  String get label => switch (this) {
+    BudgetAvatarContentStyle.separate => 'Jelenlegi',
+    BudgetAvatarContentStyle.overlappingGlow => 'Rálógó + glow',
+    BudgetAvatarContentStyle.avatarRail => 'Avatar rail',
+  };
+}
+
+enum FluviActiveDirectionLabelTone { softenedWhite, black }
+
+extension FluviActiveDirectionLabelTonePresentation
+    on FluviActiveDirectionLabelTone {
+  String get label => switch (this) {
+    FluviActiveDirectionLabelTone.softenedWhite => 'Lágyított fehér',
+    FluviActiveDirectionLabelTone.black => 'Fekete',
+  };
+
+  Color get color => switch (this) {
+    FluviActiveDirectionLabelTone.softenedWhite => const Color(0xE6FFFFFF),
+    FluviActiveDirectionLabelTone.black => Colors.black,
+  };
+}
+
+/// Deliberately excludes white: an inactive rail label may be softened grey
+/// or black only.
+enum FluviInactiveDirectionLabelTone { softenedGray, black }
+
+extension FluviInactiveDirectionLabelTonePresentation
+    on FluviInactiveDirectionLabelTone {
+  String get label => switch (this) {
+    FluviInactiveDirectionLabelTone.softenedGray => 'Lágyított szürke',
+    FluviInactiveDirectionLabelTone.black => 'Fekete',
+  };
+
+  Color get color => switch (this) {
+    FluviInactiveDirectionLabelTone.softenedGray =>
+      FluviVisualTokens.textSecondary,
+    FluviInactiveDirectionLabelTone.black => Colors.black,
+  };
+}
+
 /// Immutable presentation-only user choices shared by the dashboard shell.
 @immutable
 final class FluviGlobalAppearance {
@@ -47,29 +126,70 @@ final class FluviGlobalAppearance {
     required this.avatarColorProfile,
     required this.showsDirectionArtwork,
     required this.typography,
+    this.directionControlStyle = FluviDirectionControlStyle.splitButtons,
+    this.collapseHandleStyle = FluviCollapseHandleStyle.standalone,
+    this.activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
+    this.inactiveDirectionLabelTone =
+        FluviInactiveDirectionLabelTone.softenedGray,
+    this.showsHeaderModeLabelAboveValue = false,
+    this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
+    this.budgetAvatarContentStyle = BudgetAvatarContentStyle.separate,
   });
 
   const FluviGlobalAppearance.defaults()
     : directionColorProfile = FluviDirectionColorProfile.original,
       avatarColorProfile = CategoryAvatarColorProfile.original,
       showsDirectionArtwork = true,
-      typography = FluviTypographyProfile.app;
+      typography = FluviTypographyProfile.app,
+      directionControlStyle = FluviDirectionControlStyle.splitButtons,
+      collapseHandleStyle = FluviCollapseHandleStyle.standalone,
+      activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
+      inactiveDirectionLabelTone = FluviInactiveDirectionLabelTone.softenedGray,
+      showsHeaderModeLabelAboveValue = false,
+      mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
+      budgetAvatarContentStyle = BudgetAvatarContentStyle.separate;
 
   final FluviDirectionColorProfile directionColorProfile;
   final CategoryAvatarColorProfile avatarColorProfile;
   final bool showsDirectionArtwork;
   final FluviTypographyProfile typography;
+  final FluviDirectionControlStyle directionControlStyle;
+  final FluviCollapseHandleStyle collapseHandleStyle;
+  final FluviActiveDirectionLabelTone activeDirectionLabelTone;
+  final FluviInactiveDirectionLabelTone inactiveDirectionLabelTone;
+  final bool showsHeaderModeLabelAboveValue;
+  final MindExpandedSurfaceStyle mindExpandedSurfaceStyle;
+  final BudgetAvatarContentStyle budgetAvatarContentStyle;
 
   FluviGlobalAppearance copyWith({
     FluviDirectionColorProfile? directionColorProfile,
     CategoryAvatarColorProfile? avatarColorProfile,
     bool? showsDirectionArtwork,
     FluviTypographyProfile? typography,
+    FluviDirectionControlStyle? directionControlStyle,
+    FluviCollapseHandleStyle? collapseHandleStyle,
+    FluviActiveDirectionLabelTone? activeDirectionLabelTone,
+    FluviInactiveDirectionLabelTone? inactiveDirectionLabelTone,
+    bool? showsHeaderModeLabelAboveValue,
+    MindExpandedSurfaceStyle? mindExpandedSurfaceStyle,
+    BudgetAvatarContentStyle? budgetAvatarContentStyle,
   }) => FluviGlobalAppearance(
     directionColorProfile: directionColorProfile ?? this.directionColorProfile,
     avatarColorProfile: avatarColorProfile ?? this.avatarColorProfile,
     showsDirectionArtwork: showsDirectionArtwork ?? this.showsDirectionArtwork,
     typography: typography ?? this.typography,
+    directionControlStyle: directionControlStyle ?? this.directionControlStyle,
+    collapseHandleStyle: collapseHandleStyle ?? this.collapseHandleStyle,
+    activeDirectionLabelTone:
+        activeDirectionLabelTone ?? this.activeDirectionLabelTone,
+    inactiveDirectionLabelTone:
+        inactiveDirectionLabelTone ?? this.inactiveDirectionLabelTone,
+    showsHeaderModeLabelAboveValue:
+        showsHeaderModeLabelAboveValue ?? this.showsHeaderModeLabelAboveValue,
+    mindExpandedSurfaceStyle:
+        mindExpandedSurfaceStyle ?? this.mindExpandedSurfaceStyle,
+    budgetAvatarContentStyle:
+        budgetAvatarContentStyle ?? this.budgetAvatarContentStyle,
   );
 
   @override
@@ -78,7 +198,14 @@ final class FluviGlobalAppearance {
       directionColorProfile == other.directionColorProfile &&
       avatarColorProfile == other.avatarColorProfile &&
       showsDirectionArtwork == other.showsDirectionArtwork &&
-      typography == other.typography;
+      typography == other.typography &&
+      directionControlStyle == other.directionControlStyle &&
+      collapseHandleStyle == other.collapseHandleStyle &&
+      activeDirectionLabelTone == other.activeDirectionLabelTone &&
+      inactiveDirectionLabelTone == other.inactiveDirectionLabelTone &&
+      showsHeaderModeLabelAboveValue == other.showsHeaderModeLabelAboveValue &&
+      mindExpandedSurfaceStyle == other.mindExpandedSurfaceStyle &&
+      budgetAvatarContentStyle == other.budgetAvatarContentStyle;
 
   @override
   int get hashCode => Object.hash(
@@ -86,6 +213,13 @@ final class FluviGlobalAppearance {
     avatarColorProfile,
     showsDirectionArtwork,
     typography,
+    directionControlStyle,
+    collapseHandleStyle,
+    activeDirectionLabelTone,
+    inactiveDirectionLabelTone,
+    showsHeaderModeLabelAboveValue,
+    mindExpandedSurfaceStyle,
+    budgetAvatarContentStyle,
   );
 }
 
@@ -154,4 +288,17 @@ abstract final class FluviDirectionColorPaletteCatalog {
         FluviDirectionColorProfile.saturated => _saturatedExpense,
         FluviDirectionColorProfile.vivid => _vividExpense,
       };
+
+  /// The rail paints one immutable purple-to-pink field in rail coordinates.
+  /// The moving active pill is only a rounded window into this full-width
+  /// shader; it must never carry a pill-local gradient with it.
+  static LinearGradient rail(FluviDirectionColorProfile profile) {
+    final source = income(profile);
+    return LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: source.colors,
+      stops: source.stops,
+    );
+  }
 }

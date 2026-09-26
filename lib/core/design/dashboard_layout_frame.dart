@@ -54,6 +54,7 @@ class DashboardLayoutFrame {
     required this.summaryBounds,
     required this.railBounds,
     required this.collapseHandleBounds,
+    required this.headerCollapseHandleBounds,
     required this.logBoxHeaderBounds,
     required this.subheaderOneOpacity,
     required this.subheaderOneShift,
@@ -65,6 +66,8 @@ class DashboardLayoutFrame {
     required this.lowerCardMotion,
     required this.isRailExpanded,
     required this.hasPhysicalRail,
+    required this.hasStandaloneCollapseHandle,
+    required this.seamlessHeaderContent,
     required this.bodyOrder,
     required this.modeContentBounds,
   });
@@ -96,7 +99,14 @@ class DashboardLayoutFrame {
   final DashboardBounds actionBounds;
   final DashboardBounds summaryBounds;
   final DashboardBounds railBounds;
+
+  /// The lower structural lane. It has a zero height whenever the one
+  /// collapse interaction is visually integrated with the Header.
   final DashboardBounds collapseHandleBounds;
+
+  /// A small, header-local hit/paint boundary for the integrated presentations.
+  /// It is null for the legacy lower standalone presentation.
+  final DashboardBounds? headerCollapseHandleBounds;
   final DashboardBounds logBoxHeaderBounds;
   final double subheaderOneOpacity;
   final double subheaderOneShift;
@@ -108,6 +118,12 @@ class DashboardLayoutFrame {
   final CascadedCardMotion? lowerCardMotion;
   final bool isRailExpanded;
   final bool hasPhysicalRail;
+  final bool hasStandaloneCollapseHandle;
+
+  /// Mind-only container composition. When true, the mode body begins at the
+  /// moving Header edge and reveals as that Header expands; all other modes
+  /// retain their existing independent-card topology.
+  final bool seamlessHeaderContent;
   final DashboardBodyOrder bodyOrder;
 
   /// One logical envelope for the complete mode-owned content block, including

@@ -278,6 +278,40 @@ void main() {
       mindScoreTopLeft.dy,
       closeTo(mindHeader.top + DashboardHeaderTrendChartStyle.detailTop, .01),
     );
+    header.value = const DashboardHeaderVisualFrame(
+      colors: <Color>[Colors.red, Colors.red],
+      stops: <double>[0, 1],
+      opacity: 1,
+      colorA: Colors.red,
+      colorB: Colors.red,
+      foregroundTextColor: Colors.black,
+      chartColor: Colors.white,
+      showsHeaderModeLabelAboveValue: true,
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('mind-header-mode-label')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey<String>('mind-header-score-text')),
+          )
+          .dy,
+      closeTo(
+        mindHeader.top +
+            DashboardHeaderTrendChartStyle.detailTop +
+            DashboardHeaderTrendChartLayout.modeLabelReserve,
+        .01,
+      ),
+    );
+    expect(
+      tester.getRect(
+        find.byKey(const ValueKey<String>('dashboard-core-mode-mind-header')),
+      ),
+      mindHeader,
+    );
     final before = score.value;
     header.value = const DashboardHeaderVisualFrame(
       colors: <Color>[Colors.red, Colors.red],

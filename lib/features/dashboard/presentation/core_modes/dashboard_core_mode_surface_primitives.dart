@@ -164,6 +164,43 @@ class DashboardCoreModeOpacityPosition extends StatelessWidget {
   );
 }
 
+/// Reveals a mode-local physical surface from its top edge without creating a
+/// second animation owner. The resolved dashboard expansion progress is the
+/// only input; clipping keeps paint, hit testing and semantics inside the
+/// actually revealed portion at intermediate expansion states.
+class DashboardCoreModeTopReveal extends StatelessWidget {
+  const DashboardCoreModeTopReveal({
+    super.key,
+    required this.bounds,
+    required this.reveal,
+    required this.child,
+  });
+
+  final DashboardBounds bounds;
+  final double reveal;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DashboardCoreModeFramePosition(
+    bounds: bounds,
+    child: ClipRect(clipper: _DashboardTopRevealClipper(reveal), child: child),
+  );
+}
+
+final class _DashboardTopRevealClipper extends CustomClipper<Rect> {
+  const _DashboardTopRevealClipper(this.reveal);
+
+  final double reveal;
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTWH(0, 0, size.width, size.height * reveal.clamp(0.0, 1.0));
+
+  @override
+  bool shouldReclip(_DashboardTopRevealClipper oldClipper) =>
+      oldClipper.reveal != reveal;
+}
+
 class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   const DashboardCoreModeHeaderScaffold({
     super.key,
@@ -182,6 +219,9 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.detailTop,
     this.detailBottom = 15,
     this.usesVisualForeground = false,
+    this.borderRadiusOverride,
+    this.showsDepth = true,
+    this.showsBorder = true,
   });
 
   final DashboardBounds bounds;
@@ -199,11 +239,15 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final double? detailTop;
   final double? detailBottom;
   final bool usesVisualForeground;
+  final BorderRadius? borderRadiusOverride;
+  final bool showsDepth;
+  final bool showsBorder;
 
   @override
   Widget build(BuildContext context) {
-    final borderRadius = DashboardCornerRoundnessScope.profileOf(context)
-        .borderRadiusFor(
+    final borderRadius =
+        borderRadiusOverride ??
+        DashboardCornerRoundnessScope.profileOf(context).borderRadiusFor(
           DashboardCornerSurfaceFamily.header,
           size: Size(bounds.width, bounds.height),
         );
@@ -219,6 +263,8 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             controller: visualController,
             visualFrameListenable: visualFrameListenable,
             borderRadius: borderRadius,
+            showsDepth: showsDepth,
+            showsBorder: showsBorder,
           ),
           if (showModeLabel)
             Positioned(
@@ -376,6 +422,8 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     required this.controller,
     required this.visualFrameListenable,
     required this.borderRadius,
+    required this.showsDepth,
+    required this.showsBorder,
   });
 
   final DashboardBounds bounds;
@@ -384,6 +432,8 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   final DashboardHeaderVisualController? controller;
   final ValueListenable<DashboardHeaderVisualFrame>? visualFrameListenable;
   final BorderRadius borderRadius;
+  final bool showsDepth;
+  final bool showsBorder;
 
   @override
   Widget build(BuildContext context) {
@@ -402,6 +452,9 @@ final class _HeaderPhysicalShell extends StatelessWidget {
         semanticKey: semanticKey,
         surfaceColor: surfaceColor,
         cornerFamily: DashboardCornerSurfaceFamily.header,
+        borderRadiusOverride: borderRadius,
+        showsDepth: showsDepth,
+        showsBorder: showsBorder,
       );
     }
     return SizedBox.expand(
@@ -413,7 +466,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           FluviRoundedBox(
             color: Colors.transparent,
             borderRadius: borderRadius,
-            boxShadow: depth.outerShadows,
+            boxShadow: showsDepth ? depth.outerShadows : const <BoxShadow>[],
             child: const SizedBox.expand(),
           ),
           // Layer 2: only this clipped painter listens to the shared ticker.
@@ -450,7 +503,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
           // full DecoratedBox over a coloured animated Header: that washes out
           // the palette. This painter keeps the source highlight as an
           // edge-only ring; the animated layer remains the sole fill owner.
-          if (depth.innerShadows.isNotEmpty)
+          if (showsDepth && depth.innerShadows.isNotEmpty)
             IgnorePointer(
               child: CustomPaint(
                 key: const ValueKey<String>('dashboard-header-depth-highlight'),
@@ -461,7 +514,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
               ),
             ),
           // Keep the physical card border above dynamically-painted pixels.
-          if (border != null)
+          if (showsBorder && border != null)
             IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(

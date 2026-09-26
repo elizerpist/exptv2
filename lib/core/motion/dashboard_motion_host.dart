@@ -53,6 +53,14 @@ typedef DashboardVisualFrameBuilder =
 typedef DashboardModeContentExtraHeightResolver =
     double Function(DashboardModeSpec mode);
 
+/// Lets a mode-local presentation select its resolved body order without
+/// changing the dashboard-session body-order setting itself.
+typedef DashboardBodyOrderResolver =
+    DashboardBodyOrder Function(DashboardModeSpec mode);
+
+typedef DashboardSeamlessHeaderContentResolver =
+    bool Function(DashboardModeSpec mode);
+
 /// The dashboard's only Flutter ticker owner.
 ///
 /// It observes only structural expansion, rail and direction signals, derives
@@ -67,7 +75,10 @@ class DashboardMotionHost extends StatefulWidget {
     required this.builder,
     this.layoutMetrics,
     this.bodyOrder,
+    this.bodyOrderResolver,
     this.hasPhysicalRail = true,
+    this.hasStandaloneCollapseHandle = true,
+    this.seamlessHeaderContentResolver,
     this.modeContentExtraHeight = 0,
     this.modeContentExtraHeightResolver,
     DashboardModePaletteLookup? paletteResolver,
@@ -79,7 +90,10 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardVisualFrameBuilder builder;
   final DashboardLayoutMetrics? layoutMetrics;
   final DashboardBodyOrder? bodyOrder;
+  final DashboardBodyOrderResolver? bodyOrderResolver;
   final bool hasPhysicalRail;
+  final bool hasStandaloneCollapseHandle;
+  final DashboardSeamlessHeaderContentResolver? seamlessHeaderContentResolver;
   final double modeContentExtraHeight;
   final DashboardModeContentExtraHeightResolver? modeContentExtraHeightResolver;
   final DashboardModePaletteLookup paletteResolver;
@@ -359,6 +373,10 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
           final modeContentExtraHeight =
               widget.modeContentExtraHeightResolver?.call(mode) ??
               widget.modeContentExtraHeight;
+          final bodyOrder =
+              widget.bodyOrderResolver?.call(mode) ?? widget.bodyOrder;
+          final seamlessHeaderContent =
+              widget.seamlessHeaderContentResolver?.call(mode) ?? false;
           assert(modeContentExtraHeight >= 0);
           return DashboardCoreModePresentation(
             geometry: DashboardGeometryResolver.resolve(
@@ -369,8 +387,10 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
                   widget.controller.metrics.collapseTravel *
                   viewportMetrics.collapseTravel,
               isRailExpanded: widget.controller.navigation.isRailOpen,
-              bodyOrder: widget.bodyOrder,
+              bodyOrder: bodyOrder,
               hasPhysicalRail: widget.hasPhysicalRail,
+              hasStandaloneCollapseHandle: widget.hasStandaloneCollapseHandle,
+              seamlessHeaderContent: seamlessHeaderContent,
               modeContentExtraHeight: modeContentExtraHeight,
             ),
             palette: mode.mode == _committedMode.mode

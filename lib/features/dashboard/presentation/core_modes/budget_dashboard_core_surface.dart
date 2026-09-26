@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, immutable, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -11,6 +12,10 @@ import '../../../../core/design/dashboard_layout_frame.dart';
 import '../../../../core/design/dashboard_layout_metrics.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
+import '../../../../core/design/fluvi_global_appearance.dart';
+import '../../../../core/categories/catalog/category_color_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
+import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
 import '../../application/dashboard_spending_rhythm_controller.dart';
@@ -51,6 +56,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   const BudgetDashboardCoreSurface({
     super.key,
     required this.presentation,
+    this.avatarContentStyle = BudgetAvatarContentStyle.separate,
     this.presentationController,
     this.limitEditController,
     this.distributionDrawables,
@@ -69,6 +75,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
   });
 
   final DashboardCoreModePresentation presentation;
+  final BudgetAvatarContentStyle avatarContentStyle;
   final DashboardBudgetPresentationController? presentationController;
   final DashboardBudgetLimitEditController? limitEditController;
   final ValueListenable<DashboardBudgetDistributionDrawableFrame?>?
@@ -96,6 +103,17 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
       valueListenable: sectionOrder ?? _alwaysAvatarsThenChart,
       builder: (context, order, _) {
         final section = _BudgetSectionLayout.resolve(geometry, order);
+        final relationship = BudgetAvatarContentRelationship.resolve(
+          avatarBounds: section.avatarBounds,
+          chartBounds: section.chartBounds,
+          indicatorBounds: section.indicatorBounds,
+          style: avatarContentStyle,
+          avatarsLeadContent: order == BudgetSectionOrder.avatarsThenChart,
+        );
+        final selectedAvatarAccent =
+            avatarContentStyle == BudgetAvatarContentStyle.overlappingGlow
+            ? _selectedAvatarAccent(context)
+            : null;
         return KeyedSubtree(
           key: const ValueKey('dashboard-core-mode-budget'),
           child: Stack(
@@ -106,6 +124,20 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
               // a zero-size leaf when Split is selected; it must not become the
               // only non-positioned child and collapse the Budget stack.
               const SizedBox.expand(),
+              if (avatarContentStyle == BudgetAvatarContentStyle.avatarRail)
+                DashboardCoreModeCascadeCard(
+                  bounds: section.avatarBounds,
+                  motion: section.motionFor(
+                    geometry.upperCardMotion!,
+                    from: geometry.subheaderOneBounds,
+                    to: section.avatarBounds,
+                  ),
+                  semanticKey: const ValueKey(
+                    'budget-avatar-content-rail-backplate',
+                  ),
+                  showPlaceholderSurface: false,
+                  content: const _BudgetAvatarRailBackplate(),
+                ),
               ValueListenableBuilder<BudgetContentLayout>(
                 valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
                 builder: (context, layout, _) => _BudgetUnifiedContentCard(
@@ -120,11 +152,11 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 clip: 'none at cascade; child owns rounded viewport clip',
                 zOrder: 'unifiedSurface<chartCascade<avatarCascade<dots',
                 child: DashboardCoreModeCascadeCard(
-                  bounds: section.chartBounds,
+                  bounds: relationship.chartBounds,
                   motion: section.motionFor(
                     geometry.lowerCardMotion!,
                     from: geometry.zone2Bounds,
-                    to: section.chartBounds,
+                    to: relationship.chartBounds,
                   ),
                   semanticKey: const ValueKey(
                     'dashboard-core-mode-budget-card-2',
@@ -137,6 +169,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                       surfaceOwner: layout == BudgetContentLayout.unifiedCard
                           ? BudgetDistributionSurfaceOwner.unifiedParent
                           : BudgetDistributionSurfaceOwner.splitCard2,
+                      topGlowColor: selectedAvatarAccent,
                     ),
                   ),
                 ),
@@ -173,7 +206,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 builder: (context, layout, _) {
                   final bounds = layout == BudgetContentLayout.unifiedCard
                       ? _unifiedIndicatorBounds(section, order)
-                      : section.indicatorBounds;
+                      : relationship.indicatorBounds;
                   return DashboardCoreModeOpacityPosition(
                     bounds: bounds,
                     opacity: geometry.zone2Opacity,
@@ -432,6 +465,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
 
   Widget _distributionContent({
     required BudgetDistributionSurfaceOwner surfaceOwner,
+    Color? topGlowColor,
   }) {
     if (presentationController == null ||
         distributionDrawables == null ||
@@ -439,10 +473,14 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
         distributionPageController == null) {
       return switch (surfaceOwner) {
         BudgetDistributionSurfaceOwner.splitCard2 =>
-          const BudgetDistributionCardShell(child: SizedBox.expand()),
+          BudgetDistributionCardShell(
+            topGlowColor: topGlowColor,
+            child: const SizedBox.expand(),
+          ),
         BudgetDistributionSurfaceOwner.unifiedParent =>
-          const BudgetDistributionCardShell(
+          BudgetDistributionCardShell(
             surfaceOwner: BudgetDistributionSurfaceOwner.unifiedParent,
+            topGlowColor: topGlowColor,
             child: SizedBox.expand(),
           ),
       };
@@ -457,6 +495,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
       drilldown: drilldown,
       upperVerticalGestures: upperVerticalGestures,
       surfaceOwner: surfaceOwner,
+      topGlowColor: topGlowColor,
     );
   }
 
@@ -484,6 +523,30 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
           onMotionActiveChanged: onAvatarMotionActiveChanged,
           onDirectInputStarted: onAvatarDirectInputStarted,
         );
+
+  /// Resolves the selected avatar's existing presentation colour, never a new
+  /// category mapping. This lets the overlap cue follow the current global
+  /// avatar palette without touching Budget target identity or selection.
+  Color? _selectedAvatarAccent(BuildContext context) {
+    final state = presentationController?.value;
+    if (state == null) return null;
+    DashboardBudgetTargetPresentationItem? selected;
+    for (final item in state.items) {
+      if (item.target.handle == state.selectedHandle) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected == null) return null;
+    final colorId = selected.colorId;
+    if (colorId != null) {
+      return CategoryAvatarPaletteCatalog.tokenFor(
+        CategoryAvatarColorProfileScope.profileOf(context),
+        CategoryColorCatalog.handleOf(colorId),
+      ).middleColor;
+    }
+    return selected.baseColorArgb == 0 ? null : Color(selected.baseColorArgb);
+  }
 
   Widget _dotsContent(DashboardBounds bounds) =>
       distributionPageController == null
@@ -652,6 +715,87 @@ final class _BudgetSectionLayout {
     opacity: motion.opacity,
     scale: motion.scale,
     progress: motion.progress,
+  );
+}
+
+/// Budget-local relationship adapter. It deliberately leaves [avatarBounds]
+/// untouched for every variant: only Card2's physical relationship changes.
+@immutable
+final class BudgetAvatarContentRelationship {
+  const BudgetAvatarContentRelationship({
+    required this.avatarBounds,
+    required this.chartBounds,
+    required this.indicatorBounds,
+  });
+
+  static const double _overlapShift = 28;
+
+  final DashboardBounds avatarBounds;
+  final DashboardBounds chartBounds;
+  final DashboardBounds indicatorBounds;
+
+  static BudgetAvatarContentRelationship resolve({
+    required DashboardBounds avatarBounds,
+    required DashboardBounds chartBounds,
+    required DashboardBounds indicatorBounds,
+    required BudgetAvatarContentStyle style,
+    required bool avatarsLeadContent,
+  }) {
+    // The current default ordering is Avatar -> Card2. In the optional reverse
+    // order the selected target is intentionally below Card2, so forcing a
+    // top-edge overlap would invert that separate user composition and cause
+    // the card to collide with its dots. Keep that non-default topology safe.
+    final movesCard =
+        style == BudgetAvatarContentStyle.overlappingGlow && avatarsLeadContent;
+    if (!movesCard) {
+      return BudgetAvatarContentRelationship(
+        avatarBounds: avatarBounds,
+        chartBounds: chartBounds,
+        indicatorBounds: indicatorBounds,
+      );
+    }
+    DashboardBounds shiftUp(DashboardBounds bounds) => DashboardBounds(
+      left: bounds.left,
+      top: bounds.top - _overlapShift,
+      width: bounds.width,
+      height: bounds.height,
+    );
+    return BudgetAvatarContentRelationship(
+      avatarBounds: avatarBounds,
+      chartBounds: shiftUp(chartBounds),
+      indicatorBounds: shiftUp(indicatorBounds),
+    );
+  }
+}
+
+/// A soft selector surface placed behind the unchanged avatar carousel. The
+/// selected 112px shell already extends much farther above this 52px rail than
+/// its neighbours, so it visibly pops out without a second carousel or any
+/// avatar translation.
+final class _BudgetAvatarRailBackplate extends StatelessWidget {
+  const _BudgetAvatarRailBackplate();
+
+  @override
+  Widget build(BuildContext context) => SizedBox.expand(
+    child: Center(
+      child: FractionallySizedBox(
+        widthFactor: .94,
+        heightFactor: .72,
+        child: FluviRoundedBox(
+          key: const ValueKey('budget-avatar-content-rail-surface'),
+          color: Colors.white.withValues(alpha: .88),
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: FluviVisualTokens.textPrimary.withValues(alpha: .06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+          child: const SizedBox.expand(),
+        ),
+      ),
+    ),
   );
 }
 

@@ -142,6 +142,47 @@ void main() {
       );
       expect(colorLabAmount.style!.color, const Color(0xD114213A));
       expect(colorLabAmount.style!.fontFamily, 'FluviColorLabInter');
+      final headerBeforeModeLabel = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('dashboard-core-mode-balance-header'),
+        ),
+      );
+      frame.value = const DashboardHeaderVisualFrame(
+        colors: <Color>[Colors.red, Colors.red],
+        stops: <double>[0, 1],
+        opacity: 1,
+        colorA: Colors.red,
+        colorB: Colors.red,
+        foregroundTextColor: Color(0xD114213A),
+        chartColor: Colors.black,
+        typography: FluviTypographyProfile.colorLab,
+        showsHeaderModeLabelAboveValue: true,
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-header-mode-label')),
+        findsOneWidget,
+      );
+      final balanceAmountTop = tester.getTopLeft(
+        find.byKey(const ValueKey<String>('balance-header-net-amount')),
+      );
+      expect(
+        balanceAmountTop.dy,
+        closeTo(
+          headerBeforeModeLabel.top +
+              DashboardHeaderTrendChartStyle.detailTop +
+              DashboardHeaderTrendChartLayout.modeLabelReserve,
+          .01,
+        ),
+      );
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('dashboard-core-mode-balance-header'),
+          ),
+        ),
+        headerBeforeModeLabel,
+      );
       expect(balance.value, same(before));
       await tester.pumpWidget(const SizedBox.shrink());
       visual.dispose();

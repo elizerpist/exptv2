@@ -542,44 +542,64 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
     BuildContext context,
     BalancePresentationSettings settings,
     DashboardHeaderVisualFrame? frame,
-  ) => Stack(
-    fit: StackFit.expand,
-    children: <Widget>[
-      if (balance?.history case final history?)
-        BalanceHeaderHistoryChart(
-          series: history,
-          expansionProgress: expansionProgress,
-          chartMode: settings.chartMode,
-          lineColor:
-              frame?.chartColor ?? DashboardHeaderTrendChartStyle.lineColor,
-          areaFadeColor:
-              frame?.chartVeilColor ?? DashboardHeaderTrendChartStyle.lineColor,
-          showsAreaFade: frame?.showsChartVeil ?? true,
-          showTimeLabels: settings.showsTimeLabels,
-          adaptiveScope: adaptiveScope,
-          pointerObserver: pointerObserver,
-        ),
-      Positioned(
-        left: DashboardHeaderTrendChartStyle.detailLeft,
-        top: DashboardHeaderTrendChartStyle.detailTop,
-        child: Text(
-          balance?.formattedNetTotal ?? '—',
-          key: const ValueKey<String>('balance-header-net-amount'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: (frame?.typography ?? FluviTypographyProfile.app).applyTo(
-            DefaultTextStyle.of(context).style
-                .merge(DashboardHeaderTrendChartStyle.primaryValueTextMetrics)
-                .copyWith(
-                  color:
-                      frame?.foregroundTextColor ??
-                      FluviVisualTokens.textOnAction,
+  ) {
+    final chartLayout = DashboardHeaderTrendChartLayout(
+      showsModeLabelAboveValue: frame?.showsHeaderModeLabelAboveValue ?? false,
+    );
+    final typography = frame?.typography ?? FluviTypographyProfile.app;
+    final foreground =
+        frame?.foregroundTextColor ?? FluviVisualTokens.textOnAction;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        if (balance?.history case final history?)
+          BalanceHeaderHistoryChart(
+            series: history,
+            expansionProgress: expansionProgress,
+            chartMode: settings.chartMode,
+            lineColor:
+                frame?.chartColor ?? DashboardHeaderTrendChartStyle.lineColor,
+            areaFadeColor:
+                frame?.chartVeilColor ??
+                DashboardHeaderTrendChartStyle.lineColor,
+            showsAreaFade: frame?.showsChartVeil ?? true,
+            showTimeLabels: settings.showsTimeLabels,
+            adaptiveScope: adaptiveScope,
+            pointerObserver: pointerObserver,
+            layout: chartLayout,
+          ),
+        if (chartLayout.showsModeLabelAboveValue)
+          Positioned(
+            left: DashboardHeaderTrendChartStyle.detailLeft,
+            top: DashboardHeaderTrendChartStyle.detailTop,
+            child: Text(
+              'Balance',
+              key: const ValueKey<String>('balance-header-mode-label'),
+              style: typography.applyTo(
+                DashboardHeaderTrendChartLayout.modeLabelTextMetrics.copyWith(
+                  color: foreground,
                 ),
+              ),
+            ),
+          ),
+        Positioned(
+          left: DashboardHeaderTrendChartStyle.detailLeft,
+          top: chartLayout.valueTop,
+          child: Text(
+            balance?.formattedNetTotal ?? '—',
+            key: const ValueKey<String>('balance-header-net-amount'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: typography.applyTo(
+              DefaultTextStyle.of(context).style
+                  .merge(DashboardHeaderTrendChartStyle.primaryValueTextMetrics)
+                  .copyWith(color: foreground),
+            ),
           ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
+  }
 }
 
 final class _BalanceUpperCarouselHost extends StatelessWidget {

@@ -14,9 +14,12 @@ abstract final class DashboardGeometryResolver {
     required bool isRailExpanded,
     DashboardBodyOrder? bodyOrder,
     bool hasPhysicalRail = true,
+    bool hasStandaloneCollapseHandle = true,
+    bool seamlessHeaderContent = false,
     double modeContentExtraHeight = 0,
   }) {
     assert(modeContentExtraHeight >= 0);
+    assert(!seamlessHeaderContent || mode.mode == DashboardMode.mind);
     final progress = (collapseProgress / metrics.collapseTravel)
         .clamp(0.0, 1.0)
         .toDouble();
@@ -71,18 +74,6 @@ abstract final class DashboardGeometryResolver {
         metrics.zone2IndicatorVerticalPadding +
         metrics.dotHeight +
         postContentExtra;
-    final expandedBodies = _expandedBodyLayout(
-      metrics: metrics,
-      order: order,
-      modeContentFlowHeight: modeContentFlowHeight,
-    );
-    final railTop = _lerp(expandedBodies.railTop, collapsedRailTop, progress);
-    final collapseHandleTop =
-        railTop +
-        (hasPhysicalRail && isRailExpanded
-            ? metrics.railHeight + metrics.railToCollapseHandleGap
-            : 0);
-
     final left = metrics.contentGutter;
     DashboardBounds bounds(double top, double height) => DashboardBounds(
       left: left,
@@ -90,10 +81,53 @@ abstract final class DashboardGeometryResolver {
       width: metrics.contentWidth,
       height: height,
     );
-    final subheaderOne = bounds(
-      expandedBodies.modeContentTop,
-      metrics.subheaderOneHeight,
+    final expandedBodies = _expandedBodyLayout(
+      metrics: metrics,
+      order: order,
+      modeContentFlowHeight: modeContentFlowHeight,
+      firstBodyTopGap: seamlessHeaderContent ? 0 : metrics.standardGap,
     );
+    final headerBounds = bounds(metrics.headerTop, headerHeight);
+    final headerExpansionProgress = 1 - progress;
+    final seamlessActionTop =
+        headerBounds.bottom +
+        modeContentFlowHeight * headerExpansionProgress +
+        metrics.standardGap;
+    final seamlessSummaryTop =
+        seamlessActionTop + metrics.actionHeight + metrics.standardGap;
+    final seamlessRailTop =
+        seamlessSummaryTop + metrics.summaryHeight + metrics.standardGap;
+    final actionTop = seamlessHeaderContent
+        ? seamlessActionTop
+        : _lerp(expandedBodies.actionTop, collapsedActionTop, progress);
+    final summaryTop = seamlessHeaderContent
+        ? seamlessSummaryTop
+        : _lerp(expandedBodies.summaryTop, collapsedSummaryTop, progress);
+    final railTop = seamlessHeaderContent
+        ? seamlessRailTop
+        : _lerp(expandedBodies.railTop, collapsedRailTop, progress);
+    final collapseHandleTop =
+        railTop +
+        (hasPhysicalRail && isRailExpanded
+            ? metrics.railHeight + metrics.railToCollapseHandleGap
+            : 0);
+
+    final integratedHandleHeight = metrics.handleHeight * 1.4;
+    final integratedHandleWidth = metrics.handleHeight * 4.4;
+    final headerCollapseHandleBounds = hasStandaloneCollapseHandle
+        ? null
+        : DashboardBounds(
+            left: left + (metrics.contentWidth - integratedHandleWidth) / 2,
+            // Its center tracks the actual moving Header edge. The visual
+            // treatment owns whether it reads as a notch or translucent pill.
+            top: headerBounds.bottom - integratedHandleHeight / 2,
+            width: integratedHandleWidth,
+            height: integratedHandleHeight,
+          );
+    final modeContentTop = seamlessHeaderContent
+        ? headerBounds.bottom
+        : expandedBodies.modeContentTop;
+    final subheaderOne = bounds(modeContentTop, metrics.subheaderOneHeight);
     final zone2 = bounds(
       subheaderOne.bottom + metrics.standardGap,
       modeLowerHeight,
@@ -103,7 +137,7 @@ abstract final class DashboardGeometryResolver {
       metrics.dotHeight,
     );
     final envelope = bounds(
-      expandedBodies.modeContentTop,
+      modeContentTop,
       metrics.subheaderOneHeight + metrics.standardGap + modeLowerHeight,
     );
     final cascade = HeaderCascadeMotion.calculate(
@@ -136,7 +170,7 @@ abstract final class DashboardGeometryResolver {
       collapseProgress: collapseProgress
           .clamp(0.0, metrics.collapseTravel)
           .toDouble(),
-      headerExpansionProgress: 1 - progress,
+      headerExpansionProgress: headerExpansionProgress,
       viewportVerticalDragToControllerScale:
           metrics.viewportVerticalDragToControllerScale,
       brandLockupBounds: DashboardBounds(
@@ -145,8 +179,8 @@ abstract final class DashboardGeometryResolver {
         width: metrics.brandLockupWidth,
         height: metrics.brandLockupHeight,
       ),
-      headerBounds: bounds(metrics.headerTop, headerHeight),
-      headerGestureBounds: bounds(metrics.headerTop, headerHeight),
+      headerBounds: headerBounds,
+      headerGestureBounds: headerBounds,
       subheaderOneBounds: subheaderOne,
       zone2Bounds: zone2,
       zone2IndicatorBounds: zone2Indicator,
@@ -155,18 +189,17 @@ abstract final class DashboardGeometryResolver {
           mode.subheaderComposition == DashboardSubheaderComposition.unified
           ? envelope
           : null,
-      actionBounds: bounds(
-        _lerp(expandedBodies.actionTop, collapsedActionTop, progress),
-        metrics.actionHeight,
-      ),
-      summaryBounds: bounds(
-        _lerp(expandedBodies.summaryTop, collapsedSummaryTop, progress),
-        metrics.summaryHeight,
-      ),
+      actionBounds: bounds(actionTop, metrics.actionHeight),
+      summaryBounds: bounds(summaryTop, metrics.summaryHeight),
       railBounds: bounds(railTop, hasPhysicalRail ? metrics.railHeight : 0),
-      collapseHandleBounds: bounds(collapseHandleTop, metrics.handleHeight),
+      collapseHandleBounds: bounds(
+        collapseHandleTop,
+        hasStandaloneCollapseHandle ? metrics.handleHeight : 0,
+      ),
+      headerCollapseHandleBounds: headerCollapseHandleBounds,
       logBoxHeaderBounds: bounds(
-        collapseHandleTop + metrics.handleHeight,
+        collapseHandleTop +
+            (hasStandaloneCollapseHandle ? metrics.handleHeight : 0),
         metrics.logBoxHeaderHeight,
       ),
       subheaderOneOpacity: isSplitMode
@@ -198,11 +231,10 @@ abstract final class DashboardGeometryResolver {
       lowerCardMotion: lowerCardMotion,
       isRailExpanded: isRailExpanded,
       hasPhysicalRail: hasPhysicalRail,
+      hasStandaloneCollapseHandle: hasStandaloneCollapseHandle,
+      seamlessHeaderContent: seamlessHeaderContent,
       bodyOrder: order,
-      modeContentBounds: bounds(
-        expandedBodies.modeContentTop,
-        modeContentEnvelopeHeight,
-      ),
+      modeContentBounds: bounds(modeContentTop, modeContentEnvelopeHeight),
     );
   }
 
@@ -210,9 +242,10 @@ abstract final class DashboardGeometryResolver {
     required DashboardLayoutMetrics metrics,
     required DashboardBodyOrder order,
     required double modeContentFlowHeight,
+    required double firstBodyTopGap,
   }) {
     var cursor =
-        metrics.headerTop + metrics.headerExpandedHeight + metrics.standardGap;
+        metrics.headerTop + metrics.headerExpandedHeight + firstBodyTopGap;
     double? actionTop;
     double? summaryTop;
     double? modeContentTop;

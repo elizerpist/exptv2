@@ -43,6 +43,44 @@ abstract final class DashboardHeaderTrendChartStyle {
   );
 }
 
+/// The small optional mode-label lane shared by Balance and Mind. It keeps the
+/// Header envelope fixed: turning it on moves the value and consumes the same
+/// vertical space from the chart's plot region.
+@immutable
+final class DashboardHeaderTrendChartLayout {
+  const DashboardHeaderTrendChartLayout({
+    required this.showsModeLabelAboveValue,
+  });
+
+  const DashboardHeaderTrendChartLayout.normal()
+    : showsModeLabelAboveValue = false;
+
+  final bool showsModeLabelAboveValue;
+
+  static const modeLabelHeight = 10.0;
+  static const modeLabelGap = 3.0;
+  static const modeLabelReserve = modeLabelHeight + modeLabelGap;
+  static const modeLabelTextMetrics = TextStyle(
+    fontSize: 9,
+    height: 1,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -.18,
+  );
+
+  double get valueTop =>
+      DashboardHeaderTrendChartStyle.detailTop +
+      (showsModeLabelAboveValue ? modeLabelReserve : 0);
+  double get plotTop =>
+      DashboardHeaderTrendChartStyle.plotTop +
+      (showsModeLabelAboveValue ? modeLabelReserve : 0);
+  double get plotHeight =>
+      DashboardHeaderTrendChartStyle.plotHeight -
+      (showsModeLabelAboveValue ? modeLabelReserve : 0);
+  double get timeLabelTop => plotTop + plotHeight + 4.0;
+  double get timeLabelRevealExtent =>
+      plotHeight + 4.0 + DashboardHeaderTrendChartStyle.timeLabelHeight;
+}
+
 /// One domain value rendered by the neutral Header trend painter.
 @immutable
 final class DashboardHeaderTrendPoint {

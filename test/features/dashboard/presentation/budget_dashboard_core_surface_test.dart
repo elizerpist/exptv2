@@ -5,6 +5,7 @@ import 'package:fluvi/core/design/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
+import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -249,6 +250,117 @@ void main() {
             'RG-G6: Unified owns one physical common surface. Card2 may keep '
             'a rounded content clip, but it may not paint a second card '
             'background, border or shadow inside that surface.',
+      );
+    },
+  );
+
+  testWidgets(
+    'Budget avatar/content variants keep avatar anchors while adapting only local chrome',
+    (tester) async {
+      final geometry = DashboardGeometryResolver.resolve(
+        metrics: DashboardLayoutMetrics.reference,
+        mode: DashboardModeSpec.budget,
+        collapseProgress: 0,
+        isRailExpanded: false,
+        hasPhysicalRail: false,
+      );
+      final presentation = DashboardCoreModePresentation(
+        geometry: geometry,
+        palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.budget),
+      );
+
+      Future<void> pump(BudgetAvatarContentStyle style) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              children: <Widget>[
+                BudgetDashboardCoreSurface(
+                  presentation: presentation,
+                  avatarContentStyle: style,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await pump(BudgetAvatarContentStyle.separate);
+      final avatarAnchor = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+      );
+      final separateCard = tester.getRect(
+        find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
+      );
+      expect(
+        find.byKey(const ValueKey('budget-avatar-content-rail-backplate')),
+        findsNothing,
+      );
+
+      await pump(BudgetAvatarContentStyle.overlappingGlow);
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+        ),
+        avatarAnchor,
+      );
+      expect(
+        tester
+            .getRect(
+              find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
+            )
+            .top,
+        lessThan(separateCard.top),
+      );
+
+      await pump(BudgetAvatarContentStyle.avatarRail);
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-core-mode-budget-card-1')),
+        ),
+        avatarAnchor,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
+        ),
+        separateCard,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-avatar-content-rail-backplate')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-avatar-content-rail-surface')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Budget detail shell paints the selected-avatar glow only on demand',
+    (tester) async {
+      Future<void> pump(Color? topGlowColor) => tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 320,
+            height: 220,
+            child: BudgetDistributionCardShell(
+              topGlowColor: topGlowColor,
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      );
+
+      await pump(null);
+      expect(
+        find.byKey(const ValueKey('budget-selected-avatar-content-glow')),
+        findsNothing,
+      );
+      await pump(const Color(0xFF5277D3));
+      expect(
+        find.byKey(const ValueKey('budget-selected-avatar-content-glow')),
+        findsOneWidget,
       );
     },
   );

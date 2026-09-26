@@ -19,6 +19,9 @@ class DashboardPlaceholderCard extends StatelessWidget {
     this.fillParent = false,
     this.cornerFamily = DashboardCornerSurfaceFamily.contentCard,
     this.borderSurface = DashboardBorderSurface.balanceContent,
+    this.borderRadiusOverride,
+    this.showsDepth = true,
+    this.showsBorder = true,
     this.child,
   });
 
@@ -28,6 +31,9 @@ class DashboardPlaceholderCard extends StatelessWidget {
   final bool fillParent;
   final DashboardCornerSurfaceFamily cornerFamily;
   final DashboardBorderSurface borderSurface;
+  final BorderRadius? borderRadiusOverride;
+  final bool showsDepth;
+  final bool showsBorder;
   final Widget? child;
 
   @override
@@ -37,11 +43,16 @@ class DashboardPlaceholderCard extends StatelessWidget {
     ).depthFor(cornerFamily);
     final card = FluviRoundedBox(
       color: depth.surfaceColor ?? surfaceColor,
-      border: DashboardBorderScope.profileOf(context).borderFor(borderSurface),
-      borderRadius: DashboardCornerRoundnessScope.profileOf(
-        context,
-      ).borderRadiusFor(cornerFamily, size: Size(bounds.width, bounds.height)),
-      boxShadow: depth.shadows,
+      border: showsBorder
+          ? DashboardBorderScope.profileOf(context).borderFor(borderSurface)
+          : null,
+      borderRadius:
+          borderRadiusOverride ??
+          DashboardCornerRoundnessScope.profileOf(context).borderRadiusFor(
+            cornerFamily,
+            size: Size(bounds.width, bounds.height),
+          ),
+      boxShadow: showsDepth ? depth.shadows : const <BoxShadow>[],
       child: child ?? const SizedBox.expand(),
     );
 

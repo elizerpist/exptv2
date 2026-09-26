@@ -62,6 +62,7 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
     this.lineColor = DashboardHeaderTrendChartStyle.lineColor,
     this.areaFadeColor,
     this.showsAreaFade = true,
+    this.layout = const DashboardHeaderTrendChartLayout.normal(),
   });
 
   final DashboardBalanceHistorySeries series;
@@ -73,6 +74,7 @@ final class BalanceHeaderHistoryChart extends StatefulWidget {
   final Color lineColor;
   final Color? areaFadeColor;
   final bool showsAreaFade;
+  final DashboardHeaderTrendChartLayout layout;
 
   @visibleForTesting
   static List<int> projectedTimeLabelEpochMinutes(
@@ -164,9 +166,9 @@ final class _BalanceHeaderHistoryChartState
           children: <Widget>[
             Positioned(
               left: DashboardHeaderTrendChartStyle.plotLeft,
-              top: DashboardHeaderTrendChartStyle.plotTop,
+              top: widget.layout.plotTop,
               width: DashboardHeaderTrendChartStyle.plotWidth,
-              height: DashboardHeaderTrendChartStyle.plotHeight,
+              height: widget.layout.plotHeight,
               child: Listener(
                 key: _plotKey,
                 behavior: HitTestBehavior.translucent,
@@ -181,13 +183,13 @@ final class _BalanceHeaderHistoryChartState
                       'balance-header-history-chart-reveal',
                     ),
                     width: DashboardHeaderTrendChartStyle.plotWidth,
-                    height: DashboardHeaderTrendChartStyle.plotHeight * reveal,
+                    height: widget.layout.plotHeight * reveal,
                     child: ClipRect(
                       child: Align(
                         alignment: Alignment.topCenter,
                         child: SizedBox(
                           width: DashboardHeaderTrendChartStyle.plotWidth,
-                          height: DashboardHeaderTrendChartStyle.plotHeight,
+                          height: widget.layout.plotHeight,
                           child: RepaintBoundary(
                             child: CustomPaint(
                               key: const ValueKey<String>(
@@ -217,12 +219,14 @@ final class _BalanceHeaderHistoryChartState
               _BalanceHeaderHistoryTimeLabels(
                 series: source,
                 expansionProgress: reveal,
+                layout: widget.layout,
               ),
             if (selected != null)
               _BalanceHeaderHistorySelectedLabels(
                 point: selected,
                 projection: projection,
                 availableWidth: constraints.maxWidth,
+                layout: widget.layout,
               ),
           ],
         ),
@@ -343,6 +347,7 @@ final class _BalanceHeaderHistorySelectedLabels extends StatelessWidget {
     required this.point,
     required this.projection,
     required this.availableWidth,
+    required this.layout,
   });
 
   static const _amountWidth = 74.0;
@@ -351,6 +356,7 @@ final class _BalanceHeaderHistorySelectedLabels extends StatelessWidget {
   final DashboardBalanceHistoryPoint point;
   final DashboardHeaderTrendTemporalProjection projection;
   final double availableWidth;
+  final DashboardHeaderTrendChartLayout layout;
 
   @override
   Widget build(BuildContext context) {
@@ -368,7 +374,7 @@ final class _BalanceHeaderHistorySelectedLabels extends StatelessWidget {
           ),
           text: DashboardPreparedFormatter.amountMinor(point.balanceMinor),
           left: _clampedLeft(x, _amountWidth),
-          top: DashboardHeaderTrendChartStyle.plotTop + 1,
+          top: layout.plotTop + 1,
           width: _amountWidth,
         ),
         _label(
@@ -378,8 +384,8 @@ final class _BalanceHeaderHistorySelectedLabels extends StatelessWidget {
           text: _formatEpochDay(point.epochDay),
           left: _clampedLeft(x, _temporalWidth),
           top:
-              DashboardHeaderTrendChartStyle.plotTop +
-              DashboardHeaderTrendChartStyle.plotHeight -
+              layout.plotTop +
+              layout.plotHeight -
               DashboardHeaderTrendChartStyle.timeLabelHeight,
           width: _temporalWidth,
         ),
@@ -426,17 +432,18 @@ final class _BalanceHeaderHistoryTimeLabels extends StatelessWidget {
   const _BalanceHeaderHistoryTimeLabels({
     required this.series,
     required this.expansionProgress,
+    required this.layout,
   });
 
   final DashboardBalanceHistorySeries series;
   final double expansionProgress;
+  final DashboardHeaderTrendChartLayout layout;
 
   @override
   Widget build(BuildContext context) {
     final visibleHeight =
-        (DashboardHeaderTrendChartStyle.timeLabelRevealExtent *
-                    expansionProgress -
-                DashboardHeaderTrendChartStyle.plotHeight -
+        (layout.timeLabelRevealExtent * expansionProgress -
+                layout.plotHeight -
                 4)
             .clamp(0.0, DashboardHeaderTrendChartStyle.timeLabelHeight)
             .toDouble();
@@ -449,7 +456,7 @@ final class _BalanceHeaderHistoryTimeLabels extends StatelessWidget {
     );
     return Positioned(
       left: DashboardHeaderTrendChartStyle.plotLeft,
-      top: DashboardHeaderTrendChartStyle.timeLabelTop,
+      top: layout.timeLabelTop,
       width: DashboardHeaderTrendChartStyle.plotWidth,
       height: visibleHeight,
       child: ClipRect(
