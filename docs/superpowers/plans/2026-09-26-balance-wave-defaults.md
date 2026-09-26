@@ -93,4 +93,4 @@
 - [x] Run the 306-test feature-focused Flutter suite in Ubuntu proot; all tests passed.
 - [x] Run `flutter analyze` in Ubuntu proot; no issues found.
 - [x] Diagnose the app-suite Query-sheet flake: the isolated case passes (1/1), while its full file remains order/timing-sensitive and outside this Balance-only scope.
-- [ ] Commit production code/tests, push this branch, monitor the exact GitHub human diagnostic APK job, download normal human APK to `/storage/emulated/0/Download/fluvi`, and verify SHA-256.
+- [x] Commit production code/tests, push this branch, monitor the exact GitHub human diagnostic APK job, download normal human APK to `/storage/emulated/0/Download/fluvi`, and verify SHA-256.
