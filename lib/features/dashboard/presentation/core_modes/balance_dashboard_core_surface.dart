@@ -306,7 +306,9 @@ final class _BalanceDashboardCoreSurfaceState
             content: _BalancePrimaryCardHost(
               bounds: local.lowerBounds,
               presentation: widget.balanceLinkedPresentation,
+              presentationSettings: widget.presentationSettings,
               selectedTopic: _selectedTopic,
+              rankedListExtraHeight: geometry.principalModeContentExtraHeight,
             ),
           ),
           DashboardCoreModeCascadeCard(
@@ -398,17 +400,38 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
   const _BalancePrimaryCardHost({
     required this.bounds,
     required this.presentation,
+    required this.presentationSettings,
     required this.selectedTopic,
+    required this.rankedListExtraHeight,
   });
 
   final DashboardBounds bounds;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
+  final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final BalanceLinkedDetailTopic selectedTopic;
+  final double rankedListExtraHeight;
 
   @override
   Widget build(BuildContext context) {
+    final settings = presentationSettings;
+    if (settings == null) {
+      return _withSettings(
+        context,
+        const BalancePresentationSettings.defaults(),
+      );
+    }
+    return ValueListenableBuilder<BalancePresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => _withSettings(context, value),
+    );
+  }
+
+  Widget _withSettings(
+    BuildContext context,
+    BalancePresentationSettings settings,
+  ) {
     final listenable = presentation;
-    if (listenable == null) return _placeholder();
+    if (listenable == null) return _placeholder(context, settings);
     return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
       valueListenable: listenable,
       builder: (context, value, _) {
@@ -416,25 +439,56 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
             (selectedTopic == BalanceLinkedDetailTopic.cashflow &&
                 value.cashflow.mode ==
                     DashboardBalancePrimaryMode.unsupportedDay)) {
-          return _placeholder();
+          return _placeholder(context, settings);
         }
         return DashboardPlaceholderCard(
           bounds: bounds,
           fillParent: true,
           semanticKey: const ValueKey<String>('balance-primary-card'),
+          borderOverride: _balanceContentBorderWithOpacity(
+            context,
+            settings.balanceContentCardBorderOpacity,
+          ),
           child: BalanceLinkedDetailCard(
             presentation: value,
             topic: selectedTopic,
+            rankedListExtraHeight: rankedListExtraHeight,
           ),
         );
       },
     );
   }
 
-  Widget _placeholder() => DashboardPlaceholderCard(
+  Widget _placeholder(
+    BuildContext context,
+    BalancePresentationSettings settings,
+  ) => DashboardPlaceholderCard(
     bounds: bounds,
     fillParent: true,
     semanticKey: const ValueKey<String>('balance-primary-card-placeholder'),
+    borderOverride: _balanceContentBorderWithOpacity(
+      context,
+      settings.balanceContentCardBorderOpacity,
+    ),
+  );
+}
+
+BoxBorder? _balanceContentBorderWithOpacity(
+  BuildContext context,
+  double opacity,
+) {
+  final configured = DashboardBorderScope.profileOf(
+    context,
+  ).borderFor(DashboardBorderSurface.balanceContent);
+  if (configured is! Border) return configured;
+  BorderSide faded(BorderSide side) => side.copyWith(
+    color: side.color.withValues(alpha: side.color.a * opacity),
+  );
+  return Border(
+    top: faded(configured.top),
+    right: faded(configured.right),
+    bottom: faded(configured.bottom),
+    left: faded(configured.left),
   );
 }
 
@@ -653,19 +707,26 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = presentationSettings;
     if (settings == null) {
-      return _withSettings(context);
+      return _withSettings(
+        context,
+        const BalancePresentationSettings.defaults(),
+      );
     }
     return ValueListenableBuilder<BalancePresentationSettings>(
       valueListenable: settings,
-      builder: (context, _, _) => _withSettings(context),
+      builder: (context, value, _) => _withSettings(context, value),
     );
   }
 
-  Widget _withSettings(BuildContext context) {
+  Widget _withSettings(
+    BuildContext context,
+    BalancePresentationSettings settings,
+  ) {
     final listenable = presentation;
     if (listenable == null) {
       return _BalanceUpperCarousel(
         cards: balanceCarouselCardsFor(null),
+        presentationSettings: settings,
         summaryToUpperGap: summaryToUpperGap,
         onMotionInterrupted: onMotionInterrupted,
         onCardSelected: onCardSelected,
@@ -676,6 +737,7 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
       builder: (context, presentation, _) {
         return _BalanceUpperCarousel(
           cards: balanceCarouselCardsFor(presentation),
+          presentationSettings: settings,
           summaryToUpperGap: summaryToUpperGap,
           onMotionInterrupted: onMotionInterrupted,
           onCardSelected: onCardSelected,
@@ -688,12 +750,14 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
 final class _BalanceUpperCarousel extends StatefulWidget {
   const _BalanceUpperCarousel({
     required this.cards,
+    required this.presentationSettings,
     required this.summaryToUpperGap,
     required this.onMotionInterrupted,
     required this.onCardSelected,
   });
 
   final List<BalanceCarouselCard> cards;
+  final BalancePresentationSettings presentationSettings;
   final double summaryToUpperGap;
   final VoidCallback? onMotionInterrupted;
   final ValueChanged<BalanceCarouselCard> onCardSelected;
@@ -850,6 +914,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel> {
               width: geometry.cardWidth,
               itemHeight: carouselHeight,
               isSelected: metrics.isSelected,
+              presentationSettings: widget.presentationSettings,
             ),
           ),
         ),
@@ -900,12 +965,14 @@ final class _BalanceCarouselCard extends StatelessWidget {
     required this.width,
     required this.itemHeight,
     required this.isSelected,
+    required this.presentationSettings,
   });
 
   final BalanceCarouselCard card;
   final double width;
   final double itemHeight;
   final bool isSelected;
+  final BalancePresentationSettings presentationSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -917,6 +984,11 @@ final class _BalanceCarouselCard extends StatelessWidget {
       size: Size(width, itemHeight),
     );
     final accent = _BalanceCarouselReferenceAccent.resolve(context, card);
+    final paint = _BalanceCarouselReferencePaint.resolve(
+      visualSpec: visualSpec,
+      isSelected: isSelected,
+      presentationSettings: presentationSettings,
+    );
     return SizedBox(
       key: ValueKey<String>('balance-carousel-card-${card.id}'),
       width: width,
@@ -951,14 +1023,12 @@ final class _BalanceCarouselCard extends StatelessWidget {
                       'balance-carousel-card-reference-shell-${card.id}',
                     ),
                     decoration: BoxDecoration(
-                      color: accent.color.withValues(
-                        alpha: visualSpec.tintOpacityFor(isSelected),
-                      ),
+                      color: accent.color.withValues(alpha: paint.tintOpacity),
                       border: Border.all(
                         color: accent.color.withValues(
-                          alpha: visualSpec.outlineOpacityFor(isSelected),
+                          alpha: paint.outlineOpacity,
                         ),
-                        width: visualSpec.outlineWidthFor(isSelected),
+                        width: paint.outlineWidth,
                       ),
                       borderRadius: borderRadius,
                     ),
@@ -970,7 +1040,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
                     painter: _BalanceCarouselSoftWavePainter(
                       accentColor: accent.color,
                       spec: visualSpec,
-                      isSelected: isSelected,
+                      opacity: paint.waveOpacity,
                     ),
                   ),
                   _BalanceCarouselMiniCardContent(
@@ -1110,6 +1180,45 @@ final class _BalanceCarouselReferenceVisualSpec {
 
   double waveOpacityFor(bool isSelected) =>
       isSelected ? selectedWaveOpacity : normalWaveOpacity;
+}
+
+/// Resolves only paint alpha from the immutable user choices. The accepted
+/// reference metric source above remains the owner of every card dimension and
+/// wave-coordinate value, so settings cannot perturb carousel geometry.
+@immutable
+final class _BalanceCarouselReferencePaint {
+  const _BalanceCarouselReferencePaint._({
+    required this.tintOpacity,
+    required this.outlineOpacity,
+    required this.outlineWidth,
+    required this.waveOpacity,
+  });
+
+  final double tintOpacity;
+  final double outlineOpacity;
+  final double outlineWidth;
+  final double waveOpacity;
+
+  factory _BalanceCarouselReferencePaint.resolve({
+    required _BalanceCarouselReferenceVisualSpec visualSpec,
+    required bool isSelected,
+    required BalancePresentationSettings presentationSettings,
+  }) {
+    final authoredTint = visualSpec.tintOpacityFor(isSelected);
+    final authoredOutline = visualSpec.outlineOpacityFor(isSelected);
+    final authoredWave = visualSpec.waveOpacityFor(isSelected);
+    return _BalanceCarouselReferencePaint._(
+      tintOpacity: presentationSettings.balanceCarouselTintedBackgroundEnabled
+          ? authoredTint
+          : 0,
+      outlineOpacity: presentationSettings.balanceCarouselBorderEnabled
+          ? authoredOutline * presentationSettings.balanceCarouselBorderOpacity
+          : 0,
+      outlineWidth: visualSpec.outlineWidthFor(isSelected),
+      waveOpacity:
+          authoredWave * presentationSettings.balanceCarouselWaveOpacity,
+    );
+  }
 }
 
 @immutable
@@ -1310,12 +1419,12 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
   const _BalanceCarouselSoftWavePainter({
     required this.accentColor,
     required this.spec,
-    required this.isSelected,
+    required this.opacity,
   });
 
   final Color accentColor;
   final _BalanceCarouselReferenceVisualSpec spec;
-  final bool isSelected;
+  final double opacity;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1345,7 +1454,7 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = accentColor.withValues(alpha: spec.waveOpacityFor(isSelected))
+        ..color = accentColor.withValues(alpha: opacity)
         ..style = PaintingStyle.fill,
     );
   }
@@ -1354,5 +1463,5 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
   bool shouldRepaint(covariant _BalanceCarouselSoftWavePainter oldDelegate) =>
       oldDelegate.accentColor != accentColor ||
       oldDelegate.spec != spec ||
-      oldDelegate.isSelected != isSelected;
+      oldDelegate.opacity != opacity;
 }

@@ -36,20 +36,44 @@ final class BalancePresentationSettings {
     required this.chartMode,
     required this.timeLabels,
     required this.latestTransactionCardPresentation,
+    required this.balanceCarouselBorderEnabled,
+    required this.balanceCarouselBorderOpacity,
+    required this.balanceCarouselWaveOpacity,
+    required this.balanceCarouselTintedBackgroundEnabled,
+    required this.balanceContentCardBorderOpacity,
     required this.revision,
-  });
+  }) : assert(
+         balanceCarouselBorderOpacity >= 0 && balanceCarouselBorderOpacity <= 1,
+       ),
+       assert(
+         balanceCarouselWaveOpacity >= 0 && balanceCarouselWaveOpacity <= 1,
+       ),
+       assert(
+         balanceContentCardBorderOpacity >= 0 &&
+             balanceContentCardBorderOpacity <= 1,
+       );
 
   const BalancePresentationSettings.defaults()
     : chartMode = BalanceHeaderChartMode.allTime,
       timeLabels = BalanceHeaderChartTimeLabels.visible,
       latestTransactionCardPresentation =
           BalanceLatestTransactionCardPresentation.avatarPartner,
+      balanceCarouselBorderEnabled = true,
+      balanceCarouselBorderOpacity = 1,
+      balanceCarouselWaveOpacity = 1,
+      balanceCarouselTintedBackgroundEnabled = true,
+      balanceContentCardBorderOpacity = 1,
       revision = 0;
 
   final BalanceHeaderChartMode chartMode;
   final BalanceHeaderChartTimeLabels timeLabels;
   final BalanceLatestTransactionCardPresentation
   latestTransactionCardPresentation;
+  final bool balanceCarouselBorderEnabled;
+  final double balanceCarouselBorderOpacity;
+  final double balanceCarouselWaveOpacity;
+  final bool balanceCarouselTintedBackgroundEnabled;
+  final double balanceContentCardBorderOpacity;
   final int revision;
 
   bool get showsTimeLabels =>
@@ -59,6 +83,11 @@ final class BalancePresentationSettings {
     BalanceHeaderChartMode? chartMode,
     BalanceHeaderChartTimeLabels? timeLabels,
     BalanceLatestTransactionCardPresentation? latestTransactionCardPresentation,
+    bool? balanceCarouselBorderEnabled,
+    double? balanceCarouselBorderOpacity,
+    double? balanceCarouselWaveOpacity,
+    bool? balanceCarouselTintedBackgroundEnabled,
+    double? balanceContentCardBorderOpacity,
     int? revision,
   }) => BalancePresentationSettings(
     chartMode: chartMode ?? this.chartMode,
@@ -66,6 +95,17 @@ final class BalancePresentationSettings {
     latestTransactionCardPresentation:
         latestTransactionCardPresentation ??
         this.latestTransactionCardPresentation,
+    balanceCarouselBorderEnabled:
+        balanceCarouselBorderEnabled ?? this.balanceCarouselBorderEnabled,
+    balanceCarouselBorderOpacity:
+        balanceCarouselBorderOpacity ?? this.balanceCarouselBorderOpacity,
+    balanceCarouselWaveOpacity:
+        balanceCarouselWaveOpacity ?? this.balanceCarouselWaveOpacity,
+    balanceCarouselTintedBackgroundEnabled:
+        balanceCarouselTintedBackgroundEnabled ??
+        this.balanceCarouselTintedBackgroundEnabled,
+    balanceContentCardBorderOpacity:
+        balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
     revision: revision ?? this.revision,
   );
 
@@ -76,6 +116,13 @@ final class BalancePresentationSettings {
       other.timeLabels == timeLabels &&
       other.latestTransactionCardPresentation ==
           latestTransactionCardPresentation &&
+      other.balanceCarouselBorderEnabled == balanceCarouselBorderEnabled &&
+      other.balanceCarouselBorderOpacity == balanceCarouselBorderOpacity &&
+      other.balanceCarouselWaveOpacity == balanceCarouselWaveOpacity &&
+      other.balanceCarouselTintedBackgroundEnabled ==
+          balanceCarouselTintedBackgroundEnabled &&
+      other.balanceContentCardBorderOpacity ==
+          balanceContentCardBorderOpacity &&
       other.revision == revision;
 
   @override
@@ -83,6 +130,11 @@ final class BalancePresentationSettings {
     chartMode,
     timeLabels,
     latestTransactionCardPresentation,
+    balanceCarouselBorderEnabled,
+    balanceCarouselBorderOpacity,
+    balanceCarouselWaveOpacity,
+    balanceCarouselTintedBackgroundEnabled,
+    balanceContentCardBorderOpacity,
     revision,
   );
 }
@@ -116,4 +168,54 @@ final class BalancePresentationController
       revision: current.revision + 1,
     );
   }
+
+  void setBalanceCarouselBorderEnabled(bool next) {
+    final current = value;
+    if (current.balanceCarouselBorderEnabled == next) return;
+    value = current.copyWith(
+      balanceCarouselBorderEnabled: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceCarouselBorderOpacity(double next) {
+    final normalized = _normalizedOpacity(next);
+    final current = value;
+    if (current.balanceCarouselBorderOpacity == normalized) return;
+    value = current.copyWith(
+      balanceCarouselBorderOpacity: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceCarouselWaveOpacity(double next) {
+    final normalized = _normalizedOpacity(next);
+    final current = value;
+    if (current.balanceCarouselWaveOpacity == normalized) return;
+    value = current.copyWith(
+      balanceCarouselWaveOpacity: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceCarouselTintedBackgroundEnabled(bool next) {
+    final current = value;
+    if (current.balanceCarouselTintedBackgroundEnabled == next) return;
+    value = current.copyWith(
+      balanceCarouselTintedBackgroundEnabled: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setBalanceContentCardBorderOpacity(double next) {
+    final normalized = _normalizedOpacity(next);
+    final current = value;
+    if (current.balanceContentCardBorderOpacity == normalized) return;
+    value = current.copyWith(
+      balanceContentCardBorderOpacity: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  double _normalizedOpacity(double value) => value.clamp(0, 1).toDouble();
 }

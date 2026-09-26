@@ -19,6 +19,7 @@ class DashboardPlaceholderCard extends StatelessWidget {
     this.fillParent = false,
     this.cornerFamily = DashboardCornerSurfaceFamily.contentCard,
     this.borderSurface = DashboardBorderSurface.balanceContent,
+    this.borderOverride,
     this.borderRadiusOverride,
     this.showsDepth = true,
     this.showsBorder = true,
@@ -31,6 +32,7 @@ class DashboardPlaceholderCard extends StatelessWidget {
   final bool fillParent;
   final DashboardCornerSurfaceFamily cornerFamily;
   final DashboardBorderSurface borderSurface;
+  final BoxBorder? borderOverride;
   final BorderRadius? borderRadiusOverride;
   final bool showsDepth;
   final bool showsBorder;
@@ -44,7 +46,8 @@ class DashboardPlaceholderCard extends StatelessWidget {
     final card = FluviRoundedBox(
       color: depth.surfaceColor ?? surfaceColor,
       border: showsBorder
-          ? DashboardBorderScope.profileOf(context).borderFor(borderSurface)
+          ? borderOverride ??
+                DashboardBorderScope.profileOf(context).borderFor(borderSurface)
           : null,
       borderRadius:
           borderRadiusOverride ??

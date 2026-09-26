@@ -397,7 +397,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-PRESENTATION-TUNER: chart controls remain while retired geometry controls are absent',
+    'BALANCE-PRESENTATION-TUNER: visual controls are independently addressable while retired geometry controls remain absent',
     (tester) async {
       final controller = DashboardHeaderVisualController(vsync: tester);
       final balance = BalancePresentationController();
@@ -452,6 +452,75 @@ void main() {
         balance.value.latestTransactionCardPresentation,
         BalanceLatestTransactionCardPresentation.threeLine,
       );
+
+      expect(find.text('BALANCE CAROUSEL'), findsOneWidget);
+      expect(find.text('BALANCE CONTENT CARD'), findsOneWidget);
+      final tintedBackground = find.byKey(
+        const ValueKey<String>('balance-carousel-tinted-background-enabled'),
+      );
+      final borderEnabled = find.byKey(
+        const ValueKey<String>('balance-carousel-border-enabled'),
+      );
+      final borderOpacity = find.byKey(
+        const ValueKey<String>('balance-carousel-border-opacity'),
+      );
+      final waveOpacity = find.byKey(
+        const ValueKey<String>('balance-carousel-wave-opacity'),
+      );
+      final contentBorderOpacity = find.byKey(
+        const ValueKey<String>('balance-content-card-border-opacity'),
+      );
+      expect(tintedBackground, findsOneWidget);
+      expect(borderEnabled, findsOneWidget);
+      expect(borderOpacity, findsOneWidget);
+      expect(waveOpacity, findsOneWidget);
+      expect(contentBorderOpacity, findsOneWidget);
+
+      final tintOff = find.byKey(
+        const ValueKey<String>(
+          'balance-carousel-tinted-background-enabled-off',
+        ),
+      );
+      await tester.ensureVisible(tintOff);
+      await tester.tap(tintOff);
+      await tester.pump();
+      expect(balance.value.balanceCarouselTintedBackgroundEnabled, isFalse);
+      expect(balance.value.balanceCarouselBorderEnabled, isTrue);
+
+      final borderOff = find.byKey(
+        const ValueKey<String>('balance-carousel-border-enabled-off'),
+      );
+      await tester.ensureVisible(borderOff);
+      await tester.tap(borderOff);
+      await tester.pump();
+      expect(balance.value.balanceCarouselBorderEnabled, isFalse);
+      expect(balance.value.balanceCarouselTintedBackgroundEnabled, isFalse);
+
+      tester
+          .widget<Slider>(
+            find.descendant(of: borderOpacity, matching: find.byType(Slider)),
+          )
+          .onChanged!(.4);
+      tester
+          .widget<Slider>(
+            find.descendant(of: waveOpacity, matching: find.byType(Slider)),
+          )
+          .onChanged!(.6);
+      tester
+          .widget<Slider>(
+            find.descendant(
+              of: contentBorderOpacity,
+              matching: find.byType(Slider),
+            ),
+          )
+          .onChanged!(.2);
+      await tester.pump();
+      expect(balance.value.balanceCarouselBorderOpacity, .4);
+      expect(balance.value.balanceCarouselWaveOpacity, .6);
+      expect(balance.value.balanceContentCardBorderOpacity, .2);
+      expect(find.text('40%'), findsOneWidget);
+      expect(find.text('60%'), findsOneWidget);
+      expect(find.text('20%'), findsOneWidget);
 
       expect(
         find.byKey(const ValueKey<String>('balance-carousel-width-boost')),

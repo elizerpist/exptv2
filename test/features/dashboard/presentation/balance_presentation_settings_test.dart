@@ -8,7 +8,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 
 void main() {
   test(
-    'Balance presentation settings retain chart/time choices and own only the Latest render alternative',
+    'Balance presentation settings retain chart/time choices and independently own Balance card presentation alternatives',
     () {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
@@ -19,12 +19,22 @@ void main() {
         controller.value.latestTransactionCardPresentation,
         BalanceLatestTransactionCardPresentation.avatarPartner,
       );
+      expect(controller.value.balanceCarouselBorderEnabled, isTrue);
+      expect(controller.value.balanceCarouselBorderOpacity, 1);
+      expect(controller.value.balanceCarouselWaveOpacity, 1);
+      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
+      expect(controller.value.balanceContentCardBorderOpacity, 1);
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
         ..setTimeLabels(BalanceHeaderChartTimeLabels.hidden)
         ..setLatestTransactionCardPresentation(
           BalanceLatestTransactionCardPresentation.threeLine,
-        );
+        )
+        ..setBalanceCarouselBorderEnabled(false)
+        ..setBalanceCarouselBorderOpacity(.42)
+        ..setBalanceCarouselWaveOpacity(.61)
+        ..setBalanceCarouselTintedBackgroundEnabled(false)
+        ..setBalanceContentCardBorderOpacity(.27);
       expect(
         controller.value.chartMode,
         BalanceHeaderChartMode.adaptiveSummary,
@@ -34,7 +44,17 @@ void main() {
         controller.value.latestTransactionCardPresentation,
         BalanceLatestTransactionCardPresentation.threeLine,
       );
-      expect(controller.value.revision, 3);
+      expect(controller.value.balanceCarouselBorderEnabled, isFalse);
+      expect(
+        controller.value.balanceCarouselBorderOpacity,
+        .42,
+        reason:
+            'Disabling the outline must preserve the independently chosen opacity.',
+      );
+      expect(controller.value.balanceCarouselWaveOpacity, .61);
+      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isFalse);
+      expect(controller.value.balanceContentCardBorderOpacity, .27);
+      expect(controller.value.revision, 8);
 
       final unchangedRevision = controller.value.revision;
       controller.setLatestTransactionCardPresentation(
@@ -46,6 +66,32 @@ void main() {
         controller.value,
         reason: 'The render-only setting participates in value identity.',
       );
+    },
+  );
+
+  test(
+    'Balance visual customization clamps only its opacity writer and preserves every sibling setting',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      controller
+        ..setBalanceCarouselBorderOpacity(-.2)
+        ..setBalanceCarouselWaveOpacity(1.4)
+        ..setBalanceContentCardBorderOpacity(.5);
+
+      expect(controller.value.balanceCarouselBorderOpacity, 0);
+      expect(controller.value.balanceCarouselWaveOpacity, 1);
+      expect(controller.value.balanceContentCardBorderOpacity, .5);
+      expect(controller.value.balanceCarouselBorderEnabled, isTrue);
+      expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
+
+      final revision = controller.value.revision;
+      controller
+        ..setBalanceCarouselBorderOpacity(0)
+        ..setBalanceCarouselWaveOpacity(1)
+        ..setBalanceContentCardBorderOpacity(.5);
+      expect(controller.value.revision, revision);
     },
   );
 

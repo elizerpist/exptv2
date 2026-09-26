@@ -1034,8 +1034,119 @@ final class _BalancePresentationSection extends StatelessWidget {
             ],
           ),
         ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text('BALANCE CAROUSEL'),
+        ),
+        KeyedSubtree(
+          key: const ValueKey<String>(
+            'balance-carousel-tinted-background-enabled',
+          ),
+          child: _BalanceBooleanChoice(
+            label: 'Carousel színezett háttér',
+            value: settings.balanceCarouselTintedBackgroundEnabled,
+            onChanged: controller.setBalanceCarouselTintedBackgroundEnabled,
+            keyPrefix: 'balance-carousel-tinted-background-enabled',
+          ),
+        ),
+        KeyedSubtree(
+          key: const ValueKey<String>('balance-carousel-border-enabled'),
+          child: _BalanceBooleanChoice(
+            label: 'Carousel kártya körvonal',
+            value: settings.balanceCarouselBorderEnabled,
+            onChanged: controller.setBalanceCarouselBorderEnabled,
+            keyPrefix: 'balance-carousel-border-enabled',
+          ),
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-carousel-border-opacity'),
+          label: 'Carousel körvonal erőssége',
+          valueLabel:
+              '${(settings.balanceCarouselBorderOpacity * 100).round()}%',
+          min: 0,
+          max: 1,
+          divisions: 100,
+          value: settings.balanceCarouselBorderOpacity,
+          onChanged: controller.setBalanceCarouselBorderOpacity,
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-carousel-wave-opacity'),
+          label: 'Carousel hullám erőssége',
+          valueLabel: '${(settings.balanceCarouselWaveOpacity * 100).round()}%',
+          min: 0,
+          max: 1,
+          divisions: 100,
+          value: settings.balanceCarouselWaveOpacity,
+          onChanged: controller.setBalanceCarouselWaveOpacity,
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text('BALANCE CONTENT CARD'),
+        ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-content-card-border-opacity'),
+          label: 'Content kártya körvonal erőssége',
+          valueLabel:
+              '${(settings.balanceContentCardBorderOpacity * 100).round()}%',
+          min: 0,
+          max: 1,
+          divisions: 100,
+          value: settings.balanceContentCardBorderOpacity,
+          onChanged: controller.setBalanceContentCardBorderOpacity,
+        ),
       ],
     ),
+  );
+}
+
+final class _BalanceBooleanChoice extends StatelessWidget {
+  const _BalanceBooleanChoice({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.keyPrefix,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String keyPrefix;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      const SizedBox(height: 4),
+      Text(label),
+      RadioGroup<bool>(
+        groupValue: value,
+        onChanged: (next) {
+          if (next != null) onChanged(next);
+        },
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: RadioListTile<bool>(
+                key: ValueKey<String>('$keyPrefix-on'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Be'),
+                value: true,
+              ),
+            ),
+            Expanded(
+              child: RadioListTile<bool>(
+                key: ValueKey<String>('$keyPrefix-off'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ki'),
+                value: false,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
   );
 }
 

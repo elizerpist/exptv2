@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/assets/prepared_vector_asset_atlas.dart';
@@ -30,10 +32,12 @@ class BalanceLinkedDetailCard extends StatelessWidget {
     super.key,
     required this.presentation,
     required this.topic,
-  });
+    this.rankedListExtraHeight = 0,
+  }) : assert(rankedListExtraHeight >= 0);
 
   final DashboardBalanceLinkedPresentation presentation;
   final BalanceLinkedDetailTopic topic;
+  final double rankedListExtraHeight;
 
   @override
   Widget build(BuildContext context) => switch (topic) {
@@ -69,6 +73,7 @@ class BalanceLinkedDetailCard extends StatelessWidget {
       ranks: presentation.topCategories,
       kind: _RankDetailKind.category,
       categoryInsights: presentation.categoryInsights,
+      rankedListExtraHeight: rankedListExtraHeight,
     ),
     BalanceLinkedDetailTopic.topPartner => _RankedDetail(
       key: const ValueKey<String>('balance-linked-detail-top-partner'),
@@ -76,6 +81,7 @@ class BalanceLinkedDetailCard extends StatelessWidget {
       ranks: presentation.topPartners,
       kind: _RankDetailKind.partner,
       partnerInsights: presentation.partnerInsights,
+      rankedListExtraHeight: rankedListExtraHeight,
     ),
   };
 }
@@ -230,6 +236,7 @@ final class _RankedDetail extends StatefulWidget {
     required this.title,
     required this.ranks,
     required this.kind,
+    required this.rankedListExtraHeight,
     this.categoryInsights = const <String, DashboardBalanceCategoryInsight>{},
     this.partnerInsights = const <String, DashboardBalancePartnerInsight>{},
   });
@@ -237,6 +244,7 @@ final class _RankedDetail extends StatefulWidget {
   final String title;
   final List<DashboardBalanceRankedItem> ranks;
   final _RankDetailKind kind;
+  final double rankedListExtraHeight;
   final Map<String, DashboardBalanceCategoryInsight> categoryInsights;
   final Map<String, DashboardBalancePartnerInsight> partnerInsights;
 
@@ -300,6 +308,7 @@ final class _RankedDetailState extends State<_RankedDetail> {
                     ),
                     ranks: widget.ranks.take(5).toList(growable: false),
                     kind: widget.kind,
+                    rankedListExtraHeight: widget.rankedListExtraHeight,
                     hasCurrentInsight: (item) => switch (widget.kind) {
                       _RankDetailKind.category =>
                         widget.categoryInsights.containsKey(item.id),
@@ -326,22 +335,24 @@ final class _RankedOverview extends StatelessWidget {
     super.key,
     required this.ranks,
     required this.kind,
+    required this.rankedListExtraHeight,
     required this.hasCurrentInsight,
     required this.onRankTap,
   });
 
   final List<DashboardBalanceRankedItem> ranks;
   final _RankDetailKind kind;
+  final double rankedListExtraHeight;
   final bool Function(DashboardBalanceRankedItem item) hasCurrentInsight;
   final ValueChanged<DashboardBalanceRankedItem> onRankTap;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      // The bounded Balance lower card resolves to the compact ~210px
-      // production envelope. Keep all five real ranks visible there by
-      // tightening only their local presentation dimensions.
-      final compact = constraints.maxHeight < 170;
+      final layout = _RankedOverviewLayout.resolve(
+        availableHeight: constraints.maxHeight,
+        rankedListExtraHeight: rankedListExtraHeight,
+      );
       final leader = ranks.first;
       final followers = ranks.skip(1).toList(growable: false);
       return Column(
@@ -351,11 +362,11 @@ final class _RankedOverview extends StatelessWidget {
           _RankedLeaderRow(
             item: leader,
             kind: kind,
-            compact: compact,
+            layout: layout,
             onTap: hasCurrentInsight(leader) ? () => onRankTap(leader) : null,
           ),
           Padding(
-            padding: EdgeInsets.symmetric(vertical: compact ? 2 : 6),
+            padding: EdgeInsets.symmetric(vertical: layout.dividerVerticalGap),
             child: Divider(
               key: ValueKey<String>('balance-ranked-divider-${kind.name}'),
               height: 1,
@@ -368,12 +379,13 @@ final class _RankedOverview extends StatelessWidget {
               item: followers[index],
               rank: index + 2,
               kind: kind,
-              compact: compact,
+              layout: layout,
               onTap: hasCurrentInsight(followers[index])
                   ? () => onRankTap(followers[index])
                   : null,
             ),
-            if (index < followers.length - 1) SizedBox(height: compact ? 1 : 4),
+            if (index < followers.length - 1)
+              SizedBox(height: layout.followerGap),
           ],
         ],
       );
@@ -388,19 +400,133 @@ abstract final class _RankedOverviewVisualSpec {
   static const secondaryCopy = Color(0xFF77829D);
   static const leaderHeight = 52.0;
   static const followerHeight = 28.0;
+  static const compactLeaderHeight = 44.0;
+  static const compactFollowerHeight = 23.0;
+  static const leaderAvatar = 46.0;
+  static const compactLeaderAvatar = 40.0;
+  static const followerAvatar = 26.0;
+  static const compactFollowerAvatar = 22.0;
+  static const followerGap = 4.0;
+  static const compactFollowerGap = 1.0;
+  static const dividerVerticalGap = 6.0;
+  static const compactDividerVerticalGap = 2.0;
+}
+
+/// The canonical first-page ranked-list geometry for both categories and
+/// partners. The lower-card host supplies only already-existing extra height;
+/// this resolver never participates in outer card layout.
+@immutable
+final class _RankedOverviewLayout {
+  const _RankedOverviewLayout._({
+    required this.compact,
+    required this.leaderHeight,
+    required this.leaderAvatarSize,
+    required this.followerRowHeight,
+    required this.followerAvatarSize,
+    required this.followerIconSize,
+    required this.dividerVerticalGap,
+    required this.followerGap,
+  });
+
+  final bool compact;
+  final double leaderHeight;
+  final double leaderAvatarSize;
+  final double followerRowHeight;
+  final double followerAvatarSize;
+  final double followerIconSize;
+  final double dividerVerticalGap;
+  final double followerGap;
+
+  factory _RankedOverviewLayout.resolve({
+    required double availableHeight,
+    required double rankedListExtraHeight,
+  }) {
+    // Use the height before the existing stretch to retain the approved
+    // compact/noncompact baseline decision. Stretch must enrich a list, not
+    // accidentally switch it to a different visual system.
+    final baselineAvailableHeight = math.max(
+      0.0,
+      availableHeight - rankedListExtraHeight,
+    );
+    final compact = baselineAvailableHeight < 170;
+    final leaderHeight = compact
+        ? _RankedOverviewVisualSpec.compactLeaderHeight
+        : _RankedOverviewVisualSpec.leaderHeight;
+    final leaderAvatar = compact
+        ? _RankedOverviewVisualSpec.compactLeaderAvatar
+        : _RankedOverviewVisualSpec.leaderAvatar;
+    final baselineFollowerHeight = compact
+        ? _RankedOverviewVisualSpec.compactFollowerHeight
+        : _RankedOverviewVisualSpec.followerHeight;
+    final baselineFollowerAvatar = compact
+        ? _RankedOverviewVisualSpec.compactFollowerAvatar
+        : _RankedOverviewVisualSpec.followerAvatar;
+    final baselineDividerGap = compact
+        ? _RankedOverviewVisualSpec.compactDividerVerticalGap
+        : _RankedOverviewVisualSpec.dividerVerticalGap;
+    final baselineFollowerGap = compact
+        ? _RankedOverviewVisualSpec.compactFollowerGap
+        : _RankedOverviewVisualSpec.followerGap;
+    final baselineContentHeight =
+        leaderHeight +
+        1 +
+        baselineDividerGap * 2 +
+        baselineFollowerHeight * 4 +
+        baselineFollowerGap * 3;
+    final availableStretchCapacity = math.max(
+      0.0,
+      availableHeight - baselineContentHeight,
+    );
+    // A modest share of pre-existing bottom whitespace is intentionally
+    // reclaimed only in the stretched state. This makes the generous card
+    // fuller without moving the accepted compact baseline.
+    final reclaimedWhitespace = math.min(
+      24.0,
+      math.min(
+        rankedListExtraHeight * .24,
+        math.max(0.0, availableStretchCapacity - rankedListExtraHeight),
+      ),
+    );
+    final stretchBudget = math.min(
+      availableStretchCapacity,
+      rankedListExtraHeight + reclaimedWhitespace,
+    );
+    // Followers grow uniformly, but the retained rank-one anchor remains
+    // clearly dominant at every stretch amount.
+    final followerAvatarSize = math.min(
+      leaderAvatar - 5,
+      baselineFollowerAvatar + stretchBudget * .12,
+    );
+    final followerRowHeight = math.max(
+      baselineFollowerHeight,
+      followerAvatarSize,
+    );
+    final avatarConsumed = (followerRowHeight - baselineFollowerHeight) * 4;
+    final spacingExtra = math.max(0.0, stretchBudget - avatarConsumed) / 5;
+    return _RankedOverviewLayout._(
+      compact: compact,
+      leaderHeight: leaderHeight,
+      leaderAvatarSize: leaderAvatar,
+      followerRowHeight: followerRowHeight,
+      followerAvatarSize: followerAvatarSize,
+      followerIconSize: followerAvatarSize * (compact ? 12 / 22 : 14 / 26),
+      dividerVerticalGap: baselineDividerGap + spacingExtra,
+      followerGap: baselineFollowerGap + spacingExtra,
+    );
+  }
 }
 
 final class _RankedLeaderRow extends StatelessWidget {
   const _RankedLeaderRow({
     required this.item,
     required this.kind,
-    required this.compact,
+    required this.layout,
     required this.onTap,
   });
 
   final DashboardBalanceRankedItem item;
   final _RankDetailKind kind;
-  final bool compact;
+  final _RankedOverviewLayout layout;
   final VoidCallback? onTap;
 
   @override
@@ -419,7 +545,7 @@ final class _RankedLeaderRow extends StatelessWidget {
           key: ValueKey<String>('balance-linked-rank-${item.id}'),
           onTap: onTap,
           child: SizedBox(
-            height: compact ? 44 : _RankedOverviewVisualSpec.leaderHeight,
+            height: layout.leaderHeight,
             child: Row(
               children: <Widget>[
                 ExcludeSemantics(
@@ -430,11 +556,13 @@ final class _RankedLeaderRow extends StatelessWidget {
                     semanticLabel: item.label,
                     categoryColorId: item.categoryColorId,
                     categoryIconId: item.categoryIconId,
-                    size: compact ? 40 : 46,
-                    iconSize: compact ? 20 : 24,
+                    size: layout.leaderAvatarSize,
+                    iconSize:
+                        layout.leaderAvatarSize *
+                        (layout.compact ? .5 : 24 / 46),
                   ),
                 ),
-                SizedBox(width: compact ? 8 : 11),
+                SizedBox(width: layout.compact ? 8 : 11),
                 Expanded(
                   child: _RankedCopy(
                     primary: item.label,
@@ -442,7 +570,7 @@ final class _RankedLeaderRow extends StatelessWidget {
                     leader: true,
                   ),
                 ),
-                SizedBox(width: compact ? 8 : 11),
+                SizedBox(width: layout.compact ? 8 : 11),
                 _RankedAmount(value: amount, leader: true),
               ],
             ),
@@ -458,14 +586,14 @@ final class _RankedFollowerRow extends StatelessWidget {
     required this.item,
     required this.rank,
     required this.kind,
-    required this.compact,
+    required this.layout,
     required this.onTap,
   });
 
   final DashboardBalanceRankedItem item;
   final int rank;
   final _RankDetailKind kind;
-  final bool compact;
+  final _RankedOverviewLayout layout;
   final VoidCallback? onTap;
 
   @override
@@ -483,13 +611,17 @@ final class _RankedFollowerRow extends StatelessWidget {
           key: ValueKey<String>('balance-linked-rank-${item.id}'),
           onTap: onTap,
           child: SizedBox(
-            height: compact ? 23 : _RankedOverviewVisualSpec.followerHeight,
+            height: layout.followerRowHeight,
             child: Row(
               children: <Widget>[
                 ExcludeSemantics(
-                  child: _RankedFollowerAvatar(item: item, compact: compact),
+                  child: _RankedFollowerAvatar(
+                    item: item,
+                    size: layout.followerAvatarSize,
+                    iconSize: layout.followerIconSize,
+                  ),
                 ),
-                SizedBox(width: compact ? 7 : 9),
+                SizedBox(width: layout.compact ? 7 : 9),
                 Expanded(
                   child: _RankedCopy(
                     primary: item.label,
@@ -497,7 +629,7 @@ final class _RankedFollowerRow extends StatelessWidget {
                     leader: false,
                   ),
                 ),
-                SizedBox(width: compact ? 6 : 8),
+                SizedBox(width: layout.compact ? 6 : 8),
                 _RankedAmount(value: amount, leader: false),
               ],
             ),
@@ -601,10 +733,15 @@ final class _RankedAmount extends StatelessWidget {
 /// A local circle adapter preserves the same category color/icon catalogs used
 /// by the rounded-square badge without changing its other consumers.
 final class _RankedFollowerAvatar extends StatelessWidget {
-  const _RankedFollowerAvatar({required this.item, required this.compact});
+  const _RankedFollowerAvatar({
+    required this.item,
+    required this.size,
+    required this.iconSize,
+  });
 
   final DashboardBalanceRankedItem item;
-  final bool compact;
+  final double size;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -626,20 +763,20 @@ final class _RankedFollowerAvatar extends StatelessWidget {
         ],
       ),
       child: SizedBox(
-        width: compact ? 22 : 26,
-        height: compact ? 22 : 26,
+        width: size,
+        height: size,
         child: Center(
           child: atlas.isReady
               ? CategoryIconView(
                   picture: atlas.categoryIcon(
                     CategoryIconCatalog.handleOf(item.categoryIconId),
                   ),
-                  size: compact ? 12 : 14,
+                  size: iconSize,
                   color: Colors.white,
                 )
               : Icon(
                   Icons.category_rounded,
-                  size: compact ? 12 : 14,
+                  size: iconSize,
                   color: Colors.white,
                 ),
         ),

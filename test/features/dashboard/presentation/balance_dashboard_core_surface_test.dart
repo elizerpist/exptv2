@@ -7,6 +7,7 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
+import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
@@ -522,6 +523,243 @@ void main() {
           (neighboringShell.decoration as BoxDecoration).color!;
       expect(selectedTint.a, greaterThan(neighboringTint.a));
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'BVC-CAROUSEL: independent presentation settings alter only their owned paint alpha while preserving card bounds and controller identity',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      final settings = ValueNotifier<BalancePresentationSettings>(
+        const BalancePresentationSettings.defaults(),
+      );
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(
+                metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                  const Size(412, 892),
+                ),
+              ),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      carousel.controller.jumpToIndex(9);
+      await tester.pumpAndSettle();
+      final carouselController = carousel.controller;
+      final cardFinder = find.byKey(
+        const ValueKey<String>('balance-carousel-card-top-category'),
+      );
+      final cardRect = tester.getRect(cardFinder);
+      final shellFinder = find.byKey(
+        const ValueKey<String>(
+          'balance-carousel-card-reference-shell-top-category',
+        ),
+      );
+      final initialShell = tester.widget<DecoratedBox>(shellFinder);
+      final initialDecoration = initialShell.decoration as BoxDecoration;
+      final initialOutline = initialDecoration.border! as Border;
+      final initialWaveOpacity = _balanceCarouselWaveOpacity(
+        tester,
+        'top-category',
+      );
+      final initialWaveGeometry = _balanceCarouselWaveGeometry(
+        tester,
+        'top-category',
+      );
+      final contentShell = find.descendant(
+        of: find.byKey(const ValueKey<String>('balance-primary-card')),
+        matching: find.byType(FluviRoundedBox),
+      );
+      final initialContentBorder =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+
+      settings.value = settings.value.copyWith(
+        balanceCarouselBorderOpacity: .4,
+        balanceCarouselWaveOpacity: .5,
+        balanceCarouselTintedBackgroundEnabled: false,
+        balanceContentCardBorderOpacity: .3,
+        revision: 1,
+      );
+      await tester.pump();
+
+      final updatedDecoration =
+          tester.widget<DecoratedBox>(shellFinder).decoration as BoxDecoration;
+      final updatedOutline = updatedDecoration.border! as Border;
+      final updatedContentBorder =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(updatedDecoration.color!.a, 0);
+      expect(updatedOutline.top.width, initialOutline.top.width);
+      expect(
+        updatedOutline.top.color.a,
+        closeTo(initialOutline.top.color.a * .4, .01),
+      );
+      expect(
+        _balanceCarouselWaveOpacity(tester, 'top-category'),
+        closeTo(initialWaveOpacity * .5, .001),
+      );
+      expect(
+        _balanceCarouselWaveGeometry(tester, 'top-category'),
+        initialWaveGeometry,
+        reason: 'Opacity must not alter the accepted reference wave path.',
+      );
+      expect(updatedContentBorder.top.width, initialContentBorder.top.width);
+      expect(
+        updatedContentBorder.top.color.a,
+        closeTo(initialContentBorder.top.color.a * .3, .01),
+      );
+      expect(tester.getRect(cardFinder), cardRect);
+      expect(
+        identical(
+          tester
+              .widget<CenteredCarousel<BalanceCarouselCard>>(
+                find.byType(CenteredCarousel<BalanceCarouselCard>),
+              )
+              .controller,
+          carouselController,
+        ),
+        isTrue,
+      );
+
+      settings.value = settings.value.copyWith(
+        balanceCarouselBorderEnabled: true,
+        balanceCarouselBorderOpacity: 0,
+        balanceCarouselWaveOpacity: 0,
+        balanceContentCardBorderOpacity: 0,
+        revision: 2,
+      );
+      await tester.pump();
+      final transparentOutline =
+          (tester.widget<DecoratedBox>(shellFinder).decoration as BoxDecoration)
+                  .border!
+              as Border;
+      final transparentContentBorder =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(transparentOutline.top.color.a, 0);
+      expect(transparentOutline.top.width, initialOutline.top.width);
+      expect(_balanceCarouselWaveOpacity(tester, 'top-category'), 0);
+      expect(transparentContentBorder.top.color.a, 0);
+      expect(
+        transparentContentBorder.top.width,
+        initialContentBorder.top.width,
+      );
+
+      settings.value = settings.value.copyWith(
+        balanceCarouselBorderEnabled: false,
+        balanceCarouselBorderOpacity: .9,
+        revision: 3,
+      );
+      await tester.pump();
+      final hiddenOutline =
+          (tester.widget<DecoratedBox>(shellFinder).decoration as BoxDecoration)
+                  .border!
+              as Border;
+      final contentAfterCarouselChange =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(hiddenOutline.top.color.a, 0);
+      expect(hiddenOutline.top.width, initialOutline.top.width);
+      expect(contentAfterCarouselChange.top.color.a, 0);
+      expect(
+        contentAfterCarouselChange.top.width,
+        initialContentBorder.top.width,
+      );
+      expect(settings.value.balanceCarouselBorderOpacity, .9);
+      expect(tester.getRect(cardFinder), cardRect);
+    },
+  );
+
+  testWidgets(
+    'BVC-STRETCH-HOST: the existing content-height envelope reaches the canonical ranked layout without growing rank one',
+    (tester) async {
+      final topCategories = List<DashboardBalanceRankedItem>.generate(
+        5,
+        (index) => DashboardBalanceRankedItem(
+          id: 'category-$index',
+          label: 'Kategória $index',
+          direction: LedgerDirection.income,
+          amountMinor: 500000 - index * 10000,
+          transactionCount: 5 - index,
+          categoryColorId: 'color_07',
+          categoryIconId: 'icon_17',
+        ),
+        growable: false,
+      );
+      Future<({double leader, double follower, double cardHeight})> measure(
+        double principalModeContentExtraHeight,
+      ) async {
+        final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+          _linked(topCategories: topCategories),
+        );
+        addTearDown(linked.dispose);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: BalanceDashboardCoreSurface(
+                presentation: _balanceModePresentation(
+                  principalModeContentExtraHeight:
+                      principalModeContentExtraHeight,
+                ),
+                balanceLinkedPresentation: linked,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        tester
+            .widget<CenteredCarousel<BalanceCarouselCard>>(
+              find.byType(CenteredCarousel<BalanceCarouselCard>),
+            )
+            .controller
+            .jumpToIndex(9);
+        await tester.pumpAndSettle();
+        return (
+          leader: tester
+              .getSize(
+                find.byKey(
+                  const ValueKey<String>(
+                    'balance-ranked-leader-avatar-category-0',
+                  ),
+                ),
+              )
+              .width,
+          follower: tester
+              .getSize(
+                find.byKey(
+                  const ValueKey<String>(
+                    'balance-ranked-follower-avatar-category-1',
+                  ),
+                ),
+              )
+              .width,
+          cardHeight: tester
+              .getSize(
+                find.byKey(const ValueKey<String>('balance-primary-card')),
+              )
+              .height,
+        );
+      }
+
+      final baseline = await measure(0);
+      final stretched = await measure(100);
+      expect(stretched.cardHeight, closeTo(baseline.cardHeight + 100, .01));
+      expect(stretched.leader, baseline.leader);
+      expect(stretched.follower, greaterThan(baseline.follower));
+      expect(stretched.follower, lessThan(stretched.leader));
     },
   );
 
@@ -2064,12 +2302,14 @@ void main() {
 
 DashboardCoreModePresentation _balanceModePresentation({
   DashboardLayoutMetrics metrics = DashboardLayoutMetrics.reference,
+  double principalModeContentExtraHeight = 0,
 }) => DashboardCoreModePresentation(
   geometry: DashboardGeometryResolver.resolve(
     metrics: metrics,
     mode: DashboardModeSpec.balance,
     collapseProgress: 0,
     isRailExpanded: false,
+    principalModeContentExtraHeight: principalModeContentExtraHeight,
   ),
   palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
 );
@@ -2116,6 +2356,7 @@ DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(
 
 DashboardBalanceLinkedPresentation _linked({
   DashboardBalanceCategoryMoversPresentation? categoryMovers,
+  List<DashboardBalanceRankedItem>? topCategories,
 }) {
   const identity = DashboardBalancePrimaryIdentity(
     upstreamScopeKey: 'income|expense',
@@ -2160,17 +2401,19 @@ DashboardBalanceLinkedPresentation _linked({
         localTimeMinutes: 12 * 60,
       ),
     ],
-    topCategories: const <DashboardBalanceRankedItem>[
-      DashboardBalanceRankedItem(
-        id: 'salary',
-        label: 'Fizetés',
-        direction: LedgerDirection.income,
-        amountMinor: 700000,
-        transactionCount: 2,
-        categoryColorId: 'color_07',
-        categoryIconId: 'icon_17',
-      ),
-    ],
+    topCategories:
+        topCategories ??
+        const <DashboardBalanceRankedItem>[
+          DashboardBalanceRankedItem(
+            id: 'salary',
+            label: 'Fizetés',
+            direction: LedgerDirection.income,
+            amountMinor: 700000,
+            transactionCount: 2,
+            categoryColorId: 'color_07',
+            categoryIconId: 'icon_17',
+          ),
+        ],
     topPartners: const <DashboardBalanceRankedItem>[
       DashboardBalanceRankedItem(
         id: 'employer',
@@ -2322,4 +2565,44 @@ DashboardBalanceLinkedPresentation _linkedReplacement() {
     ],
     topPartners: initial.topPartners,
   );
+}
+
+double _balanceCarouselWaveOpacity(WidgetTester tester, String cardId) {
+  final painter = tester
+      .widget<CustomPaint>(
+        find.byKey(
+          ValueKey<String>('balance-carousel-card-reference-wave-$cardId'),
+        ),
+      )
+      .painter!;
+  return (painter as dynamic).opacity as double;
+}
+
+List<double> _balanceCarouselWaveGeometry(WidgetTester tester, String cardId) {
+  final painter =
+      tester
+              .widget<CustomPaint>(
+                find.byKey(
+                  ValueKey<String>(
+                    'balance-carousel-card-reference-wave-$cardId',
+                  ),
+                ),
+              )
+              .painter!
+          as dynamic;
+  final spec = painter.spec as dynamic;
+  return <double>[
+    spec.waveLeadingHeightFactor as double,
+    spec.waveFirstControlWidthFactor as double,
+    spec.waveFirstControlHeightFactor as double,
+    spec.waveSecondControlWidthFactor as double,
+    spec.waveSecondControlHeightFactor as double,
+    spec.waveFirstCurveEndWidthFactor as double,
+    spec.waveTrailingHeightFactor as double,
+    spec.waveTrailingFirstControlWidthFactor as double,
+    spec.waveTrailingFirstControlHeightFactor as double,
+    spec.waveTrailingSecondControlWidthFactor as double,
+    spec.waveTrailingSecondControlHeightFactor as double,
+    spec.waveTrailingEndHeightFactor as double,
+  ];
 }

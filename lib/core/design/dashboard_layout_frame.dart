@@ -42,6 +42,7 @@ class DashboardLayoutFrame {
     required this.collapseProgress,
     required this.headerExpansionProgress,
     required this.expandedHeaderExtraHeight,
+    required this.principalModeContentExtraHeight,
     required this.viewportVerticalDragToControllerScale,
     required this.brandLockupBounds,
     required this.headerBounds,
@@ -85,6 +86,11 @@ class DashboardLayoutFrame {
   /// Header renderers use this only to let their existing chart plot consume
   /// the added envelope; it has no independent motion owner.
   final double expandedHeaderExtraHeight;
+
+  /// The currently revealed share of the existing flat-BottomNav content
+  /// stretch. Mode renderers may consume this existing envelope only; they do
+  /// not participate in its outer geometry calculation.
+  final double principalModeContentExtraHeight;
 
   /// Translates physical vertical input into the headless controller's metric
   /// coordinate system. Presentation leaves only apply this mapping.

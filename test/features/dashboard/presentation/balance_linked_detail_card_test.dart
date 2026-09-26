@@ -802,6 +802,131 @@ void main() {
   );
 
   testWidgets(
+    'BVC-RANK-STRETCH: Top category and Top partner share a bounded stretched first-page geometry',
+    (tester) async {
+      Future<
+        ({double leaderAvatar, List<double> followerAvatars, List<Rect> rows})
+      >
+      measure({
+        required BalanceLinkedDetailTopic topic,
+        required String itemPrefix,
+        required double height,
+        required double rankedListExtraHeight,
+      }) async {
+        await tester.pumpWidget(
+          _host(
+            topic: topic,
+            presentation: _linked(),
+            width: 390,
+            height: height,
+            rankedListExtraHeight: rankedListExtraHeight,
+          ),
+        );
+        final leaderAvatar = tester
+            .getSize(
+              find.byKey(
+                ValueKey<String>('balance-ranked-leader-avatar-$itemPrefix-0'),
+              ),
+            )
+            .width;
+        final followers = <double>[
+          for (var index = 1; index < 5; index += 1)
+            tester
+                .getSize(
+                  find.byKey(
+                    ValueKey<String>(
+                      'balance-ranked-follower-avatar-$itemPrefix-$index',
+                    ),
+                  ),
+                )
+                .width,
+        ];
+        final rows = <Rect>[
+          for (var index = 0; index < 5; index += 1)
+            tester.getRect(
+              find.byKey(
+                ValueKey<String>('balance-linked-rank-$itemPrefix-$index'),
+              ),
+            ),
+        ];
+        return (
+          leaderAvatar: leaderAvatar,
+          followerAvatars: followers,
+          rows: rows,
+        );
+      }
+
+      final baselineCategory = await measure(
+        topic: BalanceLinkedDetailTopic.topCategory,
+        itemPrefix: 'category',
+        height: 320,
+        rankedListExtraHeight: 0,
+      );
+      final stretchedCategory = await measure(
+        topic: BalanceLinkedDetailTopic.topCategory,
+        itemPrefix: 'category',
+        height: 420,
+        rankedListExtraHeight: 100,
+      );
+      final baselinePartner = await measure(
+        topic: BalanceLinkedDetailTopic.topPartner,
+        itemPrefix: 'partner',
+        height: 320,
+        rankedListExtraHeight: 0,
+      );
+      final stretchedPartner = await measure(
+        topic: BalanceLinkedDetailTopic.topPartner,
+        itemPrefix: 'partner',
+        height: 420,
+        rankedListExtraHeight: 100,
+      );
+
+      expect(stretchedCategory.leaderAvatar, baselineCategory.leaderAvatar);
+      expect(stretchedPartner.leaderAvatar, baselinePartner.leaderAvatar);
+      for (final geometry
+          in <
+            ({
+              double leaderAvatar,
+              List<double> followerAvatars,
+              List<Rect> rows,
+            })
+          >[stretchedCategory, stretchedPartner]) {
+        expect(
+          geometry.followerAvatars,
+          everyElement(greaterThan(baselineCategory.followerAvatars.first)),
+        );
+        expect(
+          geometry.followerAvatars,
+          everyElement(lessThan(geometry.leaderAvatar)),
+        );
+        expect(
+          geometry.followerAvatars.toSet(),
+          hasLength(1),
+          reason: 'Ranks two through five deliberately share one avatar size.',
+        );
+        expect(geometry.rows.last.bottom, lessThanOrEqualTo(420));
+      }
+      expect(
+        420 - stretchedCategory.rows.last.bottom,
+        lessThan(320 - baselineCategory.rows.last.bottom),
+        reason:
+            'Stretch space must be consumed by the list instead of remaining dead below it.',
+      );
+      expect(stretchedCategory.leaderAvatar, stretchedPartner.leaderAvatar);
+      expect(
+        stretchedCategory.followerAvatars,
+        stretchedPartner.followerAvatars,
+      );
+      expect(
+        stretchedCategory.rows.map((row) => row.height),
+        stretchedPartner.rows.map((row) => row.height),
+        reason:
+            'Top category and Top partner resolve their first-page geometry from one canonical layout owner.',
+      );
+    },
+  );
+
+  testWidgets(
     'SPENDEE-RANKED-RED: category master is a fixed leader plus four circular followers',
     (tester) async {
       await tester.pumpWidget(
@@ -1206,12 +1331,17 @@ Widget _host({
   required DashboardBalanceLinkedPresentation presentation,
   double width = 390,
   double height = 320,
+  double rankedListExtraHeight = 0,
 }) => MaterialApp(
   home: Scaffold(
     body: SizedBox(
       width: width,
       height: height,
-      child: BalanceLinkedDetailCard(presentation: presentation, topic: topic),
+      child: BalanceLinkedDetailCard(
+        presentation: presentation,
+        topic: topic,
+        rankedListExtraHeight: rankedListExtraHeight,
+      ),
     ),
   ),
 );

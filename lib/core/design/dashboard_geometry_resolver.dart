@@ -191,6 +191,7 @@ abstract final class DashboardGeometryResolver {
       headerExpansionProgress: headerExpansionProgress,
       expandedHeaderExtraHeight:
           expandedHeaderExtraHeight * headerExpansionProgress,
+      principalModeContentExtraHeight: revealedPrincipalModeContentExtraHeight,
       viewportVerticalDragToControllerScale:
           metrics.viewportVerticalDragToControllerScale,
       brandLockupBounds: DashboardBounds(
