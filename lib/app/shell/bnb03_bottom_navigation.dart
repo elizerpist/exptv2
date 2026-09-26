@@ -257,9 +257,12 @@ class Bnb03BottomNavigation extends StatelessWidget {
   final DashboardBottomNavTopBorder topBorder;
   final DashboardBottomNavLayoutStyle layoutStyle;
 
-  static const double _figmaWidth = 428;
-  static const double _barHeight = 75;
-  static const double _overflowTop = 24;
+  static const double _figmaWidth =
+      DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
+  static const double _barHeight =
+      DashboardFlatBottomNavStretchLayout.referenceContainedBarHeight;
+  static const double _overflowTop =
+      DashboardFlatBottomNavStretchLayout.referenceRaisedFabOverflowTop;
   static const double _totalHeight = _barHeight + _overflowTop;
   static const double _raisedFabShellDiameter = 96;
   static const double _raisedFabVisibleDiameter = 84;

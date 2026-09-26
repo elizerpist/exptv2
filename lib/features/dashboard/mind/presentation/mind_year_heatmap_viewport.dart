@@ -21,6 +21,7 @@ import '../domain/mind_monthly_overlay_series.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
+import 'mind_heatmap_palette_scope.dart';
 import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_aggregate_line_chart.dart';
 import 'mind_anchored_info_card.dart';
@@ -742,66 +743,69 @@ final class _MindYearPartialBarPage extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) =>
-      ValueListenableBuilder<MindYearHeatmapFrame?>(
-        valueListenable: frameListenable,
-        builder: (context, frame, _) {
-          if (frame == null) return const SizedBox.shrink();
-          final series = MindYearHeatmapPartialBarSeries.fromFrame(frame);
-          final foreground = MindYearHeatmapPaletteResolver.resolveTile(
-            style: paletteStyle,
-            isEmpty: false,
-            intensity: 1,
-            paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
-            scaleResolution: scaleResolution,
-          ).background;
-          return LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              controller: scrollController,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-              child: SizedBox(
-                height: math.max(130, constraints.maxHeight - 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Expanded(
-                      child: CustomPaint(
-                        key: const ValueKey<String>(
-                          'mind-year-partial-bar-chart',
-                        ),
-                        painter: MindYearHeatmapPartialBarPainter(
-                          series: series,
-                          foreground: foreground,
-                        ),
+  Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
+    return ValueListenableBuilder<MindYearHeatmapFrame?>(
+      valueListenable: frameListenable,
+      builder: (context, frame, _) {
+        if (frame == null) return const SizedBox.shrink();
+        final series = MindYearHeatmapPartialBarSeries.fromFrame(frame);
+        final foreground = MindYearHeatmapPaletteResolver.resolveTile(
+          style: paletteStyle,
+          isEmpty: false,
+          intensity: 1,
+          paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
+          scaleResolution: scaleResolution,
+          dynamicScale: dynamicScale,
+        ).background;
+        return LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            controller: scrollController,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+            child: SizedBox(
+              height: math.max(130, constraints.maxHeight - 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Expanded(
+                    child: CustomPaint(
+                      key: const ValueKey<String>(
+                        'mind-year-partial-bar-chart',
+                      ),
+                      painter: MindYearHeatmapPartialBarPainter(
+                        series: series,
+                        foreground: foreground,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: _monthInitials
-                          .map(
-                            (initial) => Expanded(
-                              child: Center(
-                                child: Text(
-                                  initial,
-                                  style: const TextStyle(
-                                    color: FluviVisualTokens.textSecondary,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: _monthInitials
+                        .map(
+                          (initial) => Expanded(
+                            child: Center(
+                              child: Text(
+                                initial,
+                                style: const TextStyle(
+                                  color: FluviVisualTokens.textSecondary,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-                          )
-                          .toList(growable: false),
-                    ),
-                  ],
-                ),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ],
               ),
             ),
-          );
-        },
-      );
+          ),
+        );
+      },
+    );
+  }
 }
 
 @visibleForTesting
@@ -1136,6 +1140,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final gridHeight = gridHeightFor(
       width: width,
       calendarRowCount: displayCalendarRowCount,
@@ -1200,6 +1205,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                               frameListenable: frameListenable,
                               paletteStyle: paletteStyle,
                               scaleResolution: scaleResolution,
+                              dynamicScale: dynamicScale,
                               cellExtent: cellExtent,
                             ),
                             isComplex: false,
@@ -1224,6 +1230,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                                       style: paletteStyle,
                                       day: day,
                                       scaleResolution: scaleResolution,
+                                      dynamicScale: dynamicScale,
                                     ).foreground,
                               ),
                             )
@@ -1609,6 +1616,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
     required this.frameListenable,
     this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
+    this.dynamicScale,
     this.cellExtent,
   }) : super(repaint: frameListenable);
 
@@ -1621,6 +1629,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
   final double? cellExtent;
 
   @visibleForTesting
@@ -1642,6 +1651,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
         style: paletteStyle,
         day: day,
         scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
       ).background;
 
   @visibleForTesting
@@ -1695,6 +1705,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
       !identical(frameListenable, oldDelegate.frameListenable) ||
       paletteStyle != oldDelegate.paletteStyle ||
       scaleResolution != oldDelegate.scaleResolution ||
+      dynamicScale != oldDelegate.dynamicScale ||
       cellExtent != oldDelegate.cellExtent;
 }
 

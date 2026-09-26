@@ -17,18 +17,23 @@ abstract final class DashboardGeometryResolver {
     bool hasStandaloneCollapseHandle = true,
     bool seamlessHeaderContent = false,
     double modeContentExtraHeight = 0,
+    double principalModeContentExtraHeight = 0,
+    double expandedHeaderExtraHeight = 0,
   }) {
     assert(modeContentExtraHeight >= 0);
+    assert(principalModeContentExtraHeight >= 0);
+    assert(expandedHeaderExtraHeight >= 0);
     assert(!seamlessHeaderContent || mode.mode == DashboardMode.mind);
     final progress = (collapseProgress / metrics.collapseTravel)
         .clamp(0.0, 1.0)
         .toDouble();
+    final headerExpansionProgress = 1 - progress;
     final subheaderOneProgress = _stagedProgress(progress, start: .03);
     final zone2Progress = _stagedProgress(progress, start: .16);
     final isSplitMode =
         mode.subheaderComposition == DashboardSubheaderComposition.split;
     final headerHeight = _lerp(
-      metrics.headerExpandedHeight,
+      metrics.headerExpandedHeight + expandedHeaderExtraHeight,
       metrics.headerCollapsedHeight,
       progress,
     );
@@ -48,32 +53,45 @@ abstract final class DashboardGeometryResolver {
     // must grow that card itself so its dots and rail remain downstream of the
     // enlarged body. Split modes retain the existing post-content extension
     // behavior used by Budget's optional chart tail.
-    final unifiedBodyExtra =
+    final fullUnifiedBodyExtra =
         mode.subheaderComposition == DashboardSubheaderComposition.unified
         ? modeContentExtraHeight
         : 0.0;
-    final postContentExtra =
+    final fullPostContentExtra =
         mode.subheaderComposition == DashboardSubheaderComposition.unified
         ? 0.0
         : modeContentExtraHeight;
-    final modeLowerHeight = baseModeLowerHeight + unifiedBodyExtra;
+    final revealedUnifiedBodyExtra =
+        fullUnifiedBodyExtra * headerExpansionProgress;
+    final revealedPostContentExtra =
+        fullPostContentExtra * headerExpansionProgress;
+    final revealedPrincipalModeContentExtraHeight =
+        principalModeContentExtraHeight * headerExpansionProgress;
+    final fullModeLowerHeight =
+        baseModeLowerHeight +
+        fullUnifiedBodyExtra +
+        principalModeContentExtraHeight;
+    final modeLowerHeight =
+        baseModeLowerHeight +
+        revealedUnifiedBodyExtra +
+        revealedPrincipalModeContentExtraHeight;
     // The cursor keeps the accepted Zone2 → dot → next/rail relation, while
     // the named envelope includes the complete painted dot. Those differ by
     // the existing half-padding around the indicator, not a new spacing token.
-    final modeContentFlowHeight =
+    final fullModeContentFlowHeight =
         metrics.subheaderOneHeight +
         metrics.standardGap +
-        modeLowerHeight +
+        fullModeLowerHeight +
         metrics.dotGap +
         metrics.dotHeight +
-        postContentExtra;
+        fullPostContentExtra;
     final modeContentEnvelopeHeight =
         metrics.subheaderOneHeight +
         metrics.standardGap +
         modeLowerHeight +
         metrics.zone2IndicatorVerticalPadding +
         metrics.dotHeight +
-        postContentExtra;
+        revealedPostContentExtra;
     final left = metrics.contentGutter;
     DashboardBounds bounds(double top, double height) => DashboardBounds(
       left: left,
@@ -84,14 +102,14 @@ abstract final class DashboardGeometryResolver {
     final expandedBodies = _expandedBodyLayout(
       metrics: metrics,
       order: order,
-      modeContentFlowHeight: modeContentFlowHeight,
+      modeContentFlowHeight: fullModeContentFlowHeight,
       firstBodyTopGap: seamlessHeaderContent ? 0 : metrics.standardGap,
+      expandedHeaderExtraHeight: expandedHeaderExtraHeight,
     );
     final headerBounds = bounds(metrics.headerTop, headerHeight);
-    final headerExpansionProgress = 1 - progress;
     final seamlessActionTop =
         headerBounds.bottom +
-        modeContentFlowHeight * headerExpansionProgress +
+        fullModeContentFlowHeight * headerExpansionProgress +
         metrics.standardGap;
     final seamlessSummaryTop =
         seamlessActionTop + metrics.actionHeight + metrics.standardGap;
@@ -171,6 +189,8 @@ abstract final class DashboardGeometryResolver {
           .clamp(0.0, metrics.collapseTravel)
           .toDouble(),
       headerExpansionProgress: headerExpansionProgress,
+      expandedHeaderExtraHeight:
+          expandedHeaderExtraHeight * headerExpansionProgress,
       viewportVerticalDragToControllerScale:
           metrics.viewportVerticalDragToControllerScale,
       brandLockupBounds: DashboardBounds(
@@ -243,9 +263,13 @@ abstract final class DashboardGeometryResolver {
     required DashboardBodyOrder order,
     required double modeContentFlowHeight,
     required double firstBodyTopGap,
+    required double expandedHeaderExtraHeight,
   }) {
     var cursor =
-        metrics.headerTop + metrics.headerExpandedHeight + firstBodyTopGap;
+        metrics.headerTop +
+        metrics.headerExpandedHeight +
+        expandedHeaderExtraHeight +
+        firstBodyTopGap;
     double? actionTop;
     double? summaryTop;
     double? modeContentTop;

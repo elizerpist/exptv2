@@ -350,6 +350,7 @@ final class _BalanceDashboardCoreSurfaceState
               balancePresentation: widget.balancePresentation,
               headerVisualFrame: widget.headerVisualFrame,
               expansionProgress: geometry.headerExpansionProgress,
+              expandedHeaderExtraHeight: geometry.expandedHeaderExtraHeight,
               presentationSettings: widget.presentationSettings,
               adaptiveScope: widget.adaptiveScope,
               pointerObserver: widget.headerHistoryChartPointerObserver,
@@ -467,6 +468,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
     required this.balancePresentation,
     required this.headerVisualFrame,
     required this.expansionProgress,
+    required this.expandedHeaderExtraHeight,
     required this.presentationSettings,
     required this.adaptiveScope,
     required this.pointerObserver,
@@ -475,6 +477,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
   final ValueListenable<DashboardBalancePresentation?>? balancePresentation;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
+  final double expandedHeaderExtraHeight;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final LedgerTimeScope adaptiveScope;
   final BalanceHeaderHistoryChartPointerObserver? pointerObserver;
@@ -489,6 +492,7 @@ final class _BalanceHeaderDetail extends StatelessWidget {
         balance: balance,
         headerVisualFrame: headerVisualFrame,
         expansionProgress: expansionProgress,
+        expandedHeaderExtraHeight: expandedHeaderExtraHeight,
         presentationSettings: presentationSettings,
         adaptiveScope: adaptiveScope,
         pointerObserver: pointerObserver,
@@ -502,6 +506,7 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
     required this.balance,
     required this.headerVisualFrame,
     required this.expansionProgress,
+    required this.expandedHeaderExtraHeight,
     required this.presentationSettings,
     required this.adaptiveScope,
     required this.pointerObserver,
@@ -510,6 +515,7 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
   final DashboardBalancePresentation? balance;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
+  final double expandedHeaderExtraHeight;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final LedgerTimeScope adaptiveScope;
   final BalanceHeaderHistoryChartPointerObserver? pointerObserver;
@@ -545,6 +551,7 @@ final class _BalanceHeaderDetailContents extends StatelessWidget {
   ) {
     final chartLayout = DashboardHeaderTrendChartLayout(
       showsModeLabelAboveValue: frame?.showsHeaderModeLabelAboveValue ?? false,
+      extraPlotHeight: expandedHeaderExtraHeight,
     );
     final typography = frame?.typography ?? FluviTypographyProfile.app;
     final foreground =

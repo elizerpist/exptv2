@@ -50,6 +50,66 @@ final class QueryAmountRangeInteractionSummary {
 /// footer; neither presentation owns separate range or commit semantics.
 enum QueryAmountRangePresentation { standard, compactMind }
 
+/// Paint-only gradient treatment for the compact Mind host. The reusable
+/// control stays unaware of score/heatmap/domain semantics.
+@immutable
+final class QueryAmountRangeGradientVisualStyle {
+  const QueryAmountRangeGradientVisualStyle({
+    required this.stops,
+    required this.visibleThumbRadius,
+  }) : assert(stops.length >= 2);
+
+  final List<Color> stops;
+  final double visibleThumbRadius;
+}
+
+/// One normalized active-segment geometry. A palette percentage belongs to
+/// this rect, never to an absolute screen x-coordinate.
+@immutable
+final class QueryAmountRangeGradientGeometry {
+  const QueryAmountRangeGradientGeometry._({
+    required this.activeRect,
+    required this.gradientRect,
+    required this.startHandleColor,
+    required this.endHandleColor,
+  });
+
+  final Rect activeRect;
+  final Rect gradientRect;
+  final Color startHandleColor;
+  final Color endHandleColor;
+
+  static QueryAmountRangeGradientGeometry resolve({
+    required Rect trackRect,
+    required double startFraction,
+    required double endFraction,
+    required List<Color> stops,
+  }) {
+    final start = startFraction.clamp(0.0, 1.0).toDouble();
+    final end = endFraction.clamp(start, 1.0).toDouble();
+    final active = Rect.fromLTRB(
+      trackRect.left + trackRect.width * start,
+      trackRect.top,
+      trackRect.left + trackRect.width * end,
+      trackRect.bottom,
+    );
+    return QueryAmountRangeGradientGeometry._(
+      activeRect: active,
+      gradientRect: active,
+      startHandleColor: stops.first,
+      endHandleColor: stops.last,
+    );
+  }
+}
+
+abstract final class QueryAmountRangeHandleGeometry {
+  static const normalVisibleDiameter = 20.0;
+  static const minimumHitDiameter = normalVisibleDiameter;
+
+  static double visibleDiameterFor({required bool tenPercentSmaller}) =>
+      tenPercentSmaller ? normalVisibleDiameter * .9 : normalVisibleDiameter;
+}
+
 /// The shared Query-menu/Mind amount range renderer.
 ///
 /// Raw pointer feedback belongs to this narrow local state. A canonical Query
@@ -66,6 +126,7 @@ final class QueryAmountRangeControl extends StatefulWidget {
     this.onInteractionSummary,
     this.presentation = QueryAmountRangePresentation.standard,
     this.compactMindCenterAccessory,
+    this.compactMindGradientVisualStyle,
     this.enableInteractionDiagnostics = kFluviOnscreenDiagnosticsEnabled,
     this.previewScheduler,
   });
@@ -81,6 +142,7 @@ final class QueryAmountRangeControl extends StatefulWidget {
   /// An inert Mind-owned visual placed between compact Min./Max. values.
   /// Standard Query rendering deliberately ignores this presentation hook.
   final Widget? compactMindCenterAccessory;
+  final QueryAmountRangeGradientVisualStyle? compactMindGradientVisualStyle;
 
   /// The physical diagnostic APK opts in to the bounded pointer pipeline.
   /// A normal release keeps the established RangeSlider path free of its
@@ -301,10 +363,23 @@ final class _QueryAmountRangeControlState
         maximum,
       ),
     );
+    final gradientStyle =
+        widget.presentation == QueryAmountRangePresentation.compactMind
+        ? widget.compactMindGradientVisualStyle
+        : null;
     final sliderTheme = SliderTheme.of(context).copyWith(
       activeTrackColor: QueryMenuTokens.selectionEnd,
       inactiveTrackColor: QueryMenuTokens.controlSurface,
-      rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 10),
+      rangeThumbShape: gradientStyle == null
+          ? const RoundRangeSliderThumbShape(enabledThumbRadius: 10)
+          : QueryAmountRangeGradientThumbShape(
+              startColor: gradientStyle.stops.first,
+              endColor: gradientStyle.stops.last,
+              enabledThumbRadius: gradientStyle.visibleThumbRadius,
+            ),
+      rangeTrackShape: gradientStyle == null
+          ? const RoundedRectRangeSliderTrackShape()
+          : QueryAmountRangeGradientTrackShape(stops: gradientStyle.stops),
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
     );
     final slider = _buildRangeSlider(
@@ -331,6 +406,114 @@ final class _QueryAmountRangeControlState
           ),
       },
     );
+  }
+}
+
+final class QueryAmountRangeGradientTrackShape extends RangeSliderTrackShape
+    with BaseRangeSliderTrackShape {
+  const QueryAmountRangeGradientTrackShape({required this.stops});
+
+  final List<Color> stops;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required Offset startThumbCenter,
+    required Offset endThumbCenter,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+    required TextDirection textDirection,
+  }) {
+    final track = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final left = textDirection == TextDirection.ltr
+        ? startThumbCenter.dx
+        : endThumbCenter.dx;
+    final right = textDirection == TextDirection.ltr
+        ? endThumbCenter.dx
+        : startThumbCenter.dx;
+    final inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor!;
+    final radius = Radius.circular(track.height / 2);
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(track.left, track.top, left, track.bottom),
+        radius,
+      ),
+      inactivePaint,
+    );
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(right, track.top, track.right, track.bottom),
+        radius,
+      ),
+      inactivePaint,
+    );
+    final active = Rect.fromLTRB(left, track.top - 1, right, track.bottom + 1);
+    if (active.width <= 0) return;
+    final paint = Paint()
+      ..shader = LinearGradient(colors: stops).createShader(active);
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(active, Radius.circular(active.height / 2)),
+      paint,
+    );
+  }
+
+  @override
+  bool get isRounded => true;
+}
+
+final class QueryAmountRangeGradientThumbShape extends RangeSliderThumbShape {
+  const QueryAmountRangeGradientThumbShape({
+    required this.startColor,
+    required this.endColor,
+    required this.enabledThumbRadius,
+  });
+
+  final Color startColor;
+  final Color endColor;
+  final double enabledThumbRadius;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => Size.fromRadius(
+    enabledThumbRadius < QueryAmountRangeHandleGeometry.minimumHitDiameter / 2
+        ? QueryAmountRangeHandleGeometry.minimumHitDiameter / 2
+        : enabledThumbRadius,
+  );
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    bool? isOnTop,
+    required SliderThemeData sliderTheme,
+    TextDirection? textDirection,
+    Thumb? thumb,
+    bool? isPressed,
+  }) {
+    final radius = enabledThumbRadius * enableAnimation.value;
+    final color = thumb == Thumb.end ? endColor : startColor;
+    final path = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    context.canvas.drawShadow(
+      path,
+      Colors.black,
+      isPressed == true ? 3 : 1,
+      true,
+    );
+    context.canvas.drawCircle(center, radius, Paint()..color = color);
   }
 }
 

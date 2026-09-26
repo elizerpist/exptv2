@@ -14,6 +14,7 @@ import '../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
+import '../../../core/design/dashboard_geometry_resolver.dart';
 import '../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../core/design/fluvi_global_appearance.dart';
 import '../../../core/design/dashboard_body_order.dart';
@@ -231,6 +232,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryPillVariantController.addListener(_onSummaryPillVariantChanged);
     _bodyOrderController.addListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.addListener(_onLayoutPresentationChanged);
+    widget.shellPresentation?.addListener(_onShellPresentationChanged);
     controller.navigation.addListener(_syncMindModeContentGeometry);
     controller.mindYearHeatmapPresentation.addListener(
       _syncMindModeContentGeometry,
@@ -588,6 +590,12 @@ class _CoreDashboardState extends State<CoreDashboard>
     };
   }
 
+  void _onShellPresentationChanged() {
+    // Shell presentation is layout-only. Re-resolve the one geometry frame;
+    // do not touch Query, scene/cache, controllers or physical BottomNav.
+    if (mounted) setState(() {});
+  }
+
   void _recordSceneCacheMetrics() {
     controller.recordLogBoxTextLayoutCache(
       preparedRowCount: _preparedSceneCache.preparedRowCount,
@@ -708,6 +716,7 @@ class _CoreDashboardState extends State<CoreDashboard>
     _summaryPillVariantController.removeListener(_onSummaryPillVariantChanged);
     _bodyOrderController.removeListener(_onLayoutPresentationChanged);
     _budgetSectionOrderController.removeListener(_onLayoutPresentationChanged);
+    widget.shellPresentation?.removeListener(_onShellPresentationChanged);
     _summaryPillVariantController.dispose();
     _bodyOrderController.dispose();
     _budgetContentCardStyle.dispose();
@@ -753,6 +762,50 @@ class _CoreDashboardState extends State<CoreDashboard>
         ? controller.metrics.forWebContentOrigin
         : controller.metrics;
     final contentTopPadding = kIsWeb ? 20.0 : 0.0;
+    final viewport = MediaQuery.sizeOf(context);
+    final viewportMetrics = layoutMetrics.fitToViewport(viewport);
+    final shellSettings =
+        widget.shellPresentation?.value ??
+        DashboardShellPresentationSettings.defaults;
+    final baselineBodyOrder =
+        modeController.committedMode.mode == DashboardMode.mind &&
+            _globalAppearance.mindExpandedSurfaceStyle ==
+                MindExpandedSurfaceStyle.seamlessCard
+        ? DashboardBodyOrder(<DashboardBodyComponent>[
+            DashboardBodyComponent.modeContent,
+            DashboardBodyComponent.direction,
+            DashboardBodyComponent.summary,
+          ])
+        : _bodyOrderController.value;
+    final baselineGeometry = DashboardGeometryResolver.resolve(
+      metrics: viewportMetrics,
+      mode: modeController.committedMode,
+      collapseProgress: 0,
+      isRailExpanded: controller.navigation.isRailOpen,
+      bodyOrder: baselineBodyOrder,
+      hasPhysicalRail:
+          _summaryPillVariantController.value == SummaryPillVariant.legacy,
+      hasStandaloneCollapseHandle:
+          _globalAppearance.collapseHandleStyle ==
+          FluviCollapseHandleStyle.standalone,
+      seamlessHeaderContent:
+          modeController.committedMode.mode == DashboardMode.mind &&
+          _globalAppearance.mindExpandedSurfaceStyle ==
+              MindExpandedSurfaceStyle.seamlessCard,
+      modeContentExtraHeight: _modeContentExtraHeightFor(
+        modeController.committedMode,
+      ),
+    );
+    final flatBottomNavStretch = DashboardFlatBottomNavStretchLayout.resolve(
+      viewport: viewport,
+      safeBottomInset: MediaQuery.viewPaddingOf(context).bottom,
+      metrics: viewportMetrics,
+      logBoxHeaderTop: baselineGeometry.logBoxHeaderBounds.top,
+      settings: shellSettings,
+    );
+    final effectiveFlatBottomNavStretch = flatBottomNavStretch.isEligible
+        ? flatBottomNavStretch.delta
+        : 0.0;
 
     return DashboardMotionHost(
       controller: controller,
@@ -779,6 +832,16 @@ class _CoreDashboardState extends State<CoreDashboard>
           _globalAppearance.mindExpandedSurfaceStyle ==
               MindExpandedSurfaceStyle.seamlessCard,
       modeContentExtraHeightResolver: _modeContentExtraHeightFor,
+      principalModeContentExtraHeightResolver: (_) =>
+          shellSettings.flatBottomNavBodyStretch ==
+              DashboardFlatBottomNavBodyStretch.modeContent
+          ? effectiveFlatBottomNavStretch
+          : 0.0,
+      expandedHeaderExtraHeightResolver: (_) =>
+          shellSettings.flatBottomNavBodyStretch ==
+              DashboardFlatBottomNavBodyStretch.expandedHeader
+          ? effectiveFlatBottomNavStretch
+          : 0.0,
       builder: (context, frame) {
         final geometry = frame.geometry;
         final collapseTravel = controller.metrics.collapseTravel;

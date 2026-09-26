@@ -1,4 +1,9 @@
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
+
+import '../../../core/design/dashboard_layout_metrics.dart';
+import '../../../core/design/dashboard_mode_palette.dart';
 
 enum DashboardBottomNavEdgeShape { rounded, straight }
 
@@ -9,12 +14,86 @@ enum DashboardBottomNavTopBorder { off, thinGrey }
 /// it has no navigation or destination authority.
 enum DashboardBottomNavLayoutStyle { raisedFab, containedFlat }
 
+/// Selects where reclaimed flat-navigation body extent is assigned. The
+/// stored choice is intentionally retained while its BottomNav is ineligible.
+enum DashboardFlatBottomNavBodyStretch { off, expandedHeader, modeContent }
+
+/// Pure bridge between shell BottomNav geometry and the dashboard's existing
+/// resolved Ledger origin. This centralizes different shell/dashboard scales
+/// without a render-object measurement loop.
+@immutable
+final class DashboardFlatBottomNavStretchLayout {
+  const DashboardFlatBottomNavStretchLayout._({
+    required this.isEligible,
+    required this.physicalBottomNavTop,
+    required this.delta,
+    required this.scaledLedgerHeaderTopInset,
+    required this.scaledLedgerCountHeight,
+    required this.scaledCountToSearchGap,
+  });
+
+  static const referenceBottomNavWidth = 428.0;
+  static const referenceContainedBarHeight = 75.0;
+  static const referenceRaisedFabOverflowTop = 24.0;
+
+  final bool isEligible;
+  final double physicalBottomNavTop;
+  final double delta;
+  final double scaledLedgerHeaderTopInset;
+  final double scaledLedgerCountHeight;
+  final double scaledCountToSearchGap;
+
+  double searchPillTopFor({required double logBoxHeaderTop}) =>
+      logBoxHeaderTop +
+      scaledLedgerHeaderTopInset +
+      scaledLedgerCountHeight +
+      scaledCountToSearchGap;
+
+  double countBottomFor({required double logBoxHeaderTop}) =>
+      logBoxHeaderTop + scaledLedgerHeaderTopInset + scaledLedgerCountHeight;
+
+  static DashboardFlatBottomNavStretchLayout resolve({
+    required Size viewport,
+    required double safeBottomInset,
+    required DashboardLayoutMetrics metrics,
+    required double logBoxHeaderTop,
+    required DashboardShellPresentationSettings settings,
+  }) {
+    final eligible =
+        settings.bottomNavEdgeShape == DashboardBottomNavEdgeShape.straight &&
+        settings.bottomNavLayoutStyle ==
+            DashboardBottomNavLayoutStyle.containedFlat;
+    final bottomNavScale = viewport.width / referenceBottomNavWidth;
+    final physicalTop =
+        viewport.height -
+        safeBottomInset -
+        referenceContainedBarHeight * bottomNavScale;
+    final dashboardScale =
+        metrics.standardGap / DashboardLayoutMetrics.referenceStandardGap;
+    final inset = DashboardLogBoxTokens.ledgerHeaderTopInset * dashboardScale;
+    final count = DashboardLogBoxTokens.ledgerCountHeight * dashboardScale;
+    final gap = DashboardLogBoxTokens.ledgerCountToSearchGap * dashboardScale;
+    final currentSearchTop = logBoxHeaderTop + inset + count + gap;
+    return DashboardFlatBottomNavStretchLayout._(
+      isEligible: eligible,
+      physicalBottomNavTop: physicalTop,
+      delta: eligible
+          ? (physicalTop - currentSearchTop).clamp(0.0, double.infinity)
+          : 0,
+      scaledLedgerHeaderTopInset: inset,
+      scaledLedgerCountHeight: count,
+      scaledCountToSearchGap: gap,
+    );
+  }
+}
+
 @immutable
 final class DashboardShellPresentationSettings {
   const DashboardShellPresentationSettings({
     this.bottomNavEdgeShape = DashboardBottomNavEdgeShape.rounded,
     this.bottomNavTopBorder = DashboardBottomNavTopBorder.off,
     this.bottomNavLayoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
+    this.flatBottomNavBodyStretch = DashboardFlatBottomNavBodyStretch.off,
   });
 
   static const defaults = DashboardShellPresentationSettings();
@@ -22,15 +101,19 @@ final class DashboardShellPresentationSettings {
   final DashboardBottomNavEdgeShape bottomNavEdgeShape;
   final DashboardBottomNavTopBorder bottomNavTopBorder;
   final DashboardBottomNavLayoutStyle bottomNavLayoutStyle;
+  final DashboardFlatBottomNavBodyStretch flatBottomNavBodyStretch;
 
   DashboardShellPresentationSettings copyWith({
     DashboardBottomNavEdgeShape? bottomNavEdgeShape,
     DashboardBottomNavTopBorder? bottomNavTopBorder,
     DashboardBottomNavLayoutStyle? bottomNavLayoutStyle,
+    DashboardFlatBottomNavBodyStretch? flatBottomNavBodyStretch,
   }) => DashboardShellPresentationSettings(
     bottomNavEdgeShape: bottomNavEdgeShape ?? this.bottomNavEdgeShape,
     bottomNavTopBorder: bottomNavTopBorder ?? this.bottomNavTopBorder,
     bottomNavLayoutStyle: bottomNavLayoutStyle ?? this.bottomNavLayoutStyle,
+    flatBottomNavBodyStretch:
+        flatBottomNavBodyStretch ?? this.flatBottomNavBodyStretch,
   );
 
   @override
@@ -38,11 +121,16 @@ final class DashboardShellPresentationSettings {
       other is DashboardShellPresentationSettings &&
       other.bottomNavEdgeShape == bottomNavEdgeShape &&
       other.bottomNavTopBorder == bottomNavTopBorder &&
-      other.bottomNavLayoutStyle == bottomNavLayoutStyle;
+      other.bottomNavLayoutStyle == bottomNavLayoutStyle &&
+      other.flatBottomNavBodyStretch == flatBottomNavBodyStretch;
 
   @override
-  int get hashCode =>
-      Object.hash(bottomNavEdgeShape, bottomNavTopBorder, bottomNavLayoutStyle);
+  int get hashCode => Object.hash(
+    bottomNavEdgeShape,
+    bottomNavTopBorder,
+    bottomNavLayoutStyle,
+    flatBottomNavBodyStretch,
+  );
 }
 
 final class DashboardShellPresentationController
@@ -62,6 +150,13 @@ final class DashboardShellPresentationController
 
   void selectBottomNavLayoutStyle(DashboardBottomNavLayoutStyle style) {
     final next = value.copyWith(bottomNavLayoutStyle: style);
+    if (next != value) value = next;
+  }
+
+  void selectFlatBottomNavBodyStretch(
+    DashboardFlatBottomNavBodyStretch stretch,
+  ) {
+    final next = value.copyWith(flatBottomNavBodyStretch: stretch);
     if (next != value) value = next;
   }
 

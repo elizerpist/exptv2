@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../presentation/core_modes/dashboard_header_perceptual_color.dart';
 import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../time_navigation/domain/local_date.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
@@ -20,6 +21,18 @@ final class MindYearHeatmapPaletteSample {
   final Color foreground;
 }
 
+/// Ordered paint stops shared by the dynamic cells, legend and Mind range.
+/// It deliberately carries neither score calculation nor heatmap membership.
+@immutable
+final class MindHeatmapResolvedScale {
+  const MindHeatmapResolvedScale(this.stops) : assert(stops.length >= 2);
+
+  final List<Color> stops;
+
+  Color colorAt(double intensity) =>
+      MindYearHeatmapPaletteResolver.interpolateStops(stops, intensity);
+}
+
 /// Central resolver shared by MonthCard paint and tests. It deliberately maps
 /// the already-real Fluvi intensity; the B3M HTML's decorative fixture never
 /// enters this financial presentation path.
@@ -28,12 +41,14 @@ abstract final class MindYearHeatmapPaletteResolver {
     required MindYearHeatmapPaletteStyle style,
     required MindYearHeatmapDay day,
     MindHeatmapScaleResolution scaleResolution = MindHeatmapScaleResolution.ten,
+    MindHeatmapResolvedScale? dynamicScale,
   }) => resolveTile(
     style: style,
     isEmpty: day.isEmpty,
     intensity: day.intensity,
     paletteIntensity: day.paletteIntensity,
     scaleResolution: scaleResolution,
+    dynamicScale: dynamicScale,
   );
 
   /// Shared token resolution for Year day cells, Month day cells and Sum
@@ -45,10 +60,11 @@ abstract final class MindYearHeatmapPaletteResolver {
     required double intensity,
     required MindYearHeatmapPaletteIntensity paletteIntensity,
     MindHeatmapScaleResolution scaleResolution = MindHeatmapScaleResolution.ten,
+    MindHeatmapResolvedScale? dynamicScale,
   }) => _authored(
     isEmpty: isEmpty,
     intensity: intensity,
-    stops: _authoredStopsFor(style, scaleResolution),
+    stops: dynamicScale?.stops ?? _authoredStopsFor(style, scaleResolution),
   );
 
   /// Ordered, non-empty authored scale positions for every Mind surface. The
@@ -57,13 +73,20 @@ abstract final class MindYearHeatmapPaletteResolver {
   static List<MindYearHeatmapPaletteSample> legendSamples(
     MindYearHeatmapPaletteStyle style, {
     MindHeatmapScaleResolution scaleResolution = MindHeatmapScaleResolution.ten,
+    MindHeatmapResolvedScale? dynamicScale,
   }) => List<MindYearHeatmapPaletteSample>.unmodifiable(
     List<MindYearHeatmapPaletteSample>.generate(
-      scaleResolution.authoredStopCount,
+      dynamicScale?.stops.length ?? scaleResolution.authoredStopCount,
       (index) => resolve(
         style: style,
-        day: _legendDay(index / (scaleResolution.authoredStopCount - 1)),
+        day: _legendDay(
+          index /
+              ((dynamicScale?.stops.length ??
+                      scaleResolution.authoredStopCount) -
+                  1),
+        ),
         scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
       ),
       growable: false,
     ),
@@ -101,14 +124,14 @@ abstract final class MindYearHeatmapPaletteResolver {
         foreground: FluviVisualTokens.textSecondary,
       );
     }
-    final background = _interpolateAuthoredStops(stops, intensity);
+    final background = interpolateStops(stops, intensity);
     return MindYearHeatmapPaletteSample(
       background: background,
       foreground: _foregroundFor(background),
     );
   }
 
-  static Color _interpolateAuthoredStops(List<Color> stops, double intensity) {
+  static Color interpolateStops(List<Color> stops, double intensity) {
     final bounded = intensity.clamp(0.0, 1.0).toDouble();
     final scaled = bounded * (stops.length - 1);
     final lowerIndex = scaled.floor();
@@ -120,6 +143,59 @@ abstract final class MindYearHeatmapPaletteResolver {
       scaled - lowerIndex,
     )!;
   }
+
+  /// Exact score-anchored 10-stop palette morph. Matching indices interpolate
+  /// only with matching indices, preserving low/high heatmap intensity roles.
+  static MindHeatmapResolvedScale resolveDynamicMixedScale(double score) {
+    const anchors = <double>[18, 35, 58, 70, 82];
+    const palettes = <List<Color>>[
+      _dynamicRed,
+      _dynamicRedB3mBridge,
+      _b3mMy3,
+      _dynamicB3mMeadowBridge,
+      _meadowGreen,
+    ];
+    if (score <= anchors.first) {
+      return MindHeatmapResolvedScale(_dynamicRed);
+    }
+    if (score >= anchors.last) {
+      return MindHeatmapResolvedScale(_meadowGreen);
+    }
+    for (var index = 0; index < anchors.length - 1; index += 1) {
+      final lower = anchors[index];
+      final upper = anchors[index + 1];
+      if (score <= upper) {
+        if (score == lower) return MindHeatmapResolvedScale(palettes[index]);
+        if (score == upper) {
+          return MindHeatmapResolvedScale(palettes[index + 1]);
+        }
+        final t = ((score - lower) / (upper - lower)).clamp(0.0, 1.0);
+        return MindHeatmapResolvedScale(
+          List<Color>.unmodifiable(
+            List<Color>.generate(
+              10,
+              (stop) => DashboardHeaderPerceptualColorMath.mix(
+                palettes[index][stop],
+                palettes[index + 1][stop],
+                t,
+              ),
+              growable: false,
+            ),
+          ),
+        );
+      }
+    }
+    return MindHeatmapResolvedScale(_meadowGreen);
+  }
+
+  static MindHeatmapResolvedScale resolveScale({
+    required MindYearHeatmapPaletteStyle style,
+    required MindHeatmapScaleResolution scaleResolution,
+    required MindHeatmapScaleMode scaleMode,
+    required double score,
+  }) => scaleMode == MindHeatmapScaleMode.dynamicMixed
+      ? resolveDynamicMixedScale(score)
+      : MindHeatmapResolvedScale(_authoredStopsFor(style, scaleResolution));
 
   static Color _foregroundFor(Color background) =>
       background.computeLuminance() > .36
@@ -178,6 +254,42 @@ abstract final class MindYearHeatmapPaletteResolver {
     Color(0xff816fe1),
     Color(0xffa05fdd),
     Color(0xffc05cd7),
+  ];
+  static const List<Color> _dynamicRed = <Color>[
+    Color(0xffffe7d6),
+    Color(0xffffd0b3),
+    Color(0xffffb28f),
+    Color(0xffff916e),
+    Color(0xffff6f58),
+    Color(0xfff55449),
+    Color(0xffe63a3d),
+    Color(0xffc72b3c),
+    Color(0xffa5223c),
+    Color(0xff7e1f39),
+  ];
+  static const List<Color> _dynamicRedB3mBridge = <Color>[
+    Color(0xfffff0e4),
+    Color(0xffffe0c8),
+    Color(0xfffec7a6),
+    Color(0xfffda77f),
+    Color(0xfff7866c),
+    Color(0xfff26862),
+    Color(0xffe95276),
+    Color(0xffd33f8d),
+    Color(0xffb433a0),
+    Color(0xff9227a8),
+  ];
+  static const List<Color> _dynamicB3mMeadowBridge = <Color>[
+    Color(0xffeef1d2),
+    Color(0xffd9e493),
+    Color(0xffbed77a),
+    Color(0xff9cc870),
+    Color(0xff78b978),
+    Color(0xff55a982),
+    Color(0xff39998a),
+    Color(0xff278790),
+    Color(0xff206f86),
+    Color(0xff195a75),
   ];
   static const List<Color> _b3mMy3 = <Color>[
     Color(0xfff4f7fb),

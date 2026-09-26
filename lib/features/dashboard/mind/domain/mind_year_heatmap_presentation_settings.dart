@@ -35,6 +35,30 @@ enum MindHeatmapScaleResolution {
   };
 }
 
+/// Uses either the selected static authored scale or the presentation-only
+/// score-driven mixed scale. It has no projection or Query authority.
+enum MindHeatmapScaleMode {
+  existing,
+  dynamicMixed;
+
+  String get tunerLabel => switch (this) {
+    MindHeatmapScaleMode.existing => 'Jelenlegi',
+    MindHeatmapScaleMode.dynamicMixed => 'Dinamikus kevert skála',
+  };
+}
+
+/// Changes only Mind's painted range-thumb diameter. The shared slider keeps
+/// its existing recognizer and overlay hit target.
+enum MindSliderHandleSize {
+  normal,
+  tenPercentSmaller;
+
+  String get tunerLabel => switch (this) {
+    MindSliderHandleSize.normal => 'Normál',
+    MindSliderHandleSize.tenPercentSmaller => '10%-kal kisebb',
+  };
+}
+
 /// Sum-only visual density alternative over the unchanged month frame.
 enum MindSumYearRowLayout {
   twoRowExpanded,
@@ -122,6 +146,8 @@ final class MindYearHeatmapPresentationSettings {
     required this.paletteStyle,
     required this.revision,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
+    this.scaleMode = MindHeatmapScaleMode.existing,
+    this.sliderHandleSize = MindSliderHandleSize.normal,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
     this.sumVisibleChartCount = MindSumVisibleChartCount.two,
@@ -139,6 +165,8 @@ final class MindYearHeatmapPresentationSettings {
   const MindYearHeatmapPresentationSettings.defaults()
     : paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
       scaleResolution = MindHeatmapScaleResolution.ten,
+      scaleMode = MindHeatmapScaleMode.existing,
+      sliderHandleSize = MindSliderHandleSize.normal,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       sumVisibleChartCount = MindSumVisibleChartCount.two,
@@ -155,6 +183,8 @@ final class MindYearHeatmapPresentationSettings {
 
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapScaleMode scaleMode;
+  final MindSliderHandleSize sliderHandleSize;
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
@@ -183,6 +213,8 @@ final class MindYearHeatmapPresentationSettings {
   MindYearHeatmapPresentationSettings copyWith({
     MindYearHeatmapPaletteStyle? paletteStyle,
     MindHeatmapScaleResolution? scaleResolution,
+    MindHeatmapScaleMode? scaleMode,
+    MindSliderHandleSize? sliderHandleSize,
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     MindSumVisibleChartCount? sumVisibleChartCount,
@@ -199,6 +231,8 @@ final class MindYearHeatmapPresentationSettings {
   }) => MindYearHeatmapPresentationSettings(
     paletteStyle: paletteStyle ?? this.paletteStyle,
     scaleResolution: scaleResolution ?? this.scaleResolution,
+    scaleMode: scaleMode ?? this.scaleMode,
+    sliderHandleSize: sliderHandleSize ?? this.sliderHandleSize,
     sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
@@ -231,6 +265,8 @@ final class MindYearHeatmapPresentationSettings {
       other is MindYearHeatmapPresentationSettings &&
       other.paletteStyle == paletteStyle &&
       other.scaleResolution == scaleResolution &&
+      other.scaleMode == scaleMode &&
+      other.sliderHandleSize == sliderHandleSize &&
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.sumVisibleChartCount == sumVisibleChartCount &&
@@ -253,6 +289,8 @@ final class MindYearHeatmapPresentationSettings {
   int get hashCode => Object.hash(
     paletteStyle,
     scaleResolution,
+    scaleMode,
+    sliderHandleSize,
     sumYearRowLayout,
     sumMonthLabelPlacement,
     sumVisibleChartCount,
@@ -291,6 +329,21 @@ final class MindYearHeatmapPresentationController
     if (current.scaleResolution == resolution) return;
     value = current.copyWith(
       scaleResolution: resolution,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setScaleMode(MindHeatmapScaleMode mode) {
+    final current = value;
+    if (current.scaleMode == mode) return;
+    value = current.copyWith(scaleMode: mode, revision: current.revision + 1);
+  }
+
+  void setSliderHandleSize(MindSliderHandleSize size) {
+    final current = value;
+    if (current.sliderHandleSize == size) return;
+    value = current.copyWith(
+      sliderHandleSize: size,
       revision: current.revision + 1,
     );
   }

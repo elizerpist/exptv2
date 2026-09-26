@@ -22,6 +22,7 @@ import '../../mind/domain/mind_behavioral_score_projection.dart';
 import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/presentation/mind_header_score_chart.dart';
 import '../../mind/presentation/mind_year_heatmap_palette_resolver.dart';
+import '../../mind/presentation/mind_heatmap_palette_scope.dart';
 import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../../mind/presentation/mind_temporal_heatmap_viewports.dart';
 import '../../time_navigation/domain/time_plane.dart';
@@ -170,6 +171,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
               score: behavioralScore!,
               headerVisualFrame: headerVisualFrame,
               expansionProgress: geometry.headerExpansionProgress,
+              expandedHeaderExtraHeight: geometry.expandedHeaderExtraHeight,
               chartPresentation: headerScoreChartPresentation,
               temporalContext: _headerScoreChartTemporalContext,
               pointerObserver: headerScoreChartPointerObserver,
@@ -349,30 +351,68 @@ class MindDashboardCoreSurface extends StatelessWidget {
           settings?.paletteStyle ?? MindYearHeatmapPaletteStyle.fluvi;
       final scaleResolution =
           settings?.scaleResolution ?? MindHeatmapScaleResolution.ten;
-      final range = _MindQueryAmountRangeListener(
-        valuesFor: queryAmountRange!,
-        valuesChanges: queryAmountRangeChanges!,
-        lifecycleChanges: queryAmountRangeLifecycleChanges,
-        stateFor: queryAmountRangeState,
-        errorFor: queryAmountRangeError,
-        onRetry: onQueryAmountRangeRetry,
-        onRangeCommitted: onQueryAmountRangeCommitted!,
-        onRangePreviewChanged: onQueryAmountRangePreviewChanged,
-        onInteractionStarted: onQueryAmountRangeInteractionStarted,
-        onInteractionEnded: onQueryAmountRangeInteractionEnded,
-        onInteractionSummary: onQueryAmountRangeInteractionSummary,
-        // Mind has one physical range owner across Sum/Year/Month/Day. The
-        // temporal content may vary, but its range must never fall back to the
-        // standard Query-menu geometry on another TimePlane.
-        compactPresentation: true,
-        compactMindCenterAccessory: _MindHeatmapInlineLegend(
+      final scaleMode = settings?.scaleMode ?? MindHeatmapScaleMode.existing;
+      final sliderHandleSize =
+          settings?.sliderHandleSize ?? MindSliderHandleSize.normal;
+      Widget bodyForScore(double score) {
+        final resolvedScale = MindYearHeatmapPaletteResolver.resolveScale(
           style: paletteStyle,
           scaleResolution: scaleResolution,
-        ),
-      );
-      return _MindTemporalBody(
-        temporalContent: guardedTemporalContent,
-        range: range,
+          scaleMode: scaleMode,
+          score: score,
+        );
+        final range = _MindQueryAmountRangeListener(
+          valuesFor: queryAmountRange!,
+          valuesChanges: queryAmountRangeChanges!,
+          lifecycleChanges: queryAmountRangeLifecycleChanges,
+          stateFor: queryAmountRangeState,
+          errorFor: queryAmountRangeError,
+          onRetry: onQueryAmountRangeRetry,
+          onRangeCommitted: onQueryAmountRangeCommitted!,
+          onRangePreviewChanged: onQueryAmountRangePreviewChanged,
+          onInteractionStarted: onQueryAmountRangeInteractionStarted,
+          onInteractionEnded: onQueryAmountRangeInteractionEnded,
+          onInteractionSummary: onQueryAmountRangeInteractionSummary,
+          // Mind has one physical range owner across Sum/Year/Month/Day. The
+          // temporal content may vary, but its range must never fall back to the
+          // standard Query-menu geometry on another TimePlane.
+          compactPresentation: true,
+          compactMindCenterAccessory: _MindHeatmapInlineLegend(
+            style: paletteStyle,
+            scaleResolution: scaleResolution,
+          ),
+          compactMindGradientVisualStyleFor: (context) {
+            final current =
+                MindHeatmapPaletteScope.maybeOf(context) ?? resolvedScale;
+            return QueryAmountRangeGradientVisualStyle(
+              stops: current.stops,
+              visibleThumbRadius:
+                  QueryAmountRangeHandleGeometry.visibleDiameterFor(
+                    tenPercentSmaller:
+                        sliderHandleSize ==
+                        MindSliderHandleSize.tenPercentSmaller,
+                  ) /
+                  2,
+            );
+          },
+        );
+        return MindHeatmapPaletteTransition(
+          target: resolvedScale,
+          animates: scaleMode == MindHeatmapScaleMode.dynamicMixed,
+          child: _MindTemporalBody(
+            temporalContent: guardedTemporalContent,
+            range: range,
+          ),
+        );
+      }
+
+      final score = behavioralScore;
+      if (scaleMode != MindHeatmapScaleMode.dynamicMixed || score == null) {
+        return bodyForScore(50);
+      }
+      return ValueListenableBuilder<MindBehavioralScoreFrame?>(
+        valueListenable: score,
+        builder: (context, frame, _) => bodyForScore(frame?.point.score ?? 50),
       );
     }
 
@@ -622,6 +662,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
     required this.score,
     required this.headerVisualFrame,
     required this.expansionProgress,
+    required this.expandedHeaderExtraHeight,
     this.chartPresentation,
     required this.temporalContext,
     this.pointerObserver,
@@ -631,6 +672,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
   final ValueListenable<MindBehavioralScoreFrame?> score;
   final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
   final double expansionProgress;
+  final double expandedHeaderExtraHeight;
   final ValueListenable<MindHeaderScoreChartPresentationSettings>?
   chartPresentation;
   final MindHeaderScoreChartTemporalContext temporalContext;
@@ -662,6 +704,7 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
           final chartLayout = DashboardHeaderTrendChartLayout(
             showsModeLabelAboveValue:
                 headerFrame?.showsHeaderModeLabelAboveValue ?? false,
+            extraPlotHeight: expandedHeaderExtraHeight,
           );
           final foreground =
               headerFrame?.foregroundTextColor ??
@@ -782,13 +825,13 @@ final class _MindHeatmapInlineLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final samples = MindYearHeatmapPaletteResolver.legendSamples(
       style,
       scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
     );
-    final extent = scaleResolution == MindHeatmapScaleResolution.ten
-        ? 6.0
-        : 4.0;
+    final extent = samples.length == 10 ? 6.0 : 4.0;
     const gap = 1.0;
     final width = extent * samples.length + gap * (samples.length - 1);
     return Semantics(
@@ -840,6 +883,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
     required this.onInteractionSummary,
     required this.compactPresentation,
     this.compactMindCenterAccessory,
+    this.compactMindGradientVisualStyleFor,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -855,6 +899,8 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
   final bool compactPresentation;
   final Widget? compactMindCenterAccessory;
+  final QueryAmountRangeGradientVisualStyle Function(BuildContext context)?
+  compactMindGradientVisualStyleFor;
 
   @override
   Widget build(BuildContext context) {
@@ -870,6 +916,7 @@ final class _MindQueryAmountRangeListener extends StatelessWidget {
       onInteractionSummary: onInteractionSummary,
       compactPresentation: compactPresentation,
       compactMindCenterAccessory: compactMindCenterAccessory,
+      compactMindGradientVisualStyleFor: compactMindGradientVisualStyleFor,
     );
     final lifecycle = lifecycleChanges;
     if (lifecycle == null) {
@@ -901,6 +948,7 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
     required this.onInteractionSummary,
     required this.compactPresentation,
     this.compactMindCenterAccessory,
+    this.compactMindGradientVisualStyleFor,
   });
 
   final QueryAmountRangeValues? Function() valuesFor;
@@ -914,6 +962,8 @@ final class _MindQueryAmountRangeBinding extends StatefulWidget {
   final ValueChanged<QueryAmountRangeInteractionSummary>? onInteractionSummary;
   final bool compactPresentation;
   final Widget? compactMindCenterAccessory;
+  final QueryAmountRangeGradientVisualStyle Function(BuildContext context)?
+  compactMindGradientVisualStyleFor;
 
   @override
   State<_MindQueryAmountRangeBinding> createState() =>
@@ -986,6 +1036,8 @@ final class _MindQueryAmountRangeBindingState
             ? QueryAmountRangePresentation.compactMind
             : QueryAmountRangePresentation.standard,
         compactMindCenterAccessory: widget.compactMindCenterAccessory,
+        compactMindGradientVisualStyle: widget.compactMindGradientVisualStyleFor
+            ?.call(context),
         onRangeCommitted: widget.onRangeCommitted,
       ),
     );

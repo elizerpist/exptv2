@@ -50,12 +50,15 @@ abstract final class DashboardHeaderTrendChartStyle {
 final class DashboardHeaderTrendChartLayout {
   const DashboardHeaderTrendChartLayout({
     required this.showsModeLabelAboveValue,
-  });
+    this.extraPlotHeight = 0,
+  }) : assert(extraPlotHeight >= 0);
 
   const DashboardHeaderTrendChartLayout.normal()
-    : showsModeLabelAboveValue = false;
+    : showsModeLabelAboveValue = false,
+      extraPlotHeight = 0;
 
   final bool showsModeLabelAboveValue;
+  final double extraPlotHeight;
 
   static const modeLabelHeight = 10.0;
   static const modeLabelGap = 3.0;
@@ -75,7 +78,8 @@ final class DashboardHeaderTrendChartLayout {
       (showsModeLabelAboveValue ? modeLabelReserve : 0);
   double get plotHeight =>
       DashboardHeaderTrendChartStyle.plotHeight -
-      (showsModeLabelAboveValue ? modeLabelReserve : 0);
+      (showsModeLabelAboveValue ? modeLabelReserve : 0) +
+      extraPlotHeight;
   double get timeLabelTop => plotTop + plotHeight + 4.0;
   double get timeLabelRevealExtent =>
       plotHeight + 4.0 + DashboardHeaderTrendChartStyle.timeLabelHeight;

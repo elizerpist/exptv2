@@ -11,6 +11,7 @@ import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
+import 'mind_heatmap_palette_scope.dart';
 
 /// Presentation-only Month secondary card. It renders the immutable daily
 /// range-preview points carried by [MindMonthHeatmapFrame]; neither a widget
@@ -29,6 +30,7 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final points = frame.dailyRhythmPoints;
     final fullPoints = frame.fullDailyRhythmPoints;
     final strongest = points.fold<MindAggregateLinePoint>(
@@ -42,6 +44,7 @@ final class MindMonthDailyRhythmCard extends StatelessWidget {
       intensity: 1,
       paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
       scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
     ).background;
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
@@ -314,6 +317,7 @@ final class MindMonthComparisonRhythmCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final points = frame.dailyRhythmPoints;
     final strongest = points.fold<MindAggregateLinePoint>(
       points.first,
@@ -353,6 +357,7 @@ final class MindMonthComparisonRhythmCard extends StatelessWidget {
                         points: points,
                         paletteStyle: paletteStyle,
                         scaleResolution: scaleResolution,
+                        dynamicScale: dynamicScale,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -399,11 +404,13 @@ final class _MindMonthComparisonRhythmPlot extends StatelessWidget {
     required this.points,
     required this.paletteStyle,
     required this.scaleResolution,
+    required this.dynamicScale,
   });
 
   final List<MindAggregateLinePoint> points;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -423,6 +430,7 @@ final class _MindMonthComparisonRhythmPlot extends StatelessWidget {
               points: points,
               paletteStyle: paletteStyle,
               scaleResolution: scaleResolution,
+              dynamicScale: dynamicScale,
               typography: FluviTypographyScope.of(context),
             ),
           ),
@@ -449,12 +457,14 @@ final class _MindMonthComparisonRhythmPainter extends CustomPainter {
     required this.points,
     required this.paletteStyle,
     required this.scaleResolution,
+    required this.dynamicScale,
     required this.typography,
   });
 
   final List<MindAggregateLinePoint> points;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
   final FluviTypographyProfile typography;
 
   @override
@@ -488,6 +498,7 @@ final class _MindMonthComparisonRhythmPainter extends CustomPainter {
             ? MindYearHeatmapPaletteIntensity.maximum
             : MindYearHeatmapPaletteIntensity.interpolated,
         scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
       ).background;
       final height = plot.height * intensity;
       final rect = Rect.fromLTWH(
@@ -524,6 +535,7 @@ final class _MindMonthComparisonRhythmPainter extends CustomPainter {
       oldDelegate.points != points ||
       oldDelegate.paletteStyle != paletteStyle ||
       oldDelegate.scaleResolution != scaleResolution ||
+      oldDelegate.dynamicScale != dynamicScale ||
       oldDelegate.typography != typography;
 }
 
@@ -545,12 +557,14 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final markerColor = MindYearHeatmapPaletteResolver.resolveTile(
       style: paletteStyle,
       isEmpty: false,
       intensity: 1,
       paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
       scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
     ).background;
     final timelineOnly = timelineLayout == MindDayTimelineLayout.timelineOnly;
     return Padding(

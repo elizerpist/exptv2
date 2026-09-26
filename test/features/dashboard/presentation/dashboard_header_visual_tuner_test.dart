@@ -503,6 +503,16 @@ void main() {
       shell.value.bottomNavLayoutStyle,
       DashboardBottomNavLayoutStyle.containedFlat,
     );
+    final stretch = find.byKey(
+      const ValueKey<String>('dashboard-flat-bottomnav-stretch-modeContent'),
+    );
+    await tester.ensureVisible(stretch);
+    await tester.tap(stretch);
+    await tester.pump();
+    expect(
+      shell.value.flatBottomNavBodyStretch,
+      DashboardFlatBottomNavBodyStretch.modeContent,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
@@ -1489,6 +1499,24 @@ void main() {
       await tester.tap(scale);
       await tester.pump();
       expect(heatmapSettings.value.scaleResolution, resolution);
+    }
+    for (final mode in MindHeatmapScaleMode.values) {
+      final scale = find.byKey(
+        ValueKey('mind-heatmap-scale-mode-${mode.name}'),
+      );
+      await tester.ensureVisible(scale);
+      await tester.tap(scale);
+      await tester.pump();
+      expect(heatmapSettings.value.scaleMode, mode);
+    }
+    for (final size in MindSliderHandleSize.values) {
+      final handleSize = find.byKey(
+        ValueKey('mind-slider-handle-size-${size.name}'),
+      );
+      await tester.ensureVisible(handleSize);
+      await tester.tap(handleSize);
+      await tester.pump();
+      expect(heatmapSettings.value.sliderHandleSize, size);
     }
     for (final layout in MindDayTimelineLayout.values) {
       final dayLayout = find.byKey(

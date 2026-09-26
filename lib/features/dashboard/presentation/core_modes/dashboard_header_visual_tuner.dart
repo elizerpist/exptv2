@@ -1102,6 +1102,50 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
+          child: Text('Mind hőtérkép skála'),
+        ),
+        RadioGroup<MindHeatmapScaleMode>(
+          groupValue: settings.scaleMode,
+          onChanged: (mode) {
+            if (mode != null) controller.setScaleMode(mode);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final mode in MindHeatmapScaleMode.values)
+                RadioListTile<MindHeatmapScaleMode>(
+                  key: ValueKey('mind-heatmap-scale-mode-${mode.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(mode.tunerLabel),
+                  value: mode,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Mind slider fogantyú méret'),
+        ),
+        RadioGroup<MindSliderHandleSize>(
+          groupValue: settings.sliderHandleSize,
+          onChanged: (size) {
+            if (size != null) controller.setSliderHandleSize(size);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final size in MindSliderHandleSize.values)
+                RadioListTile<MindSliderHandleSize>(
+                  key: ValueKey('mind-slider-handle-size-${size.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(size.tunerLabel),
+                  value: size,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
           child: Text('Day idővonal'),
         ),
         RadioGroup<MindDayTimelineLayout>(
@@ -2558,6 +2602,7 @@ final class _SummaryRadioGroup<T> extends StatelessWidget {
     required this.itemLabel,
     required this.onChanged,
     required this.keyPrefix,
+    this.keyName,
   });
 
   final String label;
@@ -2566,6 +2611,7 @@ final class _SummaryRadioGroup<T> extends StatelessWidget {
   final String Function(T) itemLabel;
   final ValueChanged<T> onChanged;
   final String keyPrefix;
+  final String Function(T value)? keyName;
 
   @override
   Widget build(BuildContext context) => RadioGroup<T>(
@@ -2579,7 +2625,7 @@ final class _SummaryRadioGroup<T> extends StatelessWidget {
         Text(label),
         for (final item in values)
           RadioListTile<T>(
-            key: ValueKey('$keyPrefix-$item'),
+            key: ValueKey('$keyPrefix-${keyName?.call(item) ?? item}'),
             dense: true,
             contentPadding: EdgeInsets.zero,
             title: Text(itemLabel(item)),
@@ -2972,6 +3018,21 @@ final class _DashboardBottomNavPresentationSection extends StatelessWidget {
                   : 'Vékony szürke',
               onChanged: controller.selectBottomNavTopBorder,
               keyPrefix: 'dashboard-bottom-nav-top-border',
+            ),
+            _SummaryRadioGroup<DashboardFlatBottomNavBodyStretch>(
+              label: 'Sík BottomNav helykihasználás',
+              value: settings.flatBottomNavBodyStretch,
+              values: DashboardFlatBottomNavBodyStretch.values,
+              itemLabel: (value) => switch (value) {
+                DashboardFlatBottomNavBodyStretch.off => 'Kikapcsolva',
+                DashboardFlatBottomNavBodyStretch.expandedHeader =>
+                  'Expanded Header nyújtása',
+                DashboardFlatBottomNavBodyStretch.modeContent =>
+                  'Mode content nyújtása',
+              },
+              onChanged: controller.selectFlatBottomNavBodyStretch,
+              keyPrefix: 'dashboard-flat-bottomnav-stretch',
+              keyName: (value) => value.name,
             ),
           ],
         ),

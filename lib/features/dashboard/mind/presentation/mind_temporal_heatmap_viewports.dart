@@ -19,6 +19,7 @@ import '../domain/mind_year_heatmap_calendar_geometry.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
+import 'mind_heatmap_palette_scope.dart';
 import 'mind_anchored_info_card.dart';
 import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_detailed_sum_chart.dart';
@@ -527,100 +528,106 @@ final class _MindSumMonthCells extends StatelessWidget {
   final void Function(MindSumHeatmapMonth month, Offset anchor) onMonthTap;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: <Widget>[
-      SizedBox(
-        height: 22,
-        child: Row(
-          children: List<Widget>.generate(12, (monthIndex) {
-            final month = monthIndex + 1;
-            final item = frame.month(year: year, month: month);
-            final palette = MindYearHeatmapPaletteResolver.resolveTile(
-              style: paletteStyle,
-              isEmpty: item.isEmpty,
-              intensity: item.intensity,
-              paletteIntensity: item.paletteIntensity,
-              scaleResolution: scaleResolution,
-            );
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: month == 12 ? 0 : 2),
-                child: Builder(
-                  builder: (cellContext) => GestureDetector(
-                    key: ValueKey<String>('mind-sum-heatmap-tap-$year-$month'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: item.isEmpty
-                        ? null
-                        : () {
-                            final box =
-                                cellContext.findRenderObject() as RenderBox?;
-                            final anchor = box == null
-                                ? Offset.zero
-                                : box.localToGlobal(
-                                    box.size.center(Offset.zero),
-                                  );
-                            onMonthTap(item, anchor);
-                          },
-                    child: DecoratedBox(
-                      key: ValueKey<String>(
-                        'mind-sum-heatmap-cell-$year-$month',
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.background,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: Center(
-                        child:
-                            labelPlacement ==
-                                MindSumMonthLabelPlacement.insideMonthCells
-                            ? Text(
-                                _monthInitials[monthIndex],
-                                style: const TextStyle(
-                                  fontSize: 7,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              )
-                            : const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }, growable: false),
-        ),
-      ),
-      if (labelPlacement == MindSumMonthLabelPlacement.belowEachRow)
+  Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
         SizedBox(
-          height: 10,
+          height: 22,
           child: Row(
-            children: List<Widget>.generate(
-              12,
-              (monthIndex) => Expanded(
+            children: List<Widget>.generate(12, (monthIndex) {
+              final month = monthIndex + 1;
+              final item = frame.month(year: year, month: month);
+              final palette = MindYearHeatmapPaletteResolver.resolveTile(
+                style: paletteStyle,
+                isEmpty: item.isEmpty,
+                intensity: item.intensity,
+                paletteIntensity: item.paletteIntensity,
+                scaleResolution: scaleResolution,
+                dynamicScale: dynamicScale,
+              );
+              return Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(right: monthIndex == 11 ? 0 : 2),
-                  child: Center(
-                    child: Text(
-                      _monthInitials[monthIndex],
+                  padding: EdgeInsets.only(right: month == 12 ? 0 : 2),
+                  child: Builder(
+                    builder: (cellContext) => GestureDetector(
                       key: ValueKey<String>(
-                        'mind-sum-heatmap-month-label-$year-${monthIndex + 1}',
+                        'mind-sum-heatmap-tap-$year-$month',
                       ),
-                      style: const TextStyle(
-                        fontSize: 7,
-                        color: FluviVisualTokens.textSecondary,
+                      behavior: HitTestBehavior.opaque,
+                      onTap: item.isEmpty
+                          ? null
+                          : () {
+                              final box =
+                                  cellContext.findRenderObject() as RenderBox?;
+                              final anchor = box == null
+                                  ? Offset.zero
+                                  : box.localToGlobal(
+                                      box.size.center(Offset.zero),
+                                    );
+                              onMonthTap(item, anchor);
+                            },
+                      child: DecoratedBox(
+                        key: ValueKey<String>(
+                          'mind-sum-heatmap-cell-$year-$month',
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.background,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Center(
+                          child:
+                              labelPlacement ==
+                                  MindSumMonthLabelPlacement.insideMonthCells
+                              ? Text(
+                                  _monthInitials[monthIndex],
+                                  style: const TextStyle(
+                                    fontSize: 7,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                )
+                              : const SizedBox.expand(),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              growable: false,
-            ),
+              );
+            }, growable: false),
           ),
         ),
-    ],
-  );
+        if (labelPlacement == MindSumMonthLabelPlacement.belowEachRow)
+          SizedBox(
+            height: 10,
+            child: Row(
+              children: List<Widget>.generate(
+                12,
+                (monthIndex) => Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: monthIndex == 11 ? 0 : 2),
+                    child: Center(
+                      child: Text(
+                        _monthInitials[monthIndex],
+                        key: ValueKey<String>(
+                          'mind-sum-heatmap-month-label-$year-${monthIndex + 1}',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 7,
+                          color: FluviVisualTokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                growable: false,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 const _monthInitials = <String>[
@@ -697,24 +704,28 @@ final class _MindSumLinePage extends StatelessWidget {
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
-  Widget build(BuildContext context) => MindDetailedSumChart(
-    frame: frame,
-    lineColor: MindYearHeatmapPaletteResolver.resolveTile(
-      style: paletteStyle,
-      isEmpty: false,
-      intensity: 1,
-      paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
-      scaleResolution: scaleResolution,
-    ).background,
-    scrollController: scrollController,
-    visibleChartCount: visibleChartCount,
-    interpolationMode: interpolationMode,
-    catmullRomTension: catmullRomTension,
-    temporalSmoothingEnabled: temporalSmoothingEnabled,
-    smoothingWindow: smoothingWindow,
-    zoomAdaptiveSmoothingEnabled: zoomAdaptiveSmoothingEnabled,
-    upperVerticalGestures: upperVerticalGestures,
-  );
+  Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
+    return MindDetailedSumChart(
+      frame: frame,
+      lineColor: MindYearHeatmapPaletteResolver.resolveTile(
+        style: paletteStyle,
+        isEmpty: false,
+        intensity: 1,
+        paletteIntensity: MindYearHeatmapPaletteIntensity.maximum,
+        scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
+      ).background,
+      scrollController: scrollController,
+      visibleChartCount: visibleChartCount,
+      interpolationMode: interpolationMode,
+      catmullRomTension: catmullRomTension,
+      temporalSmoothingEnabled: temporalSmoothingEnabled,
+      smoothingWindow: smoothingWindow,
+      zoomAdaptiveSmoothingEnabled: zoomAdaptiveSmoothingEnabled,
+      upperVerticalGestures: upperVerticalGestures,
+    );
+  }
 }
 
 /// Sum's third presentation surface compares the already-admitted selected
@@ -792,6 +803,7 @@ final class _MindSumMonthlyOverlayYear extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final series = mindSumMonthlyOverlaySeries(frame: frame, year: year);
     Color colorFor(MindMonthlyOverlayValue value) {
       final month = frame.month(year: year, month: value.month);
@@ -801,6 +813,7 @@ final class _MindSumMonthlyOverlayYear extends StatelessWidget {
         intensity: month.intensity,
         paletteIntensity: month.paletteIntensity,
         scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
       ).background;
     }
 
@@ -1046,6 +1059,7 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
     final geometry = MindYearHeatmapCalendarGeometry.forMonth(
       year: frame.year,
       month: frame.month,
@@ -1162,6 +1176,7 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                             frameListenable: frameListenable,
                             paletteStyle: paletteStyle,
                             scaleResolution: scaleResolution,
+                            dynamicScale: dynamicScale,
                             cellExtent: cellExtent,
                             gap: gap,
                           ),
@@ -1181,6 +1196,7 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                                       style: paletteStyle,
                                       day: day,
                                       scaleResolution: scaleResolution,
+                                      dynamicScale: dynamicScale,
                                     ).foreground,
                               ),
                             )
@@ -1227,6 +1243,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
     required this.frameListenable,
     required this.paletteStyle,
     required this.scaleResolution,
+    required this.dynamicScale,
     required this.cellExtent,
     required this.gap,
   }) : super(repaint: frameListenable);
@@ -1235,6 +1252,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
   final ValueListenable<MindTemporalHeatmapFrame?> frameListenable;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
   final double cellExtent;
   final double gap;
 
@@ -1251,6 +1269,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
         style: paletteStyle,
         day: day,
         scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
       );
       paint.color = palette.background;
       canvas.drawRRect(
@@ -1275,6 +1294,7 @@ final class _MindMonthHeatmapPainter extends CustomPainter {
       !identical(frameListenable, oldDelegate.frameListenable) ||
       paletteStyle != oldDelegate.paletteStyle ||
       scaleResolution != oldDelegate.scaleResolution ||
+      dynamicScale != oldDelegate.dynamicScale ||
       cellExtent != oldDelegate.cellExtent ||
       gap != oldDelegate.gap;
 }
