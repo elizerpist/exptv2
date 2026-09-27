@@ -72,4 +72,4 @@
 - [x] Run `dart format --output=none --set-exit-if-changed` for every changed Dart file and `git diff --check`.
 - [x] Run focused presentation, wave, diagnostic, shell and core geometry suites inside Ubuntu proot (121 tests), then `flutter analyze --no-pub --no-fatal-infos` (no issues).
 - [x] Re-read the checklist, inspect refreshed golden states, and remediate the final review findings (real five-row lower-card overflow, finite diagnostics retention, sampled console status).
-- [ ] Commit/push production code and complete human APK delivery.
+- [x] Commit/push production code (`867b67d4`) and complete human APK delivery from Actions run `36311698137`.

@@ -13,7 +13,7 @@
 | WAVE-03 | §15 | wave runtime telemetry | Bound, profile, clock, geometry, loop, frame-summary and settings events include required factual fields without per-frame ring flooding. | Simulated 32-second cycle proves 4-summary/16-settings caps. | DONE |
 | DEBUG-01 | §17–19 | `debug_console.dart`, carousel runtime | Balance Wave dropdown filters only `BALANCE_WAVE|`, shows an already-sampled status pull, and bug marker includes latest wave context with no second history. | Debug console/logger and carousel marker tests. | DONE |
 | REG-01 | §10–13, §22–26 | dashboard/card test suites | No query/data/selection/carousel/collapse/count regression; on-demand hit regions do not steal outer gestures. | Final 121-test focused dashboard/presentation suite. | DONE |
-| DELIVERY-01 | §26–28 | repository / GitHub Actions | Formatting, diff check, analyze, tests, code review, production commit/push and human APK delivery are complete. | Fresh command logs and Actions artifact. | PARTIAL — awaiting review, commit/push and human APK. |
+| DELIVERY-01 | §26–28 | repository / GitHub Actions | Formatting, diff check, analyze, tests, code review, production commit/push and human APK delivery are complete. | `867b67d4`, Actions run `36311698137` human-APK job, downloaded artifact SHA-256. | DONE |
 | USER-01 | §28 | physical device | Physical acceptance of wave and compact composition remains user-only. | User | PENDING — USER ONLY |
 
 ## Architecture card
