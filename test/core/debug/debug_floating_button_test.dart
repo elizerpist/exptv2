@@ -204,6 +204,10 @@ void main() {
         'clockRunning': true,
         'visibleWaveCount': 3,
         'phase': '0.2500',
+        'speedMultiplier': '1.50',
+        'effectiveDurationMs': 4000,
+        'selectedCardLocalPhase': '0.5833',
+        'currentVisiblePeakToPeakPx': '18.42',
       };
       FluviDiagnosticLogger.registerUserMarkerContext(
         'balanceWave.test',
@@ -263,6 +267,12 @@ void main() {
       );
       expect(find.textContaining('animationEnabled: true'), findsOneWidget);
       expect(find.textContaining('phase: 0.2500'), findsOneWidget);
+      expect(find.textContaining('speedMultiplier: 1.50'), findsOneWidget);
+      expect(find.textContaining('effectiveDurationMs: 4000'), findsOneWidget);
+      expect(
+        find.textContaining('currentVisiblePeakToPeakPx: 18.42'),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('debug-console-copy')));
       await tester.pump();
       expect(clipboardText, contains('BALANCE_WAVE|BOUND'));

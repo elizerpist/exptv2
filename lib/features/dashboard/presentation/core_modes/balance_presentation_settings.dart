@@ -2,6 +2,29 @@ import 'package:flutter/foundation.dart';
 
 import '../../application/dashboard_balance_history_projection.dart';
 
+/// The authored period of the ambient carousel wave at 1.00× speed.
+const balanceCarouselWaveBaseDuration = Duration(seconds: 6);
+const balanceCarouselWaveMinimumSpeedMultiplier = .25;
+const balanceCarouselWaveMaximumSpeedMultiplier = 3.0;
+const balanceCarouselWaveDefaultSpeedMultiplier = 1.0;
+
+/// Resolves the running period without exposing milliseconds as a user setting.
+///
+/// Clamping here keeps every consumer—including a restored or programmatic
+/// setting—inside the same authored contract.
+Duration balanceCarouselWaveEffectiveDuration(double multiplier) {
+  final bounded = multiplier
+      .clamp(
+        balanceCarouselWaveMinimumSpeedMultiplier,
+        balanceCarouselWaveMaximumSpeedMultiplier,
+      )
+      .toDouble();
+  return Duration(
+    microseconds: (balanceCarouselWaveBaseDuration.inMicroseconds / bounded)
+        .round(),
+  );
+}
+
 /// Static axis-label visibility for Balance's already-published Header trend.
 /// It is deliberately independent from Mind's equivalent presentation choice.
 enum BalanceHeaderChartTimeLabels {
@@ -40,6 +63,8 @@ final class BalancePresentationSettings {
     required this.balanceCarouselBorderOpacity,
     required this.balanceCarouselBackgroundOpacity,
     required this.balanceCarouselWaveOpacity,
+    this.balanceCarouselWaveSpeedMultiplier =
+        balanceCarouselWaveDefaultSpeedMultiplier,
     required this.balanceCarouselTintedBackgroundEnabled,
     required this.balanceCarouselWaveAnimationEnabled,
     required this.balanceContentCardColoredBorderEnabled,
@@ -56,6 +81,12 @@ final class BalancePresentationSettings {
          balanceCarouselWaveOpacity >= 0 && balanceCarouselWaveOpacity <= 1,
        ),
        assert(
+         balanceCarouselWaveSpeedMultiplier >=
+                 balanceCarouselWaveMinimumSpeedMultiplier &&
+             balanceCarouselWaveSpeedMultiplier <=
+                 balanceCarouselWaveMaximumSpeedMultiplier,
+       ),
+       assert(
          balanceContentCardBorderOpacity >= 0 &&
              balanceContentCardBorderOpacity <= 1,
        );
@@ -69,6 +100,8 @@ final class BalancePresentationSettings {
       balanceCarouselBorderOpacity = 1,
       balanceCarouselBackgroundOpacity = 1,
       balanceCarouselWaveOpacity = 1,
+      balanceCarouselWaveSpeedMultiplier =
+          balanceCarouselWaveDefaultSpeedMultiplier,
       balanceCarouselTintedBackgroundEnabled = true,
       balanceCarouselWaveAnimationEnabled = true,
       balanceContentCardColoredBorderEnabled = true,
@@ -83,6 +116,7 @@ final class BalancePresentationSettings {
   final double balanceCarouselBorderOpacity;
   final double balanceCarouselBackgroundOpacity;
   final double balanceCarouselWaveOpacity;
+  final double balanceCarouselWaveSpeedMultiplier;
   final bool balanceCarouselTintedBackgroundEnabled;
   final bool balanceCarouselWaveAnimationEnabled;
   final bool balanceContentCardColoredBorderEnabled;
@@ -100,6 +134,7 @@ final class BalancePresentationSettings {
     double? balanceCarouselBorderOpacity,
     double? balanceCarouselBackgroundOpacity,
     double? balanceCarouselWaveOpacity,
+    double? balanceCarouselWaveSpeedMultiplier,
     bool? balanceCarouselTintedBackgroundEnabled,
     bool? balanceCarouselWaveAnimationEnabled,
     bool? balanceContentCardColoredBorderEnabled,
@@ -120,6 +155,9 @@ final class BalancePresentationSettings {
         this.balanceCarouselBackgroundOpacity,
     balanceCarouselWaveOpacity:
         balanceCarouselWaveOpacity ?? this.balanceCarouselWaveOpacity,
+    balanceCarouselWaveSpeedMultiplier:
+        balanceCarouselWaveSpeedMultiplier ??
+        this.balanceCarouselWaveSpeedMultiplier,
     balanceCarouselTintedBackgroundEnabled:
         balanceCarouselTintedBackgroundEnabled ??
         this.balanceCarouselTintedBackgroundEnabled,
@@ -146,6 +184,8 @@ final class BalancePresentationSettings {
       other.balanceCarouselBackgroundOpacity ==
           balanceCarouselBackgroundOpacity &&
       other.balanceCarouselWaveOpacity == balanceCarouselWaveOpacity &&
+      other.balanceCarouselWaveSpeedMultiplier ==
+          balanceCarouselWaveSpeedMultiplier &&
       other.balanceCarouselTintedBackgroundEnabled ==
           balanceCarouselTintedBackgroundEnabled &&
       other.balanceCarouselWaveAnimationEnabled ==
@@ -165,6 +205,7 @@ final class BalancePresentationSettings {
     balanceCarouselBorderOpacity,
     balanceCarouselBackgroundOpacity,
     balanceCarouselWaveOpacity,
+    balanceCarouselWaveSpeedMultiplier,
     balanceCarouselTintedBackgroundEnabled,
     balanceCarouselWaveAnimationEnabled,
     balanceContentCardColoredBorderEnabled,
@@ -242,6 +283,16 @@ final class BalancePresentationController
     );
   }
 
+  void setBalanceCarouselWaveSpeedMultiplier(double next) {
+    final normalized = _normalizedWaveSpeed(next);
+    final current = value;
+    if (current.balanceCarouselWaveSpeedMultiplier == normalized) return;
+    value = current.copyWith(
+      balanceCarouselWaveSpeedMultiplier: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
   void setBalanceCarouselTintedBackgroundEnabled(bool next) {
     final current = value;
     if (current.balanceCarouselTintedBackgroundEnabled == next) return;
@@ -280,4 +331,11 @@ final class BalancePresentationController
   }
 
   double _normalizedOpacity(double value) => value.clamp(0, 1).toDouble();
+
+  double _normalizedWaveSpeed(double value) => value
+      .clamp(
+        balanceCarouselWaveMinimumSpeedMultiplier,
+        balanceCarouselWaveMaximumSpeedMultiplier,
+      )
+      .toDouble();
 }

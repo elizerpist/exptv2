@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 /// The small authored family keeps Balance carousel decoration broad and soft
 /// while the stable card identity prevents a wave from changing when its card
@@ -66,6 +67,44 @@ final class BalanceCarouselWaveGeometry {
   final List<double> normalizedControlPoints;
 }
 
+/// Card-pixel samples of the exact two-cubic visible edge used by the filled
+/// wave path. This is deliberately not a normalized-model diagnostic: the
+/// values describe the final edge that a human can see inside one resolved
+/// carousel card.
+final class BalanceCarouselWaveVisibleBoundary {
+  BalanceCarouselWaveVisibleBoundary({
+    required this.localPhase,
+    required List<Offset> points,
+  }) : points = List<Offset>.unmodifiable(points),
+       minY = points.map((point) => point.dy).reduce(math.min),
+       maxY = points.map((point) => point.dy).reduce(math.max);
+
+  final double localPhase;
+  final List<Offset> points;
+  final double minY;
+  final double maxY;
+
+  double get peakToPeakPx => maxY - minY;
+
+  String get boundaryHash => points
+      .map((point) => '${(point.dx * 10).round()}:${(point.dy * 10).round()}')
+      .join(':');
+
+  double maxVerticalDeltaTo(BalanceCarouselWaveVisibleBoundary other) {
+    if (points.length != other.points.length) {
+      throw ArgumentError('Wave boundaries must use identical sample counts.');
+    }
+    var maximum = 0.0;
+    for (var index = 0; index < points.length; index += 1) {
+      maximum = math.max(
+        maximum,
+        (points[index].dy - other.points[index].dy).abs(),
+      );
+    }
+    return maximum;
+  }
+}
+
 /// Pure identity-to-wave resolver. It has no ticker, Flutter widgets, carousel
 /// index or selection input, so it is deterministic across rebuilds.
 abstract final class BalanceCarouselWaveMotion {
@@ -95,37 +134,134 @@ abstract final class BalanceCarouselWaveMotion {
     required BalanceCarouselWaveProfile profile,
     required double clockPhase,
   }) {
-    final clock = _wrap(clockPhase);
-    final warpedClock = _wrap(
-      clock +
-          profile.phaseOffset +
-          profile.cadenceAmplitude *
-              math.sin(_twoPi * clock + profile.cadencePhase),
-    );
-    final angle = _twoPi * warpedClock;
+    final localPhase = localPhaseFor(profile: profile, globalPhase: clockPhase);
+    final angle = _twoPi * localPhase;
     final primary = math.sin(angle);
     final secondary = math.sin(angle * 2 + profile.cadencePhase);
     final late = math.cos(angle - profile.cadencePhase * .5);
     final family = _familyGeometry(profile.family);
-    final amplitude = .026 * profile.amplitudeScale;
+    // The prior .026 normalized amplitude produced only about ±2 px in the
+    // 79 px physical card recorded by the field logs. A .045 authored motion
+    // yields approximately 6–8 px full visible travel while remaining broad.
+    final amplitude = .045 * profile.amplitudeScale;
     final bias = profile.shapeBias;
 
     return BalanceCarouselWaveGeometry(<double>[
       0,
-      family.startY + primary * amplitude + bias * .35,
-      family.firstControlX + secondary * .008 + bias,
-      family.firstControlY + primary * amplitude * .62 - late * .008,
-      family.secondControlX - late * .007 - bias * .5,
-      family.secondControlY - primary * amplitude * .76 + secondary * .009,
-      family.firstEndX + primary * .006,
-      family.firstEndY + late * amplitude * .7 - bias * .25,
-      family.trailingFirstControlX - secondary * .008 + bias * .4,
-      family.trailingFirstControlY + primary * amplitude * .54,
-      family.trailingSecondControlX + late * .006 - bias,
-      family.trailingSecondControlY - primary * amplitude * .68,
+      _clampY(family.startY + primary * amplitude + bias * .35),
+      family.firstControlX + secondary * .016 + bias,
+      _clampY(family.firstControlY + primary * amplitude * .82 - late * .014),
+      family.secondControlX - late * .014 - bias * .5,
+      _clampY(
+        family.secondControlY - primary * amplitude * .94 + secondary * .014,
+      ),
+      family.firstEndX + primary * .014,
+      _clampY(family.firstEndY + late * amplitude * .96 - bias * .25),
+      family.trailingFirstControlX - secondary * .016 + bias * .4,
+      _clampY(family.trailingFirstControlY + primary * amplitude * .78),
+      family.trailingSecondControlX + late * .014 - bias,
+      _clampY(family.trailingSecondControlY - primary * amplitude * .96),
       1,
-      family.endY + secondary * amplitude * .58 + bias * .4,
+      _clampY(family.endY + secondary * amplitude * .88 + bias * .4),
     ]);
+  }
+
+  /// Applies the deterministic per-card offset and cadence to the shared
+  /// carousel clock. It is public so diagnostics can prove the phase actually
+  /// used by final path evaluation rather than merely reporting metadata.
+  static double localPhaseFor({
+    required BalanceCarouselWaveProfile profile,
+    required double globalPhase,
+  }) {
+    final phase = _wrap(globalPhase);
+    return _wrap(
+      phase +
+          profile.phaseOffset +
+          profile.cadenceAmplitude *
+              math.sin(_twoPi * phase + profile.cadencePhase),
+    );
+  }
+
+  /// Samples the two cubic segments after card-size conversion. The painter
+  /// uses the same [geometryFor] control points through [writeFilledPath].
+  static BalanceCarouselWaveVisibleBoundary visibleBoundaryFor({
+    required BalanceCarouselWaveProfile profile,
+    required double globalPhase,
+    required Size size,
+    int samplesPerSegment = 32,
+  }) {
+    assert(samplesPerSegment > 1);
+    final geometry = geometryFor(profile: profile, clockPhase: globalPhase);
+    final points = geometry.normalizedControlPoints;
+    Offset point(int xIndex, int yIndex) =>
+        Offset(size.width * points[xIndex], size.height * points[yIndex]);
+    final start = point(0, 1);
+    final firstControl = point(2, 3);
+    final secondControl = point(4, 5);
+    final middle = point(6, 7);
+    final trailingFirstControl = point(8, 9);
+    final trailingSecondControl = point(10, 11);
+    final end = point(12, 13);
+    final visible = <Offset>[];
+    for (var index = 0; index <= samplesPerSegment; index += 1) {
+      visible.add(
+        _cubicPoint(
+          start,
+          firstControl,
+          secondControl,
+          middle,
+          index / samplesPerSegment,
+        ),
+      );
+    }
+    for (var index = 1; index <= samplesPerSegment; index += 1) {
+      visible.add(
+        _cubicPoint(
+          middle,
+          trailingFirstControl,
+          trailingSecondControl,
+          end,
+          index / samplesPerSegment,
+        ),
+      );
+    }
+    return BalanceCarouselWaveVisibleBoundary(
+      localPhase: localPhaseFor(profile: profile, globalPhase: globalPhase),
+      points: visible,
+    );
+  }
+
+  /// The single canvas path construction used by the painter. Keeping it next
+  /// to [visibleBoundaryFor] makes diagnostics and painted geometry share the
+  /// exact authored source rather than parallel approximations.
+  static void writeFilledPath({
+    required Path path,
+    required BalanceCarouselWaveGeometry geometry,
+    required Size size,
+  }) {
+    final points = geometry.normalizedControlPoints;
+    path
+      ..reset()
+      ..moveTo(size.width * points[0], size.height * points[1])
+      ..cubicTo(
+        size.width * points[2],
+        size.height * points[3],
+        size.width * points[4],
+        size.height * points[5],
+        size.width * points[6],
+        size.height * points[7],
+      )
+      ..cubicTo(
+        size.width * points[8],
+        size.height * points[9],
+        size.width * points[10],
+        size.height * points[11],
+        size.width * points[12],
+        size.height * points[13],
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
   }
 
   /// A compact deterministic digest for bounded runtime diagnostics.  It is
@@ -203,6 +339,22 @@ abstract final class BalanceCarouselWaveMotion {
   static double _wrap(double value) {
     if (!value.isFinite) return 0;
     return value - value.floorToDouble();
+  }
+
+  static double _clampY(double value) => value.clamp(.42, .985).toDouble();
+
+  static Offset _cubicPoint(
+    Offset start,
+    Offset firstControl,
+    Offset secondControl,
+    Offset end,
+    double t,
+  ) {
+    final inverse = 1 - t;
+    return start * (inverse * inverse * inverse) +
+        firstControl * (3 * inverse * inverse * t) +
+        secondControl * (3 * inverse * t * t) +
+        end * (t * t * t);
   }
 }
 

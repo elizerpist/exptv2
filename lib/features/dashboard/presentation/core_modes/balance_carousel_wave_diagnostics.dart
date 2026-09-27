@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'balance_carousel_wave_motion.dart';
+import 'balance_presentation_settings.dart';
 
 /// Latest bounded facts about the one Balance-carousel decorative-wave clock.
 /// It deliberately stores observations, not a second clock or notifier: the
@@ -21,6 +22,10 @@ final class BalanceCarouselWaveDiagnosticSnapshot {
     required this.phase,
     required this.direction,
     required this.loopMode,
+    required this.speedMultiplier,
+    required this.effectiveDurationMs,
+    required this.selectedCardLocalPhase,
+    required this.currentVisiblePeakToPeakPx,
     required this.waveOpacity,
     required this.backgroundOpacity,
     required this.lastGeometryHash,
@@ -36,6 +41,10 @@ final class BalanceCarouselWaveDiagnosticSnapshot {
   final double phase;
   final String direction;
   final String loopMode;
+  final double speedMultiplier;
+  final int effectiveDurationMs;
+  final double? selectedCardLocalPhase;
+  final double? currentVisiblePeakToPeakPx;
   final double waveOpacity;
   final double backgroundOpacity;
   final String? lastGeometryHash;
@@ -51,6 +60,12 @@ final class BalanceCarouselWaveDiagnosticSnapshot {
     'phase': phase.toStringAsFixed(4),
     'direction': direction,
     'loopMode': loopMode,
+    'speedMultiplier': speedMultiplier.toStringAsFixed(2),
+    'effectiveDurationMs': effectiveDurationMs,
+    'selectedCardLocalPhase': selectedCardLocalPhase?.toStringAsFixed(4),
+    'currentVisiblePeakToPeakPx': currentVisiblePeakToPeakPx?.toStringAsFixed(
+      2,
+    ),
     'waveOpacity': waveOpacity.toStringAsFixed(3),
     'backgroundOpacity': backgroundOpacity.toStringAsFixed(3),
     'lastGeometryHash': lastGeometryHash,
@@ -71,6 +86,7 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
 
   static const _maximumClockSamples = 15;
   static const _maximumGeometrySamples = 24;
+  static const _maximumVisibleMotionSamples = 24;
   static const _maximumLoopBoundaries = 4;
   // A diagnostics session may last far longer than the bounded observation
   // window. Keep representative frame and settings facts without allowing
@@ -93,6 +109,8 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
   double _waveOpacity = 1;
   double _backgroundOpacity = 1;
   double _borderOpacity = 1;
+  double _speedMultiplier = 1;
+  Duration _effectiveDuration = balanceCarouselWaveBaseDuration;
   String? _selectedCardId;
   BalanceCarouselWaveProfile? _selectedProfile;
   double _phase = 0;
@@ -112,6 +130,12 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
   int _summaryBuildRevision = 0;
   String? _lastGeometryHash;
   String? _lastFrameSummary;
+  double? _selectedCardLocalPhase;
+  double? _currentVisiblePeakToPeakPx;
+  final Map<String, BalanceCarouselWaveVisibleBoundary>
+  _previousVisibleBoundaryByCard =
+      <String, BalanceCarouselWaveVisibleBoundary>{};
+  int _visibleMotionSamples = 0;
 
   bool get isBound => _bound;
 
@@ -126,6 +150,10 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
         phase: _phase,
         direction: 'forward-periodic',
         loopMode: 'periodic',
+        speedMultiplier: _speedMultiplier,
+        effectiveDurationMs: _effectiveDuration.inMilliseconds,
+        selectedCardLocalPhase: _selectedCardLocalPhase,
+        currentVisiblePeakToPeakPx: _currentVisiblePeakToPeakPx,
         waveOpacity: _waveOpacity,
         backgroundOpacity: _backgroundOpacity,
         lastGeometryHash: _lastGeometryHash,
@@ -138,6 +166,8 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
     required bool clockRunning,
     required double waveOpacity,
     required double backgroundOpacity,
+    required double speedMultiplier,
+    required Duration effectiveDuration,
   }) {
     _setConfiguration(
       animationEnabled: animationEnabled,
@@ -145,6 +175,8 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
       clockRunning: clockRunning,
       waveOpacity: waveOpacity,
       backgroundOpacity: backgroundOpacity,
+      speedMultiplier: speedMultiplier,
+      effectiveDuration: effectiveDuration,
     );
     if (_bound) return;
     _bound = true;
@@ -154,6 +186,8 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
           'clockOwner=$clockOwner tickerCount=1 controllerCount=1 '
           'visibleWaveCount=$visibleWaveCount '
           'configuredDurationMs=${configuredDuration.inMilliseconds} '
+          'effectiveDurationMs=${_effectiveDuration.inMilliseconds} '
+          'speedMultiplier=${_speedMultiplier.toStringAsFixed(3)} '
           'loopMode=periodic backgroundOpacity=${_backgroundOpacity.toStringAsFixed(3)} '
           'waveOpacity=${_waveOpacity.toStringAsFixed(3)}',
     );
@@ -166,19 +200,25 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
     required double waveOpacity,
     required double backgroundOpacity,
     required double borderOpacity,
+    required double speedMultiplier,
+    required Duration effectiveDuration,
   }) {
     final changed =
         _animationEnabled != animationEnabled ||
         _reducedMotion != reducedMotion ||
         _waveOpacity != waveOpacity ||
         _backgroundOpacity != backgroundOpacity ||
-        _borderOpacity != borderOpacity;
+        _borderOpacity != borderOpacity ||
+        _speedMultiplier != speedMultiplier ||
+        _effectiveDuration != effectiveDuration;
     _setConfiguration(
       animationEnabled: animationEnabled,
       reducedMotion: reducedMotion,
       clockRunning: clockRunning,
       waveOpacity: waveOpacity,
       backgroundOpacity: backgroundOpacity,
+      speedMultiplier: speedMultiplier,
+      effectiveDuration: effectiveDuration,
     );
     _borderOpacity = borderOpacity;
     if (!changed) return;
@@ -189,7 +229,9 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
         'animationEnabled=$_animationEnabled reducedMotion=$_reducedMotion '
             'clockRunning=$_clockRunning waveOpacity=${_waveOpacity.toStringAsFixed(3)} '
             'backgroundOpacity=${_backgroundOpacity.toStringAsFixed(3)} '
-            'borderOpacity=${borderOpacity.toStringAsFixed(3)}',
+            'borderOpacity=${borderOpacity.toStringAsFixed(3)} '
+            'speedMultiplier=${_speedMultiplier.toStringAsFixed(3)} '
+            'effectiveDurationMs=${_effectiveDuration.inMilliseconds}',
       );
     }
   }
@@ -210,7 +252,7 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
       'CARD_PROFILE',
       'cardId=${profile.cardId} profileId=${profile.family.name} '
           'phaseOffset=${profile.phaseOffset.toStringAsFixed(4)} '
-          'speedMultiplier=1.000 morphVariant=${profile.family.name} '
+          'speedMultiplier=${_speedMultiplier.toStringAsFixed(3)} morphVariant=${profile.family.name} '
           'selected=$selected pathControlSignature=$signature',
     );
   }
@@ -277,12 +319,15 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
 
   void onPaint({
     required BalanceCarouselWaveProfile profile,
-    required double phase,
+    required double globalPhase,
     required Size paintBounds,
     required BalanceCarouselWaveGeometry geometry,
+    required double effectiveWaveAlpha,
+    required double finalTintAlpha,
+    required int painterRevision,
   }) {
     _intervalPaints += 1;
-    final sampleKey = '${profile.cardId}:$_cycle:${_phaseBucket(phase)}';
+    final sampleKey = '${profile.cardId}:$_cycle:${_phaseBucket(globalPhase)}';
     if (_geometrySamples >= _maximumGeometrySamples ||
         !_milestones.add('geometry:$sampleKey')) {
       return;
@@ -291,13 +336,94 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
     final digest = BalanceCarouselWaveMotion.geometryDigest(geometry);
     _lastGeometryHash = digest;
     final points = geometry.normalizedControlPoints;
+    final localPhase = BalanceCarouselWaveMotion.localPhaseFor(
+      profile: profile,
+      globalPhase: globalPhase,
+    );
     _emit(
       'GEOMETRY_SAMPLE',
       'cardId=${profile.cardId} profileId=${profile.family.name} '
-          'phase=${phase.toStringAsFixed(4)} geometryDigest=$digest '
+          'globalPhase=${globalPhase.toStringAsFixed(4)} '
+          'localPhase=${localPhase.toStringAsFixed(4)} geometryDigest=$digest '
           'controlPoints=${points[1].toStringAsFixed(4)},${points[3].toStringAsFixed(4)},${points[7].toStringAsFixed(4)},${points[13].toStringAsFixed(4)} '
           'paintBounds=0,0,${paintBounds.width.toStringAsFixed(1)}x${paintBounds.height.toStringAsFixed(1)} '
           'clipBounds=0,0,${paintBounds.width.toStringAsFixed(1)}x${paintBounds.height.toStringAsFixed(1)}',
+    );
+    _emitVisibleMotionSample(
+      profile: profile,
+      globalPhase: globalPhase,
+      paintBounds: paintBounds,
+      effectiveWaveAlpha: effectiveWaveAlpha,
+      finalTintAlpha: finalTintAlpha,
+      painterRevision: painterRevision,
+    );
+  }
+
+  /// Emits only alongside the existing bounded geometry milestones. The
+  /// boundary is sampled in actual card pixels from the same two cubic curves
+  /// that [BalanceCarouselWaveMotion.writeFilledPath] gives the painter.
+  void _emitVisibleMotionSample({
+    required BalanceCarouselWaveProfile profile,
+    required double globalPhase,
+    required Size paintBounds,
+    required double effectiveWaveAlpha,
+    required double finalTintAlpha,
+    required int painterRevision,
+  }) {
+    if (_visibleMotionSamples >= _maximumVisibleMotionSamples) return;
+    _visibleMotionSamples += 1;
+    final boundary = BalanceCarouselWaveMotion.visibleBoundaryFor(
+      profile: profile,
+      globalPhase: globalPhase,
+      size: paintBounds,
+    );
+    final previous = _previousVisibleBoundaryByCard[profile.cardId];
+    final delta = previous == null
+        ? 0.0
+        : boundary.maxVerticalDeltaTo(previous);
+    _previousVisibleBoundaryByCard[profile.cardId] = boundary;
+    if (_selectedCardId == profile.cardId) {
+      _selectedCardLocalPhase = boundary.localPhase;
+      _currentVisiblePeakToPeakPx = boundary.peakToPeakPx;
+    }
+    _emit(
+      'VISIBLE_MOTION_SAMPLE',
+      'cardId=${profile.cardId} profileId=${profile.family.name} '
+          'globalPhase=${globalPhase.toStringAsFixed(4)} '
+          'resolvedLocalPhase=${boundary.localPhase.toStringAsFixed(4)} '
+          'visibleWaveBoundaryHash=${boundary.boundaryHash} '
+          'visibleWaveMinY=${boundary.minY.toStringAsFixed(2)} '
+          'visibleWaveMaxY=${boundary.maxY.toStringAsFixed(2)} '
+          'visibleWavePeakToPeakPx=${boundary.peakToPeakPx.toStringAsFixed(2)} '
+          'visibleWaveDeltaFromPreviousSamplePx=${delta.toStringAsFixed(2)} '
+          'cardWidthPx=${paintBounds.width.toStringAsFixed(1)} '
+          'cardHeightPx=${paintBounds.height.toStringAsFixed(1)} '
+          'effectiveWaveAlpha=${effectiveWaveAlpha.toStringAsFixed(3)} '
+          'finalTintAlpha=${finalTintAlpha.toStringAsFixed(3)} '
+          'clipRect=0,0,${paintBounds.width.toStringAsFixed(1)}x${paintBounds.height.toStringAsFixed(1)} '
+          'painterRevision=$painterRevision',
+    );
+  }
+
+  void speedChanged({
+    required double oldMultiplier,
+    required double newMultiplier,
+    required double phaseBefore,
+    required double phaseAfter,
+    required Duration effectiveDuration,
+    required bool controllerRecreated,
+  }) {
+    if (_settingsSamples >= _maximumSettingsSamples) return;
+    _settingsSamples += 1;
+    _emit(
+      'SPEED_CHANGED',
+      'oldMultiplier=${oldMultiplier.toStringAsFixed(3)} '
+          'newMultiplier=${newMultiplier.toStringAsFixed(3)} '
+          'phaseBefore=${phaseBefore.toStringAsFixed(4)} '
+          'phaseAfter=${phaseAfter.toStringAsFixed(4)} '
+          'effectiveDurationMs=${effectiveDuration.inMilliseconds} '
+          'controllerRecreated=$controllerRecreated '
+          'discontinuityDetected=${(phaseBefore - phaseAfter).abs() > .0001}',
     );
   }
 
@@ -340,12 +466,16 @@ final class BalanceCarouselWaveRuntimeDiagnostics {
     required bool clockRunning,
     required double waveOpacity,
     required double backgroundOpacity,
+    required double speedMultiplier,
+    required Duration effectiveDuration,
   }) {
     _animationEnabled = animationEnabled;
     _reducedMotion = reducedMotion;
     _clockRunning = clockRunning;
     _waveOpacity = waveOpacity;
     _backgroundOpacity = backgroundOpacity;
+    _speedMultiplier = speedMultiplier;
+    _effectiveDuration = effectiveDuration;
   }
 
   static int _phaseBucket(double phase) =>

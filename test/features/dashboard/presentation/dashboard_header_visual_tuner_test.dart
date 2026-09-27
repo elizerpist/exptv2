@@ -473,6 +473,9 @@ void main() {
       final waveAnimation = find.byKey(
         const ValueKey<String>('balance-carousel-wave-animation-enabled'),
       );
+      final waveSpeed = find.byKey(
+        const ValueKey<String>('balance-carousel-wave-speed'),
+      );
       final contentColoredBorder = find.byKey(
         const ValueKey<String>('balance-content-card-colored-border-enabled'),
       );
@@ -485,6 +488,7 @@ void main() {
       expect(backgroundOpacity, findsOneWidget);
       expect(waveOpacity, findsOneWidget);
       expect(waveAnimation, findsOneWidget);
+      expect(waveSpeed, findsOneWidget);
       expect(contentColoredBorder, findsOneWidget);
       expect(contentBorderOpacity, findsOneWidget);
 
@@ -561,6 +565,11 @@ void main() {
           .onChanged!(.6);
       tester
           .widget<Slider>(
+            find.descendant(of: waveSpeed, matching: find.byType(Slider)),
+          )
+          .onChanged!(2.5);
+      tester
+          .widget<Slider>(
             find.descendant(
               of: contentBorderOpacity,
               matching: find.byType(Slider),
@@ -571,10 +580,12 @@ void main() {
       expect(balance.value.balanceCarouselBorderOpacity, .4);
       expect(balance.value.balanceCarouselBackgroundOpacity, .7);
       expect(balance.value.balanceCarouselWaveOpacity, .6);
+      expect(balance.value.balanceCarouselWaveSpeedMultiplier, 2.5);
       expect(balance.value.balanceContentCardBorderOpacity, .2);
       expect(find.text('40%'), findsOneWidget);
       expect(find.text('70%'), findsOneWidget);
       expect(find.text('60%'), findsOneWidget);
+      expect(find.text('2,50×'), findsOneWidget);
       expect(find.text('20%'), findsOneWidget);
 
       expect(
@@ -590,58 +601,71 @@ void main() {
     },
   );
 
-  testWidgets('BottomNav layout style is default-raised and tuner-selectable', (
-    tester,
-  ) async {
-    final controller = DashboardHeaderVisualController(vsync: tester);
-    final shell = DashboardShellPresentationController();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox(
-          width: 360,
-          height: 2400,
-          child: DashboardHeaderVisualTuner(
-            controller: controller,
-            shellPresentation: shell,
+  testWidgets(
+    'BottomNav layout style is default-contained and tuner-selectable',
+    (tester) async {
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final shell = DashboardShellPresentationController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 2400,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              shellPresentation: shell,
+            ),
           ),
         ),
-      ),
-    );
-    await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
-      DashboardHeaderTunerSection.shellPresentation,
-    ]);
+      );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.shellPresentation,
+      ]);
 
-    expect(
-      shell.value.bottomNavLayoutStyle,
-      DashboardBottomNavLayoutStyle.raisedFab,
-    );
-    final contained = find.byKey(
-      const ValueKey<String>(
-        'dashboard-bottom-nav-layout-DashboardBottomNavLayoutStyle.containedFlat',
-      ),
-    );
-    await tester.ensureVisible(contained);
-    await tester.tap(contained);
-    await tester.pump();
-    expect(
-      shell.value.bottomNavLayoutStyle,
-      DashboardBottomNavLayoutStyle.containedFlat,
-    );
-    final stretch = find.byKey(
-      const ValueKey<String>('dashboard-flat-bottomnav-stretch-modeContent'),
-    );
-    await tester.ensureVisible(stretch);
-    await tester.tap(stretch);
-    await tester.pump();
-    expect(
-      shell.value.flatBottomNavBodyStretch,
-      DashboardFlatBottomNavBodyStretch.modeContent,
-    );
+      expect(
+        shell.value.bottomNavLayoutStyle,
+        DashboardBottomNavLayoutStyle.containedFlat,
+      );
+      final raised = find.byKey(
+        const ValueKey<String>(
+          'dashboard-bottom-nav-layout-DashboardBottomNavLayoutStyle.raisedFab',
+        ),
+      );
+      await tester.ensureVisible(raised);
+      await tester.tap(raised);
+      await tester.pump();
+      expect(
+        shell.value.bottomNavLayoutStyle,
+        DashboardBottomNavLayoutStyle.raisedFab,
+      );
+      final contained = find.byKey(
+        const ValueKey<String>(
+          'dashboard-bottom-nav-layout-DashboardBottomNavLayoutStyle.containedFlat',
+        ),
+      );
+      await tester.ensureVisible(contained);
+      await tester.tap(contained);
+      await tester.pump();
+      expect(
+        shell.value.bottomNavLayoutStyle,
+        DashboardBottomNavLayoutStyle.containedFlat,
+      );
+      final stretch = find.byKey(
+        const ValueKey<String>('dashboard-flat-bottomnav-stretch-modeContent'),
+      );
+      await tester.ensureVisible(stretch);
+      await tester.tap(stretch);
+      await tester.pump();
+      expect(
+        shell.value.flatBottomNavBodyStretch,
+        DashboardFlatBottomNavBodyStretch.modeContent,
+      );
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    controller.dispose();
-    shell.dispose();
-  });
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      shell.dispose();
+    },
+  );
 
   testWidgets(
     'HTF-04/HTY-01 RED: the real tuner exposes softened foregrounds and Header typography',
@@ -962,7 +986,11 @@ void main() {
     await tester.ensureVisible(separators);
     await tester.tap(separators);
     await tester.pump();
-    expect(summary.value.showSeparators, isFalse);
+    expect(
+      summary.value.showSeparators,
+      isTrue,
+      reason: 'The default is separator-free; the tuner must still enable it.',
+    );
     expect(
       find.byKey(const ValueKey('dashboard-summary-mode-layout-largeIcon')),
       findsNothing,

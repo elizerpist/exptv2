@@ -1341,6 +1341,16 @@ void main() {
         find.byKey(const ValueKey<String>('balance-category-movers-info')),
         findsOneWidget,
       );
+      expect(find.text('?'), findsNothing);
+      expect(find.text('i'), findsOneWidget);
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey<String>('balance-category-movers-info-visual'),
+          ),
+        ),
+        const Size(21, 21),
+      );
       expect(
         find.byKey(
           const ValueKey<String>('balance-category-movers-direction-decrease'),
@@ -1408,6 +1418,16 @@ void main() {
           const ValueKey<String>('balance-category-movers-detail-info'),
         ),
         findsOneWidget,
+      );
+      expect(find.text('?'), findsNothing);
+      expect(find.text('i'), findsOneWidget);
+      expect(
+        tester.getSize(
+          find.byKey(
+            const ValueKey<String>('balance-category-movers-info-visual'),
+          ),
+        ),
+        const Size(21, 21),
       );
       expect(
         tester.getSize(

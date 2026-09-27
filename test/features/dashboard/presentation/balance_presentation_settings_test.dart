@@ -23,6 +23,10 @@ void main() {
       expect(controller.value.balanceCarouselBorderOpacity, 1);
       expect(controller.value.balanceCarouselBackgroundOpacity, 1);
       expect(controller.value.balanceCarouselWaveOpacity, 1);
+      expect(
+        controller.value.balanceCarouselWaveSpeedMultiplier,
+        balanceCarouselWaveDefaultSpeedMultiplier,
+      );
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
       expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
@@ -170,6 +174,41 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.value.chartMode, BalanceHeaderChartMode.compound);
+    },
+  );
+
+  test(
+    'WV-SPEED RED: wave speed is independently clamped and resolves the authored cycle duration',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(controller.value.balanceCarouselWaveSpeedMultiplier, 1);
+      expect(
+        balanceCarouselWaveEffectiveDuration(
+          controller.value.balanceCarouselWaveSpeedMultiplier,
+        ),
+        const Duration(seconds: 6),
+      );
+
+      controller
+        ..setBalanceCarouselWaveSpeedMultiplier(.5)
+        ..setBalanceCarouselWaveSpeedMultiplier(2);
+      expect(
+        balanceCarouselWaveEffectiveDuration(.5),
+        const Duration(seconds: 12),
+      );
+      expect(
+        balanceCarouselWaveEffectiveDuration(2),
+        const Duration(seconds: 3),
+      );
+
+      controller.setBalanceCarouselWaveSpeedMultiplier(9);
+      expect(controller.value.balanceCarouselWaveSpeedMultiplier, 3);
+      controller.setBalanceCarouselWaveSpeedMultiplier(0);
+      expect(controller.value.balanceCarouselWaveSpeedMultiplier, .25);
+      expect(controller.value.balanceCarouselWaveOpacity, 1);
+      expect(controller.value.balanceCarouselBorderOpacity, 1);
     },
   );
 

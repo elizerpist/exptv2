@@ -1101,6 +1101,17 @@ final class _BalancePresentationSection extends StatelessWidget {
             keyPrefix: 'balance-carousel-wave-animation-enabled',
           ),
         ),
+        _TunerSlider(
+          key: const ValueKey<String>('balance-carousel-wave-speed'),
+          label: 'Hullám animáció sebessége',
+          valueLabel:
+              '${settings.balanceCarouselWaveSpeedMultiplier.toStringAsFixed(2).replaceAll('.', ',')}×',
+          min: balanceCarouselWaveMinimumSpeedMultiplier,
+          max: balanceCarouselWaveMaximumSpeedMultiplier,
+          divisions: 55,
+          value: settings.balanceCarouselWaveSpeedMultiplier,
+          onChanged: controller.setBalanceCarouselWaveSpeedMultiplier,
+        ),
         const Padding(
           padding: EdgeInsets.only(top: 12),
           child: Text('BALANCE CONTENT CARD'),

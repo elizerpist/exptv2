@@ -393,7 +393,7 @@ final class _CalendarTile extends StatelessWidget {
   );
 }
 
-/// A 28px visual control inside the required 44px semantic hit target.  The
+/// A quiet 21px information control inside the required 44px semantic hit target. The
 /// compact circle keeps explanation access beside a title without allocating a
 /// persistent explanatory paragraph below it.
 final class _MoversInfoButton extends StatelessWidget {
@@ -419,22 +419,23 @@ final class _MoversInfoButton extends StatelessWidget {
                 color: Colors.white.withValues(alpha: .78),
                 border: Border.all(
                   color: BalanceCategoryMoversVisualTokens.purple.withValues(
-                    alpha: .55,
+                    alpha: .70,
                   ),
                 ),
                 shape: BoxShape.circle,
               ),
               child: const SizedBox(
-                width: 28,
-                height: 28,
+                key: ValueKey<String>('balance-category-movers-info-visual'),
+                width: 21,
+                height: 21,
                 child: Center(
                   child: Text(
-                    '?',
+                    'i',
                     style: TextStyle(
                       color: BalanceCategoryMoversVisualTokens.purple,
-                      fontSize: 14,
+                      fontSize: 12,
                       height: 1,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),

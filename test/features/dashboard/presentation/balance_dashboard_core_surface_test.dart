@@ -973,6 +973,16 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       final animatedLater = phase('top-category');
       expect(animatedLater, isNot(before));
+      final visibleMotionEvent = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) => entry.stage == 'BALANCE_WAVE|VISIBLE_MOTION_SAMPLE',
+      );
+      expect(visibleMotionEvent.scope, contains('resolvedLocalPhase='));
+      expect(visibleMotionEvent.scope, contains('visibleWavePeakToPeakPx='));
+      expect(
+        visibleMotionEvent.scope,
+        contains('visibleWaveDeltaFromPreviousSamplePx='),
+      );
+      expect(visibleMotionEvent.scope, contains('effectiveWaveAlpha='));
       FluviDiagnosticLogger.markUserBug('balance_wave');
       final waveMarker = FluviDiagnosticLogger.entries.last;
       expect(waveMarker.scope, contains('issue=balance_wave'));
@@ -1013,6 +1023,36 @@ void main() {
       final resumedLater = phase('top-category');
       expect(resumedLater, isNot(resumedStart));
       expect(phase('top-partner'), closeTo(resumedLater, .001));
+      final phaseBeforeSpeedChange = phase('top-category');
+      final profileGeometryBeforeSpeedChange = _balanceCarouselWaveGeometry(
+        tester,
+        'top-category',
+      );
+      settings.value = settings.value.copyWith(
+        balanceCarouselWaveSpeedMultiplier: 2,
+        revision: 21,
+      );
+      await tester.pump();
+      expect(
+        phase('top-category'),
+        closeTo(phaseBeforeSpeedChange, .001),
+        reason:
+            'A live speed change must retain the current periodic phase rather than restart at zero.',
+      );
+      expect(
+        _balanceCarouselWaveGeometry(tester, 'top-category'),
+        profileGeometryBeforeSpeedChange,
+        reason: 'The speed slider changes temporal rate, not profile identity.',
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(phase('top-category'), isNot(phaseBeforeSpeedChange));
+      final speedEvent = FluviDiagnosticLogger.entries.lastWhere(
+        (entry) => entry.stage == 'BALANCE_WAVE|SPEED_CHANGED',
+      );
+      expect(speedEvent.scope, contains('newMultiplier=2.000'));
+      expect(speedEvent.scope, contains('effectiveDurationMs=3000'));
+      expect(speedEvent.scope, contains('controllerRecreated=false'));
+      expect(speedEvent.scope, contains('discontinuityDetected=false'));
       final categoryGeometry = _balanceCarouselWaveGeometry(
         tester,
         'top-category',

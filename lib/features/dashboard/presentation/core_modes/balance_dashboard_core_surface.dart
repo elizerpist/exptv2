@@ -894,7 +894,7 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
       CenteredCarouselController(initialIndex: 0);
   late final AnimationController _wavePhaseController = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 6),
+    duration: balanceCarouselWaveBaseDuration,
   );
   late final BalanceCarouselWaveRuntimeDiagnostics _waveDiagnostics =
       BalanceCarouselWaveRuntimeDiagnostics(
@@ -903,6 +903,8 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
       );
   late final String _waveMarkerOwner;
   late final Map<String, Object?> Function() _waveMarkerContext;
+  Duration? _appliedWavePeriod;
+  double _appliedWaveSpeed = balanceCarouselWaveDefaultSpeedMultiplier;
   var _waveBuildRevision = 0;
 
   @override
@@ -935,8 +937,33 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
     final shouldAnimate =
         widget.presentationSettings.balanceCarouselWaveAnimationEnabled &&
         !reducedMotion;
+    final requestedSpeed =
+        widget.presentationSettings.balanceCarouselWaveSpeedMultiplier;
+    final requestedPeriod = balanceCarouselWaveEffectiveDuration(
+      requestedSpeed,
+    );
     if (shouldAnimate) {
-      if (!_wavePhaseController.isAnimating) _wavePhaseController.repeat();
+      final requiresNewRate = _appliedWavePeriod != requestedPeriod;
+      if (!_wavePhaseController.isAnimating || requiresNewRate) {
+        final phaseBefore = _wavePhaseController.value;
+        // AnimationController.repeat(period:) begins the new periodic rate at
+        // its current value. The controller, profile identities and local
+        // offsets remain stable, so speed changes cannot reset the silhouette.
+        _wavePhaseController.repeat(period: requestedPeriod);
+        final phaseAfter = _wavePhaseController.value;
+        if (_appliedWavePeriod != null && requiresNewRate) {
+          _waveDiagnostics.speedChanged(
+            oldMultiplier: _appliedWaveSpeed,
+            newMultiplier: requestedSpeed,
+            phaseBefore: phaseBefore,
+            phaseAfter: phaseAfter,
+            effectiveDuration: requestedPeriod,
+            controllerRecreated: false,
+          );
+        }
+        _appliedWavePeriod = requestedPeriod;
+        _appliedWaveSpeed = requestedSpeed;
+      }
     } else {
       _wavePhaseController.stop();
       // Phase zero is the authored, reference-locked static wave. Returning
@@ -953,6 +980,8 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
         waveOpacity: widget.presentationSettings.balanceCarouselWaveOpacity,
         backgroundOpacity:
             widget.presentationSettings.balanceCarouselBackgroundOpacity,
+        speedMultiplier: requestedSpeed,
+        effectiveDuration: requestedPeriod,
       );
     } else {
       _waveDiagnostics.settingsChanged(
@@ -964,6 +993,8 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
         backgroundOpacity:
             widget.presentationSettings.balanceCarouselBackgroundOpacity,
         borderOpacity: widget.presentationSettings.balanceCarouselBorderOpacity,
+        speedMultiplier: requestedSpeed,
+        effectiveDuration: requestedPeriod,
       );
     }
   }
@@ -1199,6 +1230,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
                       accentColor: accent.color,
                       profile: waveProfile,
                       opacity: paint.waveOpacity,
+                      finalTintOpacity: paint.tintOpacity,
                       diagnostics: waveDiagnostics,
                     ),
                   ),
@@ -1313,8 +1345,12 @@ final class _BalanceCarouselReferenceVisualSpec {
       selectedOutlineOpacity: .58,
       normalOutlineWidth: 1,
       selectedOutlineWidth: 1.35,
-      normalWaveOpacity: .095,
-      selectedWaveOpacity: .15,
+      // Field evidence showed the former .095/.15 fill alphas were too close
+      // to the white/tinted card surface to reveal the moving edge. These
+      // remain translucent, but make the materially moving 4–8px silhouette
+      // perceptible at the actual 79px center-card height.
+      normalWaveOpacity: .13,
+      selectedWaveOpacity: .20,
     );
   }
 
@@ -1568,6 +1604,7 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
   _BalanceCarouselSoftWavePainter({
     required this.accentColor,
     required this.opacity,
+    required this.finalTintOpacity,
     required this.profile,
     required Animation<double>? phaseClock,
     required this.staticPhase,
@@ -1577,12 +1614,14 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
 
   final Color accentColor;
   final double opacity;
+  final double finalTintOpacity;
   final BalanceCarouselWaveProfile profile;
   final Animation<double>? _phaseClock;
   final double staticPhase;
   final BalanceCarouselWaveRuntimeDiagnostics diagnostics;
   final Path _path = Path();
   final Paint _paint = Paint()..style = PaintingStyle.fill;
+  var _paintRevision = 0;
 
   /// Exposed to focused presentation tests: the live geometry is identity
   /// based and periodic, never selected-position based.
@@ -1596,39 +1635,26 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    _paintRevision += 1;
     final waveGeometry = geometry;
-    final points = waveGeometry.normalizedControlPoints;
-    final path = _path
-      ..reset()
-      ..moveTo(size.width * points[0], size.height * points[1])
-      ..cubicTo(
-        size.width * points[2],
-        size.height * points[3],
-        size.width * points[4],
-        size.height * points[5],
-        size.width * points[6],
-        size.height * points[7],
-      )
-      ..cubicTo(
-        size.width * points[8],
-        size.height * points[9],
-        size.width * points[10],
-        size.height * points[11],
-        size.width * points[12],
-        size.height * points[13],
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
-      ..close();
+    final path = _path;
+    BalanceCarouselWaveMotion.writeFilledPath(
+      path: path,
+      geometry: waveGeometry,
+      size: size,
+    );
     canvas.drawPath(
       path,
       _paint..color = accentColor.withValues(alpha: opacity),
     );
     diagnostics.onPaint(
       profile: profile,
-      phase: phase,
+      globalPhase: phase,
       paintBounds: size,
       geometry: waveGeometry,
+      effectiveWaveAlpha: opacity,
+      finalTintAlpha: finalTintOpacity,
+      painterRevision: _paintRevision,
     );
   }
 
@@ -1636,6 +1662,7 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
   bool shouldRepaint(covariant _BalanceCarouselSoftWavePainter oldDelegate) =>
       oldDelegate.accentColor != accentColor ||
       oldDelegate.opacity != opacity ||
+      oldDelegate.finalTintOpacity != finalTintOpacity ||
       oldDelegate.profile != profile ||
       oldDelegate._phaseClock != _phaseClock ||
       oldDelegate.staticPhase != staticPhase ||
@@ -1653,6 +1680,7 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
     required this.accentColor,
     required this.profile,
     required this.opacity,
+    required this.finalTintOpacity,
     required this.diagnostics,
   });
 
@@ -1662,6 +1690,7 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
   final Color accentColor;
   final BalanceCarouselWaveProfile profile;
   final double opacity;
+  final double finalTintOpacity;
   final BalanceCarouselWaveRuntimeDiagnostics diagnostics;
 
   @override
@@ -1671,6 +1700,7 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
       painter: _BalanceCarouselSoftWavePainter(
         accentColor: accentColor,
         opacity: opacity,
+        finalTintOpacity: finalTintOpacity,
         profile: profile,
         phaseClock: animated ? phase : null,
         staticPhase: 0,

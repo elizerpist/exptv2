@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_carousel_wave_motion.dart';
@@ -157,6 +159,33 @@ void main() {
             }
           }
         }
+      },
+    );
+
+    test(
+      'WV-RED: the actual card-sized painted boundary moves materially between distant phases',
+      () {
+        final profile = BalanceCarouselWaveMotion.profileForCardId('cashflow');
+        final early = BalanceCarouselWaveMotion.visibleBoundaryFor(
+          profile: profile,
+          globalPhase: .02,
+          size: const Size(137.6, 79.4),
+        );
+        final late = BalanceCarouselWaveMotion.visibleBoundaryFor(
+          profile: profile,
+          globalPhase: .75,
+          size: const Size(137.6, 79.4),
+        );
+
+        expect(early.localPhase, isNot(late.localPhase));
+        expect(early.boundaryHash, isNot(late.boundaryHash));
+        expect(
+          early.maxVerticalDeltaTo(late),
+          greaterThanOrEqualTo(3),
+          reason:
+              'A changing normalized digest is insufficient: the actual '
+              'visible Canvas edge must move by several logical pixels.',
+        );
       },
     );
   });
