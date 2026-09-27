@@ -18,6 +18,7 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dar
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_category_movers_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
@@ -398,6 +399,81 @@ void main() {
   );
 
   testWidgets(
+    'MOVERS-CORE-COMPACT: the real inherited lower envelope keeps both local pages overflow-free',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      addTearDown(linked.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(
+                metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                  const Size(412, 892),
+                ),
+              ),
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      carousel.controller.jumpToIndex(8);
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey<String>('balance-primary-card')))
+            .height,
+        lessThan(445),
+        reason:
+            'The preserved lower-card bounds deliberately use local scroll.',
+      );
+      final moversShell = tester.widget<FluviRoundedBox>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('balance-primary-card')),
+          matching: find.byType(FluviRoundedBox),
+        ),
+      );
+      expect(
+        moversShell.borderRadius,
+        BorderRadius.circular(BalanceCategoryMoversVisualTokens.outerRadius),
+        reason:
+            'The reference-locked Movers shell owns the required 22px contour.',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-mover-housing')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-detail-scroll'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'RCR-RED-01: every Balance mini card uses the reference-locked shell, lower wave, and top-right tile grammar',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(412, 892));
@@ -734,9 +810,8 @@ void main() {
       expect(updatedContentBorder.top.width, initialContentBorder.top.width);
       expect(
         updatedContentBorder.top.color.a,
-        initialContentBorder.top.color.a,
-        reason:
-            'The stored colored-border opacity must not affect the neutral baseline.',
+        closeTo(initialContentBorder.top.color.a * .3, .01),
+        reason: 'The independent content-border slider owns its alpha only.',
       );
       expect(tester.getRect(cardFinder), cardRect);
       expect(
@@ -769,10 +844,7 @@ void main() {
       expect(transparentOutline.top.color.a, 0);
       expect(transparentOutline.top.width, initialOutline.top.width);
       expect(_balanceCarouselWaveOpacity(tester, 'top-category'), 0);
-      expect(
-        transparentContentBorder.top.color.a,
-        initialContentBorder.top.color.a,
-      );
+      expect(transparentContentBorder.top.color.a, 0);
       expect(
         transparentContentBorder.top.width,
         initialContentBorder.top.width,
@@ -793,10 +865,7 @@ void main() {
           tester.widget<FluviRoundedBox>(contentShell).border! as Border;
       expect(hiddenOutline.top.color.a, 0);
       expect(hiddenOutline.top.width, initialOutline.top.width);
-      expect(
-        contentAfterCarouselChange.top.color.a,
-        initialContentBorder.top.color.a,
-      );
+      expect(contentAfterCarouselChange.top.color.a, 0);
       expect(
         contentAfterCarouselChange.top.width,
         initialContentBorder.top.width,
@@ -1047,7 +1116,29 @@ void main() {
       await tester.pump();
       final neutral =
           tester.widget<FluviRoundedBox>(contentShell).border! as Border;
-      expect(neutral, baseline);
+      expect(neutral.top.width, baseline.top.width);
+      expect(neutral.top.color, FluviVisualTokens.border);
+
+      tester
+          .widget<CenteredCarousel<BalanceCarouselCard>>(
+            find.byType(CenteredCarousel<BalanceCarouselCard>),
+          )
+          .controller
+          .jumpToIndex(8);
+      settings.value = settings.value.copyWith(
+        balanceContentCardColoredBorderEnabled: true,
+        balanceContentCardBorderOpacity: .5,
+        revision: 5,
+      );
+      await tester.pumpAndSettle();
+      final moverBorder =
+          tester.widget<FluviRoundedBox>(contentShell).border! as Border;
+      expect(
+        moverBorder.top.color,
+        BalanceCategoryMoversVisualTokens.purpleLight.withValues(alpha: .5),
+        reason:
+            'The reference-locked Movers card owns its documented lavender border family.',
+      );
     },
   );
 
@@ -2406,7 +2497,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-FIXED-CAROUSEL RED: fixed geometry locks baseline outer edges and matches the Summary gap',
+    'BALANCE-FIXED-CAROUSEL RED: fixed geometry locks baseline outer edges and preserves the standard rail gap after body reordering',
     (tester) async {
       final balance = ValueNotifier<DashboardBalancePresentation?>(
         _balance().copyWith(history: _history()),
@@ -2452,9 +2543,9 @@ void main() {
       );
       final legacyCardWidth = viewport.width / 3 * .82 * 1.30;
       final legacyOuterHalfDistance = legacyCardWidth * (1 + .78 / 2);
-      final verticalGap =
-          modePresentation.geometry.subheaderOneBounds.top -
-          modePresentation.geometry.summaryBounds.bottom;
+      final standardRailGap =
+          modePresentation.geometry.zone2Bounds.top -
+          modePresentation.geometry.subheaderOneBounds.bottom;
 
       settings.setTimeLabels(BalanceHeaderChartTimeLabels.visible);
       await tester.pump();
@@ -2478,8 +2569,8 @@ void main() {
       expect(selected.width, greaterThan(legacyCardWidth));
       expect(fixed.spec.itemExtent, closeTo(selected.width, .01));
       expect(fixed.spec.visibleItemCount, 3);
-      expect(selected.left - left.right, closeTo(verticalGap, 1));
-      expect(right.left - selected.right, closeTo(verticalGap, 1));
+      expect(selected.left - left.right, closeTo(standardRailGap, 1));
+      expect(right.left - selected.right, closeTo(standardRailGap, 1));
       expect(
         left.left,
         closeTo(selected.center.dx - legacyOuterHalfDistance, 1),
@@ -2528,7 +2619,7 @@ void main() {
   );
 
   testWidgets(
-    'BALANCE-FIXED-CAROUSEL: reference, narrow and wide production metrics retain the edge and gap contract',
+    'BALANCE-FIXED-CAROUSEL: reference, narrow and wide production metrics retain the edge and standard-gap contract',
     (tester) async {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       for (final viewport in <Size>[
@@ -2575,12 +2666,12 @@ void main() {
             .82 *
             1.30;
         final legacyOuterHalfDistance = legacyWidth * (1 + .78 / 2);
-        final gap =
-            mode.geometry.subheaderOneBounds.top -
-            mode.geometry.summaryBounds.bottom;
+        final standardRailGap =
+            mode.geometry.zone2Bounds.top -
+            mode.geometry.subheaderOneBounds.bottom;
         expect(selected.width, greaterThan(legacyWidth));
-        expect(selected.left - left.right, closeTo(gap, 1));
-        expect(right.left - selected.right, closeTo(gap, 1));
+        expect(selected.left - left.right, closeTo(standardRailGap, 1));
+        expect(right.left - selected.right, closeTo(standardRailGap, 1));
         expect(
           left.left,
           closeTo(selected.center.dx - legacyOuterHalfDistance, 1),

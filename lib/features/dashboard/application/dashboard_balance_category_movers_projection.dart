@@ -94,7 +94,15 @@ final class DashboardBalanceCategoryMoversPresentation {
     required this.currentWindow,
     required this.referenceWindow,
     required List<DashboardBalanceCategoryMover> movers,
+    List<DashboardBalanceCategoryMover>? topDecreases,
+    List<DashboardBalanceCategoryMover>? topIncreases,
   }) : movers = List<DashboardBalanceCategoryMover>.unmodifiable(movers),
+       topDecreases = List<DashboardBalanceCategoryMover>.unmodifiable(
+         topDecreases ?? movers.where((mover) => mover.deltaMinor < 0),
+       ),
+       topIncreases = List<DashboardBalanceCategoryMover>.unmodifiable(
+         topIncreases ?? movers.where((mover) => mover.deltaMinor > 0),
+       ),
        presentationId = Object.hashAll(<Object?>[
          identity,
          timeScope.canonicalKey,
@@ -105,6 +113,12 @@ final class DashboardBalanceCategoryMoversPresentation {
          for (final mover in movers)
            '${mover.id}:${mover.currentMinor}:${mover.referenceMinor}:'
                '${mover.trend.map((point) => '${point.bucket}:${point.currentMinor}:${point.referenceMinor}').join(',')}',
+         for (final mover
+             in topDecreases ?? movers.where((mover) => mover.deltaMinor < 0))
+           'decrease:${mover.id}:${mover.currentMinor}:${mover.referenceMinor}',
+         for (final mover
+             in topIncreases ?? movers.where((mover) => mover.deltaMinor > 0))
+           'increase:${mover.id}:${mover.currentMinor}:${mover.referenceMinor}',
        ]);
 
   final DashboardBalancePrimaryIdentity identity;
@@ -113,7 +127,15 @@ final class DashboardBalanceCategoryMoversPresentation {
   final LocalDate logicalAsOfDate;
   final DashboardBalanceCategoryComparisonWindow currentWindow;
   final DashboardBalanceCategoryComparisonWindow referenceWindow;
+
+  /// The existing global top-five impact order used by the mini-carousel.
   final List<DashboardBalanceCategoryMover> movers;
+
+  /// Independently bounded, impact-sorted decreases for the detail selector.
+  final List<DashboardBalanceCategoryMover> topDecreases;
+
+  /// Independently bounded, impact-sorted increases for the detail selector.
+  final List<DashboardBalanceCategoryMover> topIncreases;
   final int presentationId;
 
   bool get isNoChange => movers.isEmpty;
@@ -147,12 +169,16 @@ abstract final class DashboardBalanceCategoryMoversProjection {
       );
       accumulator.observeMetadata(entry);
       final amount = entry.amountMinor.abs();
-      if (current) accumulator.currentMinor += amount;
-      if (reference) accumulator.referenceMinor += amount;
+      final date = _dateForEpochDay(entry.bookedLocalEpochDay);
+      final bucket = _bucketFor(scope: timeScope, date: date);
+      if (current) accumulator.observeCurrent(amount: amount, bucket: bucket);
+      if (reference) {
+        accumulator.observeReference(amount: amount, bucket: bucket);
+      }
     }
-    // First rank every category by the existing comparison rule. Detailed
-    // trends are deliberately built only for the bounded rendered Top 5, so a
-    // high-cardinality ledger never triggers a category-count × ledger scan.
+    // Rank once from the selected prepared membership. The bucket totals are
+    // collected in the same pass, so the two bounded sign-specific lists do
+    // not cause a category-count × ledger scan.
     final ranked =
         accumulators.values
             .where((item) => item.currentMinor != item.referenceMinor)
@@ -165,28 +191,32 @@ abstract final class DashboardBalanceCategoryMoversProjection {
             final current = right.currentMinor.compareTo(left.currentMinor);
             return current != 0 ? current : left.id.compareTo(right.id);
           });
-    final movers = List<DashboardBalanceCategoryMover>.unmodifiable(
-      ranked
-          .take(5)
-          .map(
-            (item) => DashboardBalanceCategoryMover(
-              id: item.id,
-              label: item.label,
-              categoryColorId: item.categoryColorId,
-              categoryIconId: item.categoryIconId,
-              currentMinor: item.currentMinor,
-              referenceMinor: item.referenceMinor,
-              trend: _trendFor(
-                item.id,
-                timeScope,
-                windows.current,
-                windows.reference,
-                entries,
-              ),
+    final decreases = ranked
+        .where((item) => item.deltaMinor < 0)
+        .take(5)
+        .toList(growable: false);
+    final increases = ranked
+        .where((item) => item.deltaMinor > 0)
+        .take(5)
+        .toList(growable: false);
+    final materialized = <String, DashboardBalanceCategoryMover>{};
+    DashboardBalanceCategoryMover moverFor(_CategoryAccumulator item) =>
+        materialized.putIfAbsent(
+          item.id,
+          () => DashboardBalanceCategoryMover(
+            id: item.id,
+            label: item.label,
+            categoryColorId: item.categoryColorId,
+            categoryIconId: item.categoryIconId,
+            currentMinor: item.currentMinor,
+            referenceMinor: item.referenceMinor,
+            trend: _trendForAccumulator(
+              accumulator: item,
+              scope: timeScope,
+              current: windows.current,
             ),
-          )
-          .toList(growable: false),
-    );
+          ),
+        );
     return DashboardBalanceCategoryMoversPresentation(
       identity: identity,
       timeScope: timeScope,
@@ -194,7 +224,9 @@ abstract final class DashboardBalanceCategoryMoversProjection {
       logicalAsOfDate: logicalAsOfDate,
       currentWindow: windows.current,
       referenceWindow: windows.reference,
-      movers: movers,
+      movers: ranked.take(5).map(moverFor).toList(growable: false),
+      topDecreases: decreases.map(moverFor).toList(growable: false),
+      topIncreases: increases.map(moverFor).toList(growable: false),
     );
   }
 
@@ -314,15 +346,11 @@ abstract final class DashboardBalanceCategoryMoversProjection {
     );
   }
 
-  static List<DashboardBalanceCategoryMoverTrendPoint> _trendFor(
-    String categoryId,
-    LedgerTimeScope scope,
-    DashboardBalanceCategoryComparisonWindow current,
-    DashboardBalanceCategoryComparisonWindow reference,
-    Iterable<DashboardLedgerEntry> entries,
-  ) {
-    final currentTotals = _totalsForCategory(entries, categoryId, current);
-    final referenceTotals = _totalsForCategory(entries, categoryId, reference);
+  static List<DashboardBalanceCategoryMoverTrendPoint> _trendForAccumulator({
+    required _CategoryAccumulator accumulator,
+    required LedgerTimeScope scope,
+    required DashboardBalanceCategoryComparisonWindow current,
+  }) {
     final bucketCount = switch (scope) {
       AllTimeScope() || YearScope() => _monthCount(current),
       MonthScope() =>
@@ -334,38 +362,21 @@ abstract final class DashboardBalanceCategoryMoversProjection {
         bucketCount,
         (index) => DashboardBalanceCategoryMoverTrendPoint(
           bucket: index + 1,
-          currentMinor: currentTotals[index + 1] ?? 0,
-          referenceMinor: referenceTotals[index + 1] ?? 0,
+          currentMinor: accumulator.currentBuckets[index + 1] ?? 0,
+          referenceMinor: accumulator.referenceBuckets[index + 1] ?? 0,
         ),
       ),
     );
   }
 
-  static Map<int, int> _totalsForCategory(
-    Iterable<DashboardLedgerEntry> entries,
-    String categoryId,
-    DashboardBalanceCategoryComparisonWindow window,
-  ) {
-    final totals = <int, int>{};
-    for (final entry in entries) {
-      if (entry.categoryId != categoryId ||
-          !window.containsEpochDay(entry.bookedLocalEpochDay)) {
-        continue;
-      }
-      final date = _dateForEpochDay(entry.bookedLocalEpochDay);
-      final bucket = switch (_monthCount(window)) {
-        > 1 => date.month,
-        1 when window.startInclusive != window.endInclusive => date.day,
-        _ => 1,
-      };
-      totals.update(
-        bucket,
-        (value) => value + entry.amountMinor.abs(),
-        ifAbsent: () => entry.amountMinor.abs(),
-      );
-    }
-    return totals;
-  }
+  static int _bucketFor({
+    required LedgerTimeScope scope,
+    required LocalDate date,
+  }) => switch (scope) {
+    AllTimeScope() || YearScope() => date.month,
+    MonthScope() => date.day,
+    DayScope() => 1,
+  };
 
   static int _monthCount(DashboardBalanceCategoryComparisonWindow window) =>
       (window.endInclusive.year - window.startInclusive.year) * 12 +
@@ -391,6 +402,10 @@ final class _CategoryAccumulator {
   DashboardLedgerEntry representative;
   int currentMinor = 0;
   int referenceMinor = 0;
+  final Map<int, int> currentBuckets = <int, int>{};
+  final Map<int, int> referenceBuckets = <int, int>{};
+
+  int get deltaMinor => currentMinor - referenceMinor;
 
   String get label {
     final value = representative.categoryDisplayName?.trim();
@@ -399,6 +414,24 @@ final class _CategoryAccumulator {
 
   String get categoryColorId => representative.categoryColorId ?? 'fallback';
   String get categoryIconId => representative.categoryIconId ?? 'fallback';
+
+  void observeCurrent({required int amount, required int bucket}) {
+    currentMinor += amount;
+    currentBuckets.update(
+      bucket,
+      (value) => value + amount,
+      ifAbsent: () => amount,
+    );
+  }
+
+  void observeReference({required int amount, required int bucket}) {
+    referenceMinor += amount;
+    referenceBuckets.update(
+      bucket,
+      (value) => value + amount,
+      ifAbsent: () => amount,
+    );
+  }
 
   void observeMetadata(DashboardLedgerEntry entry) {
     if (entry.id.compareTo(representative.id) < 0) representative = entry;

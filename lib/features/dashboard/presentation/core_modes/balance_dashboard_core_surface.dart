@@ -23,6 +23,7 @@ import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
 import 'balance_category_movers_presentation.dart';
+import 'balance_category_movers_visual_tokens.dart';
 import 'balance_linked_detail_card.dart';
 import 'balance_cashflow_stability_card.dart';
 import 'balance_momentum_card.dart';
@@ -307,6 +308,16 @@ final class _BalanceDashboardCoreSurfaceState
   Widget build(BuildContext context) {
     final geometry = widget.presentation.geometry;
     final local = _BalanceLocalGeometry.resolve(geometry);
+    // The carousel's accepted dimensions were historically solved from the
+    // standard gap below an upstream Summary. The new default body order puts
+    // mode content before Summary, so that positional relationship is no
+    // longer meaningful. Keep user-selected upstream orders intact, while
+    // using the same scaled standard-gap reference for downstream Summary
+    // orders. This decouples the rail's visual geometry from body ordering.
+    final summaryToUpperGap =
+        geometry.summaryBounds.bottom <= local.upperBounds.top
+        ? local.upperBounds.top - geometry.summaryBounds.bottom
+        : geometry.zone2Bounds.top - geometry.subheaderOneBounds.bottom;
     return KeyedSubtree(
       key: const ValueKey('dashboard-core-mode-balance'),
       child: Stack(
@@ -333,8 +344,7 @@ final class _BalanceDashboardCoreSurfaceState
             content: _BalanceUpperCarouselHost(
               presentation: widget.balanceLinkedPresentation,
               presentationSettings: widget.presentationSettings,
-              summaryToUpperGap:
-                  local.upperBounds.top - geometry.summaryBounds.bottom,
+              summaryToUpperGap: summaryToUpperGap,
               onMotionInterrupted: widget.onCarouselMotionInterrupted,
               onCardSelected: (card) {
                 final selected = switch (card.kind) {
@@ -459,6 +469,15 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
           bounds: bounds,
           fillParent: true,
           semanticKey: const ValueKey<String>('balance-primary-card'),
+          // Category Movers is a reference-locked two-page surface. Its
+          // 22px outer contour must remain stable even when the global
+          // content-card roundness tuner is set to another family value.
+          borderRadiusOverride:
+              selectedTopic == BalanceLinkedDetailTopic.categoryMovers
+              ? BorderRadius.circular(
+                  BalanceCategoryMoversVisualTokens.outerRadius,
+                )
+              : null,
           borderOverride: _balanceContentBorder(
             context: context,
             settings: settings,
@@ -481,6 +500,10 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
     bounds: bounds,
     fillParent: true,
     semanticKey: const ValueKey<String>('balance-primary-card-placeholder'),
+    borderRadiusOverride:
+        selectedTopic == BalanceLinkedDetailTopic.categoryMovers
+        ? BorderRadius.circular(BalanceCategoryMoversVisualTokens.outerRadius)
+        : null,
     borderOverride: _balanceContentBorder(
       context: context,
       settings: settings,
@@ -501,7 +524,9 @@ BoxBorder? _balanceContentBorder({
   final base = configured is Border
       ? configured
       : DashboardBorderProfile.searchPillSourceBorder;
-  final accent = _BalanceCarouselReferenceAccent.resolve(context, card).color;
+  final accent = card.kind == BalanceCarouselCardKind.categoryMovers
+      ? BalanceCategoryMoversVisualTokens.purpleLight
+      : _BalanceCarouselReferenceAccent.resolve(context, card).color;
   BorderSide colored(BorderSide side) => side.copyWith(
     color: accent.withValues(alpha: settings.balanceContentCardBorderOpacity),
   );
@@ -836,7 +861,7 @@ final class _BalanceFixedCarouselGeometry {
     assert(cardWidth >= legacyCardWidth);
     assert(inwardVisualOffset >= 0);
     assert(
-      inwardVisualOffset <= cardWidth * (1 - _neighborScale) / 2,
+      inwardVisualOffset <= cardWidth * (1 - _neighborScale) / 2 + .001,
       'The visual side-card shift must stay inside the interactive item slot.',
     );
     return _BalanceFixedCarouselGeometry(

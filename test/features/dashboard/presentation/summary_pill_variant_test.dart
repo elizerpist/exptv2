@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_body_order.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 
 void main() {
@@ -58,9 +60,47 @@ void main() {
     );
     expect(
       DashboardBodyOrder.defaultOrder().components,
-      DashboardBodyComponent.values,
+      <DashboardBodyComponent>[
+        DashboardBodyComponent.modeContent,
+        DashboardBodyComponent.direction,
+        DashboardBodyComponent.summary,
+      ],
     );
   });
+
+  test(
+    'MOVERS-DEFAULTS-RED: dashboard defaults seed sectioned Summary without separators and flat straight navigation',
+    () {
+      final shell = DashboardShellPresentationController();
+      final summary = DashboardSummaryPresentationController();
+      addTearDown(shell.dispose);
+      addTearDown(summary.dispose);
+
+      expect(summary.value.showSeparators, isFalse);
+      expect(
+        shell.value.bottomNavEdgeShape,
+        DashboardBottomNavEdgeShape.straight,
+      );
+      expect(
+        shell.value.bottomNavLayoutStyle,
+        DashboardBottomNavLayoutStyle.containedFlat,
+      );
+
+      summary.setSeparatorsVisible(true);
+      shell
+        ..selectBottomNavEdgeShape(DashboardBottomNavEdgeShape.rounded)
+        ..selectBottomNavLayoutStyle(DashboardBottomNavLayoutStyle.raisedFab);
+      expect(summary.value.showSeparators, isTrue);
+      expect(
+        shell.value.bottomNavEdgeShape,
+        DashboardBottomNavEdgeShape.rounded,
+      );
+      expect(
+        shell.value.bottomNavLayoutStyle,
+        DashboardBottomNavLayoutStyle.raisedFab,
+      );
+    },
+  );
 
   testWidgets(
     'the existing Header menu selects only the active SummaryPill variants',
@@ -81,6 +121,8 @@ void main() {
           ),
         ),
       );
+      await tester.tap(find.text('Időnavigáció / SummaryPill').first);
+      await tester.pump();
 
       for (final variant in SummaryPillVariant.values) {
         expect(
@@ -126,6 +168,8 @@ void main() {
           ),
         ),
       );
+      await tester.tap(find.text('Fejléc sorrend').first);
+      await tester.pump();
 
       for (final component in DashboardBodyComponent.values) {
         expect(
@@ -136,7 +180,7 @@ void main() {
         );
       }
       await tester.tap(
-        find.byKey(const ValueKey<String>('dashboard-body-order-up-2')),
+        find.byKey(const ValueKey<String>('dashboard-body-order-down-0')),
       );
       await tester.pump();
       await tester.tap(

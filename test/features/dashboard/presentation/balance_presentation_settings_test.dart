@@ -25,7 +25,7 @@ void main() {
       expect(controller.value.balanceCarouselWaveOpacity, 1);
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
@@ -135,7 +135,7 @@ void main() {
       addTearDown(controller.dispose);
 
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
-      expect(controller.value.balanceContentCardColoredBorderEnabled, isFalse);
+      expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
       expect(controller.value.balanceCarouselBorderOpacity, 1);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
 

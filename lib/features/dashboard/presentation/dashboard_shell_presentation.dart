@@ -149,9 +149,9 @@ final class DashboardFlatBottomNavStretchLayout {
 @immutable
 final class DashboardShellPresentationSettings {
   const DashboardShellPresentationSettings({
-    this.bottomNavEdgeShape = DashboardBottomNavEdgeShape.rounded,
+    this.bottomNavEdgeShape = DashboardBottomNavEdgeShape.straight,
     this.bottomNavTopBorder = DashboardBottomNavTopBorder.off,
-    this.bottomNavLayoutStyle = DashboardBottomNavLayoutStyle.raisedFab,
+    this.bottomNavLayoutStyle = DashboardBottomNavLayoutStyle.containedFlat,
     this.flatBottomNavBodyStretch = DashboardFlatBottomNavBodyStretch.off,
   });
 

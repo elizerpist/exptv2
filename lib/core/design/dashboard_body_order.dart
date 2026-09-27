@@ -34,7 +34,11 @@ final class DashboardBodyOrder {
   }
 
   factory DashboardBodyOrder.defaultOrder() =>
-      DashboardBodyOrder(DashboardBodyComponent.values);
+      DashboardBodyOrder(const <DashboardBodyComponent>[
+        DashboardBodyComponent.modeContent,
+        DashboardBodyComponent.direction,
+        DashboardBodyComponent.summary,
+      ]);
 
   final UnmodifiableListView<DashboardBodyComponent> components;
 

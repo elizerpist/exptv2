@@ -28,7 +28,7 @@ final class DashboardSummaryPresentationSettings {
   });
 
   const DashboardSummaryPresentationSettings.defaults()
-    : showSeparators = true,
+    : showSeparators = false,
       temporalFlingPresentation = SummaryTemporalFlingPresentation.current,
       segmentedOrientation = SummarySegmentedOrientation.mirrored;
 

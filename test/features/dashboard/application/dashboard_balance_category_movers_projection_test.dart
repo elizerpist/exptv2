@@ -194,6 +194,65 @@ void main() {
       ]);
     },
   );
+
+  test(
+    'MOVERS-BIDIRECTIONAL-RED: one prepared projection retains truthful bounded top fives for both signs',
+    () {
+      final result = movers(
+        scope: const DayScope(LocalDate(year: 2026, month: 2, day: 2)),
+        asOf: const LocalDate(year: 2026, month: 2, day: 3),
+        entries: <DashboardLedgerEntry>[
+          for (var index = 0; index < 6; index += 1) ...<DashboardLedgerEntry>[
+            _entry(
+              'decrease-before-$index',
+              'decrease-$index',
+              (index + 1) * 1000,
+              2026,
+              2,
+              1,
+            ),
+            _entry('decrease-now-$index', 'decrease-$index', 10, 2026, 2, 2),
+            _entry('increase-before-$index', 'increase-$index', 10, 2026, 2, 1),
+            _entry(
+              'increase-now-$index',
+              'increase-$index',
+              (index + 1) * 100,
+              2026,
+              2,
+              2,
+            ),
+          ],
+        ],
+      );
+
+      expect(result.movers, hasLength(5));
+      expect(result.topDecreases, hasLength(5));
+      expect(result.topIncreases, hasLength(5));
+      expect(result.topDecreases.map((mover) => mover.id), <String>[
+        'decrease-5',
+        'decrease-4',
+        'decrease-3',
+        'decrease-2',
+        'decrease-1',
+      ]);
+      expect(result.topIncreases.map((mover) => mover.id), <String>[
+        'increase-5',
+        'increase-4',
+        'increase-3',
+        'increase-2',
+        'increase-1',
+      ]);
+      expect(
+        result.topDecreases.every((mover) => mover.deltaMinor < 0),
+        isTrue,
+      );
+      expect(
+        result.topIncreases.every((mover) => mover.deltaMinor > 0),
+        isTrue,
+      );
+      expect(result.movers.first.deltaMinor, lessThan(0));
+    },
+  );
 }
 
 DashboardLedgerEntry _entry(

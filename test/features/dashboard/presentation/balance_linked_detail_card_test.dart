@@ -1318,6 +1318,227 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'MOVERS-REFERENCE-RED: the two local pages expose the reference-locked title, controls, three KPIs and cumulative chart',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          height: 520,
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: _movers()),
+        ),
+      );
+
+      expect(find.text('Kategóriaváltozás'), findsOneWidget);
+      expect(
+        find.text(
+          'A kiválasztott időszak költéseinek változása\na megelőző azonos időszakhoz képest.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-direction-decrease'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-direction-increase'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('csökkenés'), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-footer')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'A százalékos változás a kiválasztott időszak és a megelőző azonos időszak költéseinek különbségét mutatja.',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-direction-decrease'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.text('Nincs ebbe az irányba változó kategória'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-direction-increase'),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-mover-housing')),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-kpi-current'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-kpi-percentage'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-kpi-delta')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-cumulative-chart'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-detail-footer'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey<String>('balance-category-movers-back')),
+        ),
+        const Size(44, 44),
+      );
+      expect(find.text('Előző'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'MOVERS-REFERENCE-GOLDEN: both reference-locked pages retain their visual hierarchy',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          width: 378,
+          height: 540,
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: _referenceMovers()),
+        ),
+      );
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers'),
+        ),
+        matchesGoldenFile(
+          '../../../goldens/balance_category_movers_page_one.png',
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-mover-housing')),
+      );
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        matchesGoldenFile(
+          '../../../goldens/balance_category_movers_page_two.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'MOVERS-DAY-CHART: one canonical bucket keeps the cumulative chart frame and horizontal comparison marks',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          width: 378,
+          height: 520,
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: _dayMovers()),
+        ),
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-mover-day-housing'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-cumulative-chart'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        matchesGoldenFile('../../../goldens/balance_category_movers_day.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'MOVERS-STRETCH: the existing taller envelope distributes Page 1 space through rows and keeps the footer at the card bottom',
+    (tester) async {
+      Future<({double rowGap, double rowHeight, Rect footer, Rect body})>
+      measure({required double height, required double extraHeight}) async {
+        await tester.pumpWidget(
+          _host(
+            width: 378,
+            height: height,
+            rankedListExtraHeight: extraHeight,
+            topic: BalanceLinkedDetailTopic.categoryMovers,
+            presentation: _linked(categoryMovers: _referenceMovers()),
+          ),
+        );
+        final first = tester.getRect(
+          find.byKey(const ValueKey<String>('balance-category-mover-housing')),
+        );
+        final second = tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-category-mover-reference-1'),
+          ),
+        );
+        return (
+          rowGap: second.top - first.bottom,
+          rowHeight: first.height,
+          footer: tester.getRect(
+            find.byKey(
+              const ValueKey<String>('balance-category-movers-footer'),
+            ),
+          ),
+          body: tester.getRect(
+            find.byKey(
+              const ValueKey<String>('balance-linked-detail-category-movers'),
+            ),
+          ),
+        );
+      }
+
+      final baseline = await measure(height: 360, extraHeight: 0);
+      final stretched = await measure(height: 520, extraHeight: 100);
+
+      expect(baseline.rowHeight, 46);
+      expect(stretched.rowHeight, baseline.rowHeight);
+      expect(stretched.rowGap, greaterThan(baseline.rowGap));
+      expect(stretched.footer.bottom, closeTo(stretched.body.bottom - 10, .1));
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-mover-reference-4'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 const _identity = DashboardBalancePrimaryIdentity(
@@ -1427,6 +1648,100 @@ DashboardBalanceCategoryMoversPresentation _movers({String id = 'housing'}) =>
               bucket: 1,
               currentMinor: 260000,
               referenceMinor: 120000,
+            ),
+          ],
+        ),
+      ],
+    );
+
+DashboardBalanceCategoryMoversPresentation _referenceMovers() {
+  final decreases = List<DashboardBalanceCategoryMover>.generate(
+    5,
+    (index) => DashboardBalanceCategoryMover(
+      id: index == 0 ? 'housing' : 'reference-$index',
+      label: <String>[
+        'Lakhatás',
+        'Élelmiszer',
+        'Vásárlás',
+        'Előfizetések',
+        'Szórakozás',
+      ][index],
+      categoryColorId: 'color_18',
+      categoryIconId: 'icon_17',
+      currentMinor: <int>[39000000, 8800000, 5100000, 3000000, 2700000][index],
+      referenceMinor: <int>[
+        42000000,
+        10900000,
+        7400000,
+        4260000,
+        3800000,
+      ][index],
+      trend: <DashboardBalanceCategoryMoverTrendPoint>[
+        DashboardBalanceCategoryMoverTrendPoint(
+          bucket: 1,
+          currentMinor: 9000000 - index * 300000,
+          referenceMinor: 11000000 - index * 300000,
+        ),
+        DashboardBalanceCategoryMoverTrendPoint(
+          bucket: 2,
+          currentMinor: 13000000 - index * 300000,
+          referenceMinor: 14500000 - index * 300000,
+        ),
+        DashboardBalanceCategoryMoverTrendPoint(
+          bucket: 3,
+          currentMinor: 17000000 - index * 300000,
+          referenceMinor: 20000000 - index * 300000,
+        ),
+      ],
+    ),
+    growable: false,
+  );
+  return DashboardBalanceCategoryMoversPresentation(
+    identity: _identity,
+    timeScope: const MonthScope(YearMonth(year: 2026, month: 7)),
+    selectedDirection: LedgerDirection.expense,
+    logicalAsOfDate: const LocalDate(year: 2026, month: 8, day: 1),
+    currentWindow: const DashboardBalanceCategoryComparisonWindow(
+      startInclusive: LocalDate(year: 2026, month: 7, day: 1),
+      endInclusive: LocalDate(year: 2026, month: 7, day: 31),
+    ),
+    referenceWindow: const DashboardBalanceCategoryComparisonWindow(
+      startInclusive: LocalDate(year: 2026, month: 6, day: 1),
+      endInclusive: LocalDate(year: 2026, month: 6, day: 30),
+    ),
+    movers: decreases,
+    topDecreases: decreases,
+    topIncreases: const <DashboardBalanceCategoryMover>[],
+  );
+}
+
+DashboardBalanceCategoryMoversPresentation _dayMovers() =>
+    DashboardBalanceCategoryMoversPresentation(
+      identity: _identity,
+      timeScope: const DayScope(LocalDate(year: 2026, month: 9, day: 24)),
+      selectedDirection: LedgerDirection.expense,
+      logicalAsOfDate: const LocalDate(year: 2026, month: 9, day: 24),
+      currentWindow: const DashboardBalanceCategoryComparisonWindow(
+        startInclusive: LocalDate(year: 2026, month: 9, day: 24),
+        endInclusive: LocalDate(year: 2026, month: 9, day: 24),
+      ),
+      referenceWindow: const DashboardBalanceCategoryComparisonWindow(
+        startInclusive: LocalDate(year: 2026, month: 9, day: 23),
+        endInclusive: LocalDate(year: 2026, month: 9, day: 23),
+      ),
+      movers: <DashboardBalanceCategoryMover>[
+        DashboardBalanceCategoryMover(
+          id: 'day-housing',
+          label: 'Lakhatás',
+          categoryColorId: 'color_18',
+          categoryIconId: 'icon_17',
+          currentMinor: 39000000,
+          referenceMinor: 42000000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 24,
+              currentMinor: 39000000,
+              referenceMinor: 42000000,
             ),
           ],
         ),
