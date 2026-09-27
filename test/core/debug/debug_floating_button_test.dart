@@ -195,6 +195,82 @@ void main() {
     },
   );
 
+  testWidgets(
+    'BALANCE-WAVE RED: the existing diagnostic ring can be filtered and copied without unrelated flow events',
+    (tester) async {
+      Map<String, Object?> balanceWaveStatus() => const <String, Object?>{
+        'animationEnabled': true,
+        'reducedMotion': false,
+        'clockRunning': true,
+        'visibleWaveCount': 3,
+        'phase': '0.2500',
+      };
+      FluviDiagnosticLogger.registerUserMarkerContext(
+        'balanceWave.test',
+        balanceWaveStatus,
+      );
+      addTearDown(
+        () => FluviDiagnosticLogger.unregisterUserMarkerContext(
+          'balanceWave.test',
+          balanceWaveStatus,
+        ),
+      );
+      String? clipboardText;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              clipboardText =
+                  (call.arguments as Map<Object?, Object?>)['text'] as String?;
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'BALANCE_WAVE|BOUND'),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'BALANCE_WAVE|FRAME_SUMMARY'),
+      );
+      FluviDiagnosticLogger.log(
+        const FluviDiagnosticEvent(stage: 'MIND_HEATMAP|PAINTED'),
+      );
+      FluviDiagnosticLogger.log(const FluviDiagnosticEvent(stage: 'AVATAR|X'));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('debug-console-log-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Balance Wave').last);
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('[FLOW][BALANCE_WAVE|BOUND]'), findsOneWidget);
+      expect(
+        find.textContaining('[FLOW][BALANCE_WAVE|FRAME_SUMMARY]'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('[FLOW][MIND_HEATMAP|PAINTED]'), findsNothing);
+      expect(find.textContaining('[FLOW][AVATAR|X]'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('debug-console-balance-wave-status')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('animationEnabled: true'), findsOneWidget);
+      expect(find.textContaining('phase: 0.2500'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('debug-console-copy')));
+      await tester.pump();
+      expect(clipboardText, contains('BALANCE_WAVE|BOUND'));
+      expect(clipboardText, isNot(contains('MIND_HEATMAP|PAINTED')));
+      expect(clipboardText, isNot(contains('AVATAR|X')));
+    },
+  );
+
   testWidgets('manual review pauses follow and jump-to-live clears unseen', (
     tester,
   ) async {
@@ -280,6 +356,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('debug-console-mark-bug')));
       await tester.pumpAndSettle();
       expect(find.text('Mind Heatmap'), findsOneWidget);
+      expect(find.text('Balance wave'), findsOneWidget);
       expect(find.text('Other'), findsOneWidget);
       expect(find.text('Mind slider'), findsOneWidget);
 
@@ -289,6 +366,28 @@ void main() {
       final marker = FluviDiagnosticLogger.entries.last;
       expect(marker.stage, 'USER_MARK');
       expect(marker.scope, contains('issue=mind_heatmap'));
+    },
+  );
+
+  testWidgets(
+    'BALANCE-WAVE marker: the dedicated issue is preserved in USER_MARK context',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: Stack(children: [DebugFloatingButton()])),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('debug-floating-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('debug-console-mark-bug')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Balance wave'));
+      await tester.pump();
+
+      final marker = FluviDiagnosticLogger.entries.last;
+      expect(marker.stage, 'USER_MARK');
+      expect(marker.scope, contains('issue=balance_wave'));
     },
   );
 

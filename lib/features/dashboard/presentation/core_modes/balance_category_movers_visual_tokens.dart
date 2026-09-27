@@ -17,6 +17,8 @@ abstract final class BalanceCategoryMoversVisualTokens {
   static const Color negativeSurface = Color(0xFFFFF1F6);
   static const Color positiveSurface = Color(0xFFEFFBF6);
   static const Color unselectedSegmentSurface = Color(0xFFF0F1F6);
+  static const Color transientOverlaySurface = Color(0xFFF1F3F6);
+  static const Color transientOverlayBorder = Color(0xFFDDE2EA);
   static const LinearGradient selectedSegmentGradient = LinearGradient(
     colors: <Color>[purple, Color(0xFF8B5CF6)],
   );

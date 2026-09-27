@@ -70,7 +70,7 @@ final class BalancePresentationSettings {
       balanceCarouselBackgroundOpacity = 1,
       balanceCarouselWaveOpacity = 1,
       balanceCarouselTintedBackgroundEnabled = true,
-      balanceCarouselWaveAnimationEnabled = false,
+      balanceCarouselWaveAnimationEnabled = true,
       balanceContentCardColoredBorderEnabled = true,
       balanceContentCardBorderOpacity = 1,
       revision = 0;

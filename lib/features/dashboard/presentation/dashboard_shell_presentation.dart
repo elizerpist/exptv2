@@ -152,7 +152,8 @@ final class DashboardShellPresentationSettings {
     this.bottomNavEdgeShape = DashboardBottomNavEdgeShape.straight,
     this.bottomNavTopBorder = DashboardBottomNavTopBorder.off,
     this.bottomNavLayoutStyle = DashboardBottomNavLayoutStyle.containedFlat,
-    this.flatBottomNavBodyStretch = DashboardFlatBottomNavBodyStretch.off,
+    this.flatBottomNavBodyStretch =
+        DashboardFlatBottomNavBodyStretch.modeContent,
   });
 
   static const defaults = DashboardShellPresentationSettings();

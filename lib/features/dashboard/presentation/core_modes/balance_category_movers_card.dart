@@ -25,11 +25,18 @@ final class BalanceCategoryMoversCard extends StatefulWidget {
 
 enum _MoversDirection { decrease, increase }
 
+/// Local, transient presentation state for the two-page Movers card.  It is
+/// deliberately independent from Summary scope, prepared data and carousel
+/// selection; opening an explanation or the chart insight never changes any
+/// Dashboard state outside this clipped card.
+enum _CategoryMoverOverlay { none, explanation, metrics }
+
 final class _BalanceCategoryMoversCardState
     extends State<BalanceCategoryMoversCard> {
   String? _selectedCategoryId;
   _MoversDirection? _selectedDirection;
   bool _directionWasChosen = false;
+  _CategoryMoverOverlay _overlay = _CategoryMoverOverlay.none;
 
   @override
   void didUpdateWidget(covariant BalanceCategoryMoversCard oldWidget) {
@@ -43,6 +50,7 @@ final class _BalanceCategoryMoversCardState
     if (selected != null &&
         !_detailMovers(next).any((mover) => mover.id == selected)) {
       _selectedCategoryId = null;
+      _overlay = _CategoryMoverOverlay.none;
     }
     if (!_directionWasChosen && next != null) {
       _selectedDirection = _initialDirection(next);
@@ -72,13 +80,21 @@ final class _BalanceCategoryMoversCardState
               _selectedDirection = direction;
               _directionWasChosen = true;
             }),
-            onSelected: (mover) =>
-                setState(() => _selectedCategoryId = mover.id),
+            onSelected: (mover) => setState(() {
+              _selectedCategoryId = mover.id;
+              _overlay = _CategoryMoverOverlay.none;
+            }),
+            onExplanationToggled: _toggleExplanation,
           )
         : _CategoryMoverTrendDetail(
             presentation: presentation,
             mover: selected,
-            onBack: () => setState(() => _selectedCategoryId = null),
+            onBack: () => setState(() {
+              _selectedCategoryId = null;
+              _overlay = _CategoryMoverOverlay.none;
+            }),
+            onExplanationToggled: _toggleExplanation,
+            onMetricsToggled: _toggleMetrics,
           );
     // The outer DashboardPlaceholderCard owns the white base, shadow and
     // 22px border. Insets keep this decorative layer inside its crisp edge.
@@ -95,11 +111,31 @@ final class _BalanceCategoryMoversCardState
               child: CustomPaint(painter: _MoversTopTintPainter()),
             ),
             page,
+            if (_overlay != _CategoryMoverOverlay.none)
+              _CategoryMoverOverlaySurface(
+                overlay: _overlay,
+                mover: selected,
+                onClose: _closeOverlay,
+              ),
           ],
         ),
       ),
     );
   }
+
+  void _toggleExplanation() => setState(() {
+    _overlay = _overlay == _CategoryMoverOverlay.explanation
+        ? _CategoryMoverOverlay.none
+        : _CategoryMoverOverlay.explanation;
+  });
+
+  void _toggleMetrics() => setState(() {
+    _overlay = _overlay == _CategoryMoverOverlay.metrics
+        ? _CategoryMoverOverlay.none
+        : _CategoryMoverOverlay.metrics;
+  });
+
+  void _closeOverlay() => setState(() => _overlay = _CategoryMoverOverlay.none);
 }
 
 _MoversDirection _initialDirection(
@@ -137,12 +173,14 @@ final class _CategoryMoversOverview extends StatelessWidget {
     required this.direction,
     required this.onDirectionSelected,
     required this.onSelected,
+    required this.onExplanationToggled,
   });
 
   final DashboardBalanceCategoryMoversPresentation presentation;
   final _MoversDirection direction;
   final ValueChanged<_MoversDirection> onDirectionSelected;
   final ValueChanged<DashboardBalanceCategoryMover> onSelected;
+  final VoidCallback onExplanationToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -152,126 +190,25 @@ final class _CategoryMoversOverview extends StatelessWidget {
                 : presentation.topIncreases)
             .take(5)
             .toList(growable: false);
-    return LayoutBuilder(
-      builder: (context, constraints) => KeyedSubtree(
-        key: const ValueKey<String>('balance-linked-detail-category-movers'),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            BalanceCategoryMoversVisualTokens.horizontalInset,
-            12,
-            BalanceCategoryMoversVisualTokens.horizontalInset,
-            10,
-          ),
-          // The preserved 210px lower-card envelope cannot physically show
-          // five 46px rows plus the reference header and footer. At that
-          // inherited compact envelope the same reference anatomy scrolls as
-          // one local surface; normal and stretched envelopes retain the
-          // fully composed, non-scrolling reference layout.
-          child: constraints.maxHeight < 445
-              ? _MoversOverviewCompact(
-                  presentation: presentation,
-                  movers: movers,
-                  direction: direction,
-                  onDirectionSelected: onDirectionSelected,
-                  onSelected: onSelected,
-                )
-              : _MoversOverviewExpanded(
-                  presentation: presentation,
-                  movers: movers,
-                  direction: direction,
-                  onDirectionSelected: onDirectionSelected,
-                  onSelected: onSelected,
-                ),
+    return KeyedSubtree(
+      key: const ValueKey<String>('balance-linked-detail-category-movers'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          BalanceCategoryMoversVisualTokens.horizontalInset,
+          4,
+          BalanceCategoryMoversVisualTokens.horizontalInset,
+          3,
         ),
-      ),
-    );
-  }
-}
-
-final class _MoversOverviewCompact extends StatelessWidget {
-  const _MoversOverviewCompact({
-    required this.presentation,
-    required this.movers,
-    required this.direction,
-    required this.onDirectionSelected,
-    required this.onSelected,
-  });
-
-  final DashboardBalanceCategoryMoversPresentation presentation;
-  final List<DashboardBalanceCategoryMover> movers;
-  final _MoversDirection direction;
-  final ValueChanged<_MoversDirection> onDirectionSelected;
-  final ValueChanged<DashboardBalanceCategoryMover> onSelected;
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    key: const ValueKey<String>('balance-category-movers-list'),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _MoversOverviewTop(
-          presentation: presentation,
-          direction: direction,
-          onDirectionSelected: onDirectionSelected,
-        ),
-        const SizedBox(height: 6),
-        if (movers.isEmpty)
-          const SizedBox(
-            height: 64,
-            child: Center(
-              child: Text(
-                'Nincs ebbe az irányba változó kategória',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: BalanceCategoryMoversVisualTokens.secondaryText,
-                  fontSize: 12.5,
-                ),
-              ),
-            ),
-          )
-        else
-          for (var index = 0; index < movers.length; index += 1)
-            _CategoryMoverRow(
-              mover: movers[index],
-              rank: index + 1,
-              showDivider: index != movers.length - 1,
-              onTap: () => onSelected(movers[index]),
-            ),
-        const SizedBox(height: 6),
-        const _MoversOverviewFooter(),
-      ],
-    ),
-  );
-}
-
-final class _MoversOverviewExpanded extends StatelessWidget {
-  const _MoversOverviewExpanded({
-    required this.presentation,
-    required this.movers,
-    required this.direction,
-    required this.onDirectionSelected,
-    required this.onSelected,
-  });
-
-  final DashboardBalanceCategoryMoversPresentation presentation;
-  final List<DashboardBalanceCategoryMover> movers;
-  final _MoversDirection direction;
-  final ValueChanged<_MoversDirection> onDirectionSelected;
-  final ValueChanged<DashboardBalanceCategoryMover> onSelected;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: <Widget>[
-      _MoversOverviewTop(
-        presentation: presentation,
-        direction: direction,
-        onDirectionSelected: onDirectionSelected,
-      ),
-      const SizedBox(height: 10),
-      Expanded(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            _MoversOverviewTop(
+              presentation: presentation,
+              direction: direction,
+              onDirectionSelected: onDirectionSelected,
+              onExplanationToggled: onExplanationToggled,
+            ),
+            const SizedBox(height: 5),
             Expanded(
               child: movers.isEmpty
                   ? const Center(
@@ -281,64 +218,56 @@ final class _MoversOverviewExpanded extends StatelessWidget {
                         style: TextStyle(
                           color:
                               BalanceCategoryMoversVisualTokens.secondaryText,
-                          fontSize: 12.5,
+                          fontSize: 12,
                         ),
                       ),
                     )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        // Stretch distributes the remaining list height
-                        // through the rows first. The 28px cap keeps the
-                        // reference rhythm generous but never sparse.
-                        const safeGapCap = 28.0;
-                        final remainingHeight = math.max(
-                          0.0,
-                          constraints.maxHeight -
-                              movers.length *
-                                  BalanceCategoryMoversVisualTokens.rowHeight,
-                        );
-                        final extraPerGap = movers.length < 2
-                            ? 0.0
-                            : math.min(
-                                safeGapCap,
-                                remainingHeight / (movers.length - 1),
-                              );
-                        final edgeInset =
-                            math.max(
-                              0.0,
-                              remainingHeight -
-                                  extraPerGap * math.max(0, movers.length - 1),
-                            ) /
-                            2;
-                        return ListView.builder(
-                          key: const ValueKey<String>(
-                            'balance-category-movers-list',
-                          ),
-                          padding: EdgeInsets.symmetric(vertical: edgeInset),
-                          itemCount: movers.length,
-                          itemBuilder: (context, index) => Padding(
-                            padding: EdgeInsets.only(
-                              bottom: index == movers.length - 1
-                                  ? 0
-                                  : extraPerGap,
-                            ),
-                            child: _CategoryMoverRow(
-                              mover: movers[index],
-                              rank: index + 1,
-                              showDivider: index != movers.length - 1,
-                              onTap: () => onSelected(movers[index]),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                  : _CompactMoverRows(movers: movers, onSelected: onSelected),
             ),
-            const SizedBox(height: 6),
-            const _MoversOverviewFooter(),
           ],
         ),
       ),
-    ],
+    );
+  }
+}
+
+/// The list is finite and fully prepared (at most five entries).  A bounded
+/// Column, not a nested scrollable, spends the card's remaining height on all
+/// visible rows.  The production Balance envelope deliberately allocates the
+/// carousel ten percent of the shared card split, so a settled Top 5 needs a
+/// compact 23px minimum here. Stretch adds breathing room without changing
+/// row semantics or introducing a nested scrollable.
+final class _CompactMoverRows extends StatelessWidget {
+  const _CompactMoverRows({required this.movers, required this.onSelected});
+
+  final List<DashboardBalanceCategoryMover> movers;
+  final ValueChanged<DashboardBalanceCategoryMover> onSelected;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final rowHeight = (constraints.maxHeight / movers.length)
+          .clamp(23.0, 42.0)
+          .toDouble();
+      return KeyedSubtree(
+        key: const ValueKey<String>('balance-category-movers-list'),
+        child: Column(
+          children: <Widget>[
+            for (var index = 0; index < movers.length; index += 1)
+              SizedBox(
+                height: rowHeight,
+                child: _CategoryMoverRow(
+                  mover: movers[index],
+                  rank: index + 1,
+                  showDivider: index != movers.length - 1,
+                  compact: true,
+                  onTap: () => onSelected(movers[index]),
+                ),
+              ),
+          ],
+        ),
+      );
+    },
   );
 }
 
@@ -347,69 +276,62 @@ final class _MoversOverviewTop extends StatelessWidget {
     required this.presentation,
     required this.direction,
     required this.onDirectionSelected,
+    required this.onExplanationToggled,
   });
 
   final DashboardBalanceCategoryMoversPresentation presentation;
   final _MoversDirection direction;
   final ValueChanged<_MoversDirection> onDirectionSelected;
+  final VoidCallback onExplanationToggled;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      _MoversOverviewHeader(presentation: presentation),
-      const SizedBox(height: 3),
-      const Text(
-        'A kiválasztott időszak költéseinek változása\n'
-        'a megelőző azonos időszakhoz képest.',
-        maxLines: 2,
-        style: TextStyle(
-          color: BalanceCategoryMoversVisualTokens.secondaryText,
-          fontSize: 12.5,
-          height: 1.28,
-          fontWeight: FontWeight.w500,
-        ),
+      _MoversOverviewHeader(
+        presentation: presentation,
+        onExplanationToggled: onExplanationToggled,
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 2),
       _DirectionSelector(selected: direction, onSelected: onDirectionSelected),
     ],
   );
 }
 
-final class _MoversOverviewFooter extends StatelessWidget {
-  const _MoversOverviewFooter();
-
-  @override
-  Widget build(BuildContext context) => const _MoversInfoFooter(
-    key: ValueKey<String>('balance-category-movers-footer'),
-    copy:
-        'A százalékos változás a kiválasztott időszak és a megelőző azonos időszak költéseinek különbségét mutatja.',
-    icon: Icons.info_rounded,
-    minHeight: 42,
-    dense: true,
-    maxLines: 2,
-  );
-}
-
 final class _MoversOverviewHeader extends StatelessWidget {
-  const _MoversOverviewHeader({required this.presentation});
+  const _MoversOverviewHeader({
+    required this.presentation,
+    required this.onExplanationToggled,
+  });
 
   final DashboardBalanceCategoryMoversPresentation presentation;
+  final VoidCallback onExplanationToggled;
 
   @override
   Widget build(BuildContext context) => Row(
     children: <Widget>[
-      const Expanded(
-        child: Text(
-          'Kategóriaváltozás',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: BalanceCategoryMoversVisualTokens.primaryText,
-            fontSize: BalanceCategoryMoversVisualTokens.titleSize,
-            height: 22 / BalanceCategoryMoversVisualTokens.titleSize,
-            fontWeight: FontWeight.w700,
-          ),
+      Expanded(
+        child: Row(
+          children: <Widget>[
+            const Flexible(
+              child: Text(
+                'Kategóriaváltozás',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: BalanceCategoryMoversVisualTokens.primaryText,
+                  fontSize: BalanceCategoryMoversVisualTokens.titleSize,
+                  height: 22 / BalanceCategoryMoversVisualTokens.titleSize,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 7),
+            _MoversInfoButton(
+              key: const ValueKey<String>('balance-category-movers-info'),
+              onTap: onExplanationToggled,
+            ),
+          ],
         ),
       ),
       _ScopeLabelAndCalendar(presentation: presentation),
@@ -471,6 +393,60 @@ final class _CalendarTile extends StatelessWidget {
   );
 }
 
+/// A 28px visual control inside the required 44px semantic hit target.  The
+/// compact circle keeps explanation access beside a title without allocating a
+/// persistent explanatory paragraph below it.
+final class _MoversInfoButton extends StatelessWidget {
+  const _MoversInfoButton({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: 'Kategóriaváltozás magyarázata',
+    child: SizedBox(
+      width: 44,
+      height: 44,
+      child: Material(
+        color: Colors.transparent,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 22,
+          child: Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .78),
+                border: Border.all(
+                  color: BalanceCategoryMoversVisualTokens.purple.withValues(
+                    alpha: .55,
+                  ),
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const SizedBox(
+                width: 28,
+                height: 28,
+                child: Center(
+                  child: Text(
+                    '?',
+                    style: TextStyle(
+                      color: BalanceCategoryMoversVisualTokens.purple,
+                      fontSize: 14,
+                      height: 1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 final class _DirectionSelector extends StatelessWidget {
   const _DirectionSelector({required this.selected, required this.onSelected});
 
@@ -480,10 +456,12 @@ final class _DirectionSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 266),
+      constraints: const BoxConstraints(maxWidth: 232),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Expanded(
+          SizedBox(
+            width: 112,
             child: _DirectionSegment(
               key: const ValueKey<String>(
                 'balance-category-movers-direction-decrease',
@@ -493,8 +471,9 @@ final class _DirectionSelector extends StatelessWidget {
               onSelected: onSelected,
             ),
           ),
-          const SizedBox(width: 10),
-          Expanded(
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 112,
             child: _DirectionSegment(
               key: const ValueKey<String>(
                 'balance-category-movers-direction-increase',
@@ -534,9 +513,9 @@ final class _DirectionSegment extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () => onSelected(direction),
-          borderRadius: BorderRadius.circular(19),
+          borderRadius: BorderRadius.circular(16),
           child: Ink(
-            height: 38,
+            height: 32,
             decoration: BoxDecoration(
               color: selected
                   ? null
@@ -544,7 +523,7 @@ final class _DirectionSegment extends StatelessWidget {
               gradient: selected
                   ? BalanceCategoryMoversVisualTokens.selectedSegmentGradient
                   : null,
-              borderRadius: BorderRadius.circular(19),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -555,19 +534,19 @@ final class _DirectionSegment extends StatelessWidget {
                     isDecrease
                         ? Icons.south_west_rounded
                         : Icons.north_east_rounded,
-                    size: 16,
+                    size: 14,
                     color: selected
                         ? Colors.white
                         : BalanceCategoryMoversVisualTokens.secondaryText,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
                     label,
                     style: TextStyle(
                       color: selected
                           ? Colors.white
                           : BalanceCategoryMoversVisualTokens.secondaryText,
-                      fontSize: 12.5,
+                      fontSize: 12,
                       height: 1,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     ),
@@ -587,12 +566,14 @@ final class _CategoryMoverRow extends StatelessWidget {
     required this.mover,
     required this.rank,
     required this.showDivider,
+    required this.compact,
     required this.onTap,
   });
 
   final DashboardBalanceCategoryMover mover;
   final int rank;
   final bool showDivider;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -616,8 +597,7 @@ final class _CategoryMoverRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   )
                 : null,
-            child: SizedBox(
-              height: BalanceCategoryMoversVisualTokens.rowHeight,
+            child: SizedBox.expand(
               child: Stack(
                 children: <Widget>[
                   Row(
@@ -635,32 +615,32 @@ final class _CategoryMoverRow extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      SizedBox(width: compact ? 4 : 6),
                       BalanceCategoryVisualBadge(
                         semanticLabel: mover.label,
                         categoryColorId: mover.categoryColorId,
                         categoryIconId: mover.categoryIconId,
-                        size: 32,
-                        iconSize: 18,
+                        size: compact ? 22 : 32,
+                        iconSize: compact ? 13 : 18,
                       ),
-                      const SizedBox(width: 9),
+                      SizedBox(width: compact ? 5 : 9),
                       Expanded(
                         child: Text(
                           mover.label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color:
                                 BalanceCategoryMoversVisualTokens.primaryText,
-                            fontSize: 14.5,
-                            height: 18 / 14.5,
+                            fontSize: compact ? 11.5 : 14.5,
+                            height: compact ? 1 : 18 / 14.5,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      SizedBox(width: compact ? 3 : 6),
                       SizedBox(
-                        width: 88,
+                        width: compact ? 70 : 88,
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.end,
@@ -673,33 +653,33 @@ final class _CategoryMoverRow extends StatelessWidget {
                                     ? BalanceCategoryMoversVisualTokens.positive
                                     : BalanceCategoryMoversVisualTokens
                                           .negative,
-                                fontSize: 15.5,
-                                height: 18 / 15.5,
+                                fontSize: compact ? 12 : 15.5,
+                                height: compact ? 1 : 18 / 15.5,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 1),
+                            SizedBox(height: compact ? 0 : 1),
                             Text(
                               balanceCategoryMoverSignedAmountLabel(
                                 mover.deltaMinor,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: BalanceCategoryMoversVisualTokens
                                     .secondaryText,
-                                fontSize: 11.5,
-                                height: 15 / 11.5,
+                                fontSize: compact ? 9 : 11.5,
+                                height: compact ? 1 : 15 / 11.5,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 7),
-                      const Icon(
+                      SizedBox(width: compact ? 2 : 7),
+                      Icon(
                         Icons.chevron_right_rounded,
-                        size: 18,
+                        size: compact ? 14 : 18,
                         color: BalanceCategoryMoversVisualTokens.purple,
                       ),
                     ],
@@ -730,11 +710,15 @@ final class _CategoryMoverTrendDetail extends StatelessWidget {
     required this.presentation,
     required this.mover,
     required this.onBack,
+    required this.onExplanationToggled,
+    required this.onMetricsToggled,
   });
 
   final DashboardBalanceCategoryMoversPresentation presentation;
   final DashboardBalanceCategoryMover mover;
   final VoidCallback onBack;
+  final VoidCallback onExplanationToggled;
+  final VoidCallback onMetricsToggled;
 
   @override
   Widget build(BuildContext context) {
@@ -743,74 +727,26 @@ final class _CategoryMoverTrendDetail extends StatelessWidget {
     ).middleColor;
     final labels = balanceCategoryMoverLegendLabels(presentation);
     final series = balanceCategoryMoverCumulativeSeries(mover.trend);
-    final positive = mover.deltaMinor > 0 || mover.isNew;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxHeight < 445;
-        // Header/copy/KPIs/chart label/footer are intentionally fixed to the
-        // reference metrics. The chart alone consumes healthy surplus, capped
-        // at its ~175px visual maximum; anything beyond that becomes balanced
-        // breathing room instead of a stretched graph.
-        const fixedVerticalSpace = 300.0;
-        final availableContentHeight = math.max(
-          0.0,
-          constraints.maxHeight - 20,
-        );
-        final chartSpace = math.max(
-          125.0,
-          availableContentHeight - fixedVerticalSpace,
-        );
-        final chartHeight = math.min(175.0, chartSpace);
-        final chartBreathing = compact
-            ? 0.0
-            : math.max(0.0, chartSpace - chartHeight);
-        return KeyedSubtree(
-          key: const ValueKey<String>('balance-category-movers-detail'),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              BalanceCategoryMoversVisualTokens.horizontalInset,
-              10,
-              BalanceCategoryMoversVisualTokens.horizontalInset,
-              10,
-            ),
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                compact
-                    ? SingleChildScrollView(
-                        key: const ValueKey<String>(
-                          'balance-category-movers-detail-scroll',
-                        ),
-                        child: _MoversDetailContent(
-                          presentation: presentation,
-                          mover: mover,
-                          positive: positive,
-                          labels: labels,
-                          series: series,
-                          accent: accent,
-                          chartHeight: chartHeight,
-                        ),
-                      )
-                    : _MoversDetailContent(
-                        presentation: presentation,
-                        mover: mover,
-                        positive: positive,
-                        labels: labels,
-                        series: series,
-                        accent: accent,
-                        chartHeight: chartHeight,
-                        chartBreathing: chartBreathing,
-                      ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  child: _MoversBackTarget(onBack: onBack),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    return KeyedSubtree(
+      key: const ValueKey<String>('balance-category-movers-detail'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          BalanceCategoryMoversVisualTokens.horizontalInset,
+          6,
+          BalanceCategoryMoversVisualTokens.horizontalInset,
+          8,
+        ),
+        child: _MoversDetailContent(
+          presentation: presentation,
+          mover: mover,
+          labels: labels,
+          series: series,
+          accent: accent,
+          onBack: onBack,
+          onExplanationToggled: onExplanationToggled,
+          onMetricsToggled: onMetricsToggled,
+        ),
+      ),
     );
   }
 }
@@ -819,80 +755,46 @@ final class _MoversDetailContent extends StatelessWidget {
   const _MoversDetailContent({
     required this.presentation,
     required this.mover,
-    required this.positive,
     required this.labels,
     required this.series,
     required this.accent,
-    required this.chartHeight,
-    this.chartBreathing = 0,
+    required this.onBack,
+    required this.onExplanationToggled,
+    required this.onMetricsToggled,
   });
 
   final DashboardBalanceCategoryMoversPresentation presentation;
   final DashboardBalanceCategoryMover mover;
-  final bool positive;
   final BalanceCategoryMoverLegendLabels labels;
   final BalanceCategoryMoverCumulativeSeries series;
   final Color accent;
-  final double chartHeight;
-  final double chartBreathing;
+  final VoidCallback onBack;
+  final VoidCallback onExplanationToggled;
+  final VoidCallback onMetricsToggled;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      _MoversDetailHeader(presentation: presentation, mover: mover),
-      const SizedBox(height: 3),
-      const Text(
-        'A kiválasztott időszak költéseinek összehasonlítása\n'
-        'a megelőző azonos időszakkal.',
-        maxLines: 2,
-        style: TextStyle(
-          color: BalanceCategoryMoversVisualTokens.secondaryText,
-          fontSize: 12.5,
-          height: 1.28,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      const SizedBox(height: 9),
-      _MoverKpiRow(
+      _MoversDetailHeader(
         presentation: presentation,
         mover: mover,
-        positive: positive,
-        height: 86,
+        onBack: onBack,
+        onExplanationToggled: onExplanationToggled,
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 3),
       _ChartHeader(labels: labels, accent: accent),
-      const SizedBox(height: 6),
-      SizedBox(
-        height: chartHeight,
+      const SizedBox(height: 4),
+      Expanded(
         child: _MoverCumulativeChart(
           presentation: presentation,
           mover: mover,
           series: series,
           accent: accent,
+          onTap: onMetricsToggled,
         ),
       ),
-      if (chartBreathing > 0) SizedBox(height: chartBreathing),
-      const SizedBox(height: 8),
-      const _MoversDetailFooter(),
     ],
-  );
-}
-
-final class _MoversDetailFooter extends StatelessWidget {
-  const _MoversDetailFooter();
-
-  @override
-  Widget build(BuildContext context) => const _MoversInfoFooter(
-    key: ValueKey<String>('balance-category-movers-detail-footer'),
-    copy:
-        'A grafikon a két időszak kumulatív költését mutatja,\n'
-        'így jól látható, hol alakult ki a különbség.\n'
-        'A jobb oldali értékek a teljes időszak végösszegei.',
-    icon: Icons.lightbulb_outline_rounded,
-    iconColor: BalanceCategoryMoversVisualTokens.purple,
-    minHeight: 50,
-    dense: true,
   );
 }
 
@@ -913,26 +815,10 @@ final class _MoversBackTarget extends StatelessWidget {
         key: const ValueKey<String>('balance-category-movers-back'),
         onTap: onBack,
         radius: 24,
-        child: const SizedBox(width: 44, height: 44),
-      ),
-    ),
-  );
-}
-
-final class _MoversDetailHeader extends StatelessWidget {
-  const _MoversDetailHeader({required this.presentation, required this.mover});
-
-  final DashboardBalanceCategoryMoversPresentation presentation;
-  final DashboardBalanceCategoryMover mover;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: <Widget>[
-      const ExcludeSemantics(
-        child: IgnorePointer(
-          child: SizedBox(
-            width: 28,
-            height: 36,
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
             child: Icon(
               Icons.arrow_back_rounded,
               size: 20,
@@ -941,7 +827,27 @@ final class _MoversDetailHeader extends StatelessWidget {
           ),
         ),
       ),
-      const SizedBox(width: 4),
+    ),
+  );
+}
+
+final class _MoversDetailHeader extends StatelessWidget {
+  const _MoversDetailHeader({
+    required this.presentation,
+    required this.mover,
+    required this.onBack,
+    required this.onExplanationToggled,
+  });
+
+  final DashboardBalanceCategoryMoversPresentation presentation;
+  final DashboardBalanceCategoryMover mover;
+  final VoidCallback onBack;
+  final VoidCallback onExplanationToggled;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      _MoversBackTarget(onBack: onBack),
       BalanceCategoryVisualBadge(
         semanticLabel: mover.label,
         categoryColorId: mover.categoryColorId,
@@ -951,164 +857,40 @@ final class _MoversDetailHeader extends StatelessWidget {
       ),
       const SizedBox(width: 8),
       Expanded(
-        child: Text(
-          mover.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: BalanceCategoryMoversVisualTokens.primaryText,
-            fontSize: 18,
-            height: 22 / 18,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Row(
+          children: <Widget>[
+            Flexible(
+              child: Text(
+                mover.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BalanceCategoryMoversVisualTokens.primaryText,
+                  fontSize: 18,
+                  height: 22 / 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            _MoversInfoButton(
+              key: const ValueKey<String>(
+                'balance-category-movers-detail-info',
+              ),
+              onTap: onExplanationToggled,
+            ),
+          ],
         ),
       ),
-      const SizedBox(width: 4),
-      _ScopeLabelAndCalendar(presentation: presentation),
+      const SizedBox(width: 2),
+      Flexible(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: _ScopeLabelAndCalendar(presentation: presentation),
+        ),
+      ),
     ],
-  );
-}
-
-final class _MoverKpiRow extends StatelessWidget {
-  const _MoverKpiRow({
-    required this.presentation,
-    required this.mover,
-    required this.positive,
-    required this.height,
-  });
-
-  final DashboardBalanceCategoryMoversPresentation presentation;
-  final DashboardBalanceCategoryMover mover;
-  final bool positive;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    height: height,
-    child: Row(
-      children: <Widget>[
-        Expanded(
-          child: _MoverKpiTile(
-            key: const ValueKey<String>('balance-category-movers-kpi-current'),
-            background: BalanceCategoryMoversVisualTokens.selectedPeriodSurface,
-            icon: Icons.stacked_line_chart_rounded,
-            iconColor: BalanceCategoryMoversVisualTokens.purple,
-            value: DashboardPreparedFormatter.amountMinor(mover.currentMinor),
-            valueColor: BalanceCategoryMoversVisualTokens.primaryText,
-            label: 'Kiválasztott időszak',
-            detail: balanceCategoryMoverWindowLabel(presentation.currentWindow),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _MoverKpiTile(
-            key: const ValueKey<String>(
-              'balance-category-movers-kpi-percentage',
-            ),
-            background: positive
-                ? BalanceCategoryMoversVisualTokens.positiveSurface
-                : BalanceCategoryMoversVisualTokens.negativeSurface,
-            icon: positive
-                ? Icons.trending_up_rounded
-                : Icons.trending_down_rounded,
-            iconColor: positive
-                ? BalanceCategoryMoversVisualTokens.positive
-                : BalanceCategoryMoversVisualTokens.negative,
-            value: balanceCategoryMoverPercentageLabel(mover),
-            valueColor: positive
-                ? BalanceCategoryMoversVisualTokens.positive
-                : BalanceCategoryMoversVisualTokens.negative,
-            label: 'Változás az előző időszakhoz képest',
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _MoverKpiTile(
-            key: const ValueKey<String>('balance-category-movers-kpi-delta'),
-            background: positive
-                ? BalanceCategoryMoversVisualTokens.positiveSurface
-                : BalanceCategoryMoversVisualTokens.negativeSurface,
-            icon: Icons.bar_chart_rounded,
-            iconColor: positive
-                ? BalanceCategoryMoversVisualTokens.positive
-                : BalanceCategoryMoversVisualTokens.negative,
-            value: balanceCategoryMoverSignedAmountLabel(mover.deltaMinor),
-            valueColor: mover.deltaMinor == 0
-                ? BalanceCategoryMoversVisualTokens.secondaryText
-                : positive
-                ? BalanceCategoryMoversVisualTokens.positive
-                : BalanceCategoryMoversVisualTokens.negative,
-            label: mover.deltaMinor < 0
-                ? 'Különbség (ennyivel kevesebb)'
-                : mover.deltaMinor > 0
-                ? 'Különbség (ennyivel több)'
-                : 'Különbség (nincs eltérés)',
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-final class _MoverKpiTile extends StatelessWidget {
-  const _MoverKpiTile({
-    super.key,
-    required this.background,
-    required this.icon,
-    required this.iconColor,
-    required this.value,
-    required this.valueColor,
-    required this.label,
-    this.detail,
-  });
-
-  final Color background;
-  final IconData icon;
-  final Color iconColor;
-  final String value;
-  final Color valueColor;
-  final String label;
-  final String? detail;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(9, 8, 8, 7),
-    decoration: BoxDecoration(
-      color: background,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Icon(icon, size: 17, color: iconColor),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: valueColor,
-            fontSize: 17.5,
-            height: 21 / 17.5,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 1),
-        Expanded(
-          child: Text(
-            detail == null || detail!.isEmpty ? label : '$label\n$detail',
-            maxLines: detail == null || detail!.isEmpty ? 2 : 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: BalanceCategoryMoversVisualTokens.secondaryText,
-              fontSize: 10.5,
-              height: 13 / 10.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
-    ),
   );
 }
 
@@ -1183,12 +965,14 @@ final class _MoverCumulativeChart extends StatelessWidget {
     required this.mover,
     required this.series,
     required this.accent,
+    required this.onTap,
   });
 
   final DashboardBalanceCategoryMoversPresentation presentation;
   final DashboardBalanceCategoryMover mover;
   final BalanceCategoryMoverCumulativeSeries series;
   final Color accent;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1201,24 +985,31 @@ final class _MoverCumulativeChart extends StatelessWidget {
         '${DashboardPreparedFormatter.amountMinor(mover.referenceMinor)} a megelőzőben, '
         '${balanceCategoryMoverPercentageLabel(mover)}, ${balanceCategoryMoverSignedAmountLabel(mover.deltaMinor)}.';
     return Semantics(
+      button: true,
       label: semantics,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          key: const ValueKey<String>(
-            'balance-category-movers-cumulative-chart',
-          ),
-          painter: _CategoryMoverCumulativePainter(
-            series: series,
-            currentColor: accent,
-            xLabels: xLabels,
-            currentEndpoint: balanceCategoryMoverCompactAmountLabel(
-              mover.currentMinor,
+      hint: 'Érintse meg a részletes értékekhez',
+      child: GestureDetector(
+        key: const ValueKey<String>('balance-category-movers-chart-hit-area'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            key: const ValueKey<String>(
+              'balance-category-movers-cumulative-chart',
             ),
-            referenceEndpoint: balanceCategoryMoverCompactAmountLabel(
-              mover.referenceMinor,
+            painter: _CategoryMoverCumulativePainter(
+              series: series,
+              currentColor: accent,
+              xLabels: xLabels,
+              currentEndpoint: balanceCategoryMoverCompactAmountLabel(
+                mover.currentMinor,
+              ),
+              referenceEndpoint: balanceCategoryMoverCompactAmountLabel(
+                mover.referenceMinor,
+              ),
             ),
+            child: const SizedBox.expand(),
           ),
-          child: const SizedBox.expand(),
         ),
       ),
     );
@@ -1427,51 +1218,273 @@ final class _CategoryMoverCumulativePainter extends CustomPainter {
       !listEquals(oldDelegate.series.referenceMinor, series.referenceMinor);
 }
 
-final class _MoversInfoFooter extends StatelessWidget {
-  const _MoversInfoFooter({
-    super.key,
-    required this.copy,
-    required this.icon,
-    required this.minHeight,
-    this.iconColor = BalanceCategoryMoversVisualTokens.secondaryText,
-    this.dense = false,
-    this.maxLines = 3,
+/// One in-card transient surface for both explanatory and chart insight copy.
+/// It is a Stack layer, never normal-flow content, so it cannot enlarge the
+/// shared Dashboard mode-content card or push the cumulative chart away.
+final class _CategoryMoverOverlaySurface extends StatelessWidget {
+  const _CategoryMoverOverlaySurface({
+    required this.overlay,
+    required this.mover,
+    required this.onClose,
   });
 
-  final String copy;
-  final IconData icon;
-  final Color iconColor;
-  final double minHeight;
-  final bool dense;
-  final int maxLines;
+  final _CategoryMoverOverlay overlay;
+  final DashboardBalanceCategoryMover? mover;
+  final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: BoxConstraints(minHeight: minHeight),
-    padding: EdgeInsets.symmetric(horizontal: 10, vertical: dense ? 4 : 7),
-    decoration: BoxDecoration(
-      color: BalanceCategoryMoversVisualTokens.lavenderSurface,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Row(
+  Widget build(BuildContext context) {
+    final metrics = overlay == _CategoryMoverOverlay.metrics;
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Stack(
       children: <Widget>[
-        Icon(icon, size: 18, color: iconColor),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            copy,
-            maxLines: maxLines,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: BalanceCategoryMoversVisualTokens.secondaryText,
-              fontSize: 11,
-              height: 14 / 11,
-              fontWeight: FontWeight.w500,
+        if (metrics)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 48,
+            bottom: 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: onClose,
+            ),
+          ),
+        Positioned(
+          left: 8,
+          right: 8,
+          top: metrics ? null : 50,
+          bottom: metrics ? 8 : null,
+          child: AnimatedSwitcher(
+            duration: reducedMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 160),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, .05),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: _MoversOverlayCard(
+              key: ValueKey<String>(
+                metrics
+                    ? 'balance-category-movers-metrics-overlay'
+                    : 'balance-category-movers-explanation-overlay',
+              ),
+              title: metrics ? 'Részletes értékek' : 'Mit jelent ez?',
+              onClose: onClose,
+              onTap: metrics ? onClose : null,
+              child: metrics
+                  ? _MoversMetricsOverlayBody(mover: mover!)
+                  : _MoversExplanationOverlayBody(isDetail: mover != null),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+final class _MoversOverlayCard extends StatelessWidget {
+  const _MoversOverlayCard({
+    super.key,
+    required this.title,
+    required this.onClose,
+    this.onTap,
+    required this.child,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 11),
+        decoration: BoxDecoration(
+          color: BalanceCategoryMoversVisualTokens.transientOverlaySurface,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(
+            color: BalanceCategoryMoversVisualTokens.transientOverlayBorder,
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: BalanceCategoryMoversVisualTokens.primaryText,
+                      fontSize: 12.5,
+                      height: 1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey<String>(
+                    'balance-category-movers-overlay-close',
+                  ),
+                  tooltip: 'Bezárás',
+                  onPressed: onClose,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 32,
+                    height: 32,
+                  ),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: BalanceCategoryMoversVisualTokens.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            child,
+          ],
+        ),
+      ),
     ),
+  );
+}
+
+final class _MoversExplanationOverlayBody extends StatelessWidget {
+  const _MoversExplanationOverlayBody({required this.isDetail});
+
+  final bool isDetail;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Icon(
+        isDetail ? Icons.insights_rounded : Icons.info_outline_rounded,
+        size: 18,
+        color: BalanceCategoryMoversVisualTokens.secondaryText,
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          isDetail
+              ? 'A grafikon a kiválasztott időszak és a megelőző azonos időszak kumulatív költését hasonlítja össze. Így látható, mikor és mekkora eltérés alakult ki.'
+              : 'A lista a kiválasztott időszak kategóriaköltéseit hasonlítja a megelőző azonos időszakhoz. A százalék a relatív változás, az alatta lévő összeg pedig a pontos forintkülönbség.',
+          style: const TextStyle(
+            color: BalanceCategoryMoversVisualTokens.secondaryText,
+            fontSize: 11.5,
+            height: 14 / 11.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+final class _MoversMetricsOverlayBody extends StatelessWidget {
+  const _MoversMetricsOverlayBody({required this.mover});
+
+  final DashboardBalanceCategoryMover mover;
+
+  @override
+  Widget build(BuildContext context) {
+    final positive = mover.deltaMinor > 0 || mover.isNew;
+    final semantic = positive
+        ? BalanceCategoryMoversVisualTokens.positive
+        : BalanceCategoryMoversVisualTokens.negative;
+    return Column(
+      children: <Widget>[
+        _MoversMetricLine(
+          key: const ValueKey<String>(
+            'balance-category-movers-metrics-current',
+          ),
+          label: 'Kiválasztott időszak',
+          value: DashboardPreparedFormatter.amountMinor(mover.currentMinor),
+          valueColor: BalanceCategoryMoversVisualTokens.primaryText,
+        ),
+        const SizedBox(height: 5),
+        _MoversMetricLine(
+          key: const ValueKey<String>(
+            'balance-category-movers-metrics-percentage',
+          ),
+          label: 'Változás',
+          value: balanceCategoryMoverPercentageLabel(mover),
+          valueColor: semantic,
+        ),
+        const SizedBox(height: 5),
+        _MoversMetricLine(
+          key: const ValueKey<String>('balance-category-movers-metrics-delta'),
+          label: 'Különbség',
+          value: balanceCategoryMoverSignedAmountLabel(mover.deltaMinor),
+          valueColor: mover.deltaMinor == 0
+              ? BalanceCategoryMoversVisualTokens.secondaryText
+              : semantic,
+        ),
+      ],
+    );
+  }
+}
+
+final class _MoversMetricLine extends StatelessWidget {
+  const _MoversMetricLine({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      Expanded(
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: BalanceCategoryMoversVisualTokens.secondaryText,
+            fontSize: 12,
+            height: 1,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: valueColor,
+          fontSize: 16,
+          height: 1,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ],
   );
 }
 

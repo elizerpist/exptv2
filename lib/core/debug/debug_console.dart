@@ -26,7 +26,7 @@ enum _DebugConsoleSection { logs, report }
 
 /// A view-only projection over the one bounded diagnostic ring.  It owns no
 /// second history, export path, or diagnostic retention policy.
-enum _DebugConsoleLogFilter { all, mindHeatmap }
+enum _DebugConsoleLogFilter { all, mindHeatmap, balanceWave }
 
 class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   static const _followThreshold = 36.0;
@@ -191,6 +191,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     final count = FluviDiagnosticLogger.retainedEntryCount;
     final status =
         widget.diagnosticStatusProvider?.call() ?? const <String, Object?>{};
+    final balanceWaveStatus = _logFilter == _DebugConsoleLogFilter.balanceWave
+        ? FluviDiagnosticLogger.userMarkerContextForOwnerPrefix('balanceWave.')
+        : const <String, Object?>{};
     return Dialog(
       key: const ValueKey('debug-console-dialog'),
       backgroundColor: const Color(0xFF1E1E2E),
@@ -254,6 +257,13 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                         value: 'mind_heatmap',
                         child: Text(
                           'Mind Heatmap',
+                          style: TextStyle(color: Color(0xFF1F2937)),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'balance_wave',
+                        child: Text(
+                          'Balance wave',
                           style: TextStyle(color: Color(0xFF1F2937)),
                         ),
                       ),
@@ -398,6 +408,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                           value: _DebugConsoleLogFilter.mindHeatmap,
                           child: Text('Mind Heatmap'),
                         ),
+                        DropdownMenuItem(
+                          value: _DebugConsoleLogFilter.balanceWave,
+                          child: Text('Balance Wave'),
+                        ),
                       ],
                     ),
                   ),
@@ -413,6 +427,20 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                   maxLines: 10,
                   style: const TextStyle(
                     color: Color(0xFFBAC2DE),
+                    fontSize: 10.5,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            if (balanceWaveStatus.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SelectableText(
+                  'BALANCE WAVE STATUS\n${_statusText(balanceWaveStatus)}',
+                  key: const ValueKey('debug-console-balance-wave-status'),
+                  maxLines: 10,
+                  style: const TextStyle(
+                    color: Color(0xFFC4B5FD),
                     fontSize: 10.5,
                     height: 1.35,
                   ),
@@ -652,13 +680,18 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
 
   List<FluviDiagnosticEvent> _filteredEntries() {
     final entries = FluviDiagnosticLogger.entries;
-    if (_logFilter == _DebugConsoleLogFilter.all) return entries;
     return List<FluviDiagnosticEvent>.unmodifiable(
       entries.where(
-        (entry) =>
+        (entry) => switch (_logFilter) {
+          _DebugConsoleLogFilter.all => true,
+          _DebugConsoleLogFilter.mindHeatmap =>
             entry.stage.startsWith('MIND_HEATMAP|') ||
-            entry.stage.startsWith('MIND_SUM|') ||
-            entry.stage.startsWith('MIND_ENTRY|'),
+                entry.stage.startsWith('MIND_SUM|') ||
+                entry.stage.startsWith('MIND_ENTRY|'),
+          _DebugConsoleLogFilter.balanceWave => entry.stage.startsWith(
+            'BALANCE_WAVE|',
+          ),
+        },
       ),
     );
   }

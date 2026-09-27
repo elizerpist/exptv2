@@ -1,8 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_carousel_wave_motion.dart';
 
 void main() {
   group('Balance carousel wave motion', () {
+    test(
+      'BWA-STARTUP RED: the physical default enables the ambient wave clock while retaining a user toggle',
+      () {
+        const defaults = BalancePresentationSettings.defaults();
+        expect(defaults.balanceCarouselWaveAnimationEnabled, isTrue);
+        final controller = BalancePresentationController(initial: defaults);
+        controller.setBalanceCarouselWaveAnimationEnabled(false);
+        expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
+        controller.dispose();
+      },
+    );
+
     test(
       'BWA-PROFILE RED: card identity resolves one stable authored profile',
       () {

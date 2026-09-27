@@ -128,6 +128,14 @@ abstract final class BalanceCarouselWaveMotion {
     ]);
   }
 
+  /// A compact deterministic digest for bounded runtime diagnostics.  It is
+  /// derived from authored control geometry, rather than object identity, so
+  /// a field report can prove that a changing phase reached the painter.
+  static String geometryDigest(BalanceCarouselWaveGeometry geometry) => geometry
+      .normalizedControlPoints
+      .map((point) => (point * 10000).round())
+      .join(':');
+
   static _WaveFamilyGeometry _familyGeometry(
     BalanceCarouselWaveFamily family,
   ) => switch (family) {

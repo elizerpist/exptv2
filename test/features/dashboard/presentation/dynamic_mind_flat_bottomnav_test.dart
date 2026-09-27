@@ -291,26 +291,44 @@ void main() {
       );
     }
 
-    test('FBS-RED-01: default stays off and stored target is independent', () {
-      const defaults = DashboardShellPresentationSettings.defaults;
-      expect(
-        defaults.flatBottomNavBodyStretch,
-        DashboardFlatBottomNavBodyStretch.off,
-      );
+    test(
+      'FBS-RED-01: default assigns the reclaimed eligible extent to mode content and remains user-changeable',
+      () {
+        const defaults = DashboardShellPresentationSettings.defaults;
+        expect(
+          defaults.flatBottomNavBodyStretch,
+          DashboardFlatBottomNavBodyStretch.modeContent,
+        );
 
-      final next = settingsFor(
-        stretch: DashboardFlatBottomNavBodyStretch.modeContent,
-      );
-      expect(next.bottomNavEdgeShape, DashboardBottomNavEdgeShape.straight);
-      expect(
-        next.bottomNavLayoutStyle,
-        DashboardBottomNavLayoutStyle.containedFlat,
-      );
-      expect(
-        next.flatBottomNavBodyStretch,
-        DashboardFlatBottomNavBodyStretch.modeContent,
-      );
-    });
+        final controller = DashboardShellPresentationController();
+        controller.selectFlatBottomNavBodyStretch(
+          DashboardFlatBottomNavBodyStretch.off,
+        );
+        expect(
+          controller.value.flatBottomNavBodyStretch,
+          DashboardFlatBottomNavBodyStretch.off,
+        );
+        controller.reset();
+        expect(
+          controller.value.flatBottomNavBodyStretch,
+          DashboardFlatBottomNavBodyStretch.modeContent,
+        );
+        controller.dispose();
+
+        final next = settingsFor(
+          stretch: DashboardFlatBottomNavBodyStretch.modeContent,
+        );
+        expect(next.bottomNavEdgeShape, DashboardBottomNavEdgeShape.straight);
+        expect(
+          next.bottomNavLayoutStyle,
+          DashboardBottomNavLayoutStyle.containedFlat,
+        );
+        expect(
+          next.flatBottomNavBodyStretch,
+          DashboardFlatBottomNavBodyStretch.modeContent,
+        );
+      },
+    );
 
     test('FBS-RED-02: only straight contained BottomNav is eligible', () {
       expect(layoutFor(settingsFor()).isEligible, isTrue);

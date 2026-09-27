@@ -424,6 +424,26 @@ abstract final class FluviDiagnosticLogger {
     }
   }
 
+  /// Reads the already-registered latest snapshot for a diagnostic view. This
+  /// is deliberately a pull performed while the console builds, never a new
+  /// ticker, notifier, history or polling loop. The feature continues to own
+  /// its sampled state and user-marker lifecycle.
+  static Map<String, Object?> userMarkerContextForOwnerPrefix(String prefix) {
+    if (!kFluviOnscreenDiagnosticsEnabled) {
+      return const <String, Object?>{};
+    }
+    final context = <String, Object?>{};
+    for (final provider in _userMarkerContextProviders.entries) {
+      if (!provider.key.startsWith(prefix)) continue;
+      try {
+        context.addAll(provider.value());
+      } on Object catch (error) {
+        context['snapshotError'] = '$error';
+      }
+    }
+    return Map<String, Object?>.unmodifiable(context);
+  }
+
   static String _exportText({
     required String label,
     required List<FluviDiagnosticEvent> events,

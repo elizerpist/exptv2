@@ -12,6 +12,7 @@ import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/categories/catalog/category_color_catalog.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_catalog.dart';
 import '../../../../core/categories/presentation/category_avatar_palette_scope.dart';
+import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../../../shared/motion/centered_carousel/centered_carousel.dart';
 import '../../application/dashboard_balance_presentation.dart';
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
@@ -19,6 +20,7 @@ import '../../application/dashboard_balance_primary_projection.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_carousel_wave_motion.dart';
+import 'balance_carousel_wave_diagnostics.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
@@ -894,6 +896,26 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
     vsync: this,
     duration: const Duration(seconds: 6),
   );
+  late final BalanceCarouselWaveRuntimeDiagnostics _waveDiagnostics =
+      BalanceCarouselWaveRuntimeDiagnostics(
+        clockOwner: '_BalanceUpperCarouselState',
+        configuredDuration: _wavePhaseController.duration!,
+      );
+  late final String _waveMarkerOwner;
+  late final Map<String, Object?> Function() _waveMarkerContext;
+  var _waveBuildRevision = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _waveMarkerOwner = 'balanceWave.${identityHashCode(this)}';
+    _waveMarkerContext = () => _waveDiagnostics.snapshot.toMarkerContext();
+    _wavePhaseController.addListener(_sampleWaveClock);
+    FluviDiagnosticLogger.registerUserMarkerContext(
+      _waveMarkerOwner,
+      _waveMarkerContext,
+    );
+  }
 
   @override
   void didChangeDependencies() {
@@ -922,90 +944,130 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
       // static instead of freezing a partially deformed animation frame.
       if (_wavePhaseController.value != 0) _wavePhaseController.value = 0;
     }
+    if (!_waveDiagnostics.isBound) {
+      _waveDiagnostics.bind(
+        animationEnabled:
+            widget.presentationSettings.balanceCarouselWaveAnimationEnabled,
+        reducedMotion: reducedMotion,
+        clockRunning: _wavePhaseController.isAnimating,
+        waveOpacity: widget.presentationSettings.balanceCarouselWaveOpacity,
+        backgroundOpacity:
+            widget.presentationSettings.balanceCarouselBackgroundOpacity,
+      );
+    } else {
+      _waveDiagnostics.settingsChanged(
+        animationEnabled:
+            widget.presentationSettings.balanceCarouselWaveAnimationEnabled,
+        reducedMotion: reducedMotion,
+        clockRunning: _wavePhaseController.isAnimating,
+        waveOpacity: widget.presentationSettings.balanceCarouselWaveOpacity,
+        backgroundOpacity:
+            widget.presentationSettings.balanceCarouselBackgroundOpacity,
+        borderOpacity: widget.presentationSettings.balanceCarouselBorderOpacity,
+      );
+    }
   }
+
+  void _sampleWaveClock() => _waveDiagnostics.onTick(
+    elapsed: _wavePhaseController.lastElapsedDuration ?? Duration.zero,
+    phase: _wavePhaseController.value,
+    buildRevision: _waveBuildRevision,
+  );
 
   @override
   void dispose() {
+    FluviDiagnosticLogger.unregisterUserMarkerContext(
+      _waveMarkerOwner,
+      _waveMarkerContext,
+    );
+    _wavePhaseController.removeListener(_sampleWaveClock);
     _wavePhaseController.dispose();
     _controller.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final geometry = _BalanceFixedCarouselGeometry.resolve(
-        availableWidth: constraints.maxWidth,
-        summaryToUpperGap: widget.summaryToUpperGap,
-      );
-      final carouselHeight = math.max(1.0, constraints.maxHeight);
-      final spec = CenteredCarouselSpec(
-        itemExtent: geometry.itemExtent,
-        visibleItemCount: 3,
-        viewportTrailingGap: geometry.viewportTrailingGap,
-        selectorHeight: carouselHeight,
-        minScale: .70,
-        maxScale: 1,
-        neighborScale: .78,
-        outerScale: .70,
-        minOpacity: .74,
-        maxOpacity: 1,
-        neighborOpacity: .88,
-        outerOpacity: .74,
-        influenceRadiusItems: 2,
-        motionProfile: CenteredCarouselMotionProfiles.timeRefinementRail,
-        enableHaptics: true,
-        clipBehavior: Clip.none,
-      );
-      return CenteredCarousel<BalanceCarouselCard>(
-        key: const ValueKey<String>('balance-carousel'),
-        dataSource: CyclicCarouselDataSource<BalanceCarouselCard>(widget.cards),
-        controller: _controller,
-        spec: spec,
-        height: carouselHeight,
-        viewportKey: const ValueKey<String>('balance-carousel-viewport'),
-        onMotionInterrupted: widget.onMotionInterrupted,
-        onSelectedChanged: (logicalIndex) {
-          final count = widget.cards.length;
-          final itemIndex = ((logicalIndex % count) + count) % count;
-          widget.onCardSelected(widget.cards[itemIndex]);
-        },
-        semanticsLabelBuilder: (card) => switch (card.kind) {
-          BalanceCarouselCardKind.cashflow => 'Cashflow: ${card.amount}',
-          BalanceCarouselCardKind.closings => 'Zárások: ${card.amount}',
-          BalanceCarouselCardKind.momentum =>
-            'Balance momentum: ${card.amount}',
-          BalanceCarouselCardKind.retention =>
-            'Megtakarítási arány: ${card.amount}',
-          BalanceCarouselCardKind.stability =>
-            'Cashflow stabilitás: ${card.amount}',
-          BalanceCarouselCardKind.ghost => 'Fix terhek: ${card.amount}',
-          BalanceCarouselCardKind.forecast => 'Forecast: ${card.amount}',
-          BalanceCarouselCardKind.latestTransaction =>
-            'Utolsó tranzakció: ${card.amount}',
-          BalanceCarouselCardKind.categoryMovers =>
-            'Legnagyobb kategóriaváltozás: ${card.amount}',
-          BalanceCarouselCardKind.topCategory =>
-            'Top kategória: ${card.amount}',
-          BalanceCarouselCardKind.topPartner => 'Top partner: ${card.amount}',
-        },
-        itemBuilder: (context, card, metrics) => _BalanceCarouselPressFeedback(
-          child: Transform.translate(
-            offset: Offset(geometry.inwardOffsetFor(metrics), 0),
-            transformHitTests: true,
-            child: _BalanceCarouselCard(
-              card: card,
-              width: geometry.cardWidth,
-              itemHeight: carouselHeight,
-              isSelected: metrics.isSelected,
-              presentationSettings: widget.presentationSettings,
-              wavePhase: _wavePhaseController,
-            ),
+  Widget build(BuildContext context) {
+    _waveBuildRevision += 1;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final geometry = _BalanceFixedCarouselGeometry.resolve(
+          availableWidth: constraints.maxWidth,
+          summaryToUpperGap: widget.summaryToUpperGap,
+        );
+        final carouselHeight = math.max(1.0, constraints.maxHeight);
+        final spec = CenteredCarouselSpec(
+          itemExtent: geometry.itemExtent,
+          visibleItemCount: 3,
+          viewportTrailingGap: geometry.viewportTrailingGap,
+          selectorHeight: carouselHeight,
+          minScale: .70,
+          maxScale: 1,
+          neighborScale: .78,
+          outerScale: .70,
+          minOpacity: .74,
+          maxOpacity: 1,
+          neighborOpacity: .88,
+          outerOpacity: .74,
+          influenceRadiusItems: 2,
+          motionProfile: CenteredCarouselMotionProfiles.timeRefinementRail,
+          enableHaptics: true,
+          clipBehavior: Clip.none,
+        );
+        return CenteredCarousel<BalanceCarouselCard>(
+          key: const ValueKey<String>('balance-carousel'),
+          dataSource: CyclicCarouselDataSource<BalanceCarouselCard>(
+            widget.cards,
           ),
-        ),
-      );
-    },
-  );
+          controller: _controller,
+          spec: spec,
+          height: carouselHeight,
+          viewportKey: const ValueKey<String>('balance-carousel-viewport'),
+          onMotionInterrupted: widget.onMotionInterrupted,
+          onSelectedChanged: (logicalIndex) {
+            final count = widget.cards.length;
+            final itemIndex = ((logicalIndex % count) + count) % count;
+            widget.onCardSelected(widget.cards[itemIndex]);
+          },
+          semanticsLabelBuilder: (card) => switch (card.kind) {
+            BalanceCarouselCardKind.cashflow => 'Cashflow: ${card.amount}',
+            BalanceCarouselCardKind.closings => 'Zárások: ${card.amount}',
+            BalanceCarouselCardKind.momentum =>
+              'Balance momentum: ${card.amount}',
+            BalanceCarouselCardKind.retention =>
+              'Megtakarítási arány: ${card.amount}',
+            BalanceCarouselCardKind.stability =>
+              'Cashflow stabilitás: ${card.amount}',
+            BalanceCarouselCardKind.ghost => 'Fix terhek: ${card.amount}',
+            BalanceCarouselCardKind.forecast => 'Forecast: ${card.amount}',
+            BalanceCarouselCardKind.latestTransaction =>
+              'Utolsó tranzakció: ${card.amount}',
+            BalanceCarouselCardKind.categoryMovers =>
+              'Legnagyobb kategóriaváltozás: ${card.amount}',
+            BalanceCarouselCardKind.topCategory =>
+              'Top kategória: ${card.amount}',
+            BalanceCarouselCardKind.topPartner => 'Top partner: ${card.amount}',
+          },
+          itemBuilder: (context, card, metrics) =>
+              _BalanceCarouselPressFeedback(
+                child: Transform.translate(
+                  offset: Offset(geometry.inwardOffsetFor(metrics), 0),
+                  transformHitTests: true,
+                  child: _BalanceCarouselCard(
+                    card: card,
+                    width: geometry.cardWidth,
+                    itemHeight: carouselHeight,
+                    isSelected: metrics.isSelected,
+                    presentationSettings: widget.presentationSettings,
+                    wavePhase: _wavePhaseController,
+                    waveDiagnostics: _waveDiagnostics,
+                  ),
+                ),
+              ),
+        );
+      },
+    );
+  }
 }
 
 /// Input feedback intentionally mirrors Budget's accepted local interaction
@@ -1052,6 +1114,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
     required this.isSelected,
     required this.presentationSettings,
     required this.wavePhase,
+    required this.waveDiagnostics,
   });
 
   final BalanceCarouselCard card;
@@ -1060,6 +1123,7 @@ final class _BalanceCarouselCard extends StatelessWidget {
   final bool isSelected;
   final BalancePresentationSettings presentationSettings;
   final Animation<double> wavePhase;
+  final BalanceCarouselWaveRuntimeDiagnostics waveDiagnostics;
 
   @override
   Widget build(BuildContext context) {
@@ -1076,6 +1140,8 @@ final class _BalanceCarouselCard extends StatelessWidget {
       isSelected: isSelected,
       presentationSettings: presentationSettings,
     );
+    final waveProfile = BalanceCarouselWaveMotion.profileForCardId(card.id);
+    waveDiagnostics.bindProfile(waveProfile, selected: isSelected);
     return SizedBox(
       key: ValueKey<String>('balance-carousel-card-${card.id}'),
       width: width,
@@ -1131,10 +1197,9 @@ final class _BalanceCarouselCard extends StatelessWidget {
                           !(MediaQuery.maybeOf(context)?.disableAnimations ??
                               false),
                       accentColor: accent.color,
-                      profile: BalanceCarouselWaveMotion.profileForCardId(
-                        card.id,
-                      ),
+                      profile: waveProfile,
                       opacity: paint.waveOpacity,
+                      diagnostics: waveDiagnostics,
                     ),
                   ),
                   KeyedSubtree(
@@ -1506,6 +1571,7 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
     required this.profile,
     required Animation<double>? phaseClock,
     required this.staticPhase,
+    required this.diagnostics,
   }) : _phaseClock = phaseClock,
        super(repaint: phaseClock);
 
@@ -1514,6 +1580,7 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
   final BalanceCarouselWaveProfile profile;
   final Animation<double>? _phaseClock;
   final double staticPhase;
+  final BalanceCarouselWaveRuntimeDiagnostics diagnostics;
   final Path _path = Path();
   final Paint _paint = Paint()..style = PaintingStyle.fill;
 
@@ -1529,7 +1596,8 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final points = geometry.normalizedControlPoints;
+    final waveGeometry = geometry;
+    final points = waveGeometry.normalizedControlPoints;
     final path = _path
       ..reset()
       ..moveTo(size.width * points[0], size.height * points[1])
@@ -1556,6 +1624,12 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
       path,
       _paint..color = accentColor.withValues(alpha: opacity),
     );
+    diagnostics.onPaint(
+      profile: profile,
+      phase: phase,
+      paintBounds: size,
+      geometry: waveGeometry,
+    );
   }
 
   @override
@@ -1564,7 +1638,8 @@ final class _BalanceCarouselSoftWavePainter extends CustomPainter {
       oldDelegate.opacity != opacity ||
       oldDelegate.profile != profile ||
       oldDelegate._phaseClock != _phaseClock ||
-      oldDelegate.staticPhase != staticPhase;
+      oldDelegate.staticPhase != staticPhase ||
+      oldDelegate.diagnostics != diagnostics;
 }
 
 /// Paint-only wrapper around the carousel-owned clock. [CustomPainter.repaint]
@@ -1578,6 +1653,7 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
     required this.accentColor,
     required this.profile,
     required this.opacity,
+    required this.diagnostics,
   });
 
   final Key paintKey;
@@ -1586,6 +1662,7 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
   final Color accentColor;
   final BalanceCarouselWaveProfile profile;
   final double opacity;
+  final BalanceCarouselWaveRuntimeDiagnostics diagnostics;
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(
@@ -1597,6 +1674,7 @@ final class _BalanceCarouselAmbientWave extends StatelessWidget {
         profile: profile,
         phaseClock: animated ? phase : null,
         staticPhase: 0,
+        diagnostics: diagnostics,
       ),
     ),
   );

@@ -9,6 +9,7 @@ import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
 import 'package:fluvi/core/design/fluvi_rounded_box.dart';
+import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
@@ -34,6 +35,21 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 
 void main() {
+  // The physical default intentionally runs the ambient wave. Most surface
+  // tests verify static geometry and use pumpAndSettle, so model the platform
+  // reduced-motion preference unless a test explicitly owns the wave clock.
+  setUp(() {
+    TestWidgetsFlutterBinding.ensureInitialized()
+        .platformDispatcher
+        .accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+      disableAnimations: true,
+    );
+  });
+  tearDown(() {
+    TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher
+        .clearAccessibilityFeaturesTestValue();
+  });
+
   testWidgets(
     'Balance Header foreground frame changes text without balance data work',
     (tester) async {
@@ -435,14 +451,49 @@ void main() {
         ),
         findsOneWidget,
       );
+      for (final id in <String>[
+        'housing',
+        'transport',
+        'food',
+        'health',
+        'leisure',
+      ]) {
+        expect(
+          find.byKey(ValueKey<String>('balance-category-mover-$id')),
+          findsOneWidget,
+          reason:
+              'The real lower-card envelope must expose every bounded Top 5 row.',
+        );
+      }
+      expect(tester.takeException(), isNull);
+      final primaryCard = find.byKey(
+        const ValueKey<String>('balance-primary-card'),
+      );
+      final primaryCardBounds = tester.getRect(primaryCard);
       expect(
-        tester
-            .getSize(find.byKey(const ValueKey<String>('balance-primary-card')))
-            .height,
+        tester.getSize(primaryCard).height,
         lessThan(445),
         reason:
-            'The preserved lower-card bounds deliberately use local scroll.',
+            'The compact Movers pages preserve the existing lower-card bounds.',
       );
+      for (final id in <String>[
+        'housing',
+        'transport',
+        'food',
+        'health',
+        'leisure',
+      ]) {
+        expect(
+          tester
+              .getRect(
+                find.byKey(ValueKey<String>('balance-category-mover-$id')),
+              )
+              .bottom,
+          lessThanOrEqualTo(primaryCardBounds.bottom),
+          reason:
+              '$id must remain visible inside the real primary-card bounds.',
+        );
+      }
       final moversShell = tester.widget<FluviRoundedBox>(
         find.descendant(
           of: find.byKey(const ValueKey<String>('balance-primary-card')),
@@ -465,7 +516,7 @@ void main() {
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-category-movers-detail-scroll'),
+          const ValueKey<String>('balance-category-movers-cumulative-chart'),
         ),
         findsOneWidget,
       );
@@ -674,7 +725,9 @@ void main() {
         _linked(categoryMovers: _moverPresentation()),
       );
       final settings = ValueNotifier<BalancePresentationSettings>(
-        const BalancePresentationSettings.defaults(),
+        const BalancePresentationSettings.defaults().copyWith(
+          balanceCarouselWaveAnimationEnabled: false,
+        ),
       );
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
@@ -876,8 +929,10 @@ void main() {
   );
 
   testWidgets(
-    'BWD-WAVE RED: one carousel wave phase animates only when enabled and stays static for reduced motion',
+    'BWD-WAVE: the startup clock progresses, while OFF and reduced motion remain static',
     (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures();
       await tester.binding.setSurfaceSize(const Size(412, 892));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
@@ -900,13 +955,13 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
         find.byType(CenteredCarousel<BalanceCarouselCard>),
       );
       carousel.controller.jumpToIndex(9);
-      await tester.pumpAndSettle();
+      await tester.pump();
 
       double phase(String cardId) => _balanceCarouselWavePhase(tester, cardId);
       final cardBounds = tester.getRect(
@@ -916,7 +971,13 @@ void main() {
       );
       final before = phase('top-category');
       await tester.pump(const Duration(seconds: 1));
-      expect(phase('top-category'), before);
+      final animatedLater = phase('top-category');
+      expect(animatedLater, isNot(before));
+      FluviDiagnosticLogger.markUserBug('balance_wave');
+      final waveMarker = FluviDiagnosticLogger.entries.last;
+      expect(waveMarker.scope, contains('issue=balance_wave'));
+      expect(waveMarker.scope, contains('balanceWave.'));
+      expect(waveMarker.scope, contains('profile='));
       expect(
         tester.getRect(
           find.byKey(
@@ -924,21 +985,34 @@ void main() {
           ),
         ),
         cardBounds,
-        reason: 'Static wave paint must not move the card geometry.',
+        reason: 'Ambient wave paint must not move carousel card geometry.',
       );
 
       settings.value =
           (settings.value as dynamic).copyWith(
-                balanceCarouselWaveAnimationEnabled: true,
+                balanceCarouselWaveAnimationEnabled: false,
                 revision: 1,
               )
               as BalancePresentationSettings;
       await tester.pump();
-      final animatedStart = phase('top-category');
+      final staticStart = phase('top-category');
       await tester.pump(const Duration(seconds: 1));
-      final animatedLater = phase('top-category');
-      expect(animatedLater, isNot(animatedStart));
-      expect(phase('top-partner'), closeTo(animatedLater, .001));
+      expect(phase('top-category'), staticStart);
+      expect(staticStart, 0);
+      expect(phase('top-partner'), 0);
+
+      settings.value =
+          (settings.value as dynamic).copyWith(
+                balanceCarouselWaveAnimationEnabled: true,
+                revision: 2,
+              )
+              as BalancePresentationSettings;
+      await tester.pump();
+      final resumedStart = phase('top-category');
+      await tester.pump(const Duration(seconds: 1));
+      final resumedLater = phase('top-category');
+      expect(resumedLater, isNot(resumedStart));
+      expect(phase('top-partner'), closeTo(resumedLater, .001));
       final categoryGeometry = _balanceCarouselWaveGeometry(
         tester,
         'top-category',
@@ -963,23 +1037,41 @@ void main() {
         reason: 'Ambient wave animation must remain paint-only.',
       );
 
+      settings.value = settings.value.copyWith(
+        balanceCarouselWaveOpacity: 0,
+        revision: 3,
+      );
+      await tester.pump();
+      final invisibleWaveStart = phase('top-category');
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        phase('top-category'),
+        isNot(invisibleWaveStart),
+        reason: 'Opacity owns paint only; it must not pause the shared clock.',
+      );
+      final phaseBeforeSelection = phase('top-category');
+      final geometryBeforeSelection = _balanceCarouselWaveGeometry(
+        tester,
+        'top-category',
+      );
+
       carousel.controller.jumpToIndex(10);
       await tester.pump();
       expect(
         phase('top-category'),
-        closeTo(animatedLater, .01),
+        closeTo(phaseBeforeSelection, .01),
         reason: 'Changing selection must not reset the shared wave phase.',
       );
       expect(
         _balanceCarouselWaveGeometry(tester, 'top-category'),
-        categoryGeometry,
+        geometryBeforeSelection,
         reason: 'Center/side position must not replace a card wave identity.',
       );
 
       settings.value =
           (settings.value as dynamic).copyWith(
                 balanceCarouselWaveAnimationEnabled: false,
-                revision: 2,
+                revision: 4,
               )
               as BalancePresentationSettings;
       await tester.pump();
@@ -991,7 +1083,7 @@ void main() {
 
       settings.value = settings.value.copyWith(
         balanceCarouselWaveAnimationEnabled: true,
-        revision: 3,
+        revision: 5,
       );
 
       await tester.pumpWidget(
@@ -1032,7 +1124,9 @@ void main() {
         _linked(),
       );
       final settings = ValueNotifier<BalancePresentationSettings>(
-        const BalancePresentationSettings.defaults(),
+        const BalancePresentationSettings.defaults().copyWith(
+          balanceCarouselWaveAnimationEnabled: false,
+        ),
       );
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
@@ -2949,6 +3043,66 @@ DashboardBalanceCategoryMoversPresentation _moverPresentation() =>
               bucket: 1,
               currentMinor: 260000,
               referenceMinor: 120000,
+            ),
+          ],
+        ),
+        DashboardBalanceCategoryMover(
+          id: 'transport',
+          label: 'Közlekedés',
+          categoryColorId: 'color_03',
+          categoryIconId: 'icon_03',
+          currentMinor: 220000,
+          referenceMinor: 100000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 1,
+              currentMinor: 220000,
+              referenceMinor: 100000,
+            ),
+          ],
+        ),
+        DashboardBalanceCategoryMover(
+          id: 'food',
+          label: 'Élelmiszer',
+          categoryColorId: 'color_08',
+          categoryIconId: 'icon_08',
+          currentMinor: 180000,
+          referenceMinor: 90000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 1,
+              currentMinor: 180000,
+              referenceMinor: 90000,
+            ),
+          ],
+        ),
+        DashboardBalanceCategoryMover(
+          id: 'health',
+          label: 'Egészség',
+          categoryColorId: 'color_05',
+          categoryIconId: 'icon_05',
+          currentMinor: 150000,
+          referenceMinor: 70000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 1,
+              currentMinor: 150000,
+              referenceMinor: 70000,
+            ),
+          ],
+        ),
+        DashboardBalanceCategoryMover(
+          id: 'leisure',
+          label: 'Szabadidő',
+          categoryColorId: 'color_12',
+          categoryIconId: 'icon_12',
+          currentMinor: 130000,
+          referenceMinor: 60000,
+          trend: const <DashboardBalanceCategoryMoverTrendPoint>[
+            DashboardBalanceCategoryMoverTrendPoint(
+              bucket: 1,
+              currentMinor: 130000,
+              referenceMinor: 60000,
             ),
           ],
         ),

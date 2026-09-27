@@ -1320,7 +1320,7 @@ void main() {
   );
 
   testWidgets(
-    'MOVERS-REFERENCE-RED: the two local pages expose the reference-locked title, controls, three KPIs and cumulative chart',
+    'MOVERS-REFERENCE: the two local pages reserve their default hierarchy for ranking and chart content',
     (tester) async {
       await tester.pumpWidget(
         _host(
@@ -1335,6 +1335,10 @@ void main() {
         find.text(
           'A kiválasztott időszak költéseinek változása\na megelőző azonos időszakhoz képest.',
         ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-info')),
         findsOneWidget,
       );
       expect(
@@ -1352,13 +1356,7 @@ void main() {
       expect(find.text('csökkenés'), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('balance-category-movers-footer')),
-        findsOneWidget,
-      );
-      expect(
-        find.text(
-          'A százalékos változás a kiválasztott időszak és a megelőző azonos időszak költéseinek különbségét mutatja.',
-        ),
-        findsOneWidget,
+        findsNothing,
       );
 
       await tester.tap(
@@ -1387,17 +1385,17 @@ void main() {
         find.byKey(
           const ValueKey<String>('balance-category-movers-kpi-current'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(
           const ValueKey<String>('balance-category-movers-kpi-percentage'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey<String>('balance-category-movers-kpi-delta')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(
@@ -1407,7 +1405,7 @@ void main() {
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-category-movers-detail-footer'),
+          const ValueKey<String>('balance-category-movers-detail-info'),
         ),
         findsOneWidget,
       );
@@ -1486,10 +1484,12 @@ void main() {
   );
 
   testWidgets(
-    'MOVERS-STRETCH: the existing taller envelope distributes Page 1 space through rows and keeps the footer at the card bottom',
+    'MOVERS-STRETCH: the existing taller envelope distributes Page 1 ranking rows without a dead permanent footer',
     (tester) async {
-      Future<({double rowGap, double rowHeight, Rect footer, Rect body})>
-      measure({required double height, required double extraHeight}) async {
+      Future<({double rowHeight, Rect lastRow, Rect body})> measure({
+        required double height,
+        required double extraHeight,
+      }) async {
         await tester.pumpWidget(
           _host(
             width: 378,
@@ -1502,17 +1502,11 @@ void main() {
         final first = tester.getRect(
           find.byKey(const ValueKey<String>('balance-category-mover-housing')),
         );
-        final second = tester.getRect(
-          find.byKey(
-            const ValueKey<String>('balance-category-mover-reference-1'),
-          ),
-        );
         return (
-          rowGap: second.top - first.bottom,
           rowHeight: first.height,
-          footer: tester.getRect(
+          lastRow: tester.getRect(
             find.byKey(
-              const ValueKey<String>('balance-category-movers-footer'),
+              const ValueKey<String>('balance-category-mover-reference-4'),
             ),
           ),
           body: tester.getRect(
@@ -1526,10 +1520,16 @@ void main() {
       final baseline = await measure(height: 360, extraHeight: 0);
       final stretched = await measure(height: 520, extraHeight: 100);
 
-      expect(baseline.rowHeight, 46);
-      expect(stretched.rowHeight, baseline.rowHeight);
-      expect(stretched.rowGap, greaterThan(baseline.rowGap));
-      expect(stretched.footer.bottom, closeTo(stretched.body.bottom - 10, .1));
+      expect(baseline.rowHeight, inInclusiveRange(30, 42));
+      expect(stretched.rowHeight, greaterThanOrEqualTo(baseline.rowHeight));
+      expect(
+        stretched.lastRow.bottom,
+        lessThanOrEqualTo(stretched.body.bottom),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-footer')),
+        findsNothing,
+      );
       expect(
         find.byKey(
           const ValueKey<String>('balance-category-mover-reference-4'),
@@ -1537,6 +1537,215 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'MOVERS-COMPACTION RED: Page 1 uses one compact title-row info control and shows its bounded ranking without permanent explanatory surfaces',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          width: 378,
+          height: 320,
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: _referenceMovers()),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-info')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'A kiválasztott időszak költéseinek változása\na megelőző azonos időszakhoz képest.',
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-category-movers-footer')),
+        findsNothing,
+      );
+      final decrease = tester.getSize(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-direction-decrease'),
+        ),
+      );
+      expect(decrease.height, inInclusiveRange(30, 32));
+      expect(decrease.width, inInclusiveRange(100, 112));
+      final body = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-category-movers'),
+        ),
+      );
+      final lastRow = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('balance-category-mover-reference-4'),
+        ),
+      );
+      expect(lastRow.bottom, lessThanOrEqualTo(body.bottom));
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-list-scroll'),
+        ),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-movers-info')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-explanation-overlay'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-linked-detail-category-movers'),
+          ),
+        ),
+        body,
+        reason: 'The in-card explanation must not resize mode content.',
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-overlay-close'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-explanation-overlay'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'MOVERS-COMPACTION RED: Page 2 gives reclaimed space to the chart and exposes exactly three metrics only on chart tap',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          width: 378,
+          height: 320,
+          topic: BalanceLinkedDetailTopic.categoryMovers,
+          presentation: _linked(categoryMovers: _referenceMovers()),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-category-mover-housing')),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-detail-info'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-kpi-current'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-overlay'),
+        ),
+        findsNothing,
+      );
+      final chart = find.byKey(
+        const ValueKey<String>('balance-category-movers-cumulative-chart'),
+      );
+      expect(chart, findsOneWidget);
+      expect(tester.getSize(chart).height, greaterThanOrEqualTo(150));
+      final detailBounds = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+      );
+
+      final chartBounds = tester.getRect(chart);
+      await tester.tapAt(Offset(chartBounds.center.dx, chartBounds.top + 6));
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-overlay'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-current'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-percentage'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-delta'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Előző'), findsNothing);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-detail-info'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-overlay'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-explanation-overlay'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey<String>('balance-category-movers-detail')),
+        ),
+        detailBounds,
+        reason: 'Neither in-card overlay may resize mode content.',
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-overlay-close'),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(chart);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-overlay'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tapAt(Offset(chartBounds.center.dx, chartBounds.top + 6));
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-category-movers-metrics-overlay'),
+        ),
+        findsNothing,
+      );
     },
   );
 }

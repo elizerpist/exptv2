@@ -24,7 +24,7 @@ void main() {
       expect(controller.value.balanceCarouselBackgroundOpacity, 1);
       expect(controller.value.balanceCarouselWaveOpacity, 1);
       expect(controller.value.balanceCarouselTintedBackgroundEnabled, isTrue);
-      expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
+      expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
       expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
       controller
@@ -134,7 +134,7 @@ void main() {
       final dynamic controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
-      expect(controller.value.balanceCarouselWaveAnimationEnabled, isFalse);
+      expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
       expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
       expect(controller.value.balanceCarouselBorderOpacity, 1);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
