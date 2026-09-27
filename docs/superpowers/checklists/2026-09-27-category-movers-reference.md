@@ -23,5 +23,5 @@ as user-only physical validation.
 | DEF-01 | §25–30 / canonical defaults | Segmented summary, separators off, straight nav, containedFlat nav and modeContent→direction→summary initialize and remain user-changeable. | unit tests | DONE |
 | REG-01 | §24, §37 / scope guard | No balance calculations, query/data boundaries, carousel semantics, Summary navigation, count or BottomNav geometry regress. | focused regression suite + code review | DONE |
 | VIS-01 | §39 / visual review | Both full reference pages and the Day mark are compared against change.png/golden evidence for hierarchy, colours, padding and card anatomy. The only responsive exception is the preserved 210px card envelope, whose complete anatomy scrolls locally instead of changing outer geometry. | reference reinspection + screenshot/golden/core-host evidence | DONE |
-| FINAL-01 | §40–41 / delivery | Analyzer/tests pass, review complete, commit/push and normal human APK delivery complete. | command logs + Actions APK | NOT DONE |
+| FINAL-01 | §40–41 / delivery | Analyzer/tests pass, review complete, commit/push and normal human APK delivery complete. | command logs + Actions APK | DONE |
 | USER-01 | §39–41 / physical device | Physical acceptance remains user-only. | user | PENDING — USER ONLY |
