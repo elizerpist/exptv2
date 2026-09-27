@@ -80,5 +80,5 @@ existing settings controllers remain the sole write paths.
 - [x] Format changed Dart files.
 - [x] Run all focused tests plus `flutter analyze` in Ubuntu proot.
 - [x] Re-read this checklist/reference and update only evidence-supported statuses.
-- [ ] Commit, push, await the exact human diagnostic APK job, download the normal
+- [x] Commit, push, await the exact human diagnostic APK job, download the normal
   APK to `/storage/emulated/0/Download/fluvi`, and record SHA-256.

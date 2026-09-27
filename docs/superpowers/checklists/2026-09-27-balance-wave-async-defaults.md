@@ -8,4 +8,4 @@
 | BWA-04 | User §§12–14, 21 | Balance settings/tuner | Background toggle/opacity, wave opacity and animation controls are co-located and independently preserve values. | Settings and tuner/widget tests. | DONE |
 | BWA-05 | User §§1–2, 15–16, 22 | Balance defaults/Header tuning | Time labels default hidden; Balance veil defaults enabled/white; all setters retain user override behavior. | Model/controller tests. | DONE |
 | BWA-06 | User §24 | carousel integration | Outer geometry, controller ownership, physics and selected semantics do not change. | Existing canonical/carousel boundary tests. | DONE |
-| BWA-07 | User §25 | delivery | Focused tests/analyze, GitHub human APK and local hash evidence complete. | Commands, Actions run and filesystem. | PARTIAL — local verification complete; commit, push and human APK delivery pending. |
+| BWA-07 | User §25 | delivery | Focused tests/analyze, GitHub human APK and local hash evidence complete. | Commands, Actions run and filesystem. | DONE — Actions run 36280839490 human job succeeded for `a393f95e`; local APK SHA-256 is `c72d05c573646bffdeab3e28fe007c2fb180137b5c27ffa95f9b315564c3be07`. |
