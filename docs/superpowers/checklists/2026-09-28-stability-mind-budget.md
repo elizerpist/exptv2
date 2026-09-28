@@ -49,7 +49,7 @@
 | BUDGET-01 | Prompt 3 | Budget core surface | selecting `Közös kártya` joins Header and content with Mind-equivalent seamless ownership | widget geometry/surface test | DONE |
 | BUDGET-02 | Prompt 3 | shared surface primitive | one shared shape mechanism, no duplicated radius state machine | boundary/direct inspection test | DONE |
 | REG-01 | Both prompts | dashboard defaults/geometry | prior accepted defaults, count visibility, carousel physics, Mind data/slider, and Budget semantics remain | serial focused regressions | DONE |
-| DEL-01 | Global delivery rule | GitHub Actions/APK | commit, push, successful human APK, local SHA-256 | Actions + local SHA | NOT DONE |
+| DEL-01 | Global delivery rule | GitHub Actions/APK | commit, push, successful human APK, local SHA-256 | Actions + local SHA | DONE |
 
 ## Evidence received
 
@@ -81,3 +81,11 @@
 - The Stability source files and their focused goldens were re-opened before
   delivery review. Automated evidence verifies layout state and interaction;
   final physical comparison on the user's device remains `PENDING — USER ONLY`.
+- Production commit `1ec27103937cacb7744610de4ae9ed3747582e89` was pushed to
+  `feature/balance-wave-defaults`. GitHub Actions run `36380260566` completed
+  `test-flutter`, `test-core`, and `build-human-diagnostic-apk` successfully.
+  The exact human APK was downloaded to
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_1ec2710.apk`.
+  Its local SHA-256 is
+  `18e4845a15d197b1ec50257e03da8f17800dd458afeb46e3aa97629ef796c617`, which
+  equals the release digest.
