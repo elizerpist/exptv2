@@ -19,7 +19,7 @@ references remain mandatory inputs: the four-section composition is based on
 | TET-02 | Prompt 3 §§4–16,28–31 | pure four-section resolver + scaffold | Header-excluded body partitions exactly 60/40 and 70/30/50/50; four neutral centered labels only, with visual gutter insets only. | pure + mounted rect + golden test | DONE |
 | TET-03 | Prompt 3 §§17–26,32–35 | Balance body switch | Tetris replaces carousel/detail/dots without changing unified outer/downstream geometry; returning restores the selected topic and no financial/Query work occurs. | Balance core/boundary regressions | DONE |
 | REG-01 | all prompts | existing defaults and surfaces | Existing Mind and Balance defaults, card visibility, wave, carousel mechanics, Direction/Summary/count/nav geometry remain intact. | focused suites, fast suite, analyzer, diff check | DONE |
-| DEL-01 | user delivery instruction | GitHub Actions / APK | Production commit is pushed; exact human APK from its successful run is downloaded to `/storage/emulated/0/Download/fluvi` and SHA-256 verified. | GitHub Actions + file/hash | NOT DONE |
+| DEL-01 | user delivery instruction | GitHub Actions / APK | Production commit is pushed; exact human APK from its successful run is downloaded to `/storage/emulated/0/Download/fluvi` and SHA-256 verified. | successful `build-human-diagnostic-apk` job + local SHA-256 | DONE |
 
 `PHYSICAL VALIDATION: PENDING — USER ONLY`
 
@@ -27,3 +27,10 @@ Verification evidence: focused Mind suite (50 tests), Balance core suite (34
 tests), settings/tuner/geometry suite (31 tests), project fast suite (434
 tests), `dart format --set-exit-if-changed`, `git diff --check`, and
 `flutter analyze --no-pub --no-fatal-infos` all passed before delivery.
+
+Delivery evidence: production commit `1194cf2507048d03607f975bb70f1f4ba2ffc244`,
+successful human-APK job
+`https://github.com/elizerpist/exptv2/actions/runs/36397006560/job/108847533878`,
+and `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_1194cf2.apk`
+with SHA-256
+`523de929b7475cd99a58e61a98edfce3a1085b0ed7630e16daef712393afb804`.
