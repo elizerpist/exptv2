@@ -21,6 +21,9 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_carousel_wave_motion.dart';
 import 'balance_carousel_wave_diagnostics.dart';
+import 'balance_alternative_income_expense_bar_card.dart';
+import 'balance_alternative_scope_presentation.dart';
+import 'balance_five_section_layout.dart';
 import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
@@ -522,7 +525,11 @@ final class _BalanceDashboardCoreSurfaceState
                       presentationSettings: widget.presentationSettings,
                     ),
             ),
-            if (showsTetris) _BalanceFourSectionScaffold(geometry: geometry),
+            if (showsTetris)
+              _BalanceAlternativeScopeScaffold(
+                geometry: geometry,
+                presentation: widget.balanceLinkedPresentation,
+              ),
             DashboardCoreModeHeaderScaffold(
               bounds: geometry.headerBounds,
               surfaceColor: widget.presentation.palette.upcomingHeaderTone,
@@ -893,8 +900,57 @@ final class _BalanceUnifiedHeaderContentBridge extends StatelessWidget {
   }
 }
 
-/// Geometry-only first phase of the requested alternative unified Balance
-/// presentation. It deliberately consumes no financial projection.
+/// Selects a distinct alternative body composition from canonical scope
+/// identity.  Only the immutable existing Balance primary presentation crosses
+/// this UI boundary; it never asks for a second projection or query.
+final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
+  const _BalanceAlternativeScopeScaffold({
+    required this.geometry,
+    required this.presentation,
+  });
+
+  final DashboardLayoutFrame geometry;
+  final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
+
+  @override
+  Widget build(BuildContext context) {
+    final linked = presentation;
+    if (linked == null) return _BalanceFourSectionScaffold(geometry: geometry);
+    return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
+      valueListenable: linked,
+      builder: (context, value, _) {
+        if (value == null) {
+          return _BalanceFourSectionScaffold(geometry: geometry);
+        }
+        return switch (BalanceAlternativeScopePresentation.fromPrimary(
+          value.cashflow,
+        )) {
+          BalanceAlternativeSumPresentation(:final incomeExpense) =>
+            _BalanceFiveSectionScaffold(
+              geometry: geometry,
+              presentation: incomeExpense,
+              scopeKey: 'sum',
+            ),
+          BalanceAlternativeYearPresentation(:final incomeExpense) =>
+            _BalanceFiveSectionScaffold(
+              geometry: geometry,
+              presentation: incomeExpense,
+              scopeKey: 'year',
+            ),
+          BalanceAlternativeMonthPresentation() => _BalanceFourSectionScaffold(
+            geometry: geometry,
+          ),
+          BalanceAlternativeDayPresentation() => _BalanceFourSectionScaffold(
+            geometry: geometry,
+          ),
+        };
+      },
+    );
+  }
+}
+
+/// Existing four-section alternative layout.  MONTH and DAY intentionally
+/// remain on this exact composition until their dedicated visual phases.
 final class _BalanceFourSectionScaffold extends StatelessWidget {
   const _BalanceFourSectionScaffold({required this.geometry});
 
@@ -912,16 +968,9 @@ final class _BalanceFourSectionScaffold extends StatelessWidget {
       bounds: combinedBounds,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const outerInset = 12.0;
-          final bodyHeight = math.max(
-            0.0,
-            constraints.maxHeight - geometry.headerBounds.height,
-          );
-          final bodyRect = Rect.fromLTWH(
-            outerInset,
-            geometry.headerBounds.height + outerInset,
-            math.max(0.0, constraints.maxWidth - outerInset * 2),
-            math.max(0.0, bodyHeight - outerInset * 2),
+          final bodyRect = _balanceAlternativeBodyRect(
+            constraints,
+            geometry.headerBounds.height,
           );
           final layout = BalanceFourSectionLayout.resolve(bodyRect);
           return Stack(
@@ -963,6 +1012,102 @@ final class _BalanceFourSectionScaffold extends StatelessWidget {
   }
 }
 
+/// SUM and YEAR share five exact allocations while keeping the pre-existing
+/// Card 1/2/4 placeholders structurally neutral in this phase.
+final class _BalanceFiveSectionScaffold extends StatelessWidget {
+  const _BalanceFiveSectionScaffold({
+    required this.geometry,
+    required this.presentation,
+    required this.scopeKey,
+  });
+
+  final DashboardLayoutFrame geometry;
+  final BalanceAlternativeIncomeExpenseBarPresentation presentation;
+  final String scopeKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final combinedBounds = DashboardBounds(
+      left: geometry.headerBounds.left,
+      top: geometry.headerBounds.top,
+      width: geometry.headerBounds.width,
+      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    );
+    return DashboardCoreModeFramePosition(
+      bounds: combinedBounds,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final layout = BalanceFiveSectionLayout.resolve(
+            _balanceAlternativeBodyRect(
+              constraints,
+              geometry.headerBounds.height,
+            ),
+          );
+          return Stack(
+            key: ValueKey<String>('balance-alternative-$scopeKey-layout'),
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              _BalanceFourSectionSlot(
+                slot: layout.card1,
+                label: 'Card 1',
+                semanticsLabel: 'Balance alternatív szekció 1',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-1'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-1'),
+              ),
+              _BalanceFourSectionSlot(
+                slot: layout.card2,
+                label: 'Card 2',
+                semanticsLabel: 'Balance alternatív szekció 2',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-2'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-2'),
+              ),
+              _BalanceAlternativeSectionSlot(
+                slot: layout.card3,
+                allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
+                child: Semantics(
+                  label: 'Bevétel és Kiadás oszlopdiagram',
+                  child: BalanceAlternativeIncomeExpenseBarCard(
+                    presentation: presentation,
+                  ),
+                ),
+              ),
+              _BalanceFourSectionSlot(
+                slot: layout.card4,
+                label: 'Card 4',
+                semanticsLabel: 'Balance alternatív szekció 4',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
+              ),
+              _BalanceFourSectionSlot(
+                slot: layout.card5,
+                label: 'Card 5',
+                semanticsLabel: 'Balance alternatív szekció 5',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-5'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-5'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+Rect _balanceAlternativeBodyRect(
+  BoxConstraints constraints,
+  double headerHeight,
+) {
+  const outerInset = 12.0;
+  final bodyHeight = math.max(0.0, constraints.maxHeight - headerHeight);
+  return Rect.fromLTWH(
+    outerInset,
+    headerHeight + outerInset,
+    math.max(0.0, constraints.maxWidth - outerInset * 2),
+    math.max(0.0, bodyHeight - outerInset * 2),
+  );
+}
+
 final class _BalanceFourSectionSlot extends StatelessWidget {
   const _BalanceFourSectionSlot({
     required this.slot,
@@ -980,6 +1125,51 @@ final class _BalanceFourSectionSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _BalanceAlternativeSectionSlot(
+      slot: slot,
+      allocationKey: allocationKey,
+      surfaceKey: surfaceKey,
+      child: Semantics(
+        label: semanticsLabel,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: FluviVisualTokens.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: FluviVisualTokens.textSecondary.withValues(alpha: .14),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: FluviVisualTokens.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _BalanceAlternativeSectionSlot extends StatelessWidget {
+  const _BalanceAlternativeSectionSlot({
+    required this.slot,
+    required this.allocationKey,
+    required this.surfaceKey,
+    required this.child,
+  });
+
+  final Rect slot;
+  final Key allocationKey;
+  final Key surfaceKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
     // Deflating every allocation by half a gutter makes one consistent shared
     // 6px visual seam without perturbing the mathematical slot boundaries.
     return Positioned.fromRect(
@@ -988,29 +1178,7 @@ final class _BalanceFourSectionSlot extends StatelessWidget {
         key: allocationKey,
         child: Padding(
           padding: const EdgeInsets.all(3),
-          child: Semantics(
-            label: semanticsLabel,
-            child: DecoratedBox(
-              key: surfaceKey,
-              decoration: BoxDecoration(
-                color: FluviVisualTokens.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: FluviVisualTokens.textSecondary.withValues(alpha: .14),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          child: KeyedSubtree(key: surfaceKey, child: child),
         ),
       ),
     );

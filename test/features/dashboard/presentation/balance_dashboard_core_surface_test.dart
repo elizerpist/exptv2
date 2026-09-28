@@ -261,7 +261,7 @@ void main() {
   );
 
   testWidgets(
-    'BAL-UNI-02/TET-03: unified surface is one Header-linked owner and four-section mode preserves selected topic',
+    'BAL-UNI-02/TET-03/ALT2-02: unified surface routes SUM through five sections and preserves selected topic',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
@@ -313,7 +313,7 @@ void main() {
 
       settings.setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
       await tester.pump();
-      for (final index in <int>[1, 2, 3, 4]) {
+      for (final index in <int>[1, 2, 3, 4, 5]) {
         expect(
           find.byKey(ValueKey<String>('balance-tetris-card-$index')),
           findsOneWidget,
@@ -331,6 +331,9 @@ void main() {
       final card4Slot = tester.getRect(
         find.byKey(const ValueKey<String>('balance-tetris-slot-4')),
       );
+      final card5Slot = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-5')),
+      );
       final bodyWidth = card3Slot.width + card4Slot.width;
       final bodyHeight = card3Slot.height + card1Slot.height;
       expect(card3Slot.width / bodyWidth, closeTo(.70, .001));
@@ -338,13 +341,17 @@ void main() {
       expect(card1Slot.width / bodyWidth, closeTo(.50, .001));
       expect(card2Slot.width / bodyWidth, closeTo(.50, .001));
       expect(card3Slot.height / bodyHeight, closeTo(.60, .001));
-      expect(card4Slot.height / bodyHeight, closeTo(.60, .001));
+      expect(card4Slot.height / bodyHeight, closeTo(.30, .001));
+      expect(card5Slot.height / bodyHeight, closeTo(.30, .001));
       expect(card1Slot.height / bodyHeight, closeTo(.40, .001));
       expect(card2Slot.height / bodyHeight, closeTo(.40, .001));
       expect(card3Slot.bottom, closeTo(card1Slot.top, .01));
-      expect(card4Slot.bottom, closeTo(card2Slot.top, .01));
+      expect(card4Slot.bottom, closeTo(card5Slot.top, .01));
+      expect(card5Slot.bottom, closeTo(card2Slot.top, .01));
       expect(card4Slot.right, closeTo(card2Slot.right, .01));
+      expect(card5Slot.right, closeTo(card2Slot.right, .01));
       expect(card1Slot.bottom, closeTo(card2Slot.bottom, .01));
+      expect(find.text('Bevétel / Kiadás'), findsOneWidget);
       expect(find.byType(CenteredCarousel<BalanceCarouselCard>), findsNothing);
       expect(
         find.byKey(
@@ -424,6 +431,93 @@ void main() {
       await expectLater(
         find.byKey(const ValueKey<String>('balance-surface-golden-boundary')),
         matchesGoldenFile('../../../goldens/balance_tetris_scaffold.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'ALT2-04/06: SUM and YEAR have five slots while Month and Day retain the unchanged four-slot alternative body',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(cashflow: _alternativeYearCashflow()),
+      );
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-alternative-year-layout')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-sum-plot-scroll'),
+        ),
+        findsNothing,
+      );
+      for (final label in <String>[
+        'JAN',
+        'FEB',
+        'MÁR',
+        'ÁPR',
+        'MÁJ',
+        'JÚN',
+        'JÚL',
+        'AUG',
+        'SZE',
+        'OKT',
+        'NOV',
+        'DEC',
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
+
+      linked.value = _linked(cashflow: _alternativeMonthCashflow());
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-income-expense-bar-card'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-4')),
+        findsOneWidget,
+      );
+
+      linked.value = _linked(cashflow: _alternativeDayCashflow());
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-5')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-income-expense-bar-card'),
+        ),
+        findsNothing,
       );
     },
   );
@@ -3390,6 +3484,7 @@ DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(
 );
 
 DashboardBalanceLinkedPresentation _linked({
+  DashboardBalancePrimaryPresentation? cashflow,
   DashboardBalanceCategoryMoversPresentation? categoryMovers,
   List<DashboardBalanceRankedItem>? topCategories,
 }) {
@@ -3402,26 +3497,28 @@ DashboardBalanceLinkedPresentation _linked({
     identity: identity,
     timeScope: const AllTimeScope(),
     selectedDirection: LedgerDirection.income,
-    cashflow: DashboardBalancePrimaryPresentation(
-      identity: identity,
-      timeScope: const AllTimeScope(),
-      mode: DashboardBalancePrimaryMode.sum,
-      incomeTotalMinor: 700000,
-      expenseTotalMinor: 400000,
-      periodPairs: const <DashboardBalancePrimaryPeriodPair>[
-        DashboardBalancePrimaryPeriodPair(
-          value: 2025,
-          incomeMinor: 300000,
-          expenseMinor: 200000,
+    cashflow:
+        cashflow ??
+        DashboardBalancePrimaryPresentation(
+          identity: identity,
+          timeScope: const AllTimeScope(),
+          mode: DashboardBalancePrimaryMode.sum,
+          incomeTotalMinor: 700000,
+          expenseTotalMinor: 400000,
+          periodPairs: const <DashboardBalancePrimaryPeriodPair>[
+            DashboardBalancePrimaryPeriodPair(
+              value: 2025,
+              incomeMinor: 300000,
+              expenseMinor: 200000,
+            ),
+            DashboardBalancePrimaryPeriodPair(
+              value: 2026,
+              incomeMinor: 400000,
+              expenseMinor: 200000,
+            ),
+          ],
+          dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
         ),
-        DashboardBalancePrimaryPeriodPair(
-          value: 2026,
-          incomeMinor: 400000,
-          expenseMinor: 200000,
-        ),
-      ],
-      dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
-    ),
     latestTransactions: const <DashboardBalanceScopedTransaction>[
       DashboardBalanceScopedTransaction(
         entryId: 'latest-in-scope',
@@ -3469,6 +3566,52 @@ DashboardBalanceLinkedPresentation _linked({
     },
   );
 }
+
+const _alternativeBalanceIdentity = DashboardBalancePrimaryIdentity(
+  upstreamScopeKey: 'income|expense',
+  indexGeneration: 3,
+  coreRevision: 7,
+);
+
+DashboardBalancePrimaryPresentation _alternativeYearCashflow() =>
+    DashboardBalancePrimaryPresentation(
+      identity: _alternativeBalanceIdentity,
+      timeScope: const YearScope(2026),
+      mode: DashboardBalancePrimaryMode.year,
+      incomeTotalMinor: 780000,
+      expenseTotalMinor: 330000,
+      periodPairs: <DashboardBalancePrimaryPeriodPair>[
+        for (var month = 1; month <= 12; month += 1)
+          DashboardBalancePrimaryPeriodPair(
+            value: month,
+            incomeMinor: month == 12 ? 90000 : 0,
+            expenseMinor: month == 1 ? 40000 : 0,
+          ),
+      ],
+      dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+    );
+
+DashboardBalancePrimaryPresentation _alternativeMonthCashflow() =>
+    DashboardBalancePrimaryPresentation(
+      identity: _alternativeBalanceIdentity,
+      timeScope: MonthScope(const YearMonth(year: 2026, month: 8)),
+      mode: DashboardBalancePrimaryMode.month,
+      incomeTotalMinor: 0,
+      expenseTotalMinor: 0,
+      periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+      dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+    );
+
+DashboardBalancePrimaryPresentation _alternativeDayCashflow() =>
+    DashboardBalancePrimaryPresentation(
+      identity: _alternativeBalanceIdentity,
+      timeScope: DayScope(const LocalDate(year: 2026, month: 8, day: 7)),
+      mode: DashboardBalancePrimaryMode.unsupportedDay,
+      incomeTotalMinor: 0,
+      expenseTotalMinor: 0,
+      periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+      dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+    );
 
 DashboardBalanceCategoryMoversPresentation _moverPresentation() =>
     DashboardBalanceCategoryMoversPresentation(
