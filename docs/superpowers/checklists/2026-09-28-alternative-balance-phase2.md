@@ -14,6 +14,6 @@ The user explicitly corrected the original filename and approved this source.
 | ALT2-05 | §§11–16,40–41 | SUM Card 3 | Real years remain chronological; only the plot lane scrolls on overflow, begins at recent end once, and preserves user position. | adapter + widget test | DONE |
 | ALT2-06 | §§24–27,42 | scope content | SUM/YEAR Card 3 is real while all other requested slots remain placeholders; MONTH/DAY have no Card 5 or new bars. | widget regression | DONE |
 | ALT2-07 | §§32–35,43 | boundary/gesture | No bar infocards or extra repository/Query/prepared-index work; dashboard vertical behavior remains parent-owned. | focused regression | DONE |
-| ALT2-08 | delivery | CI/APK | Production commit pushed; successful exact human APK is downloaded under `/storage/emulated/0/Download/fluvi` and hashed. | Actions + file/hash | NOT DONE |
+| ALT2-08 | delivery | CI/APK | Production commit pushed; successful exact human APK is downloaded under `/storage/emulated/0/Download/fluvi` and hashed. | Actions + file/hash | DONE |
 
 `PHYSICAL VALIDATION: PENDING — USER ONLY`
