@@ -49,7 +49,7 @@
 | BUDGET-01 | Prompt 3 | Budget core surface | selecting `Közös kártya` joins Header and content with Mind-equivalent seamless ownership | widget geometry/surface test | DONE |
 | BUDGET-02 | Prompt 3 | shared surface primitive | one shared shape mechanism, no duplicated radius state machine | boundary/direct inspection test | DONE |
 | REG-01 | Both prompts | dashboard defaults/geometry | prior accepted defaults, count visibility, carousel physics, Mind data/slider, and Budget semantics remain | serial focused regressions | DONE |
-| DEL-01 | Global delivery rule | GitHub Actions/APK | commit, push, successful human APK, local SHA-256 | Actions + local SHA | DONE |
+| DEL-01 | Global delivery rule | GitHub Actions/APK | commit, push, successful human APK, local SHA-256 | Actions + local SHA | PARTIAL — initial-mount visibility reconciliation awaits its own production APK |
 
 ## Evidence received
 
@@ -71,7 +71,8 @@
   `DashboardHeaderContentSeamShape` used by Mind. Split Budget remains a
   separate surface.
 - Final serial validation in Ubuntu/proot passed:
-  - 93 Balance stability/visibility/settings tests;
+  - 94 Balance stability/visibility/settings tests, including the initially
+    preconfigured-hidden selected-card reconciliation case;
   - 101 Mind/Budget/default/projection tests;
   - 22 Mind mode-host tests; and
   - 37 CoreDashboard geometry/default tests.
@@ -89,3 +90,8 @@
   Its local SHA-256 is
   `18e4845a15d197b1ec50257e03da8f17800dd458afeb46e3aa97629ef796c617`, which
   equals the release digest.
+- A final independent review then exposed an initial-mount-only visibility
+  reconciliation case (the default Cashflow card can already be hidden before
+  the surface mounts). The focused red test failed, the central initial
+  reconciliation fixed it, and the serial Balance suite passed 94 tests. Its
+  production APK delivery is tracked by the current `DEL-01` status.

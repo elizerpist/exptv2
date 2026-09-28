@@ -372,6 +372,52 @@ void main() {
     },
   );
 
+  testWidgets(
+    'BCV-INIT-RED: an initially hidden default topic is reconciled before the first Balance frame',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = BalancePresentationController()
+        ..setBalanceCarouselCardVisible(
+          BalanceCarouselCardKind.cashflow,
+          false,
+        );
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-closings')),
+        findsOneWidget,
+        reason:
+            'The initial Cashflow selection is hidden, so the first visible '
+            'canonical card must own both carousel and detail state.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-cashflow')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-insight-indicator-cashflow'),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
   test(
     'BX5 RED: Closings compact fraction uses strict-positive bucket DTOs',
     () {

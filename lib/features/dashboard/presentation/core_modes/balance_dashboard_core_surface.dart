@@ -350,6 +350,7 @@ final class _BalanceDashboardCoreSurfaceState
   void initState() {
     super.initState();
     _bindPresentationSettings();
+    _reconcileVisibleSelection();
   }
 
   @override
