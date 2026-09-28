@@ -2,7 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../../application/dashboard_balance_closings_momentum_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
+import '../../application/dashboard_balance_retention_stability_projection.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 
 /// Render-only adapter boundary for the scope-specific alternative Balance
@@ -35,14 +37,88 @@ sealed class BalanceAlternativeScopePresentation {
         primary,
         domain: BalanceAlternativeBarDomain.months,
       ),
+      closings: BalanceAlternativeYearClosingsPresentation.fromPeriodPairs(
+        primary.periodPairs,
+      ),
+      savings: BalanceAlternativeSavingsPresentation.fromTotals(
+        incomeMinor: primary.incomeTotalMinor,
+        expenseMinor: primary.expenseTotalMinor,
+        retentionBasisPoints: null,
+      ),
     ),
     MonthScope() => BalanceAlternativeMonthPresentation(
       timeScope: primary.timeScope,
       sourcePresentationId: primary.presentationId,
+      dailySpend: BalanceAlternativeMonthlySpendPresentation.fromPrimary(
+        primary,
+      ),
+      savings: BalanceAlternativeSavingsPresentation.fromTotals(
+        incomeMinor: primary.incomeTotalMinor,
+        expenseMinor: primary.expenseTotalMinor,
+        retentionBasisPoints: null,
+      ),
+      incomeExpense: BalanceAlternativeIncomeExpenseStripPresentation.fromPrimary(
+        primary,
+      ),
     ),
     DayScope() => BalanceAlternativeDayPresentation(
       timeScope: primary.timeScope,
       sourcePresentationId: primary.presentationId,
+    ),
+  };
+
+  /// Uses the established linked immutable presentation without introducing a
+  /// new financial projection. Only render-ready values cross this boundary.
+  factory BalanceAlternativeScopePresentation.fromLinked(
+    DashboardBalanceLinkedPresentation linked,
+  ) => switch (linked.timeScope) {
+    AllTimeScope() => BalanceAlternativeScopePresentation.fromPrimary(
+      linked.cashflow,
+    ),
+    YearScope() => BalanceAlternativeYearPresentation(
+      timeScope: linked.timeScope,
+      sourcePresentationId: linked.presentationId,
+      incomeExpense: BalanceAlternativeIncomeExpenseBarPresentation.fromPrimary(
+        linked.cashflow,
+        domain: BalanceAlternativeBarDomain.months,
+      ),
+      closings: BalanceAlternativeYearClosingsPresentation.fromClosings(
+        linked.closings,
+      ),
+      savings: BalanceAlternativeSavingsPresentation.fromRetention(
+        linked.retention,
+        fallbackIncomeMinor: linked.cashflow.incomeTotalMinor,
+        fallbackExpenseMinor: linked.cashflow.expenseTotalMinor,
+      ),
+    ),
+    MonthScope() => () {
+      final selectedIndex = linked.retention.periods.indexWhere(
+        (period) => period.selected,
+      );
+      final previousExpenseMinor = selectedIndex > 0
+          ? linked.retention.periods[selectedIndex - 1].expenseMinor
+          : null;
+      return BalanceAlternativeMonthPresentation(
+        timeScope: linked.timeScope,
+        sourcePresentationId: linked.presentationId,
+        dailySpend: BalanceAlternativeMonthlySpendPresentation.fromPrimary(
+          linked.cashflow,
+          previousExpenseMinor: previousExpenseMinor,
+        ),
+        savings: BalanceAlternativeSavingsPresentation.fromRetention(
+          linked.retention,
+          fallbackIncomeMinor: linked.cashflow.incomeTotalMinor,
+          fallbackExpenseMinor: linked.cashflow.expenseTotalMinor,
+        ),
+        incomeExpense:
+            BalanceAlternativeIncomeExpenseStripPresentation.fromPrimary(
+              linked.cashflow,
+            ),
+      );
+    }(),
+    DayScope() => BalanceAlternativeDayPresentation(
+      timeScope: linked.timeScope,
+      sourcePresentationId: linked.presentationId,
     ),
   };
 }
@@ -64,9 +140,13 @@ final class BalanceAlternativeYearPresentation
     required super.timeScope,
     required super.sourcePresentationId,
     required this.incomeExpense,
+    required this.closings,
+    required this.savings,
   });
 
   final BalanceAlternativeIncomeExpenseBarPresentation incomeExpense;
+  final BalanceAlternativeYearClosingsPresentation closings;
+  final BalanceAlternativeSavingsPresentation savings;
 }
 
 final class BalanceAlternativeMonthPresentation
@@ -74,7 +154,14 @@ final class BalanceAlternativeMonthPresentation
   const BalanceAlternativeMonthPresentation({
     required super.timeScope,
     required super.sourcePresentationId,
+    required this.dailySpend,
+    required this.savings,
+    required this.incomeExpense,
   });
+
+  final BalanceAlternativeMonthlySpendPresentation dailySpend;
+  final BalanceAlternativeSavingsPresentation savings;
+  final BalanceAlternativeIncomeExpenseStripPresentation incomeExpense;
 }
 
 final class BalanceAlternativeDayPresentation
@@ -169,6 +256,182 @@ final class BalanceAlternativeIncomeExpenseBarGroup {
   final String label;
   final int incomeMinor;
   final int expenseMinor;
+}
+
+/// One point in Havi 2's daily expense line. Values are individual daily
+/// expenses, derived by differencing the already cumulative primary points.
+@immutable
+final class BalanceAlternativeDailySpendPoint {
+  const BalanceAlternativeDailySpendPoint({
+    required this.day,
+    required this.expenseMinor,
+  });
+
+  final int day;
+  final int expenseMinor;
+}
+
+@immutable
+final class BalanceAlternativeMonthlySpendPresentation {
+  BalanceAlternativeMonthlySpendPresentation({
+    required List<BalanceAlternativeDailySpendPoint> points,
+    required this.currentExpenseMinor,
+    required this.previousExpenseMinor,
+  }) : points = List<BalanceAlternativeDailySpendPoint>.unmodifiable(points);
+
+  factory BalanceAlternativeMonthlySpendPresentation.fromPrimary(
+    DashboardBalancePrimaryPresentation primary, {
+    int? previousExpenseMinor,
+  }) {
+    var priorCumulativeExpense = 0;
+    final points = <BalanceAlternativeDailySpendPoint>[
+      for (final point in primary.dailyPoints)
+        () {
+          final expense = math.max(
+            0,
+            point.expenseMinor - priorCumulativeExpense,
+          );
+          priorCumulativeExpense = point.expenseMinor;
+          return BalanceAlternativeDailySpendPoint(
+            day: point.day,
+            expenseMinor: expense,
+          );
+        }(),
+    ];
+    return BalanceAlternativeMonthlySpendPresentation(
+      points: points,
+      currentExpenseMinor: primary.expenseTotalMinor,
+      previousExpenseMinor: previousExpenseMinor,
+    );
+  }
+
+  final List<BalanceAlternativeDailySpendPoint> points;
+  final int currentExpenseMinor;
+  final int? previousExpenseMinor;
+
+  int get noSpendDayCount => points
+      .where((point) => point.expenseMinor == 0)
+      .length;
+
+  /// Signed relative spending change. Negative means the current month has
+  /// lower expense than its comparable predecessor.
+  int? get expenseChangeBasisPoints {
+    final previous = previousExpenseMinor;
+    if (previous == null || previous <= 0) return null;
+    return ((currentExpenseMinor - previous) * 10000 / previous).round();
+  }
+}
+
+@immutable
+final class BalanceAlternativeSavingsPresentation {
+  const BalanceAlternativeSavingsPresentation({
+    required this.netMinor,
+    required this.retentionBasisPoints,
+  });
+
+  factory BalanceAlternativeSavingsPresentation.fromTotals({
+    required int incomeMinor,
+    required int expenseMinor,
+    required int? retentionBasisPoints,
+  }) => BalanceAlternativeSavingsPresentation(
+    netMinor: incomeMinor - expenseMinor,
+    retentionBasisPoints: retentionBasisPoints,
+  );
+
+  factory BalanceAlternativeSavingsPresentation.fromRetention(
+    DashboardBalanceRetentionPresentation retention, {
+    required int fallbackIncomeMinor,
+    required int fallbackExpenseMinor,
+  }) {
+    final selected = retention.selectedPeriod;
+    return BalanceAlternativeSavingsPresentation.fromTotals(
+      incomeMinor: selected?.incomeMinor ?? fallbackIncomeMinor,
+      expenseMinor: selected?.expenseMinor ?? fallbackExpenseMinor,
+      retentionBasisPoints: selected?.retentionBasisPoints,
+    );
+  }
+
+  final int netMinor;
+  final int? retentionBasisPoints;
+}
+
+@immutable
+final class BalanceAlternativeIncomeExpenseStripPresentation {
+  const BalanceAlternativeIncomeExpenseStripPresentation({
+    required this.incomeMinor,
+    required this.expenseMinor,
+  });
+
+  factory BalanceAlternativeIncomeExpenseStripPresentation.fromPrimary(
+    DashboardBalancePrimaryPresentation primary,
+  ) => BalanceAlternativeIncomeExpenseStripPresentation(
+    incomeMinor: primary.incomeTotalMinor,
+    expenseMinor: primary.expenseTotalMinor,
+  );
+
+  final int incomeMinor;
+  final int expenseMinor;
+
+  int get totalMinor => incomeMinor + expenseMinor;
+
+  int get incomeBasisPoints => totalMinor <= 0
+      ? 5000
+      : (incomeMinor * 10000 / totalMinor).round();
+}
+
+@immutable
+final class BalanceAlternativeYearClosingBucket {
+  const BalanceAlternativeYearClosingBucket({
+    required this.label,
+    required this.incomeMinor,
+    required this.expenseMinor,
+  });
+
+  final String label;
+  final int incomeMinor;
+  final int expenseMinor;
+
+  int get netMinor => incomeMinor - expenseMinor;
+}
+
+@immutable
+final class BalanceAlternativeYearClosingsPresentation {
+  BalanceAlternativeYearClosingsPresentation({
+    required List<BalanceAlternativeYearClosingBucket> buckets,
+  }) : buckets = List<BalanceAlternativeYearClosingBucket>.unmodifiable(
+         buckets,
+       );
+
+  factory BalanceAlternativeYearClosingsPresentation.fromClosings(
+    DashboardBalanceClosingsPresentation closings,
+  ) => BalanceAlternativeYearClosingsPresentation(
+    buckets: <BalanceAlternativeYearClosingBucket>[
+      for (final bucket in closings.buckets)
+        BalanceAlternativeYearClosingBucket(
+          label: bucket.label,
+          incomeMinor: bucket.incomeMinor,
+          expenseMinor: bucket.expenseMinor,
+        ),
+    ],
+  );
+
+  factory BalanceAlternativeYearClosingsPresentation.fromPeriodPairs(
+    List<DashboardBalancePrimaryPeriodPair> pairs,
+  ) => BalanceAlternativeYearClosingsPresentation(
+    buckets: <BalanceAlternativeYearClosingBucket>[
+      for (final pair in pairs)
+        BalanceAlternativeYearClosingBucket(
+          label: _monthLabels[pair.value.clamp(1, 12) - 1],
+          incomeMinor: pair.incomeMinor,
+          expenseMinor: pair.expenseMinor,
+        ),
+    ],
+  );
+
+  final List<BalanceAlternativeYearClosingBucket> buckets;
+
+  int get positiveBucketCount =>
+      buckets.where((bucket) => bucket.netMinor > 0).length;
 }
 
 const List<String> _monthLabels = <String>[

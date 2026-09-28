@@ -144,6 +144,7 @@ final class BalancePresentationSettings {
     required this.balanceContentCardBorderOpacity,
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.separateCards,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.currentCarouselDetail,
+    this.alternativeMotherCardVisible = true,
     Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
         const <BalanceCarouselCardKind>{},
     required this.revision,
@@ -189,6 +190,7 @@ final class BalancePresentationSettings {
       balanceContentCardBorderOpacity = 1,
       contentSurfaceStyle = BalanceContentSurfaceStyle.separateCards,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.currentCarouselDetail,
+      alternativeMotherCardVisible = true,
       hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
       revision = 0;
 
@@ -207,6 +209,9 @@ final class BalancePresentationSettings {
   final double balanceContentCardBorderOpacity;
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
+  /// Controls only the physical unified parent/backplate. The alternative
+  /// content composition and dashboard geometry retain their existing owners.
+  final bool alternativeMotherCardVisible;
   final Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds;
   final int revision;
 
@@ -236,6 +241,7 @@ final class BalancePresentationSettings {
     double? balanceContentCardBorderOpacity,
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
+    bool? alternativeMotherCardVisible,
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
     int? revision,
   }) => BalancePresentationSettings(
@@ -269,6 +275,8 @@ final class BalancePresentationSettings {
         balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
     contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
     unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
+    alternativeMotherCardVisible:
+        alternativeMotherCardVisible ?? this.alternativeMotherCardVisible,
     hiddenBalanceCarouselCardKinds:
         hiddenBalanceCarouselCardKinds ?? this.hiddenBalanceCarouselCardKinds,
     revision: revision ?? this.revision,
@@ -298,6 +306,7 @@ final class BalancePresentationSettings {
           balanceContentCardBorderOpacity &&
       other.contentSurfaceStyle == contentSurfaceStyle &&
       other.unifiedBodyLayout == unifiedBodyLayout &&
+      other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
       setEquals(
         other.hiddenBalanceCarouselCardKinds,
         hiddenBalanceCarouselCardKinds,
@@ -320,6 +329,7 @@ final class BalancePresentationSettings {
     balanceContentCardBorderOpacity,
     contentSurfaceStyle,
     unifiedBodyLayout,
+    alternativeMotherCardVisible,
     Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
     revision,
   );
@@ -455,6 +465,17 @@ final class BalancePresentationController
     if (current.unifiedBodyLayout == next) return;
     value = current.copyWith(
       unifiedBodyLayout: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  /// Shows or hides the unified Balance parent surface without changing the
+  /// content-body bounds, selected topic, query, or Balance presentation.
+  void setAlternativeMotherCardVisible(bool next) {
+    final current = value;
+    if (current.alternativeMotherCardVisible == next) return;
+    value = current.copyWith(
+      alternativeMotherCardVisible: next,
       revision: current.revision + 1,
     );
   }

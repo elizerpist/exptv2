@@ -1194,6 +1194,19 @@ final class _BalancePresentationSection extends StatelessWidget {
               ],
             ),
           ),
+        if (settings.contentSurfaceStyle ==
+            BalanceContentSurfaceStyle.unifiedCard)
+          KeyedSubtree(
+            key: const ValueKey<String>(
+              'balance-alternative-mother-card-visible',
+            ),
+            child: _BalanceBooleanChoice(
+              label: 'Mother kártya',
+              value: settings.alternativeMotherCardVisible,
+              onChanged: controller.setAlternativeMotherCardVisible,
+              keyPrefix: 'balance-alternative-mother-card-visible',
+            ),
+          ),
         const SizedBox(height: 8),
         _BalanceCarouselCardVisibilitySubmenu(
           controller: controller,

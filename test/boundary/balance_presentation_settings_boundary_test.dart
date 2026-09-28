@@ -32,12 +32,20 @@ void main() {
         contains('void setBalanceContentCardColoredBorderEnabled(bool next)'),
       );
       expect(
+        settings,
+        contains('void setAlternativeMotherCardVisible(bool next)'),
+      );
+      expect(
         tuner,
         contains('controller.setBalanceCarouselWaveAnimationEnabled'),
       );
       expect(
         tuner,
         contains('controller.setBalanceContentCardColoredBorderEnabled'),
+      );
+      expect(
+        tuner,
+        contains('controller.setAlternativeMotherCardVisible'),
       );
       expect(
         tuner,
@@ -76,7 +84,7 @@ void main() {
         hasLength(1),
       );
       expect(surface, contains('final class _BalanceUpperCarouselState'));
-      expect(surface, contains('_wavePhaseController.repeat()'));
+      expect(surface, contains('_wavePhaseController.repeat(period: requestedPeriod)'));
       expect(surface, contains('_wavePhaseController.stop()'));
       expect(surface, contains('final class _BalanceCarouselAmbientWave'));
     },

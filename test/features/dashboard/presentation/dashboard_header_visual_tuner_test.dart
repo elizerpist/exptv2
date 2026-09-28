@@ -525,6 +525,17 @@ void main() {
         find.byKey(const ValueKey<String>('balance-unified-body-layout')),
         findsOneWidget,
       );
+      final motherCardVisible = find.byKey(
+        const ValueKey<String>('balance-alternative-mother-card-visible'),
+      );
+      expect(motherCardVisible, findsOneWidget);
+      final motherCardOff = find.byKey(
+        const ValueKey<String>('balance-alternative-mother-card-visible-off'),
+      );
+      await tester.ensureVisible(motherCardOff);
+      await tester.tap(motherCardOff);
+      await tester.pump();
+      expect(balance.value.alternativeMotherCardVisible, isFalse);
       final fourSections = find.byKey(
         const ValueKey<String>('balance-unified-body-four-section'),
       );

@@ -441,6 +441,19 @@ void main() {
       expect(day.points.single.entryId, '2025-salary');
     },
   );
+  test(
+    'ALT-MOTHER-RED: alternative Balance mother card is visible by default, user-changeable, and resettable',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(controller.value.alternativeMotherCardVisible, isTrue);
+      controller.setAlternativeMotherCardVisible(false);
+      expect(controller.value.alternativeMotherCardVisible, isFalse);
+      controller.reset();
+      expect(controller.value.alternativeMotherCardVisible, isTrue);
+    },
+  );
 }
 
 DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(

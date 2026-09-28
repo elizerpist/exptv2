@@ -436,7 +436,7 @@ void main() {
   );
 
   testWidgets(
-    'ALT2-04/06: SUM and YEAR have five slots while Month and Day retain the unchanged four-slot alternative body',
+    'ALT2-04/06: SUM retains five slots, while Year and Havi 2 resolve their HTML extended-sheet bodies and Day stays four-slot',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(cashflow: _alternativeYearCashflow()),
@@ -473,28 +473,24 @@ void main() {
         ),
         findsNothing,
       );
-      for (final label in <String>[
-        'JAN',
-        'FEB',
-        'MÁR',
-        'ÁPR',
-        'MÁJ',
-        'JÚN',
-        'JÚL',
-        'AUG',
-        'SZE',
-        'OKT',
-        'NOV',
-        'DEC',
-      ]) {
-        expect(find.text(label), findsOneWidget);
-      }
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-year-closings-plot'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-year-income-expense-bars'),
+        ),
+        findsOneWidget,
+      );
 
       linked.value = _linked(cashflow: _alternativeMonthCashflow());
       await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('balance-tetris-card-5')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(
@@ -503,7 +499,9 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey<String>('balance-tetris-card-4')),
+        find.byKey(
+          const ValueKey<String>('balance-alternative-month-daily-spend-plot'),
+        ),
         findsOneWidget,
       );
 
@@ -518,6 +516,61 @@ void main() {
           const ValueKey<String>('balance-alternative-income-expense-bar-card'),
         ),
         findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'ALT-MOTHER-UI: hiding the unified mother surface preserves the alternative body allocation and data path',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(_linked());
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-unified-header-content-surface'),
+        ),
+        findsOneWidget,
+      );
+      final card3Before = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-3')),
+      );
+
+      settings.setAlternativeMotherCardVisible(false);
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-unified-header-content-surface'),
+        ),
+        findsNothing,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey<String>('balance-tetris-slot-3')),
+        ),
+        card3Before,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-income-expense-bar-card'),
+        ),
+        findsOneWidget,
       );
     },
   );
@@ -3495,7 +3548,7 @@ DashboardBalanceLinkedPresentation _linked({
   );
   return DashboardBalanceLinkedPresentation(
     identity: identity,
-    timeScope: const AllTimeScope(),
+    timeScope: cashflow?.timeScope ?? const AllTimeScope(),
     selectedDirection: LedgerDirection.income,
     cashflow:
         cashflow ??
