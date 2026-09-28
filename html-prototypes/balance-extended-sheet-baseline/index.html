@@ -1,0 +1,2044 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="prototype-id" content="fluvi-balance-carousel-recovery/balance-extended-sheet-baseline">
+    <meta name="prototype-status" content="current">
+    <title>Balance extended sheet — five-card baseline</title>
+    <style>
+      :root {
+        /* Native physical screenshot canvas, deliberately unscaled. */
+        --screen-width: 920px;
+        --screen-height: 2048px;
+        --mother-x: 39px;
+        --mother-y: 233px;
+        --mother-width: 842px;
+        --mother-height: 1187px;
+
+        /* Flutter source: _balanceAlternativeBodyRect + section inset. */
+        --header-height: 282px;
+        --outer-inset: 26.73px; /* 12 logical px at the captured density */
+        --half-gutter: 6.68px; /* 3 logical px at the captured density */
+        --body-width: calc(var(--mother-width) - 2 * var(--outer-inset));
+        --body-height: calc(var(--mother-height) - var(--header-height) - 2 * var(--outer-inset));
+        --top-height: calc(var(--body-height) * .6);
+        --bottom-height: calc(var(--body-height) * .4);
+        --left-top-width: calc(var(--body-width) * .7);
+        --right-top-width: calc(var(--body-width) * .3);
+        --bottom-width: calc(var(--body-width) * .5);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        min-width: calc(2 * var(--screen-width) + 420px);
+        margin: 0;
+        background: #e9eff7;
+        color: #14213a;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: max-content 280px;
+        gap: 32px;
+        align-items: start;
+        width: max-content;
+        padding: 32px;
+      }
+      .screens {
+        display: grid;
+        grid-template-columns: repeat(2, var(--screen-width));
+        gap: 32px;
+      }
+      .screen-wrap { display: grid; gap: 10px; }
+      .screen-title {
+        margin: 0;
+        color: #3f506a;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: .02em;
+      }
+      .native-canvas {
+        position: relative;
+        width: var(--screen-width);
+        height: var(--screen-height);
+        overflow: hidden;
+        background: #edf2f8;
+        box-shadow: 0 16px 40px rgb(20 33 58 / .12);
+      }
+      .mother-card {
+        position: absolute;
+        left: var(--mother-x);
+        top: var(--mother-y);
+        width: var(--mother-width);
+        height: var(--mother-height);
+        overflow: hidden;
+        border-radius: 39px;
+      }
+      .reference-raster {
+        position: absolute;
+        z-index: 0;
+        left: calc(-1 * var(--mother-x));
+        top: calc(-1 * var(--mother-y));
+        display: block;
+        width: var(--screen-width);
+        height: var(--screen-height);
+        max-width: none;
+        pointer-events: none;
+        user-select: none;
+      }
+      .child-slots { position: absolute; inset: 0; z-index: 1; }
+      .slot {
+        position: absolute;
+        outline: 0 solid transparent;
+        outline-offset: -1px;
+        border-radius: 25px;
+      }
+      .slot::after {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        display: none;
+        padding: 3px 6px;
+        border-radius: 5px;
+        background: #14213a;
+        color: white;
+        content: attr(data-slot);
+        font: 700 12px/1 system-ui, sans-serif;
+      }
+      .show-slots .slot { outline: 2px solid #00b8d9; background: rgb(0 184 217 / .05); }
+      .show-slots .slot::after { display: block; }
+      /* Havi: only the requested baseline slots replace the source capture.
+         Their bounds still come from the same Flutter allocation variables. */
+      .baseline-card {
+        z-index: 2;
+        overflow: hidden;
+        border: 2px solid #e7ebf0;
+        background: #fff;
+        box-shadow: 0 2px 6px rgb(20 33 58 / .025);
+      }
+      .baseline-card-3 { display: block; }
+      /* Havi Card 3: app-drawable daily-spending time chart matching the
+         latest physical reference's hierarchy, tint, rhythm and primitives. */
+      .daily-spend-card {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-rows: 64px minmax(0, 1fr) 102px;
+        gap: 10px;
+        padding: 24px 24px 20px;
+      }
+      .daily-spend-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .daily-spend-heading-copy {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+      }
+      .daily-spend-icon {
+        width: 30px;
+        height: 42px;
+        flex: 0 0 auto;
+      }
+      .daily-spend-title {
+        display: block;
+        color: #111b59;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -.03em;
+        line-height: 1;
+      }
+      .daily-spend-subtitle {
+        display: block;
+        margin-top: 9px;
+        color: #7181aa;
+        font-size: 19px;
+        font-weight: 500;
+        line-height: 1;
+      }
+      .daily-spend-comparison {
+        max-width: 188px;
+        padding-top: 2px;
+        text-align: right;
+      }
+      .daily-spend-comparison strong {
+        display: block;
+        color: #19aa70;
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -.035em;
+        line-height: 1;
+      }
+      .daily-spend-comparison span {
+        display: block;
+        margin-top: 5px;
+        color: #7181aa;
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.18;
+      }
+      .daily-spend-plot { min-height: 0; }
+      .daily-spend-plot svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .daily-spend-insight {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr);
+        align-items: center;
+        gap: 14px;
+        padding: 15px 18px;
+        border-radius: 23px;
+        background: linear-gradient(135deg, #effbf5, #e5f8ef);
+      }
+      .daily-spend-insight-icon {
+        display: grid;
+        width: 58px;
+        height: 58px;
+        place-items: center;
+        border-radius: 50%;
+        background: #c9f2dd;
+      }
+      .daily-spend-insight-title {
+        display: block;
+        color: #111b59;
+        font-size: 23px;
+        font-weight: 800;
+        letter-spacing: -.025em;
+        line-height: 1;
+      }
+      .daily-spend-insight-copy {
+        display: block;
+        margin-top: 7px;
+        color: #63759a;
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.23;
+      }
+      .baseline-savings {
+        display: grid;
+        place-items: center;
+        padding: 21px 16px;
+      }
+      .baseline-savings-card-1 {
+        grid-template-rows: 70px minmax(0, 1fr);
+        align-items: center;
+        justify-items: center;
+        padding: 24px 24px 20px;
+      }
+      .baseline-savings-card-1 .baseline-progress-title-row {
+        align-self: start;
+        justify-self: start;
+        gap: 15px;
+      }
+      .baseline-savings-card-1 .baseline-progress-title-icon {
+        width: 30px;
+        height: 42px;
+      }
+      .baseline-savings-card-1 .baseline-savings-title {
+        font-size: 30px;
+        letter-spacing: -.03em;
+        line-height: 1;
+        text-align: left;
+      }
+      .baseline-savings-card-1 .baseline-savings-ring {
+        width: 184px;
+        height: 184px;
+      }
+      .baseline-progress-title-row {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+      }
+      .baseline-progress-title-icon {
+        width: 29px;
+        height: 29px;
+        flex: 0 0 auto;
+      }
+      .baseline-savings-title {
+        color: #14213a;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: -.025em;
+        line-height: 1.05;
+        text-align: center;
+      }
+      .baseline-savings-ring {
+        display: block;
+        width: 132px;
+        height: 132px;
+      }
+      .baseline-savings-value {
+        color: #7c3aed;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -.03em;
+      }
+      .baseline-no-spend {
+        display: grid;
+        place-items: center;
+        padding: 21px 16px;
+      }
+      .baseline-no-spend-title {
+        color: #14213a;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: -.025em;
+        line-height: 1.05;
+        text-align: center;
+      }
+      .baseline-no-spend-ring {
+        display: block;
+        width: 132px;
+        height: 132px;
+      }
+      /* Havi 2's no-spend card is a plain count, not a completion metric. */
+      .monthly-mixed-no-spend {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        align-items: start;
+        justify-items: center;
+        padding: 21px 16px;
+      }
+      .monthly-mixed-no-spend-value {
+        align-self: center;
+        color: #16b981;
+        font-size: 66px;
+        font-weight: 800;
+        letter-spacing: -.06em;
+        line-height: .86;
+        text-align: center;
+      }
+      .monthly-mixed-no-spend .baseline-no-spend-title {
+        white-space: nowrap;
+      }
+      .monthly-mixed-no-spend-value small {
+        display: block;
+        margin-top: 9px;
+        color: #7181aa;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: 0;
+        line-height: 1;
+      }
+      /* Havi Card 2: compact, app-drawable Bevétel vs. Kiadás strip from the
+         latest reference. The two panels retain their 61/39 mock-data ratio. */
+      .baseline-income-expense {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-rows: 42px 145px minmax(0, 1fr);
+        gap: 13px;
+        padding: 23px 20px 19px;
+      }
+      .baseline-income-expense-title {
+        color: #111b59;
+        font-size: 27px;
+        font-weight: 800;
+        letter-spacing: -.04em;
+        line-height: 1;
+      }
+      .baseline-income-expense-title-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .baseline-income-expense-title-icon {
+        width: 30px;
+        height: 36px;
+        flex: 0 0 auto;
+      }
+      .baseline-income-expense-strip {
+        position: relative;
+        display: grid;
+        grid-template-columns: 61fr 39fr;
+        overflow: visible;
+        border-radius: 25px;
+      }
+      .baseline-income-panel,
+      .baseline-expense-panel {
+        display: grid;
+        align-content: center;
+        gap: 5px;
+        overflow: hidden;
+        padding: 18px 13px 15px;
+      }
+      .baseline-income-panel {
+        border-radius: 25px 0 0 25px;
+        background: linear-gradient(135deg, #89df9c, #d4fad6);
+      }
+      .baseline-expense-panel {
+        border-left: 6px solid #fff;
+        border-radius: 0 25px 25px 0;
+        background: linear-gradient(135deg, #ffe2e7, #ffb9c9);
+      }
+      .baseline-strip-label {
+        color: #1b3560;
+        font-size: 17px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .baseline-strip-value {
+        color: #111b59;
+        font-size: 23px;
+        font-weight: 800;
+        letter-spacing: -.04em;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .baseline-strip-percent {
+        color: #395a83;
+        font-size: 17px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .baseline-strip-switch {
+        position: absolute;
+        z-index: 1;
+        top: 50%;
+        left: 61%;
+        display: grid;
+        width: 56px;
+        height: 56px;
+        place-items: center;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 4px 13px rgb(20 33 58 / .12);
+        color: #52658a;
+        transform: translate(-50%, -50%);
+      }
+      .baseline-income-expense-copy {
+        align-self: center;
+        color: #63759a;
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.25;
+      }
+
+      /* Allocation is exact code geometry; the 3px Flutter Padding becomes
+         --half-gutter at captured density, so these match painted child cards. */
+      .card-3 {
+        left: calc(var(--outer-inset) + var(--half-gutter));
+        top: calc(var(--header-height) + var(--outer-inset) + var(--half-gutter));
+        width: calc(var(--left-top-width) - 2 * var(--half-gutter));
+        height: calc(var(--top-height) - 2 * var(--half-gutter));
+      }
+      .card-4 {
+        left: calc(var(--outer-inset) + var(--left-top-width) + var(--half-gutter));
+        top: calc(var(--header-height) + var(--outer-inset) + var(--half-gutter));
+        width: calc(var(--right-top-width) - 2 * var(--half-gutter));
+        height: calc(var(--top-height) / 2 - 2 * var(--half-gutter));
+      }
+      .card-5 {
+        left: calc(var(--outer-inset) + var(--left-top-width) + var(--half-gutter));
+        top: calc(var(--header-height) + var(--outer-inset) + var(--top-height) / 2 + var(--half-gutter));
+        width: calc(var(--right-top-width) - 2 * var(--half-gutter));
+        height: calc(var(--top-height) / 2 - 2 * var(--half-gutter));
+      }
+      .card-1 {
+        left: calc(var(--outer-inset) + var(--half-gutter));
+        top: calc(var(--header-height) + var(--outer-inset) + var(--top-height) + var(--half-gutter));
+        width: calc(var(--bottom-width) - 2 * var(--half-gutter));
+        height: calc(var(--bottom-height) - 2 * var(--half-gutter));
+      }
+      .card-2 {
+        left: calc(var(--outer-inset) + var(--bottom-width) + var(--half-gutter));
+        top: calc(var(--header-height) + var(--outer-inset) + var(--top-height) + var(--half-gutter));
+        width: calc(var(--bottom-width) - 2 * var(--half-gutter));
+        height: calc(var(--bottom-height) - 2 * var(--half-gutter));
+      }
+
+      /* Static variant: Card 1 and Card 2 own one combined allocation. The
+         shared 6 logical-px gap disappears only at their former shared seam;
+         the code-derived outer insets remain unchanged. */
+      .variant-mother {
+        isolation: isolate;
+        background: #fff;
+        box-shadow: inset 0 0 0 2px #a879ff;
+      }
+      .variant-header {
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: var(--header-height);
+        overflow: hidden;
+      }
+      .variant-body {
+        position: absolute;
+        z-index: 2;
+        left: var(--outer-inset);
+        top: calc(var(--header-height) + var(--outer-inset));
+        width: var(--body-width);
+        height: var(--body-height);
+      }
+      .variant-card {
+        position: absolute;
+        overflow: hidden;
+        border: 2px solid #e7ebf0;
+        border-radius: 25px;
+        background: #fff;
+        box-shadow: 0 2px 6px rgb(20 33 58 / .025);
+      }
+      .variant-card-3 {
+        left: var(--half-gutter);
+        top: var(--half-gutter);
+        width: calc(var(--left-top-width) - 2 * var(--half-gutter));
+        height: calc(var(--top-height) - 2 * var(--half-gutter));
+      }
+      .variant-card-4 {
+        left: calc(var(--left-top-width) + var(--half-gutter));
+        top: var(--half-gutter);
+        width: calc(var(--right-top-width) - 2 * var(--half-gutter));
+        height: calc(var(--top-height) / 2 - 2 * var(--half-gutter));
+      }
+      .variant-card-5 {
+        left: calc(var(--left-top-width) + var(--half-gutter));
+        top: calc(var(--top-height) / 2 + var(--half-gutter));
+        width: calc(var(--right-top-width) - 2 * var(--half-gutter));
+        height: calc(var(--top-height) / 2 - 2 * var(--half-gutter));
+      }
+      .variant-card-combined {
+        left: var(--half-gutter);
+        top: calc(var(--top-height) + var(--half-gutter));
+        width: calc(var(--body-width) - 2 * var(--half-gutter));
+        height: calc(var(--bottom-height) - 2 * var(--half-gutter));
+      }
+      /* Card 3 is app-drawable mock data: no screenshot crop or raster chart.
+         Its proportions and visual tokens reproduce the eves.png reference. */
+      .annual-closings-card {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-rows: 63px minmax(0, 1fr) 31px;
+        gap: 8px;
+        padding: 24px 22px 20px;
+      }
+      .annual-closings-heading {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+      }
+      .annual-closings-icon {
+        display: flex;
+        align-items: end;
+        gap: 5px;
+        width: 30px;
+        height: 42px;
+        padding-bottom: 4px;
+      }
+      .annual-closings-icon i {
+        display: block;
+        width: 8px;
+        border-radius: 6px;
+        background: #7c4ded;
+      }
+      .annual-closings-icon i:nth-child(1) { height: 21px; }
+      .annual-closings-icon i:nth-child(2) { height: 42px; }
+      .annual-closings-icon i:nth-child(3) { height: 31px; }
+      .annual-closings-title {
+        display: block;
+        color: #090e4c;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -.03em;
+        line-height: 1;
+      }
+      .annual-closings-subtitle {
+        display: block;
+        margin-top: 8px;
+        color: #7181aa;
+        font-size: 19px;
+        font-weight: 500;
+        line-height: 1;
+      }
+      .annual-closings-plot {
+        min-height: 0;
+      }
+      .annual-closings-plot svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .annual-closings-legend {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: #7181aa;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .annual-closings-key {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .annual-closings-dot {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #75dcc1;
+      }
+      .annual-closings-dot.negative { background: #ff94af; }
+      .annual-closings-line-key {
+        width: 34px;
+        height: 6px;
+        flex: 0 0 auto;
+        border-radius: 99px;
+        background: linear-gradient(90deg, #8a57f2, #6843e8);
+      }
+      /* App-drawable Card 1 + Card 2 composition from the eves.png reference.
+         All values are intentional mock data; the layout uses the live merged
+         card's actual inner width and height. */
+      .income-expense-card {
+        position: relative;
+        display: grid;
+        width: 100%;
+        height: 100%;
+        grid-template-rows: 60px minmax(0, 1fr);
+        gap: 8px;
+        padding: 21px 22px 19px;
+      }
+      .income-expense-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        padding-right: 46px;
+      }
+      .income-expense-heading-copy {
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+      }
+      .income-expense-icon {
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+      }
+      .income-expense-title {
+        display: block;
+        color: #090e4c;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -.03em;
+        line-height: 1;
+      }
+      .income-expense-subtitle {
+        display: block;
+        margin-top: 8px;
+        color: #7181aa;
+        font-size: 19px;
+        font-weight: 500;
+        line-height: 1;
+      }
+      .income-expense-legend {
+        display: flex;
+        align-items: center;
+        gap: 27px;
+        padding-top: 5px;
+        color: #7181aa;
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .income-expense-key {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .income-expense-dot {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed, #a879ff);
+      }
+      .income-expense-dot.expense { background: linear-gradient(135deg, #ff8638, #f431a0); }
+      .income-expense-plot { min-height: 0; }
+      .income-expense-plot svg {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .income-expense-plot { position: relative; }
+      .income-expense-lines { display: none !important; }
+      .income-expense-card.is-line .income-expense-bars { display: none; }
+      .income-expense-card.is-line .income-expense-lines { display: block !important; }
+      .income-expense-mode-toggle {
+        position: absolute;
+        z-index: 2;
+        top: 15px;
+        right: 15px;
+        display: grid;
+        width: 34px;
+        height: 34px;
+        min-width: 0;
+        place-items: center;
+        padding: 0;
+        border: 1px solid rgb(124 58 237 / .45);
+        border-radius: 10px;
+        background: #faf8ff;
+        color: #7146db;
+        box-shadow: none;
+      }
+      .income-expense-mode-toggle svg {
+        width: 18px;
+        height: 18px;
+      }
+      .income-expense-mode-toggle .mode-line-icon { display: none; }
+      .income-expense-card.is-line .income-expense-mode-toggle .mode-bar-icon { display: none; }
+      .income-expense-card.is-line .income-expense-mode-toggle .mode-line-icon { display: block; }
+      .annual-savings-info {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        width: 100%;
+        height: 100%;
+        padding: 22px 19px 20px;
+      }
+      .annual-savings-info-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .annual-savings-info-title {
+        color: #111b59;
+        font-size: 21px;
+        font-weight: 800;
+        letter-spacing: -.03em;
+        line-height: 1.06;
+      }
+      .annual-savings-info-icon {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 50%;
+        background: #e0f8ec;
+      }
+      .annual-savings-info-value {
+        align-self: center;
+        color: #19aa70;
+        font-size: 37px;
+        font-weight: 800;
+        letter-spacing: -.055em;
+        line-height: 1;
+      }
+      .annual-savings-info-copy {
+        color: #7181aa;
+        font-size: 17px;
+        font-weight: 500;
+        line-height: 1.22;
+      }
+      .variant-placeholder {
+        display: grid;
+        width: 100%;
+        height: 100%;
+        place-items: center;
+        color: #16265b;
+        font-size: 40px;
+        font-weight: 500;
+      }
+
+      /* The editor stays on the same native screenshot canvas. Its empty cards
+         start from precisely the code-derived painted slots above. */
+      .editor-mother {
+        isolation: isolate;
+        overflow: visible;
+        background: #fff;
+        box-shadow: inset 0 0 0 2px #a879ff;
+      }
+      .editor-header {
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: var(--header-height);
+        overflow: hidden;
+      }
+      .editor-body {
+        position: absolute;
+        z-index: 2;
+        left: var(--outer-inset);
+        top: calc(var(--header-height) + var(--outer-inset));
+        width: var(--body-width);
+        height: var(--body-height);
+      }
+      .layout-canvas {
+        position: absolute;
+        transform-origin: 50% 50%;
+      }
+      .layout-selection {
+        position: absolute;
+        z-index: 9;
+        display: none;
+        inset: 0;
+        border: 2px dashed #7c3aed;
+        border-radius: 29px;
+        pointer-events: none;
+      }
+      .layout-canvas.is-group-selected .layout-selection { display: block; }
+      .layout-canvas.is-group-selected .editor-card {
+        box-shadow: 0 0 0 2px rgb(124 58 237 / .45), 0 3px 9px rgb(20 33 58 / .055);
+      }
+      .group-handle {
+        position: absolute;
+        display: grid;
+        width: 58px;
+        height: 58px;
+        min-width: 0;
+        place-items: center;
+        padding: 0;
+        border: 3px solid #7c3aed;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 7px rgb(20 33 58 / .2);
+        color: #5f32c4;
+        font: 900 29px/1 system-ui, sans-serif;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      .group-rotate {
+        top: -82px;
+        left: 50%;
+        cursor: grab;
+        transform: translateX(-50%);
+      }
+      .group-rotate::after {
+        position: absolute;
+        bottom: -25px;
+        left: 50%;
+        width: 3px;
+        height: 23px;
+        background: #7c3aed;
+        content: '';
+        transform: translateX(-50%);
+      }
+      .group-scale {
+        border-radius: 14px;
+        cursor: nwse-resize;
+      }
+      .group-edge {
+        width: 64px;
+        height: 48px;
+        border-radius: 999px;
+      }
+      .group-edge-top, .group-edge-bottom {
+        left: 50%;
+        cursor: ns-resize;
+        transform: translateX(-50%);
+      }
+      .group-edge-top { top: -24px; }
+      .group-edge-bottom { bottom: -24px; }
+      .group-edge-left, .group-edge-right {
+        top: 50%;
+        width: 48px;
+        height: 64px;
+        cursor: ew-resize;
+        transform: translateY(-50%);
+      }
+      .group-edge-left { left: -24px; }
+      .group-edge-right { right: -24px; }
+      .group-corner { width: 52px; height: 52px; }
+      .group-corner-top-left { top: -26px; left: -26px; cursor: nwse-resize; }
+      .group-corner-top-right { top: -26px; right: -26px; cursor: nesw-resize; }
+      .group-corner-bottom-left { bottom: -26px; left: -26px; cursor: nesw-resize; }
+      .group-corner-bottom-right { right: -26px; bottom: -26px; cursor: nwse-resize; }
+      .group-handle:active { cursor: grabbing; }
+      .snap-guide {
+        position: absolute;
+        z-index: 6;
+        display: none;
+        pointer-events: none;
+        filter: drop-shadow(0 0 2px rgb(124 58 237 / .35));
+      }
+      .snap-guide.is-visible { display: block; }
+      .snap-guide.is-vertical {
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: repeating-linear-gradient(to bottom, #7c3aed 0 7px, transparent 7px 11px);
+        transform: translateX(-1px);
+      }
+      .snap-guide.is-horizontal {
+        right: 0;
+        left: 0;
+        height: 2px;
+        background: repeating-linear-gradient(to right, #7c3aed 0 7px, transparent 7px 11px);
+        transform: translateY(-1px);
+      }
+      .mother-padding-guide {
+        position: absolute;
+        z-index: 8;
+        display: none;
+        pointer-events: none;
+        background: #a879ff;
+        filter: drop-shadow(0 0 3px rgb(124 58 237 / .45));
+      }
+      .mother-padding-guide.is-visible { display: block; }
+      .mother-padding-guide.is-vertical {
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        transform: translateX(-1px);
+      }
+      .mother-padding-guide.is-horizontal {
+        right: 0;
+        left: 0;
+        height: 2px;
+        transform: translateY(-1px);
+      }
+      .editor-card {
+        position: absolute;
+        overflow: hidden;
+        touch-action: none;
+        border: 2px solid #000;
+        border-radius: 25px;
+        background: rgb(255 255 255 / .98);
+        box-shadow: 0 2px 6px rgb(20 33 58 / .025);
+        user-select: none;
+      }
+      .editor-card[data-card-id="card-3"] { background: rgb(249 251 254 / .99); }
+      .editor-card.is-selected {
+        z-index: 10;
+        border-color: rgb(124 58 237 / .72);
+        box-shadow: 0 0 0 1px rgb(124 58 237 / .15), 0 3px 9px rgb(20 33 58 / .055);
+      }
+      .edge {
+        position: absolute;
+        z-index: 2;
+        display: none;
+        touch-action: none;
+      }
+      .editor-card.is-selected .edge { display: block; }
+      .edge-top, .edge-bottom {
+        left: 50%;
+        width: 64px;
+        height: 48px;
+        cursor: ns-resize;
+        transform: translateX(-50%);
+      }
+      .edge-top { top: -24px; }
+      .edge-bottom { bottom: -24px; }
+      .edge-left, .edge-right {
+        top: 50%;
+        width: 48px;
+        height: 64px;
+        cursor: ew-resize;
+        transform: translateY(-50%);
+      }
+      .edge-left { left: -24px; }
+      .edge-right { right: -24px; }
+      .edge::before {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 40px;
+        height: 18px;
+        border: 2px solid #7c3aed;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 1px 4px rgb(20 33 58 / .18);
+        content: '';
+        transform: translate(-50%, -50%);
+      }
+      .edge-left::before, .edge-right::before { width: 18px; height: 40px; }
+      .card-center {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        cursor: pointer;
+      }
+      .delta {
+        position: absolute;
+        z-index: 3;
+        display: none;
+        min-width: max-content;
+        padding: 3px 5px;
+        border: 1px solid rgb(124 58 237 / .25);
+        border-radius: 6px;
+        background: rgb(255 255 255 / .93);
+        color: #5f32c4;
+        font: 800 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        pointer-events: none;
+      }
+      .editor-card.is-selected .delta { display: block; }
+      .delta-top { top: 29px; left: 50%; transform: translateX(-50%); }
+      .delta-right { top: 50%; right: 25px; transform: translateY(-50%); }
+      .delta-bottom { bottom: 29px; left: 50%; transform: translateX(-50%); }
+      .delta-left { top: 50%; left: 25px; transform: translateY(-50%); }
+      .editor-card.is-dragging { border-color: #7c3aed; box-shadow: 0 0 0 2px rgb(124 58 237 / .16); }
+
+      aside {
+        position: sticky;
+        top: 24px;
+        padding: 20px;
+        border: 1px solid #dfe6f0;
+        border-radius: 18px;
+        background: white;
+        box-shadow: 0 8px 22px rgb(20 33 58 / .07);
+      }
+      h1 { margin: 0 0 10px; font-size: 19px; line-height: 1.2; }
+      p, li { color: #64748b; font-size: 13px; line-height: 1.45; }
+      ul { padding-left: 18px; }
+      button {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #a879ff;
+        border-radius: 10px;
+        background: #f7f3ff;
+        color: #5f32c4;
+        font: 700 13px/1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+      code { color: #253653; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <main class="workspace">
+      <div class="screens">
+        <div class="screen-wrap">
+          <p class="screen-title">Havi</p>
+          <section class="native-canvas" aria-label="920 by 2048 native physical reference canvas">
+            <section class="mother-card" aria-label="Balance unified extended sheet mother card">
+              <img class="reference-raster" src="assets/balance-extended-sheet-reference-920x2048.png" alt="">
+              <div class="child-slots" aria-label="Balance five-section child-card geometry">
+                <section class="slot card-3 baseline-card baseline-card-3" data-slot="Card 3" aria-label="Költés márciusban: javuló napi költési tendencia">
+                  <div class="daily-spend-card">
+                    <div class="daily-spend-heading">
+                      <span class="daily-spend-heading-copy">
+                        <svg class="daily-spend-icon" viewBox="0 0 30 42" aria-hidden="true">
+                          <rect x="3" y="3" width="24" height="36" rx="6" fill="none" stroke="#7c4ded" stroke-width="3"></rect>
+                          <path d="M8.5 14h13M8.5 20h10M15 32V22m0 10-4-4m4 4 4-4" fill="none" stroke="#7c4ded" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+                        </svg>
+                        <span>
+                          <span class="daily-spend-title">Költés</span>
+                          <span class="daily-spend-subtitle">március</span>
+                        </span>
+                      </span>
+                      <span class="daily-spend-comparison">
+                        <strong>↓ 28%</strong>
+                        <span>alacsonyabb, mint<br>az előző hónapban</span>
+                      </span>
+                    </div>
+                    <div class="daily-spend-plot">
+                      <svg viewBox="0 0 490 252" preserveAspectRatio="none" role="img" aria-label="Mock márciusi napi költés idődiagram csökkenő tendenciával">
+                        <defs>
+                          <linearGradient id="dailySpendArea" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#dddefe" stop-opacity=".82"></stop><stop offset="1" stop-color="#eef0ff" stop-opacity=".16"></stop></linearGradient>
+                          <linearGradient id="dailySpendLine" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#4d50e7"></stop><stop offset="1" stop-color="#6254e8"></stop></linearGradient>
+                        </defs>
+                        <g fill="none" stroke="#dfe4ef" stroke-dasharray="5 5" stroke-width="1.2">
+                          <path d="M0 25H486"></path><path d="M0 87H486"></path><path d="M0 149H486"></path><path d="M0 211H486"></path>
+                          <path d="M0 25V224"></path><path d="M121 25V224"></path><path d="M243 25V224"></path><path d="M364 25V224"></path><path d="M486 25V224"></path>
+                        </g>
+                        <path d="M0 71 C12 68 19 85 28 118 S45 147 57 124 S73 104 83 139 S100 164 113 145 S129 133 142 164 S159 184 171 164 S188 156 200 184 S217 196 229 201 S246 175 258 129 S275 145 286 172 S303 149 314 163 S331 184 343 190 S360 211 372 193 S389 196 400 207 S417 219 429 213 S446 220 457 216 S474 224 486 215 L486 224 L0 224Z" fill="url(#dailySpendArea)"></path>
+                        <path d="M0 71 C12 68 19 85 28 118 S45 147 57 124 S73 104 83 139 S100 164 113 145 S129 133 142 164 S159 184 171 164 S188 156 200 184 S217 196 229 201 S246 175 258 129 S275 145 286 172 S303 149 314 163 S331 184 343 190 S360 211 372 193 S389 196 400 207 S417 219 429 213 S446 220 457 216 S474 224 486 215" fill="none" stroke="url(#dailySpendLine)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="500" text-anchor="middle">
+                          <text x="0" y="248" text-anchor="start">MÁRC. 1.</text><text x="121" y="248">8.</text><text x="243" y="248">15.</text><text x="364" y="248">22.</text><text x="486" y="248" text-anchor="end">29.</text>
+                        </g>
+                      </svg>
+                    </div>
+                    <div class="daily-spend-insight">
+                      <span class="daily-spend-insight-icon" aria-hidden="true">
+                        <svg viewBox="0 0 30 30" width="30" height="30"><path d="m5 21 7-7 4 4 9-10M18 8h7v7" fill="none" stroke="#19aa70" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"></path></svg>
+                      </span>
+                      <span>
+                        <span class="daily-spend-insight-title">Javuló tendencia</span>
+                        <span class="daily-spend-insight-copy">A napi költésed csökkenő tendenciát mutat az előző időszakhoz képest.</span>
+                      </span>
+                    </div>
+                  </div>
+                </section>
+                <section class="slot card-4 baseline-card baseline-no-spend" data-slot="Card 4" aria-label="Költésmentes napok: 12 nap">
+                  <span class="baseline-progress-title-row">
+                    <svg class="baseline-progress-title-icon" viewBox="0 0 29 29" aria-hidden="true"><rect x="4" y="6" width="21" height="19" rx="4" fill="none" stroke="#16b981" stroke-width="2.5"></rect><path d="M9 3v6m11-6v6m-11 8 3.4 3.3L20 13" fill="none" stroke="#16b981" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+                    <span class="baseline-no-spend-title">Költésmentes<br>napok</span>
+                  </span>
+                  <svg class="baseline-no-spend-ring" viewBox="0 0 104 104" role="img" aria-label="12 költésmentes nap a hónapban">
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#e6f6ef" stroke-width="10"></circle>
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#16b981" stroke-linecap="round" stroke-width="10" stroke-dasharray="94.8 245.0" transform="rotate(-90 52 52)"></circle>
+                    <text x="52" y="55" fill="#16b981" font-family="Inter, system-ui, sans-serif" font-size="27" font-weight="800" text-anchor="middle">12</text>
+                    <text x="52" y="72" fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="600" text-anchor="middle">nap</text>
+                  </svg>
+                </section>
+                <section class="slot card-5" data-slot="Card 5" aria-label="Card 5: middle-right, 30 percent width by 30 percent body height"></section>
+                <section class="slot card-1 baseline-card baseline-savings baseline-savings-card-1" data-slot="Card 1" aria-label="Megtakarítási arány: 62 százalék">
+                  <span class="baseline-progress-title-row">
+                    <svg class="baseline-progress-title-icon" viewBox="0 0 30 42" aria-hidden="true"><rect x="3" y="3" width="24" height="36" rx="7" fill="none" stroke="#7c3aed" stroke-width="3"></rect><circle cx="15" cy="15" r="4" fill="none" stroke="#7c3aed" stroke-width="2.5"></circle><path d="M8.5 29c2.1-3.4 4.3-5.1 6.5-5.1s4.4 1.7 6.5 5.1M9 34h12" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+                    <span class="baseline-savings-title">Megtakarítás</span>
+                  </span>
+                  <svg class="baseline-savings-ring" viewBox="0 0 104 104" role="img" aria-label="Megtakarítási arány 62 százalék">
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#e7ebf0" stroke-width="10"></circle>
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-width="10" stroke-dasharray="151.9 245.0" transform="rotate(-90 52 52)"></circle>
+                    <text x="52" y="59" fill="#7c3aed" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="800" text-anchor="middle">62%</text>
+                  </svg>
+                </section>
+                <section class="slot card-2 baseline-card" data-slot="Card 2" aria-label="Bevétel és kiadás összehasonlítás">
+                  <div class="baseline-income-expense">
+                    <span class="baseline-income-expense-title-row">
+                      <svg class="baseline-income-expense-title-icon" viewBox="0 0 30 36" aria-hidden="true"><path d="M3 11h19m-5-5 6 5-6 5M27 25H8m5-5-6 5 6 5" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>
+                      <span class="baseline-income-expense-title">Bevétel vs. Kiadás</span>
+                    </span>
+                    <div class="baseline-income-expense-strip" aria-label="Bevétel 61 százalék, kiadás 39 százalék">
+                      <span class="baseline-income-panel">
+                        <span class="baseline-strip-label">Bevétel</span>
+                        <span class="baseline-strip-value">892 k Ft</span>
+                        <span class="baseline-strip-percent">61%</span>
+                      </span>
+                      <span class="baseline-expense-panel">
+                        <span class="baseline-strip-label">Kiadás</span>
+                        <span class="baseline-strip-value">524 k Ft</span>
+                        <span class="baseline-strip-percent">39%</span>
+                      </span>
+                      <span class="baseline-strip-switch" aria-hidden="true">
+                        <svg viewBox="0 0 30 30" width="30" height="30"><path d="M4 10h19m-5-5 5 5-5 5M26 20H7m5-5-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.7"></path></svg>
+                      </span>
+                    </div>
+                    <span class="baseline-income-expense-copy">Ebben a hónapban a bevételed meghaladja a kiadásaidat.</span>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <div class="screen-wrap">
+          <p class="screen-title">Havi 2</p>
+          <section class="native-canvas" aria-label="Balance havi alternative five-card layout">
+            <section class="mother-card variant-mother" aria-label="Balance unified extended sheet mother card, Havi 2">
+              <div class="variant-header" aria-hidden="true">
+                <img class="reference-raster" src="assets/balance-extended-sheet-reference-920x2048.png" alt="">
+              </div>
+              <div class="variant-body">
+                <section class="variant-card variant-card-3" aria-label="Költés márciusban: javuló napi költési tendencia">
+                  <div class="daily-spend-card">
+                    <div class="daily-spend-heading">
+                      <span class="daily-spend-heading-copy">
+                        <svg class="daily-spend-icon" viewBox="0 0 30 42" aria-hidden="true">
+                          <rect x="3" y="3" width="24" height="36" rx="6" fill="none" stroke="#7c4ded" stroke-width="3"></rect>
+                          <path d="M8.5 14h13M8.5 20h10M15 32V22m0 10-4-4m4 4 4-4" fill="none" stroke="#7c4ded" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+                        </svg>
+                        <span>
+                          <span class="daily-spend-title">Költés</span>
+                          <span class="daily-spend-subtitle">március</span>
+                        </span>
+                      </span>
+                      <span class="daily-spend-comparison">
+                        <strong>↓ 28%</strong>
+                        <span>alacsonyabb, mint<br>az előző hónapban</span>
+                      </span>
+                    </div>
+                    <div class="daily-spend-plot">
+                      <svg viewBox="0 0 490 252" preserveAspectRatio="none" role="img" aria-label="Mock márciusi napi költés idődiagram csökkenő tendenciával">
+                        <defs>
+                          <linearGradient id="dailySpendAreaTwo" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#dddefe" stop-opacity=".82"></stop><stop offset="1" stop-color="#eef0ff" stop-opacity=".16"></stop></linearGradient>
+                          <linearGradient id="dailySpendLineTwo" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#4d50e7"></stop><stop offset="1" stop-color="#6254e8"></stop></linearGradient>
+                        </defs>
+                        <g fill="none" stroke="#dfe4ef" stroke-dasharray="5 5" stroke-width="1.2">
+                          <path d="M0 25H486"></path><path d="M0 87H486"></path><path d="M0 149H486"></path><path d="M0 211H486"></path>
+                          <path d="M0 25V224"></path><path d="M121 25V224"></path><path d="M243 25V224"></path><path d="M364 25V224"></path><path d="M486 25V224"></path>
+                        </g>
+                        <path d="M0 71 C12 68 19 85 28 118 S45 147 57 124 S73 104 83 139 S100 164 113 145 S129 133 142 164 S159 184 171 164 S188 156 200 184 S217 196 229 201 S246 175 258 129 S275 145 286 172 S303 149 314 163 S331 184 343 190 S360 211 372 193 S389 196 400 207 S417 219 429 213 S446 220 457 216 S474 224 486 215 L486 224 L0 224Z" fill="url(#dailySpendAreaTwo)"></path>
+                        <path d="M0 71 C12 68 19 85 28 118 S45 147 57 124 S73 104 83 139 S100 164 113 145 S129 133 142 164 S159 184 171 164 S188 156 200 184 S217 196 229 201 S246 175 258 129 S275 145 286 172 S303 149 314 163 S331 184 343 190 S360 211 372 193 S389 196 400 207 S417 219 429 213 S446 220 457 216 S474 224 486 215" fill="none" stroke="url(#dailySpendLineTwo)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="500" text-anchor="middle">
+                          <text x="0" y="248" text-anchor="start">MÁRC. 1.</text><text x="121" y="248">8.</text><text x="243" y="248">15.</text><text x="364" y="248">22.</text><text x="486" y="248" text-anchor="end">29.</text>
+                        </g>
+                      </svg>
+                    </div>
+                    <div class="daily-spend-insight">
+                      <span class="daily-spend-insight-icon" aria-hidden="true">
+                        <svg viewBox="0 0 30 30" width="30" height="30"><path d="m5 21 7-7 4 4 9-10M18 8h7v7" fill="none" stroke="#19aa70" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"></path></svg>
+                      </span>
+                      <span>
+                        <span class="daily-spend-insight-title">Javuló tendencia</span>
+                        <span class="daily-spend-insight-copy">A napi költésed csökkenő tendenciát mutat az előző időszakhoz képest.</span>
+                      </span>
+                    </div>
+                  </div>
+                </section>
+                <section class="variant-card variant-card-4 monthly-mixed-no-spend" aria-label="Költésmentes napok: 12 nap">
+                  <span class="baseline-progress-title-row">
+                    <svg class="baseline-progress-title-icon" viewBox="0 0 29 29" aria-hidden="true"><rect x="4" y="6" width="21" height="19" rx="4" fill="none" stroke="#16b981" stroke-width="2.5"></rect><path d="M9 3v6m11-6v6m-11 8 3.4 3.3L20 13" fill="none" stroke="#16b981" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+                    <span class="baseline-no-spend-title">Költésmentes</span>
+                  </span>
+                  <span class="monthly-mixed-no-spend-value">12<small>nap</small></span>
+                </section>
+                <section class="variant-card variant-card-5 baseline-savings" aria-label="Megtakarítási arány: 62 százalék">
+                  <span class="baseline-progress-title-row">
+                    <svg class="baseline-progress-title-icon" viewBox="0 0 30 42" aria-hidden="true"><rect x="3" y="3" width="24" height="36" rx="7" fill="none" stroke="#7c3aed" stroke-width="3"></rect><circle cx="15" cy="15" r="4" fill="none" stroke="#7c3aed" stroke-width="2.5"></circle><path d="M8.5 29c2.1-3.4 4.3-5.1 6.5-5.1s4.4 1.7 6.5 5.1M9 34h12" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+                    <span class="baseline-savings-title">Megtakarítás</span>
+                  </span>
+                  <svg class="baseline-savings-ring" viewBox="0 0 104 104" role="img" aria-label="Megtakarítási arány 62 százalék">
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#e7ebf0" stroke-width="10"></circle>
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-width="10" stroke-dasharray="151.9 245.0" transform="rotate(-90 52 52)"></circle>
+                    <text x="52" y="59" fill="#7c3aed" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="800" text-anchor="middle">62%</text>
+                  </svg>
+                </section>
+                <section class="variant-card variant-card-combined" aria-label="Bevétel és kiadás összehasonlítás">
+                  <div class="baseline-income-expense">
+                    <span class="baseline-income-expense-title-row">
+                      <svg class="baseline-income-expense-title-icon" viewBox="0 0 30 36" aria-hidden="true"><path d="M3 11h19m-5-5 6 5-6 5M27 25H8m5-5-6 5 6 5" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>
+                      <span class="baseline-income-expense-title">Bevétel vs. Kiadás</span>
+                    </span>
+                    <div class="baseline-income-expense-strip" aria-label="Bevétel 61 százalék, kiadás 39 százalék">
+                      <span class="baseline-income-panel">
+                        <span class="baseline-strip-label">Bevétel</span>
+                        <span class="baseline-strip-value">892 k Ft</span>
+                        <span class="baseline-strip-percent">61%</span>
+                      </span>
+                      <span class="baseline-expense-panel">
+                        <span class="baseline-strip-label">Kiadás</span>
+                        <span class="baseline-strip-value">524 k Ft</span>
+                        <span class="baseline-strip-percent">39%</span>
+                      </span>
+                      <span class="baseline-strip-switch" aria-hidden="true">
+                        <svg viewBox="0 0 30 30" width="30" height="30"><path d="M4 10h19m-5-5 5 5-5 5M26 20H7m5-5-5 5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.7"></path></svg>
+                      </span>
+                    </div>
+                    <span class="baseline-income-expense-copy">Ebben a hónapban a bevételed meghaladja a kiadásaidat.</span>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <div class="screen-wrap">
+          <p class="screen-title">Éves</p>
+          <section class="native-canvas" aria-label="Balance extended sheet static merged lower-card variant">
+            <section class="mother-card variant-mother" aria-label="Balance unified extended sheet mother card with combined Card 1 and Card 2">
+              <div class="variant-header" aria-hidden="true">
+                <img class="reference-raster" src="assets/balance-extended-sheet-reference-920x2048.png" alt="">
+              </div>
+              <div class="variant-body">
+                <section class="variant-card variant-card-3" aria-label="Éves alakulás: havi zárások, 2026">
+                  <div class="annual-closings-card">
+                    <div class="annual-closings-heading">
+                      <span class="annual-closings-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+                      <span>
+                        <span class="annual-closings-title">Éves alakulás</span>
+                        <span class="annual-closings-subtitle">Havi zárások&nbsp; • &nbsp;2026</span>
+                      </span>
+                    </div>
+                    <div class="annual-closings-plot">
+                      <svg viewBox="0 0 490 318" preserveAspectRatio="none" role="img" aria-label="Mock havi zárások: pozitív és negatív oszlopok, kumulált egyenleg vonallal">
+                        <defs>
+                          <linearGradient id="annualClosingPositive" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#89e5cd"></stop><stop offset="1" stop-color="#75dcc1"></stop></linearGradient>
+                          <linearGradient id="annualClosingNegative" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#ff9cb5"></stop><stop offset="1" stop-color="#ff8eaa"></stop></linearGradient>
+                          <linearGradient id="annualClosingLine" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#925cf4"></stop><stop offset="1" stop-color="#6742e7"></stop></linearGradient>
+                        </defs>
+                        <g fill="none" stroke="#e7eaf3" stroke-width="1.2">
+                          <path d="M59 12H484"></path><path d="M59 82H484"></path><path d="M59 152H484"></path><path d="M59 222H484"></path><path d="M59 292H484"></path>
+                          <path d="M59 12V292"></path><path d="M94 12V292"></path><path d="M129 12V292"></path><path d="M164 12V292"></path><path d="M199 12V292"></path><path d="M234 12V292"></path><path d="M269 12V292"></path><path d="M304 12V292"></path><path d="M339 12V292"></path><path d="M374 12V292"></path><path d="M409 12V292"></path><path d="M444 12V292"></path><path d="M479 12V292"></path>
+                        </g>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="500" text-anchor="end">
+                          <text x="47" y="18">400K</text><text x="47" y="88">200K</text><text x="47" y="158">0</text><text x="47" y="228">-200K</text><text x="47" y="298">-400K</text>
+                        </g>
+                        <g>
+                          <rect x="68" y="86" width="16" height="66" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="103" y="58" width="16" height="94" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="138" y="30" width="16" height="122" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="173" y="152" width="16" height="16" rx="4" fill="url(#annualClosingNegative)"></rect>
+                          <rect x="208" y="100" width="16" height="52" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="243" y="152" width="16" height="44" rx="4" fill="url(#annualClosingNegative)"></rect>
+                          <rect x="278" y="152" width="16" height="88" rx="4" fill="url(#annualClosingNegative)"></rect>
+                          <rect x="313" y="152" width="16" height="42" rx="4" fill="url(#annualClosingNegative)"></rect>
+                          <rect x="348" y="106" width="16" height="46" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="383" y="89" width="16" height="63" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="418" y="133" width="16" height="19" rx="4" fill="url(#annualClosingPositive)"></rect>
+                          <rect x="453" y="152" width="16" height="72" rx="4" fill="url(#annualClosingNegative)"></rect>
+                        </g>
+                        <path d="M67 125 C82 114 93 105 109 108 S134 102 144 108 S167 126 179 137 S202 147 214 157 S237 173 249 181 S272 193 284 202 S307 208 319 211 S342 214 354 219 S377 228 389 237 S412 245 424 252 S447 260 469 272" fill="none" stroke="url(#annualClosingLine)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">
+                          <text x="76" y="314">JAN</text><text x="111" y="314">FEB</text><text x="146" y="314">MÁR</text><text x="181" y="314">ÁPR</text><text x="216" y="314">MÁJ</text><text x="251" y="314">JÚN</text><text x="286" y="314">JÚL</text><text x="321" y="314">AUG</text><text x="356" y="314">SZE</text><text x="391" y="314">OKT</text><text x="426" y="314">NOV</text><text x="461" y="314">DEC</text>
+                        </g>
+                      </svg>
+                    </div>
+                    <div class="annual-closings-legend" aria-label="Diagramjelmagyarázat">
+                      <span class="annual-closings-key"><i class="annual-closings-dot"></i>Pozitív zárás</span>
+                      <span class="annual-closings-key"><i class="annual-closings-dot negative"></i>Negatív zárás</span>
+                      <span class="annual-closings-key"><i class="annual-closings-line-key"></i>Egyenleg (halmozott)</span>
+                    </div>
+                  </div>
+                </section>
+                <section class="variant-card variant-card-4" aria-label="Card 4 placeholder">
+                  <span class="variant-placeholder">Card 4</span>
+                </section>
+                <section class="variant-card variant-card-5" aria-label="Megtakarítások: 10 ezer forint">
+                  <div class="annual-savings-info" aria-label="Megtakarítások 10 ezer forint">
+                    <span class="annual-savings-info-heading">
+                      <span class="annual-savings-info-title">Megtakarítások</span>
+                      <span class="annual-savings-info-icon" aria-hidden="true">
+                        <svg viewBox="0 0 26 26" width="26" height="26"><path d="m4 18 6-6 4 4 8-9M16 7h6v6" fill="none" stroke="#19aa70" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6"></path></svg>
+                      </span>
+                    </span>
+                    <span class="annual-savings-info-value">10 k Ft</span>
+                    <span class="annual-savings-info-copy">félretett összeg<br>ebben az évben</span>
+                  </div>
+                </section>
+                <section class="variant-card variant-card-combined" aria-label="Bevétel és kiadás havi bontás, 2026">
+                  <div class="income-expense-card">
+                    <button class="income-expense-mode-toggle" id="income-expense-chart-toggle" type="button" aria-pressed="false" aria-label="Váltás vonaldiagramra" title="Váltás vonaldiagramra">
+                      <svg class="mode-bar-icon" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 15V9m5 6V4m5 11V7m4 8V2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.4"></path></svg>
+                      <svg class="mode-line-icon" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 13.5 6.1 9l3.2 2.1L16 4.5M2 16h14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.1"></path></svg>
+                    </button>
+                    <div class="income-expense-heading">
+                      <span class="income-expense-heading-copy">
+                        <svg class="income-expense-icon" viewBox="0 0 42 42" aria-hidden="true">
+                          <path d="M4 14h24m-7-7 8 7-8 7M38 28H14m7-7-8 7 8 7" fill="none" stroke="#7c4ded" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+                        </svg>
+                        <span>
+                          <span class="income-expense-title">Bevétel / kiadás</span>
+                          <span class="income-expense-subtitle">Havi bontás&nbsp; • &nbsp;2026</span>
+                        </span>
+                      </span>
+                      <span class="income-expense-legend" aria-label="Diagramjelmagyarázat">
+                        <span class="income-expense-key"><i class="income-expense-dot"></i>Bevétel</span>
+                        <span class="income-expense-key"><i class="income-expense-dot expense"></i>Kiadás</span>
+                      </span>
+                    </div>
+                    <div class="income-expense-plot">
+                      <svg class="income-expense-bars" viewBox="0 0 730 210" preserveAspectRatio="none" role="img" aria-label="Mock 2026 havi bevétel és kiadás oszlopdiagram">
+                        <defs>
+                          <linearGradient id="incomeBar" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#7c3aed"></stop><stop offset="1" stop-color="#a879ff"></stop></linearGradient>
+                          <linearGradient id="expenseBar" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#ff8638"></stop><stop offset="1" stop-color="#f431a0"></stop></linearGradient>
+                        </defs>
+                        <g fill="none" stroke="#e7eaf3" stroke-width="1.2">
+                          <path d="M58 10H726"></path><path d="M58 70H726"></path><path d="M58 130H726"></path><path d="M58 190H726"></path>
+                          <path d="M58 10V190"></path><path d="M113 10V190"></path><path d="M168 10V190"></path><path d="M223 10V190"></path><path d="M278 10V190"></path><path d="M333 10V190"></path><path d="M388 10V190"></path><path d="M443 10V190"></path><path d="M498 10V190"></path><path d="M553 10V190"></path><path d="M608 10V190"></path><path d="M663 10V190"></path><path d="M718 10V190"></path>
+                        </g>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="500" text-anchor="end">
+                          <text x="44" y="16">600K</text><text x="44" y="76">400K</text><text x="44" y="136">200K</text><text x="44" y="196">0</text>
+                        </g>
+                        <g>
+                          <rect x="68" y="81" width="16" height="109" rx="4" fill="url(#incomeBar)"></rect><rect x="90" y="103" width="16" height="87" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="123" y="69" width="16" height="121" rx="4" fill="url(#incomeBar)"></rect><rect x="145" y="91" width="16" height="99" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="178" y="35" width="16" height="155" rx="4" fill="url(#incomeBar)"></rect><rect x="200" y="63" width="16" height="127" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="233" y="66" width="16" height="124" rx="4" fill="url(#incomeBar)"></rect><rect x="255" y="94" width="16" height="96" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="288" y="75" width="16" height="115" rx="4" fill="url(#incomeBar)"></rect><rect x="310" y="100" width="16" height="90" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="343" y="91" width="16" height="99" rx="4" fill="url(#incomeBar)"></rect><rect x="365" y="112" width="16" height="78" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="398" y="88" width="16" height="102" rx="4" fill="url(#incomeBar)"></rect><rect x="420" y="109" width="16" height="81" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="453" y="69" width="16" height="121" rx="4" fill="url(#incomeBar)"></rect><rect x="475" y="97" width="16" height="93" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="508" y="54" width="16" height="136" rx="4" fill="url(#incomeBar)"></rect><rect x="530" y="78" width="16" height="112" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="563" y="26" width="16" height="164" rx="4" fill="url(#incomeBar)"></rect><rect x="585" y="44" width="16" height="146" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="618" y="63" width="16" height="127" rx="4" fill="url(#incomeBar)"></rect><rect x="640" y="85" width="16" height="105" rx="4" fill="url(#expenseBar)"></rect>
+                          <rect x="673" y="60" width="16" height="130" rx="4" fill="url(#incomeBar)"></rect><rect x="695" y="81" width="16" height="109" rx="4" fill="url(#expenseBar)"></rect>
+                        </g>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="500" text-anchor="middle">
+                          <text x="87" y="207">JAN</text><text x="142" y="207">FEB</text><text x="197" y="207">MÁR</text><text x="252" y="207">ÁPR</text><text x="307" y="207">MÁJ</text><text x="362" y="207">JÚN</text><text x="417" y="207">JÚL</text><text x="472" y="207">AUG</text><text x="527" y="207">SZE</text><text x="582" y="207">OKT</text><text x="637" y="207">NOV</text><text x="692" y="207">DEC</text>
+                        </g>
+                      </svg>
+                      <svg class="income-expense-lines" viewBox="0 0 730 210" preserveAspectRatio="none" role="img" aria-label="Mock 2026 havi bevétel és kiadás vonaldiagram">
+                        <defs>
+                          <linearGradient id="incomeLine" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#7c3aed"></stop><stop offset="1" stop-color="#a879ff"></stop></linearGradient>
+                          <linearGradient id="expenseLine" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#ff8638"></stop><stop offset="1" stop-color="#f431a0"></stop></linearGradient>
+                        </defs>
+                        <g fill="none" stroke="#e7eaf3" stroke-width="1.2">
+                          <path d="M58 10H726"></path><path d="M58 70H726"></path><path d="M58 130H726"></path><path d="M58 190H726"></path>
+                          <path d="M58 10V190"></path><path d="M113 10V190"></path><path d="M168 10V190"></path><path d="M223 10V190"></path><path d="M278 10V190"></path><path d="M333 10V190"></path><path d="M388 10V190"></path><path d="M443 10V190"></path><path d="M498 10V190"></path><path d="M553 10V190"></path><path d="M608 10V190"></path><path d="M663 10V190"></path><path d="M718 10V190"></path>
+                        </g>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="500" text-anchor="end">
+                          <text x="44" y="16">600K</text><text x="44" y="76">400K</text><text x="44" y="136">200K</text><text x="44" y="196">0</text>
+                        </g>
+                        <path d="M76 81 C94 76 110 70 131 69 S165 43 186 35 S220 61 241 66 S275 71 296 75 S330 86 351 91 S385 84 406 88 S440 73 461 69 S495 59 516 54 S550 34 571 26 S605 57 626 63 S660 59 681 60" fill="none" stroke="url(#incomeLine)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+                        <path d="M76 103 C94 98 110 95 131 91 S165 71 186 63 S220 86 241 94 S275 97 296 100 S330 108 351 112 S385 105 406 109 S440 101 461 97 S495 83 516 78 S550 55 571 44 S605 77 626 85 S660 83 681 81" fill="none" stroke="url(#expenseLine)" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"></path>
+                        <g fill="#7c3aed"><circle cx="76" cy="81" r="3.5"></circle><circle cx="131" cy="69" r="3.5"></circle><circle cx="186" cy="35" r="3.5"></circle><circle cx="241" cy="66" r="3.5"></circle><circle cx="296" cy="75" r="3.5"></circle><circle cx="351" cy="91" r="3.5"></circle><circle cx="406" cy="88" r="3.5"></circle><circle cx="461" cy="69" r="3.5"></circle><circle cx="516" cy="54" r="3.5"></circle><circle cx="571" cy="26" r="3.5"></circle><circle cx="626" cy="63" r="3.5"></circle><circle cx="681" cy="60" r="3.5"></circle></g>
+                        <g fill="#f431a0"><circle cx="76" cy="103" r="3.5"></circle><circle cx="131" cy="91" r="3.5"></circle><circle cx="186" cy="63" r="3.5"></circle><circle cx="241" cy="94" r="3.5"></circle><circle cx="296" cy="100" r="3.5"></circle><circle cx="351" cy="112" r="3.5"></circle><circle cx="406" cy="109" r="3.5"></circle><circle cx="461" cy="97" r="3.5"></circle><circle cx="516" cy="78" r="3.5"></circle><circle cx="571" cy="44" r="3.5"></circle><circle cx="626" cy="85" r="3.5"></circle><circle cx="681" cy="81" r="3.5"></circle></g>
+                        <g fill="#7181aa" font-family="Inter, system-ui, sans-serif" font-size="14" font-weight="500" text-anchor="middle">
+                          <text x="76" y="207">JAN</text><text x="131" y="207">FEB</text><text x="186" y="207">MÁR</text><text x="241" y="207">ÁPR</text><text x="296" y="207">MÁJ</text><text x="351" y="207">JÚN</text><text x="406" y="207">JÚL</text><text x="461" y="207">AUG</text><text x="516" y="207">SZE</text><text x="571" y="207">OKT</text><text x="626" y="207">NOV</text><text x="681" y="207">DEC</text>
+                        </g>
+                      </svg>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <div class="screen-wrap">
+          <p class="screen-title">Interaktív méret-próba — üres Card 1–5 téglalapok</p>
+          <section class="native-canvas" aria-label="Interactive 920 by 2048 Balance extended sheet layout editor">
+            <section class="mother-card editor-mother" aria-label="Balance unified extended sheet editable mother card">
+              <div class="editor-header" aria-hidden="true">
+                <img class="reference-raster" src="assets/balance-extended-sheet-reference-920x2048.png" alt="">
+              </div>
+              <div class="editor-body" id="editor-body" aria-label="Balance extended sheet editable child-card body">
+                <div class="mother-padding-guide" id="mother-padding-guide" aria-hidden="true"></div>
+                <div class="layout-canvas" id="layout-canvas">
+                  <div class="snap-guide" id="snap-guide" aria-hidden="true"></div>
+                  <div class="layout-selection" id="layout-selection" aria-label="Whole Balance layout selection">
+                    <button class="group-handle group-rotate" id="group-rotate" type="button" aria-label="Teljes layout forgatása">⟳</button>
+                    <button class="group-handle group-edge group-edge-top" data-group-resize="top" type="button" aria-label="Teljes layout függőleges nyújtása felülről">↕</button>
+                    <button class="group-handle group-edge group-edge-right" data-group-resize="right" type="button" aria-label="Teljes layout vízszintes nyújtása jobbról">↔</button>
+                    <button class="group-handle group-edge group-edge-bottom" data-group-resize="bottom" type="button" aria-label="Teljes layout függőleges nyújtása alulról">↕</button>
+                    <button class="group-handle group-edge group-edge-left" data-group-resize="left" type="button" aria-label="Teljes layout vízszintes nyújtása balról">↔</button>
+                    <button class="group-handle group-scale group-corner group-corner-top-left" data-group-resize="top-left" type="button" aria-label="Teljes layout arányos méretezése bal felső sarokból">↗</button>
+                    <button class="group-handle group-scale group-corner group-corner-top-right" data-group-resize="top-right" type="button" aria-label="Teljes layout arányos méretezése jobb felső sarokból">↗</button>
+                    <button class="group-handle group-scale group-corner group-corner-bottom-left" data-group-resize="bottom-left" type="button" aria-label="Teljes layout arányos méretezése bal alsó sarokból">↗</button>
+                    <button class="group-handle group-scale group-corner group-corner-bottom-right" data-group-resize="bottom-right" type="button" aria-label="Teljes layout arányos méretezése jobb alsó sarokból">↗</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </section>
+        </div>
+      </div>
+      <aside>
+        <h1>Balance extended sheet</h1>
+        <p>Native <code>920×2048</code> baseline. The first screen is unchanged. The lower screen starts from the exact same Flutter-derived Card 1–5 slots, but uses deliberately empty cards for layout exploration.</p>
+        <button type="button" id="slot-toggle" aria-pressed="false">Child-card határok mutatása</button>
+        <button type="button" id="whole-layout-select" aria-pressed="false">Teljes layout kijelölése</button>
+        <button type="button" id="whole-layout-flip" aria-pressed="false">Vízszintes tükrözés</button>
+        <button type="button" id="whole-layout-flip-vertical" aria-pressed="false">Függőleges tükrözés</button>
+        <button type="button" id="editor-reset">Szerkesztő visszaállítása</button>
+        <ul>
+          <li>Mother: <code>842×1187</code> at <code>39,233</code></li>
+          <li>Outer inset: <code>12 logical px</code></li>
+          <li>Fixed outer card inset: <code>3 logical px</code></li>
+          <li>Fixed shared gutter: <code>6 logical px</code></li>
+          <li>Card 3: <code>70% × 60%</code></li>
+          <li>Card 4 / 5: <code>30% × 30%</code></li>
+          <li>Card 1 / 2: <code>50% × 40%</code></li>
+        </ul>
+        <p>Az alsó nézetben koppints egy téglalap közepére. Highlightot kap, a négy oldal közepén pedig nagy, érintésbarát húzható fogantyú jelenik meg. Egy drag csak azt az egy élt mozdítja; a kódbeli külső inset és a két kártya közötti rés fix, nem húzható össze.</p>
+        <p>A <strong>Teljes layout kijelölése</strong> gomb minden kártyát egy közös csoportba tesz. A felső körrel forgatható, a sarkokkal aránytartóan, az oldalakkal tengelyenként méretezhető. A vízszintes és függőleges tükrözés a teljes csoportot fordítja meg.</p>
+      </aside>
+    </main>
+    <script>
+      const toggle = document.querySelector('#slot-toggle');
+      const canvas = document.querySelector('.native-canvas');
+      toggle.addEventListener('click', () => {
+        const visible = canvas.classList.toggle('show-slots');
+        toggle.setAttribute('aria-pressed', String(visible));
+        toggle.textContent = visible ? 'Child-card határok elrejtése' : 'Child-card határok mutatása';
+      });
+
+      const incomeExpenseCard = document.querySelector('.income-expense-card');
+      const incomeExpenseChartToggle = document.querySelector('#income-expense-chart-toggle');
+      incomeExpenseChartToggle.addEventListener('click', () => {
+        const lineMode = incomeExpenseCard.classList.toggle('is-line');
+        incomeExpenseChartToggle.setAttribute('aria-pressed', String(lineMode));
+        incomeExpenseChartToggle.setAttribute('aria-label', lineMode ? 'Váltás oszlopdiagramra' : 'Váltás vonaldiagramra');
+        incomeExpenseChartToggle.title = lineMode ? 'Váltás oszlopdiagramra' : 'Váltás vonaldiagramra';
+      });
+
+      const editorBody = document.querySelector('#editor-body');
+      const layoutCanvas = document.querySelector('#layout-canvas');
+      const snapGuide = document.querySelector('#snap-guide');
+      const motherPaddingGuide = document.querySelector('#mother-padding-guide');
+      const wholeLayoutSelect = document.querySelector('#whole-layout-select');
+      const wholeLayoutFlip = document.querySelector('#whole-layout-flip');
+      const wholeLayoutFlipVertical = document.querySelector('#whole-layout-flip-vertical');
+      const halfGutter = 6.68;
+      const fixedOuterInset = halfGutter;
+      const fixedSharedGap = halfGutter * 2;
+      const snapThreshold = 24;
+      const bodyWidth = 842 - 2 * 26.73;
+      const bodyHeight = 1187 - 282 - 2 * 26.73;
+      const topHeight = bodyHeight * .6;
+      const leftTopWidth = bodyWidth * .7;
+      const rightTopWidth = bodyWidth * .3;
+      const bottomWidth = bodyWidth * .5;
+      const minSide = 80;
+      const originalRects = {
+        'card-3': { x: halfGutter, y: halfGutter, w: leftTopWidth - 2 * halfGutter, h: topHeight - 2 * halfGutter },
+        /* Card 4 absorbs the former Card 4 + fixed inter-card gap + Card 5. */
+        'card-4': { x: leftTopWidth + halfGutter, y: halfGutter, w: rightTopWidth - 2 * halfGutter, h: topHeight - 2 * halfGutter },
+        'card-1': { x: halfGutter, y: topHeight + halfGutter, w: bottomWidth - 2 * halfGutter, h: bodyHeight - topHeight - 2 * halfGutter },
+        'card-2': { x: bottomWidth + halfGutter, y: topHeight + halfGutter, w: bottomWidth - 2 * halfGutter, h: bodyHeight - topHeight - 2 * halfGutter },
+      };
+      const cards = Object.fromEntries(Object.entries(originalRects).map(([id, rect]) => [id, {
+        rect: { ...rect },
+        original: { ...rect },
+        element: createEditorCard(id),
+      }]));
+      let activeDrag = null;
+      let activeGroupTransform = null;
+      let selectedCardId = null;
+      let groupSelected = false;
+      let groupRotation = 0;
+      let groupFlipX = false;
+      let groupFlipY = false;
+      let groupScaleX = 1;
+      let groupScaleY = 1;
+      let groupScaleBase = null;
+      let layoutBounds = { x: fixedOuterInset, y: fixedOuterInset, w: bodyWidth - 2 * fixedOuterInset, h: bodyHeight - 2 * fixedOuterInset };
+      let rotationPivot = { x: bodyWidth / 2, y: bodyHeight / 2 };
+
+      function createEditorCard(id) {
+        const element = document.createElement('section');
+        element.className = 'editor-card';
+        element.dataset.cardId = id;
+        element.setAttribute('aria-label', `${id.replace('-', ' ')} editable empty rectangle`);
+        element.innerHTML = `
+          <span class="edge edge-top" data-edge="top" aria-label="Top edge"></span>
+          <span class="edge edge-right" data-edge="right" aria-label="Right edge"></span>
+          <span class="edge edge-bottom" data-edge="bottom" aria-label="Bottom edge"></span>
+          <span class="edge edge-left" data-edge="left" aria-label="Left edge"></span>
+          <span class="card-center" aria-label="Show original-size differences"></span>
+          <output class="delta delta-top"></output>
+          <output class="delta delta-right"></output>
+          <output class="delta delta-bottom"></output>
+          <output class="delta delta-left"></output>`;
+        element.querySelector('.card-center').addEventListener('click', () => selectCard(id));
+        element.querySelectorAll('.edge').forEach((edge) => {
+          edge.addEventListener('pointerdown', (event) => startDrag(event, id, edge.dataset.edge));
+        });
+        layoutCanvas.append(element);
+        return element;
+      }
+
+      function selectCard(id) {
+        setGroupSelected(false);
+        selectedCardId = id;
+        Object.entries(cards).forEach(([otherId, card]) => {
+          card.element.classList.toggle('is-selected', otherId === id);
+        });
+        // Re-resolve the stable local bounds/pivot before an individual edge
+        // receives a drag after a rotated or mirrored whole-layout edit.
+        renderAll();
+      }
+
+      function applyGroupTransform() {
+        layoutCanvas.style.transformOrigin = `${rotationPivot.x - layoutBounds.x}px ${rotationPivot.y - layoutBounds.y}px`;
+        // CSS applies transforms right-to-left: the local reflections happen
+        // before visual rotation, exactly as the input conversion below does.
+        layoutCanvas.style.transform = `rotate(${groupRotation}deg) scaleX(${groupFlipX ? -1 : 1}) scaleY(${groupFlipY ? -1 : 1})`;
+      }
+
+      function setGroupSelected(next) {
+        groupSelected = next;
+        layoutCanvas.classList.toggle('is-group-selected', next);
+        wholeLayoutSelect.setAttribute('aria-pressed', String(next));
+        wholeLayoutFlip.setAttribute('aria-pressed', String(groupFlipX));
+        wholeLayoutFlipVertical.setAttribute('aria-pressed', String(groupFlipY));
+        wholeLayoutSelect.textContent = next ? 'Egyedi kártya-szerkesztés' : 'Teljes layout kijelölése';
+        if (next) {
+          groupScaleX = 1;
+          groupScaleY = 1;
+          groupScaleBase = Object.fromEntries(Object.entries(cards).map(([id, card]) => [id, { ...card.rect }]));
+          rotationPivot = { x: layoutBounds.x + layoutBounds.w / 2, y: layoutBounds.y + layoutBounds.h / 2 };
+          applyGroupTransform();
+          selectedCardId = null;
+          Object.values(cards).forEach((card) => card.element.classList.remove('is-selected'));
+        }
+      }
+
+      function formatDelta(value) {
+        const rounded = Math.round(value);
+        return `${rounded >= 0 ? '+' : '−'}${Math.abs(rounded)} px`;
+      }
+
+      function renderCard(card) {
+        const { element, rect, original } = card;
+        element.style.left = `${rect.x - layoutBounds.x}px`;
+        element.style.top = `${rect.y - layoutBounds.y}px`;
+        element.style.width = `${rect.w}px`;
+        element.style.height = `${rect.h}px`;
+        element.querySelector('.delta-top').textContent = `F ${formatDelta(rect.y - original.y)}`;
+        element.querySelector('.delta-right').textContent = `J ${formatDelta(rect.x + rect.w - original.x - original.w)}`;
+        element.querySelector('.delta-bottom').textContent = `A ${formatDelta(rect.y + rect.h - original.y - original.h)}`;
+        element.querySelector('.delta-left').textContent = `B ${formatDelta(rect.x - original.x)}`;
+      }
+
+      function renderAll() {
+        updateLayoutCanvas();
+        applyGroupTransform();
+        Object.values(cards).forEach(renderCard);
+      }
+
+      function updateLayoutCanvas() {
+        const rects = Object.values(cards).map((card) => card.rect);
+        const left = Math.min(...rects.map((rect) => rect.x));
+        const top = Math.min(...rects.map((rect) => rect.y));
+        const right = Math.max(...rects.map((rect) => rect.x + rect.w));
+        const bottom = Math.max(...rects.map((rect) => rect.y + rect.h));
+        layoutBounds = { x: left, y: top, w: right - left, h: bottom - top };
+        layoutCanvas.style.left = `${layoutBounds.x}px`;
+        layoutCanvas.style.top = `${layoutBounds.y}px`;
+        layoutCanvas.style.width = `${layoutBounds.w}px`;
+        layoutCanvas.style.height = `${layoutBounds.h}px`;
+      }
+
+      function candidateFrom(start, edge, delta) {
+        const next = { ...start };
+        if (edge === 'left') {
+          const bounded = Math.min(delta, start.w - minSide);
+          next.x += bounded;
+          next.w -= bounded;
+        }
+        if (edge === 'right') {
+          next.w += Math.max(-start.w + minSide, delta);
+        }
+        if (edge === 'top') {
+          const bounded = Math.min(delta, start.h - minSide);
+          next.y += bounded;
+          next.h -= bounded;
+        }
+        if (edge === 'bottom') {
+          next.h += Math.max(-start.h + minSide, delta);
+        }
+        return next;
+      }
+
+      function validCandidate(id, candidate) {
+        if (candidate.w < minSide || candidate.h < minSide) return false;
+        // A whole-layout transform may deliberately extend beyond the original
+        // mother padding. Internal editing must remain possible in that local
+        // space; only the fixed child-card gap and non-overlap are constraints.
+        return Object.entries(cards).every(([otherId, other]) => {
+          if (otherId === id) return true;
+          return candidate.x + candidate.w + fixedSharedGap <= other.rect.x + .01
+            || other.rect.x + other.rect.w + fixedSharedGap <= candidate.x + .01
+            || candidate.y + candidate.h + fixedSharedGap <= other.rect.y + .01
+            || other.rect.y + other.rect.h + fixedSharedGap <= candidate.y + .01;
+        });
+      }
+
+      function edgeCoordinate(rect, edge) {
+        if (edge === 'left') return rect.x;
+        if (edge === 'right') return rect.x + rect.w;
+        if (edge === 'top') return rect.y;
+        return rect.y + rect.h;
+      }
+
+      function snapEdgeTo(rect, edge, coordinate) {
+        const snapped = { ...rect };
+        if (edge === 'left') {
+          const right = rect.x + rect.w;
+          snapped.x = coordinate;
+          snapped.w = right - coordinate;
+        }
+        if (edge === 'right') snapped.w = coordinate - rect.x;
+        if (edge === 'top') {
+          const bottom = rect.y + rect.h;
+          snapped.y = coordinate;
+          snapped.h = bottom - coordinate;
+        }
+        if (edge === 'bottom') snapped.h = coordinate - rect.y;
+        return snapped;
+      }
+
+      function resolveSnap(id, edge, rect) {
+        const horizontal = edge === 'left' || edge === 'right';
+        const coordinate = edgeCoordinate(rect, edge);
+        let closest = null;
+        Object.entries(cards).forEach(([otherId, other]) => {
+          if (otherId === id) return;
+          const targets = horizontal
+            ? [other.rect.x, other.rect.x + other.rect.w]
+            : [other.rect.y, other.rect.y + other.rect.h];
+          targets.forEach((target) => {
+            const distance = Math.abs(target - coordinate);
+            if (distance > snapThreshold || (closest && distance >= closest.distance)) return;
+            const snapped = snapEdgeTo(rect, edge, target);
+            if (snapped.w < minSide || snapped.h < minSide || !validCandidate(id, snapped)) return;
+            closest = { rect: snapped, coordinate: target, axis: horizontal ? 'vertical' : 'horizontal', distance };
+          });
+        });
+        return closest;
+      }
+
+      function showSnapGuide(snap) {
+        if (!snap) {
+          snapGuide.className = 'snap-guide';
+          return;
+        }
+        snapGuide.className = `snap-guide is-visible is-${snap.axis}`;
+        if (snap.axis === 'vertical') {
+          snapGuide.style.left = `${snap.coordinate - layoutBounds.x}px`;
+          snapGuide.style.top = '';
+        } else {
+          snapGuide.style.top = `${snap.coordinate - layoutBounds.y}px`;
+          snapGuide.style.left = '';
+        }
+      }
+
+      function showMotherPaddingGuide(snap) {
+        if (!snap) {
+          motherPaddingGuide.className = 'mother-padding-guide';
+          return;
+        }
+        motherPaddingGuide.className = `mother-padding-guide is-visible is-${snap.axis}`;
+        if (snap.axis === 'vertical') {
+          motherPaddingGuide.style.left = `${snap.coordinate}px`;
+          motherPaddingGuide.style.top = '';
+        } else {
+          motherPaddingGuide.style.top = `${snap.coordinate}px`;
+          motherPaddingGuide.style.left = '';
+        }
+      }
+
+      function nearestMotherPaddingSnap(coordinate, axis) {
+        const limit = axis === 'vertical' ? bodyWidth : bodyHeight;
+        const targets = [fixedOuterInset, limit - fixedOuterInset];
+        const target = targets.reduce((closest, candidate) => (
+          Math.abs(candidate - coordinate) < Math.abs(closest - coordinate) ? candidate : closest
+        ));
+        return Math.abs(target - coordinate) <= snapThreshold ? target : null;
+      }
+
+      function snappedQuarterTurn() {
+        const quarter = Math.round(groupRotation / 90);
+        return Math.abs(groupRotation - quarter * 90) <= .01 ? ((quarter % 4) + 4) % 4 : null;
+      }
+
+      function rotateAroundPivot(point, inverse = false) {
+        const radians = (inverse ? -groupRotation : groupRotation) * Math.PI / 180;
+        let dx = point.x - rotationPivot.x;
+        let dy = point.y - rotationPivot.y;
+        if (!inverse && groupFlipX) dx = -dx;
+        if (!inverse && groupFlipY) dy = -dy;
+        let transformedX = Math.cos(radians) * dx - Math.sin(radians) * dy;
+        let transformedY = Math.sin(radians) * dx + Math.cos(radians) * dy;
+        if (inverse && groupFlipX) transformedX = -transformedX;
+        if (inverse && groupFlipY) transformedY = -transformedY;
+        return {
+          x: rotationPivot.x + transformedX,
+          y: rotationPivot.y + transformedY,
+        };
+      }
+
+      function snapRotatedGroupEdge(localAxis, localCoordinate) {
+        const quarter = snappedQuarterTurn();
+        if (quarter === null) return null;
+        const visualAxis = localAxis === 'x'
+          ? (quarter % 2 === 0 ? 'vertical' : 'horizontal')
+          : (quarter % 2 === 0 ? 'horizontal' : 'vertical');
+        const probe = localAxis === 'x'
+          ? rotateAroundPivot({ x: localCoordinate, y: rotationPivot.y })
+          : rotateAroundPivot({ x: rotationPivot.x, y: localCoordinate });
+        const visualCoordinate = visualAxis === 'vertical' ? probe.x : probe.y;
+        const target = nearestMotherPaddingSnap(visualCoordinate, visualAxis);
+        if (target === null) return null;
+        const localProbe = visualAxis === 'vertical'
+          ? rotateAroundPivot({ x: target, y: rotationPivot.y }, true)
+          : rotateAroundPivot({ x: rotationPivot.x, y: target }, true);
+        return {
+          axis: visualAxis,
+          coordinate: target,
+          localCoordinate: localAxis === 'x' ? localProbe.x : localProbe.y,
+        };
+      }
+
+      function startDrag(event, id, edge) {
+        if (activeDrag || activeGroupTransform) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const card = cards[id];
+        activeDrag = {
+          id,
+          edge,
+          pointerId: event.pointerId,
+          inputSpace: currentInputSpace(),
+          startRect: { ...card.rect },
+        };
+        activeDrag.startPoint = pointerInSpace(event, activeDrag.inputSpace);
+        card.element.classList.add('is-dragging');
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+
+      function updateDrag(event) {
+        if (activeGroupTransform && event.pointerId === activeGroupTransform.pointerId) {
+          updateGroupTransform(event);
+          return;
+        }
+        if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
+        const point = pointerInSpace(event, activeDrag.inputSpace);
+        const axisDelta = activeDrag.edge === 'left' || activeDrag.edge === 'right'
+          ? point.x - activeDrag.startPoint.x
+          : point.y - activeDrag.startPoint.y;
+        const intended = candidateFrom(activeDrag.startRect, activeDrag.edge, axisDelta);
+        let resolved = intended;
+        if (!validCandidate(activeDrag.id, intended)) {
+          let low = 0;
+          let high = 1;
+          for (let index = 0; index < 22; index += 1) {
+            const midpoint = (low + high) / 2;
+            const trial = candidateFrom(activeDrag.startRect, activeDrag.edge, axisDelta * midpoint);
+            if (validCandidate(activeDrag.id, trial)) low = midpoint;
+            else high = midpoint;
+          }
+          resolved = candidateFrom(activeDrag.startRect, activeDrag.edge, axisDelta * low);
+        }
+        const snap = resolveSnap(activeDrag.id, activeDrag.edge, resolved);
+        cards[activeDrag.id].rect = snap ? snap.rect : resolved;
+        renderAll();
+        showSnapGuide(snap);
+      }
+
+      function endDrag(event) {
+        if (activeGroupTransform && event.pointerId === activeGroupTransform.pointerId) {
+          activeGroupTransform = null;
+          showMotherPaddingGuide(null);
+          return;
+        }
+        if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
+        cards[activeDrag.id].element.classList.remove('is-dragging');
+        activeDrag = null;
+        showSnapGuide(null);
+        showMotherPaddingGuide(null);
+      }
+
+      function currentInputSpace() {
+        const bounds = editorBody.getBoundingClientRect();
+        return {
+          centerX: bounds.left + rotationPivot.x,
+          centerY: bounds.top + rotationPivot.y,
+          rotation: groupRotation,
+          flipX: groupFlipX,
+          flipY: groupFlipY,
+          pivot: { ...rotationPivot },
+        };
+      }
+
+      function pointerInSpace(event, space) {
+        const dx = event.clientX - space.centerX;
+        const dy = event.clientY - space.centerY;
+        const radians = space.rotation * Math.PI / 180;
+        let localX = Math.cos(radians) * dx + Math.sin(radians) * dy;
+        const localY = -Math.sin(radians) * dx + Math.cos(radians) * dy;
+        // Invert the same F→R transform that the canvas uses. This is what
+        // lets a selected individual card keep resizing in its own relative
+        // coordinate system after whole-layout rotation or reflection.
+        if (space.flipX) localX = -localX;
+        if (space.flipY) localY = -localY;
+        return {
+          x: space.pivot.x + localX,
+          y: space.pivot.y + localY,
+        };
+      }
+
+      function startGroupTransform(event, kind) {
+        if (activeDrag || activeGroupTransform || !groupSelected) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const inputSpace = currentInputSpace();
+        const centerX = inputSpace.centerX;
+        const centerY = inputSpace.centerY;
+        activeGroupTransform = {
+          kind,
+          pointerId: event.pointerId,
+          centerX,
+          centerY,
+          startRotation: groupRotation,
+          startScaleX: groupScaleX,
+          startScaleY: groupScaleY,
+          startBounds: { ...layoutBounds },
+          startRects: Object.fromEntries(Object.entries(cards).map(([id, card]) => [id, { ...card.rect }])),
+          inputSpace,
+          startAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX),
+          startDistance: Math.max(1, Math.hypot(event.clientX - centerX, event.clientY - centerY)),
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+
+      function updateGroupTransform(event) {
+        const drag = activeGroupTransform;
+        if (drag.kind === 'rotate') {
+          const nextAngle = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX);
+          const rawDegrees = drag.startRotation + (nextAngle - drag.startAngle) * 180 / Math.PI;
+          const nearestRightAngle = Math.round(rawDegrees / 90) * 90;
+          groupRotation = Math.abs(rawDegrees - nearestRightAngle) <= 5 ? nearestRightAngle : rawDegrees;
+        } else {
+          const paddingSnap = resizeWholeLayout(drag, pointerInSpace(event, drag.inputSpace));
+          renderAll();
+          showMotherPaddingGuide(paddingSnap);
+        }
+        applyGroupTransform();
+      }
+
+      function groupMetrics() {
+        const base = groupScaleBase;
+        return {
+          width: Math.max(base['card-3'].w + base['card-4'].w, base['card-1'].w + base['card-2'].w),
+          height: base['card-3'].h + base['card-1'].h,
+        };
+      }
+
+      function groupWidth(metrics, scaleX) {
+        return metrics.width * scaleX + fixedSharedGap;
+      }
+
+      function groupHeight(metrics, scaleY) {
+        return metrics.height * scaleY + fixedSharedGap;
+      }
+
+      function clampGroupScaleX(scale) {
+        return Math.max(.08, scale);
+      }
+
+      function clampGroupScaleY(scale) {
+        return Math.max(.08, scale);
+      }
+
+      function applyGroupDimensions(scaleX, scaleY, anchorX, anchorY) {
+        if (!groupScaleBase) return;
+        const base = groupScaleBase;
+        const card3 = base['card-3'];
+        const card4 = base['card-4'];
+        const card1 = base['card-1'];
+        const card2 = base['card-2'];
+        groupScaleX = scaleX;
+        groupScaleY = scaleY;
+        cards['card-3'].rect = { x: anchorX, y: anchorY, w: card3.w * scaleX, h: card3.h * scaleY };
+        cards['card-4'].rect = { x: anchorX + card3.w * scaleX + fixedSharedGap, y: anchorY, w: card4.w * scaleX, h: card4.h * scaleY };
+        cards['card-1'].rect = { x: anchorX, y: anchorY + card3.h * scaleY + fixedSharedGap, w: card1.w * scaleX, h: card1.h * scaleY };
+        cards['card-2'].rect = { x: anchorX + card1.w * scaleX + fixedSharedGap, y: anchorY + card3.h * scaleY + fixedSharedGap, w: card2.w * scaleX, h: card2.h * scaleY };
+      }
+
+      function applyHorizontalDistortion(drag, scaleX, anchorX) {
+        const base = groupScaleBase;
+        const start = drag.startRects;
+        groupScaleX = scaleX;
+        cards['card-3'].rect = { x: anchorX, y: start['card-3'].y, w: base['card-3'].w * scaleX, h: start['card-3'].h };
+        cards['card-4'].rect = { x: anchorX + base['card-3'].w * scaleX + fixedSharedGap, y: start['card-4'].y, w: base['card-4'].w * scaleX, h: start['card-4'].h };
+        cards['card-1'].rect = { x: anchorX, y: start['card-1'].y, w: base['card-1'].w * scaleX, h: start['card-1'].h };
+        cards['card-2'].rect = { x: anchorX + base['card-1'].w * scaleX + fixedSharedGap, y: start['card-2'].y, w: base['card-2'].w * scaleX, h: start['card-2'].h };
+      }
+
+      function applyVerticalDistortion(drag, scaleY, anchorY) {
+        const base = groupScaleBase;
+        const start = drag.startRects;
+        groupScaleY = scaleY;
+        cards['card-3'].rect = { x: start['card-3'].x, y: anchorY, w: start['card-3'].w, h: base['card-3'].h * scaleY };
+        cards['card-4'].rect = { x: start['card-4'].x, y: anchorY, w: start['card-4'].w, h: base['card-4'].h * scaleY };
+        cards['card-1'].rect = { x: start['card-1'].x, y: anchorY + base['card-3'].h * scaleY + fixedSharedGap, w: start['card-1'].w, h: base['card-1'].h * scaleY };
+        cards['card-2'].rect = { x: start['card-2'].x, y: anchorY + base['card-3'].h * scaleY + fixedSharedGap, w: start['card-2'].w, h: base['card-2'].h * scaleY };
+      }
+
+      function resizeWholeLayout(drag, point) {
+        const metrics = groupMetrics();
+        const start = drag.startBounds;
+        const movingLeft = drag.kind === 'left' || drag.kind.endsWith('left');
+        const movingRight = drag.kind === 'right' || drag.kind.endsWith('right');
+        const movingTop = drag.kind === 'top' || drag.kind.startsWith('top');
+        const movingBottom = drag.kind === 'bottom' || drag.kind.startsWith('bottom');
+        const isCorner = drag.kind.includes('-');
+        let scaleX = drag.startScaleX;
+        let scaleY = drag.startScaleY;
+        let anchorX = start.x;
+        let anchorY = start.y;
+        let paddingSnap = null;
+
+        if (movingLeft || movingRight) {
+          const desiredWidth = movingLeft ? start.x + start.w - point.x : point.x - start.x;
+          scaleX = (desiredWidth - fixedSharedGap) / metrics.width;
+          scaleX = clampGroupScaleX(scaleX);
+          anchorX = movingLeft ? start.x + start.w - groupWidth(metrics, scaleX) : start.x;
+        }
+        if (movingTop || movingBottom) {
+          const desiredHeight = movingTop ? start.y + start.h - point.y : point.y - start.y;
+          scaleY = (desiredHeight - fixedSharedGap) / metrics.height;
+          scaleY = clampGroupScaleY(scaleY);
+          anchorY = movingTop ? start.y + start.h - groupHeight(metrics, scaleY) : start.y;
+        }
+
+        if (isCorner) {
+          const ratioX = scaleX / drag.startScaleX;
+          const ratioY = scaleY / drag.startScaleY;
+          const ratio = Math.abs(ratioX - 1) >= Math.abs(ratioY - 1) ? ratioX : ratioY;
+          scaleX = clampGroupScaleX(drag.startScaleX * ratio);
+          scaleY = clampGroupScaleY(drag.startScaleY * ratio);
+          const constrainedRatio = Math.min(scaleX / drag.startScaleX, scaleY / drag.startScaleY);
+          scaleX = drag.startScaleX * constrainedRatio;
+          scaleY = drag.startScaleY * constrainedRatio;
+          anchorX = movingLeft ? start.x + start.w - groupWidth(metrics, scaleX) : start.x;
+          anchorY = movingTop ? start.y + start.h - groupHeight(metrics, scaleY) : start.y;
+        }
+        if (!isCorner && (movingLeft || movingRight)) {
+          const movingCoordinate = movingLeft ? anchorX : anchorX + groupWidth(metrics, scaleX);
+          const snap = snapRotatedGroupEdge('x', movingCoordinate);
+          if (snap) {
+            scaleX = clampGroupScaleX(((movingLeft ? start.x + start.w - snap.localCoordinate : snap.localCoordinate - start.x) - fixedSharedGap) / metrics.width);
+            anchorX = movingLeft ? snap.localCoordinate : start.x;
+            paddingSnap = { axis: snap.axis, coordinate: snap.coordinate };
+          }
+        }
+        if (!isCorner && (movingTop || movingBottom)) {
+          const movingCoordinate = movingTop ? anchorY : anchorY + groupHeight(metrics, scaleY);
+          const snap = snapRotatedGroupEdge('y', movingCoordinate);
+          if (snap) {
+            scaleY = clampGroupScaleY(((movingTop ? start.y + start.h - snap.localCoordinate : snap.localCoordinate - start.y) - fixedSharedGap) / metrics.height);
+            anchorY = movingTop ? snap.localCoordinate : start.y;
+            paddingSnap = { axis: snap.axis, coordinate: snap.coordinate };
+          }
+        }
+        if (!isCorner && (movingLeft || movingRight)) {
+          applyHorizontalDistortion(drag, scaleX, anchorX);
+          return paddingSnap;
+        }
+        if (!isCorner && (movingTop || movingBottom)) {
+          applyVerticalDistortion(drag, scaleY, anchorY);
+          return paddingSnap;
+        }
+        applyGroupDimensions(scaleX, scaleY, anchorX, anchorY);
+        return paddingSnap;
+      }
+
+      document.addEventListener('pointermove', updateDrag);
+      document.addEventListener('pointerup', endDrag);
+      document.addEventListener('pointercancel', endDrag);
+      wholeLayoutSelect.addEventListener('click', () => setGroupSelected(!groupSelected));
+      function toggleWholeLayoutFlip(axis) {
+        if (activeDrag || activeGroupTransform) return;
+        if (!groupSelected) setGroupSelected(true);
+        if (axis === 'horizontal') {
+          groupFlipX = !groupFlipX;
+          wholeLayoutFlip.setAttribute('aria-pressed', String(groupFlipX));
+          wholeLayoutFlip.textContent = groupFlipX ? 'Vízszintes tükrözés visszavonása' : 'Vízszintes tükrözés';
+        } else {
+          groupFlipY = !groupFlipY;
+          wholeLayoutFlipVertical.setAttribute('aria-pressed', String(groupFlipY));
+          wholeLayoutFlipVertical.textContent = groupFlipY ? 'Függőleges tükrözés visszavonása' : 'Függőleges tükrözés';
+        }
+        applyGroupTransform();
+      }
+      wholeLayoutFlip.addEventListener('click', () => toggleWholeLayoutFlip('horizontal'));
+      wholeLayoutFlipVertical.addEventListener('click', () => toggleWholeLayoutFlip('vertical'));
+      document.querySelector('#group-rotate').addEventListener('pointerdown', (event) => startGroupTransform(event, 'rotate'));
+      document.querySelectorAll('[data-group-resize]').forEach((handle) => {
+        handle.addEventListener('pointerdown', (event) => startGroupTransform(event, handle.dataset.groupResize));
+      });
+      document.querySelector('#editor-reset').addEventListener('click', () => {
+        Object.values(cards).forEach((card) => {
+          card.rect = { ...card.original };
+          card.element.classList.remove('is-selected', 'is-dragging');
+        });
+        selectedCardId = null;
+        groupRotation = 0;
+        groupFlipX = false;
+        groupFlipY = false;
+        groupScaleX = 1;
+        groupScaleY = 1;
+        groupScaleBase = null;
+        wholeLayoutFlip.setAttribute('aria-pressed', 'false');
+        wholeLayoutFlip.textContent = 'Vízszintes tükrözés';
+        wholeLayoutFlipVertical.setAttribute('aria-pressed', 'false');
+        wholeLayoutFlipVertical.textContent = 'Függőleges tükrözés';
+        applyGroupTransform();
+        setGroupSelected(false);
+        renderAll();
+      });
+      renderAll();
+    </script>
+  </body>
+</html>
