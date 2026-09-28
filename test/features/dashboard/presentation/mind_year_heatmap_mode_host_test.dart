@@ -36,9 +36,12 @@ void main() {
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
       final expansion = _ExpansionRecorder();
+      final presentation = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
+      addTearDown(presentation.dispose);
 
       await tester.pumpWidget(
         _HostHarness(
@@ -47,6 +50,7 @@ void main() {
           rangeChanges: rangeChanges,
           expansion: expansion,
           showYearHeatmap: true,
+          presentationSettings: presentation,
         ),
       );
       expect(
@@ -112,6 +116,8 @@ void main() {
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
       final expansion = DashboardExpansionController();
+      final presentation = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       final coordinator = DashboardUpperVerticalGestureCoordinator(
         expansion: expansion,
         mapViewportDelta: (delta) => delta,
@@ -120,6 +126,7 @@ void main() {
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
       addTearDown(expansion.dispose);
+      addTearDown(presentation.dispose);
 
       await tester.pumpWidget(
         _HostHarness(
@@ -129,6 +136,7 @@ void main() {
           expansion: _ExpansionRecorder(),
           upperVerticalGestures: coordinator,
           showYearHeatmap: true,
+          presentationSettings: presentation,
         ),
       );
       final scroll = find.byKey(

@@ -9,6 +9,7 @@ import 'package:fluvi/features/dashboard/application/transaction_direction_contr
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/mind_dashboard_core_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_dashboard_core_surface.dart';
 import 'package:fluvi/core/design/dashboard_body_order.dart';
@@ -92,10 +93,10 @@ void main() {
     expect(FluviInactiveDirectionLabelTone.values.length, 2);
   });
 
-  test('Mind expanded surface defaults to separate cards', () {
+  test('Mind expanded surface defaults to one seamless card', () {
     expect(
       const FluviGlobalAppearance.defaults().mindExpandedSurfaceStyle,
-      MindExpandedSurfaceStyle.separateCards,
+      MindExpandedSurfaceStyle.seamlessCard,
     );
   });
 
@@ -109,13 +110,13 @@ void main() {
   test('seamless Mind geometry owns a real zero-radius internal seam', () {
     const header = BorderRadius.all(Radius.circular(20));
     const content = BorderRadius.all(Radius.circular(16));
-    final midpoint = MindExpandedSurfaceShape.resolve(
+    final midpoint = DashboardHeaderContentSeamShape.resolve(
       seamless: true,
       headerRadius: header,
       contentRadius: content,
       expansionProgress: .5,
     );
-    final expanded = MindExpandedSurfaceShape.resolve(
+    final expanded = DashboardHeaderContentSeamShape.resolve(
       seamless: true,
       headerRadius: header,
       contentRadius: content,

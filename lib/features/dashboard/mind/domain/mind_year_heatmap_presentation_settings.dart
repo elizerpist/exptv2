@@ -47,6 +47,19 @@ enum MindHeatmapScaleMode {
   };
 }
 
+/// The one presentation-only arrangement of the immutable Mind Year field.
+/// It controls layout density only; it cannot change the annual frame, Query,
+/// palette data, or amount-range state.
+enum MindYearHeatmapGridLayout { threeByFour, fourByThree, twoBySix }
+
+extension MindYearHeatmapGridLayoutPresentation on MindYearHeatmapGridLayout {
+  String get tunerLabel => switch (this) {
+    MindYearHeatmapGridLayout.threeByFour => '3×4',
+    MindYearHeatmapGridLayout.fourByThree => '4×3',
+    MindYearHeatmapGridLayout.twoBySix => '2×6',
+  };
+}
+
 /// Changes only Mind's painted range-thumb diameter. The shared slider keeps
 /// its existing recognizer and overlay hit target.
 enum MindSliderHandleSize {
@@ -151,7 +164,8 @@ final class MindYearHeatmapPresentationSettings {
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
     this.sumVisibleChartCount = MindSumVisibleChartCount.two,
-    this.yearMonthCardBorderEnabled = true,
+    this.yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
+    this.yearMonthCardBorderEnabled = false,
     this.yearMonthCardProfitabilityTintEnabled = false,
     this.yearMonthCardProfitabilityTintOpacity = .16,
     this.sumLineInterpolationMode = MindSumLineInterpolationMode.linear,
@@ -170,7 +184,8 @@ final class MindYearHeatmapPresentationSettings {
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       sumVisibleChartCount = MindSumVisibleChartCount.two,
-      yearMonthCardBorderEnabled = true,
+      yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
+      yearMonthCardBorderEnabled = false,
       yearMonthCardProfitabilityTintEnabled = false,
       yearMonthCardProfitabilityTintOpacity = .16,
       sumLineInterpolationMode = MindSumLineInterpolationMode.linear,
@@ -188,6 +203,7 @@ final class MindYearHeatmapPresentationSettings {
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
+  final MindYearHeatmapGridLayout yearGridLayout;
 
   /// MonthCard chrome applies to card-based Year layouts only. It never
   /// affects direct 4×3 cells, palette inputs or financial data.
@@ -218,6 +234,7 @@ final class MindYearHeatmapPresentationSettings {
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     MindSumVisibleChartCount? sumVisibleChartCount,
+    MindYearHeatmapGridLayout? yearGridLayout,
     bool? yearMonthCardBorderEnabled,
     bool? yearMonthCardProfitabilityTintEnabled,
     double? yearMonthCardProfitabilityTintOpacity,
@@ -237,6 +254,7 @@ final class MindYearHeatmapPresentationSettings {
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
     sumVisibleChartCount: sumVisibleChartCount ?? this.sumVisibleChartCount,
+    yearGridLayout: yearGridLayout ?? this.yearGridLayout,
     yearMonthCardBorderEnabled:
         yearMonthCardBorderEnabled ?? this.yearMonthCardBorderEnabled,
     yearMonthCardProfitabilityTintEnabled:
@@ -270,6 +288,7 @@ final class MindYearHeatmapPresentationSettings {
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.sumVisibleChartCount == sumVisibleChartCount &&
+      other.yearGridLayout == yearGridLayout &&
       other.yearMonthCardBorderEnabled == yearMonthCardBorderEnabled &&
       other.yearMonthCardProfitabilityTintEnabled ==
           yearMonthCardProfitabilityTintEnabled &&
@@ -294,6 +313,7 @@ final class MindYearHeatmapPresentationSettings {
     sumYearRowLayout,
     sumMonthLabelPlacement,
     sumVisibleChartCount,
+    yearGridLayout,
     yearMonthCardBorderEnabled,
     yearMonthCardProfitabilityTintEnabled,
     yearMonthCardProfitabilityTintOpacity,
@@ -371,6 +391,15 @@ final class MindYearHeatmapPresentationController
     if (current.sumVisibleChartCount == count) return;
     value = current.copyWith(
       sumVisibleChartCount: count,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setYearGridLayout(MindYearHeatmapGridLayout layout) {
+    final current = value;
+    if (current.yearGridLayout == layout) return;
+    value = current.copyWith(
+      yearGridLayout: layout,
       revision: current.revision + 1,
     );
   }
@@ -465,4 +494,6 @@ final class MindYearHeatmapPresentationController
       revision: current.revision + 1,
     );
   }
+
+  void reset() => value = const MindYearHeatmapPresentationSettings.defaults();
 }

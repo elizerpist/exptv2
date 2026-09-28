@@ -492,6 +492,11 @@ void main() {
       expect(contentColoredBorder, findsOneWidget);
       expect(contentBorderOpacity, findsOneWidget);
 
+      final cardVisibilitySubmenu = find.byKey(
+        const ValueKey<String>('balance-carousel-card-visibility-submenu'),
+      );
+      expect(cardVisibilitySubmenu, findsOneWidget);
+
       final waveAnimationOn = find.byKey(
         const ValueKey<String>('balance-carousel-wave-animation-enabled-on'),
       );

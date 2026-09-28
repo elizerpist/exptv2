@@ -258,7 +258,7 @@ void main() {
   });
 
   testWidgets(
-    'BX3/BX4: Retention and Stability use immutable detail data and local inspection',
+    'STAB-RED: Cashflow stability keeps live data in two local reference views without changing card bounds',
     (tester) async {
       final retention = _retention();
       await tester.pumpWidget(
@@ -289,19 +289,121 @@ void main() {
         ),
       );
       expect(
-        find.byKey(const ValueKey<String>('balance-stability-distribution')),
+        find.byKey(const ValueKey<String>('balance-stability-stabil1')),
         findsOneWidget,
       );
       expect(find.text('Medián nettó'), findsOneWidget);
       expect(find.text('Tipikus sáv'), findsOneWidget);
-      expect(find.text('0 Ft'), findsOneWidget);
+      expect(find.text('Értelmezés fókuszban'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-inspection')),
+        findsNothing,
+        reason: 'The retired point inspection cannot compete with card tap.',
+      );
+      final card = find.byKey(
+        const ValueKey<String>('balance-linked-detail-stability'),
+      );
+      final before = tester.getRect(card);
       await tester.tap(
-        find.byKey(const ValueKey<String>('balance-stability-distribution')),
+        find.byKey(const ValueKey<String>('balance-stability-toggle-surface')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-stabil2')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-interpretation')),
+        findsOneWidget,
+      );
+      expect(tester.getRect(card), before);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-stability-stabil2-info')),
       );
       await tester.pump();
       expect(
-        find.byKey(const ValueKey<String>('balance-stability-inspection')),
+        find.byKey(const ValueKey<String>('balance-stability-stabil2')),
         findsOneWidget,
+        reason:
+            'An explicit child control must not bubble into the card toggle.',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-stability-toggle-surface')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-stabil1')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'STAB-RED: a presentation refresh keeps the active local Stability view',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.stability,
+          presentation: _linked(stability: _stability()),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-stability-toggle-surface')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-stabil2')),
+        findsOneWidget,
+      );
+
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.stability,
+          presentation: _linked(
+            stability: DashboardBalanceStabilityPresentation(
+              identity: _identity,
+              timeScope: const AllTimeScope(),
+              observations: _stability().observations,
+              medianNetTimesTwo: 600,
+              typicalDeviationTimesTwo: 200,
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-stability-stabil2')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'STAB-REFERENCE-GOLDEN: stabil1 and stabil2 retain separate production-card compositions',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          topic: BalanceLinkedDetailTopic.stability,
+          presentation: _linked(stability: _stability()),
+          width: 378,
+          height: 320,
+        ),
+      );
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-linked-detail-stability')),
+        matchesGoldenFile(
+          '../../../goldens/balance_cashflow_stability_stabil1.png',
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('balance-stability-toggle-surface')),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-linked-detail-stability')),
+        matchesGoldenFile(
+          '../../../goldens/balance_cashflow_stability_stabil2.png',
+        ),
       );
     },
   );

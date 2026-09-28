@@ -50,7 +50,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
   const MindDashboardCoreSurface({
     super.key,
     required this.presentation,
-    this.expandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
+    this.expandedSurfaceStyle = MindExpandedSurfaceStyle.seamlessCard,
     this.queryAmountRange,
     this.queryAmountRangeChanges,
     this.queryAmountRangeLifecycleChanges,
@@ -134,7 +134,7 @@ class MindDashboardCoreSurface extends StatelessWidget {
           DashboardCornerSurfaceFamily.contentCard,
           size: Size(bodyBounds.width, bodyBounds.height),
         );
-    final surfaceShape = MindExpandedSurfaceShape.resolve(
+    final surfaceShape = DashboardHeaderContentSeamShape.resolve(
       seamless: isSeamless,
       headerRadius: headerRadius,
       contentRadius: contentRadius,
@@ -421,66 +421,6 @@ class MindDashboardCoreSurface extends StatelessWidget {
     return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
       valueListenable: settings,
       builder: (context, value, _) => bodyFor(value),
-    );
-  }
-}
-
-/// Resolved physical silhouette for Mind's two presentation choices. Keeping
-/// the seam radii explicit makes it impossible for seamless mode to devolve
-/// into two independently rounded cards merely moved together.
-@immutable
-final class MindExpandedSurfaceShape {
-  const MindExpandedSurfaceShape({
-    required this.headerRadius,
-    required this.contentRadius,
-    required this.outerRadius,
-  });
-
-  final BorderRadius headerRadius;
-  final BorderRadius contentRadius;
-  final BorderRadius outerRadius;
-
-  static MindExpandedSurfaceShape resolve({
-    required bool seamless,
-    required BorderRadius headerRadius,
-    required BorderRadius contentRadius,
-    required double expansionProgress,
-  }) {
-    if (!seamless) {
-      return MindExpandedSurfaceShape(
-        headerRadius: headerRadius,
-        contentRadius: contentRadius,
-        outerRadius: contentRadius,
-      );
-    }
-    final reveal = expansionProgress.clamp(0.0, 1.0).toDouble();
-    final headerTopOnly = BorderRadius.only(
-      topLeft: headerRadius.topLeft,
-      topRight: headerRadius.topRight,
-    );
-    final contentBottomOnly = BorderRadius.only(
-      bottomLeft: contentRadius.bottomLeft,
-      bottomRight: contentRadius.bottomRight,
-    );
-    return MindExpandedSurfaceShape(
-      // The continuous interpolation removes the lower Header corners as its
-      // second section grows, so no one-frame radius pop can expose a slit.
-      headerRadius: BorderRadius.lerp(headerRadius, headerTopOnly, reveal)!,
-      contentRadius: BorderRadius.lerp(
-        contentRadius,
-        contentBottomOnly,
-        reveal,
-      )!,
-      outerRadius: BorderRadius.lerp(
-        headerRadius,
-        BorderRadius.only(
-          topLeft: headerRadius.topLeft,
-          topRight: headerRadius.topRight,
-          bottomLeft: contentRadius.bottomLeft,
-          bottomRight: contentRadius.bottomRight,
-        ),
-        reveal,
-      )!,
     );
   }
 }

@@ -132,7 +132,7 @@ final class FluviGlobalAppearance {
     this.inactiveDirectionLabelTone =
         FluviInactiveDirectionLabelTone.softenedGray,
     this.showsHeaderModeLabelAboveValue = false,
-    this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
+    this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.seamlessCard,
     this.budgetAvatarContentStyle = BudgetAvatarContentStyle.separate,
   });
 
@@ -146,7 +146,7 @@ final class FluviGlobalAppearance {
       activeDirectionLabelTone = FluviActiveDirectionLabelTone.softenedWhite,
       inactiveDirectionLabelTone = FluviInactiveDirectionLabelTone.softenedGray,
       showsHeaderModeLabelAboveValue = false,
-      mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
+      mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.seamlessCard,
       budgetAvatarContentStyle = BudgetAvatarContentStyle.separate;
 
   final FluviDirectionColorProfile directionColorProfile;

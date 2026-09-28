@@ -201,6 +201,67 @@ final class _DashboardTopRevealClipper extends CustomClipper<Rect> {
       oldClipper.reveal != reveal;
 }
 
+/// Resolves one continuous Header/content silhouette without giving either
+/// feature a duplicate border-radius state machine.  The consumer owns the
+/// content and its bounds; this value object owns only the shared physical
+/// seam treatment.
+@immutable
+final class DashboardHeaderContentSeamShape {
+  const DashboardHeaderContentSeamShape({
+    required this.headerRadius,
+    required this.contentRadius,
+    required this.outerRadius,
+  });
+
+  final BorderRadius headerRadius;
+  final BorderRadius contentRadius;
+  final BorderRadius outerRadius;
+
+  static DashboardHeaderContentSeamShape resolve({
+    required bool seamless,
+    required BorderRadius headerRadius,
+    required BorderRadius contentRadius,
+    required double expansionProgress,
+  }) {
+    if (!seamless) {
+      return DashboardHeaderContentSeamShape(
+        headerRadius: headerRadius,
+        contentRadius: contentRadius,
+        outerRadius: contentRadius,
+      );
+    }
+    final reveal = expansionProgress.clamp(0.0, 1.0).toDouble();
+    final headerTopOnly = BorderRadius.only(
+      topLeft: headerRadius.topLeft,
+      topRight: headerRadius.topRight,
+    );
+    final contentBottomOnly = BorderRadius.only(
+      bottomLeft: contentRadius.bottomLeft,
+      bottomRight: contentRadius.bottomRight,
+    );
+    return DashboardHeaderContentSeamShape(
+      // Continuously remove the internal radii as the second section appears,
+      // avoiding a one-frame slit or radius pop at the shared seam.
+      headerRadius: BorderRadius.lerp(headerRadius, headerTopOnly, reveal)!,
+      contentRadius: BorderRadius.lerp(
+        contentRadius,
+        contentBottomOnly,
+        reveal,
+      )!,
+      outerRadius: BorderRadius.lerp(
+        headerRadius,
+        BorderRadius.only(
+          topLeft: headerRadius.topLeft,
+          topRight: headerRadius.topRight,
+          bottomLeft: contentRadius.bottomLeft,
+          bottomRight: contentRadius.bottomRight,
+        ),
+        reveal,
+      )!,
+    );
+  }
+}
+
 class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   const DashboardCoreModeHeaderScaffold({
     super.key,

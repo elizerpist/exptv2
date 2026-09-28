@@ -2,6 +2,53 @@ import 'package:flutter/foundation.dart';
 
 import '../../application/dashboard_balance_history_projection.dart';
 
+/// Stable semantic identities for the finite Balance carousel catalog.
+///
+/// This belongs to the presentation settings owner because visibility is
+/// session presentation state, never financial data. Defaults derive from the
+/// enum, so a future catalog member starts visible automatically.
+enum BalanceCarouselCardKind {
+  cashflow,
+  closings,
+  momentum,
+  retention,
+  stability,
+  ghost,
+  forecast,
+  latestTransaction,
+  categoryMovers,
+  topCategory,
+  topPartner;
+
+  String get stableId => switch (this) {
+    BalanceCarouselCardKind.cashflow => 'cashflow',
+    BalanceCarouselCardKind.closings => 'closings',
+    BalanceCarouselCardKind.momentum => 'momentum',
+    BalanceCarouselCardKind.retention => 'retention',
+    BalanceCarouselCardKind.stability => 'stability',
+    BalanceCarouselCardKind.ghost => 'ghost',
+    BalanceCarouselCardKind.forecast => 'forecast',
+    BalanceCarouselCardKind.latestTransaction => 'latest-transaction',
+    BalanceCarouselCardKind.categoryMovers => 'category-movers',
+    BalanceCarouselCardKind.topCategory => 'top-category',
+    BalanceCarouselCardKind.topPartner => 'top-partner',
+  };
+
+  String get visibilityLabel => switch (this) {
+    BalanceCarouselCardKind.cashflow => 'Cashflow',
+    BalanceCarouselCardKind.closings => 'Zárások',
+    BalanceCarouselCardKind.momentum => 'Balance momentum',
+    BalanceCarouselCardKind.retention => 'Megtakarítási arány',
+    BalanceCarouselCardKind.stability => 'Cashflow stabilitás',
+    BalanceCarouselCardKind.ghost => 'Fix terhek',
+    BalanceCarouselCardKind.forecast => 'Forecast',
+    BalanceCarouselCardKind.latestTransaction => 'Utolsó tranzakció',
+    BalanceCarouselCardKind.categoryMovers => 'Kategóriaváltozás',
+    BalanceCarouselCardKind.topCategory => 'Top kategória',
+    BalanceCarouselCardKind.topPartner => 'Top partner',
+  };
+}
+
 /// The authored period of the ambient carousel wave at 1.00× speed.
 const balanceCarouselWaveBaseDuration = Duration(seconds: 6);
 const balanceCarouselWaveMinimumSpeedMultiplier = .25;
@@ -55,7 +102,7 @@ enum BalanceLatestTransactionCardPresentation {
 /// Financial totals and the latest transaction are never settings-dependent.
 @immutable
 final class BalancePresentationSettings {
-  const BalancePresentationSettings({
+  BalancePresentationSettings({
     required this.chartMode,
     required this.timeLabels,
     required this.latestTransactionCardPresentation,
@@ -69,8 +116,14 @@ final class BalancePresentationSettings {
     required this.balanceCarouselWaveAnimationEnabled,
     required this.balanceContentCardColoredBorderEnabled,
     required this.balanceContentCardBorderOpacity,
+    Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
+        const <BalanceCarouselCardKind>{},
     required this.revision,
-  }) : assert(
+  }) : hiddenBalanceCarouselCardKinds =
+           Set<BalanceCarouselCardKind>.unmodifiable(
+             hiddenBalanceCarouselCardKinds,
+           ),
+       assert(
          balanceCarouselBorderOpacity >= 0 && balanceCarouselBorderOpacity <= 1,
        ),
        assert(
@@ -106,6 +159,7 @@ final class BalancePresentationSettings {
       balanceCarouselWaveAnimationEnabled = true,
       balanceContentCardColoredBorderEnabled = true,
       balanceContentCardBorderOpacity = 1,
+      hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
       revision = 0;
 
   final BalanceHeaderChartMode chartMode;
@@ -121,10 +175,19 @@ final class BalancePresentationSettings {
   final bool balanceCarouselWaveAnimationEnabled;
   final bool balanceContentCardColoredBorderEnabled;
   final double balanceContentCardBorderOpacity;
+  final Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds;
   final int revision;
 
   bool get showsTimeLabels =>
       timeLabels == BalanceHeaderChartTimeLabels.visible;
+
+  Set<BalanceCarouselCardKind> get visibleBalanceCarouselCardKinds =>
+      Set<BalanceCarouselCardKind>.unmodifiable(
+        BalanceCarouselCardKind.values.where(isBalanceCarouselCardVisible),
+      );
+
+  bool isBalanceCarouselCardVisible(BalanceCarouselCardKind kind) =>
+      !hiddenBalanceCarouselCardKinds.contains(kind);
 
   BalancePresentationSettings copyWith({
     BalanceHeaderChartMode? chartMode,
@@ -139,6 +202,7 @@ final class BalancePresentationSettings {
     bool? balanceCarouselWaveAnimationEnabled,
     bool? balanceContentCardColoredBorderEnabled,
     double? balanceContentCardBorderOpacity,
+    Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
     int? revision,
   }) => BalancePresentationSettings(
     chartMode: chartMode ?? this.chartMode,
@@ -169,6 +233,8 @@ final class BalancePresentationSettings {
         this.balanceContentCardColoredBorderEnabled,
     balanceContentCardBorderOpacity:
         balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
+    hiddenBalanceCarouselCardKinds:
+        hiddenBalanceCarouselCardKinds ?? this.hiddenBalanceCarouselCardKinds,
     revision: revision ?? this.revision,
   );
 
@@ -194,6 +260,10 @@ final class BalancePresentationSettings {
           balanceContentCardColoredBorderEnabled &&
       other.balanceContentCardBorderOpacity ==
           balanceContentCardBorderOpacity &&
+      setEquals(
+        other.hiddenBalanceCarouselCardKinds,
+        hiddenBalanceCarouselCardKinds,
+      ) &&
       other.revision == revision;
 
   @override
@@ -210,6 +280,7 @@ final class BalancePresentationSettings {
     balanceCarouselWaveAnimationEnabled,
     balanceContentCardColoredBorderEnabled,
     balanceContentCardBorderOpacity,
+    Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
     revision,
   );
 }
@@ -329,6 +400,32 @@ final class BalancePresentationController
       revision: current.revision + 1,
     );
   }
+
+  /// Changes only the finite carousel membership. Returning false tells the
+  /// UI that hiding [kind] would leave no meaningful Balance carousel.
+  bool setBalanceCarouselCardVisible(
+    BalanceCarouselCardKind kind,
+    bool visible,
+  ) {
+    final current = value;
+    final hidden = <BalanceCarouselCardKind>{
+      ...current.hiddenBalanceCarouselCardKinds,
+    };
+    if (visible) {
+      if (!hidden.remove(kind)) return true;
+    } else {
+      if (hidden.contains(kind)) return true;
+      if (current.visibleBalanceCarouselCardKinds.length <= 1) return false;
+      hidden.add(kind);
+    }
+    value = current.copyWith(
+      hiddenBalanceCarouselCardKinds: hidden,
+      revision: current.revision + 1,
+    );
+    return true;
+  }
+
+  void reset() => value = const BalancePresentationSettings.defaults();
 
   double _normalizedOpacity(double value) => value.clamp(0, 1).toDouble();
 

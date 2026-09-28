@@ -48,6 +48,35 @@ void main() {
   });
 
   group('Mind Year heatmap presentation settings', () {
+    test(
+      'fresh Year defaults to 4x3 and reset restores the user-changeable visual choice',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.yearGridLayout,
+          MindYearHeatmapGridLayout.fourByThree,
+        );
+        expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+
+        controller.setYearGridLayout(MindYearHeatmapGridLayout.twoBySix);
+        controller.setYearMonthCardBorderEnabled(true);
+        expect(
+          controller.value.yearGridLayout,
+          MindYearHeatmapGridLayout.twoBySix,
+        );
+        expect(controller.value.yearMonthCardBorderEnabled, isTrue);
+
+        controller.reset();
+        expect(
+          controller.value.yearGridLayout,
+          MindYearHeatmapGridLayout.fourByThree,
+        );
+        expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+      },
+    );
+
     test('defaults retain only data-independent Mind presentation choices', () {
       final controller = MindYearHeatmapPresentationController();
       addTearDown(controller.dispose);
@@ -247,7 +276,11 @@ void main() {
         final controller = MindYearHeatmapPresentationController();
         addTearDown(controller.dispose);
 
-        expect(controller.value.yearMonthCardBorderEnabled, isTrue);
+        expect(
+          controller.value.yearMonthCardBorderEnabled,
+          isFalse,
+          reason: 'Fresh Mind MonthCards start without a border.',
+        );
         expect(controller.value.yearMonthCardProfitabilityTintEnabled, isFalse);
         expect(
           controller.value.yearMonthCardProfitabilityTintOpacity,
@@ -264,7 +297,7 @@ void main() {
           MindSumSmoothingWindow.days3,
         );
 
-        controller.setYearMonthCardBorderEnabled(false);
+        controller.setYearMonthCardBorderEnabled(true);
         controller.setYearMonthCardProfitabilityTintEnabled(true);
         controller.setYearMonthCardProfitabilityTintOpacity(.37);
         controller.setSumLineInterpolationMode(
@@ -275,7 +308,7 @@ void main() {
         controller.setSumLineSmoothingWindow(MindSumSmoothingWindow.days7);
         controller.setSumLineZoomAdaptiveSmoothingEnabled(true);
 
-        expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+        expect(controller.value.yearMonthCardBorderEnabled, isTrue);
         expect(controller.value.yearMonthCardProfitabilityTintEnabled, isTrue);
         expect(
           controller.value.yearMonthCardProfitabilityTintOpacity,

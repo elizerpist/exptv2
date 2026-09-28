@@ -1138,8 +1138,59 @@ final class _BalancePresentationSection extends StatelessWidget {
           value: settings.balanceContentCardBorderOpacity,
           onChanged: controller.setBalanceContentCardBorderOpacity,
         ),
+        const SizedBox(height: 8),
+        _BalanceCarouselCardVisibilitySubmenu(
+          controller: controller,
+          settings: settings,
+        ),
       ],
     ),
+  );
+}
+
+/// Membership is intentionally rendered from the typed catalog rather than a
+/// copied list of display strings. A disabled card is removed before the
+/// Balance carousel datasource, never merely made transparent.
+final class _BalanceCarouselCardVisibilitySubmenu extends StatelessWidget {
+  const _BalanceCarouselCardVisibilitySubmenu({
+    required this.controller,
+    required this.settings,
+  });
+
+  final BalancePresentationController controller;
+  final BalancePresentationSettings settings;
+
+  @override
+  Widget build(BuildContext context) => ExpansionTile(
+    key: const ValueKey<String>('balance-carousel-card-visibility-submenu'),
+    tilePadding: EdgeInsets.zero,
+    childrenPadding: EdgeInsets.zero,
+    title: const Text('Balance kártyák'),
+    children: <Widget>[
+      for (final kind in BalanceCarouselCardKind.values)
+        SwitchListTile.adaptive(
+          key: ValueKey<String>('balance-card-visible-${kind.stableId}'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(kind.visibilityLabel),
+          value: settings.isBalanceCarouselCardVisible(kind),
+          onChanged: (visible) {
+            final accepted = controller.setBalanceCarouselCardVisible(
+              kind,
+              visible,
+            );
+            if (!accepted) {
+              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Legalább egy Balance kártyának láthatónak kell maradnia.',
+                  ),
+                ),
+              );
+            }
+          },
+        ),
+    ],
   );
 }
 

@@ -96,10 +96,6 @@ final class MindYearHeatmapViewport extends StatefulWidget {
       _MindYearHeatmapViewportState();
 }
 
-/// The annual layout is an in-card renderer choice, not a persisted global
-/// presentation setting. All arrangements render the same immutable frame.
-enum _MindYearHeatmapLayout { threeByFour, fourByThree, twoBySix }
-
 final class _MindYearHeatmapViewportState
     extends State<MindYearHeatmapViewport> {
   final _heatmapCardKey = GlobalKey();
@@ -114,7 +110,7 @@ final class _MindYearHeatmapViewportState
   late MindYearHeatmapPresentationSettings _presentationSettings;
   MindYearHeatmapIdentity? _lastVisibleIdentity;
   int? _lastLoggedGeometryYear;
-  var _directGridLayout = _MindYearHeatmapLayout.threeByFour;
+  late MindYearHeatmapGridLayout _directGridLayout;
   late final PageController _pageController;
   late final ScrollController _ownedAnnualScrollController;
   late final ScrollController _barPageScrollController;
@@ -130,6 +126,7 @@ final class _MindYearHeatmapViewportState
     _presentationSettings =
         widget.presentationSettings?.value ??
         const MindYearHeatmapPresentationSettings.defaults();
+    _directGridLayout = _presentationSettings.yearGridLayout;
     _pageController = PageController();
     _ownedAnnualScrollController = ScrollController();
     _barPageScrollController = ScrollController();
@@ -163,6 +160,7 @@ final class _MindYearHeatmapViewportState
       _presentationSettings =
           widget.presentationSettings?.value ??
           const MindYearHeatmapPresentationSettings.defaults();
+      _directGridLayout = _presentationSettings.yearGridLayout;
       widget.presentationSettings?.addListener(_onPresentationSettingsChanged);
     }
   }
@@ -193,7 +191,10 @@ final class _MindYearHeatmapViewportState
   void _onPresentationSettingsChanged() {
     final next = widget.presentationSettings?.value;
     if (next == null || next == _presentationSettings || !mounted) return;
-    setState(() => _presentationSettings = next);
+    setState(() {
+      _presentationSettings = next;
+      _directGridLayout = next.yearGridLayout;
+    });
     // A 2×6 → 3×4 transition shortens the one existing viewport. Preserve
     // its controller/physics and correct only an offset that became outside
     // the newly computed extent.
@@ -261,6 +262,25 @@ final class _MindYearHeatmapViewportState
     });
   }
 
+  void _setDirectGridLayout(MindYearHeatmapGridLayout next) {
+    if (next == _directGridLayout) return;
+    final owner = widget.presentationSettings;
+    if (owner is MindYearHeatmapPresentationController) {
+      owner.setYearGridLayout(next);
+      return;
+    }
+    // Isolated embedding callers without the session controller still obtain
+    // one immutable local presentation snapshot. Production CoreDashboard
+    // always supplies the canonical controller above.
+    setState(() {
+      _presentationSettings = _presentationSettings.copyWith(
+        yearGridLayout: next,
+        revision: _presentationSettings.revision + 1,
+      );
+      _directGridLayout = next;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_hasFrame) {
@@ -276,13 +296,17 @@ final class _MindYearHeatmapViewportState
         const rowGap = 4.0;
         const headerHeight = 30.0;
         final columns = switch (_directGridLayout) {
-          _MindYearHeatmapLayout.fourByThree => 4,
-          _MindYearHeatmapLayout.threeByFour => 3,
-          _MindYearHeatmapLayout.twoBySix => 2,
+          MindYearHeatmapGridLayout.fourByThree => 4,
+          MindYearHeatmapGridLayout.threeByFour => 3,
+          MindYearHeatmapGridLayout.twoBySix => 2,
         };
         final isMonthCardLayout =
-            _directGridLayout != _MindYearHeatmapLayout.fourByThree;
-        final footerRowCount = isMonthCardLayout ? 2 : 0;
+            _directGridLayout != MindYearHeatmapGridLayout.fourByThree;
+        final footerRowCount = switch (_directGridLayout) {
+          MindYearHeatmapGridLayout.fourByThree => 0,
+          MindYearHeatmapGridLayout.threeByFour => 2,
+          MindYearHeatmapGridLayout.twoBySix => 1,
+        };
         final contentWidth = (constraints.maxWidth - horizontalPadding * 2)
             .clamp(0.0, double.infinity)
             .toDouble();
@@ -300,8 +324,8 @@ final class _MindYearHeatmapViewportState
         );
         _scheduleCalendarGeometryDiagnostics(year, geometries);
         final Widget heatmapPage;
-        if (_directGridLayout == _MindYearHeatmapLayout.fourByThree) {
-          final fit = _MindYearHeatmapFourColumnFit.resolve(
+        if (_directGridLayout == MindYearHeatmapGridLayout.fourByThree) {
+          final fit = MindYearHeatmapFourColumnFit.resolve(
             viewportHeight: math.max(0, constraints.maxHeight - headerHeight),
             cardWidth: monthCardWidth,
             geometries: geometries,
@@ -353,7 +377,8 @@ final class _MindYearHeatmapViewportState
                                 child: MindYearHeatmapMonthGroup(
                                   month: month,
                                   width: monthCardWidth,
-                                  cellExtent: fit.cellExtent,
+                                  cellExtent: fit.cellWidth,
+                                  cellHeight: fit.cellHeight,
                                   geometry: geometries[month - 1],
                                   frameListenable: widget.frameListenable,
                                   compactChrome: true,
@@ -431,12 +456,14 @@ final class _MindYearHeatmapViewportState
                           paletteStyle: _presentationSettings.paletteStyle,
                           scaleResolution:
                               _presentationSettings.scaleResolution,
-                          showMonthlyClosing: isMonthCardLayout,
+                          showMonthlyClosing:
+                              _directGridLayout ==
+                              MindYearHeatmapGridLayout.threeByFour,
                           showScopeAmount: isMonthCardLayout,
                           showMonthCard: true,
                           showDayNumbers:
                               _directGridLayout ==
-                              _MindYearHeatmapLayout.twoBySix,
+                              MindYearHeatmapGridLayout.twoBySix,
                           monthCardBorderEnabled:
                               _presentationSettings.yearMonthCardBorderEnabled,
                           profitabilityTintEnabled: _presentationSettings
@@ -493,10 +520,7 @@ final class _MindYearHeatmapViewportState
                                 ),
                                 _MindYearDirectGridSelector(
                                   value: _directGridLayout,
-                                  onChanged: (next) {
-                                    if (next == _directGridLayout) return;
-                                    setState(() => _directGridLayout = next);
-                                  },
+                                  onChanged: _setDirectGridLayout,
                                 ),
                               ],
                             ),
@@ -616,27 +640,27 @@ final class _MindYearDirectGridSelector extends StatelessWidget {
     required this.onChanged,
   });
 
-  final _MindYearHeatmapLayout value;
-  final ValueChanged<_MindYearHeatmapLayout> onChanged;
+  final MindYearHeatmapGridLayout value;
+  final ValueChanged<MindYearHeatmapGridLayout> onChanged;
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: <Widget>[
       _button(
-        layout: _MindYearHeatmapLayout.threeByFour,
+        layout: MindYearHeatmapGridLayout.threeByFour,
         key: const ValueKey<String>('mind-year-layout-selector-3x4'),
         label: '3×4',
       ),
       const SizedBox(width: 3),
       _button(
-        layout: _MindYearHeatmapLayout.fourByThree,
+        layout: MindYearHeatmapGridLayout.fourByThree,
         key: const ValueKey<String>('mind-year-layout-selector-4x3'),
         label: '4×3',
       ),
       const SizedBox(width: 3),
       _button(
-        layout: _MindYearHeatmapLayout.twoBySix,
+        layout: MindYearHeatmapGridLayout.twoBySix,
         key: const ValueKey<String>('mind-year-layout-selector-2x6'),
         label: '2×6',
       ),
@@ -644,7 +668,7 @@ final class _MindYearDirectGridSelector extends StatelessWidget {
   );
 
   Widget _button({
-    required _MindYearHeatmapLayout layout,
+    required MindYearHeatmapGridLayout layout,
     required Key key,
     required String label,
   }) => SizedBox(
@@ -904,16 +928,31 @@ final class _MindYearMonthlyLinePage extends StatelessWidget {
   );
 }
 
-final class _MindYearHeatmapFourColumnFit {
-  const _MindYearHeatmapFourColumnFit._({
-    required this.cellExtent,
+@visibleForTesting
+final class MindYearHeatmapFourColumnFit {
+  const MindYearHeatmapFourColumnFit._({
+    required this.annualViewportHeight,
+    required this.staticHeight,
+    required this.cellWidth,
+    required this.cellHeight,
+    required this.squareConsumedHeight,
+    required this.verticalSurplus,
+    required this.extraHeightPerCell,
     required this.rowHeights,
+    required this.resolvedContentHeight,
   });
 
-  final double cellExtent;
+  final double annualViewportHeight;
+  final double staticHeight;
+  final double cellWidth;
+  final double cellHeight;
+  final double squareConsumedHeight;
+  final double verticalSurplus;
+  final double extraHeightPerCell;
   final List<double> rowHeights;
+  final double resolvedContentHeight;
 
-  static _MindYearHeatmapFourColumnFit resolve({
+  static MindYearHeatmapFourColumnFit resolve({
     required double viewportHeight,
     required double cardWidth,
     required List<MindYearHeatmapCalendarGeometry> geometries,
@@ -951,27 +990,51 @@ final class _MindYearHeatmapFourColumnFit {
       0,
       (sum, rows) => sum + rows,
     );
-    final cellByWidth = MindYearHeatmapMonthGroup.cellExtentFor(cardWidth);
+    final cellWidth = MindYearHeatmapMonthGroup.cellExtentFor(cardWidth);
     final cellByHeight = viewportHeight.isFinite && totalCalendarRows > 0
         ? ((viewportHeight - staticHeight) / totalCalendarRows)
               .clamp(0.0, double.infinity)
               .toDouble()
-        : cellByWidth;
-    final cellExtent = math.min(cellByWidth, cellByHeight);
+        : cellWidth;
+    // Direct 4×3 intentionally preserves its width-driven horizontal grid
+    // while consuming the exact live annual viewport vertically.  Never
+    // reintroduce min(cellWidth, cellByHeight): that is the square-cell bug
+    // which leaves a tall seamless/body-stretched viewport unused.
+    final cellHeight = cellByHeight;
+    final squareConsumedHeight = staticHeight + totalCalendarRows * cellWidth;
+    final verticalSurplus = math
+        .max(0.0, viewportHeight - squareConsumedHeight)
+        .toDouble();
+    final extraHeightPerCell = totalCalendarRows == 0
+        ? 0.0
+        : verticalSurplus / totalCalendarRows;
     final rowHeights = calendarRows
         .map(
           (rows) => MindYearHeatmapMonthGroup.heightFor(
             width: cardWidth,
-            cellExtent: cellExtent,
+            cellExtent: cellWidth,
+            cellHeight: cellHeight,
             calendarRowCount: rows,
             footerRowCount: footerRowCount,
             compactChrome: compactChrome,
           ),
         )
         .toList(growable: false);
-    return _MindYearHeatmapFourColumnFit._(
-      cellExtent: cellExtent,
+    final resolvedContentHeight =
+        viewportTopPadding +
+        viewportBottomPadding +
+        rowGap * (annualRows - 1) +
+        rowHeights.fold<double>(0, (total, height) => total + height);
+    return MindYearHeatmapFourColumnFit._(
+      annualViewportHeight: viewportHeight,
+      staticHeight: staticHeight,
+      cellWidth: cellWidth,
+      cellHeight: cellHeight,
+      squareConsumedHeight: squareConsumedHeight,
+      verticalSurplus: verticalSurplus,
+      extraHeightPerCell: extraHeightPerCell,
       rowHeights: rowHeights,
+      resolvedContentHeight: resolvedContentHeight,
     );
   }
 }
@@ -1023,6 +1086,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     required this.geometry,
     required this.frameListenable,
     this.cellExtent,
+    this.cellHeight,
     this.compactChrome = false,
     this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
     this.scaleResolution = MindHeatmapScaleResolution.ten,
@@ -1055,7 +1119,13 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
 
   final int month;
   final double width;
+
+  /// Width of a direct heatmap cell.  The legacy name is retained because
+  /// card-based layouts intentionally remain square.
   final double? cellExtent;
+
+  /// Optional independent vertical extent used only by direct 4×3.
+  final double? cellHeight;
   final bool compactChrome;
   final MindYearHeatmapCalendarGeometry geometry;
   final ValueListenable<MindYearHeatmapFrame?> frameListenable;
@@ -1103,9 +1173,11 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     required double width,
     required int calendarRowCount,
     double? cellExtent,
+    double? cellHeight,
   }) {
-    final resolvedCellExtent = cellExtent ?? cellExtentFor(width);
-    return resolvedCellExtent * calendarRowCount +
+    final resolvedCellWidth = cellExtent ?? cellExtentFor(width);
+    final resolvedCellHeight = cellHeight ?? resolvedCellWidth;
+    return resolvedCellHeight * calendarRowCount +
         MindYearHeatmapMonthPainter.gap * (calendarRowCount - 1);
   }
 
@@ -1114,6 +1186,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     required int calendarRowCount,
     int footerRowCount = 0,
     double? cellExtent,
+    double? cellHeight,
     bool compactChrome = false,
   }) =>
       fixedChromeHeightFor(
@@ -1124,6 +1197,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         width: width,
         calendarRowCount: calendarRowCount,
         cellExtent: cellExtent,
+        cellHeight: cellHeight,
       );
 
   int get _footerRowCount =>
@@ -1145,6 +1219,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
       width: width,
       calendarRowCount: displayCalendarRowCount,
       cellExtent: cellExtent,
+      cellHeight: cellHeight,
     );
     final verticalPadding = _verticalPaddingFor(compactChrome);
     final titleHeight = _titleHeightFor(compactChrome);
@@ -1185,7 +1260,8 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
               builder: (context, frame, _) {
                 final days =
                     frame?.month(month) ?? const <MindYearHeatmapDay>[];
-                final extent = cellExtent ?? cellExtentFor(width);
+                final cellWidth = cellExtent ?? cellExtentFor(width);
+                final resolvedCellHeight = cellHeight ?? cellWidth;
                 return Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
@@ -1207,6 +1283,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                               scaleResolution: scaleResolution,
                               dynamicScale: dynamicScale,
                               cellExtent: cellExtent,
+                              cellHeight: cellHeight,
                             ),
                             isComplex: false,
                             willChange: true,
@@ -1218,7 +1295,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                     if (showDayNumbers)
                       MindHeatmapDayNumberOverlay(
                         geometry: geometry,
-                        cellExtent: extent,
+                        cellExtent: cellWidth,
                         gap: MindYearHeatmapMonthPainter.gap,
                         keyPrefix: 'mind-year-heatmap-day-number',
                         dayNumbers: days
@@ -1244,7 +1321,8 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                           ),
                           geometry: geometry,
                           day: day,
-                          extent: extent,
+                          cellWidth: cellWidth,
+                          cellHeight: resolvedCellHeight,
                           onTap: onDayTap!,
                         ),
                   ],
@@ -1301,6 +1379,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         calendarRowCount: displayCalendarRowCount,
         footerRowCount: _footerRowCount,
         cellExtent: cellExtent,
+        cellHeight: cellHeight,
         compactChrome: compactChrome,
       ),
       child: Semantics(
@@ -1355,13 +1434,15 @@ final class _MindYearDayCellTapTarget extends StatelessWidget {
     super.key,
     required this.geometry,
     required this.day,
-    required this.extent,
+    required this.cellWidth,
+    required this.cellHeight,
     required this.onTap,
   });
 
   final MindYearHeatmapCalendarGeometry geometry;
   final MindYearHeatmapDay day;
-  final double extent;
+  final double cellWidth;
+  final double cellHeight;
   final void Function(MindYearHeatmapDay day, Offset anchor) onTap;
 
   @override
@@ -1370,10 +1451,10 @@ final class _MindYearDayCellTapTarget extends StatelessWidget {
     final row = slot ~/ MindYearHeatmapMonthPainter.columnCount;
     final column = slot % MindYearHeatmapMonthPainter.columnCount;
     return Positioned(
-      left: column * (extent + MindYearHeatmapMonthPainter.gap),
-      top: row * (extent + MindYearHeatmapMonthPainter.gap),
-      width: extent,
-      height: extent,
+      left: column * (cellWidth + MindYearHeatmapMonthPainter.gap),
+      top: row * (cellHeight + MindYearHeatmapMonthPainter.gap),
+      width: cellWidth,
+      height: cellHeight,
       child: Semantics(
         button: true,
         label:
@@ -1618,6 +1699,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.dynamicScale,
     this.cellExtent,
+    this.cellHeight,
   }) : super(repaint: frameListenable);
 
   static const columnCount = 7;
@@ -1631,6 +1713,7 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
   final MindHeatmapScaleResolution scaleResolution;
   final MindHeatmapResolvedScale? dynamicScale;
   final double? cellExtent;
+  final double? cellHeight;
 
   @visibleForTesting
   Color colorForDate(LocalDate date) {
@@ -1665,31 +1748,36 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
   @visibleForTesting
   int? dayAtSlot(int slot) => geometry.dayAtSlot(slot);
 
+  @visibleForTesting
+  Rect cellRectForSlot(int slot, Size size) {
+    final cellWidth =
+        cellExtent ?? (size.width - (columnCount - 1) * gap) / columnCount;
+    final resolvedCellHeight = cellHeight ?? cellWidth;
+    final row = slot ~/ columnCount;
+    final column = slot % columnCount;
+    return Rect.fromLTWH(
+      column * (cellWidth + gap),
+      row * (resolvedCellHeight + gap),
+      cellWidth,
+      resolvedCellHeight,
+    );
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final days = frameListenable.value?.month(month);
     if (days == null || days.isEmpty || size.width <= 0) return;
-    final resolvedCellExtent =
+    final resolvedCellWidth =
         cellExtent ?? (size.width - (columnCount - 1) * gap) / columnCount;
-    if (resolvedCellExtent <= 0) return;
+    final resolvedCellHeight = cellHeight ?? resolvedCellWidth;
+    if (resolvedCellWidth <= 0 || resolvedCellHeight <= 0) return;
     final paint = Paint();
     for (final day in days) {
       final slotIndex = geometry.slotIndexForDay(day.date.day);
-      final row = slotIndex ~/ columnCount;
-      final column = slotIndex % columnCount;
-      final offset = Offset(
-        column * (resolvedCellExtent + gap),
-        row * (resolvedCellExtent + gap),
-      );
       paint.color = colorFor(day);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            offset.dx,
-            offset.dy,
-            resolvedCellExtent,
-            resolvedCellExtent,
-          ),
+          cellRectForSlot(slotIndex, size),
           _cornerRadius,
         ),
         paint,
@@ -1706,7 +1794,8 @@ final class MindYearHeatmapMonthPainter extends CustomPainter {
       paletteStyle != oldDelegate.paletteStyle ||
       scaleResolution != oldDelegate.scaleResolution ||
       dynamicScale != oldDelegate.dynamicScale ||
-      cellExtent != oldDelegate.cellExtent;
+      cellExtent != oldDelegate.cellExtent ||
+      cellHeight != oldDelegate.cellHeight;
 }
 
 enum _MindYearHeatmapFooterKind { net, income, expense }

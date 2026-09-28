@@ -191,7 +191,7 @@ void main() {
   );
 
   testWidgets(
-    'Unified Budget composition uses the central mode-content envelope only once',
+    'Unified Budget composition links the existing Header and content in one physical surface',
     (tester) async {
       final cardStyle = BudgetContentCardStyleController();
       addTearDown(cardStyle.dispose);
@@ -224,24 +224,39 @@ void main() {
 
       await pumpSurface();
       expect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
         findsNothing,
       );
 
       cardStyle.select(BudgetContentLayout.unifiedCard);
       await tester.pump();
       final unified = find.byKey(
-        const ValueKey('budget-unified-content-card-surface'),
+        const ValueKey('budget-unified-header-content-surface'),
       );
       expect(unified, findsOneWidget);
       expect(
         tester.getRect(unified),
         Rect.fromLTWH(
-          geometry.modeContentBounds.left,
-          geometry.modeContentBounds.top,
-          geometry.modeContentBounds.width,
-          geometry.modeContentBounds.height,
+          geometry.headerBounds.left,
+          geometry.headerBounds.top,
+          geometry.headerBounds.width,
+          geometry.modeContentBounds.bottom - geometry.headerBounds.top,
         ),
+        reason:
+            'Közös kártya uses Mind-style single physical Header/content '
+            'ownership without moving the established Budget content bounds.',
+      );
+      expect(
+        tester.getRect(
+          find.byKey(const ValueKey('dashboard-core-mode-budget-header')),
+        ),
+        Rect.fromLTWH(
+          geometry.headerBounds.left,
+          geometry.headerBounds.top,
+          geometry.headerBounds.width,
+          geometry.headerBounds.height,
+        ),
+        reason: 'The existing Header geometry is retained inside the shell.',
       );
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
@@ -625,7 +640,7 @@ void main() {
       );
       expect(tester.getRect(avatar).top, lessThan(tester.getRect(chart).top));
       expect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
         findsNothing,
       );
 
@@ -646,12 +661,12 @@ void main() {
       composition.select(BudgetContentLayout.unifiedCard);
       await pumpSurface();
       expect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
         findsOneWidget,
       );
       expect(tester.getRect(chart).top, lessThan(tester.getRect(avatar).top));
       final unified = tester.getRect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
       );
       final selectedAvatarInput = tester.getRect(
         find.byKey(const ValueKey('budget-target-avatar-rail')),
@@ -663,12 +678,12 @@ void main() {
       order.select(BudgetSectionOrder.avatarsThenChart);
       await pumpSurface();
       expect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
         findsOneWidget,
       );
       expect(tester.getRect(avatar).top, lessThan(tester.getRect(chart).top));
       final avatarsFirstUnified = tester.getRect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
       );
       final avatarsFirstInput = tester.getRect(
         find.byKey(const ValueKey('budget-target-avatar-rail')),

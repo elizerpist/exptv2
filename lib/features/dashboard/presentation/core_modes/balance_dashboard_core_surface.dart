@@ -40,48 +40,78 @@ import '../dashboard_border_style.dart';
 import '../dashboard_corner_roundness.dart';
 import '../dashboard_shadow_style.dart';
 
-/// The finite presentation domain of Balance's upper linked topic rail.
-enum BalanceCarouselCardKind {
-  cashflow,
-  closings,
-  momentum,
-  retention,
-  stability,
-  ghost,
-  forecast,
-  latestTransaction,
-  categoryMovers,
-  topCategory,
-  topPartner,
+String _indicatorIdFor(BalanceLinkedDetailTopic topic) =>
+    _kindForTopic(topic).stableId;
+
+BalanceCarouselCardKind _kindForTopic(BalanceLinkedDetailTopic topic) =>
+    switch (topic) {
+      BalanceLinkedDetailTopic.cashflow => BalanceCarouselCardKind.cashflow,
+      BalanceLinkedDetailTopic.closings => BalanceCarouselCardKind.closings,
+      BalanceLinkedDetailTopic.momentum => BalanceCarouselCardKind.momentum,
+      BalanceLinkedDetailTopic.retention => BalanceCarouselCardKind.retention,
+      BalanceLinkedDetailTopic.stability => BalanceCarouselCardKind.stability,
+      BalanceLinkedDetailTopic.ghost => BalanceCarouselCardKind.ghost,
+      BalanceLinkedDetailTopic.forecast => BalanceCarouselCardKind.forecast,
+      BalanceLinkedDetailTopic.latestTransaction =>
+        BalanceCarouselCardKind.latestTransaction,
+      BalanceLinkedDetailTopic.categoryMovers =>
+        BalanceCarouselCardKind.categoryMovers,
+      BalanceLinkedDetailTopic.topCategory =>
+        BalanceCarouselCardKind.topCategory,
+      BalanceLinkedDetailTopic.topPartner => BalanceCarouselCardKind.topPartner,
+    };
+
+BalanceLinkedDetailTopic _topicForKind(BalanceCarouselCardKind kind) =>
+    switch (kind) {
+      BalanceCarouselCardKind.cashflow => BalanceLinkedDetailTopic.cashflow,
+      BalanceCarouselCardKind.closings => BalanceLinkedDetailTopic.closings,
+      BalanceCarouselCardKind.momentum => BalanceLinkedDetailTopic.momentum,
+      BalanceCarouselCardKind.retention => BalanceLinkedDetailTopic.retention,
+      BalanceCarouselCardKind.stability => BalanceLinkedDetailTopic.stability,
+      BalanceCarouselCardKind.ghost => BalanceLinkedDetailTopic.ghost,
+      BalanceCarouselCardKind.forecast => BalanceLinkedDetailTopic.forecast,
+      BalanceCarouselCardKind.latestTransaction =>
+        BalanceLinkedDetailTopic.latestTransaction,
+      BalanceCarouselCardKind.categoryMovers =>
+        BalanceLinkedDetailTopic.categoryMovers,
+      BalanceCarouselCardKind.topCategory =>
+        BalanceLinkedDetailTopic.topCategory,
+      BalanceCarouselCardKind.topPartner => BalanceLinkedDetailTopic.topPartner,
+    };
+
+/// Resolves membership before it reaches the carousel datasource. Keeping the
+/// result pure makes selection fallback testable and prevents hidden items
+/// becoming geometry/semantic ghost slots.
+@visibleForTesting
+List<BalanceCarouselCardKind> visibleBalanceCarouselCardKindsFor(
+  BalancePresentationSettings settings,
+) => List<BalanceCarouselCardKind>.unmodifiable(
+  BalanceCarouselCardKind.values.where(settings.isBalanceCarouselCardVisible),
+);
+
+@visibleForTesting
+BalanceCarouselCardKind resolveVisibleBalanceCarouselCardKind({
+  required BalanceCarouselCardKind selected,
+  required BalancePresentationSettings settings,
+}) {
+  if (settings.isBalanceCarouselCardVisible(selected)) return selected;
+  final visible = visibleBalanceCarouselCardKindsFor(settings);
+  assert(visible.isNotEmpty, 'Balance carousel must retain one visible card.');
+  final index = BalanceCarouselCardKind.values.indexOf(selected);
+  for (
+    var next = index + 1;
+    next < BalanceCarouselCardKind.values.length;
+    next += 1
+  ) {
+    final candidate = BalanceCarouselCardKind.values[next];
+    if (settings.isBalanceCarouselCardVisible(candidate)) return candidate;
+  }
+  for (var previous = index - 1; previous >= 0; previous -= 1) {
+    final candidate = BalanceCarouselCardKind.values[previous];
+    if (settings.isBalanceCarouselCardVisible(candidate)) return candidate;
+  }
+  return visible.first;
 }
-
-const _balanceInsightIndicatorIds = <String>[
-  'cashflow',
-  'closings',
-  'momentum',
-  'retention',
-  'stability',
-  'ghost',
-  'forecast',
-  'latest-transaction',
-  'category-movers',
-  'top-category',
-  'top-partner',
-];
-
-String _indicatorIdFor(BalanceLinkedDetailTopic topic) => switch (topic) {
-  BalanceLinkedDetailTopic.cashflow => 'cashflow',
-  BalanceLinkedDetailTopic.closings => 'closings',
-  BalanceLinkedDetailTopic.momentum => 'momentum',
-  BalanceLinkedDetailTopic.retention => 'retention',
-  BalanceLinkedDetailTopic.stability => 'stability',
-  BalanceLinkedDetailTopic.ghost => 'ghost',
-  BalanceLinkedDetailTopic.forecast => 'forecast',
-  BalanceLinkedDetailTopic.latestTransaction => 'latest-transaction',
-  BalanceLinkedDetailTopic.categoryMovers => 'category-movers',
-  BalanceLinkedDetailTopic.topCategory => 'top-category',
-  BalanceLinkedDetailTopic.topPartner => 'top-partner',
-};
 
 /// One render-only Balance carousel item. Financial data is supplied in the
 /// prepared [DashboardBalanceLinkedPresentation] and never fetched by this
@@ -121,7 +151,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
   final stability = presentation?.stability;
   return List<BalanceCarouselCard>.unmodifiable(<BalanceCarouselCard>[
     BalanceCarouselCard._(
-      id: 'cashflow',
+      id: BalanceCarouselCardKind.cashflow.stableId,
       kind: BalanceCarouselCardKind.cashflow,
       title: 'Cashflow',
       amount: presentation == null
@@ -132,14 +162,14 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       detail: 'Nettó cashflow',
     ),
     BalanceCarouselCard._(
-      id: 'closings',
+      id: BalanceCarouselCardKind.closings.stableId,
       kind: BalanceCarouselCardKind.closings,
       title: 'Zárások',
       amount: closings == null ? '—' : balanceClosingsCompactSummary(closings),
       detail: 'Pozitív zárások',
     ),
     BalanceCarouselCard._(
-      id: 'momentum',
+      id: BalanceCarouselCardKind.momentum.stableId,
       kind: BalanceCarouselCardKind.momentum,
       title: 'Balance momentum',
       amount: momentum == null || !momentum.isAvailable
@@ -150,14 +180,14 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
           : balanceMomentumStateLabel(momentum.state),
     ),
     BalanceCarouselCard._(
-      id: 'retention',
+      id: BalanceCarouselCardKind.retention.stableId,
       kind: BalanceCarouselCardKind.retention,
       title: 'Megtakarítási arány',
       amount: formatBalanceRetentionPeriod(retention?.selectedPeriod),
       detail: 'bevételből megtartva',
     ),
     BalanceCarouselCard._(
-      id: 'stability',
+      id: BalanceCarouselCardKind.stability.stableId,
       kind: BalanceCarouselCardKind.stability,
       title: 'Cashflow stabilitás',
       amount: stability == null || !stability.isAvailable
@@ -167,22 +197,22 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
             ),
       detail: 'tipikus havi kilengés',
     ),
-    const BalanceCarouselCard._(
-      id: 'ghost',
+    BalanceCarouselCard._(
+      id: BalanceCarouselCardKind.ghost.stableId,
       kind: BalanceCarouselCardKind.ghost,
       title: 'Fix terhek',
       amount: 'Hamarosan',
       detail: 'Ghost tranzakciók',
     ),
-    const BalanceCarouselCard._(
-      id: 'forecast',
+    BalanceCarouselCard._(
+      id: BalanceCarouselCardKind.forecast.stableId,
       kind: BalanceCarouselCardKind.forecast,
       title: 'Forecast',
       amount: 'Hamarosan',
       detail: 'Várható zárás',
     ),
     BalanceCarouselCard._(
-      id: 'latest-transaction',
+      id: BalanceCarouselCardKind.latestTransaction.stableId,
       kind: BalanceCarouselCardKind.latestTransaction,
       title: 'Utolsó tranzakció',
       amount: latest?.title ?? 'Nincs tétel',
@@ -195,7 +225,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       categoryIconId: latest?.categoryIconId,
     ),
     BalanceCarouselCard._(
-      id: 'category-movers',
+      id: BalanceCarouselCardKind.categoryMovers.stableId,
       kind: BalanceCarouselCardKind.categoryMovers,
       title: 'Legnagyobb kategóriaváltozás',
       amount: topMover?.label ?? 'Nincs kategóriaváltozás',
@@ -206,7 +236,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       categoryIconId: topMover?.categoryIconId,
     ),
     BalanceCarouselCard._(
-      id: 'top-category',
+      id: BalanceCarouselCardKind.topCategory.stableId,
       kind: BalanceCarouselCardKind.topCategory,
       title: 'Top kategória',
       amount: topCategory?.label ?? 'Nincs adat',
@@ -219,7 +249,7 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
       categoryIconId: topCategory?.categoryIconId,
     ),
     BalanceCarouselCard._(
-      id: 'top-partner',
+      id: BalanceCarouselCardKind.topPartner.stableId,
       kind: BalanceCarouselCardKind.topPartner,
       title: 'Top partner',
       amount: topPartner?.label ?? 'Nincs adat',
@@ -233,6 +263,15 @@ List<BalanceCarouselCard> balanceCarouselCardsFor(
     ),
   ]);
 }
+
+List<BalanceCarouselCard> _visibleBalanceCarouselCardsFor(
+  DashboardBalanceLinkedPresentation? presentation,
+  BalancePresentationSettings settings,
+) => List<BalanceCarouselCard>.unmodifiable(
+  balanceCarouselCardsFor(
+    presentation,
+  ).where((card) => settings.isBalanceCarouselCardVisible(card.kind)),
+);
 
 /// Maps the already selected semantic detail topic back to its canonical rail
 /// item. This keeps content-card coloring on the same accent resolver as the
@@ -305,6 +344,48 @@ class BalanceDashboardCoreSurface extends StatefulWidget {
 final class _BalanceDashboardCoreSurfaceState
     extends State<BalanceDashboardCoreSurface> {
   BalanceLinkedDetailTopic _selectedTopic = BalanceLinkedDetailTopic.cashflow;
+  ValueListenable<BalancePresentationSettings>? _boundSettings;
+
+  @override
+  void initState() {
+    super.initState();
+    _bindPresentationSettings();
+  }
+
+  @override
+  void didUpdateWidget(covariant BalanceDashboardCoreSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.presentationSettings != widget.presentationSettings) {
+      _boundSettings?.removeListener(_reconcileVisibleSelection);
+      _bindPresentationSettings();
+      _reconcileVisibleSelection();
+    }
+  }
+
+  @override
+  void dispose() {
+    _boundSettings?.removeListener(_reconcileVisibleSelection);
+    super.dispose();
+  }
+
+  void _bindPresentationSettings() {
+    _boundSettings = widget.presentationSettings;
+    _boundSettings?.addListener(_reconcileVisibleSelection);
+  }
+
+  void _reconcileVisibleSelection() {
+    final settings =
+        _boundSettings?.value ?? const BalancePresentationSettings.defaults();
+    final resolved = _topicForKind(
+      resolveVisibleBalanceCarouselCardKind(
+        selected: _kindForTopic(_selectedTopic),
+        settings: settings,
+      ),
+    );
+    if (resolved != _selectedTopic && mounted) {
+      setState(() => _selectedTopic = resolved);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -347,32 +428,10 @@ final class _BalanceDashboardCoreSurfaceState
               presentation: widget.balanceLinkedPresentation,
               presentationSettings: widget.presentationSettings,
               summaryToUpperGap: summaryToUpperGap,
+              selectedCardId: _indicatorIdFor(_selectedTopic),
               onMotionInterrupted: widget.onCarouselMotionInterrupted,
               onCardSelected: (card) {
-                final selected = switch (card.kind) {
-                  BalanceCarouselCardKind.cashflow =>
-                    BalanceLinkedDetailTopic.cashflow,
-                  BalanceCarouselCardKind.closings =>
-                    BalanceLinkedDetailTopic.closings,
-                  BalanceCarouselCardKind.momentum =>
-                    BalanceLinkedDetailTopic.momentum,
-                  BalanceCarouselCardKind.retention =>
-                    BalanceLinkedDetailTopic.retention,
-                  BalanceCarouselCardKind.stability =>
-                    BalanceLinkedDetailTopic.stability,
-                  BalanceCarouselCardKind.ghost =>
-                    BalanceLinkedDetailTopic.ghost,
-                  BalanceCarouselCardKind.forecast =>
-                    BalanceLinkedDetailTopic.forecast,
-                  BalanceCarouselCardKind.latestTransaction =>
-                    BalanceLinkedDetailTopic.latestTransaction,
-                  BalanceCarouselCardKind.categoryMovers =>
-                    BalanceLinkedDetailTopic.categoryMovers,
-                  BalanceCarouselCardKind.topCategory =>
-                    BalanceLinkedDetailTopic.topCategory,
-                  BalanceCarouselCardKind.topPartner =>
-                    BalanceLinkedDetailTopic.topPartner,
-                };
+                final selected = _topicForKind(card.kind);
                 if (selected != _selectedTopic) {
                   setState(() => _selectedTopic = selected);
                 }
@@ -383,10 +442,10 @@ final class _BalanceDashboardCoreSurfaceState
             bounds: geometry.zone2IndicatorBounds,
             opacity: geometry.zone2Opacity,
             offset: Offset(0, geometry.zone2Shift),
-            child: BalanceInsightIndicators(
+            child: _BalanceVisibleInsightIndicators(
               bounds: geometry.zone2IndicatorBounds,
-              itemIds: _balanceInsightIndicatorIds,
               activeItemId: _indicatorIdFor(_selectedTopic),
+              presentationSettings: widget.presentationSettings,
             ),
           ),
           DashboardCoreModeHeaderScaffold(
@@ -417,6 +476,41 @@ final class _BalanceDashboardCoreSurfaceState
       ),
     );
   }
+}
+
+/// Dots share the exact member filter used by the carousel datasource. This
+/// prevents a hidden-but-unselected item from leaving a visual ghost dot.
+final class _BalanceVisibleInsightIndicators extends StatelessWidget {
+  const _BalanceVisibleInsightIndicators({
+    required this.bounds,
+    required this.activeItemId,
+    required this.presentationSettings,
+  });
+
+  final DashboardBounds bounds;
+  final String activeItemId;
+  final ValueListenable<BalancePresentationSettings>? presentationSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = presentationSettings;
+    if (settings == null) {
+      return _build(const BalancePresentationSettings.defaults());
+    }
+    return ValueListenableBuilder<BalancePresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => _build(value),
+    );
+  }
+
+  Widget _build(BalancePresentationSettings settings) =>
+      BalanceInsightIndicators(
+        bounds: bounds,
+        itemIds: visibleBalanceCarouselCardKindsFor(
+          settings,
+        ).map((kind) => kind.stableId).toList(growable: false),
+        activeItemId: activeItemId,
+      );
 }
 
 /// Keeps the existing zone2 envelope as the one Balance primary-card surface.
@@ -744,6 +838,7 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
     required this.presentation,
     required this.presentationSettings,
     required this.summaryToUpperGap,
+    required this.selectedCardId,
     required this.onMotionInterrupted,
     required this.onCardSelected,
   });
@@ -751,6 +846,7 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final double summaryToUpperGap;
+  final String selectedCardId;
   final VoidCallback? onMotionInterrupted;
   final ValueChanged<BalanceCarouselCard> onCardSelected;
 
@@ -776,9 +872,10 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
     final listenable = presentation;
     if (listenable == null) {
       return _BalanceUpperCarousel(
-        cards: balanceCarouselCardsFor(null),
+        cards: _visibleBalanceCarouselCardsFor(null, settings),
         presentationSettings: settings,
         summaryToUpperGap: summaryToUpperGap,
+        selectedCardId: selectedCardId,
         onMotionInterrupted: onMotionInterrupted,
         onCardSelected: onCardSelected,
       );
@@ -787,9 +884,10 @@ final class _BalanceUpperCarouselHost extends StatelessWidget {
       valueListenable: listenable,
       builder: (context, presentation, _) {
         return _BalanceUpperCarousel(
-          cards: balanceCarouselCardsFor(presentation),
+          cards: _visibleBalanceCarouselCardsFor(presentation, settings),
           presentationSettings: settings,
           summaryToUpperGap: summaryToUpperGap,
+          selectedCardId: selectedCardId,
           onMotionInterrupted: onMotionInterrupted,
           onCardSelected: onCardSelected,
         );
@@ -803,6 +901,7 @@ final class _BalanceUpperCarousel extends StatefulWidget {
     required this.cards,
     required this.presentationSettings,
     required this.summaryToUpperGap,
+    required this.selectedCardId,
     required this.onMotionInterrupted,
     required this.onCardSelected,
   });
@@ -810,6 +909,7 @@ final class _BalanceUpperCarousel extends StatefulWidget {
   final List<BalanceCarouselCard> cards;
   final BalancePresentationSettings presentationSettings;
   final double summaryToUpperGap;
+  final String selectedCardId;
   final VoidCallback? onMotionInterrupted;
   final ValueChanged<BalanceCarouselCard> onCardSelected;
 
@@ -928,8 +1028,32 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
   @override
   void didUpdateWidget(covariant _BalanceUpperCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final cardMembershipChanged = !listEquals(
+      _cardIds(oldWidget.cards),
+      _cardIds(widget.cards),
+    );
+    if (cardMembershipChanged && widget.cards.isNotEmpty) {
+      final selectedIndex = widget.cards.indexWhere(
+        (card) => card.id == widget.selectedCardId,
+      );
+      _controller.installSemanticDomain(
+        dataMode: _dataModeForCards(widget.cards),
+        finiteLength: widget.cards.length,
+        selectedLogicalIndex: selectedIndex < 0 ? 0 : selectedIndex,
+        policy:
+            CenteredCarouselSemanticInstallPolicy.reconcileCanonicalSelection,
+      );
+    }
     _syncWaveAnimation();
   }
+
+  List<String> _cardIds(List<BalanceCarouselCard> cards) =>
+      cards.map((card) => card.id).toList(growable: false);
+
+  CenteredCarouselDataMode _dataModeForCards(List<BalanceCarouselCard> cards) =>
+      cards.length <= 2
+      ? CenteredCarouselDataMode.bounded
+      : CenteredCarouselDataMode.cyclic;
 
   void _syncWaveAnimation() {
     final reducedMotion =
@@ -1047,9 +1171,9 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
         );
         return CenteredCarousel<BalanceCarouselCard>(
           key: const ValueKey<String>('balance-carousel'),
-          dataSource: CyclicCarouselDataSource<BalanceCarouselCard>(
-            widget.cards,
-          ),
+          dataSource: widget.cards.length <= 2
+              ? BoundedCarouselDataSource<BalanceCarouselCard>(widget.cards)
+              : CyclicCarouselDataSource<BalanceCarouselCard>(widget.cards),
           controller: _controller,
           spec: spec,
           height: carouselHeight,

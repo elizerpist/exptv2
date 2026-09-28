@@ -31,6 +31,12 @@ void main() {
       expect(controller.value.balanceCarouselWaveAnimationEnabled, isTrue);
       expect(controller.value.balanceContentCardColoredBorderEnabled, isTrue);
       expect(controller.value.balanceContentCardBorderOpacity, 1);
+      expect(
+        controller.value.visibleBalanceCarouselCardKinds,
+        equals(
+          Set<BalanceCarouselCardKind>.from(BalanceCarouselCardKind.values),
+        ),
+      );
       controller
         ..setChartMode(BalanceHeaderChartMode.adaptiveSummary)
         ..setTimeLabels(BalanceHeaderChartTimeLabels.visible)
@@ -74,6 +80,58 @@ void main() {
         controller.value.copyWith(),
         controller.value,
         reason: 'The render-only setting participates in value identity.',
+      );
+    },
+  );
+
+  test(
+    'BCV-SETTINGS RED: card visibility is typed, canonical, and refuses an empty carousel',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.setBalanceCarouselCardVisible(
+          BalanceCarouselCardKind.forecast,
+          false,
+        ),
+        isTrue,
+      );
+      expect(
+        controller.value.isBalanceCarouselCardVisible(
+          BalanceCarouselCardKind.forecast,
+        ),
+        isFalse,
+      );
+      expect(
+        controller.setBalanceCarouselCardVisible(
+          BalanceCarouselCardKind.forecast,
+          true,
+        ),
+        isTrue,
+      );
+      for (final kind in BalanceCarouselCardKind.values.skip(1)) {
+        expect(controller.setBalanceCarouselCardVisible(kind, false), isTrue);
+      }
+      expect(
+        controller.setBalanceCarouselCardVisible(
+          BalanceCarouselCardKind.cashflow,
+          false,
+        ),
+        isFalse,
+        reason: 'At least one Balance carousel card must remain visible.',
+      );
+      expect(
+        controller.value.visibleBalanceCarouselCardKinds,
+        <BalanceCarouselCardKind>{BalanceCarouselCardKind.cashflow},
+      );
+
+      controller.reset();
+      expect(
+        controller.value.visibleBalanceCarouselCardKinds,
+        equals(
+          Set<BalanceCarouselCardKind>.from(BalanceCarouselCardKind.values),
+        ),
       );
     },
   );

@@ -231,6 +231,148 @@ void main() {
   });
 
   test(
+    'BCV-RED: visibility is resolved before carousel membership and selected fallback follows canonical right then left order',
+    () {
+      const defaults = BalancePresentationSettings.defaults();
+      expect(
+        visibleBalanceCarouselCardKindsFor(defaults),
+        BalanceCarouselCardKind.values,
+      );
+      final unrelatedHidden = defaults.copyWith(
+        hiddenBalanceCarouselCardKinds: <BalanceCarouselCardKind>{
+          BalanceCarouselCardKind.forecast,
+        },
+      );
+      expect(
+        visibleBalanceCarouselCardKindsFor(unrelatedHidden),
+        isNot(contains(BalanceCarouselCardKind.forecast)),
+      );
+      expect(
+        resolveVisibleBalanceCarouselCardKind(
+          selected: BalanceCarouselCardKind.stability,
+          settings: unrelatedHidden,
+        ),
+        BalanceCarouselCardKind.stability,
+      );
+      final selectedHidden = defaults.copyWith(
+        hiddenBalanceCarouselCardKinds: <BalanceCarouselCardKind>{
+          BalanceCarouselCardKind.stability,
+        },
+      );
+      expect(
+        resolveVisibleBalanceCarouselCardKind(
+          selected: BalanceCarouselCardKind.stability,
+          settings: selectedHidden,
+        ),
+        BalanceCarouselCardKind.ghost,
+      );
+      final terminalHidden = defaults.copyWith(
+        hiddenBalanceCarouselCardKinds: <BalanceCarouselCardKind>{
+          BalanceCarouselCardKind.topPartner,
+        },
+      );
+      expect(
+        resolveVisibleBalanceCarouselCardKind(
+          selected: BalanceCarouselCardKind.topPartner,
+          settings: terminalHidden,
+        ),
+        BalanceCarouselCardKind.topCategory,
+      );
+    },
+  );
+
+  testWidgets(
+    'BCV-RED: visible membership drives carousel, detail, and indicators including one/two-card states',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = BalancePresentationController();
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      CenteredCarousel<BalanceCarouselCard> carousel() =>
+          tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+            find.byType(CenteredCarousel<BalanceCarouselCard>),
+          );
+
+      expect(carousel().dataSource!.finiteLength, 11);
+      settings.setBalanceCarouselCardVisible(
+        BalanceCarouselCardKind.forecast,
+        false,
+      );
+      await tester.pump();
+      expect(carousel().dataSource!.finiteLength, 10);
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-insight-indicator-forecast'),
+        ),
+        findsNothing,
+      );
+
+      carousel().controller.jumpToIndex(4);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-stability')),
+        findsOneWidget,
+      );
+      settings.setBalanceCarouselCardVisible(
+        BalanceCarouselCardKind.stability,
+        false,
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('balance-linked-detail-ghost')),
+        findsOneWidget,
+        reason: 'Hidden selected Stability resolves to its next visible topic.',
+      );
+
+      for (final kind in BalanceCarouselCardKind.values) {
+        if (kind == BalanceCarouselCardKind.cashflow ||
+            kind == BalanceCarouselCardKind.closings) {
+          continue;
+        }
+        settings.setBalanceCarouselCardVisible(kind, false);
+      }
+      await tester.pump();
+      expect(carousel().dataSource!.finiteLength, 2);
+      expect(carousel().dataSource!.mode, CenteredCarouselDataMode.bounded);
+      settings.setBalanceCarouselCardVisible(
+        BalanceCarouselCardKind.closings,
+        false,
+      );
+      await tester.pump();
+      expect(carousel().dataSource!.finiteLength, 1);
+      expect(carousel().dataSource!.mode, CenteredCarouselDataMode.bounded);
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-insight-indicator-cashflow'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        settings.setBalanceCarouselCardVisible(
+          BalanceCarouselCardKind.cashflow,
+          false,
+        ),
+        isFalse,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  test(
     'BX5 RED: Closings compact fraction uses strict-positive bucket DTOs',
     () {
       final summary = balanceClosingsCompactSummary(

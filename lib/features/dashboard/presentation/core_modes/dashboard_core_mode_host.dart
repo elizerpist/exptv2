@@ -88,7 +88,7 @@ class DashboardCoreModeHost extends StatefulWidget {
     this.mindYearHeatmapVisible = false,
     this.mindTemporalHeatmapVisible = false,
     this.mindTemporalDayVisible = false,
-    this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.separateCards,
+    this.mindExpandedSurfaceStyle = MindExpandedSurfaceStyle.seamlessCard,
     this.onMindQueryAmountRangeRetry,
     this.onMindQueryAmountRangeCommitted,
     this.onMindQueryAmountRangePreviewChanged,

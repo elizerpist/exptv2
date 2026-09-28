@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_calendar_geometry.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_viewport.dart';
@@ -38,6 +39,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
 
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-scroll')),
@@ -532,6 +537,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
 
       await tester.drag(
         find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
@@ -742,6 +751,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
       final footerBefore = tester.getRect(
         find.byKey(const ValueKey('mind-year-heatmap-fixed-footer')),
       );
@@ -782,6 +795,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
       final gridBefore = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
       );
@@ -1000,6 +1017,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
 
       final grid = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
@@ -1193,6 +1214,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
       expect(find.text('Zárás'), findsAtLeastNWidgets(1));
       expect(find.text('Scope'), findsAtLeastNWidgets(1));
       expect(find.text('3 800 Ft'), findsAtLeastNWidgets(1));
@@ -1257,7 +1282,7 @@ void main() {
         findsNothing,
       );
       expect(scrollController.hasClients, isTrue);
-      expect(scrollController.position.maxScrollExtent, 0);
+      expect(scrollController.position.maxScrollExtent, closeTo(0, .001));
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
         findsOneWidget,
@@ -1282,16 +1307,187 @@ void main() {
         tester
             .getRect(find.byKey(const ValueKey('mind-year-direct-month-12')))
             .bottom,
-        lessThanOrEqualTo(
+        closeTo(
           tester
               .getRect(
                 find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
               )
               .bottom,
+          .5,
         ),
+        reason:
+            'The direct 4x3 field must fill its live annual viewport instead '
+            'of leaving the width-limited square-cell gap at the bottom.',
       );
 
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  test(
+    '4x3 fit derives independent live vertical cells without changing width',
+    () {
+      final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
+        12,
+        (index) => MindYearHeatmapCalendarGeometry.forMonth(
+          year: 2025,
+          month: index + 1,
+        ),
+        growable: false,
+      );
+      final fit = MindYearHeatmapFourColumnFit.resolve(
+        viewportHeight: 390,
+        cardWidth: 82,
+        geometries: geometries,
+        footerRowCount: 0,
+        viewportTopPadding: 5,
+        viewportBottomPadding: 0,
+        rowGap: 4,
+        compactChrome: true,
+      );
+
+      expect(fit.staticHeight, closeTo(88, .001));
+      expect(fit.cellHeight, greaterThan(fit.cellWidth));
+      expect(fit.extraHeightPerCell, closeTo(fit.verticalSurplus / 18, .0001));
+      expect(fit.resolvedContentHeight, closeTo(fit.annualViewportHeight, .5));
+    },
+  );
+
+  test(
+    '4x3 physical-size seamless/stretched fixture fills the full annual field',
+    () {
+      final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
+        12,
+        (index) => MindYearHeatmapCalendarGeometry.forMonth(
+          year: 2025,
+          month: index + 1,
+        ),
+        growable: false,
+      );
+      // 430×560 is the focused production-size golden viewport. The 30px
+      // in-card title/selector lane leaves 530px for the annual field.
+      final fit = MindYearHeatmapFourColumnFit.resolve(
+        viewportHeight: 530,
+        cardWidth: 99.5,
+        geometries: geometries,
+        footerRowCount: 0,
+        viewportTopPadding: 5,
+        viewportBottomPadding: 0,
+        rowGap: 4,
+        compactChrome: true,
+      );
+
+      expect(fit.annualViewportHeight, 530);
+      expect(fit.staticHeight, 88);
+      expect(fit.cellWidth, closeTo(75.5 / 7, .001));
+      expect(fit.squareConsumedHeight, closeTo(88 + 18 * (75.5 / 7), .001));
+      expect(fit.verticalSurplus, closeTo(530 - (88 + 18 * (75.5 / 7)), .001));
+      expect(
+        fit.extraHeightPerCell,
+        closeTo((530 - (88 + 18 * (75.5 / 7))) / 18, .001),
+      );
+      expect(fit.cellHeight, closeTo((530 - 88) / 18, .001));
+      expect(fit.resolvedContentHeight, closeTo(530, .5));
+    },
+  );
+
+  test(
+    '4x3 painter exposes the same rectangle geometry that day hit targets use',
+    () {
+      final geometry = MindYearHeatmapCalendarGeometry.forMonth(
+        year: 2025,
+        month: 1,
+      );
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(frame.dispose);
+      final painter = MindYearHeatmapMonthPainter(
+        month: 1,
+        geometry: geometry,
+        frameListenable: frame,
+        cellExtent: 10,
+        cellHeight: 18,
+      );
+
+      final painted = painter.cellRectForSlot(
+        geometry.slotIndexForDay(2),
+        const Size(82, 120),
+      );
+      expect(painted.width, 10);
+      expect(painted.height, 18);
+      expect(painted.left, (geometry.slotIndexForDay(2) % 7) * (10 + 2));
+      expect(painted.top, 0);
+    },
+  );
+
+  testWidgets(
+    '4x3 painted cells and day hit targets share the resolved rectangular geometry',
+    (tester) async {
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 440,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      final paint = find.byKey(
+        const ValueKey('mind-year-heatmap-month-cells-1'),
+      );
+      final painter =
+          tester.widget<CustomPaint>(paint).painter!
+              as MindYearHeatmapMonthPainter;
+      final paintRect = tester.getRect(paint);
+      final expected = painter
+          .cellRectForSlot(
+            painter.slotIndexForDate(
+              const LocalDate(year: 2025, month: 1, day: 2),
+            ),
+            paintRect.size,
+          )
+          .shift(paintRect.topLeft);
+      final hit = tester.getRect(
+        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+      );
+
+      expect(hit.left, closeTo(expected.left, .001));
+      expect(hit.top, closeTo(expected.top, .001));
+      expect(hit.width, closeTo(expected.width, .001));
+      expect(hit.height, closeTo(expected.height, .001));
+    },
+  );
+
+  test(
+    '4x3 fit contracts cell height in a short viewport without vertical overflow',
+    () {
+      final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
+        12,
+        (index) => MindYearHeatmapCalendarGeometry.forMonth(
+          year: 2025,
+          month: index + 1,
+        ),
+        growable: false,
+      );
+      final fit = MindYearHeatmapFourColumnFit.resolve(
+        viewportHeight: 150,
+        cardWidth: 82,
+        geometries: geometries,
+        footerRowCount: 0,
+        viewportTopPadding: 5,
+        viewportBottomPadding: 0,
+        rowGap: 4,
+        compactChrome: true,
+      );
+
+      expect(fit.cellHeight, lessThan(fit.cellWidth));
+      expect(fit.cellHeight, greaterThanOrEqualTo(0));
+      expect(fit.resolvedContentHeight, closeTo(fit.annualViewportHeight, .5));
     },
   );
 
@@ -1368,7 +1564,7 @@ void main() {
         find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
       );
       await tester.pump();
-      expect(scrollController.position.maxScrollExtent, 0);
+      expect(scrollController.position.maxScrollExtent, closeTo(0, .001));
       expect(
         find.byKey(const ValueKey('mind-year-direct-month-1')),
         findsOneWidget,
@@ -1414,7 +1610,11 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Scope'), findsAtLeastNWidgets(1));
-      expect(find.text('Zárás'), findsAtLeastNWidgets(1));
+      expect(
+        find.text('Zárás'),
+        findsNothing,
+        reason: '2x6 keeps Scope but reclaims the monthly closing footer.',
+      );
       expect(
         find.byKey(
           const ValueKey<String>('mind-year-heatmap-day-number-2025-1-1'),
@@ -1495,7 +1695,7 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-DIRECT-01/02/04: Year header selector exposes 3x4/4x3/2x6 without restoring settings ownership',
+    'YEAR-DIRECT-01/02/04: fresh Year uses direct 4x3 while the selector remains user-changeable',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
       addTearDown(frame.dispose);
@@ -1531,8 +1731,8 @@ void main() {
         find.byKey(const ValueKey<String>('mind-year-direct-month-1')),
         findsOneWidget,
       );
-      expect(find.text('Scope'), findsAtLeastNWidgets(1));
-      expect(find.text('Zárás'), findsAtLeastNWidgets(1));
+      expect(find.text('Scope'), findsNothing);
+      expect(find.text('Zárás'), findsNothing);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
@@ -1548,7 +1748,7 @@ void main() {
             )
             .first,
       );
-      expect(annualScroll.position.maxScrollExtent, 0);
+      expect(annualScroll.position.maxScrollExtent, closeTo(0, .001));
       expect(find.text('Scope'), findsNothing);
     },
   );
@@ -1568,6 +1768,10 @@ void main() {
           ),
         ),
       );
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+      );
+      await tester.pump();
 
       expect(
         find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
@@ -1647,6 +1851,7 @@ void main() {
       final frame = ValueNotifier(projection.preview(range));
       addTearDown(frame.dispose);
       addTearDown(settings.dispose);
+      settings.setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1710,7 +1915,11 @@ void main() {
       );
       expect(cardDecoration(3).color, FluviVisualTokens.surface);
       expect(cardDecoration(1).color, isNot(cardDecoration(2).color));
-      expect(cardDecoration(1).border, isNotNull);
+      expect(
+        cardDecoration(1).border,
+        isNull,
+        reason: 'MonthCard tint is independent from the border-off default.',
+      );
       expect(
         (tester
                     .widget<CustomPaint>(

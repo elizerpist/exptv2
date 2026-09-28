@@ -17,6 +17,11 @@ void main() {
       controller.tuning.value.globalAppearance,
       const FluviGlobalAppearance.defaults(),
     );
+    expect(
+      controller.tuning.value.globalAppearance.mindExpandedSurfaceStyle,
+      MindExpandedSurfaceStyle.seamlessCard,
+      reason: 'Fresh expanded Mind now joins Header and content by default.',
+    );
 
     controller.setDirectionColorProfile(FluviDirectionColorProfile.vivid);
     expect(
@@ -41,6 +46,9 @@ void main() {
     );
     controller.setShowsHeaderModeLabelAboveValue(true);
     controller.setMindExpandedSurfaceStyle(
+      MindExpandedSurfaceStyle.separateCards,
+    );
+    controller.setMindExpandedSurfaceStyle(
       MindExpandedSurfaceStyle.seamlessCard,
     );
     controller.setBudgetAvatarContentStyle(
@@ -62,7 +70,7 @@ void main() {
         budgetAvatarContentStyle: BudgetAvatarContentStyle.overlappingGlow,
       ),
     );
-    expect(controller.tuning.value.generation, initialGeneration + 11);
+    expect(controller.tuning.value.generation, initialGeneration + 12);
     expect(controller.tickerIdentity, same(ticker));
   });
 }

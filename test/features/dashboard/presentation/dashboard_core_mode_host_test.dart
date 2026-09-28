@@ -426,7 +426,7 @@ void main() {
               find.byKey(const ValueKey('dashboard-core-mode-budget-card-2')),
             )
             .top,
-        DashboardLayoutMetrics.reference.zone2Top,
+        _presentationFor(DashboardModeSpec.budget).geometry.zone2Bounds.top,
       );
     },
   );

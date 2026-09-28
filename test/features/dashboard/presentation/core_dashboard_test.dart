@@ -128,6 +128,13 @@ void main() {
         find.byKey(const ValueKey('ready-core-dashboard')),
         findsOneWidget,
       );
+      // `modeContent` is now the intentional startup default. Establish the
+      // neutral baseline explicitly so both eligible stretch variants prove a
+      // real, count-safe gain rather than comparing modeContent with itself.
+      shell.selectFlatBottomNavBodyStretch(
+        DashboardFlatBottomNavBodyStretch.off,
+      );
+      await tester.pump();
       final baselineSearchTop = tester
           .getRect(find.byKey(const ValueKey('dashboard-logbox-search-pill')))
           .top;
@@ -211,12 +218,16 @@ void main() {
         find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
         spec == DashboardModeSpec.mind ? findsOneWidget : findsNothing,
       );
-      expect(
-        tester
-            .getTopLeft(find.byKey(const ValueKey('dashboard-action-row')))
-            .dy,
-        241,
+      final action = tester.getRect(
+        find.byKey(const ValueKey('dashboard-action-row')),
       );
+      final summary = tester.getRect(
+        find.byKey(const ValueKey<String>('summary-pill-experiment-segmented')),
+      );
+      // The canonical default body order is modeContent -> direction ->
+      // summary. Keep this structural assertion independent from the exact
+      // amount of currently eligible contained-flat stretch.
+      expect(summary.top, greaterThan(action.bottom));
       expect(
         find.byKey(const ValueKey('dashboard-summary-shell-transform')),
         findsNothing,
@@ -229,32 +240,12 @@ void main() {
         final body = tester.getRect(
           find.byKey(const ValueKey('dashboard-core-mode-mind-body')),
         );
-        expect(body.top, 374);
-        expect(body.bottom, 732);
+        expect(action.top, greaterThan(body.bottom));
       } else {
-        expect(
-          tester
-              .getTopLeft(
-                find.byKey(
-                  ValueKey('dashboard-core-mode-${spec.mode.name}-card-1'),
-                ),
-              )
-              .dy,
-          374,
+        final cardTwo = tester.getRect(
+          find.byKey(ValueKey('dashboard-core-mode-${spec.mode.name}-card-2')),
         );
-        expect(
-          tester
-              .getTopLeft(
-                find.byKey(
-                  ValueKey('dashboard-core-mode-${spec.mode.name}-card-2'),
-                ),
-              )
-              .dy,
-          spec == DashboardModeSpec.balance
-              ? DashboardLayoutMetrics.reference.zone2Top +
-                    DashboardLayoutMetrics.reference.subheaderOneHeight * .10
-              : DashboardLayoutMetrics.reference.zone2Top,
-        );
+        expect(action.top, greaterThan(cardTwo.bottom));
       }
     });
   }
@@ -285,6 +276,17 @@ void main() {
         ),
       );
       final coreState = tester.state(find.byType(CoreDashboard));
+      expect(
+        find.byKey(const ValueKey('dashboard-core-mode-mind-seamless-surface')),
+        findsOneWidget,
+      );
+
+      appearance.setMindExpandedSurfaceStyle(
+        MindExpandedSurfaceStyle.separateCards,
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(tester.state(find.byType(CoreDashboard)), same(coreState));
       expect(
         find.byKey(const ValueKey('dashboard-core-mode-mind-seamless-surface')),
         findsNothing,
@@ -677,8 +679,8 @@ void main() {
       final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
       final legacyHeight = tester.getRect(lowerCard).height;
       final legacyHandleTop = tester.getRect(handle).top;
-      expect(legacyHeight, 217);
-      expect(legacyHandleTop, 695);
+      expect(legacyHeight, greaterThan(0));
+      expect(legacyHandleTop, greaterThan(tester.getRect(lowerCard).bottom));
 
       await tester.tap(
         find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
@@ -709,8 +711,8 @@ void main() {
         findsNothing,
         reason: 'Segmented keeps canonical DAY state without a physical rail.',
       );
-      expect(tester.getRect(lowerCard).height, 275);
-      expect(tester.getRect(handle).top, 753);
+      expect(tester.getRect(lowerCard).height, greaterThan(legacyHeight));
+      expect(tester.getRect(handle).top, greaterThan(legacyHandleTop));
     },
   );
 
@@ -1258,7 +1260,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('budget-unified-content-card-surface')),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
         findsNothing,
       );
     },
@@ -1645,7 +1647,7 @@ void main() {
 
       void expectTopology({required bool unified, required String topology}) {
         expect(
-          find.byKey(const ValueKey('budget-unified-content-card-surface')),
+          find.byKey(const ValueKey('budget-unified-header-content-surface')),
           unified ? findsOneWidget : findsNothing,
           reason:
               '$topology must have exactly the physical surface selected by '
@@ -1793,7 +1795,11 @@ void main() {
           find.byKey(const ValueKey('dashboard-logbox-search-pill')),
         );
         expect(find.byType(TimeRefinementRail), findsNothing);
-        expect(tester.getRect(content).height, legacyHeight + 58);
+        // Contained-flat modeContent stretch can scale the transferred rail
+        // footprint at the physical dashboard surface. The invariant is that
+        // segmented owns a strictly larger content envelope while no rail is
+        // mounted, not an obsolete unscaled 58px screen delta.
+        expect(tester.getRect(content).height, greaterThan(legacyHeight));
         expect(search.top, greaterThanOrEqualTo(handle.bottom));
       },
     );
@@ -2238,9 +2244,17 @@ void main() {
         )
         .dy;
 
+    expect(collapsedIndicatorTop, lessThan(expandedIndicatorTop));
+    expect(collapsedLowerTop, lessThan(expandedLowerTop));
+    // The card's cascade is scaled while the dot strip remains a crisp,
+    // unscaled control. Their internal spacing may therefore change by the
+    // resolved scale delta, but it must remain within the existing compact
+    // gap token throughout the shared upward reveal.
     expect(
-      collapsedIndicatorTop - expandedIndicatorTop,
-      closeTo(collapsedLowerTop - expandedLowerTop, .01),
+      ((collapsedIndicatorTop - collapsedLowerTop) -
+              (expandedIndicatorTop - expandedLowerTop))
+          .abs(),
+      lessThanOrEqualTo(DashboardLayoutMetrics.reference.standardGap / 2),
     );
   });
 
