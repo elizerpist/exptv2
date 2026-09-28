@@ -1138,6 +1138,62 @@ final class _BalancePresentationSection extends StatelessWidget {
           value: settings.balanceContentCardBorderOpacity,
           onChanged: controller.setBalanceContentCardBorderOpacity,
         ),
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text('BALANCE ELRENDEZÉS'),
+        ),
+        RadioGroup<BalanceContentSurfaceStyle>(
+          groupValue: settings.contentSurfaceStyle,
+          onChanged: (style) {
+            if (style != null) controller.setContentSurfaceStyle(style);
+          },
+          child: Column(
+            key: const ValueKey<String>('balance-content-surface-style'),
+            children: <Widget>[
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Header és tartalom'),
+              ),
+              for (final style in BalanceContentSurfaceStyle.values)
+                RadioListTile<BalanceContentSurfaceStyle>(
+                  key: ValueKey<String>(
+                    'balance-content-style-${style == BalanceContentSurfaceStyle.separateCards ? 'separate' : 'unified'}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(style.tunerLabel),
+                  value: style,
+                ),
+            ],
+          ),
+        ),
+        if (settings.contentSurfaceStyle ==
+            BalanceContentSurfaceStyle.unifiedCard)
+          RadioGroup<BalanceUnifiedBodyLayout>(
+            groupValue: settings.unifiedBodyLayout,
+            onChanged: (layout) {
+              if (layout != null) controller.setUnifiedBodyLayout(layout);
+            },
+            child: Column(
+              key: const ValueKey<String>('balance-unified-body-layout'),
+              children: <Widget>[
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Unified Balance tartalom'),
+                ),
+                for (final layout in BalanceUnifiedBodyLayout.values)
+                  RadioListTile<BalanceUnifiedBodyLayout>(
+                    key: ValueKey<String>(
+                      'balance-unified-body-${layout == BalanceUnifiedBodyLayout.currentCarouselDetail ? 'current' : 'four-section'}',
+                    ),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(layout.tunerLabel),
+                    value: layout,
+                  ),
+              ],
+            ),
+          ),
         const SizedBox(height: 8),
         _BalanceCarouselCardVisibilitySubmenu(
           controller: controller,
@@ -1438,6 +1494,30 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   title: Text(count.tunerLabel),
                   value: count,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('4×3 cellák elrendezése'),
+        ),
+        RadioGroup<MindYearFourColumnCellStyle>(
+          groupValue: settings.fourColumnCellStyle,
+          onChanged: (style) {
+            if (style != null) controller.setFourColumnCellStyle(style);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final style in MindYearFourColumnCellStyle.values)
+                RadioListTile<MindYearFourColumnCellStyle>(
+                  key: ValueKey(
+                    'mind-year-four-column-cell-style-${style.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(style.tunerLabel),
+                  value: style,
                 ),
             ],
           ),

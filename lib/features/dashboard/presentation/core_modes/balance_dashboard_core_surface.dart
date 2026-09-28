@@ -21,6 +21,7 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_carousel_wave_motion.dart';
 import 'balance_carousel_wave_diagnostics.dart';
+import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
 import 'balance_category_visual_badge.dart';
@@ -32,6 +33,7 @@ import 'balance_momentum_card.dart';
 import 'balance_presentation_settings.dart';
 import 'balance_retention_card.dart';
 import '../widgets/dashboard_placeholder_card.dart';
+import '../widgets/dashboard_render_diagnostic_probe.dart';
 import '../widgets/dashboard_header_trend_visual_kernel.dart';
 import 'dashboard_core_mode_presentation.dart';
 import 'dashboard_core_mode_surface_primitives.dart';
@@ -383,15 +385,64 @@ final class _BalanceDashboardCoreSurfaceState
         settings: settings,
       ),
     );
-    if (resolved != _selectedTopic && mounted) {
-      setState(() => _selectedTopic = resolved);
-    }
+    if (!mounted) return;
+    // The outer Balance surface style is presentation state too. Rebuild the
+    // local shell on every setting publication, while retaining the old
+    // stable carousel/listenable topology below it. The carousel and dots
+    // still own their dedicated settings listeners, so this never creates a
+    // financial publication path.
+    setState(() {
+      _selectedTopic = resolved;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    return _withSettings(
+      context,
+      widget.presentationSettings?.value ??
+          const BalancePresentationSettings.defaults(),
+    );
+  }
+
+  Widget _withSettings(
+    BuildContext context,
+    BalancePresentationSettings settings,
+  ) {
     final geometry = widget.presentation.geometry;
     final local = _BalanceLocalGeometry.resolve(geometry);
+    final contentProgress = geometry.zone2Opacity.clamp(0.0, 1.0).toDouble();
+    // Keep Balance's accepted two-card cascade during an in-flight collapse.
+    // The parent shell is a fully expanded endpoint owner only, exactly as in
+    // Budget: a giant static white rectangle must not cross the reveal lane.
+    final isHeaderLinked =
+        settings.contentSurfaceStyle ==
+            BalanceContentSurfaceStyle.unifiedCard &&
+        contentProgress >= .999 &&
+        geometry.collapseProgress <= .001;
+    final showsTetris =
+        isHeaderLinked &&
+        settings.unifiedBodyLayout ==
+            BalanceUnifiedBodyLayout.fourSectionTetris;
+    final headerRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.header,
+          size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
+        );
+    final contentRadius = DashboardCornerRoundnessScope.profileOf(context)
+        .borderRadiusFor(
+          DashboardCornerSurfaceFamily.contentCard,
+          size: Size(
+            geometry.modeContentBounds.width,
+            geometry.modeContentBounds.height,
+          ),
+        );
+    final seamShape = DashboardHeaderContentSeamShape.resolve(
+      seamless: isHeaderLinked,
+      headerRadius: headerRadius,
+      contentRadius: contentRadius,
+      expansionProgress: contentProgress,
+    );
     // The carousel's accepted dimensions were historically solved from the
     // standard gap below an upstream Summary. The new default body order puts
     // mode content before Summary, so that positional relationship is no
@@ -404,76 +455,103 @@ final class _BalanceDashboardCoreSurfaceState
         : geometry.zone2Bounds.top - geometry.subheaderOneBounds.bottom;
     return KeyedSubtree(
       key: const ValueKey('dashboard-core-mode-balance'),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          DashboardCoreModeCascadeCard(
-            bounds: local.lowerBounds,
-            motion: local.lowerMotion,
-            semanticKey: const ValueKey('dashboard-core-mode-balance-card-2'),
-            showPlaceholderSurface: false,
-            content: _BalancePrimaryCardHost(
-              bounds: local.lowerBounds,
-              presentation: widget.balanceLinkedPresentation,
-              presentationSettings: widget.presentationSettings,
+      // Balance geometry is resolved against the dashboard viewport. Make
+      // that contract explicit even for isolated hosts (previews/tests); a
+      // loose ancestor must not collapse every positioned mode region to a
+      // one-pixel rail. Dashboard production already supplies these bounds,
+      // so this does not alter its resolved physical geometry.
+      child: SizedBox.expand(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _BalanceUnifiedHeaderContentSurface(
+              geometry: geometry,
+              settings: settings,
               selectedTopic: _selectedTopic,
-              rankedListExtraHeight: geometry.principalModeContentExtraHeight,
-            ),
-          ),
-          DashboardCoreModeCascadeCard(
-            bounds: local.upperBounds,
-            motion: local.upperMotion,
-            semanticKey: const ValueKey('dashboard-core-mode-balance-card-1'),
-            showPlaceholderSurface: false,
-            content: _BalanceUpperCarouselHost(
-              presentation: widget.balanceLinkedPresentation,
-              presentationSettings: widget.presentationSettings,
-              summaryToUpperGap: summaryToUpperGap,
-              selectedCardId: _indicatorIdFor(_selectedTopic),
-              onMotionInterrupted: widget.onCarouselMotionInterrupted,
-              onCardSelected: (card) {
-                final selected = _topicForKind(card.kind);
-                if (selected != _selectedTopic) {
-                  setState(() => _selectedTopic = selected);
-                }
-              },
-            ),
-          ),
-          DashboardCoreModeOpacityPosition(
-            bounds: geometry.zone2IndicatorBounds,
-            opacity: geometry.zone2Opacity,
-            offset: Offset(0, geometry.zone2Shift),
-            child: _BalanceVisibleInsightIndicators(
-              bounds: geometry.zone2IndicatorBounds,
-              activeItemId: _indicatorIdFor(_selectedTopic),
-              presentationSettings: widget.presentationSettings,
-            ),
-          ),
-          DashboardCoreModeHeaderScaffold(
-            bounds: geometry.headerBounds,
-            surfaceColor: widget.presentation.palette.upcomingHeaderTone,
-            headerKey: const ValueKey('dashboard-core-mode-balance-header'),
-            labelKey: const ValueKey('dashboard-core-mode-label-balance'),
-            label: 'balance',
-            showModeLabel: false,
-            visualController: widget.headerVisualController,
-            visualFrameListenable: widget.headerVisualFrame,
-            usesVisualForeground: true,
-            detail: _BalanceHeaderDetail(
-              balancePresentation: widget.balancePresentation,
               headerVisualFrame: widget.headerVisualFrame,
-              expansionProgress: geometry.headerExpansionProgress,
-              expandedHeaderExtraHeight: geometry.expandedHeaderExtraHeight,
-              presentationSettings: widget.presentationSettings,
-              adaptiveScope: widget.adaptiveScope,
-              pointerObserver: widget.headerHistoryChartPointerObserver,
+              seamShape: seamShape,
+              isHeaderLinked: isHeaderLinked,
             ),
-            detailLeft: 0,
-            detailRight: 0,
-            detailTop: 0,
-            detailBottom: 0,
-          ),
-        ],
+            DashboardCoreModeCascadeCard(
+              bounds: local.lowerBounds,
+              motion: local.lowerMotion,
+              semanticKey: const ValueKey('dashboard-core-mode-balance-card-2'),
+              showPlaceholderSurface: false,
+              content: showsTetris
+                  ? const SizedBox.shrink()
+                  : _BalancePrimaryCardHost(
+                      bounds: local.lowerBounds,
+                      presentation: widget.balanceLinkedPresentation,
+                      presentationSettings: widget.presentationSettings,
+                      selectedTopic: _selectedTopic,
+                      rankedListExtraHeight:
+                          geometry.principalModeContentExtraHeight,
+                      unifiedSurface: isHeaderLinked,
+                    ),
+            ),
+            DashboardCoreModeCascadeCard(
+              bounds: local.upperBounds,
+              motion: local.upperMotion,
+              semanticKey: const ValueKey('dashboard-core-mode-balance-card-1'),
+              showPlaceholderSurface: false,
+              content: showsTetris
+                  ? const SizedBox.shrink()
+                  : _BalanceUpperCarouselHost(
+                      presentation: widget.balanceLinkedPresentation,
+                      presentationSettings: widget.presentationSettings,
+                      summaryToUpperGap: summaryToUpperGap,
+                      selectedCardId: _indicatorIdFor(_selectedTopic),
+                      onMotionInterrupted: widget.onCarouselMotionInterrupted,
+                      onCardSelected: (card) {
+                        final selected = _topicForKind(card.kind);
+                        if (selected != _selectedTopic) {
+                          setState(() => _selectedTopic = selected);
+                        }
+                      },
+                    ),
+            ),
+            DashboardCoreModeOpacityPosition(
+              bounds: geometry.zone2IndicatorBounds,
+              opacity: geometry.zone2Opacity,
+              offset: Offset(0, geometry.zone2Shift),
+              child: showsTetris
+                  ? const SizedBox.shrink()
+                  : _BalanceVisibleInsightIndicators(
+                      bounds: geometry.zone2IndicatorBounds,
+                      activeItemId: _indicatorIdFor(_selectedTopic),
+                      presentationSettings: widget.presentationSettings,
+                    ),
+            ),
+            if (showsTetris) _BalanceFourSectionScaffold(geometry: geometry),
+            DashboardCoreModeHeaderScaffold(
+              bounds: geometry.headerBounds,
+              surfaceColor: widget.presentation.palette.upcomingHeaderTone,
+              headerKey: const ValueKey('dashboard-core-mode-balance-header'),
+              labelKey: const ValueKey('dashboard-core-mode-label-balance'),
+              label: 'balance',
+              showModeLabel: false,
+              visualController: widget.headerVisualController,
+              visualFrameListenable: widget.headerVisualFrame,
+              usesVisualForeground: true,
+              borderRadiusOverride: seamShape.headerRadius,
+              showsDepth: !isHeaderLinked,
+              showsBorder: !isHeaderLinked,
+              detail: _BalanceHeaderDetail(
+                balancePresentation: widget.balancePresentation,
+                headerVisualFrame: widget.headerVisualFrame,
+                expansionProgress: geometry.headerExpansionProgress,
+                expandedHeaderExtraHeight: geometry.expandedHeaderExtraHeight,
+                presentationSettings: widget.presentationSettings,
+                adaptiveScope: widget.adaptiveScope,
+                pointerObserver: widget.headerHistoryChartPointerObserver,
+              ),
+              detailLeft: 0,
+              detailRight: 0,
+              detailTop: 0,
+              detailBottom: 0,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -524,6 +602,7 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
     required this.presentationSettings,
     required this.selectedTopic,
     required this.rankedListExtraHeight,
+    this.unifiedSurface = false,
   });
 
   final DashboardBounds bounds;
@@ -531,6 +610,7 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
   final ValueListenable<BalancePresentationSettings>? presentationSettings;
   final BalanceLinkedDetailTopic selectedTopic;
   final double rankedListExtraHeight;
+  final bool unifiedSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -561,6 +641,13 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
                 value.cashflow.mode ==
                     DashboardBalancePrimaryMode.unsupportedDay)) {
           return _placeholder(context, settings);
+        }
+        if (unifiedSurface) {
+          return BalanceLinkedDetailCard(
+            presentation: value,
+            topic: selectedTopic,
+            rankedListExtraHeight: rankedListExtraHeight,
+          );
         }
         return DashboardPlaceholderCard(
           bounds: bounds,
@@ -593,20 +680,26 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
   Widget _placeholder(
     BuildContext context,
     BalancePresentationSettings settings,
-  ) => DashboardPlaceholderCard(
-    bounds: bounds,
-    fillParent: true,
-    semanticKey: const ValueKey<String>('balance-primary-card-placeholder'),
-    borderRadiusOverride:
-        selectedTopic == BalanceLinkedDetailTopic.categoryMovers
-        ? BorderRadius.circular(BalanceCategoryMoversVisualTokens.outerRadius)
-        : null,
-    borderOverride: _balanceContentBorder(
-      context: context,
-      settings: settings,
-      card: _balanceCarouselCardForTopic(null, selectedTopic),
-    ),
-  );
+  ) => unifiedSurface
+      ? const SizedBox.shrink()
+      : DashboardPlaceholderCard(
+          bounds: bounds,
+          fillParent: true,
+          semanticKey: const ValueKey<String>(
+            'balance-primary-card-placeholder',
+          ),
+          borderRadiusOverride:
+              selectedTopic == BalanceLinkedDetailTopic.categoryMovers
+              ? BorderRadius.circular(
+                  BalanceCategoryMoversVisualTokens.outerRadius,
+                )
+              : null,
+          borderOverride: _balanceContentBorder(
+            context: context,
+            settings: settings,
+            card: _balanceCarouselCardForTopic(null, selectedTopic),
+          ),
+        );
 }
 
 BoxBorder? _balanceContentBorder({
@@ -680,6 +773,245 @@ final class _BalanceLocalGeometry {
         opacity: originalLowerMotion.opacity,
         scale: originalLowerMotion.scale,
         progress: originalLowerMotion.progress,
+      ),
+    );
+  }
+}
+
+/// A settled-only Balance surface using the same Header/content contract as
+/// Budget. The established Balance cascade remains the physical owner during
+/// every in-flight collapse, avoiding an opaque slab through that lane.
+final class _BalanceUnifiedHeaderContentSurface extends StatelessWidget {
+  const _BalanceUnifiedHeaderContentSurface({
+    required this.geometry,
+    required this.settings,
+    required this.selectedTopic,
+    required this.headerVisualFrame,
+    required this.seamShape,
+    required this.isHeaderLinked,
+  });
+
+  final DashboardLayoutFrame geometry;
+  final BalancePresentationSettings settings;
+  final BalanceLinkedDetailTopic selectedTopic;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
+  final DashboardHeaderContentSeamShape seamShape;
+  final bool isHeaderLinked;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isHeaderLinked) return const SizedBox.shrink();
+    final combinedBounds = DashboardBounds(
+      left: geometry.headerBounds.left,
+      top: geometry.headerBounds.top,
+      width: geometry.headerBounds.width,
+      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    );
+    final bridgeHeight =
+        (geometry.modeContentBounds.top - geometry.headerBounds.bottom + 34)
+            .clamp(0.0, combinedBounds.height - geometry.headerBounds.height)
+            .toDouble();
+    return DashboardCoreModeFramePosition(
+      bounds: combinedBounds,
+      child: DashboardRenderDiagnosticProbe(
+        candidate: 'balanceUnifiedHeaderContentSurface',
+        material: 'surface=DashboardPlaceholderCard header+balance-content',
+        clip: 'outer rounded surface; carousel descendants retain overflow',
+        zOrder: 'unifiedSurface<carousel/detail/dots<header',
+        child: DashboardPlaceholderCard(
+          bounds: combinedBounds,
+          fillParent: true,
+          semanticKey: const ValueKey<String>(
+            'balance-unified-header-content-surface',
+          ),
+          cornerFamily: DashboardCornerSurfaceFamily.contentCard,
+          borderSurface: DashboardBorderSurface.balanceContent,
+          borderRadiusOverride: seamShape.outerRadius,
+          borderOverride: _balanceContentBorder(
+            context: context,
+            settings: settings,
+            card: _balanceCarouselCardForTopic(null, selectedTopic),
+          ),
+          child: _BalanceUnifiedHeaderContentBridge(
+            headerHeight: geometry.headerBounds.height,
+            bridgeHeight: bridgeHeight,
+            headerVisualFrame: headerVisualFrame,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A shallow non-interactive live Header-color bridge. It is intentionally
+/// restricted to the seam rather than tinting the whole Balance body.
+final class _BalanceUnifiedHeaderContentBridge extends StatelessWidget {
+  const _BalanceUnifiedHeaderContentBridge({
+    required this.headerHeight,
+    required this.bridgeHeight,
+    required this.headerVisualFrame,
+  });
+
+  final double headerHeight;
+  final double bridgeHeight;
+  final ValueListenable<DashboardHeaderVisualFrame>? headerVisualFrame;
+
+  @override
+  Widget build(BuildContext context) {
+    final frames = headerVisualFrame;
+    if (frames == null || bridgeHeight <= 0) return const SizedBox.expand();
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        Positioned(
+          left: 0,
+          right: 0,
+          top: headerHeight,
+          height: bridgeHeight,
+          child: IgnorePointer(
+            child: ValueListenableBuilder<DashboardHeaderVisualFrame>(
+              valueListenable: frames,
+              builder: (context, frame, _) => DecoratedBox(
+                key: const ValueKey('balance-unified-header-color-bleed'),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      frame.colorB.withValues(alpha: .14),
+                      frame.colorA.withValues(alpha: .04),
+                      Colors.white.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Geometry-only first phase of the requested alternative unified Balance
+/// presentation. It deliberately consumes no financial projection.
+final class _BalanceFourSectionScaffold extends StatelessWidget {
+  const _BalanceFourSectionScaffold({required this.geometry});
+
+  final DashboardLayoutFrame geometry;
+
+  @override
+  Widget build(BuildContext context) {
+    final combinedBounds = DashboardBounds(
+      left: geometry.headerBounds.left,
+      top: geometry.headerBounds.top,
+      width: geometry.headerBounds.width,
+      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    );
+    return DashboardCoreModeFramePosition(
+      bounds: combinedBounds,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const outerInset = 12.0;
+          final bodyHeight = math.max(
+            0.0,
+            constraints.maxHeight - geometry.headerBounds.height,
+          );
+          final bodyRect = Rect.fromLTWH(
+            outerInset,
+            geometry.headerBounds.height + outerInset,
+            math.max(0.0, constraints.maxWidth - outerInset * 2),
+            math.max(0.0, bodyHeight - outerInset * 2),
+          );
+          final layout = BalanceFourSectionLayout.resolve(bodyRect);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              _BalanceFourSectionSlot(
+                slot: layout.card1,
+                label: 'Card 1',
+                semanticsLabel: 'Balance alternatív szekció 1',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-1'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-1'),
+              ),
+              _BalanceFourSectionSlot(
+                slot: layout.card2,
+                label: 'Card 2',
+                semanticsLabel: 'Balance alternatív szekció 2',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-2'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-2'),
+              ),
+              _BalanceFourSectionSlot(
+                slot: layout.card3,
+                label: 'Card 3',
+                semanticsLabel: 'Balance alternatív szekció 3',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
+              ),
+              _BalanceFourSectionSlot(
+                slot: layout.card4,
+                label: 'Card 4',
+                semanticsLabel: 'Balance alternatív szekció 4',
+                allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
+                surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+final class _BalanceFourSectionSlot extends StatelessWidget {
+  const _BalanceFourSectionSlot({
+    required this.slot,
+    required this.label,
+    required this.semanticsLabel,
+    required this.allocationKey,
+    required this.surfaceKey,
+  });
+
+  final Rect slot;
+  final String label;
+  final String semanticsLabel;
+  final Key allocationKey;
+  final Key surfaceKey;
+
+  @override
+  Widget build(BuildContext context) {
+    // Deflating every allocation by half a gutter makes one consistent shared
+    // 6px visual seam without perturbing the mathematical slot boundaries.
+    return Positioned.fromRect(
+      rect: slot,
+      child: SizedBox.expand(
+        key: allocationKey,
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: Semantics(
+            label: semanticsLabel,
+            child: DecoratedBox(
+              key: surfaceKey,
+              decoration: BoxDecoration(
+                color: FluviVisualTokens.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: FluviVisualTokens.textSecondary.withValues(alpha: .14),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: FluviVisualTokens.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -991,8 +1323,7 @@ final class _BalanceFixedCarouselGeometry {
 
 final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
     with SingleTickerProviderStateMixin {
-  late final CenteredCarouselController _controller =
-      CenteredCarouselController(initialIndex: 0);
+  late final CenteredCarouselController _controller;
   late final AnimationController _wavePhaseController = AnimationController(
     vsync: this,
     duration: balanceCarouselWaveBaseDuration,
@@ -1011,6 +1342,18 @@ final class _BalanceUpperCarouselState extends State<_BalanceUpperCarousel>
   @override
   void initState() {
     super.initState();
+    // A fresh rail can follow the parent-owned stable topic immediately.
+    // This matters when the temporary four-section scaffold is dismissed:
+    // recreating the renderer must restore the selected visible topic, not
+    // initialise a second source of truth at Cashflow.  The generic carousel
+    // performs its own first configuration after build, so an initial index
+    // is the correct pre-configuration API (not semantic-domain installation).
+    final selectedIndex = widget.cards.indexWhere(
+      (card) => card.id == widget.selectedCardId,
+    );
+    _controller = CenteredCarouselController(
+      initialIndex: selectedIndex < 0 ? 0 : selectedIndex,
+    );
     _waveMarkerOwner = 'balanceWave.${identityHashCode(this)}';
     _waveMarkerContext = () => _waveDiagnostics.snapshot.toMarkerContext();
     _wavePhaseController.addListener(_sampleWaveClock);

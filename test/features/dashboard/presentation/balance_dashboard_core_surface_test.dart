@@ -231,6 +231,204 @@ void main() {
   });
 
   test(
+    'BAL-UNI-01/TET-01: Balance surface choices default separately and remain presentation-only',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.value.contentSurfaceStyle,
+        BalanceContentSurfaceStyle.separateCards,
+      );
+      expect(
+        controller.value.unifiedBodyLayout,
+        BalanceUnifiedBodyLayout.currentCarouselDetail,
+      );
+      controller
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+      expect(controller.value.revision, 2);
+      controller.reset();
+      expect(
+        controller.value.contentSurfaceStyle,
+        BalanceContentSurfaceStyle.separateCards,
+      );
+      expect(
+        controller.value.unifiedBodyLayout,
+        BalanceUnifiedBodyLayout.currentCarouselDetail,
+      );
+    },
+  );
+
+  testWidgets(
+    'BAL-UNI-02/TET-03: unified surface is one Header-linked owner and four-section mode preserves selected topic',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard);
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      final mode = _balanceModePresentation();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: mode,
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final unified = find.byKey(
+        const ValueKey<String>('balance-unified-header-content-surface'),
+      );
+      expect(unified, findsOneWidget);
+      final unifiedRect = tester.getRect(unified);
+      expect(unifiedRect.top, closeTo(mode.geometry.headerBounds.top, .01));
+      expect(
+        unifiedRect.bottom,
+        closeTo(mode.geometry.modeContentBounds.bottom, .01),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card')),
+        findsNothing,
+      );
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      carousel.controller.jumpToIndex(9);
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-top-category'),
+        ),
+        findsOneWidget,
+      );
+
+      settings.setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+      await tester.pump();
+      for (final index in <int>[1, 2, 3, 4]) {
+        expect(
+          find.byKey(ValueKey<String>('balance-tetris-card-$index')),
+          findsOneWidget,
+        );
+      }
+      final card1Slot = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-1')),
+      );
+      final card2Slot = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-2')),
+      );
+      final card3Slot = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-3')),
+      );
+      final card4Slot = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-4')),
+      );
+      final bodyWidth = card3Slot.width + card4Slot.width;
+      final bodyHeight = card3Slot.height + card1Slot.height;
+      expect(card3Slot.width / bodyWidth, closeTo(.70, .001));
+      expect(card4Slot.width / bodyWidth, closeTo(.30, .001));
+      expect(card1Slot.width / bodyWidth, closeTo(.50, .001));
+      expect(card2Slot.width / bodyWidth, closeTo(.50, .001));
+      expect(card3Slot.height / bodyHeight, closeTo(.60, .001));
+      expect(card4Slot.height / bodyHeight, closeTo(.60, .001));
+      expect(card1Slot.height / bodyHeight, closeTo(.40, .001));
+      expect(card2Slot.height / bodyHeight, closeTo(.40, .001));
+      expect(card3Slot.bottom, closeTo(card1Slot.top, .01));
+      expect(card4Slot.bottom, closeTo(card2Slot.top, .01));
+      expect(card4Slot.right, closeTo(card2Slot.right, .01));
+      expect(card1Slot.bottom, closeTo(card2Slot.bottom, .01));
+      expect(find.byType(CenteredCarousel<BalanceCarouselCard>), findsNothing);
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-top-category'),
+        ),
+        findsNothing,
+      );
+      expect(tester.getRect(unified), unifiedRect);
+
+      settings.setUnifiedBodyLayout(
+        BalanceUnifiedBodyLayout.currentCarouselDetail,
+      );
+      await tester.pump();
+      expect(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-linked-detail-top-category'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'VIS-BAL-UNI: separate and unified Header/content surfaces retain their distinct physical contracts',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = BalancePresentationController();
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      final mode = _balanceModePresentation(
+        metrics: DashboardLayoutMetrics.reference.fitToViewport(
+          const Size(412, 892),
+        ),
+      );
+
+      Future<void> pumpSurface() => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: const ValueKey<String>('balance-surface-golden-boundary'),
+              child: SizedBox.expand(
+                child: BalanceDashboardCoreSurface(
+                  presentation: mode,
+                  balanceLinkedPresentation: linked,
+                  presentationSettings: settings,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await pumpSurface();
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-surface-golden-boundary')),
+        matchesGoldenFile('../../../goldens/balance_separate_surface.png'),
+      );
+
+      settings.setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard);
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-surface-golden-boundary')),
+        matchesGoldenFile('../../../goldens/balance_unified_surface.png'),
+      );
+
+      settings.setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+      await tester.pump();
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-surface-golden-boundary')),
+        matchesGoldenFile('../../../goldens/balance_tetris_scaffold.png'),
+      );
+    },
+  );
+
+  test(
     'BCV-RED: visibility is resolved before carousel membership and selected fallback follows canonical right then left order',
     () {
       const defaults = BalancePresentationSettings.defaults();
@@ -284,6 +482,8 @@ void main() {
   testWidgets(
     'BCV-RED: visible membership drives carousel, detail, and indicators including one/two-card states',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
       );
@@ -293,10 +493,16 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: BalanceDashboardCoreSurface(
-              presentation: _balanceModePresentation(),
-              balanceLinkedPresentation: linked,
-              presentationSettings: settings,
+            body: SizedBox.expand(
+              child: BalanceDashboardCoreSurface(
+                presentation: _balanceModePresentation(
+                  metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                    const Size(412, 892),
+                  ),
+                ),
+                balanceLinkedPresentation: linked,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
@@ -321,8 +527,11 @@ void main() {
         findsNothing,
       );
 
+      expect(carousel().controller.selectedIndex, 0);
+      expect(carousel().controller.onSelectedChanged, isNotNull);
       carousel().controller.jumpToIndex(4);
       await tester.pump();
+      expect(carousel().controller.selectedIndex, 4);
       expect(
         find.byKey(const ValueKey<String>('balance-linked-detail-stability')),
         findsOneWidget,
@@ -375,6 +584,8 @@ void main() {
   testWidgets(
     'BCV-INIT-RED: an initially hidden default topic is reconciled before the first Balance frame',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
       );
@@ -389,10 +600,16 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: BalanceDashboardCoreSurface(
-              presentation: _balanceModePresentation(),
-              balanceLinkedPresentation: linked,
-              presentationSettings: settings,
+            body: SizedBox.expand(
+              child: BalanceDashboardCoreSurface(
+                presentation: _balanceModePresentation(
+                  metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                    const Size(412, 892),
+                  ),
+                ),
+                balanceLinkedPresentation: linked,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
@@ -514,6 +731,8 @@ void main() {
   testWidgets(
     'BCL-02: every selected Balance topic renders one title, visual, primary and secondary mini-card structure',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(categoryMovers: _moverPresentation()),
       );
@@ -521,9 +740,15 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: BalanceDashboardCoreSurface(
-              presentation: _balanceModePresentation(),
-              balanceLinkedPresentation: linked,
+            body: SizedBox.expand(
+              child: BalanceDashboardCoreSurface(
+                presentation: _balanceModePresentation(
+                  metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                    const Size(412, 892),
+                  ),
+                ),
+                balanceLinkedPresentation: linked,
+              ),
             ),
           ),
         ),
@@ -3106,18 +3331,23 @@ void main() {
 }
 
 DashboardCoreModePresentation _balanceModePresentation({
-  DashboardLayoutMetrics metrics = DashboardLayoutMetrics.reference,
+  DashboardLayoutMetrics? metrics,
   double principalModeContentExtraHeight = 0,
-}) => DashboardCoreModePresentation(
-  geometry: DashboardGeometryResolver.resolve(
-    metrics: metrics,
-    mode: DashboardModeSpec.balance,
-    collapseProgress: 0,
-    isRailExpanded: false,
-    principalModeContentExtraHeight: principalModeContentExtraHeight,
-  ),
-  palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
-);
+}) {
+  final resolvedMetrics =
+      metrics ??
+      DashboardLayoutMetrics.reference.fitToViewport(const Size(412, 892));
+  return DashboardCoreModePresentation(
+    geometry: DashboardGeometryResolver.resolve(
+      metrics: resolvedMetrics,
+      mode: DashboardModeSpec.balance,
+      collapseProgress: 0,
+      isRailExpanded: false,
+      principalModeContentExtraHeight: principalModeContentExtraHeight,
+    ),
+    palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),
+  );
+}
 
 DashboardBalancePresentation _balance() => const DashboardBalancePresentation(
   scopeKey: 'income|all|expense|all',

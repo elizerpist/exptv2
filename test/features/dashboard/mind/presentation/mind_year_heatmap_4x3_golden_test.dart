@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_viewport.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
@@ -37,6 +38,51 @@ void main() {
         find.byKey(const ValueKey<String>('mind-year-4x3-golden-boundary')),
         matchesGoldenFile(
           '../../../../goldens/mind_year_heatmap_4x3_vertical_fill.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
+    'VIS-4x3-SQUARE: the optional square field places the one selector in its lower free region',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 560));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final frame = ValueNotifier(_frame());
+      final settings = MindYearHeatmapPresentationController()
+        ..setFourColumnCellStyle(MindYearFourColumnCellStyle.squareCells);
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: const ValueKey<String>(
+                'mind-year-4x3-square-golden-boundary',
+              ),
+              child: SizedBox(
+                width: 430,
+                height: 560,
+                child: MindYearHeatmapViewport(
+                  frameListenable: frame,
+                  presentationSettings: settings,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-year-direct-grid-selector-bottom')),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('mind-year-4x3-square-golden-boundary'),
+        ),
+        matchesGoldenFile(
+          '../../../../goldens/mind_year_heatmap_4x3_square.png',
         ),
       );
     },

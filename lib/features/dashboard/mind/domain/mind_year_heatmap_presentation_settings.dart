@@ -60,6 +60,19 @@ extension MindYearHeatmapGridLayoutPresentation on MindYearHeatmapGridLayout {
   };
 }
 
+/// The direct four-column field can either use the live vertical viewport or
+/// preserve the earlier square-cell composition. This is intentionally
+/// inactive for card-based 3×4 and 2×6 layouts.
+enum MindYearFourColumnCellStyle {
+  fillHeight,
+  squareCells;
+
+  String get tunerLabel => switch (this) {
+    MindYearFourColumnCellStyle.fillHeight => 'Kitöltött magasság',
+    MindYearFourColumnCellStyle.squareCells => 'Négyzetes cellák',
+  };
+}
+
 /// Changes only Mind's painted range-thumb diameter. The shared slider keeps
 /// its existing recognizer and overlay hit target.
 enum MindSliderHandleSize {
@@ -165,6 +178,7 @@ final class MindYearHeatmapPresentationSettings {
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
     this.sumVisibleChartCount = MindSumVisibleChartCount.two,
     this.yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
+    this.fourColumnCellStyle = MindYearFourColumnCellStyle.fillHeight,
     this.yearMonthCardBorderEnabled = false,
     this.yearMonthCardProfitabilityTintEnabled = false,
     this.yearMonthCardProfitabilityTintOpacity = .16,
@@ -185,6 +199,7 @@ final class MindYearHeatmapPresentationSettings {
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       sumVisibleChartCount = MindSumVisibleChartCount.two,
       yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
+      fourColumnCellStyle = MindYearFourColumnCellStyle.fillHeight,
       yearMonthCardBorderEnabled = false,
       yearMonthCardProfitabilityTintEnabled = false,
       yearMonthCardProfitabilityTintOpacity = .16,
@@ -204,6 +219,7 @@ final class MindYearHeatmapPresentationSettings {
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
   final MindYearHeatmapGridLayout yearGridLayout;
+  final MindYearFourColumnCellStyle fourColumnCellStyle;
 
   /// MonthCard chrome applies to card-based Year layouts only. It never
   /// affects direct 4×3 cells, palette inputs or financial data.
@@ -235,6 +251,7 @@ final class MindYearHeatmapPresentationSettings {
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     MindSumVisibleChartCount? sumVisibleChartCount,
     MindYearHeatmapGridLayout? yearGridLayout,
+    MindYearFourColumnCellStyle? fourColumnCellStyle,
     bool? yearMonthCardBorderEnabled,
     bool? yearMonthCardProfitabilityTintEnabled,
     double? yearMonthCardProfitabilityTintOpacity,
@@ -255,6 +272,7 @@ final class MindYearHeatmapPresentationSettings {
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
     sumVisibleChartCount: sumVisibleChartCount ?? this.sumVisibleChartCount,
     yearGridLayout: yearGridLayout ?? this.yearGridLayout,
+    fourColumnCellStyle: fourColumnCellStyle ?? this.fourColumnCellStyle,
     yearMonthCardBorderEnabled:
         yearMonthCardBorderEnabled ?? this.yearMonthCardBorderEnabled,
     yearMonthCardProfitabilityTintEnabled:
@@ -289,6 +307,7 @@ final class MindYearHeatmapPresentationSettings {
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.sumVisibleChartCount == sumVisibleChartCount &&
       other.yearGridLayout == yearGridLayout &&
+      other.fourColumnCellStyle == fourColumnCellStyle &&
       other.yearMonthCardBorderEnabled == yearMonthCardBorderEnabled &&
       other.yearMonthCardProfitabilityTintEnabled ==
           yearMonthCardProfitabilityTintEnabled &&
@@ -314,6 +333,7 @@ final class MindYearHeatmapPresentationSettings {
     sumMonthLabelPlacement,
     sumVisibleChartCount,
     yearGridLayout,
+    fourColumnCellStyle,
     yearMonthCardBorderEnabled,
     yearMonthCardProfitabilityTintEnabled,
     yearMonthCardProfitabilityTintOpacity,
@@ -400,6 +420,15 @@ final class MindYearHeatmapPresentationController
     if (current.yearGridLayout == layout) return;
     value = current.copyWith(
       yearGridLayout: layout,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setFourColumnCellStyle(MindYearFourColumnCellStyle style) {
+    final current = value;
+    if (current.fourColumnCellStyle == style) return;
+    value = current.copyWith(
+      fourColumnCellStyle: style,
       revision: current.revision + 1,
     );
   }

@@ -59,14 +59,25 @@ void main() {
           MindYearHeatmapGridLayout.fourByThree,
         );
         expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+        expect(
+          controller.value.fourColumnCellStyle,
+          MindYearFourColumnCellStyle.fillHeight,
+        );
 
         controller.setYearGridLayout(MindYearHeatmapGridLayout.twoBySix);
         controller.setYearMonthCardBorderEnabled(true);
+        controller.setFourColumnCellStyle(
+          MindYearFourColumnCellStyle.squareCells,
+        );
         expect(
           controller.value.yearGridLayout,
           MindYearHeatmapGridLayout.twoBySix,
         );
         expect(controller.value.yearMonthCardBorderEnabled, isTrue);
+        expect(
+          controller.value.fourColumnCellStyle,
+          MindYearFourColumnCellStyle.squareCells,
+        );
 
         controller.reset();
         expect(
@@ -74,6 +85,10 @@ void main() {
           MindYearHeatmapGridLayout.fourByThree,
         );
         expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+        expect(
+          controller.value.fourColumnCellStyle,
+          MindYearFourColumnCellStyle.fillHeight,
+        );
       },
     );
 

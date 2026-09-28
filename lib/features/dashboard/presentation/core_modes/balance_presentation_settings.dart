@@ -98,6 +98,32 @@ enum BalanceLatestTransactionCardPresentation {
   };
 }
 
+/// Balance can retain its established independent Header/detail cards or use
+/// the Budget/Mind-derived continuous Header-to-content parent surface.
+enum BalanceContentSurfaceStyle {
+  separateCards,
+  unifiedCard;
+
+  String get tunerLabel => switch (this) {
+    BalanceContentSurfaceStyle.separateCards => 'Külön kártyák',
+    BalanceContentSurfaceStyle.unifiedCard => 'Egybefüggő kártya',
+  };
+}
+
+/// A subordinate composition preference. It is retained while separate
+/// Balance is active, but only rendered when [BalanceContentSurfaceStyle]
+/// resolves to [BalanceContentSurfaceStyle.unifiedCard].
+enum BalanceUnifiedBodyLayout {
+  currentCarouselDetail,
+  fourSectionTetris;
+
+  String get tunerLabel => switch (this) {
+    BalanceUnifiedBodyLayout.currentCarouselDetail =>
+      'Jelenlegi — carousel + részletek',
+    BalanceUnifiedBodyLayout.fourSectionTetris => 'Alternatív — 4 szekció',
+  };
+}
+
 /// Session-only alternatives over the immutable all-time Balance history.
 /// Financial totals and the latest transaction are never settings-dependent.
 @immutable
@@ -116,6 +142,8 @@ final class BalancePresentationSettings {
     required this.balanceCarouselWaveAnimationEnabled,
     required this.balanceContentCardColoredBorderEnabled,
     required this.balanceContentCardBorderOpacity,
+    this.contentSurfaceStyle = BalanceContentSurfaceStyle.separateCards,
+    this.unifiedBodyLayout = BalanceUnifiedBodyLayout.currentCarouselDetail,
     Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
         const <BalanceCarouselCardKind>{},
     required this.revision,
@@ -159,6 +187,8 @@ final class BalancePresentationSettings {
       balanceCarouselWaveAnimationEnabled = true,
       balanceContentCardColoredBorderEnabled = true,
       balanceContentCardBorderOpacity = 1,
+      contentSurfaceStyle = BalanceContentSurfaceStyle.separateCards,
+      unifiedBodyLayout = BalanceUnifiedBodyLayout.currentCarouselDetail,
       hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
       revision = 0;
 
@@ -175,6 +205,8 @@ final class BalancePresentationSettings {
   final bool balanceCarouselWaveAnimationEnabled;
   final bool balanceContentCardColoredBorderEnabled;
   final double balanceContentCardBorderOpacity;
+  final BalanceContentSurfaceStyle contentSurfaceStyle;
+  final BalanceUnifiedBodyLayout unifiedBodyLayout;
   final Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds;
   final int revision;
 
@@ -202,6 +234,8 @@ final class BalancePresentationSettings {
     bool? balanceCarouselWaveAnimationEnabled,
     bool? balanceContentCardColoredBorderEnabled,
     double? balanceContentCardBorderOpacity,
+    BalanceContentSurfaceStyle? contentSurfaceStyle,
+    BalanceUnifiedBodyLayout? unifiedBodyLayout,
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
     int? revision,
   }) => BalancePresentationSettings(
@@ -233,6 +267,8 @@ final class BalancePresentationSettings {
         this.balanceContentCardColoredBorderEnabled,
     balanceContentCardBorderOpacity:
         balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
+    contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
+    unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
     hiddenBalanceCarouselCardKinds:
         hiddenBalanceCarouselCardKinds ?? this.hiddenBalanceCarouselCardKinds,
     revision: revision ?? this.revision,
@@ -260,6 +296,8 @@ final class BalancePresentationSettings {
           balanceContentCardColoredBorderEnabled &&
       other.balanceContentCardBorderOpacity ==
           balanceContentCardBorderOpacity &&
+      other.contentSurfaceStyle == contentSurfaceStyle &&
+      other.unifiedBodyLayout == unifiedBodyLayout &&
       setEquals(
         other.hiddenBalanceCarouselCardKinds,
         hiddenBalanceCarouselCardKinds,
@@ -280,6 +318,8 @@ final class BalancePresentationSettings {
     balanceCarouselWaveAnimationEnabled,
     balanceContentCardColoredBorderEnabled,
     balanceContentCardBorderOpacity,
+    contentSurfaceStyle,
+    unifiedBodyLayout,
     Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
     revision,
   );
@@ -397,6 +437,24 @@ final class BalancePresentationController
     if (current.balanceContentCardBorderOpacity == normalized) return;
     value = current.copyWith(
       balanceContentCardBorderOpacity: normalized,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setContentSurfaceStyle(BalanceContentSurfaceStyle next) {
+    final current = value;
+    if (current.contentSurfaceStyle == next) return;
+    value = current.copyWith(
+      contentSurfaceStyle: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setUnifiedBodyLayout(BalanceUnifiedBodyLayout next) {
+    final current = value;
+    if (current.unifiedBodyLayout == next) return;
+    value = current.copyWith(
+      unifiedBodyLayout: next,
       revision: current.revision + 1,
     );
   }

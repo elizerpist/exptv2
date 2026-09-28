@@ -497,6 +497,51 @@ void main() {
       );
       expect(cardVisibilitySubmenu, findsOneWidget);
 
+      final balanceSurfaceStyle = find.byKey(
+        const ValueKey<String>('balance-content-surface-style'),
+      );
+      expect(balanceSurfaceStyle, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('balance-unified-body-layout')),
+        findsNothing,
+      );
+      final unifiedBalance = find.byKey(
+        const ValueKey<String>('balance-content-style-unified'),
+      );
+      tester
+          .widget<RadioGroup<BalanceContentSurfaceStyle>>(
+            find.ancestor(
+              of: unifiedBalance,
+              matching: find.byType(RadioGroup<BalanceContentSurfaceStyle>),
+            ),
+          )
+          .onChanged(BalanceContentSurfaceStyle.unifiedCard);
+      await tester.pump();
+      expect(
+        balance.value.contentSurfaceStyle,
+        BalanceContentSurfaceStyle.unifiedCard,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-unified-body-layout')),
+        findsOneWidget,
+      );
+      final fourSections = find.byKey(
+        const ValueKey<String>('balance-unified-body-four-section'),
+      );
+      tester
+          .widget<RadioGroup<BalanceUnifiedBodyLayout>>(
+            find.ancestor(
+              of: fourSections,
+              matching: find.byType(RadioGroup<BalanceUnifiedBodyLayout>),
+            ),
+          )
+          .onChanged(BalanceUnifiedBodyLayout.fourSectionTetris);
+      await tester.pump();
+      expect(
+        balance.value.unifiedBodyLayout,
+        BalanceUnifiedBodyLayout.fourSectionTetris,
+      );
+
       final waveAnimationOn = find.byKey(
         const ValueKey<String>('balance-carousel-wave-animation-enabled-on'),
       );
@@ -1730,6 +1775,22 @@ void main() {
         .onChanged!(false);
     await tester.pump();
     expect(heatmapSettings.value.yearMonthCardBorderEnabled, isFalse);
+    final squareCells = find.byKey(
+      const ValueKey<String>('mind-year-four-column-cell-style-squareCells'),
+    );
+    tester
+        .widget<RadioGroup<MindYearFourColumnCellStyle>>(
+          find.ancestor(
+            of: squareCells,
+            matching: find.byType(RadioGroup<MindYearFourColumnCellStyle>),
+          ),
+        )
+        .onChanged(MindYearFourColumnCellStyle.squareCells);
+    await tester.pump();
+    expect(
+      heatmapSettings.value.fourColumnCellStyle,
+      MindYearFourColumnCellStyle.squareCells,
+    );
     final catmull = find.byKey(
       const ValueKey<String>('mind-sum-line-interpolation-catmullRom'),
     );

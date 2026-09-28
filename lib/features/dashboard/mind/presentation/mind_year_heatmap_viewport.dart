@@ -300,11 +300,11 @@ final class _MindYearHeatmapViewportState
           MindYearHeatmapGridLayout.threeByFour => 3,
           MindYearHeatmapGridLayout.twoBySix => 2,
         };
-        final isMonthCardLayout =
-            _directGridLayout != MindYearHeatmapGridLayout.fourByThree;
         final footerRowCount = switch (_directGridLayout) {
           MindYearHeatmapGridLayout.fourByThree => 0,
-          MindYearHeatmapGridLayout.threeByFour => 2,
+          // 3×4 intentionally presents only its MonthCard calendar field.
+          // Neither former financial footer retains a hidden envelope.
+          MindYearHeatmapGridLayout.threeByFour => 0,
           MindYearHeatmapGridLayout.twoBySix => 1,
         };
         final contentWidth = (constraints.maxWidth - horizontalPadding * 2)
@@ -324,6 +324,7 @@ final class _MindYearHeatmapViewportState
         );
         _scheduleCalendarGeometryDiagnostics(year, geometries);
         final Widget heatmapPage;
+        MindYearHeatmapFourColumnFit? directFourColumnFit;
         if (_directGridLayout == MindYearHeatmapGridLayout.fourByThree) {
           final fit = MindYearHeatmapFourColumnFit.resolve(
             viewportHeight: math.max(0, constraints.maxHeight - headerHeight),
@@ -334,7 +335,9 @@ final class _MindYearHeatmapViewportState
             viewportBottomPadding: 0,
             rowGap: rowGap,
             compactChrome: true,
+            style: _presentationSettings.fourColumnCellStyle,
           );
+          directFourColumnFit = fit;
           heatmapPage = KeyedSubtree(
             key: const ValueKey('mind-year-heatmap-scroll'),
             child: SingleChildScrollView(
@@ -347,64 +350,82 @@ final class _MindYearHeatmapViewportState
                 key: const ValueKey('mind-year-heatmap-grid'),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: List<Widget>.generate(3, (annualRow) {
-                    final offset = annualRow * columns;
-                    final rowGeometries = geometries.sublist(
-                      offset,
-                      offset + columns,
-                    );
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        bottom: annualRow == 2 ? 0 : rowGap,
-                      ),
-                      child: SizedBox(
-                        key: ValueKey(
-                          'mind-year-heatmap-annual-row-$annualRow',
+                  children: <Widget>[
+                    ...List<Widget>.generate(3, (annualRow) {
+                      final offset = annualRow * columns;
+                      final rowGeometries = geometries.sublist(
+                        offset,
+                        offset + columns,
+                      );
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          bottom: annualRow == 2 ? 0 : rowGap,
                         ),
-                        height: fit.rowHeights[annualRow],
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: List<Widget>.generate(
-                            rowGeometries.length,
-                            (column) {
-                              final month = offset + column + 1;
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  right: column == rowGeometries.length - 1
-                                      ? 0
-                                      : rowGap,
-                                ),
-                                child: MindYearHeatmapMonthGroup(
-                                  month: month,
-                                  width: monthCardWidth,
-                                  cellExtent: fit.cellWidth,
-                                  cellHeight: fit.cellHeight,
-                                  geometry: geometries[month - 1],
-                                  frameListenable: widget.frameListenable,
-                                  compactChrome: true,
-                                  paletteStyle:
-                                      _presentationSettings.paletteStyle,
-                                  scaleResolution:
-                                      _presentationSettings.scaleResolution,
-                                  showMonthlyClosing: false,
-                                  showScopeAmount: false,
-                                  showMonthCard: false,
-                                  monthlyAggregates: _monthlyAggregates,
-                                  scopedMonthlyAggregates:
-                                      _scopedMonthlyAggregates,
-                                  inspectionScope: _inspectionScope,
-                                  activeDirectionIsIncome:
-                                      _activeDirectionIsIncome,
-                                  onDayTap: _onDayTapped,
-                                ),
-                              );
-                            },
-                            growable: false,
+                        child: SizedBox(
+                          key: ValueKey(
+                            'mind-year-heatmap-annual-row-$annualRow',
+                          ),
+                          height: fit.rowHeights[annualRow],
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: List<Widget>.generate(
+                              rowGeometries.length,
+                              (column) {
+                                final month = offset + column + 1;
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    right: column == rowGeometries.length - 1
+                                        ? 0
+                                        : rowGap,
+                                  ),
+                                  child: MindYearHeatmapMonthGroup(
+                                    month: month,
+                                    width: monthCardWidth,
+                                    cellExtent: fit.cellWidth,
+                                    cellHeight: fit.cellHeight,
+                                    geometry: geometries[month - 1],
+                                    frameListenable: widget.frameListenable,
+                                    compactChrome: true,
+                                    paletteStyle:
+                                        _presentationSettings.paletteStyle,
+                                    scaleResolution:
+                                        _presentationSettings.scaleResolution,
+                                    showMonthlyClosing: false,
+                                    showScopeAmount: false,
+                                    showMonthCard: false,
+                                    monthlyAggregates: _monthlyAggregates,
+                                    scopedMonthlyAggregates:
+                                        _scopedMonthlyAggregates,
+                                    inspectionScope: _inspectionScope,
+                                    activeDirectionIsIncome:
+                                        _activeDirectionIsIncome,
+                                    onDayTap: _onDayTapped,
+                                  ),
+                                );
+                              },
+                              growable: false,
+                            ),
+                          ),
+                        ),
+                      );
+                    }, growable: false),
+                    if (fit.selectorPlacement ==
+                        MindYearFourColumnSelectorPlacement.bottomFreeRegion)
+                      SizedBox(
+                        height: fit.freeHeight,
+                        child: Center(
+                          child: KeyedSubtree(
+                            key: const ValueKey(
+                              'mind-year-direct-grid-selector-bottom',
+                            ),
+                            child: _MindYearDirectGridSelector(
+                              value: _directGridLayout,
+                              onChanged: _setDirectGridLayout,
+                            ),
                           ),
                         ),
                       ),
-                    );
-                  }, growable: false),
+                  ],
                 ),
               ),
             ),
@@ -456,10 +477,10 @@ final class _MindYearHeatmapViewportState
                           paletteStyle: _presentationSettings.paletteStyle,
                           scaleResolution:
                               _presentationSettings.scaleResolution,
-                          showMonthlyClosing:
+                          showMonthlyClosing: false,
+                          showScopeAmount:
                               _directGridLayout ==
-                              MindYearHeatmapGridLayout.threeByFour,
-                          showScopeAmount: isMonthCardLayout,
+                              MindYearHeatmapGridLayout.twoBySix,
                           showMonthCard: true,
                           showDayNumbers:
                               _directGridLayout ==
@@ -518,10 +539,18 @@ final class _MindYearHeatmapViewportState
                                     ),
                                   ),
                                 ),
-                                _MindYearDirectGridSelector(
-                                  value: _directGridLayout,
-                                  onChanged: _setDirectGridLayout,
-                                ),
+                                if (directFourColumnFit?.selectorPlacement !=
+                                    MindYearFourColumnSelectorPlacement
+                                        .bottomFreeRegion)
+                                  KeyedSubtree(
+                                    key: const ValueKey(
+                                      'mind-year-direct-grid-selector-top',
+                                    ),
+                                    child: _MindYearDirectGridSelector(
+                                      value: _directGridLayout,
+                                      onChanged: _setDirectGridLayout,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -929,6 +958,9 @@ final class _MindYearMonthlyLinePage extends StatelessWidget {
 }
 
 @visibleForTesting
+enum MindYearFourColumnSelectorPlacement { topTitleRow, bottomFreeRegion }
+
+@visibleForTesting
 final class MindYearHeatmapFourColumnFit {
   const MindYearHeatmapFourColumnFit._({
     required this.annualViewportHeight,
@@ -940,6 +972,9 @@ final class MindYearHeatmapFourColumnFit {
     required this.extraHeightPerCell,
     required this.rowHeights,
     required this.resolvedContentHeight,
+    required this.gridConsumedHeight,
+    required this.freeHeight,
+    required this.selectorPlacement,
   });
 
   final double annualViewportHeight;
@@ -951,6 +986,9 @@ final class MindYearHeatmapFourColumnFit {
   final double extraHeightPerCell;
   final List<double> rowHeights;
   final double resolvedContentHeight;
+  final double gridConsumedHeight;
+  final double freeHeight;
+  final MindYearFourColumnSelectorPlacement selectorPlacement;
 
   static MindYearHeatmapFourColumnFit resolve({
     required double viewportHeight,
@@ -961,6 +999,7 @@ final class MindYearHeatmapFourColumnFit {
     required double viewportBottomPadding,
     required double rowGap,
     required bool compactChrome,
+    MindYearFourColumnCellStyle style = MindYearFourColumnCellStyle.fillHeight,
   }) {
     const annualRows = 3;
     // The physical MonthCard envelope is deliberately independent of a
@@ -996,11 +1035,11 @@ final class MindYearHeatmapFourColumnFit {
               .clamp(0.0, double.infinity)
               .toDouble()
         : cellWidth;
-    // Direct 4×3 intentionally preserves its width-driven horizontal grid
-    // while consuming the exact live annual viewport vertically.  Never
-    // reintroduce min(cellWidth, cellByHeight): that is the square-cell bug
-    // which leaves a tall seamless/body-stretched viewport unused.
-    final cellHeight = cellByHeight;
+    // Fill-height preserves the accepted direct 4×3 repair. Square is a
+    // deliberate alternative that leaves a calculated lower selector region.
+    final cellHeight = style == MindYearFourColumnCellStyle.fillHeight
+        ? cellByHeight
+        : cellWidth;
     final squareConsumedHeight = staticHeight + totalCalendarRows * cellWidth;
     final verticalSurplus = math
         .max(0.0, viewportHeight - squareConsumedHeight)
@@ -1025,6 +1064,15 @@ final class MindYearHeatmapFourColumnFit {
         viewportBottomPadding +
         rowGap * (annualRows - 1) +
         rowHeights.fold<double>(0, (total, height) => total + height);
+    final gridConsumedHeight = staticHeight + totalCalendarRows * cellHeight;
+    final freeHeight = math.max(0.0, viewportHeight - gridConsumedHeight);
+    const selectorHeight = 22.0;
+    const selectorVerticalClearance = 8.0;
+    final selectorPlacement =
+        style == MindYearFourColumnCellStyle.squareCells &&
+            freeHeight >= selectorHeight + selectorVerticalClearance * 2
+        ? MindYearFourColumnSelectorPlacement.bottomFreeRegion
+        : MindYearFourColumnSelectorPlacement.topTitleRow;
     return MindYearHeatmapFourColumnFit._(
       annualViewportHeight: viewportHeight,
       staticHeight: staticHeight,
@@ -1035,6 +1083,9 @@ final class MindYearHeatmapFourColumnFit {
       extraHeightPerCell: extraHeightPerCell,
       rowHeights: rowHeights,
       resolvedContentHeight: resolvedContentHeight,
+      gridConsumedHeight: gridConsumedHeight,
+      freeHeight: freeHeight,
+      selectorPlacement: selectorPlacement,
     );
   }
 }

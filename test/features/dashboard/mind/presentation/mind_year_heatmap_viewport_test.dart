@@ -1140,106 +1140,95 @@ void main() {
     },
   );
 
-  testWidgets(
-    'YEAR-DIRECT-04: three-by-four direct groups show scope and monthly close',
-    (tester) async {
-      final noFooterHeight = MindYearHeatmapMonthGroup.heightFor(
-        width: 100,
-        calendarRowCount: 5,
-      );
-      final oneFooterHeight = MindYearHeatmapMonthGroup.heightFor(
-        width: 100,
-        calendarRowCount: 5,
-        footerRowCount: 1,
-      );
-      final bothFooterHeight = MindYearHeatmapMonthGroup.heightFor(
-        width: 100,
-        calendarRowCount: 5,
-        footerRowCount: 2,
-      );
-      expect(oneFooterHeight, greaterThan(noFooterHeight));
-      expect(bothFooterHeight, greaterThan(oneFooterHeight));
-      final aggregates =
-          MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+  testWidgets('MIND-SQ-03: three-by-four MonthCards reclaim both footer rows', (
+    tester,
+  ) async {
+    final noFooterHeight = MindYearHeatmapMonthGroup.heightFor(
+      width: 100,
+      calendarRowCount: 5,
+    );
+    final bothFooterHeight = MindYearHeatmapMonthGroup.heightFor(
+      width: 100,
+      calendarRowCount: 5,
+      footerRowCount: 2,
+    );
+    expect(bothFooterHeight, greaterThan(noFooterHeight));
+    final aggregates = MindYearHeatmapMonthlyAggregates.fromDirectionalEntries(
+      year: 2025,
+      incomeEntries: <DashboardLedgerEntry>[
+        DashboardLedgerEntry(
+          id: 'income',
+          partnerId: 'salary',
+          categoryId: 'income',
+          direction: 'income',
+          amountMinor: 500000,
+          bookedLocalEpochDay: const LocalDate(
             year: 2025,
-            incomeEntries: <DashboardLedgerEntry>[
-              DashboardLedgerEntry(
-                id: 'income',
-                partnerId: 'salary',
-                categoryId: 'income',
-                direction: 'income',
-                amountMinor: 500000,
-                bookedLocalEpochDay: const LocalDate(
-                  year: 2025,
-                  month: 1,
-                  day: 1,
-                ).epochDay,
-                bookedLocalTimeMinutes: 0,
-              ),
-            ],
-            expenseEntries: <DashboardLedgerEntry>[
-              _entry(
-                'expense',
-                120000,
-                const LocalDate(year: 2025, month: 1, day: 2),
-              ),
-            ],
-          );
-      final projection = MindYearHeatmapProjection.build(
-        identity: const MindYearHeatmapIdentity(
-          upstreamScopeKey: 'expense|year:2025',
-          indexGeneration: 1,
-          coreRevision: 1,
-          year: 2025,
-          navigationEpoch: 1,
+            month: 1,
+            day: 1,
+          ).epochDay,
+          bookedLocalTimeMinutes: 0,
         ),
-        entries: <DashboardLedgerEntry>[
-          _entry(
-            'focused',
-            100000,
-            const LocalDate(year: 2025, month: 1, day: 2),
-          ),
-        ],
-        monthlyAggregates: aggregates,
-      );
-      final frame = ValueNotifier(projection.preview(range));
-      addTearDown(frame.dispose);
+      ],
+      expenseEntries: <DashboardLedgerEntry>[
+        _entry(
+          'expense',
+          120000,
+          const LocalDate(year: 2025, month: 1, day: 2),
+        ),
+      ],
+    );
+    final projection = MindYearHeatmapProjection.build(
+      identity: const MindYearHeatmapIdentity(
+        upstreamScopeKey: 'expense|year:2025',
+        indexGeneration: 1,
+        coreRevision: 1,
+        year: 2025,
+        navigationEpoch: 1,
+      ),
+      entries: <DashboardLedgerEntry>[
+        _entry(
+          'focused',
+          100000,
+          const LocalDate(year: 2025, month: 1, day: 2),
+        ),
+      ],
+      monthlyAggregates: aggregates,
+    );
+    final frame = ValueNotifier(projection.preview(range));
+    addTearDown(frame.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: SizedBox(
-            width: 360,
-            height: 500,
-            child: MindYearHeatmapViewport(frameListenable: frame),
-          ),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 360,
+          height: 500,
+          child: MindYearHeatmapViewport(frameListenable: frame),
         ),
-      );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
-      expect(find.text('Zárás'), findsAtLeastNWidgets(1));
-      expect(find.text('Scope'), findsAtLeastNWidgets(1));
-      expect(find.text('3 800 Ft'), findsAtLeastNWidgets(1));
-      expect(find.text('1 000 Ft'), findsAtLeastNWidgets(1));
+      ),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
+    );
+    await tester.pump();
+    expect(find.text('Zárás'), findsNothing);
+    expect(find.text('Scope'), findsNothing);
 
-      final incomeProjection = MindYearHeatmapProjection.build(
-        identity: const MindYearHeatmapIdentity(
-          upstreamScopeKey: 'income|year:2025',
-          indexGeneration: 1,
-          coreRevision: 2,
-          year: 2025,
-          navigationEpoch: 2,
-        ),
-        entries: const <DashboardLedgerEntry>[],
-        monthlyAggregates: aggregates,
-      );
-      frame.value = incomeProjection.preview(range);
-      await tester.pump();
-      expect(find.text('Scope'), findsAtLeastNWidgets(1));
-      expect(find.text('0 Ft'), findsAtLeastNWidgets(1));
-    },
-  );
+    final incomeProjection = MindYearHeatmapProjection.build(
+      identity: const MindYearHeatmapIdentity(
+        upstreamScopeKey: 'income|year:2025',
+        indexGeneration: 1,
+        coreRevision: 2,
+        year: 2025,
+        navigationEpoch: 2,
+      ),
+      entries: const <DashboardLedgerEntry>[],
+      monthlyAggregates: aggregates,
+    );
+    frame.value = incomeProjection.preview(range);
+    await tester.pump();
+    expect(find.text('Scope'), findsNothing);
+  });
 
   testWidgets(
     'YEAR-DIRECT-05: four-by-three direct grid solves one non-scrolling viewport',
@@ -1350,6 +1339,116 @@ void main() {
       expect(fit.cellHeight, greaterThan(fit.cellWidth));
       expect(fit.extraHeightPerCell, closeTo(fit.verticalSurplus / 18, .0001));
       expect(fit.resolvedContentHeight, closeTo(fit.annualViewportHeight, .5));
+    },
+  );
+
+  test(
+    'RED MIND-SQ-02: square 4x3 cells reserve a calculated lower selector zone',
+    () {
+      final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
+        12,
+        (index) => MindYearHeatmapCalendarGeometry.forMonth(
+          year: 2025,
+          month: index + 1,
+        ),
+        growable: false,
+      );
+      final fit = MindYearHeatmapFourColumnFit.resolve(
+        viewportHeight: 530,
+        cardWidth: 99.5,
+        geometries: geometries,
+        footerRowCount: 0,
+        viewportTopPadding: 5,
+        viewportBottomPadding: 0,
+        rowGap: 4,
+        compactChrome: true,
+        style: MindYearFourColumnCellStyle.squareCells,
+      );
+
+      expect(fit.cellHeight, closeTo(fit.cellWidth, .0001));
+      expect(fit.freeHeight, greaterThan(22 + 16));
+      expect(
+        fit.selectorPlacement,
+        MindYearFourColumnSelectorPlacement.bottomFreeRegion,
+      );
+      expect(fit.gridConsumedHeight, lessThan(fit.annualViewportHeight));
+    },
+  );
+
+  test(
+    'RED MIND-SQ-02: constrained square 4x3 keeps the one selector in the title row',
+    () {
+      final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
+        12,
+        (index) => MindYearHeatmapCalendarGeometry.forMonth(
+          year: 2025,
+          month: index + 1,
+        ),
+        growable: false,
+      );
+      final fit = MindYearHeatmapFourColumnFit.resolve(
+        viewportHeight: 150,
+        cardWidth: 82,
+        geometries: geometries,
+        footerRowCount: 0,
+        viewportTopPadding: 5,
+        viewportBottomPadding: 0,
+        rowGap: 4,
+        compactChrome: true,
+        style: MindYearFourColumnCellStyle.squareCells,
+      );
+
+      expect(fit.cellHeight, closeTo(fit.cellWidth, .0001));
+      expect(
+        fit.selectorPlacement,
+        MindYearFourColumnSelectorPlacement.topTitleRow,
+      );
+    },
+  );
+
+  testWidgets(
+    'MIND-SQ-02: tall square 4x3 mounts one bottom selector inside the calculated free region',
+    (tester) async {
+      final settings = MindYearHeatmapPresentationController()
+        ..setFourColumnCellStyle(MindYearFourColumnCellStyle.squareCells);
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(settings.dispose);
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 560,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-year-direct-grid-selector-bottom')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-direct-grid-selector-top')),
+        findsNothing,
+      );
+      final selector = tester.getRect(
+        find.byKey(const ValueKey('mind-year-direct-grid-selector-bottom')),
+      );
+      final december = tester.getRect(
+        find.byKey(const ValueKey('mind-year-direct-month-12')),
+      );
+      final viewport = tester.getRect(
+        find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
+      );
+      expect(selector.top, greaterThanOrEqualTo(december.bottom + 8));
+      expect(selector.bottom, lessThanOrEqualTo(viewport.bottom - 8));
     },
   );
 
