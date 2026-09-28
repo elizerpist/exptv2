@@ -49,7 +49,7 @@
 | BUDGET-01 | Prompt 3 | Budget core surface | selecting `Közös kártya` joins Header and content with Mind-equivalent seamless ownership | widget geometry/surface test | DONE |
 | BUDGET-02 | Prompt 3 | shared surface primitive | one shared shape mechanism, no duplicated radius state machine | boundary/direct inspection test | DONE |
 | REG-01 | Both prompts | dashboard defaults/geometry | prior accepted defaults, count visibility, carousel physics, Mind data/slider, and Budget semantics remain | serial focused regressions | DONE |
-| DEL-01 | Global delivery rule | GitHub Actions/APK | commit, push, successful human APK, local SHA-256 | Actions + local SHA | PARTIAL — initial-mount visibility reconciliation awaits its own production APK |
+| DEL-01 | Global delivery rule | GitHub Actions/APK | commit, push, successful human APK, local SHA-256 | Actions + local SHA | DONE |
 
 ## Evidence received
 
@@ -95,3 +95,10 @@
   the surface mounts). The focused red test failed, the central initial
   reconciliation fixed it, and the serial Balance suite passed 94 tests. Its
   production APK delivery is tracked by the current `DEL-01` status.
+- Production fix commit `6183fecbf082a0eca11700e683892a4bdfb30842` passed
+  GitHub Actions run `36382965320` for `test-flutter`, `test-core`, and
+  `build-human-diagnostic-apk`. The final human APK is
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_6183fec.apk`.
+  Its verified SHA-256 is
+  `a5475911140bd0bce0f8433996af1bc8c3b2f11e7f9fed6fe9aa567b203d6c5f`,
+  matching the release digest.
