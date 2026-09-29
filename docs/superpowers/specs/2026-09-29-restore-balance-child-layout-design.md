@@ -64,11 +64,13 @@ remains the one default-state owner.
    rectangle grammar. The fixed canonical body rectangle is still passed in;
    no outer layout is reverted.
 2. Restore the matching Havi/Éves child renderer/chart composition from the
-   pre-height-patch version, limited to the code changed by the prior
-   child-layout rewrite. Do not reintroduce a Mother Card height exception.
+   pre-height-patch version, including the HTML-defined fixed Havi
+   income/expense strip row. Do not reintroduce a Mother Card height exception
+   or a whole-card `FittedBox` fallback.
 3. In shared geometry, anchor the settled seamless Mind action row from the
-   canonical Mother Card lower edge plus the existing standard gap. This makes
-   its lower padding equal the settled Budget Mother Card's lower padding.
+   canonical Mother Card lower edge plus the existing dot-flow tail and standard
+   gap. This makes its lower padding equal the settled Budget Mother Card's
+   lower padding while preserving the collapsed anchor.
 4. Keep Budget's `unifiedCard` constructor default and no-dot behavior.
 
 ## Verification

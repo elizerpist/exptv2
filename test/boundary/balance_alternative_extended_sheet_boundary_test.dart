@@ -109,4 +109,46 @@ void main() {
       expect(budget, isNot(contains('BudgetDistributionPageDots')));
     },
   );
+
+  test(
+    'RBL-02/06: Balance extended sheet owns the HTML child grammar without a local height policy',
+    () {
+      final layout = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'balance_extended_sheet_layout.dart',
+      ).readAsStringSync();
+      final visualTokens = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'balance_alternative_visual_tokens.dart',
+      ).readAsStringSync();
+
+      expect(layout, contains('final halfRightHeight = topHeight / 2;'));
+      expect(
+        layout,
+        contains(
+          'bodyRect.left + card3Width,\n'
+          '        bodyRect.top + halfRightHeight,\n'
+          '        rightWidth,\n'
+          '        halfRightHeight',
+        ),
+      );
+      expect(
+        layout,
+        contains(
+          'bodyRect.left,\n'
+          '        bodyRect.top + topHeight,\n'
+          '        bodyRect.width,\n'
+          '        bottomHeight',
+        ),
+      );
+      expect(
+        layout,
+        isNot(contains('final bottomWidth = bodyRect.width * .50;')),
+      );
+      expect(
+        visualTokens,
+        isNot(contains('extendedSheetPrincipalModeContentExtraHeight')),
+      );
+    },
+  );
 }

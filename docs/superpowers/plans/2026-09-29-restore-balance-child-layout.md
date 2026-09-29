@@ -4,7 +4,7 @@
 
 **Goal:** Restore the approved Balance Havi/Éves child-card topology and their pre-existing chart content within the current shared Mother Card height; keep Budget unified by default and give Mind the same settled lower action-row padding as Budget.
 
-**Architecture:** `DashboardContentCardHeightPolicy` stays the sole outer-height owner. `BalanceExtendedSheetLayout` is the sole owner of the Havi/Éves child rectangles. Existing Balance renderers continue to render direct typography and flexible charts into those rectangles. `DashboardGeometryResolver` owns the common Mother Card-to-action-row spacing. Budget's controller remains the unified-card state owner.
+**Architecture:** `DashboardContentCardHeightPolicy` stays the sole outer-height owner. `BalanceExtendedSheetLayout` is the sole owner of the Havi/Éves child rectangles. Balance renderers retain direct typography, the HTML-defined fixed Havi strip row, and flexible plots in those rectangles. `DashboardGeometryResolver` owns the common Mother Card-to-action-row spacing. Budget's controller remains the unified-card state owner.
 
 **Tech Stack:** Flutter/Dart, `flutter_test`, golden tests, Android screenshots, GitHub Actions.
 
@@ -14,7 +14,7 @@
 - Preserve `test/features/dashboard/presentation/failures/`, which was already untracked.
 - Keep the present shared Mother Card size and its height policy unchanged.
 - Treat `html-prototypes/balance-extended-sheet-baseline/index.html` as the approved layout: a 70%×60% left card, two 30%×30% right cards, then a 100%×40% bottom card.
-- Keep direct text/padding and the existing flexible chart renderers; do not restore a card-wide `FittedBox`.
+- Keep direct text/padding, restore the HTML-defined fixed Havi strip row, and keep flexible chart renderers; do not restore a card-wide `FittedBox`.
 - Run Flutter analysis/tests through Ubuntu proot. Use GitHub Actions, not Termux, for the APK.
 - No parallel agent work: the production changes share the same geometry and golden baselines.
 
@@ -85,7 +85,7 @@ return BalanceExtendedSheetLayout._(
 proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/fluvi-balance-carousel-recovery && /home/flutteruser/flutter/bin/flutter test test/features/dashboard/presentation/balance_alternative_extended_sheet_cards_test.dart'
 ```
 
-- [ ] Keep the existing pre-computed chart series, labels, direct typography, and card-local padding. Do not make a renderer change merely to make the old incorrect golden pass. If the result reports a real overflow, trace the specific card and add the smallest renderer adjustment with a new failing widget assertion first.
+- [ ] Keep the existing pre-computed chart series, labels, direct typography, and card-local padding. Restore the HTML's fixed 145-source-pixel Havi income/expense strip row rather than allocating it with a `flex`; do not make a renderer change merely to make the old incorrect golden pass. If the result reports a real overflow, trace the specific card and add the smallest renderer adjustment with a new failing widget assertion first.
 
 - [ ] Regenerate only the two changed goldens, inspect them at full resolution, then re-run the same suite.
 
@@ -102,7 +102,7 @@ The Havi frame must show daily spending at left, no-spend and savings stacked at
 - Modify: `test/core/design/dashboard_geometry_resolver_test.dart`
 - Modify: `lib/core/design/dashboard_geometry_resolver.dart`
 
-- [ ] Add a test that resolves settled `DashboardModeSpec.mind` with `seamlessHeaderContent: true` and settled `DashboardModeSpec.budget` with matching metrics. Compute the lower padding from each `headerBounds.bottom + canonicalMotherCardContentHeight` to its action row; assert the results agree and equal `metrics.standardGap`.
+- [ ] Add a test that resolves settled `DashboardModeSpec.mind` with `seamlessHeaderContent: true` and settled `DashboardModeSpec.budget` with matching metrics. Compute the lower padding from each resolved Mother Card bound to its action row and assert the results agree.
 
 - [ ] Run that focused test through Ubuntu and observe the failure caused by Mind currently using `fullModeContentFlowHeight`.
 
@@ -111,7 +111,8 @@ The Havi frame must show daily spending at left, no-spend and savings stacked at
 ```dart
 final seamlessActionTop =
     headerBounds.bottom +
-    canonicalMotherCardContentHeight * headerExpansionProgress +
+    (canonicalMotherCardContentHeight + metrics.dotGap + metrics.dotHeight) *
+        headerExpansionProgress +
     metrics.standardGap;
 ```
 
@@ -157,4 +158,3 @@ proot-distro login ubuntu -- bash -lc 'cd /data/data/com.termux/files/home/fluvi
 - The outer height remains centralized; the layout grammar and lower action anchor each have one owner.
 - The Havi/Éves renderer is preserved unless test evidence identifies a real independent overflow.
 - The work is sequential and shares source/golden state, so inline execution is the correct mode.
-
