@@ -118,7 +118,8 @@ abstract final class DashboardGeometryResolver {
     final headerBounds = bounds(metrics.headerTop, headerHeight);
     final seamlessActionTop =
         headerBounds.bottom +
-        fullModeContentFlowHeight * headerExpansionProgress +
+        (canonicalMotherCardContentHeight + metrics.dotGap + metrics.dotHeight) *
+            headerExpansionProgress +
         metrics.standardGap;
     final seamlessSummaryTop =
         seamlessActionTop + metrics.actionHeight + metrics.standardGap;

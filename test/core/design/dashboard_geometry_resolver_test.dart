@@ -648,6 +648,39 @@ void main() {
     );
 
     test(
+      'RBL-05: seamless Mind keeps the Budget lower Mother Card padding',
+      () {
+        const metrics = DashboardLayoutMetrics.reference;
+        final budget = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+        );
+        final mind = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.mind,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+          seamlessHeaderContent: true,
+        );
+
+        final budgetMother = DashboardHeaderContentMotherCardBounds.resolve(
+          geometry: budget,
+        );
+        final mindMother = DashboardHeaderContentMotherCardBounds.resolve(
+          geometry: mind,
+        );
+        final budgetPadding = budget.actionBounds.top - budgetMother.bottom;
+        final mindPadding = mind.actionBounds.top - mindMother.bottom;
+
+        expect(mindPadding, closeTo(budgetPadding, .001));
+      },
+    );
+
+    test(
       'derives one header expansion reveal from the existing collapse owner',
       () {
         final dynamic expanded = DashboardGeometryResolver.resolve(
