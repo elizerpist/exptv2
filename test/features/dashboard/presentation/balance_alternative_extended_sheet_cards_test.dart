@@ -1,5 +1,6 @@
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_extended_sheet_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_scope_presentation.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_extended_sheet_layout.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
@@ -115,6 +116,40 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey<String>('balance-alternative-year-income-expense-line')), findsOneWidget);
   });
+
+  testWidgets(
+    'ALT-HAVI2-UI-RED: income and expense strip retains the HTML fixed row height',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 380,
+              height: 250,
+              child: BalanceAlternativeIncomeExpenseStripCard(
+                presentation: BalanceAlternativeIncomeExpenseStripPresentation(
+                  incomeMinor: 500000,
+                  expenseMinor: 200000,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final strip = find
+          .descendant(
+            of: find.byType(BalanceAlternativeIncomeExpenseStripCard),
+            matching: find.byType(LayoutBuilder),
+          )
+          .last;
+
+      expect(
+        tester.getSize(strip).height,
+        closeTo(BalanceAlternativeHtmlTokens.incomeExpenseStripHeight, .001),
+      );
+    },
+  );
 
   testWidgets('ALT-VISUAL: Havi 2 extended sheet keeps its HTML-derived card proportions', (
     tester,

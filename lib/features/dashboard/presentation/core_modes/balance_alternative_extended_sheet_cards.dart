@@ -513,25 +513,21 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
                     color: BalanceAlternativeHtmlTokens.purple,
                   ),
                   SizedBox(width: BalanceAlternativeHtmlTokens.logical(12)),
-                  Expanded(
-                    child: Text(
-                      'Bevétel vs. Kiadás',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _text(
-                        BalanceAlternativeHtmlTokens.incomeExpenseTitleSize,
-                        BalanceAlternativeHtmlTokens.textPrimary,
-                        FontWeight.w800,
-                        height: 1,
-                      ),
+                  Text(
+                    'Bevétel vs. Kiadás',
+                    style: _text(
+                      BalanceAlternativeHtmlTokens.incomeExpenseTitleSize,
+                      BalanceAlternativeHtmlTokens.textPrimary,
+                      FontWeight.w800,
+                      height: 1,
                     ),
                   ),
                 ],
               ),
             ),
             SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
-            Expanded(
-              flex: 4,
+            SizedBox(
+              height: BalanceAlternativeHtmlTokens.incomeExpenseStripHeight,
               child: LayoutBuilder(
                 builder: (context, constraints) => Stack(
                   clipBehavior: Clip.none,
@@ -601,7 +597,6 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
             ),
             SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
             Expanded(
-              flex: 1,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
