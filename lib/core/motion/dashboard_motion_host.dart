@@ -59,6 +59,11 @@ typedef DashboardModeContentExtraHeightResolver =
 typedef DashboardPrincipalModeContentExtraHeightResolver =
     double Function(DashboardModeSpec mode);
 
+/// Resolves shell-wide content space that belongs in every settled Mother
+/// Card. Mode-local presentation variants must not use this channel.
+typedef DashboardCanonicalMotherCardContentExtraHeightResolver =
+    double Function(DashboardModeSpec mode);
+
 typedef DashboardExpandedHeaderExtraHeightResolver =
     double Function(DashboardModeSpec mode);
 
@@ -91,6 +96,7 @@ class DashboardMotionHost extends StatefulWidget {
     this.modeContentExtraHeight = 0,
     this.modeContentExtraHeightResolver,
     this.principalModeContentExtraHeightResolver,
+    this.canonicalMotherCardContentExtraHeightResolver,
     this.expandedHeaderExtraHeightResolver,
     DashboardModePaletteLookup? paletteResolver,
   }) : paletteResolver =
@@ -109,6 +115,8 @@ class DashboardMotionHost extends StatefulWidget {
   final DashboardModeContentExtraHeightResolver? modeContentExtraHeightResolver;
   final DashboardPrincipalModeContentExtraHeightResolver?
   principalModeContentExtraHeightResolver;
+  final DashboardCanonicalMotherCardContentExtraHeightResolver?
+  canonicalMotherCardContentExtraHeightResolver;
   final DashboardExpandedHeaderExtraHeightResolver?
   expandedHeaderExtraHeightResolver;
   final DashboardModePaletteLookup paletteResolver;
@@ -390,6 +398,11 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
               widget.modeContentExtraHeight;
           final principalModeContentExtraHeight =
               widget.principalModeContentExtraHeightResolver?.call(mode) ?? 0;
+          final canonicalMotherCardContentExtraHeight =
+              widget.canonicalMotherCardContentExtraHeightResolver?.call(
+                mode,
+              ) ??
+              0;
           final expandedHeaderExtraHeight =
               widget.expandedHeaderExtraHeightResolver?.call(mode) ?? 0;
           final bodyOrder =
@@ -398,6 +411,7 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
               widget.seamlessHeaderContentResolver?.call(mode) ?? false;
           assert(modeContentExtraHeight >= 0);
           assert(principalModeContentExtraHeight >= 0);
+          assert(canonicalMotherCardContentExtraHeight >= 0);
           assert(expandedHeaderExtraHeight >= 0);
           return DashboardCoreModePresentation(
             geometry: DashboardGeometryResolver.resolve(
@@ -414,6 +428,8 @@ class _DashboardMotionHostState extends State<DashboardMotionHost>
               seamlessHeaderContent: seamlessHeaderContent,
               modeContentExtraHeight: modeContentExtraHeight,
               principalModeContentExtraHeight: principalModeContentExtraHeight,
+              canonicalMotherCardContentExtraHeight:
+                  canonicalMotherCardContentExtraHeight,
               expandedHeaderExtraHeight: expandedHeaderExtraHeight,
             ),
             palette: mode.mode == _committedMode.mode

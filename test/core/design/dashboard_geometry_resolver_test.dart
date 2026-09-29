@@ -7,6 +7,7 @@ import 'package:fluvi/core/design/dashboard_layout_frame.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_surface_primitives.dart';
 
 void main() {
   group('DashboardGeometryResolver', () {
@@ -584,6 +585,65 @@ void main() {
           chartFirst.logBoxHeaderBounds.top - base.logBoxHeaderBounds.top,
           40,
         );
+      },
+    );
+
+    test(
+      'CCH-01: Balance SUM supplies one settled Mother Card frame for every mode and submode',
+      () {
+        const metrics = DashboardLayoutMetrics.reference;
+        final sum = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+        );
+        final mind = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.mind,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+          bodyOrder: DashboardBodyOrder(<DashboardBodyComponent>[
+            DashboardBodyComponent.modeContent,
+            DashboardBodyComponent.direction,
+            DashboardBodyComponent.summary,
+          ]),
+          seamlessHeaderContent: true,
+        );
+        final haviOrEves = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.balance,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+          principalModeContentExtraHeight: 40,
+        );
+        final budgetChartThenAvatars = DashboardGeometryResolver.resolve(
+          metrics: metrics,
+          mode: DashboardModeSpec.budget,
+          collapseProgress: 0,
+          isRailExpanded: false,
+          hasPhysicalRail: false,
+          modeContentExtraHeight: 40,
+        );
+
+        final sumMother = DashboardHeaderContentMotherCardBounds.resolve(
+          geometry: sum,
+        );
+        for (final candidate in <DashboardLayoutFrame>[
+          mind,
+          haviOrEves,
+          budgetChartThenAvatars,
+        ]) {
+          final mother = DashboardHeaderContentMotherCardBounds.resolve(
+            geometry: candidate,
+          );
+          expect(mother.top, closeTo(sumMother.top, .01));
+          expect(mother.height, closeTo(sumMother.height, .01));
+          expect(mother.bottom, closeTo(sumMother.bottom, .01));
+        }
       },
     );
 

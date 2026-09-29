@@ -1,5 +1,6 @@
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import 'dashboard_body_order.dart';
+import 'dashboard_content_card_height_policy.dart';
 import 'dashboard_layout_frame.dart';
 import 'dashboard_layout_metrics.dart';
 import 'dashboard_mode_palette.dart';
@@ -18,10 +19,12 @@ abstract final class DashboardGeometryResolver {
     bool seamlessHeaderContent = false,
     double modeContentExtraHeight = 0,
     double principalModeContentExtraHeight = 0,
+    double canonicalMotherCardContentExtraHeight = 0,
     double expandedHeaderExtraHeight = 0,
   }) {
     assert(modeContentExtraHeight >= 0);
     assert(principalModeContentExtraHeight >= 0);
+    assert(canonicalMotherCardContentExtraHeight >= 0);
     assert(expandedHeaderExtraHeight >= 0);
     assert(!seamlessHeaderContent || mode.mode == DashboardMode.mind);
     final progress = (collapseProgress / metrics.collapseTravel)
@@ -49,6 +52,12 @@ abstract final class DashboardGeometryResolver {
         : metrics.railHeight + metrics.railToCollapseHandleGap;
     final baseModeLowerHeight =
         metrics.zone2CardHeight + reclaimedRailFootprint;
+    final canonicalMotherCardContentHeight =
+        DashboardContentCardHeightPolicy.resolveSettledContentHeight(
+          metrics: metrics,
+          hasPhysicalRail: hasPhysicalRail,
+          sharedContentStretch: canonicalMotherCardContentExtraHeight,
+        );
     // A unified mode owns one physical card envelope. Its structural minimum
     // must grow that card itself so its dots and rail remain downstream of the
     // enlarged body. Split modes retain the existing post-content extension
@@ -192,6 +201,7 @@ abstract final class DashboardGeometryResolver {
       expandedHeaderExtraHeight:
           expandedHeaderExtraHeight * headerExpansionProgress,
       principalModeContentExtraHeight: revealedPrincipalModeContentExtraHeight,
+      canonicalMotherCardContentHeight: canonicalMotherCardContentHeight,
       viewportVerticalDragToControllerScale:
           metrics.viewportVerticalDragToControllerScale,
       brandLockupBounds: DashboardBounds(

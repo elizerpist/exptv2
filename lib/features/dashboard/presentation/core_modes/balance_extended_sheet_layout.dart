@@ -24,30 +24,25 @@ final class BalanceExtendedSheetLayout {
     final bottomHeight = bodyRect.height - topHeight;
     final card3Width = bodyRect.width * .70;
     final rightWidth = bodyRect.width - card3Width;
-    final halfRightHeight = topHeight / 2;
+    final bottomWidth = bodyRect.width * .50;
     return BalanceExtendedSheetLayout._(
-      card3: Rect.fromLTWH(
-        bodyRect.left,
-        bodyRect.top,
-        card3Width,
-        topHeight,
-      ),
+      card3: Rect.fromLTWH(bodyRect.left, bodyRect.top, card3Width, topHeight),
       card4: Rect.fromLTWH(
         bodyRect.left + card3Width,
         bodyRect.top,
         rightWidth,
-        halfRightHeight,
+        topHeight,
       ),
       card5: Rect.fromLTWH(
-        bodyRect.left + card3Width,
-        bodyRect.top + halfRightHeight,
-        rightWidth,
-        halfRightHeight,
-      ),
-      combined: Rect.fromLTWH(
         bodyRect.left,
         bodyRect.top + topHeight,
-        bodyRect.width,
+        bottomWidth,
+        bottomHeight,
+      ),
+      combined: Rect.fromLTWH(
+        bodyRect.left + bottomWidth,
+        bodyRect.top + topHeight,
+        bodyRect.width - bottomWidth,
         bottomHeight,
       ),
     );

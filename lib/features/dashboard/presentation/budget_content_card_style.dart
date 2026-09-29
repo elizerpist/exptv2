@@ -20,7 +20,7 @@ enum BudgetContentLayout {
 /// authored content regions inside one common outer surface.
 final class BudgetContentCardStyleController
     extends ValueNotifier<BudgetContentLayout> {
-  BudgetContentCardStyleController() : super(BudgetContentLayout.split);
+  BudgetContentCardStyleController() : super(BudgetContentLayout.unifiedCard);
 
   void select(BudgetContentLayout layout) {
     if (value != layout) value = layout;

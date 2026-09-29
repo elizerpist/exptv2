@@ -223,13 +223,6 @@ void main() {
       );
 
       await pumpSurface();
-      expect(
-        find.byKey(const ValueKey('budget-unified-header-content-surface')),
-        findsNothing,
-      );
-
-      cardStyle.select(BudgetContentLayout.unifiedCard);
-      await tester.pump();
       final unified = find.byKey(
         const ValueKey('budget-unified-header-content-surface'),
       );
@@ -240,12 +233,16 @@ void main() {
           geometry.headerBounds.left,
           geometry.headerBounds.top,
           geometry.headerBounds.width,
-          geometry.subheaderEnvelopeBounds.bottom - geometry.headerBounds.top,
+          geometry.headerBounds.height +
+              geometry.canonicalMotherCardContentHeight,
         ),
         reason:
-            'The settled Budget Mother Card uses the same Header/content '
-            'envelope lower edge as Mind, without changing Budget content '
-            'or transition ownership.',
+            'Fresh Budget uses the same SUM-derived Mother Card frame as '
+            'Mind and Balance, without changing Budget content ownership.',
+      );
+      expect(
+        find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
+        findsNothing,
       );
       expect(
         tester.getRect(
@@ -599,16 +596,12 @@ void main() {
       addTearDown(order.dispose);
 
       Future<void> pumpSurface() {
-        final chartFirst = order.value == BudgetSectionOrder.chartThenAvatars;
         final geometry = DashboardGeometryResolver.resolve(
           metrics: DashboardLayoutMetrics.reference,
           mode: DashboardModeSpec.budget,
           collapseProgress: 0,
           isRailExpanded: false,
           hasPhysicalRail: false,
-          modeContentExtraHeight: chartFirst
-              ? BudgetSectionOrder.chartThenAvatarsExtraModeContentHeight
-              : 0,
         );
         return tester.pumpWidget(
           MaterialApp(
@@ -632,6 +625,7 @@ void main() {
         );
       }
 
+      composition.select(BudgetContentLayout.split);
       await pumpSurface();
       final avatar = find.byKey(
         const ValueKey('dashboard-core-mode-budget-card-1'),
@@ -650,13 +644,7 @@ void main() {
       expect(tester.getRect(chart).top, lessThan(tester.getRect(avatar).top));
       expect(
         tester.getRect(avatar).bottom,
-        lessThanOrEqualTo(
-          tester
-              .getRect(
-                find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
-              )
-              .top,
-        ),
+        greaterThan(tester.getRect(chart).bottom),
       );
 
       composition.select(BudgetContentLayout.unifiedCard);
@@ -673,20 +661,7 @@ void main() {
         find.byKey(const ValueKey('budget-target-avatar-rail')),
       );
       expect(selectedAvatarInput.top, greaterThan(unified.top));
-      expect(
-        selectedAvatarInput.bottom,
-        lessThanOrEqualTo(
-          tester
-              .getRect(
-                find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
-              )
-              .top,
-        ),
-        reason:
-            'The avatar control keeps its established Budget cascade but may '
-            'not enter the indicator lane after the Mind-matched Mother Card '
-            'ends before that lane.',
-      );
+      expect(selectedAvatarInput.bottom, lessThanOrEqualTo(unified.bottom));
       expect(tester.getRect(chart).bottom, lessThan(selectedAvatarInput.top));
 
       order.select(BudgetSectionOrder.avatarsThenChart);
@@ -716,16 +691,12 @@ void main() {
             'The selected avatar chrome clears the actual donut/list region; '
             'the preceding padded heading lane is intentionally shared.',
       );
-      final dots = tester.getRect(
-        find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
-      );
       expect(
         avatarsFirstUnified.bottom,
-        lessThanOrEqualTo(dots.top),
+        greaterThanOrEqualTo(avatarsFirstInput.bottom),
         reason:
-            'The Mind-matched Mother Card ends before Budget’s existing '
-            'downstream indicator lane; the lane retains its own cascade '
-            'ownership.',
+            'The unified Mother Card contains the selected Budget input with '
+            'no downstream indicator lane.',
       );
     },
   );

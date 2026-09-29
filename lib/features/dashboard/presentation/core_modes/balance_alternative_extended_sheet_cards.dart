@@ -513,21 +513,25 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
                     color: BalanceAlternativeHtmlTokens.purple,
                   ),
                   SizedBox(width: BalanceAlternativeHtmlTokens.logical(12)),
-                  Text(
-                    'Bevétel vs. Kiadás',
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.incomeExpenseTitleSize,
-                      BalanceAlternativeHtmlTokens.textPrimary,
-                      FontWeight.w800,
-                      height: 1,
+                  Expanded(
+                    child: Text(
+                      'Bevétel vs. Kiadás',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _text(
+                        BalanceAlternativeHtmlTokens.incomeExpenseTitleSize,
+                        BalanceAlternativeHtmlTokens.textPrimary,
+                        FontWeight.w800,
+                        height: 1,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
             SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
-            SizedBox(
-              height: BalanceAlternativeHtmlTokens.incomeExpenseStripHeight,
+            Expanded(
+              flex: 4,
               child: LayoutBuilder(
                 builder: (context, constraints) => Stack(
                   clipBehavior: Clip.none,
@@ -597,6 +601,7 @@ final class BalanceAlternativeIncomeExpenseStripCard extends StatelessWidget {
             ),
             SizedBox(height: BalanceAlternativeHtmlTokens.incomeExpenseGap),
             Expanded(
+              flex: 1,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -982,119 +987,76 @@ final class BalanceAlternativeAnnualSavingsCard extends StatelessWidget {
   Widget build(BuildContext context) => BalanceAlternativeHtmlCardSurface(
     minimumContentSize:
         BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize,
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxHeight < BalanceAlternativeHtmlTokens.logical(145) ||
-            constraints.maxWidth < BalanceAlternativeHtmlTokens.logical(185)) {
-          return Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Icon(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        BalanceAlternativeHtmlTokens.logical(19),
+        BalanceAlternativeHtmlTokens.logical(22),
+        BalanceAlternativeHtmlTokens.logical(19),
+        BalanceAlternativeHtmlTokens.logical(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'Megtakarítások',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _text(
+                    BalanceAlternativeHtmlTokens.annualSavingsTitleSize,
+                    BalanceAlternativeHtmlTokens.textPrimary,
+                    FontWeight.w800,
+                    height: 1.06,
+                  ),
+                ),
+              ),
+              DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE0F8EC),
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox.square(
+                  dimension: BalanceAlternativeHtmlTokens
+                      .annualIncomeExpenseIconExtent,
+                  child: Icon(
                     Icons.savings_rounded,
                     color: BalanceAlternativeHtmlTokens.positive,
+                    size: BalanceAlternativeHtmlTokens.logical(25),
                   ),
-                  Text(
-                    'Megtakarítások',
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.annualSavingsTitleSize,
-                      BalanceAlternativeHtmlTokens.textPrimary,
-                      FontWeight.w800,
-                      height: 1.06,
-                    ),
-                  ),
-                  Text(
-                    DashboardPreparedFormatter.compactAmountMinor(
-                      presentation.netMinor,
-                    ),
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.annualSavingsValueSize,
-                      presentation.netMinor >= 0
-                          ? BalanceAlternativeHtmlTokens.positive
-                          : const Color(0xFFFF5F8A),
-                      FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            BalanceAlternativeHtmlTokens.logical(19),
-            BalanceAlternativeHtmlTokens.logical(22),
-            BalanceAlternativeHtmlTokens.logical(19),
-            BalanceAlternativeHtmlTokens.logical(20),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      'Megtakarítások',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _text(
-                        BalanceAlternativeHtmlTokens.annualSavingsTitleSize,
-                        BalanceAlternativeHtmlTokens.textPrimary,
-                        FontWeight.w800,
-                        height: 1.06,
-                      ),
-                    ),
-                  ),
-                  DecoratedBox(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE0F8EC),
-                      shape: BoxShape.circle,
-                    ),
-                    child: SizedBox.square(
-                      dimension: BalanceAlternativeHtmlTokens
-                          .annualIncomeExpenseIconExtent,
-                      child: Icon(
-                        Icons.savings_rounded,
-                        color: BalanceAlternativeHtmlTokens.positive,
-                        size: BalanceAlternativeHtmlTokens.logical(25),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                DashboardPreparedFormatter.compactAmountMinor(
-                  presentation.netMinor,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _text(
-                  BalanceAlternativeHtmlTokens.annualSavingsValueSize,
-                  presentation.netMinor >= 0
-                      ? BalanceAlternativeHtmlTokens.positive
-                      : const Color(0xFFFF5F8A),
-                  FontWeight.w800,
-                  height: 1,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'félretett összeg\nebben az évben',
-                style: _text(
-                  BalanceAlternativeHtmlTokens.smallBodySize,
-                  BalanceAlternativeHtmlTokens.textSecondary,
-                  FontWeight.w500,
-                  height: 1.22,
                 ),
               ),
             ],
           ),
-        );
-      },
+          const Spacer(),
+          Text(
+            DashboardPreparedFormatter.compactAmountMinor(
+              presentation.netMinor,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _text(
+              BalanceAlternativeHtmlTokens.annualSavingsValueSize,
+              presentation.netMinor >= 0
+                  ? BalanceAlternativeHtmlTokens.positive
+                  : const Color(0xFFFF5F8A),
+              FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'félretett összeg\nebben az évben',
+            style: _text(
+              BalanceAlternativeHtmlTokens.smallBodySize,
+              BalanceAlternativeHtmlTokens.textSecondary,
+              FontWeight.w500,
+              height: 1.22,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -1154,6 +1116,8 @@ final class _BalanceAlternativeAnnualIncomeExpenseCardState
                           children: <Widget>[
                             Text(
                               'Bevétel / Kiadás',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: _text(
                                 BalanceAlternativeHtmlTokens.annualTitleSize,
                                 const Color(0xFF090E4C),
@@ -1166,6 +1130,8 @@ final class _BalanceAlternativeAnnualIncomeExpenseCardState
                             ),
                             Text(
                               'Havi összehasonlítás • ${year ?? '—'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: _text(
                                 BalanceAlternativeHtmlTokens.annualSubtitleSize,
                                 BalanceAlternativeHtmlTokens.textSecondary,

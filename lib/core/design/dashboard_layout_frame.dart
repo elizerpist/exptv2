@@ -43,6 +43,7 @@ class DashboardLayoutFrame {
     required this.headerExpansionProgress,
     required this.expandedHeaderExtraHeight,
     required this.principalModeContentExtraHeight,
+    required this.canonicalMotherCardContentHeight,
     required this.viewportVerticalDragToControllerScale,
     required this.brandLockupBounds,
     required this.headerBounds,
@@ -91,6 +92,10 @@ class DashboardLayoutFrame {
   /// stretch. Mode renderers may consume this existing envelope only; they do
   /// not participate in its outer geometry calculation.
   final double principalModeContentExtraHeight;
+
+  /// The Balance SUM-derived settled body height for every Header/content
+  /// Mother Card. Mode-local content alternatives cannot change this value.
+  final double canonicalMotherCardContentHeight;
 
   /// Translates physical vertical input into the headless controller's metric
   /// coordinate system. Presentation leaves only apply this mapping.

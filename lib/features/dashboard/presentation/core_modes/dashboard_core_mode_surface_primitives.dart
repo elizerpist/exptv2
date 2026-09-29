@@ -263,9 +263,9 @@ final class DashboardHeaderContentSeamShape {
 }
 
 /// Resolves the physical outer bounds for every seamless Header/content
-/// Mother Card. The envelope deliberately stops before the indicator lane;
-/// Mind, Balance and the settled unified Budget surface therefore share one
-/// lower-edge rule while retaining their own body renderers and transitions.
+/// Mother Card. The height comes from the Balance SUM-derived geometry policy,
+/// so Mind, Balance and the settled unified Budget surface share one lower
+/// edge while retaining their own body renderers and transitions.
 @immutable
 final class DashboardHeaderContentMotherCardBounds {
   const DashboardHeaderContentMotherCardBounds._();
@@ -276,12 +276,12 @@ final class DashboardHeaderContentMotherCardBounds {
   }) {
     final reveal = bodyReveal.clamp(0.0, 1.0).toDouble();
     final header = geometry.headerBounds;
-    final body = geometry.subheaderEnvelopeBounds;
     return DashboardBounds(
       left: header.left,
       top: header.top,
       width: header.width,
-      height: header.height + (body.bottom - header.bottom) * reveal,
+      height:
+          header.height + geometry.canonicalMotherCardContentHeight * reveal,
     );
   }
 }

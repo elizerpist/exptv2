@@ -154,25 +154,21 @@ void main() {
   test('Budget relationship moves only the detail card for overlap', () {
     const avatars = DashboardBounds(left: 17, top: 374, width: 378, height: 72);
     const chart = DashboardBounds(left: 17, top: 457, width: 378, height: 220);
-    const dots = DashboardBounds(left: 17, top: 682, width: 378, height: 6);
     final separate = BudgetAvatarContentRelationship.resolve(
       avatarBounds: avatars,
       chartBounds: chart,
-      indicatorBounds: dots,
       style: BudgetAvatarContentStyle.separate,
       avatarsLeadContent: true,
     );
     final overlap = BudgetAvatarContentRelationship.resolve(
       avatarBounds: avatars,
       chartBounds: chart,
-      indicatorBounds: dots,
       style: BudgetAvatarContentStyle.overlappingGlow,
       avatarsLeadContent: true,
     );
     final rail = BudgetAvatarContentRelationship.resolve(
       avatarBounds: avatars,
       chartBounds: chart,
-      indicatorBounds: dots,
       style: BudgetAvatarContentStyle.avatarRail,
       avatarsLeadContent: true,
     );
@@ -181,7 +177,6 @@ void main() {
     expect(separate.chartBounds, chart);
     expect(overlap.avatarBounds, avatars);
     expect(overlap.chartBounds.top, lessThan(chart.top));
-    expect(overlap.indicatorBounds.top, lessThan(dots.top));
     expect(rail.avatarBounds, avatars);
     expect(rail.chartBounds, chart);
   });

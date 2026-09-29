@@ -835,16 +835,20 @@ void main() {
       DashboardHeaderTunerSection.budgetContentCardStyle,
     ]);
 
-    final control = find.byKey(
+    final unifiedControl = find.byKey(
       const ValueKey<String>('dashboard-budget-content-unifiedCard'),
     );
-    await tester.ensureVisible(control);
-    expect(control, findsOneWidget);
-    expect(cardStyle.value, BudgetContentLayout.split);
-
-    await tester.tap(control);
-    await tester.pump();
+    await tester.ensureVisible(unifiedControl);
+    expect(unifiedControl, findsOneWidget);
     expect(cardStyle.value, BudgetContentLayout.unifiedCard);
+
+    final splitControl = find.byKey(
+      const ValueKey<String>('dashboard-budget-content-split'),
+    );
+    await tester.ensureVisible(splitControl);
+    await tester.tap(splitControl);
+    await tester.pump();
+    expect(cardStyle.value, BudgetContentLayout.split);
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
     cardStyle.dispose();

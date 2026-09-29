@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/design/dashboard_layout_metrics.dart';
-
 /// The sole visual-token owner for the alternative Balance extended sheet.
 ///
 /// Values are transcribed from the canonical Havi 2 / Éves HTML source, not
@@ -18,63 +16,14 @@ abstract final class BalanceAlternativeHtmlTokens {
   static const double halfGutter = 3;
   static const double directContentMinimumTolerance = .01;
 
-  // Canonical Havi 2 / Éves source Mother Card. These values are expressed
-  // once in source pixels and converted through [logical], exactly like the
-  // type and padding tokens below. They define the authored direct-rendering
-  // allocation; a card-wide FittedBox is only valid below these dimensions.
-  static const double _sourceMotherWidth = 842;
-  static const double _sourceMotherHeight = 1187;
-  static const double _sourceHeaderHeight = 282;
-
-  static Size get _sourceExtendedSheetBodySize => Size(
-    logical(_sourceMotherWidth) - outerInset * 2,
-    logical(_sourceMotherHeight) -
-        logical(_sourceHeaderHeight) -
-        outerInset * 2,
-  );
-
-  static Size _extendedSheetCardMinimumSize({
-    required double widthFraction,
-    required double heightFraction,
-  }) {
-    final body = _sourceExtendedSheetBodySize;
-    return Size(
-      body.width * widthFraction - halfGutter * 2,
-      body.height * heightFraction - halfGutter * 2,
-    );
-  }
-
-  static Size get extendedSheetPrimaryCardMinimumSize =>
-      _extendedSheetCardMinimumSize(widthFraction: .70, heightFraction: .60);
-
-  static Size get extendedSheetSideCardMinimumSize =>
-      _extendedSheetCardMinimumSize(widthFraction: .30, heightFraction: .30);
-
-  static Size get extendedSheetCombinedCardMinimumSize =>
-      _extendedSheetCardMinimumSize(widthFraction: 1, heightFraction: .40);
-
-  /// Returns the extra Zone2 height needed for the Havi 2 / Éves reference
-  /// body. This stays in the existing geometry resolver input, so the Mother
-  /// Card, following action controls and child-card layout expand together.
-  static double extendedSheetPrincipalModeContentExtraHeight({
-    required DashboardLayoutMetrics metrics,
-    required bool hasPhysicalRail,
-  }) {
-    final sourceScale = metrics.contentWidth / logical(_sourceMotherWidth);
-    final expectedRawBodyHeight =
-        logical(_sourceMotherHeight - _sourceHeaderHeight) * sourceScale;
-    final reclaimedRailFootprint = hasPhysicalRail
-        ? 0.0
-        : metrics.railHeight + metrics.railToCollapseHandleGap;
-    final currentRawBodyHeight =
-        metrics.standardGap * 2 +
-        metrics.subheaderOneHeight +
-        metrics.zone2CardHeight +
-        reclaimedRailFootprint;
-    return (expectedRawBodyHeight - currentRawBodyHeight)
-        .clamp(0.0, double.infinity)
-        .toDouble();
-  }
+  // The canonical SUM Mother Card is intentionally narrower and shorter than
+  // the historical capture. Every child card therefore renders directly:
+  // fixed typography/padding stay authored, while flexible plots receive the
+  // remaining space. A whole-card FittedBox would break the approved 1:1 HTML
+  // hierarchy, including for the 30%-wide side card.
+  static const Size extendedSheetPrimaryCardMinimumSize = Size.zero;
+  static const Size extendedSheetSideCardMinimumSize = Size.zero;
+  static const Size extendedSheetCombinedCardMinimumSize = Size.zero;
 
   // HTML: .variant-card / .baseline-card.
   static double get childBorderRadius => logical(25);

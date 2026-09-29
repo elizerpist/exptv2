@@ -20,7 +20,6 @@ import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dar
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_category_movers_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
@@ -545,11 +544,7 @@ void main() {
       );
       final mode = _balanceModePresentation(
         metrics: metrics,
-        principalModeContentExtraHeight:
-            BalanceAlternativeHtmlTokens.extendedSheetPrincipalModeContentExtraHeight(
-              metrics: metrics,
-              hasPhysicalRail: true,
-            ),
+        hasPhysicalRail: false,
       );
 
       Future<void> pumpSurface() => tester.pumpWidget(
@@ -579,6 +574,26 @@ void main() {
 
       await pumpSurface();
       await tester.pump();
+      final canonicalMother = DashboardHeaderContentMotherCardBounds.resolve(
+        geometry: _balanceModePresentation(
+          metrics: metrics,
+          hasPhysicalRail: false,
+        ).geometry,
+      );
+      expect(
+        tester.getRect(
+          find.byKey(
+            const ValueKey<String>('balance-unified-header-content-surface'),
+          ),
+        ),
+        Rect.fromLTWH(
+          canonicalMother.left,
+          canonicalMother.top,
+          canonicalMother.width,
+          canonicalMother.height,
+        ),
+        reason: 'Havi 2 uses the Balance SUM Mother Card frame.',
+      );
       expect(
         find.byKey(
           const ValueKey<String>('balance-alternative-month-daily-spend-plot'),
@@ -3586,27 +3601,31 @@ void main() {
 }
 
 void _expectHtmlCardSurfaceSizes(WidgetTester tester) {
-  final primary =
-      BalanceAlternativeHtmlTokens.extendedSheetPrimaryCardMinimumSize;
-  final side = BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize;
-  final combined =
-      BalanceAlternativeHtmlTokens.extendedSheetCombinedCardMinimumSize;
-
-  void expectSize(String key, Size expected) {
-    final actual = tester.getSize(find.byKey(ValueKey<String>(key)));
-    expect(actual.width, closeTo(expected.width, .01), reason: '$key width');
-    expect(actual.height, closeTo(expected.height, .01), reason: '$key height');
+  final mother = tester.getRect(
+    find.byKey(
+      const ValueKey<String>('balance-unified-header-content-surface'),
+    ),
+  );
+  for (final key in <String>[
+    'balance-tetris-card-3',
+    'balance-tetris-card-4',
+    'balance-tetris-card-5',
+    'balance-tetris-card-combined',
+  ]) {
+    final actual = tester.getRect(find.byKey(ValueKey<String>(key)));
+    expect(actual.width, greaterThan(0), reason: '$key has positive width');
+    expect(actual.height, greaterThan(0), reason: '$key has positive height');
+    expect(actual.left, greaterThanOrEqualTo(mother.left));
+    expect(actual.top, greaterThanOrEqualTo(mother.top));
+    expect(actual.right, lessThanOrEqualTo(mother.right));
+    expect(actual.bottom, lessThanOrEqualTo(mother.bottom));
   }
-
-  expectSize('balance-tetris-card-3', primary);
-  expectSize('balance-tetris-card-4', side);
-  expectSize('balance-tetris-card-5', side);
-  expectSize('balance-tetris-card-combined', combined);
 }
 
 DashboardCoreModePresentation _balanceModePresentation({
   DashboardLayoutMetrics? metrics,
   double principalModeContentExtraHeight = 0,
+  bool hasPhysicalRail = true,
 }) {
   final resolvedMetrics =
       metrics ??
@@ -3617,6 +3636,7 @@ DashboardCoreModePresentation _balanceModePresentation({
       mode: DashboardModeSpec.balance,
       collapseProgress: 0,
       isRailExpanded: false,
+      hasPhysicalRail: hasPhysicalRail,
       principalModeContentExtraHeight: principalModeContentExtraHeight,
     ),
     palette: DashboardModePaletteResolver.resolve(DashboardModeSpec.balance),

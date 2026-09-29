@@ -10,8 +10,8 @@ void main() {
 
     final controller = BudgetContentCardStyleController();
     addTearDown(controller.dispose);
-    expect(controller.value, BudgetContentLayout.split);
-    controller.select(BudgetContentLayout.unifiedCard);
     expect(controller.value, BudgetContentLayout.unifiedCard);
+    controller.select(BudgetContentLayout.split);
+    expect(controller.value, BudgetContentLayout.split);
   });
 }

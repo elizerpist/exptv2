@@ -66,30 +66,47 @@ void main() {
   });
 
   test(
-    'SHEET-01/02: only the Core geometry owner may extend Havi and Éves',
+    'CCH-01/03/05/07: one geometry policy fixes Mother Card height and Budget has no dots',
     () {
       final coreDashboard = File(
         'lib/features/dashboard/presentation/core_dashboard.dart',
+      ).readAsStringSync();
+      final policy = File(
+        'lib/core/design/dashboard_content_card_height_policy.dart',
+      ).readAsStringSync();
+      final frame = File(
+        'lib/core/design/dashboard_layout_frame.dart',
+      ).readAsStringSync();
+      final primitives = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'dashboard_core_mode_surface_primitives.dart',
       ).readAsStringSync();
       final visualTokens = File(
         'lib/features/dashboard/presentation/core_modes/'
         'balance_alternative_visual_tokens.dart',
       ).readAsStringSync();
+      final budget = File(
+        'lib/features/dashboard/presentation/core_modes/'
+        'budget_dashboard_core_surface.dart',
+      ).readAsStringSync();
 
+      expect(policy, contains('DashboardContentCardHeightPolicy'));
+      expect(frame, contains('canonicalMotherCardContentHeight'));
+      expect(primitives, contains('canonicalMotherCardContentHeight'));
       expect(
         coreDashboard,
-        contains(
-          '_balanceAlternativeExtendedSheetPrincipalContentExtraHeightFor',
+        isNot(
+          contains(
+            '_balanceAlternativeExtendedSheetPrincipalContentExtraHeightFor',
+          ),
         ),
       );
       expect(
-        coreDashboard,
-        contains('principalModeContentExtraHeightResolver:'),
-      );
-      expect(
         visualTokens,
-        contains('extendedSheetPrincipalModeContentExtraHeight'),
+        isNot(contains('extendedSheetPrincipalModeContentExtraHeight')),
       );
+      expect(budget, isNot(contains('dashboard-core-mode-budget-dots')));
+      expect(budget, isNot(contains('BudgetDistributionPageDots')));
     },
   );
 }

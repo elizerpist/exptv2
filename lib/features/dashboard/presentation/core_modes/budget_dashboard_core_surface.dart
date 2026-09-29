@@ -9,7 +9,6 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/dashboard_border_profile.dart';
 import '../../../../core/design/dashboard_corner_profile.dart';
 import '../../../../core/design/dashboard_layout_frame.dart';
-import '../../../../core/design/dashboard_layout_metrics.dart';
 import '../../../../core/design/header_cascade_motion.dart';
 import '../../../../core/design/fluvi_rounded_box.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
@@ -104,7 +103,6 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
         final relationship = BudgetAvatarContentRelationship.resolve(
           avatarBounds: section.avatarBounds,
           chartBounds: section.chartBounds,
-          indicatorBounds: section.indicatorBounds,
           style: avatarContentStyle,
           avatarsLeadContent: order == BudgetSectionOrder.avatarsThenChart,
         );
@@ -137,7 +135,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   content: const _BudgetAvatarRailBackplate(),
                 ),
               ValueListenableBuilder<BudgetContentLayout>(
-                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+                valueListenable:
+                    contentCardStyle ?? _alwaysUnifiedBudgetContent,
                 builder: (context, layout, _) => _BudgetUnifiedContentCard(
                   geometry: geometry,
                   section: section,
@@ -149,7 +148,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 candidate: 'budgetChartCascadeCard',
                 material: 'contentOnly DashboardCoreModeCascadeCard',
                 clip: 'none at cascade; child owns rounded viewport clip',
-                zOrder: 'unifiedSurface<chartCascade<avatarCascade<dots',
+                zOrder: 'unifiedSurface<chartCascade<avatarCascade',
                 child: DashboardCoreModeCascadeCard(
                   bounds: relationship.chartBounds,
                   motion: section.motionFor(
@@ -163,7 +162,7 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                   showPlaceholderSurface: false,
                   content: ValueListenableBuilder<BudgetContentLayout>(
                     valueListenable:
-                        contentCardStyle ?? _alwaysSplitBudgetContent,
+                        contentCardStyle ?? _alwaysUnifiedBudgetContent,
                     builder: (context, layout, _) => _distributionContent(
                       surfaceOwner: layout == BudgetContentLayout.unifiedCard
                           ? BudgetDistributionSurfaceOwner.unifiedParent
@@ -174,7 +173,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
-                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+                valueListenable:
+                    contentCardStyle ?? _alwaysUnifiedBudgetContent,
                 builder: (context, layout, _) => DashboardCoreModeCascadeCard(
                   bounds: section.avatarBounds,
                   motion: section.motionFor(
@@ -201,21 +201,8 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
                 ),
               ),
               ValueListenableBuilder<BudgetContentLayout>(
-                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
-                builder: (context, layout, _) {
-                  final bounds = layout == BudgetContentLayout.unifiedCard
-                      ? _unifiedIndicatorBounds(section, order)
-                      : relationship.indicatorBounds;
-                  return DashboardCoreModeOpacityPosition(
-                    bounds: bounds,
-                    opacity: geometry.zone2Opacity,
-                    offset: Offset(0, geometry.zone2Shift),
-                    child: _dotsContent(bounds),
-                  );
-                },
-              ),
-              ValueListenableBuilder<BudgetContentLayout>(
-                valueListenable: contentCardStyle ?? _alwaysSplitBudgetContent,
+                valueListenable:
+                    contentCardStyle ?? _alwaysUnifiedBudgetContent,
                 builder: (context, layout, _) {
                   final contentProgress = geometry.zone2Opacity
                       .clamp(0.0, 1.0)
@@ -605,21 +592,6 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
     }
     return selected.baseColorArgb == 0 ? null : Color(selected.baseColorArgb);
   }
-
-  Widget _dotsContent(DashboardBounds bounds) =>
-      distributionPageController == null
-      ? DashboardPlaceholderDots(
-          bounds: bounds,
-          semanticKey: const ValueKey('dashboard-core-mode-budget-dots'),
-        )
-      : SizedBox(
-          key: const ValueKey('dashboard-core-mode-budget-dots'),
-          width: bounds.width,
-          height: bounds.height,
-          child: BudgetDistributionPageDots(
-            controller: distributionPageController!,
-          ),
-        );
 }
 
 /// Unified Budget uses the same shared Header/content seam primitive as Mind.
@@ -694,8 +666,7 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
             material: 'surface=DashboardPlaceholderCard header+content',
             clip:
                 'none; descendant BudgetDistributionCardShell owns viewport clip',
-            zOrder:
-                'unifiedHeaderSurface<header<chartCascade<avatarCascade<dots',
+            zOrder: 'unifiedHeaderSurface<header<chartCascade<avatarCascade',
             child: DashboardPlaceholderCard(
               bounds: combinedBounds,
               fillParent: true,
@@ -748,7 +719,7 @@ final class _BudgetUnifiedTransitionSurface extends StatelessWidget {
         candidate: 'budgetUnifiedTransitionSurface',
         material: 'settledHeaderContentShell=off; lowerCascade=on',
         clip: 'none; descendant BudgetDistributionCardShell owns viewport clip',
-        zOrder: 'transitionSurface<chartCascade<avatarCascade<dots',
+        zOrder: 'transitionSurface<chartCascade<avatarCascade',
         child: DashboardPlaceholderCard(
           bounds: bounds,
           fillParent: true,
@@ -814,23 +785,8 @@ final class _BudgetUnifiedHeaderContentBridge extends StatelessWidget {
   }
 }
 
-DashboardBounds _unifiedIndicatorBounds(
-  _BudgetSectionLayout section,
-  BudgetSectionOrder order,
-) {
-  final bottomClearance = order == BudgetSectionOrder.avatarsThenChart
-      ? DashboardLayoutMetrics.reference.dotGap
-      : 0.0;
-  return DashboardBounds(
-    left: section.indicatorBounds.left,
-    top: section.indicatorBounds.top - bottomClearance,
-    width: section.indicatorBounds.width,
-    height: section.indicatorBounds.height,
-  );
-}
-
-final ValueListenable<BudgetContentLayout> _alwaysSplitBudgetContent =
-    ValueNotifier<BudgetContentLayout>(BudgetContentLayout.split);
+final ValueListenable<BudgetContentLayout> _alwaysUnifiedBudgetContent =
+    ValueNotifier<BudgetContentLayout>(BudgetContentLayout.unifiedCard);
 final ValueListenable<BudgetSectionOrder> _alwaysAvatarsThenChart =
     ValueNotifier<BudgetSectionOrder>(BudgetSectionOrder.avatarsThenChart);
 
@@ -839,12 +795,10 @@ final class _BudgetSectionLayout {
   const _BudgetSectionLayout({
     required this.avatarBounds,
     required this.chartBounds,
-    required this.indicatorBounds,
   });
 
   final DashboardBounds avatarBounds;
   final DashboardBounds chartBounds;
-  final DashboardBounds indicatorBounds;
 
   static _BudgetSectionLayout resolve(
     DashboardLayoutFrame geometry,
@@ -854,15 +808,21 @@ final class _BudgetSectionLayout {
       return _BudgetSectionLayout(
         avatarBounds: geometry.subheaderOneBounds,
         chartBounds: geometry.zone2Bounds,
-        indicatorBounds: geometry.zone2IndicatorBounds,
       );
     }
     final gap = geometry.zone2Bounds.top - geometry.subheaderOneBounds.bottom;
+    // The selected Avatar has a 112px interactive shell while the structural
+    // subheader lane is 72px. In the reverse composition, reserve its existing
+    // 20px top/bottom input overhang from the flexible chart canvas instead of
+    // extending the shared Mother Card below the SUM-derived frame.
+    final chartHeight =
+        geometry.zone2Bounds.height -
+        BudgetTargetAvatarRail.selectedInputVerticalOverflow * 2;
     final chart = DashboardBounds(
       left: geometry.zone2Bounds.left,
       top: geometry.subheaderOneBounds.top,
       width: geometry.zone2Bounds.width,
-      height: geometry.zone2Bounds.height,
+      height: chartHeight,
     );
     final avatars = DashboardBounds(
       left: geometry.subheaderOneBounds.left,
@@ -870,24 +830,7 @@ final class _BudgetSectionLayout {
       width: geometry.subheaderOneBounds.width,
       height: geometry.subheaderOneBounds.height,
     );
-    final indicatorGap =
-        geometry.zone2IndicatorBounds.top - geometry.zone2Bounds.bottom;
-    final selectedShellFootprint =
-        BudgetTargetAvatarRail.selectedInputVerticalOverflow;
-    return _BudgetSectionLayout(
-      avatarBounds: avatars,
-      chartBounds: chart,
-      indicatorBounds: DashboardBounds(
-        left: geometry.zone2IndicatorBounds.left,
-        // The selected input shell is deliberately 40px taller than this
-        // structural rail. Chart-first puts it below the chart, so dots must
-        // follow the whole physical shell rather than slice through its lower
-        // ring/shadow. The central geometry reserves the same 40px tail.
-        top: avatars.bottom + selectedShellFootprint * 2 + indicatorGap,
-        width: geometry.zone2IndicatorBounds.width,
-        height: geometry.zone2IndicatorBounds.height,
-      ),
-    );
+    return _BudgetSectionLayout(avatarBounds: avatars, chartBounds: chart);
   }
 
   CascadedCardMotion motionFor(
@@ -911,33 +854,29 @@ final class BudgetAvatarContentRelationship {
   const BudgetAvatarContentRelationship({
     required this.avatarBounds,
     required this.chartBounds,
-    required this.indicatorBounds,
   });
 
   static const double _overlapShift = 28;
 
   final DashboardBounds avatarBounds;
   final DashboardBounds chartBounds;
-  final DashboardBounds indicatorBounds;
 
   static BudgetAvatarContentRelationship resolve({
     required DashboardBounds avatarBounds,
     required DashboardBounds chartBounds,
-    required DashboardBounds indicatorBounds,
     required BudgetAvatarContentStyle style,
     required bool avatarsLeadContent,
   }) {
     // The current default ordering is Avatar -> Card2. In the optional reverse
     // order the selected target is intentionally below Card2, so forcing a
-    // top-edge overlap would invert that separate user composition and cause
-    // the card to collide with its dots. Keep that non-default topology safe.
+    // top-edge overlap would invert that separate user composition. Keep that
+    // non-default topology safe.
     final movesCard =
         style == BudgetAvatarContentStyle.overlappingGlow && avatarsLeadContent;
     if (!movesCard) {
       return BudgetAvatarContentRelationship(
         avatarBounds: avatarBounds,
         chartBounds: chartBounds,
-        indicatorBounds: indicatorBounds,
       );
     }
     DashboardBounds shiftUp(DashboardBounds bounds) => DashboardBounds(
@@ -949,7 +888,6 @@ final class BudgetAvatarContentRelationship {
     return BudgetAvatarContentRelationship(
       avatarBounds: avatarBounds,
       chartBounds: shiftUp(chartBounds),
-      indicatorBounds: shiftUp(indicatorBounds),
     );
   }
 }
