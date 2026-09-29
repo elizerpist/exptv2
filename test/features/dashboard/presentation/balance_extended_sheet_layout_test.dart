@@ -12,9 +12,9 @@ void main() {
       );
 
       expect(layout.card3, const Rect.fromLTWH(0, 0, 700, 600));
-      expect(layout.card4, const Rect.fromLTWH(700, 0, 300, 600));
-      expect(layout.card5, const Rect.fromLTWH(0, 600, 500, 400));
-      expect(layout.combined, const Rect.fromLTWH(500, 600, 500, 400));
+      expect(layout.card4, const Rect.fromLTWH(700, 0, 300, 300));
+      expect(layout.card5, const Rect.fromLTWH(700, 300, 300, 300));
+      expect(layout.combined, const Rect.fromLTWH(0, 600, 1000, 400));
     },
   );
 
@@ -27,10 +27,12 @@ void main() {
       expect(layout.card3.left, body.left);
       expect(layout.card3.top, body.top);
       expect(layout.card4.right, body.right);
-      expect(layout.card4.bottom, body.top + body.height * .60);
-      expect(layout.card5.left, body.left);
+      expect(layout.card4.bottom, layout.card5.top);
+      expect(layout.card5.left, layout.card4.left);
+      expect(layout.card5.right, body.right);
       expect(layout.combined.top, body.top + body.height * .60);
-      expect(layout.card5.bottom, body.bottom);
+      expect(layout.combined.left, body.left);
+      expect(layout.combined.width, body.width);
       expect(layout.combined.bottom, body.bottom);
     },
   );
