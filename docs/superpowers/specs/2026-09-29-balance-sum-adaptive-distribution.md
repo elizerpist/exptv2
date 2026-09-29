@@ -57,4 +57,4 @@ The data path is ledger entries -> linked dashboard projection -> stability proj
 | SUM-06 | Explicit exception | SUM child shells | Neutral standard child borders; no extra purple child-card outline | widget/source inspection | DONE |
 | SUM-07 | Explicit mother-card constraint | scope scaffold/layout | Existing Mother Card bounds and extended-sheet child allocation remain unchanged | geometry/boundary test | DONE |
 | SUM-08 | Architecture gate | app/domain/presentation boundaries | One immutable data path; no Flutter in math, no ledger query/math in widgets, no copied palette | boundary tests | DONE |
-| SUM-09 | Delivery request | Git/GitHub Actions | Commit, push, successful human APK job, download to `/storage/emulated/0/Download/fluvi`, SHA-256 | git/GitHub/file hash | PARTIAL — awaits commit/push and the online human APK |
+| SUM-09 | Delivery request | Git/GitHub Actions | Commit, push, successful human APK job, download to `/storage/emulated/0/Download/fluvi`, SHA-256 | GitHub run `36629660762`, `build-human-diagnostic-apk`, local SHA-256 | DONE — `fluvi_HUMAN_DIAGNOSTIC_14df8e5.apk`, `535124f74117ab3f8914c8f95f80ea3fc4cc1bb2b0da1a0621943f5fbd8d0713` |
