@@ -813,11 +813,8 @@ final class _BalanceUnifiedHeaderContentSurface extends StatelessWidget {
     if (!isHeaderLinked || !settings.alternativeMotherCardVisible) {
       return const SizedBox.shrink();
     }
-    final combinedBounds = DashboardBounds(
-      left: geometry.headerBounds.left,
-      top: geometry.headerBounds.top,
-      width: geometry.headerBounds.width,
-      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
     );
     final bridgeHeight =
         (geometry.modeContentBounds.top - geometry.headerBounds.bottom + 34)
@@ -927,7 +924,9 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
         if (value == null) {
           return _BalanceFourSectionScaffold(geometry: geometry);
         }
-        final alternative = BalanceAlternativeScopePresentation.fromLinked(value);
+        final alternative = BalanceAlternativeScopePresentation.fromLinked(
+          value,
+        );
         return switch (alternative) {
           BalanceAlternativeSumPresentation(:final incomeExpense) =>
             _BalanceFiveSectionScaffold(
@@ -935,10 +934,11 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
               presentation: incomeExpense,
               scopeKey: 'sum',
             ),
-          BalanceAlternativeYearPresentation() => _BalanceYearExtendedSheetScaffold(
-            geometry: geometry,
-            presentation: alternative,
-          ),
+          BalanceAlternativeYearPresentation() =>
+            _BalanceYearExtendedSheetScaffold(
+              geometry: geometry,
+              presentation: alternative,
+            ),
           BalanceAlternativeMonthPresentation() =>
             _BalanceMonthExtendedSheetScaffold(
               geometry: geometry,
@@ -1107,11 +1107,8 @@ final class _BalanceExtendedSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final combinedBounds = DashboardBounds(
-      left: geometry.headerBounds.left,
-      top: geometry.headerBounds.top,
-      width: geometry.headerBounds.width,
-      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
     );
     return DashboardCoreModeFramePosition(
       bounds: combinedBounds,
@@ -1142,11 +1139,8 @@ final class _BalanceFourSectionScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final combinedBounds = DashboardBounds(
-      left: geometry.headerBounds.left,
-      top: geometry.headerBounds.top,
-      width: geometry.headerBounds.width,
-      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
     );
     return DashboardCoreModeFramePosition(
       bounds: combinedBounds,
@@ -1211,11 +1205,8 @@ final class _BalanceFiveSectionScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final combinedBounds = DashboardBounds(
-      left: geometry.headerBounds.left,
-      top: geometry.headerBounds.top,
-      width: geometry.headerBounds.width,
-      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
     );
     return DashboardCoreModeFramePosition(
       bounds: combinedBounds,
@@ -1361,7 +1352,9 @@ final class _BalanceAlternativeSectionSlot extends StatelessWidget {
       child: SizedBox.expand(
         key: allocationKey,
         child: Padding(
-          padding: const EdgeInsets.all(BalanceAlternativeHtmlTokens.halfGutter),
+          padding: const EdgeInsets.all(
+            BalanceAlternativeHtmlTokens.halfGutter,
+          ),
           child: KeyedSubtree(key: surfaceKey, child: child),
         ),
       ),

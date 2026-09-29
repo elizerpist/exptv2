@@ -677,11 +677,8 @@ final class _BudgetUnifiedContentCard extends StatelessWidget {
       contentRadius: contentRadius,
       expansionProgress: 1,
     );
-    final combinedBounds = DashboardBounds(
-      left: geometry.headerBounds.left,
-      top: geometry.headerBounds.top,
-      width: geometry.headerBounds.width,
-      height: geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
     );
     final bridgeHeight =
         (geometry.modeContentBounds.top - geometry.headerBounds.bottom + 34)

@@ -240,11 +240,12 @@ void main() {
           geometry.headerBounds.left,
           geometry.headerBounds.top,
           geometry.headerBounds.width,
-          geometry.modeContentBounds.bottom - geometry.headerBounds.top,
+          geometry.subheaderEnvelopeBounds.bottom - geometry.headerBounds.top,
         ),
         reason:
-            'Közös kártya uses Mind-style single physical Header/content '
-            'ownership without moving the established Budget content bounds.',
+            'The settled Budget Mother Card uses the same Header/content '
+            'envelope lower edge as Mind, without changing Budget content '
+            'or transition ownership.',
       );
       expect(
         tester.getRect(
@@ -672,7 +673,20 @@ void main() {
         find.byKey(const ValueKey('budget-target-avatar-rail')),
       );
       expect(selectedAvatarInput.top, greaterThan(unified.top));
-      expect(selectedAvatarInput.bottom, lessThan(unified.bottom));
+      expect(
+        selectedAvatarInput.bottom,
+        lessThanOrEqualTo(
+          tester
+              .getRect(
+                find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
+              )
+              .top,
+        ),
+        reason:
+            'The avatar control keeps its established Budget cascade but may '
+            'not enter the indicator lane after the Mind-matched Mother Card '
+            'ends before that lane.',
+      );
       expect(tester.getRect(chart).bottom, lessThan(selectedAvatarInput.top));
 
       order.select(BudgetSectionOrder.avatarsThenChart);
@@ -692,7 +706,6 @@ void main() {
         avatarsFirstInput.top,
         greaterThanOrEqualTo(avatarsFirstUnified.top),
       );
-      expect(avatarsFirstInput.bottom, lessThan(avatarsFirstUnified.bottom));
       expect(
         avatarsFirstInput.bottom,
         lessThan(
@@ -707,11 +720,12 @@ void main() {
         find.byKey(const ValueKey('dashboard-core-mode-budget-dots')),
       );
       expect(
-        avatarsFirstUnified.bottom - dots.bottom,
-        closeTo(DashboardLayoutMetrics.reference.dotGap, .001),
+        avatarsFirstUnified.bottom,
+        lessThanOrEqualTo(dots.top),
         reason:
-            'The lower Unified chart indicators retain the shared card but '
-            'now own the authored 4px physical bottom gap.',
+            'The Mind-matched Mother Card ends before Budget’s existing '
+            'downstream indicator lane; the lane retains its own cascade '
+            'ownership.',
       );
     },
   );

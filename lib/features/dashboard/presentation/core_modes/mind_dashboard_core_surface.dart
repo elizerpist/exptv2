@@ -140,13 +140,9 @@ class MindDashboardCoreSurface extends StatelessWidget {
       contentRadius: contentRadius,
       expansionProgress: geometry.headerExpansionProgress,
     );
-    final combinedBounds = DashboardBounds(
-      left: geometry.headerBounds.left,
-      top: geometry.headerBounds.top,
-      width: geometry.headerBounds.width,
-      height:
-          geometry.headerBounds.height +
-          bodyBounds.height * geometry.headerExpansionProgress,
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
+      bodyReveal: geometry.headerExpansionProgress,
     );
     final header = DashboardCoreModeHeaderScaffold(
       bounds: geometry.headerBounds,

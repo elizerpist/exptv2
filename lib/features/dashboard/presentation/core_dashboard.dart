@@ -15,6 +15,7 @@ import '../../../core/financial_limits/domain/financial_limit_repository.dart';
 import '../../../core/financial_limits/presentation/budget_ring_presentation.dart';
 import '../../../core/design/dashboard_layout_frame.dart';
 import '../../../core/design/dashboard_geometry_resolver.dart';
+import '../../../core/design/dashboard_layout_metrics.dart';
 import '../../../core/design/dashboard_logbox_layout_profile.dart';
 import '../../../core/design/fluvi_global_appearance.dart';
 import '../../../core/design/dashboard_body_order.dart';
@@ -37,6 +38,7 @@ import '../mind/domain/mind_header_score_chart_presentation.dart';
 import '../mind/domain/mind_year_heatmap_presentation_settings.dart';
 import '../logbox/application/dashboard_logbox_scene_window.dart';
 import 'core_modes/dashboard_core_mode_host.dart';
+import 'core_modes/balance_alternative_visual_tokens.dart';
 import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -264,7 +266,8 @@ class _CoreDashboardState extends State<CoreDashboard>
         DashboardHeaderVisualController(vsync: this);
     _globalAppearance = _headerVisualController.tuning.value.globalAppearance;
     _headerVisualController.tuning.addListener(_onGlobalAppearanceChanged);
-    _balancePresentationSettings = BalancePresentationController();
+    _balancePresentationSettings = BalancePresentationController()
+      ..addListener(_onLayoutPresentationChanged);
     _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
     );
@@ -590,6 +593,32 @@ class _CoreDashboardState extends State<CoreDashboard>
     };
   }
 
+  double _balanceAlternativeExtendedSheetPrincipalContentExtraHeightFor(
+    DashboardModeSpec mode,
+    DashboardLayoutMetrics metrics, {
+    required bool hasPhysicalRail,
+  }) {
+    if (mode != modeController.committedMode ||
+        mode.mode != DashboardMode.balance) {
+      return 0;
+    }
+    final settings = _balancePresentationSettings.value;
+    final isExtendedSheet =
+        settings.contentSurfaceStyle ==
+            BalanceContentSurfaceStyle.unifiedCard &&
+        settings.unifiedBodyLayout ==
+            BalanceUnifiedBodyLayout.fourSectionTetris &&
+        switch (controller.presentation.navigation.state.effectiveScope) {
+          MonthScope() || YearScope() => true,
+          _ => false,
+        };
+    if (!isExtendedSheet) return 0;
+    return BalanceAlternativeHtmlTokens.extendedSheetPrincipalModeContentExtraHeight(
+      metrics: metrics,
+      hasPhysicalRail: hasPhysicalRail,
+    );
+  }
+
   void _onShellPresentationChanged() {
     // Shell presentation is layout-only. Re-resolve the one geometry frame;
     // do not touch Query, scene/cache, controllers or physical BottomNav.
@@ -743,7 +772,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     if (_ownsHeaderVisualController) {
       _headerVisualController.dispose();
     }
-    _balancePresentationSettings.dispose();
+    _balancePresentationSettings
+      ..removeListener(_onLayoutPresentationChanged)
+      ..dispose();
     _budgetPresentation.dispose();
     _budgetLimitEdit?.dispose();
     _preparedSceneCache.removeListener(_recordSceneCacheMetrics);
@@ -777,14 +808,21 @@ class _CoreDashboardState extends State<CoreDashboard>
             DashboardBodyComponent.summary,
           ])
         : _bodyOrderController.value;
+    final hasPhysicalRail =
+        _summaryPillVariantController.value == SummaryPillVariant.legacy;
+    final balanceAlternativeExtendedSheetPrincipalHeight =
+        _balanceAlternativeExtendedSheetPrincipalContentExtraHeightFor(
+          modeController.committedMode,
+          viewportMetrics,
+          hasPhysicalRail: hasPhysicalRail,
+        );
     final baselineGeometry = DashboardGeometryResolver.resolve(
       metrics: viewportMetrics,
       mode: modeController.committedMode,
       collapseProgress: 0,
       isRailExpanded: controller.navigation.isRailOpen,
       bodyOrder: baselineBodyOrder,
-      hasPhysicalRail:
-          _summaryPillVariantController.value == SummaryPillVariant.legacy,
+      hasPhysicalRail: hasPhysicalRail,
       hasStandaloneCollapseHandle:
           _globalAppearance.collapseHandleStyle ==
           FluviCollapseHandleStyle.standalone,
@@ -795,6 +833,8 @@ class _CoreDashboardState extends State<CoreDashboard>
       modeContentExtraHeight: _modeContentExtraHeightFor(
         modeController.committedMode,
       ),
+      principalModeContentExtraHeight:
+          balanceAlternativeExtendedSheetPrincipalHeight,
     );
     final flatBottomNavStretch = DashboardFlatBottomNavStretchLayout.resolve(
       viewport: viewport,
@@ -822,8 +862,7 @@ class _CoreDashboardState extends State<CoreDashboard>
               DashboardBodyComponent.summary,
             ])
           : _bodyOrderController.value,
-      hasPhysicalRail:
-          _summaryPillVariantController.value == SummaryPillVariant.legacy,
+      hasPhysicalRail: hasPhysicalRail,
       hasStandaloneCollapseHandle:
           _globalAppearance.collapseHandleStyle ==
           FluviCollapseHandleStyle.standalone,
@@ -832,11 +871,16 @@ class _CoreDashboardState extends State<CoreDashboard>
           _globalAppearance.mindExpandedSurfaceStyle ==
               MindExpandedSurfaceStyle.seamlessCard,
       modeContentExtraHeightResolver: _modeContentExtraHeightFor,
-      principalModeContentExtraHeightResolver: (_) =>
-          shellSettings.flatBottomNavBodyStretch ==
-              DashboardFlatBottomNavBodyStretch.modeContent
-          ? effectiveFlatBottomNavStretch
-          : 0.0,
+      principalModeContentExtraHeightResolver: (mode) =>
+          _balanceAlternativeExtendedSheetPrincipalContentExtraHeightFor(
+            mode,
+            viewportMetrics,
+            hasPhysicalRail: hasPhysicalRail,
+          ) +
+          (shellSettings.flatBottomNavBodyStretch ==
+                  DashboardFlatBottomNavBodyStretch.modeContent
+              ? effectiveFlatBottomNavStretch
+              : 0.0),
       expandedHeaderExtraHeightResolver: (_) =>
           shellSettings.flatBottomNavBodyStretch ==
               DashboardFlatBottomNavBodyStretch.expandedHeader

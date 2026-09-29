@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design/dashboard_layout_metrics.dart';
+
 /// The sole visual-token owner for the alternative Balance extended sheet.
 ///
 /// Values are transcribed from the canonical Havi 2 / Éves HTML source, not
@@ -14,6 +16,65 @@ abstract final class BalanceAlternativeHtmlTokens {
   // HTML root geometry: 26.73px outer inset and 6.68px half gutter.
   static const double outerInset = 12;
   static const double halfGutter = 3;
+  static const double directContentMinimumTolerance = .01;
+
+  // Canonical Havi 2 / Éves source Mother Card. These values are expressed
+  // once in source pixels and converted through [logical], exactly like the
+  // type and padding tokens below. They define the authored direct-rendering
+  // allocation; a card-wide FittedBox is only valid below these dimensions.
+  static const double _sourceMotherWidth = 842;
+  static const double _sourceMotherHeight = 1187;
+  static const double _sourceHeaderHeight = 282;
+
+  static Size get _sourceExtendedSheetBodySize => Size(
+    logical(_sourceMotherWidth) - outerInset * 2,
+    logical(_sourceMotherHeight) -
+        logical(_sourceHeaderHeight) -
+        outerInset * 2,
+  );
+
+  static Size _extendedSheetCardMinimumSize({
+    required double widthFraction,
+    required double heightFraction,
+  }) {
+    final body = _sourceExtendedSheetBodySize;
+    return Size(
+      body.width * widthFraction - halfGutter * 2,
+      body.height * heightFraction - halfGutter * 2,
+    );
+  }
+
+  static Size get extendedSheetPrimaryCardMinimumSize =>
+      _extendedSheetCardMinimumSize(widthFraction: .70, heightFraction: .60);
+
+  static Size get extendedSheetSideCardMinimumSize =>
+      _extendedSheetCardMinimumSize(widthFraction: .30, heightFraction: .30);
+
+  static Size get extendedSheetCombinedCardMinimumSize =>
+      _extendedSheetCardMinimumSize(widthFraction: 1, heightFraction: .40);
+
+  /// Returns the extra Zone2 height needed for the Havi 2 / Éves reference
+  /// body. This stays in the existing geometry resolver input, so the Mother
+  /// Card, following action controls and child-card layout expand together.
+  static double extendedSheetPrincipalModeContentExtraHeight({
+    required DashboardLayoutMetrics metrics,
+    required bool hasPhysicalRail,
+  }) {
+    final sourceScale = metrics.contentWidth / logical(_sourceMotherWidth);
+    final expectedRawBodyHeight =
+        logical(_sourceMotherHeight - _sourceHeaderHeight) * sourceScale;
+    final reclaimedRailFootprint = hasPhysicalRail
+        ? 0.0
+        : metrics.railHeight + metrics.railToCollapseHandleGap;
+    final currentRawBodyHeight =
+        metrics.standardGap * 2 +
+        metrics.subheaderOneHeight +
+        metrics.zone2CardHeight +
+        reclaimedRailFootprint;
+    return (expectedRawBodyHeight - currentRawBodyHeight)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+  }
 
   // HTML: .variant-card / .baseline-card.
   static double get childBorderRadius => logical(25);
@@ -40,12 +101,8 @@ abstract final class BalanceAlternativeHtmlTokens {
   static const Color closingNegativeEnd = Color(0xFFFF8EAA);
 
   // HTML .daily-spend-card: 24px 24px 20px; 10px inter-row gap.
-  static EdgeInsets get dailyCardPadding => EdgeInsets.fromLTRB(
-    logical(24),
-    logical(24),
-    logical(24),
-    logical(20),
-  );
+  static EdgeInsets get dailyCardPadding =>
+      EdgeInsets.fromLTRB(logical(24), logical(24), logical(24), logical(20));
   static double get dailyHeaderHeight => logical(64);
   static double get dailyInsightHeight => logical(102);
   static double get dailyGap => logical(10);
@@ -60,12 +117,8 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get dailyInsightRadius => logical(23);
 
   // HTML .baseline-income-expense: 23px 20px 19px; 42/145px rows.
-  static EdgeInsets get incomeExpensePadding => EdgeInsets.fromLTRB(
-    logical(20),
-    logical(23),
-    logical(20),
-    logical(19),
-  );
+  static EdgeInsets get incomeExpensePadding =>
+      EdgeInsets.fromLTRB(logical(20), logical(23), logical(20), logical(19));
   static double get incomeExpenseHeadingHeight => logical(42);
   static double get incomeExpenseStripHeight => logical(145);
   static double get incomeExpenseGap => logical(13);
@@ -76,12 +129,8 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get incomeExpenseSwitchExtent => logical(56);
 
   // HTML .annual-closings-card: 24px 22px 20px, 63px title and 31px legend.
-  static EdgeInsets get annualClosingsPadding => EdgeInsets.fromLTRB(
-    logical(22),
-    logical(24),
-    logical(22),
-    logical(20),
-  );
+  static EdgeInsets get annualClosingsPadding =>
+      EdgeInsets.fromLTRB(logical(22), logical(24), logical(22), logical(20));
   static double get annualClosingsHeadingHeight => logical(63);
   static double get annualClosingsLegendHeight => logical(31);
   static double get annualTitleSize => logical(30);
@@ -91,10 +140,8 @@ abstract final class BalanceAlternativeHtmlTokens {
 
   // Shared Havi 2 small-card chrome. HTML: 21px 16px / 20px title and 66px
   // no-spend metric; those source units are converted by [logical].
-  static EdgeInsets get smallCardPadding => EdgeInsets.symmetric(
-    horizontal: logical(16),
-    vertical: logical(21),
-  );
+  static EdgeInsets get smallCardPadding =>
+      EdgeInsets.symmetric(horizontal: logical(16), vertical: logical(21));
   static double get smallTitleSize => logical(20);
   static double get noSpendValueSize => logical(66);
   static double get smallBodySize => logical(17);
@@ -103,12 +150,8 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get annualSavingsValueSize => logical(37);
 
   // HTML .income-expense-card (Éves lower combined card).
-  static EdgeInsets get annualIncomeExpensePadding => EdgeInsets.fromLTRB(
-    logical(22),
-    logical(21),
-    logical(22),
-    logical(19),
-  );
+  static EdgeInsets get annualIncomeExpensePadding =>
+      EdgeInsets.fromLTRB(logical(22), logical(21), logical(22), logical(19));
   static double get annualIncomeExpenseHeadingHeight => logical(60);
   static double get annualIncomeExpenseGap => logical(8);
   static double get annualIncomeExpenseIconExtent => logical(42);
@@ -120,11 +163,7 @@ abstract final class BalanceAlternativeHtmlTokens {
     borderRadius: BorderRadius.circular(childBorderRadius),
     border: Border.all(color: childBorder, width: logical(2)),
     boxShadow: const <BoxShadow>[
-      BoxShadow(
-        color: Color(0x0614213A),
-        blurRadius: 3,
-        offset: Offset(0, 1),
-      ),
+      BoxShadow(color: Color(0x0614213A), blurRadius: 3, offset: Offset(0, 1)),
     ],
   );
 }

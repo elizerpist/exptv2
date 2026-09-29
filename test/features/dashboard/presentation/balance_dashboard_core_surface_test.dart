@@ -14,11 +14,13 @@ import 'package:fluvi/features/dashboard/application/dashboard_balance_presentat
 import 'package:fluvi/features/dashboard/application/dashboard_balance_closings_momentum_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_category_movers_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
+import 'package:fluvi/features/dashboard/application/dashboard_balance_retention_stability_projection.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_entity_insights_projection.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_border_style.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shadow_style.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_dashboard_core_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_category_movers_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_core_mode_presentation.dart';
@@ -292,7 +294,10 @@ void main() {
       expect(unifiedRect.top, closeTo(mode.geometry.headerBounds.top, .01));
       expect(
         unifiedRect.bottom,
-        closeTo(mode.geometry.modeContentBounds.bottom, .01),
+        closeTo(mode.geometry.subheaderEnvelopeBounds.bottom, .01),
+        reason:
+            'The seamless Balance Mother Card ends at the same Header/content '
+            'envelope boundary as Mind, not after the indicator lane.',
       );
       expect(
         find.byKey(const ValueKey<String>('balance-primary-card')),
@@ -481,7 +486,9 @@ void main() {
       );
       expect(
         find.byKey(
-          const ValueKey<String>('balance-alternative-year-income-expense-bars'),
+          const ValueKey<String>(
+            'balance-alternative-year-income-expense-bars',
+          ),
         ),
         findsOneWidget,
       );
@@ -521,9 +528,110 @@ void main() {
   );
 
   testWidgets(
+    'SHEET-01/02: 412×892 Havi 2 and Éves cards use direct HTML-scale content instead of a card-wide fallback',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _richAlternativeMonthLinked(),
+      );
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      final metrics = DashboardLayoutMetrics.reference.fitToViewport(
+        const Size(412, 892),
+      );
+      final mode = _balanceModePresentation(
+        metrics: metrics,
+        principalModeContentExtraHeight:
+            BalanceAlternativeHtmlTokens.extendedSheetPrincipalModeContentExtraHeight(
+              metrics: metrics,
+              hasPhysicalRail: true,
+            ),
+      );
+
+      Future<void> pumpSurface() => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: const ValueKey<String>('balance-alternative-sheet-golden'),
+              child: SizedBox.expand(
+                child: BalanceDashboardCoreSurface(
+                  presentation: mode,
+                  balanceLinkedPresentation: linked,
+                  presentationSettings: settings,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      Finder cardWideFallback() => find.byWidgetPredicate((widget) {
+        if (widget is! FittedBox || widget.fit != BoxFit.contain) {
+          return false;
+        }
+        final child = widget.child;
+        return child is SizedBox && child.width != null && child.height != null;
+      });
+
+      await pumpSurface();
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-month-daily-spend-plot'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        cardWideFallback(),
+        findsNothing,
+        reason:
+            'The Havi 2 allocation at the reference viewport must keep its '
+            'CSS-derived type and plot dimensions without a whole-card scale '
+            'fallback.',
+      );
+      _expectHtmlCardSurfaceSizes(tester);
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-alternative-sheet-golden')),
+        matchesGoldenFile(
+          '../../../goldens/balance_alternative_havi2_surface.png',
+        ),
+      );
+
+      linked.value = _richAlternativeYearLinked();
+      await tester.pump();
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-alternative-year-closings-plot'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        cardWideFallback(),
+        findsNothing,
+        reason:
+            'The Éves allocation at the reference viewport must keep both '
+            'charts and their labels at their authored scale.',
+      );
+      _expectHtmlCardSurfaceSizes(tester);
+      await expectLater(
+        find.byKey(const ValueKey<String>('balance-alternative-sheet-golden')),
+        matchesGoldenFile(
+          '../../../goldens/balance_alternative_eves_surface.png',
+        ),
+      );
+    },
+  );
+
+  testWidgets(
     'ALT-MOTHER-UI: hiding the unified mother surface preserves the alternative body allocation and data path',
     (tester) async {
-      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(_linked());
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
       final settings = BalancePresentationController()
         ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
         ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
@@ -3477,6 +3585,25 @@ void main() {
   );
 }
 
+void _expectHtmlCardSurfaceSizes(WidgetTester tester) {
+  final primary =
+      BalanceAlternativeHtmlTokens.extendedSheetPrimaryCardMinimumSize;
+  final side = BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize;
+  final combined =
+      BalanceAlternativeHtmlTokens.extendedSheetCombinedCardMinimumSize;
+
+  void expectSize(String key, Size expected) {
+    final actual = tester.getSize(find.byKey(ValueKey<String>(key)));
+    expect(actual.width, closeTo(expected.width, .01), reason: '$key width');
+    expect(actual.height, closeTo(expected.height, .01), reason: '$key height');
+  }
+
+  expectSize('balance-tetris-card-3', primary);
+  expectSize('balance-tetris-card-4', side);
+  expectSize('balance-tetris-card-5', side);
+  expectSize('balance-tetris-card-combined', combined);
+}
+
 DashboardCoreModePresentation _balanceModePresentation({
   DashboardLayoutMetrics? metrics,
   double principalModeContentExtraHeight = 0,
@@ -3538,6 +3665,8 @@ DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(
 
 DashboardBalanceLinkedPresentation _linked({
   DashboardBalancePrimaryPresentation? cashflow,
+  DashboardBalanceClosingsPresentation? closings,
+  DashboardBalanceRetentionPresentation? retention,
   DashboardBalanceCategoryMoversPresentation? categoryMovers,
   List<DashboardBalanceRankedItem>? topCategories,
 }) {
@@ -3611,6 +3740,8 @@ DashboardBalanceLinkedPresentation _linked({
       ),
     ],
     categoryMovers: categoryMovers,
+    closings: closings,
+    retention: retention,
     categoryInsights: <String, DashboardBalanceCategoryInsight>{
       'salary': _salaryCategoryInsight(),
     },
@@ -3624,6 +3755,110 @@ const _alternativeBalanceIdentity = DashboardBalancePrimaryIdentity(
   upstreamScopeKey: 'income|expense',
   indexGeneration: 3,
   coreRevision: 7,
+);
+
+DashboardBalanceLinkedPresentation _richAlternativeMonthLinked() => _linked(
+  cashflow: DashboardBalancePrimaryPresentation(
+    identity: _alternativeBalanceIdentity,
+    timeScope: MonthScope(const YearMonth(year: 2026, month: 8)),
+    mode: DashboardBalancePrimaryMode.month,
+    incomeTotalMinor: 500000,
+    expenseTotalMinor: 200000,
+    periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+    dailyPoints: <DashboardBalancePrimaryDayPoint>[
+      for (var day = 1; day <= 31; day += 1)
+        DashboardBalancePrimaryDayPoint(
+          day: day,
+          incomeMinor: day == 1 ? 500000 : 0,
+          expenseMinor: switch (day % 7) {
+            0 => 36000,
+            3 => 21000,
+            5 => 12000,
+            _ => 0,
+          },
+        ),
+    ],
+  ),
+  retention: DashboardBalanceRetentionPresentation(
+    identity: _alternativeBalanceIdentity,
+    timeScope: MonthScope(const YearMonth(year: 2026, month: 8)),
+    periods: const <DashboardBalanceRetentionPeriod>[
+      DashboardBalanceRetentionPeriod(
+        id: '2026-07',
+        label: 'július',
+        incomeMinor: 400000,
+        expenseMinor: 250000,
+        state: DashboardBalanceRetentionState.value,
+        selected: false,
+        retentionBasisPoints: 3750,
+      ),
+      DashboardBalanceRetentionPeriod(
+        id: '2026-08',
+        label: 'augusztus',
+        incomeMinor: 500000,
+        expenseMinor: 200000,
+        state: DashboardBalanceRetentionState.value,
+        selected: true,
+        retentionBasisPoints: 6000,
+      ),
+    ],
+  ),
+);
+
+DashboardBalanceLinkedPresentation _richAlternativeYearLinked() => _linked(
+  cashflow: DashboardBalancePrimaryPresentation(
+    identity: _alternativeBalanceIdentity,
+    timeScope: const YearScope(2026),
+    mode: DashboardBalancePrimaryMode.year,
+    incomeTotalMinor: 1326000,
+    expenseTotalMinor: 858000,
+    periodPairs: <DashboardBalancePrimaryPeriodPair>[
+      for (var month = 1; month <= 12; month += 1)
+        DashboardBalancePrimaryPeriodPair(
+          value: month,
+          incomeMinor: month * 17000,
+          expenseMinor: month * 11000,
+        ),
+    ],
+    dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+  ),
+  closings: DashboardBalanceClosingsPresentation(
+    identity: _alternativeBalanceIdentity,
+    timeScope: const YearScope(2026),
+    buckets: <DashboardBalanceClosingBucket>[
+      for (var month = 1; month <= 12; month += 1)
+        DashboardBalanceClosingBucket(
+          id: '2026-$month',
+          label: 'M$month',
+          incomeMinor: month.isEven ? 90000 : 25000,
+          expenseMinor: month.isEven ? 30000 : 55000,
+        ),
+    ],
+  ),
+  retention: DashboardBalanceRetentionPresentation(
+    identity: _alternativeBalanceIdentity,
+    timeScope: const YearScope(2026),
+    periods: const <DashboardBalanceRetentionPeriod>[
+      DashboardBalanceRetentionPeriod(
+        id: '2025',
+        label: '2025',
+        incomeMinor: 1100000,
+        expenseMinor: 760000,
+        state: DashboardBalanceRetentionState.value,
+        selected: false,
+        retentionBasisPoints: 3090,
+      ),
+      DashboardBalanceRetentionPeriod(
+        id: '2026',
+        label: '2026',
+        incomeMinor: 1326000,
+        expenseMinor: 858000,
+        state: DashboardBalanceRetentionState.value,
+        selected: true,
+        retentionBasisPoints: 3529,
+      ),
+    ],
+  ),
 );
 
 DashboardBalancePrimaryPresentation _alternativeYearCashflow() =>
