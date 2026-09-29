@@ -51,6 +51,8 @@
         gap: 32px;
       }
       .screen-wrap { display: grid; gap: 10px; }
+      /* The Napi planning canvas intentionally starts a fresh row below SUM. */
+      .screen-wrap--napi { grid-column: 1; }
       .screen-title {
         margin: 0;
         color: #3f506a;
@@ -486,6 +488,335 @@
         border-radius: 25px;
         background: #fff;
         box-shadow: 0 2px 6px rgb(20 33 58 / .025);
+      }
+      /* One shared visual token for deliberately empty planning cards. */
+      .empty-planning-layout .variant-card,
+      .empty-planning-layout .baseline-card { border-color: #a879ff; }
+      /* SUM mock-data component. It mirrors the app's long-term closed-month
+         projection: median monthly net + a MAD-style typical range. The
+         component deliberately has no subjective stability-score label. */
+      .cashflow-stability-card {
+        display: grid;
+        grid-template-rows: 48px 126px minmax(0, 1fr);
+        gap: 10px;
+        width: 100%;
+        height: 100%;
+        padding: 18px 22px 20px;
+        color: #111b59;
+      }
+      .cashflow-stability-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .cashflow-stability-heading-copy {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 12px;
+      }
+      .cashflow-stability-icon {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #eee8ff, #faf8ff);
+      }
+      .cashflow-stability-icon svg { width: 26px; height: 26px; }
+      .cashflow-stability-title {
+        display: block;
+        color: #111b59;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -.035em;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .cashflow-stability-subtitle {
+        display: block;
+        margin-top: 6px;
+        color: #7181aa;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1;
+      }
+      .cashflow-closed-months {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        flex: 0 0 auto;
+        padding: 9px 11px;
+        border-radius: 14px;
+        background: #f0ebff;
+        color: #7339d4;
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .cashflow-closed-months svg { width: 19px; height: 19px; }
+      .cashflow-band-chart {
+        position: relative;
+        min-width: 0;
+        height: 126px;
+      }
+      .cashflow-band-surface {
+        position: absolute;
+        top: 55px;
+        right: 0;
+        left: 0;
+        height: 71px;
+        overflow: hidden;
+        border-radius: 19px;
+        background: linear-gradient(90deg, #fde0e7 0%, #f1ebff 20%, #e7dcff 50%, #f0eaff 86%, #d3f7df 100%);
+      }
+      .cashflow-axis-label {
+        position: absolute;
+        z-index: 4;
+        top: 23px;
+        left: var(--position);
+        color: #52658a;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: -.025em;
+        line-height: 1;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+      .cashflow-axis-label--median {
+        top: 0;
+        color: #7339d4;
+        text-align: center;
+      }
+      .cashflow-axis-label--median span {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .cashflow-axis-label--median strong {
+        display: block;
+        font-size: 17px;
+        font-weight: 850;
+      }
+      .cashflow-band-rule {
+        position: absolute;
+        z-index: 3;
+        top: 45px;
+        bottom: 0;
+        left: var(--position);
+        width: 2px;
+        transform: translateX(-50%);
+      }
+      .cashflow-band-rule--bound { border-left: 2px dashed #aeb9c9; }
+      .cashflow-band-rule--zero { background: #9ca9ba; }
+      .cashflow-band-rule--median { width: 3px; background: #7339d4; }
+      .cashflow-month-dot {
+        position: absolute;
+        z-index: 2;
+        top: calc(63px + var(--offset));
+        left: var(--position);
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #9d78e9;
+        box-shadow: 0 1px 2px rgb(77 58 152 / .14);
+        transform: translateX(-50%);
+      }
+      .cashflow-month-dot--negative { background: #ef89a0; }
+      .cashflow-month-dot--positive { background: #38b96b; }
+      .cashflow-month-dot--median {
+        z-index: 5;
+        width: 16px;
+        height: 16px;
+        margin-top: -2px;
+        background: #7339d4;
+        box-shadow: 0 2px 5px rgb(93 45 184 / .3);
+      }
+      .cashflow-stability-legend {
+        display: grid;
+        align-content: center;
+        gap: 12px;
+        min-height: 0;
+        padding: 4px 2px 0;
+      }
+      .cashflow-stability-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        color: #7181aa;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -.02em;
+        line-height: 1.15;
+      }
+      .cashflow-stability-legend-marker {
+        width: 24px;
+        height: 24px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #b69aff;
+        box-shadow: 0 2px 5px rgb(112 70 213 / .18);
+      }
+      .cashflow-stability-legend-marker--month {
+        width: 15px;
+        height: 15px;
+        margin-left: 5px;
+        margin-right: 4px;
+        background: #e5dcff;
+        box-shadow: none;
+      }
+      /* SUM's distribution visual is an SVG renderer fed by the full set of
+         closed-month nets. It uses the same original Soft rainbow anchors as
+         DashboardBalanceHeaderPalette.softRainbow in the Flutter app. */
+      .sum-histogram-card {
+        display: grid;
+        grid-template-rows: 58px minmax(0, 1fr) 82px;
+        gap: 10px;
+        width: 100%;
+        height: 100%;
+        padding: 22px 24px 20px;
+      }
+      .sum-histogram-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .sum-histogram-title-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .sum-histogram-title {
+        color: #111b59;
+        font-size: 25px;
+        font-weight: 800;
+        letter-spacing: -.04em;
+        line-height: 1;
+      }
+      .sum-histogram-info {
+        width: 22px;
+        height: 22px;
+        flex: 0 0 auto;
+        color: #7181aa;
+      }
+      .sum-histogram-subtitle {
+        display: block;
+        margin-top: 8px;
+        color: #7181aa;
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 1;
+      }
+      .sum-histogram-plot { min-height: 0; }
+      .sum-histogram-plot svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .sum-histogram-insight {
+        display: grid;
+        grid-template-columns: 35px minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        padding: 12px 14px;
+        border-radius: 17px;
+        background: linear-gradient(135deg, #f5f2ff, #ede8ff);
+      }
+      .sum-histogram-insight-icon {
+        width: 31px;
+        height: 31px;
+        color: #7339d4;
+      }
+      .sum-histogram-insight strong {
+        display: block;
+        color: #4f28be;
+        font-size: 17px;
+        font-weight: 850;
+        letter-spacing: -.03em;
+        line-height: 1.08;
+      }
+      .sum-histogram-insight-copy span {
+        display: block;
+        margin-top: 5px;
+        color: #7181aa;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -.02em;
+        line-height: 1.16;
+      }
+      .sum-positive-streak-card {
+        display: grid;
+        grid-template-rows: 43px 57px 25px 49px;
+        gap: 3px;
+        width: 100%;
+        height: 100%;
+        padding: 18px 16px 16px;
+      }
+      .sum-positive-streak-heading {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .sum-positive-streak-icon {
+        display: grid;
+        width: 31px;
+        height: 31px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 11px;
+        background: linear-gradient(135deg, #edf0ff, #e7fcf5);
+        color: #5f49d6;
+      }
+      .sum-positive-streak-icon svg { width: 21px; height: 21px; }
+      .sum-positive-streak-title {
+        color: #111b59;
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: -.035em;
+        line-height: 1.05;
+      }
+      .sum-positive-streak-value {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+      .sum-positive-streak-value strong {
+        color: #19a773;
+        font-size: 54px;
+        font-weight: 850;
+        letter-spacing: -.065em;
+        line-height: .9;
+      }
+      .sum-positive-streak-value span {
+        color: #52658a;
+        font-size: 15px;
+        font-weight: 750;
+        line-height: 1;
+      }
+      .sum-positive-streak-copy {
+        color: #7181aa;
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: -.015em;
+        line-height: 1.1;
+      }
+      .sum-positive-streak-visual {
+        min-height: 0;
+        padding: 5px 8px;
+        border-radius: 13px;
+        background: linear-gradient(90deg, #f0eeff, #ebfaf5);
+      }
+      .sum-positive-streak-visual svg {
+        display: block;
+        width: 100%;
+        height: 100%;
       }
       .variant-card-3 {
         left: var(--half-gutter);
@@ -1400,6 +1731,157 @@
             </section>
           </section>
         </div>
+
+        <div class="screen-wrap">
+          <p class="screen-title">Sum</p>
+          <section class="native-canvas" aria-label="Balance SUM layout">
+            <section class="mother-card variant-mother" aria-label="Balance unified extended sheet mother card, SUM">
+              <div class="variant-header" aria-hidden="true">
+                <img class="reference-raster" src="assets/balance-extended-sheet-reference-920x2048.png" alt="">
+              </div>
+              <div class="variant-body empty-planning-layout">
+                <section class="variant-card variant-card-3" aria-label="Havi nettó eloszlás 38 lezárt hónapból">
+                  <article class="sum-histogram-card">
+                    <header class="sum-histogram-heading">
+                      <span>
+                        <span class="sum-histogram-title-line">
+                          <span class="sum-histogram-title">Havi eredmények eloszlása</span>
+                        </span>
+                        <span class="sum-histogram-subtitle">Minden lezárt hónap nettó eredménye</span>
+                      </span>
+                    </header>
+                    <div class="sum-histogram-plot" id="sum-net-histogram" aria-live="polite"></div>
+                    <aside class="sum-histogram-insight" id="sum-net-histogram-insight" aria-label="A hisztogram értelmezése"></aside>
+                  </article>
+                </section>
+                <section class="variant-card variant-card-4" aria-label="Leghosszabb pozitív széria">
+                  <article class="sum-positive-streak-card">
+                    <header class="sum-positive-streak-heading">
+                      <span class="sum-positive-streak-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="m4 16 5-5 3.5 3.5L20 7m-4 0h4v4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.7"></path></svg>
+                      </span>
+                      <span class="sum-positive-streak-title">Leghosszabb<br>pozitív széria</span>
+                    </header>
+                    <div class="sum-positive-streak-value"><strong id="sum-positive-streak-count">0</strong><span>hónap</span></div>
+                    <span class="sum-positive-streak-copy" id="sum-positive-streak-copy">Egymást követő pozitív zárások</span>
+                    <div class="sum-positive-streak-visual" id="sum-positive-streak-visual" aria-label="A leghosszabb pozitív széria alakulása"></div>
+                  </article>
+                </section>
+                <section class="variant-card variant-card-5 baseline-savings" aria-label="Megtakarítási arány: 62 százalék">
+                  <span class="baseline-progress-title-row">
+                    <svg class="baseline-progress-title-icon" viewBox="0 0 30 42" aria-hidden="true"><rect x="3" y="3" width="24" height="36" rx="7" fill="none" stroke="#7c3aed" stroke-width="3"></rect><circle cx="15" cy="15" r="4" fill="none" stroke="#7c3aed" stroke-width="2.5"></circle><path d="M8.5 29c2.1-3.4 4.3-5.1 6.5-5.1s4.4 1.7 6.5 5.1M9 34h12" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+                    <span class="baseline-savings-title">Megtakarítás</span>
+                  </span>
+                  <svg class="baseline-savings-ring" viewBox="0 0 104 104" role="img" aria-label="Megtakarítási arány 62 százalék">
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#e7ebf0" stroke-width="10"></circle>
+                    <circle cx="52" cy="52" r="39" fill="none" stroke="#7c3aed" stroke-linecap="round" stroke-width="10" stroke-dasharray="151.9 245.0" transform="rotate(-90 52 52)"></circle>
+                    <text x="52" y="59" fill="#7c3aed" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="800" text-anchor="middle">62%</text>
+                  </svg>
+                </section>
+                <section class="variant-card variant-card-combined" aria-label="Cashflow stabilitás: 38 lezárt hónap, tipikus tartomány mínusz 39 500 és plusz 57 500 forint között">
+                  <article class="cashflow-stability-card">
+                    <header class="cashflow-stability-heading">
+                      <span class="cashflow-stability-heading-copy">
+                        <span class="cashflow-stability-icon" aria-hidden="true">
+                          <svg viewBox="0 0 26 26"><path d="M4 21V14m9 7V5m9 16V10" fill="none" stroke="#7339d4" stroke-linecap="round" stroke-width="4"></path></svg>
+                        </span>
+                        <span>
+                          <span class="cashflow-stability-title">Cashflow stabilitás</span>
+                          <span class="cashflow-stability-subtitle">Összes lezárt hónap alapján</span>
+                        </span>
+                      </span>
+                      <span class="cashflow-closed-months">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.4"></rect><path d="M7 3v5m10-5v5M3 10h18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.4"></path></svg>
+                        38 lezárt hónap
+                      </span>
+                    </header>
+
+                    <div class="cashflow-band-chart" role="img" aria-label="Mock adatok: a tipikus havi nettó mínusz 39 500 és plusz 57 500 forint közötti; a medián plusz 9 000 forint. A 38 pont egy-egy lezárt hónap nettó eredményét jelöli.">
+                      <div class="cashflow-band-surface" aria-hidden="true"></div>
+                      <span class="cashflow-axis-label" style="--position:20%">−39,5 k Ft</span>
+                      <span class="cashflow-axis-label" style="--position:43%">0 Ft</span>
+                      <span class="cashflow-axis-label cashflow-axis-label--median" style="--position:51%"><span>Medián</span><strong>+9 000 Ft</strong></span>
+                      <span class="cashflow-axis-label" style="--position:86%">+57,5 k Ft</span>
+
+                      <i class="cashflow-band-rule cashflow-band-rule--bound" style="--position:20%" aria-hidden="true"></i>
+                      <i class="cashflow-band-rule cashflow-band-rule--zero" style="--position:43%" aria-hidden="true"></i>
+                      <i class="cashflow-band-rule cashflow-band-rule--median" style="--position:51%" aria-hidden="true"></i>
+                      <i class="cashflow-band-rule cashflow-band-rule--bound" style="--position:86%" aria-hidden="true"></i>
+
+                      <i class="cashflow-month-dot cashflow-month-dot--negative" style="--position:8%; --offset:47px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot cashflow-month-dot--negative" style="--position:15%; --offset:25px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:24%; --offset:32px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:27%; --offset:40px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:30%; --offset:19px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:33%; --offset:46px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:35%; --offset:32px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:37%; --offset:53px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:39%; --offset:24px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:41%; --offset:44px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:43%; --offset:37px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:45%; --offset:26px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:47%; --offset:47px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:49%; --offset:39px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot cashflow-month-dot--median" style="--position:51%; --offset:26px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:52.5%; --offset:45px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:54%; --offset:31px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:56%; --offset:52px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:58%; --offset:28px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:60%; --offset:43px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:61.5%; --offset:25px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:63%; --offset:48px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:65%; --offset:39px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:66%; --offset:31px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:68%; --offset:50px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:70%; --offset:42px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:72%; --offset:31px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:74%; --offset:47px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:76%; --offset:28px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:78%; --offset:44px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:80%; --offset:31px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:82%; --offset:40px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:84%; --offset:32px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:86%; --offset:27px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot" style="--position:89%; --offset:37px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot cashflow-month-dot--positive" style="--position:93%; --offset:32px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot cashflow-month-dot--positive" style="--position:96%; --offset:40px" aria-hidden="true"></i>
+                      <i class="cashflow-month-dot cashflow-month-dot--positive" style="--position:98%; --offset:26px" aria-hidden="true"></i>
+                    </div>
+
+                    <footer class="cashflow-stability-legend">
+                      <span class="cashflow-stability-legend-item">
+                        <i class="cashflow-stability-legend-marker" aria-hidden="true"></i>
+                        A havi eredményeid jellemzően ebben a sávban mozognak.
+                      </span>
+                      <span class="cashflow-stability-legend-item">
+                        <i class="cashflow-stability-legend-marker cashflow-stability-legend-marker--month" aria-hidden="true"></i>
+                        Minden pont egy lezárt hónapot jelöl.
+                      </span>
+                    </footer>
+                  </article>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+
+        <!-- NAPI-01 through NAPI-03: Havi's shared five-slot geometry, kept
+             deliberately content-free as the next daily-chart planning canvas. -->
+        <div class="screen-wrap screen-wrap--napi">
+          <p class="screen-title">Napi</p>
+          <section class="native-canvas" aria-label="Balance Napi empty five-card planning layout">
+            <section class="mother-card" aria-label="Balance unified extended sheet mother card, Napi">
+              <img class="reference-raster" src="assets/balance-extended-sheet-reference-920x2048.png" alt="">
+              <div class="child-slots empty-planning-layout" aria-label="Napi empty five-section child-card geometry">
+                <section class="slot card-3 baseline-card" data-slot="Card 3" aria-label="Üres napi child card 3, új diagram helye"></section>
+                <section class="slot card-4 baseline-card" data-slot="Card 4" aria-label="Üres napi child card 4, új diagram helye"></section>
+                <section class="slot card-5 baseline-card" data-slot="Card 5" aria-label="Üres napi child card 5, új diagram helye"></section>
+                <section class="slot card-1 baseline-card" data-slot="Card 1" aria-label="Üres napi child card 1, új diagram helye"></section>
+                <section class="slot card-2 baseline-card" data-slot="Card 2" aria-label="Üres napi child card 2, új diagram helye"></section>
+              </div>
+            </section>
+          </section>
+        </div>
       </div>
       <aside>
         <h1>Balance extended sheet</h1>
@@ -2038,6 +2520,550 @@
         setGroupSelected(false);
         renderAll();
       });
+      /*
+       * Future Flutter component contract — adaptive monthly-net histogram:
+       * - input is exactly one income-minus-expense net for every closed month;
+       *   the current open month is excluded and every supplied observation is
+       *   assigned to exactly one bar.
+       * - bin width starts with Freedman–Diaconis (2 × IQR / cubeRoot(N)); an
+       *   IQR=0 sample falls back to MAD, then to its own min–max spread.
+       * - bins are equal-width and derived from the current data. A 5–11 bar
+       *   mobile ceiling controls visual density, never a fixed HUF step.
+       * - Tukey-fence outliers retain a separate underflow/overflow bar. Zero
+       *   is a bin boundary when the core crosses it, otherwise an external
+       *   reference. The median and median±MAD typical band are overlays.
+       * - bar hues use the Flutter Soft rainbow original anchors: negative is
+       *   coral/rose, zero purple, positive blue/turquoise/green.
+       */
+      const sumHistogramMockClosedMonthNets = Object.freeze([
+        -194000, 53000, -35000, 128000, -18000, 9000, -151000, 24000,
+        199000, -39500, 70000, -109000,
+        12000, 57500, 143000, 39000, 85000, 18000,
+        -30000, 0, -172000, -97000, 9000, -24000, 223000, -2000,
+        48000, -131000, 158000, 30000, -142000, 101000, 8000, -118000,
+        4000, 176000, -10000, 115000,
+      ]);
+
+      // Exact original Soft rainbow anchors from
+      // DashboardBalanceHeaderPalette.softRainbow in the Flutter app.
+      const sumHistogramSoftRainbow = Object.freeze([
+        '#fbf8cc', '#fde4cf', '#ffcfd2', '#f1c0e8', '#cfbaf0',
+        '#a3c4f3', '#90dbf4', '#8eecf5', '#98f5e1', '#b9fbc0',
+      ]);
+      const sumHistogramSvgNamespace = 'http://www.w3.org/2000/svg';
+      const sumHistogramEpsilon = 1e-9;
+
+      function sumHistogramClamp(value, minimum, maximum) {
+        return Math.min(maximum, Math.max(minimum, value));
+      }
+
+      function sumHistogramMedian(sortedValues) {
+        const middle = Math.floor(sortedValues.length / 2);
+        return sortedValues.length % 2 === 0
+          ? (sortedValues[middle - 1] + sortedValues[middle]) / 2
+          : sortedValues[middle];
+      }
+
+      function sumHistogramQuantile(sortedValues, quantile) {
+        const position = (sortedValues.length - 1) * quantile;
+        const lower = Math.floor(position);
+        const upper = Math.ceil(position);
+        if (lower === upper) return sortedValues[lower];
+        const fraction = position - lower;
+        return sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * fraction;
+      }
+
+      function sumHistogramNiceStep(rawStep) {
+        if (!(rawStep > sumHistogramEpsilon)) return 0;
+        const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+        const normalized = rawStep / magnitude;
+        const candidate = [1, 2, 2.5, 5, 10].reduce(
+          (closest, current) => Math.abs(current - normalized) < Math.abs(closest - normalized)
+            ? current
+            : closest,
+          1,
+        );
+        return candidate * magnitude;
+      }
+
+      function sumHistogramDomain(coreMinimum, coreMaximum, step) {
+        const start = Math.floor(coreMinimum / step) * step;
+        let end = Math.ceil(coreMaximum / step) * step;
+        if (Math.abs(end - start) <= sumHistogramEpsilon) end = start + step;
+        const count = Math.max(1, Math.round((end - start) / step));
+        return { start, end: start + count * step, count };
+      }
+
+      function buildAdaptiveMonthlyNetHistogram(rawValues) {
+        const values = rawValues.filter(Number.isFinite);
+        if (values.length === 0) return null;
+        const sorted = [...values].sort((left, right) => left - right);
+        const minimum = sorted[0];
+        const maximum = sorted.at(-1);
+        const median = sumHistogramMedian(sorted);
+        const deviations = sorted.map((value) => Math.abs(value - median)).sort((left, right) => left - right);
+        const mad = sumHistogramMedian(deviations);
+        const q1 = sumHistogramQuantile(sorted, .25);
+        const q3 = sumHistogramQuantile(sorted, .75);
+        const iqr = q3 - q1;
+        const allIdentical = Math.abs(maximum - minimum) <= sumHistogramEpsilon;
+
+        if (allIdentical) {
+          return {
+            values,
+            sampleSize: values.length,
+            median,
+            mad,
+            q1,
+            q3,
+            iqr,
+            allIdentical: true,
+            lowerFence: minimum,
+            upperFence: maximum,
+            regularStart: minimum,
+            regularEnd: maximum,
+            regularBinWidth: 0,
+            regularBins: [{ kind: 'regular', start: minimum, end: maximum, count: values.length }],
+            underflowCount: 0,
+            overflowCount: 0,
+          };
+        }
+
+        let lowerFence = Number.NEGATIVE_INFINITY;
+        let upperFence = Number.POSITIVE_INFINITY;
+        if (iqr > sumHistogramEpsilon) {
+          lowerFence = q1 - 1.5 * iqr;
+          upperFence = q3 + 1.5 * iqr;
+        } else if (mad > sumHistogramEpsilon) {
+          lowerFence = median - 3 * mad;
+          upperFence = median + 3 * mad;
+        }
+
+        const coreValues = values.filter((value) => value >= lowerFence && value <= upperFence);
+        const resolvedCoreValues = coreValues.length > 0 ? coreValues : values;
+        const coreMinimum = Math.min(...resolvedCoreValues);
+        const coreMaximum = Math.max(...resolvedCoreValues);
+        const coreRange = coreMaximum - coreMinimum;
+        const fallbackTarget = Math.min(5, Math.max(2, Math.ceil(Math.cbrt(values.length))));
+        let rawWidth = iqr > sumHistogramEpsilon
+          ? 2 * iqr / Math.cbrt(values.length)
+          : mad > sumHistogramEpsilon
+            ? 2 * mad / Math.cbrt(values.length)
+            : coreRange / fallbackTarget;
+        if (!(rawWidth > sumHistogramEpsilon)) rawWidth = coreRange / fallbackTarget;
+        let regularBinWidth = sumHistogramNiceStep(rawWidth);
+        if (!(regularBinWidth > sumHistogramEpsilon)) regularBinWidth = coreRange;
+
+        let domain = sumHistogramDomain(coreMinimum, coreMaximum, regularBinWidth);
+        // The density cap controls only the rendered number of regular bins.
+        // It never changes the value-derived nature of their equal widths.
+        for (let attempt = 0; domain.count > 11 && attempt < 8; attempt += 1) {
+          regularBinWidth = sumHistogramNiceStep(regularBinWidth * 1.7);
+          domain = sumHistogramDomain(coreMinimum, coreMaximum, regularBinWidth);
+        }
+
+        const regularBins = Array.from({ length: domain.count }, (_, index) => ({
+          kind: 'regular',
+          start: domain.start + index * regularBinWidth,
+          end: domain.start + (index + 1) * regularBinWidth,
+          count: 0,
+        }));
+        let underflowCount = 0;
+        let overflowCount = 0;
+        for (const value of values) {
+          if (value < lowerFence) {
+            underflowCount += 1;
+            continue;
+          }
+          if (value > upperFence) {
+            overflowCount += 1;
+            continue;
+          }
+          const index = sumHistogramClamp(
+            Math.floor((value - domain.start) / regularBinWidth),
+            0,
+            regularBins.length - 1,
+          );
+          regularBins[index].count += 1;
+        }
+
+        return {
+          values,
+          sampleSize: values.length,
+          median,
+          mad,
+          q1,
+          q3,
+          iqr,
+          allIdentical: false,
+          lowerFence,
+          upperFence,
+          regularStart: domain.start,
+          regularEnd: domain.end,
+          regularBinWidth,
+          regularBins,
+          underflowCount,
+          overflowCount,
+        };
+      }
+
+      function sumHistogramBlendHex(left, right, amount) {
+        const start = left.slice(1);
+        const end = right.slice(1);
+        const channel = (offset) => Math.round(
+          parseInt(start.slice(offset, offset + 2), 16)
+          + (parseInt(end.slice(offset, offset + 2), 16) - parseInt(start.slice(offset, offset + 2), 16)) * amount,
+        ).toString(16).padStart(2, '0');
+        return `#${channel(0)}${channel(2)}${channel(4)}`;
+      }
+
+      function sumHistogramPaletteSample(startIndex, endIndex, amount) {
+        const position = startIndex + (endIndex - startIndex) * sumHistogramClamp(amount, 0, 1);
+        const left = Math.floor(position);
+        const right = Math.min(sumHistogramSoftRainbow.length - 1, Math.ceil(position));
+        return sumHistogramBlendHex(
+          sumHistogramSoftRainbow[left],
+          sumHistogramSoftRainbow[right],
+          position - left,
+        );
+      }
+
+      function sumHistogramColorForNet(value, displayMinimum, displayMaximum) {
+        if (value <= 0) {
+          const negativeSpan = Math.max(sumHistogramEpsilon, Math.abs(Math.min(displayMinimum, 0)));
+          return sumHistogramPaletteSample(1, 4, (value + negativeSpan) / negativeSpan);
+        }
+        const positiveSpan = Math.max(sumHistogramEpsilon, Math.max(displayMaximum, 0));
+        return sumHistogramPaletteSample(4, 9, value / positiveSpan);
+      }
+
+      function sumHistogramFormatCompactHuf(value, includeCurrency = true) {
+        const prefix = value > 0 ? '+' : value < 0 ? '−' : '';
+        const absolute = Math.abs(value);
+        if (absolute >= 1000) {
+          const thousands = absolute / 1000;
+          const digits = Math.abs(thousands - Math.round(thousands)) <= sumHistogramEpsilon ? 0 : 1;
+          return `${prefix}${thousands.toLocaleString('hu-HU', { maximumFractionDigits: digits })}k${includeCurrency ? ' Ft' : ''}`;
+        }
+        return `${prefix}${absolute.toLocaleString('hu-HU', { maximumFractionDigits: 0 })}${includeCurrency ? ' Ft' : ''}`;
+      }
+
+      function sumHistogramSvgElement(name, attributes = {}, text) {
+        const element = document.createElementNS(sumHistogramSvgNamespace, name);
+        Object.entries(attributes).forEach(([attribute, value]) => element.setAttribute(attribute, String(value)));
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function sumHistogramAppendLine(svg, attributes) {
+        svg.append(sumHistogramSvgElement('line', attributes));
+      }
+
+      function buildLongestPositiveStreak(values) {
+        let activeStart = 0;
+        let activeLength = 0;
+        let bestStart = -1;
+        let bestLength = 0;
+        values.forEach((value, index) => {
+          if (value > 0) {
+            if (activeLength === 0) activeStart = index;
+            activeLength += 1;
+            if (activeLength > bestLength) {
+              bestStart = activeStart;
+              bestLength = activeLength;
+            }
+          } else {
+            activeLength = 0;
+          }
+        });
+        return {
+          length: bestLength,
+          values: bestStart < 0 ? [] : values.slice(bestStart, bestStart + bestLength),
+        };
+      }
+
+      function renderSumPositiveStreak() {
+        const count = document.querySelector('#sum-positive-streak-count');
+        const copy = document.querySelector('#sum-positive-streak-copy');
+        const visual = document.querySelector('#sum-positive-streak-visual');
+        if (!count || !copy || !visual) return;
+        const streak = buildLongestPositiveStreak(sumHistogramMockClosedMonthNets);
+        count.textContent = String(streak.length);
+        copy.textContent = streak.length === 0
+          ? 'Még nincs pozitív zárási széria'
+          : 'Egymást követő pozitív zárások';
+        visual.setAttribute(
+          'aria-label',
+          streak.length === 0
+            ? 'Nincs pozitív zárási széria'
+            : `Leghosszabb pozitív széria: ${streak.length} egymást követő lezárt hónap`,
+        );
+
+        const visibleValues = streak.values.slice(-6);
+        const svg = sumHistogramSvgElement('svg', {
+          viewBox: '0 0 180 38', preserveAspectRatio: 'none', role: 'img',
+          'aria-label': `${streak.length} hónapos pozitív széria mini idővonala`,
+        });
+        if (visibleValues.length === 0) {
+          svg.append(sumHistogramSvgElement('path', {
+            d: 'M8 21H172', fill: 'none', stroke: '#c9d1df', 'stroke-width': 2.5, 'stroke-dasharray': '5 5',
+          }));
+        } else {
+          const minimum = Math.min(...visibleValues);
+          const maximum = Math.max(...visibleValues);
+          const span = Math.max(sumHistogramEpsilon, maximum - minimum);
+          const points = visibleValues.map((value, index) => ({
+            x: visibleValues.length === 1 ? 90 : 9 + index * 162 / (visibleValues.length - 1),
+            y: 29 - (value - minimum) / span * 20,
+          }));
+          const defs = sumHistogramSvgElement('defs');
+          const lineGradient = sumHistogramSvgElement('linearGradient', {
+            id: 'sum-positive-streak-line', x1: 0, x2: 1, y1: 0, y2: 0,
+          });
+          lineGradient.append(
+            sumHistogramSvgElement('stop', { offset: '0%', 'stop-color': '#a3c4f3' }),
+            sumHistogramSvgElement('stop', { offset: '100%', 'stop-color': '#98f5e1' }),
+          );
+          defs.append(lineGradient);
+          svg.append(defs);
+          svg.append(sumHistogramSvgElement('path', {
+            d: `M${points.map((point) => `${point.x} ${point.y}`).join(' L')}`,
+            fill: 'none', stroke: 'url(#sum-positive-streak-line)', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 3,
+          }));
+          points.forEach((point, index) => {
+            svg.append(sumHistogramSvgElement('circle', {
+              cx: point.x, cy: point.y, r: 4.6,
+              fill: sumHistogramPaletteSample(5, 9, points.length === 1 ? .5 : index / (points.length - 1)),
+              stroke: '#ffffff', 'stroke-width': 1.5,
+            }));
+          });
+        }
+        visual.replaceChildren(svg);
+      }
+
+      function renderSumHistogram() {
+        const host = document.querySelector('#sum-net-histogram');
+        const insight = document.querySelector('#sum-net-histogram-insight');
+        const histogram = buildAdaptiveMonthlyNetHistogram(sumHistogramMockClosedMonthNets);
+        if (!host || !insight || !histogram) return;
+
+        const svg = sumHistogramSvgElement('svg', {
+          viewBox: '0 0 560 320',
+          preserveAspectRatio: 'none',
+          role: 'img',
+          'aria-label': `${histogram.sampleSize} lezárt hónap havi nettó eloszlása. Medián ${sumHistogramFormatCompactHuf(histogram.median)}.`,
+        });
+        svg.append(sumHistogramSvgElement('title', {}, 'Adaptív havi nettó hisztogram'));
+        svg.append(sumHistogramSvgElement('desc', {}, 'Minden bar egy automatikusan számolt, azonos szélességű nettóérték-tartományba eső lezárt hónapok számát mutatja.'));
+
+        const bars = [
+          ...(histogram.underflowCount > 0 ? [{
+            kind: 'underflow', count: histogram.underflowCount, representative: Math.min(...histogram.values),
+          }] : []),
+          ...histogram.regularBins.map((bin) => ({
+            ...bin,
+            representative: (bin.start + bin.end) / 2,
+          })),
+          ...(histogram.overflowCount > 0 ? [{
+            kind: 'overflow', count: histogram.overflowCount, representative: Math.max(...histogram.values),
+          }] : []),
+        ];
+        const maximumCount = Math.max(1, ...bars.map((bar) => bar.count));
+        const yMaximum = maximumCount <= 1 ? 1 : Math.ceil(maximumCount / 2) * 2;
+        const plot = { left: 47, right: 548, top: 62, bottom: 254 };
+        const plotHeight = plot.bottom - plot.top;
+        const barGap = 6;
+        const barWidth = (plot.right - plot.left - barGap * (bars.length - 1)) / bars.length;
+        const regularOffset = histogram.underflowCount > 0 ? 1 : 0;
+        const regularLeft = plot.left + regularOffset * (barWidth + barGap);
+        const regularRight = regularLeft + histogram.regularBins.length * barWidth + (histogram.regularBins.length - 1) * barGap;
+        const regularSpan = histogram.regularEnd - histogram.regularStart;
+        const xForValue = (value) => regularSpan <= sumHistogramEpsilon
+          ? (regularLeft + regularRight) / 2
+          : regularLeft + (value - histogram.regularStart) / regularSpan * (regularRight - regularLeft);
+        const yForCount = (count) => plot.bottom - count / yMaximum * plotHeight;
+
+        const grid = sumHistogramSvgElement('g', { fill: 'none', stroke: '#e6ebf3', 'stroke-width': 1.2 });
+        for (let tick = 0; tick <= 4; tick += 1) {
+          const value = yMaximum * tick / 4;
+          const y = yForCount(value);
+          grid.append(sumHistogramSvgElement('line', { x1: plot.left, x2: plot.right, y1: y, y2: y }));
+          svg.append(sumHistogramSvgElement('text', {
+            x: 35, y: y + 5, fill: '#7181aa', 'font-size': 15, 'font-weight': 650, 'text-anchor': 'end',
+          }, String(value)));
+        }
+        svg.append(grid);
+
+        const zeroInRegularDomain = histogram.regularStart <= 0 && histogram.regularEnd >= 0;
+        const xTicks = zeroInRegularDomain
+          ? [histogram.regularStart, (histogram.regularStart + 0) / 2, 0, histogram.regularEnd / 2, histogram.regularEnd]
+          : [histogram.regularStart, (histogram.regularStart + histogram.regularEnd) / 2, histogram.regularEnd];
+        for (const tick of [...new Set(xTicks.map((value) => Number(value.toFixed(8))))]) {
+          const x = xForValue(tick);
+          sumHistogramAppendLine(svg, {
+            x1: x, x2: x, y1: plot.top, y2: plot.bottom, stroke: '#edf0f5', 'stroke-width': 1.2,
+          });
+          svg.append(sumHistogramSvgElement('text', {
+            x, y: 280, fill: '#7181aa', 'font-size': 14, 'font-weight': 650, 'text-anchor': 'middle',
+          }, sumHistogramFormatCompactHuf(tick, tick === 0)));
+        }
+
+        svg.append(sumHistogramSvgElement('text', {
+          x: 0, y: 27, fill: '#7181aa', 'font-size': 14, 'font-weight': 650,
+        }, 'Hónapok'));
+        svg.append(sumHistogramSvgElement('text', {
+          x: 0, y: 44, fill: '#7181aa', 'font-size': 14, 'font-weight': 650,
+        }, 'száma'));
+        svg.append(sumHistogramSvgElement('text', {
+          x: (plot.left + plot.right) / 2, y: 311, fill: '#7181aa', 'font-size': 15, 'font-weight': 650,
+          'text-anchor': 'middle',
+        }, 'Havi nettó eredmény (Ft)'));
+
+        const typicalLower = histogram.median - histogram.mad;
+        const typicalUpper = histogram.median + histogram.mad;
+        const typicalBandLeft = sumHistogramClamp(xForValue(typicalLower), regularLeft, regularRight);
+        const typicalBandRight = sumHistogramClamp(xForValue(typicalUpper), regularLeft, regularRight);
+        if (typicalBandRight > typicalBandLeft + 2) {
+          svg.append(sumHistogramSvgElement('rect', {
+            x: typicalBandLeft, y: 11, width: typicalBandRight - typicalBandLeft, height: plot.bottom - 11,
+            rx: 12, fill: '#eee9ff', opacity: .68,
+          }));
+          const typicalCenter = (typicalBandLeft + typicalBandRight) / 2;
+          svg.append(sumHistogramSvgElement('text', {
+            x: typicalCenter, y: 27, fill: '#7950dc', 'font-size': 15, 'font-weight': 800, 'text-anchor': 'middle',
+          }, 'Tipikus tartomány'));
+          sumHistogramAppendLine(svg, {
+            x1: typicalBandLeft + 10, x2: typicalBandRight - 10, y1: 38, y2: 38,
+            stroke: '#9b7bf4', 'stroke-width': 2.2,
+          });
+          svg.append(sumHistogramSvgElement('path', {
+            d: `M${typicalBandLeft + 10} 38 l5 -4 m-5 4 l5 4 M${typicalBandRight - 10} 38 l-5 -4 m5 4 l-5 4`,
+            fill: 'none', stroke: '#9b7bf4', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 2.2,
+          }));
+        }
+
+        const defs = sumHistogramSvgElement('defs');
+        const medianCalloutGradient = sumHistogramSvgElement('linearGradient', {
+          id: 'sum-histogram-median-callout', x1: 0, x2: 1, y1: 0, y2: 1,
+        });
+        medianCalloutGradient.append(
+          sumHistogramSvgElement('stop', { offset: '0%', 'stop-color': '#8d64e8' }),
+          sumHistogramSvgElement('stop', { offset: '100%', 'stop-color': '#a06ce7' }),
+        );
+        defs.append(medianCalloutGradient);
+        bars.forEach((bar, index) => {
+          const color = sumHistogramColorForNet(
+            bar.representative,
+            histogram.regularStart,
+            histogram.regularEnd,
+          );
+          const gradient = sumHistogramSvgElement('linearGradient', {
+            id: `sum-histogram-bar-${index}`, x1: 0, x2: 0, y1: 0, y2: 1,
+          });
+          gradient.append(
+            sumHistogramSvgElement('stop', { offset: '0%', 'stop-color': sumHistogramBlendHex(color, '#ffffff', .35) }),
+            sumHistogramSvgElement('stop', { offset: '100%', 'stop-color': color }),
+          );
+          defs.append(gradient);
+        });
+        svg.append(defs);
+
+        bars.forEach((bar, index) => {
+          if (bar.count === 0) return;
+          const x = plot.left + index * (barWidth + barGap);
+          const y = yForCount(bar.count);
+          const rect = sumHistogramSvgElement('rect', {
+            x, y, width: barWidth, height: plot.bottom - y, rx: 4,
+            fill: `url(#sum-histogram-bar-${index})`,
+          });
+          if (bar.kind !== 'regular') {
+            rect.setAttribute('stroke', bar.kind === 'underflow' ? '#f0a1ae' : '#75d9b0');
+            rect.setAttribute('stroke-dasharray', '3 2');
+          }
+          const label = bar.kind === 'underflow'
+            ? `Underflow: ${bar.count} hónap a robusztus tartomány alatt`
+            : bar.kind === 'overflow'
+              ? `Overflow: ${bar.count} hónap a robusztus tartomány felett`
+              : `${sumHistogramFormatCompactHuf(bar.start)} és ${sumHistogramFormatCompactHuf(bar.end)} között: ${bar.count} hónap`;
+          rect.append(sumHistogramSvgElement('title', {}, label));
+          svg.append(rect);
+        });
+
+        if (zeroInRegularDomain) {
+          const zeroX = xForValue(0);
+          sumHistogramAppendLine(svg, {
+            x1: zeroX, x2: zeroX, y1: 52, y2: plot.bottom + 8,
+            stroke: '#7487a9', 'stroke-width': 1.8, 'stroke-dasharray': '7 6',
+          });
+          svg.append(sumHistogramSvgElement('text', {
+            x: zeroX - 8, y: 57, fill: '#52658a', 'font-size': 14, 'font-weight': 750,
+            'text-anchor': 'end',
+          }, '0 Ft'));
+        } else {
+          const zeroAtLeft = histogram.regularStart > 0;
+          const x = zeroAtLeft ? regularLeft : regularRight;
+          svg.append(sumHistogramSvgElement('text', {
+            x, y: 53, fill: '#7487a9', 'font-size': 12, 'font-weight': 750,
+            'text-anchor': zeroAtLeft ? 'start' : 'end',
+          }, '0 Ft'));
+        }
+        const medianX = sumHistogramClamp(xForValue(histogram.median), regularLeft, regularRight);
+        const medianCalloutWidth = 112;
+        const medianCalloutHeight = 50;
+        const medianCalloutX = medianX + 12 + medianCalloutWidth <= plot.right
+          ? medianX + 12
+          : medianX - 12 - medianCalloutWidth;
+        const medianCalloutY = 53;
+        sumHistogramAppendLine(svg, {
+          x1: medianX, x2: medianX, y1: medianCalloutY + medianCalloutHeight - 5, y2: plot.bottom + 8,
+          stroke: '#7146db', 'stroke-width': 3.4,
+        });
+        svg.append(sumHistogramSvgElement('rect', {
+          x: medianCalloutX, y: medianCalloutY, width: medianCalloutWidth, height: medianCalloutHeight,
+          rx: 13, fill: 'url(#sum-histogram-median-callout)',
+        }));
+        svg.append(sumHistogramSvgElement('text', {
+          x: medianCalloutX + medianCalloutWidth / 2, y: medianCalloutY + 20, fill: '#ffffff', 'font-size': 14, 'font-weight': 700,
+          'text-anchor': 'middle',
+        }, 'Medián'));
+        svg.append(sumHistogramSvgElement('text', {
+          x: medianCalloutX + medianCalloutWidth / 2, y: medianCalloutY + 40, fill: '#ffffff', 'font-size': 18, 'font-weight': 850,
+          'text-anchor': 'middle',
+        }, sumHistogramFormatCompactHuf(histogram.median)));
+
+        host.replaceChildren(svg);
+        const positiveMonths = histogram.values.filter((value) => value > 0).length;
+        const negativeMonths = histogram.values.filter((value) => value < 0).length;
+        const insightTitle = positiveMonths > negativeMonths
+          ? 'A legtöbb hónap 0 Ft felett zár.'
+          : negativeMonths > positiveMonths
+            ? 'A legtöbb hónap 0 Ft alatt zár.'
+            : 'A lezárt hónapok eredménye kiegyensúlyozott.';
+        const insightIcon = sumHistogramSvgElement('svg', {
+          class: 'sum-histogram-insight-icon', viewBox: '0 0 32 32', 'aria-hidden': 'true',
+        });
+        insightIcon.append(
+          sumHistogramSvgElement('path', {
+            d: 'M16 3.5a9.5 9.5 0 0 0-5.9 17v3.1h11.8v-3.1A9.5 9.5 0 0 0 16 3.5Z',
+            fill: 'none', stroke: 'currentColor', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 2.8,
+          }),
+          sumHistogramSvgElement('path', {
+            d: 'M12 27h8m-6 3h4', fill: 'none', stroke: 'currentColor', 'stroke-linecap': 'round', 'stroke-width': 2.8,
+          }),
+        );
+        const insightCopy = document.createElement('div');
+        insightCopy.className = 'sum-histogram-insight-copy';
+        insightCopy.append(
+          Object.assign(document.createElement('strong'), { textContent: insightTitle }),
+          Object.assign(document.createElement('span'), {
+            textContent: `Az eredményeid jellemzően a ${sumHistogramFormatCompactHuf(typicalLower)} – ${sumHistogramFormatCompactHuf(typicalUpper)} tartományban mozognak.`,
+          }),
+        );
+        insight.replaceChildren(insightIcon, insightCopy);
+      }
+
+      renderSumPositiveStreak();
+      renderSumHistogram();
       renderAll();
     </script>
   </body>

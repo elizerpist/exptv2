@@ -262,7 +262,7 @@ void main() {
   );
 
   testWidgets(
-    'BAL-UNI-02/TET-03/ALT2-02: unified surface routes SUM through five sections and preserves selected topic',
+    'BAL-UNI-02/SUM-UI: unified surface routes SUM through the approved extended sheet and preserves selected topic',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
@@ -317,17 +317,23 @@ void main() {
 
       settings.setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
       await tester.pump();
-      for (final index in <int>[1, 2, 3, 4, 5]) {
+      for (final index in <int>[3, 4, 5]) {
         expect(
           find.byKey(ValueKey<String>('balance-tetris-card-$index')),
           findsOneWidget,
         );
       }
-      final card1Slot = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-tetris-slot-1')),
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-combined')),
+        findsOneWidget,
       );
-      final card2Slot = tester.getRect(
-        find.byKey(const ValueKey<String>('balance-tetris-slot-2')),
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-2')),
+        findsNothing,
       );
       final card3Slot = tester.getRect(
         find.byKey(const ValueKey<String>('balance-tetris-slot-3')),
@@ -338,24 +344,24 @@ void main() {
       final card5Slot = tester.getRect(
         find.byKey(const ValueKey<String>('balance-tetris-slot-5')),
       );
+      final combinedSlot = tester.getRect(
+        find.byKey(const ValueKey<String>('balance-tetris-slot-combined')),
+      );
       final bodyWidth = card3Slot.width + card4Slot.width;
-      final bodyHeight = card3Slot.height + card1Slot.height;
+      final bodyHeight = card3Slot.height + combinedSlot.height;
       expect(card3Slot.width / bodyWidth, closeTo(.70, .001));
       expect(card4Slot.width / bodyWidth, closeTo(.30, .001));
-      expect(card1Slot.width / bodyWidth, closeTo(.50, .001));
-      expect(card2Slot.width / bodyWidth, closeTo(.50, .001));
       expect(card3Slot.height / bodyHeight, closeTo(.60, .001));
       expect(card4Slot.height / bodyHeight, closeTo(.30, .001));
       expect(card5Slot.height / bodyHeight, closeTo(.30, .001));
-      expect(card1Slot.height / bodyHeight, closeTo(.40, .001));
-      expect(card2Slot.height / bodyHeight, closeTo(.40, .001));
-      expect(card3Slot.bottom, closeTo(card1Slot.top, .01));
+      expect(combinedSlot.height / bodyHeight, closeTo(.40, .001));
+      expect(card3Slot.bottom, closeTo(combinedSlot.top, .01));
       expect(card4Slot.bottom, closeTo(card5Slot.top, .01));
-      expect(card5Slot.bottom, closeTo(card2Slot.top, .01));
-      expect(card4Slot.right, closeTo(card2Slot.right, .01));
-      expect(card5Slot.right, closeTo(card2Slot.right, .01));
-      expect(card1Slot.bottom, closeTo(card2Slot.bottom, .01));
-      expect(find.text('Bevétel / Kiadás'), findsOneWidget);
+      expect(card5Slot.bottom, closeTo(combinedSlot.top, .01));
+      expect(card4Slot.right, closeTo(combinedSlot.right, .01));
+      expect(card5Slot.right, closeTo(combinedSlot.right, .01));
+      expect(find.text('Havi eredmények eloszlása'), findsOneWidget);
+      expect(find.text('Cashflow stabilitás'), findsOneWidget);
       expect(find.byType(CenteredCarousel<BalanceCarouselCard>), findsNothing);
       expect(
         find.byKey(
@@ -689,12 +695,7 @@ void main() {
         ),
         card3Before,
       );
-      expect(
-        find.byKey(
-          const ValueKey<String>('balance-alternative-income-expense-bar-card'),
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Még nincs lezárt hónap'), findsOneWidget);
     },
   );
 

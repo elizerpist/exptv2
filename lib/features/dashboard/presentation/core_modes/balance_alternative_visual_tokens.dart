@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dashboard_header_balance_color_scale.dart';
+
 /// The sole visual-token owner for the alternative Balance extended sheet.
 ///
 /// Values are transcribed from the canonical Havi 2 / Éves HTML source, not
@@ -17,13 +19,22 @@ abstract final class BalanceAlternativeHtmlTokens {
   static const double directContentMinimumTolerance = .01;
 
   // The canonical SUM Mother Card is intentionally narrower and shorter than
-  // the historical capture. Every child card therefore renders directly:
+  // the historical capture. Havi 2 / Éves children therefore render directly:
   // fixed typography/padding stay authored, while flexible plots receive the
   // remaining space. A whole-card FittedBox would break the approved 1:1 HTML
   // hierarchy, including for the 30%-wide side card.
   static const Size extendedSheetPrimaryCardMinimumSize = Size.zero;
   static const Size extendedSheetSideCardMinimumSize = Size.zero;
   static const Size extendedSheetCombinedCardMinimumSize = Size.zero;
+
+  // The approved SUM composition has authored source dimensions. These are
+  // only a below-physical-minimum fallback: at normal Mother Card dimensions
+  // SUM stays direct, while an unusually small host scales the full child
+  // hierarchy rather than overflowing or changing Mother geometry.
+  static Size get sumSideCardMinimumContentSize =>
+      Size(logical(252), logical(300));
+  static Size get sumCombinedCardMinimumContentSize =>
+      Size(logical(720), logical(340));
 
   // HTML: .variant-card / .baseline-card.
   static double get childBorderRadius => logical(25);
@@ -48,6 +59,55 @@ abstract final class BalanceAlternativeHtmlTokens {
   static const Color closingPositiveEnd = Color(0xFF75DCC1);
   static const Color closingNegativeStart = Color(0xFFFF9CB5);
   static const Color closingNegativeEnd = Color(0xFFFF8EAA);
+
+  // SUM distribution cards. The histogram's dynamic hues are resolved from
+  // the single approved Soft rainbow catalog instead of a local copy.
+  static List<Color> get sumOriginalSoftRainbow =>
+      DashboardBalanceHeaderPaletteCatalog.scaleFor(
+        DashboardBalanceHeaderPalette.softRainbow,
+      ).colors;
+  static const Color sumPurple = Color(0xFF7339D4);
+  static const Color sumPurpleLight = Color(0xFFEEE9FF);
+  static const Color sumInsightStart = Color(0xFFF5F2FF);
+  static const Color sumInsightEnd = Color(0xFFEDE8FF);
+  static const Color sumBandNegative = Color(0xFFFDE0E7);
+  static const Color sumBandPurpleStart = Color(0xFFF1EBFF);
+  static const Color sumBandPurpleEnd = Color(0xFFF0EAFF);
+  static const Color sumBandPositive = Color(0xFFD3F7DF);
+  static const Color sumBandRule = Color(0xFFAEB9C9);
+  static const Color sumBandZeroRule = Color(0xFF9CA9BA);
+  static const Color sumBandDot = Color(0xFF9D78E9);
+  static const Color sumBandNegativeDot = Color(0xFFEF89A0);
+  static const Color sumBandPositiveDot = Color(0xFF38B96B);
+
+  /// Semantic original-Soft-rainbow resolver used by every adaptive SUM bar.
+  /// Negative ranges progress coral/rose -> purple and positive ranges
+  /// progress purple -> blue/turquoise/green; count never affects hue.
+  static Color sumHistogramColorForNet({
+    required double netMinor,
+    required double regularDomainMinimumMinor,
+    required double regularDomainMaximumMinor,
+  }) {
+    if (netMinor <= 0) {
+      final span = (-regularDomainMinimumMinor).clamp(.000001, double.infinity);
+      return _sumSoftRainbowSample(1, 4, (netMinor + span) / span);
+    }
+    final span = regularDomainMaximumMinor.clamp(.000001, double.infinity);
+    return _sumSoftRainbowSample(4, 9, netMinor / span);
+  }
+
+  static Color _sumSoftRainbowSample(
+    int startIndex,
+    int endIndex,
+    double amount,
+  ) {
+    final palette = sumOriginalSoftRainbow;
+    final position =
+        startIndex + (endIndex - startIndex) * amount.clamp(0.0, 1.0);
+    final lower = position.floor();
+    final upper = position.ceil().clamp(0, palette.length - 1);
+    return Color.lerp(palette[lower], palette[upper], position - lower)!;
+  }
 
   // HTML .daily-spend-card: 24px 24px 20px; 10px inter-row gap.
   static EdgeInsets get dailyCardPadding =>
@@ -106,6 +166,41 @@ abstract final class BalanceAlternativeHtmlTokens {
   static double get annualIncomeExpenseIconExtent => logical(42);
   static double get annualIncomeExpenseLegendSize => logical(17);
   static double get annualIncomeExpenseToggleExtent => logical(34);
+
+  // SUM Card 3: canonical `sum-histogram-card` CSS.
+  static EdgeInsets get sumHistogramPadding =>
+      EdgeInsets.fromLTRB(logical(24), logical(22), logical(24), logical(20));
+  static double get sumHistogramHeadingHeight => logical(58);
+  static double get sumHistogramGap => logical(10);
+  static double get sumHistogramInsightHeight => logical(82);
+  static double get sumHistogramTitleSize => logical(25);
+  static double get sumHistogramSubtitleSize => logical(16);
+  static double get sumHistogramInsightTitleSize => logical(17);
+  static double get sumHistogramInsightBodySize => logical(14);
+  static double get sumHistogramMedianCalloutWidth => logical(112);
+  static double get sumHistogramMedianCalloutHeight => logical(50);
+
+  // SUM Card 4: canonical `sum-positive-streak-card` CSS.
+  static EdgeInsets get sumStreakPadding =>
+      EdgeInsets.fromLTRB(logical(16), logical(18), logical(16), logical(16));
+  static double get sumStreakHeadingHeight => logical(43);
+  static double get sumStreakValueHeight => logical(57);
+  static double get sumStreakCopyHeight => logical(25);
+  static double get sumStreakGap => logical(3);
+  static double get sumStreakValueSize => logical(54);
+  static double get sumStreakTitleSize => logical(17);
+  static double get sumStreakBodySize => logical(12);
+
+  // SUM lower combined card: canonical `cashflow-stability-card` CSS.
+  static EdgeInsets get sumStabilityPadding =>
+      EdgeInsets.fromLTRB(logical(22), logical(18), logical(22), logical(20));
+  static double get sumStabilityHeadingHeight => logical(48);
+  static double get sumStabilityChartHeight => logical(126);
+  static double get sumStabilityGap => logical(10);
+  static double get sumStabilityTitleSize => logical(24);
+  static double get sumStabilitySubtitleSize => logical(14);
+  static double get sumStabilityChipSize => logical(15);
+  static double get sumStabilityLegendSize => logical(16);
 
   static BoxDecoration childCardDecoration() => BoxDecoration(
     color: childSurface,

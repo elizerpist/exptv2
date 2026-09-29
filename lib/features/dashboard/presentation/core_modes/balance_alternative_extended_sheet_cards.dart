@@ -417,9 +417,11 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
   const BalanceAlternativeSavingsRingCard({
     super.key,
     required this.presentation,
+    this.minimumContentSize,
   });
 
   final BalanceAlternativeSavingsPresentation presentation;
+  final Size? minimumContentSize;
 
   @override
   Widget build(BuildContext context) {
@@ -428,6 +430,7 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
     final label = ratio == null ? '—' : '${(ratio / 100).round()}%';
     return BalanceAlternativeHtmlCardSurface(
       minimumContentSize:
+          minimumContentSize ??
           BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize,
       child: Padding(
         padding: BalanceAlternativeHtmlTokens.smallCardPadding,

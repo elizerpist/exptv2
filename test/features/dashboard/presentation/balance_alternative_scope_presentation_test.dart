@@ -16,85 +16,81 @@ const identity = DashboardBalancePrimaryIdentity(
 );
 
 void main() {
-  test('ALT2-01: scope adapter routes canonical SUM and YEAR bar payloads', () {
-    final sum = BalanceAlternativeScopePresentation.fromPrimary(
-      DashboardBalancePrimaryPresentation(
-        identity: identity,
-        timeScope: const AllTimeScope(),
-        mode: DashboardBalancePrimaryMode.sum,
-        incomeTotalMinor: 600000,
-        expenseTotalMinor: 380000,
-        periodPairs: const <DashboardBalancePrimaryPeriodPair>[
-          DashboardBalancePrimaryPeriodPair(
-            value: 2024,
-            incomeMinor: 200000,
-            expenseMinor: 120000,
-          ),
-          DashboardBalancePrimaryPeriodPair(
-            value: 2026,
-            incomeMinor: 400000,
-            expenseMinor: 260000,
-          ),
-        ],
-        dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
-      ),
-    );
-    expect(sum, isA<BalanceAlternativeSumPresentation>());
-    final sumChart = (sum as BalanceAlternativeSumPresentation).incomeExpense;
-    expect(sumChart.domain, BalanceAlternativeBarDomain.years);
-    expect(sumChart.groups.map((group) => group.key), <int>[2024, 2026]);
-    expect(sumChart.groups.map((group) => group.label), <String>[
-      '2024',
-      '2026',
-    ]);
-    expect(sumChart.incomeTotalMinor, 600000);
-    expect(sumChart.expenseTotalMinor, 380000);
-    expect(sumChart.netTotalMinor, 220000);
-
-    final year = BalanceAlternativeScopePresentation.fromPrimary(
-      DashboardBalancePrimaryPresentation(
-        identity: identity,
-        timeScope: const YearScope(2026),
-        mode: DashboardBalancePrimaryMode.year,
-        incomeTotalMinor: 780000,
-        expenseTotalMinor: 330000,
-        periodPairs: <DashboardBalancePrimaryPeriodPair>[
-          for (var month = 1; month <= 12; month += 1)
+  test(
+    'ALT2-01: primary-only scope adapter retains an empty SUM distribution fallback',
+    () {
+      final sum = BalanceAlternativeScopePresentation.fromPrimary(
+        DashboardBalancePrimaryPresentation(
+          identity: identity,
+          timeScope: const AllTimeScope(),
+          mode: DashboardBalancePrimaryMode.sum,
+          incomeTotalMinor: 600000,
+          expenseTotalMinor: 380000,
+          periodPairs: const <DashboardBalancePrimaryPeriodPair>[
             DashboardBalancePrimaryPeriodPair(
-              value: month,
-              incomeMinor: month == 12 ? 90000 : 0,
-              expenseMinor: month == 1 ? 40000 : 0,
+              value: 2024,
+              incomeMinor: 200000,
+              expenseMinor: 120000,
             ),
-        ],
-        dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
-      ),
-    );
-    expect(year, isA<BalanceAlternativeYearPresentation>());
-    final yearChart =
-        (year as BalanceAlternativeYearPresentation).incomeExpense;
-    expect(yearChart.domain, BalanceAlternativeBarDomain.months);
-    expect(yearChart.groups, hasLength(12));
-    expect(
-      yearChart.groups.map((group) => group.key),
-      List<int>.generate(12, (index) => index + 1),
-    );
-    expect(yearChart.groups.map((group) => group.label), <String>[
-      'JAN',
-      'FEB',
-      'MÁR',
-      'ÁPR',
-      'MÁJ',
-      'JÚN',
-      'JÚL',
-      'AUG',
-      'SZE',
-      'OKT',
-      'NOV',
-      'DEC',
-    ]);
-    expect(yearChart.groups[5].incomeMinor, 0);
-    expect(yearChart.groups[5].expenseMinor, 0);
-  });
+            DashboardBalancePrimaryPeriodPair(
+              value: 2026,
+              incomeMinor: 400000,
+              expenseMinor: 260000,
+            ),
+          ],
+          dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+        ),
+      );
+      expect(sum, isA<BalanceAlternativeSumPresentation>());
+      final sumPresentation = sum as BalanceAlternativeSumPresentation;
+      expect(sumPresentation.distribution.histogram.sampleCount, 0);
+      expect(sumPresentation.savings.netMinor, 220000);
+
+      final year = BalanceAlternativeScopePresentation.fromPrimary(
+        DashboardBalancePrimaryPresentation(
+          identity: identity,
+          timeScope: const YearScope(2026),
+          mode: DashboardBalancePrimaryMode.year,
+          incomeTotalMinor: 780000,
+          expenseTotalMinor: 330000,
+          periodPairs: <DashboardBalancePrimaryPeriodPair>[
+            for (var month = 1; month <= 12; month += 1)
+              DashboardBalancePrimaryPeriodPair(
+                value: month,
+                incomeMinor: month == 12 ? 90000 : 0,
+                expenseMinor: month == 1 ? 40000 : 0,
+              ),
+          ],
+          dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+        ),
+      );
+      expect(year, isA<BalanceAlternativeYearPresentation>());
+      final yearChart =
+          (year as BalanceAlternativeYearPresentation).incomeExpense;
+      expect(yearChart.domain, BalanceAlternativeBarDomain.months);
+      expect(yearChart.groups, hasLength(12));
+      expect(
+        yearChart.groups.map((group) => group.key),
+        List<int>.generate(12, (index) => index + 1),
+      );
+      expect(yearChart.groups.map((group) => group.label), <String>[
+        'JAN',
+        'FEB',
+        'MÁR',
+        'ÁPR',
+        'MÁJ',
+        'JÚN',
+        'JÚL',
+        'AUG',
+        'SZE',
+        'OKT',
+        'NOV',
+        'DEC',
+      ]);
+      expect(yearChart.groups[5].incomeMinor, 0);
+      expect(yearChart.groups[5].expenseMinor, 0);
+    },
+  );
 
   test(
     'ALT2-01: Month and Day have independent alternative presentation types',
@@ -129,9 +125,9 @@ void main() {
   test(
     'ALT-HAVI2-RED: Month mixed presentation derives daily expense, no-spend, retention, and prior-month comparison from linked DTOs',
     () {
-      final alternative = BalanceAlternativeScopePresentation.fromLinked(
-        _linkedMonth(),
-      ) as BalanceAlternativeMonthPresentation;
+      final alternative =
+          BalanceAlternativeScopePresentation.fromLinked(_linkedMonth())
+              as BalanceAlternativeMonthPresentation;
 
       expect(
         alternative.dailySpend.points.map((point) => point.expenseMinor),
@@ -149,9 +145,9 @@ void main() {
   test(
     'ALT-EVES-RED: Year alternative derives closing buckets and the selected real savings value from linked DTOs',
     () {
-      final alternative = BalanceAlternativeScopePresentation.fromLinked(
-        _linkedYear(),
-      ) as BalanceAlternativeYearPresentation;
+      final alternative =
+          BalanceAlternativeScopePresentation.fromLinked(_linkedYear())
+              as BalanceAlternativeYearPresentation;
 
       expect(alternative.closings.buckets, hasLength(12));
       expect(alternative.closings.buckets[0].netMinor, 50000);
@@ -162,18 +158,37 @@ void main() {
     },
   );
 
-  test('ALT-HTML-RED: shared logical tokens are calculated from Havi 2 CSS', () {
-    expect(BalanceAlternativeHtmlTokens.logical(26.73), closeTo(12, .001));
-    expect(BalanceAlternativeHtmlTokens.logical(6.68), closeTo(3, .002));
-    expect(
-      BalanceAlternativeHtmlTokens.dailyCardPadding.left,
-      closeTo(BalanceAlternativeHtmlTokens.logical(24), .001),
-    );
-    expect(
-      BalanceAlternativeHtmlTokens.childBorderRadius,
-      closeTo(BalanceAlternativeHtmlTokens.logical(25), .001),
-    );
-  });
+  test(
+    'SUM-ADAPTER: linked SUM maps its established stability sample, savings and distribution without a second ledger query',
+    () {
+      final alternative =
+          BalanceAlternativeScopePresentation.fromLinked(_linkedSum())
+              as BalanceAlternativeSumPresentation;
+
+      expect(alternative.stability.sampleCount, 8);
+      expect(alternative.distribution.histogram.sampleCount, 8);
+      expect(alternative.distribution.histogram.assignedSampleCount, 8);
+      expect(alternative.distribution.longestPositiveStreak.length, 3);
+      expect(alternative.savings.retentionBasisPoints, 6250);
+      expect(alternative.savings.netMinor, 250000);
+    },
+  );
+
+  test(
+    'ALT-HTML-RED: shared logical tokens are calculated from Havi 2 CSS',
+    () {
+      expect(BalanceAlternativeHtmlTokens.logical(26.73), closeTo(12, .001));
+      expect(BalanceAlternativeHtmlTokens.logical(6.68), closeTo(3, .002));
+      expect(
+        BalanceAlternativeHtmlTokens.dailyCardPadding.left,
+        closeTo(BalanceAlternativeHtmlTokens.logical(24), .001),
+      );
+      expect(
+        BalanceAlternativeHtmlTokens.childBorderRadius,
+        closeTo(BalanceAlternativeHtmlTokens.logical(25), .001),
+      );
+    },
+  );
 }
 
 DashboardBalanceLinkedPresentation _linkedMonth() =>
@@ -305,6 +320,65 @@ DashboardBalanceLinkedPresentation _linkedYear() =>
             retentionBasisPoints: 1667,
           ),
         ],
+      ),
+      latestTransactions: const <DashboardBalanceScopedTransaction>[],
+      topCategories: const <DashboardBalanceRankedItem>[],
+      topPartners: const <DashboardBalanceRankedItem>[],
+    );
+
+DashboardBalanceLinkedPresentation _linkedSum() =>
+    DashboardBalanceLinkedPresentation(
+      identity: identity,
+      timeScope: const AllTimeScope(),
+      selectedDirection: LedgerDirection.expense,
+      cashflow: DashboardBalancePrimaryPresentation(
+        identity: identity,
+        timeScope: const AllTimeScope(),
+        mode: DashboardBalancePrimaryMode.sum,
+        incomeTotalMinor: 400000,
+        expenseTotalMinor: 150000,
+        periodPairs: const <DashboardBalancePrimaryPeriodPair>[],
+        dailyPoints: const <DashboardBalancePrimaryDayPoint>[],
+      ),
+      retention: DashboardBalanceRetentionPresentation(
+        identity: identity,
+        timeScope: const AllTimeScope(),
+        periods: const <DashboardBalanceRetentionPeriod>[
+          DashboardBalanceRetentionPeriod(
+            id: 'all',
+            label: 'Összesen',
+            incomeMinor: 400000,
+            expenseMinor: 150000,
+            state: DashboardBalanceRetentionState.value,
+            selected: true,
+            retentionBasisPoints: 6250,
+          ),
+        ],
+      ),
+      stability: DashboardBalanceStabilityPresentation(
+        identity: identity,
+        timeScope: const AllTimeScope(),
+        observations: <DashboardBalanceMonthlyNetObservation>[
+          for (final (index, net) in <int>[
+            -10,
+            20,
+            30,
+            40,
+            0,
+            10,
+            20,
+            -5,
+          ].indexed)
+            DashboardBalanceMonthlyNetObservation(
+              id: 'month:$index',
+              label: '2024 M$index',
+              month: YearMonth(year: 2024, month: index + 1),
+              incomeMinor: net > 0 ? net : 0,
+              expenseMinor: net < 0 ? -net : 0,
+            ),
+        ],
+        medianNetTimesTwo: 30,
+        typicalDeviationTimesTwo: 35,
       ),
       latestTransactions: const <DashboardBalanceScopedTransaction>[],
       topCategories: const <DashboardBalanceRankedItem>[],

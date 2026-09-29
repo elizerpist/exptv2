@@ -3,13 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
+import '../../application/dashboard_balance_monthly_net_distribution_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../application/dashboard_balance_retention_stability_projection.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 
 /// Render-only adapter boundary for the scope-specific alternative Balance
-/// dashboard. It intentionally copies only immutable values that the existing
-/// Balance primary projection already prepared.
+/// dashboard. It intentionally copies only immutable values that established
+/// Balance linked projections already prepared.
 sealed class BalanceAlternativeScopePresentation {
   const BalanceAlternativeScopePresentation({
     required this.timeScope,
@@ -22,14 +23,25 @@ sealed class BalanceAlternativeScopePresentation {
   factory BalanceAlternativeScopePresentation.fromPrimary(
     DashboardBalancePrimaryPresentation primary,
   ) => switch (primary.timeScope) {
-    AllTimeScope() => BalanceAlternativeSumPresentation(
-      timeScope: primary.timeScope,
-      sourcePresentationId: primary.presentationId,
-      incomeExpense: BalanceAlternativeIncomeExpenseBarPresentation.fromPrimary(
-        primary,
-        domain: BalanceAlternativeBarDomain.years,
-      ),
-    ),
+    AllTimeScope() => () {
+      final stability = _unavailableStability(
+        identity: primary.identity,
+        timeScope: primary.timeScope,
+      );
+      return BalanceAlternativeSumPresentation(
+        timeScope: primary.timeScope,
+        sourcePresentationId: primary.presentationId,
+        stability: stability,
+        distribution: DashboardBalanceMonthlyNetDistributionProjection.build(
+          stability: stability,
+        ),
+        savings: BalanceAlternativeSavingsPresentation.fromTotals(
+          incomeMinor: primary.incomeTotalMinor,
+          expenseMinor: primary.expenseTotalMinor,
+          retentionBasisPoints: null,
+        ),
+      );
+    }(),
     YearScope() => BalanceAlternativeYearPresentation(
       timeScope: primary.timeScope,
       sourcePresentationId: primary.presentationId,
@@ -57,9 +69,8 @@ sealed class BalanceAlternativeScopePresentation {
         expenseMinor: primary.expenseTotalMinor,
         retentionBasisPoints: null,
       ),
-      incomeExpense: BalanceAlternativeIncomeExpenseStripPresentation.fromPrimary(
-        primary,
-      ),
+      incomeExpense:
+          BalanceAlternativeIncomeExpenseStripPresentation.fromPrimary(primary),
     ),
     DayScope() => BalanceAlternativeDayPresentation(
       timeScope: primary.timeScope,
@@ -72,8 +83,18 @@ sealed class BalanceAlternativeScopePresentation {
   factory BalanceAlternativeScopePresentation.fromLinked(
     DashboardBalanceLinkedPresentation linked,
   ) => switch (linked.timeScope) {
-    AllTimeScope() => BalanceAlternativeScopePresentation.fromPrimary(
-      linked.cashflow,
+    AllTimeScope() => BalanceAlternativeSumPresentation(
+      timeScope: linked.timeScope,
+      sourcePresentationId: linked.presentationId,
+      stability: linked.stability,
+      distribution: DashboardBalanceMonthlyNetDistributionProjection.build(
+        stability: linked.stability,
+      ),
+      savings: BalanceAlternativeSavingsPresentation.fromRetention(
+        linked.retention,
+        fallbackIncomeMinor: linked.cashflow.incomeTotalMinor,
+        fallbackExpenseMinor: linked.cashflow.expenseTotalMinor,
+      ),
     ),
     YearScope() => BalanceAlternativeYearPresentation(
       timeScope: linked.timeScope,
@@ -121,6 +142,17 @@ sealed class BalanceAlternativeScopePresentation {
       sourcePresentationId: linked.presentationId,
     ),
   };
+
+  static DashboardBalanceStabilityPresentation _unavailableStability({
+    required DashboardBalancePrimaryIdentity identity,
+    required LedgerTimeScope timeScope,
+  }) => DashboardBalanceStabilityPresentation(
+    identity: identity,
+    timeScope: timeScope,
+    observations: const <DashboardBalanceMonthlyNetObservation>[],
+    medianNetTimesTwo: null,
+    typicalDeviationTimesTwo: null,
+  );
 }
 
 final class BalanceAlternativeSumPresentation
@@ -128,10 +160,14 @@ final class BalanceAlternativeSumPresentation
   const BalanceAlternativeSumPresentation({
     required super.timeScope,
     required super.sourcePresentationId,
-    required this.incomeExpense,
+    required this.stability,
+    required this.distribution,
+    required this.savings,
   });
 
-  final BalanceAlternativeIncomeExpenseBarPresentation incomeExpense;
+  final DashboardBalanceStabilityPresentation stability;
+  final DashboardBalanceMonthlyNetDistributionPresentation distribution;
+  final BalanceAlternativeSavingsPresentation savings;
 }
 
 final class BalanceAlternativeYearPresentation
@@ -309,9 +345,8 @@ final class BalanceAlternativeMonthlySpendPresentation {
   final int currentExpenseMinor;
   final int? previousExpenseMinor;
 
-  int get noSpendDayCount => points
-      .where((point) => point.expenseMinor == 0)
-      .length;
+  int get noSpendDayCount =>
+      points.where((point) => point.expenseMinor == 0).length;
 
   /// Signed relative spending change. Negative means the current month has
   /// lower expense than its comparable predecessor.
@@ -374,9 +409,8 @@ final class BalanceAlternativeIncomeExpenseStripPresentation {
 
   int get totalMinor => incomeMinor + expenseMinor;
 
-  int get incomeBasisPoints => totalMinor <= 0
-      ? 5000
-      : (incomeMinor * 10000 / totalMinor).round();
+  int get incomeBasisPoints =>
+      totalMinor <= 0 ? 5000 : (incomeMinor * 10000 / totalMinor).round();
 }
 
 @immutable

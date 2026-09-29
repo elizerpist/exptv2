@@ -21,12 +21,11 @@ import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_carousel_wave_motion.dart';
 import 'balance_carousel_wave_diagnostics.dart';
-import 'balance_alternative_income_expense_bar_card.dart';
 import 'balance_alternative_extended_sheet_cards.dart';
 import 'balance_alternative_scope_presentation.dart';
+import 'balance_alternative_sum_cards.dart';
 import 'balance_alternative_visual_tokens.dart';
 import 'balance_extended_sheet_layout.dart';
-import 'balance_five_section_layout.dart';
 import 'balance_four_section_layout.dart';
 import 'balance_header_history_chart.dart';
 import 'balance_insight_indicators.dart';
@@ -928,11 +927,10 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
           value,
         );
         return switch (alternative) {
-          BalanceAlternativeSumPresentation(:final incomeExpense) =>
-            _BalanceFiveSectionScaffold(
+          BalanceAlternativeSumPresentation() =>
+            _BalanceSumExtendedSheetScaffold(
               geometry: geometry,
-              presentation: incomeExpense,
-              scopeKey: 'sum',
+              presentation: alternative,
             ),
           BalanceAlternativeYearPresentation() =>
             _BalanceYearExtendedSheetScaffold(
@@ -951,6 +949,79 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
       },
     );
   }
+}
+
+/// SUM uses the same canonical extended-sheet body allocation as Havi 2 and
+/// Éves. This is deliberately a new composition only: the Mother Card bounds,
+/// outer inset and 70/30/40 child geometry remain in their shared owners.
+final class _BalanceSumExtendedSheetScaffold extends StatelessWidget {
+  const _BalanceSumExtendedSheetScaffold({
+    required this.geometry,
+    required this.presentation,
+  });
+
+  final DashboardLayoutFrame geometry;
+  final BalanceAlternativeSumPresentation presentation;
+
+  @override
+  Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
+    geometry: geometry,
+    scopeKey: 'sum',
+    childrenFor: (layout) {
+      final distribution = presentation.distribution;
+      return <Widget>[
+        _BalanceAlternativeSectionSlot(
+          slot: layout.card3,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
+          child: Semantics(
+            label:
+                'Havi eredmények eloszlása ${distribution.histogram.sampleCount} lezárt hónapból',
+            child: BalanceAlternativeSumHistogramCard(
+              presentation: distribution.histogram,
+            ),
+          ),
+        ),
+        _BalanceAlternativeSectionSlot(
+          slot: layout.card4,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
+          child: Semantics(
+            label:
+                'Leghosszabb pozitív széria: ${distribution.longestPositiveStreak.length} hónap',
+            child: BalanceAlternativePositiveStreakCard(
+              presentation: distribution.longestPositiveStreak,
+            ),
+          ),
+        ),
+        _BalanceAlternativeSectionSlot(
+          slot: layout.card5,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-5'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-5'),
+          child: Semantics(
+            label: 'Megtakarítási arány',
+            child: BalanceAlternativeSavingsRingCard(
+              presentation: presentation.savings,
+              minimumContentSize:
+                  BalanceAlternativeHtmlTokens.sumSideCardMinimumContentSize,
+            ),
+          ),
+        ),
+        _BalanceAlternativeSectionSlot(
+          slot: layout.combined,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
+          child: Semantics(
+            label:
+                'Cashflow stabilitás ${distribution.cashflowBand.sampleCount} lezárt hónapból',
+            child: BalanceAlternativeCashflowStabilityBandCard(
+              presentation: distribution.cashflowBand,
+            ),
+          ),
+        ),
+      ];
+    },
+  );
 }
 
 /// Havi 2 is the approved monthly alternative: one daily-spend Card 3, two
@@ -1181,85 +1252,6 @@ final class _BalanceFourSectionScaffold extends StatelessWidget {
                 semanticsLabel: 'Balance alternatív szekció 4',
                 allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
                 surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// SUM and YEAR share five exact allocations while keeping the pre-existing
-/// Card 1/2/4 placeholders structurally neutral in this phase.
-final class _BalanceFiveSectionScaffold extends StatelessWidget {
-  const _BalanceFiveSectionScaffold({
-    required this.geometry,
-    required this.presentation,
-    required this.scopeKey,
-  });
-
-  final DashboardLayoutFrame geometry;
-  final BalanceAlternativeIncomeExpenseBarPresentation presentation;
-  final String scopeKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
-      geometry: geometry,
-    );
-    return DashboardCoreModeFramePosition(
-      bounds: combinedBounds,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final layout = BalanceFiveSectionLayout.resolve(
-            _balanceAlternativeBodyRect(
-              constraints,
-              geometry.headerBounds.height,
-            ),
-          );
-          return Stack(
-            key: ValueKey<String>('balance-alternative-$scopeKey-layout'),
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              _BalanceFourSectionSlot(
-                slot: layout.card1,
-                label: 'Card 1',
-                semanticsLabel: 'Balance alternatív szekció 1',
-                allocationKey: const ValueKey<String>('balance-tetris-slot-1'),
-                surfaceKey: const ValueKey<String>('balance-tetris-card-1'),
-              ),
-              _BalanceFourSectionSlot(
-                slot: layout.card2,
-                label: 'Card 2',
-                semanticsLabel: 'Balance alternatív szekció 2',
-                allocationKey: const ValueKey<String>('balance-tetris-slot-2'),
-                surfaceKey: const ValueKey<String>('balance-tetris-card-2'),
-              ),
-              _BalanceAlternativeSectionSlot(
-                slot: layout.card3,
-                allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
-                surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
-                child: Semantics(
-                  label: 'Bevétel és Kiadás oszlopdiagram',
-                  child: BalanceAlternativeIncomeExpenseBarCard(
-                    presentation: presentation,
-                  ),
-                ),
-              ),
-              _BalanceFourSectionSlot(
-                slot: layout.card4,
-                label: 'Card 4',
-                semanticsLabel: 'Balance alternatív szekció 4',
-                allocationKey: const ValueKey<String>('balance-tetris-slot-4'),
-                surfaceKey: const ValueKey<String>('balance-tetris-card-4'),
-              ),
-              _BalanceFourSectionSlot(
-                slot: layout.card5,
-                label: 'Card 5',
-                semanticsLabel: 'Balance alternatív szekció 5',
-                allocationKey: const ValueKey<String>('balance-tetris-slot-5'),
-                surfaceKey: const ValueKey<String>('balance-tetris-card-5'),
               ),
             ],
           );

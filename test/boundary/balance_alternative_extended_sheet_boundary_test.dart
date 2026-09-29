@@ -33,6 +33,57 @@ void main() {
     },
   );
 
+  test(
+    'SUM-BOUNDARY: adaptive SUM has one pure distribution owner and retains the shared extended-sheet Mother geometry',
+    () {
+      String source(String file) =>
+          File('lib/features/dashboard/$file').readAsStringSync();
+      final distribution = source(
+        'application/dashboard_balance_monthly_net_distribution_projection.dart',
+      );
+      final adapter = source(
+        'presentation/core_modes/balance_alternative_scope_presentation.dart',
+      );
+      final renderer = source(
+        'presentation/core_modes/balance_dashboard_core_surface.dart',
+      );
+      final sumCards = source(
+        'presentation/core_modes/balance_alternative_sum_cards.dart',
+      );
+      final tokens = source(
+        'presentation/core_modes/balance_alternative_visual_tokens.dart',
+      );
+
+      expect(
+        distribution,
+        contains('DashboardBalanceMonthlyNetDistributionProjection'),
+      );
+      expect(distribution, isNot(contains('package:flutter')));
+      expect(
+        adapter,
+        contains('DashboardBalanceMonthlyNetDistributionProjection.build'),
+      );
+      expect(adapter, isNot(contains('DashboardLedgerEntry')));
+      expect(renderer, contains('_BalanceSumExtendedSheetScaffold'));
+      expect(renderer, contains('scopeKey: \'sum\''));
+      expect(
+        renderer,
+        isNot(
+          contains('BalanceAlternativeSumPresentation(:final incomeExpense)'),
+        ),
+      );
+      expect(sumCards, isNot(contains('DashboardLedgerEntry')));
+      expect(
+        sumCards,
+        isNot(
+          contains('DashboardBalanceMonthlyNetDistributionProjection.build'),
+        ),
+      );
+      expect(tokens, contains('DashboardBalanceHeaderPaletteCatalog.scaleFor'));
+      expect(sumCards, isNot(contains('0xFFA879FF')));
+    },
+  );
+
   test('MOM-01/REG-01: seamless Mother Card bounds have one shared owner', () {
     String source(String file) => File(
       'lib/features/dashboard/presentation/core_modes/$file',
