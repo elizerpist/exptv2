@@ -202,4 +202,34 @@ void main() {
       );
     },
   );
+
+  test(
+    'N4-12/13: Napi 4 has one daily domain owner and reuses the unchanged extended-sheet geometry',
+    () {
+      String source(String file) =>
+          File('lib/features/dashboard/$file').readAsStringSync();
+      final projection = source(
+        'application/dashboard_balance_daily_insights_projection.dart',
+      );
+      final adapter = source(
+        'presentation/core_modes/balance_alternative_scope_presentation.dart',
+      );
+      final renderer = source(
+        'presentation/core_modes/balance_dashboard_core_surface.dart',
+      );
+      final cards = source(
+        'presentation/core_modes/balance_alternative_day_cards.dart',
+      );
+
+      expect(projection, contains('DashboardBalanceDailyInsightsProjection'));
+      expect(projection, isNot(contains('package:flutter/material.dart')));
+      expect(adapter, contains('dailyInsights: linked.dailyInsights'));
+      expect(renderer, contains('_BalanceDayExtendedSheetScaffold'));
+      expect(renderer, contains('Rect.fromLTRB('));
+      expect(renderer, contains('scopeKey: \'day\''));
+      expect(cards, isNot(contains('DashboardLedgerEntry')));
+      expect(cards, contains('balance-napi4-coordinate-map'));
+      expect(cards, contains('balance-napi4-rhythm-strip'));
+    },
+  );
 }

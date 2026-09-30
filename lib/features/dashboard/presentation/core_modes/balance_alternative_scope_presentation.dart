@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../application/dashboard_balance_closings_momentum_projection.dart';
+import '../../application/dashboard_balance_daily_insights_projection.dart';
 import '../../application/dashboard_balance_monthly_net_distribution_projection.dart';
 import '../../application/dashboard_balance_primary_projection.dart';
 import '../../application/dashboard_balance_retention_stability_projection.dart';
@@ -75,6 +76,10 @@ sealed class BalanceAlternativeScopePresentation {
     DayScope() => BalanceAlternativeDayPresentation(
       timeScope: primary.timeScope,
       sourcePresentationId: primary.presentationId,
+      dailyInsights: DashboardBalanceDailyInsightsPresentation.unavailable(
+        identity: primary.identity,
+        timeScope: primary.timeScope,
+      ),
     ),
   };
 
@@ -140,6 +145,7 @@ sealed class BalanceAlternativeScopePresentation {
     DayScope() => BalanceAlternativeDayPresentation(
       timeScope: linked.timeScope,
       sourcePresentationId: linked.presentationId,
+      dailyInsights: linked.dailyInsights,
     ),
   };
 
@@ -205,7 +211,10 @@ final class BalanceAlternativeDayPresentation
   const BalanceAlternativeDayPresentation({
     required super.timeScope,
     required super.sourcePresentationId,
+    required this.dailyInsights,
   });
+
+  final DashboardBalanceDailyInsightsPresentation dailyInsights;
 }
 
 enum BalanceAlternativeBarDomain { years, months }

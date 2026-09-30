@@ -35,6 +35,10 @@ abstract final class BalanceAlternativeHtmlTokens {
       Size(logical(252), logical(300));
   static Size get sumCombinedCardMinimumContentSize =>
       Size(logical(720), logical(340));
+  static Size get napi4ImpactCardMinimumContentSize =>
+      Size(logical(252), logical(600));
+  static Size get napi4RhythmCardMinimumContentSize =>
+      Size(logical(720), logical(340));
 
   // HTML: .variant-card / .baseline-card.
   static double get childBorderRadius => logical(25);
@@ -79,6 +83,22 @@ abstract final class BalanceAlternativeHtmlTokens {
   static const Color sumBandDot = Color(0xFF9D78E9);
   static const Color sumBandNegativeDot = Color(0xFFEF89A0);
   static const Color sumBandPositiveDot = Color(0xFF38B96B);
+
+  // Napi 4, transcribed from the canonical daily-momentum HTML. The same
+  // semantic token owner supplies the coordinate field, impact tube and
+  // rhythm strip; individual card renderers never own a local palette.
+  static const Color dailyMomentumPurple = Color(0xFF7750DF);
+  static const Color dailyMomentumPurpleLight = Color(0xFFB395FF);
+  static const Color dailyMomentumTeal = Color(0xFF41C9BE);
+  static const Color dailyMomentumMint = Color(0xFF20B78D);
+  static const Color dailyMomentumCoral = Color(0xFFEF7184);
+  static const Color dailyMomentumAxis = Color(0xFF8293AE);
+  static const Color dailyMomentumFieldUpperLeft = Color(0xFFE2F7EE);
+  static const Color dailyMomentumFieldUpperRight = Color(0xFFDCF5F2);
+  static const Color dailyMomentumFieldLowerLeft = Color(0xFFE1EBF4);
+  static const Color dailyMomentumFieldLowerRight = Color(0xFFF1EBEB);
+  static const Color dailyMomentumWell = Color(0xFFE9F0F1);
+  static const Color dailyMomentumRing = Color(0xFFFDFEFC);
 
   /// Semantic original-Soft-rainbow resolver used by every adaptive SUM bar.
   /// Negative ranges progress coral/rose -> purple and positive ranges

@@ -446,7 +446,7 @@ void main() {
   );
 
   testWidgets(
-    'ALT2-04/06: SUM retains five slots, while Year and Havi 2 resolve their HTML extended-sheet bodies and Day stays four-slot',
+    'ALT2-04/06: SUM, Year, Havi 2 and Napi 4 resolve their source-owned extended-sheet bodies',
     (tester) async {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(cashflow: _alternativeYearCashflow()),
@@ -522,6 +522,18 @@ void main() {
       expect(
         find.byKey(const ValueKey<String>('balance-tetris-card-5')),
         findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-alternative-day-layout')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-daily-impact')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-tetris-card-combined')),
+        findsOneWidget,
       );
       expect(
         find.byKey(

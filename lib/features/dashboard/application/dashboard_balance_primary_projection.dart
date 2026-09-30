@@ -6,6 +6,7 @@ import '../time_navigation/domain/ledger_time_scope.dart';
 import '../time_navigation/domain/local_date.dart';
 import '../time_navigation/domain/year_month.dart';
 import 'dashboard_balance_closings_momentum_projection.dart';
+import 'dashboard_balance_daily_insights_projection.dart';
 import 'dashboard_balance_category_movers_projection.dart';
 import 'dashboard_balance_entity_insights_projection.dart';
 import 'dashboard_balance_primary_identity.dart';
@@ -155,6 +156,7 @@ final class DashboardBalanceLinkedPresentation {
     required this.cashflow,
     DashboardBalanceClosingsPresentation? closings,
     DashboardBalanceMomentumPresentation? momentum,
+    DashboardBalanceDailyInsightsPresentation? dailyInsights,
     DashboardBalanceRetentionPresentation? retention,
     DashboardBalanceStabilityPresentation? stability,
     this.categoryMovers,
@@ -185,6 +187,12 @@ final class DashboardBalanceLinkedPresentation {
        momentum =
            momentum ??
            DashboardBalanceMomentumPresentation.unavailable(
+             identity: identity,
+             timeScope: timeScope,
+           ),
+       dailyInsights =
+           dailyInsights ??
+           DashboardBalanceDailyInsightsPresentation.unavailable(
              identity: identity,
              timeScope: timeScope,
            ),
@@ -219,6 +227,7 @@ final class DashboardBalanceLinkedPresentation {
   final DashboardBalancePrimaryPresentation cashflow;
   final DashboardBalanceClosingsPresentation closings;
   final DashboardBalanceMomentumPresentation momentum;
+  final DashboardBalanceDailyInsightsPresentation dailyInsights;
   final DashboardBalanceRetentionPresentation retention;
   final DashboardBalanceStabilityPresentation stability;
   final DashboardBalanceCategoryMoversPresentation? categoryMovers;
@@ -234,6 +243,7 @@ final class DashboardBalanceLinkedPresentation {
     cashflow.presentationId,
     closings.presentationId,
     momentum.presentationId,
+    dailyInsights.presentationId,
     retention.presentationId,
     stability.presentationId,
     categoryMovers?.presentationId,
@@ -547,6 +557,14 @@ abstract final class DashboardBalanceLinkedProjection {
         expenseEntries: expenseEntries,
       ),
       momentum: DashboardBalanceMomentumProjection.build(
+        identity: identity,
+        timeScope: timeScope,
+        logicalAsOfDate: logicalAsOfDate,
+        logicalAsOfLocalTimeMinutes: logicalAsOfLocalTimeMinutes,
+        incomeEntries: incomeEntries,
+        expenseEntries: expenseEntries,
+      ),
+      dailyInsights: DashboardBalanceDailyInsightsProjection.build(
         identity: identity,
         timeScope: timeScope,
         logicalAsOfDate: logicalAsOfDate,

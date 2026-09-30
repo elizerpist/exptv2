@@ -22,6 +22,7 @@ import '../../time_navigation/domain/ledger_time_scope.dart';
 import 'balance_carousel_wave_motion.dart';
 import 'balance_carousel_wave_diagnostics.dart';
 import 'balance_alternative_extended_sheet_cards.dart';
+import 'balance_alternative_day_cards.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_sum_cards.dart';
 import 'balance_alternative_visual_tokens.dart';
@@ -942,13 +943,86 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
               geometry: geometry,
               presentation: alternative,
             ),
-          BalanceAlternativeDayPresentation() => _BalanceFourSectionScaffold(
-            geometry: geometry,
-          ),
+          BalanceAlternativeDayPresentation() =>
+            _BalanceDayExtendedSheetScaffold(
+              geometry: geometry,
+              presentation: alternative,
+            ),
         };
       },
     );
   }
+}
+
+/// Napi 4 preserves the shared extended Mother Card but follows its own source
+/// truth composition: coordinate field, one merged vertical impact card and
+/// the full-width shared-data rhythm strip.
+final class _BalanceDayExtendedSheetScaffold extends StatelessWidget {
+  const _BalanceDayExtendedSheetScaffold({
+    required this.geometry,
+    required this.presentation,
+  });
+
+  final DashboardLayoutFrame geometry;
+  final BalanceAlternativeDayPresentation presentation;
+
+  @override
+  Widget build(BuildContext context) => _BalanceExtendedSheetFrame(
+    geometry: geometry,
+    scopeKey: 'day',
+    childrenFor: (layout) {
+      final insights = presentation.dailyInsights;
+      final mergedImpact = Rect.fromLTRB(
+        layout.card4.left,
+        layout.card4.top,
+        layout.card5.right,
+        layout.card5.bottom,
+      );
+      return <Widget>[
+        _BalanceAlternativeSectionSlot(
+          slot: layout.card3,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-3'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-3'),
+          child: Semantics(
+            label: insights.momentum.available
+                ? 'Pénzügyi koordinátarendszer: ${insights.momentum.selected.quadrant.label}'
+                : 'Pénzügyi koordinátarendszer még nem elérhető',
+            child: BalanceAlternativeDailyMomentumCoordinateCard(
+              presentation: insights.momentum,
+            ),
+          ),
+        ),
+        _BalanceAlternativeSectionSlot(
+          slot: mergedImpact,
+          allocationKey: const ValueKey<String>(
+            'balance-tetris-slot-daily-impact',
+          ),
+          surfaceKey: const ValueKey<String>(
+            'balance-tetris-card-daily-impact',
+          ),
+          child: Semantics(
+            label: insights.impact.available
+                ? 'Napi hatás ${insights.impact.valuePercent!.round()} százalék'
+                : 'Napi hatás még nem hasonlítható össze',
+            child: BalanceAlternativeDailyImpactCard(
+              presentation: insights.impact,
+            ),
+          ),
+        ),
+        _BalanceAlternativeSectionSlot(
+          slot: layout.combined,
+          allocationKey: const ValueKey<String>('balance-tetris-slot-combined'),
+          surfaceKey: const ValueKey<String>('balance-tetris-card-combined'),
+          child: Semantics(
+            label: 'Összehasonlító ritmuscsík',
+            child: BalanceAlternativeDailyMomentumRhythmCard(
+              presentation: insights.momentum,
+            ),
+          ),
+        ),
+      ];
+    },
+  );
 }
 
 /// SUM uses the same canonical extended-sheet body allocation as Havi 2 and
