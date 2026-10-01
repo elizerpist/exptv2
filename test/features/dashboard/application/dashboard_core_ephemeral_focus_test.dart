@@ -2179,9 +2179,15 @@ void main() {
       RangeSlider slider() => tester.widget<RangeSlider>(
         find.byKey(const ValueKey<String>('query-amount-range-slider')),
       );
-      void expectFirstPreviewFrame(QueryAmountRangeValues expected) {
+      void expectFirstPreviewFrame(
+        QueryAmountRangeValues expected, {
+        required int expectedAmountMinor,
+        required int expectedRows,
+      }) {
         final heatmap = core.mindTemporalHeatmap.value;
         final score = core.mindBehavioralScore.value;
+        final summary = core.visibleFrames.amountLane.value;
+        final list = core.visibleFrames.logBoxLane.value;
         String rangeDigest(QueryAmountRangeValues values) =>
             '${values.minimumScaled100}/${values.maximumScaled100} '
             '${values.lowerScaled100}/${values.upperScaled100}';
@@ -2200,6 +2206,12 @@ void main() {
               'score=${rangeDigest(score.range)} expected=${rangeDigest(expected)}',
         );
         expect(score.chartSeries!.points.last, score.point);
+        expect(summary, isNotNull);
+        expect(list, isNotNull);
+        expect(summary!.mode, DashboardVisibleMode.preview);
+        expect(list!.mode, DashboardVisibleMode.preview);
+        expect(summary.amount.totalMinor, expectedAmountMinor);
+        expect(list.logBox.previewRowCount, expectedRows);
       }
 
       final readsBefore = repository.committedPageReads;
@@ -2216,7 +2228,11 @@ void main() {
         upperScaled100: 500000,
       );
       expect(core.mindTemporalHeatmap.value, isA<MindMonthHeatmapFrame>());
-      expectFirstPreviewFrame(onlyHigh);
+      expectFirstPreviewFrame(
+        onlyHigh,
+        expectedAmountMinor: 500000,
+        expectedRows: 1,
+      );
 
       core.navigateExperimentalTemporalSelection(
         plane: TimePlane.sum,
@@ -2232,7 +2248,11 @@ void main() {
         lowerScaled100: 200000,
         upperScaled100: 500000,
       );
-      expectFirstPreviewFrame(middleAndHigh);
+      expectFirstPreviewFrame(
+        middleAndHigh,
+        expectedAmountMinor: 700000,
+        expectedRows: 2,
+      );
 
       core.navigateExperimentalTemporalSelection(
         plane: TimePlane.year,
@@ -2249,7 +2269,11 @@ void main() {
         lowerScaled100: 200000,
         upperScaled100: 200000,
       );
-      expectFirstPreviewFrame(onlyLow);
+      expectFirstPreviewFrame(
+        onlyLow,
+        expectedAmountMinor: 200000,
+        expectedRows: 1,
+      );
       expect(repository.committedPageReads, readsBefore);
       expect(repository.prepareCalls, preparesBefore);
       final counter = core.mindBehavioralScore.sourceWorkCounter!;
@@ -2993,11 +3017,13 @@ void main() {
             'same frame as the pre-settle score publication.',
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-card')),
         findsOneWidget,
-        reason: 'The mounted Mind timeline must paint the accepted Day target.',
+        reason:
+            'The mounted native All-vs-slider Day surface must paint the '
+            'accepted Day target.',
       );
-      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
+      expect(find.text('Napi aktivitás'), findsOneWidget);
       final headerScore = tester.widget<Text>(
         find.byKey(const ValueKey<String>('mind-header-score-text')),
       );
@@ -3101,16 +3127,16 @@ void main() {
         const DayScope(LocalDate(year: 2026, month: 7, day: 14)),
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-card')),
         findsOneWidget,
       );
-      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
+      expect(find.text('Napi aktivitás'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey<String>('mind-day-timeline-marker-0')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-full-00')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('mind-day-timeline-marker-1')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-full-23')),
         findsOneWidget,
       );
       final score = core.mindBehavioralScore.value!;
@@ -3124,6 +3150,37 @@ void main() {
         const LocalDate(year: 2026, month: 7, day: 14).epochDay,
       );
       expect(score.chartSeries!.points.last, score.point);
+
+      // The visible Summary pill and transaction-list lanes are the same
+      // immediate preview consumers as the Day heatmap. Narrowing must update
+      // them before release; it may not be a heatmap-only repaint.
+      core.beginMindAmountRangeInteraction();
+      expect(
+        core.previewMindAmountRange(
+          const QueryAmountRangeValues(
+            minimumScaled100: 100000,
+            maximumScaled100: 900000,
+            lowerScaled100: 250000,
+            upperScaled100: 900000,
+          ),
+        ),
+        isTrue,
+      );
+      await tester.pump();
+      final previewDay = core.mindTemporalHeatmap.value! as MindDayHeatmapFrame;
+      expect(previewDay.timelineEvents, hasLength(1));
+      expect(previewDay.timelineEvents.single.total, 300000);
+      expect(
+        core.visibleFrames.amountLane.value?.mode,
+        DashboardVisibleMode.preview,
+      );
+      expect(core.visibleFrames.amountLane.value?.amount.totalMinor, 300000);
+      expect(
+        core.visibleFrames.logBoxLane.value?.mode,
+        DashboardVisibleMode.preview,
+      );
+      expect(core.visibleFrames.logBoxLane.value?.logBox.previewRowCount, 1);
+      core.endMindAmountRangeInteraction(committed: false);
     },
   );
 
@@ -3175,7 +3232,7 @@ void main() {
       );
       expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
       expect(
-        find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
+        find.byKey(const ValueKey<String>('mind-day-all-slider-card')),
         findsOneWidget,
       );
       final readsBeforeLevelClose = repository.prepareCalls;
@@ -3304,7 +3361,7 @@ void main() {
           expect(core.navigation.state.effectiveScope, isA<DayScope>());
           expect(core.mindTemporalHeatmap.value, isA<MindDayHeatmapFrame>());
           expect(
-            find.byKey(const ValueKey<String>('mind-day-timeline-chart')),
+            find.byKey(const ValueKey<String>('mind-day-all-slider-card')),
             findsOneWidget,
           );
         } else {

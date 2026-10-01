@@ -107,6 +107,8 @@ final class MindSumHeatmapViewport extends StatelessWidget {
             return MindSumReferenceSurface(
               frame: frame,
               visualStyle: value.sumVisualStyle,
+              paletteStyle: value.paletteStyle,
+              scaleResolution: value.scaleResolution,
               showLayoutChooser: value.showSumLayoutChooser,
             );
           }
@@ -1281,18 +1283,24 @@ final class MindDayHeatmapViewport extends StatelessWidget {
           final controller = settings is MindYearHeatmapPresentationController
               ? settings
               : null;
-          Widget heatmap() => MindDayAllVsSliderHeatmapCard(
-            frame: frame,
-            onTimelineRequested: controller == null
-                ? null
-                : () =>
-                      controller.setDayContentView(MindDayContentView.timeline),
-          );
-          if (settings == null) return heatmap();
+          Widget heatmap(MindYearHeatmapPresentationSettings value) =>
+              MindDayAllVsSliderHeatmapCard(
+                frame: frame,
+                paletteStyle: value.paletteStyle,
+                scaleResolution: value.scaleResolution,
+                onTimelineRequested: controller == null
+                    ? null
+                    : () => controller.setDayContentView(
+                        MindDayContentView.timeline,
+                      ),
+              );
+          if (settings == null) {
+            return MindDayAllVsSliderHeatmapCard(frame: frame);
+          }
           return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
             valueListenable: settings,
             builder: (context, value, _) => switch (value.dayContentView) {
-              MindDayContentView.allVsSliderHeatmap => heatmap(),
+              MindDayContentView.allVsSliderHeatmap => heatmap(value),
               MindDayContentView.timeline => MindDayTransactionTimelineCard(
                 frame: frame,
                 paletteStyle: value.paletteStyle,

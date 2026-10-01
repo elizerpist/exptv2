@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_temporal_heatmap_projection.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/mind/domain/mind_year_heatmap_projection.dart';
+import 'package:fluvi/features/dashboard/mind/presentation/mind_heatmap_palette_scope.dart';
+import 'package:fluvi/features/dashboard/mind/presentation/mind_year_heatmap_palette_resolver.dart';
 import 'package:fluvi/features/dashboard/mind/presentation/mind_sum_reference_surface.dart';
 import 'package:fluvi/features/dashboard/query/domain/query_amount_range.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
@@ -74,7 +76,7 @@ void main() {
   );
 
   testWidgets(
-    'SUM-REFERENCE-02 RED: the visible SUM-A layout chooser changes the live month-grid layout',
+    'SUMFIX-01 RED: SUM-A has one fixed four-column, twelve-month layout without a chooser',
     (tester) async {
       final frame =
           MindSumHeatmapProjection.build(
@@ -112,23 +114,132 @@ void main() {
         ),
       );
 
+      final grid = find.byKey(const ValueKey('mind-sum-month-grid-2025-4'));
+      expect(grid, findsOneWidget);
       expect(
-        find.byKey(const ValueKey('mind-sum-month-grid-2025-4')),
-        findsOneWidget,
+        find.byKey(const ValueKey('mind-sum-detail-mode-toggle')),
+        findsNothing,
+        reason: 'SUM is fixed to the source-of-truth 4 columns × 3 rows.',
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-sum-layout-two-by-six')),
-      );
-      await tester.pump();
       expect(
-        find.byKey(const ValueKey('mind-sum-month-grid-2025-6')),
-        findsOneWidget,
+        tester.getSize(grid).height,
+        greaterThanOrEqualTo(120),
+        reason: 'All three rows must have real vertical room; no clipped band.',
       );
     },
   );
 
   testWidgets(
-    'SUM-REFERENCE-03 RED: SUM-B year identity color follows the same live range frame as the month cells',
+    'SUMFIX-03 RED: SUM-A and SUM-B month cells consume the live shared heatmap palette',
+    (tester) async {
+      final frame =
+          MindSumHeatmapProjection.build(
+            identity: const MindTemporalHeatmapIdentity(
+              upstreamScopeKey: 'expense',
+              indexGeneration: 1,
+              coreRevision: 1,
+              timeScopeKey: 'sum',
+            ),
+            contributions: <MindYearHeatmapPreparedContribution>[
+              _entry(0, 80000, const LocalDate(year: 2025, month: 1, day: 2)),
+            ],
+          ).preview(
+            const QueryAmountRangeValues(
+              minimumScaled100: 1,
+              maximumScaled100: 100000,
+              lowerScaled100: 1,
+              upperScaled100: 100000,
+            ),
+          );
+
+      const dynamicHigh = Color(0xff145c48);
+      final dynamicScale = MindHeatmapResolvedScale(<Color>[
+        const Color(0xffe6f8ef),
+        dynamicHigh,
+      ]);
+      final expected = MindYearHeatmapPaletteResolver.resolveTile(
+        style: MindYearHeatmapPaletteStyle.fluvi,
+        isEmpty: false,
+        intensity: frame.month(year: 2025, month: 1).intensity,
+        paletteIntensity: frame.month(year: 2025, month: 1).paletteIntensity,
+        dynamicScale: dynamicScale,
+      );
+      for (final style in <MindSumVisualStyle>[
+        MindSumVisualStyle.sumA,
+        MindSumVisualStyle.sumB,
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MindHeatmapPaletteScope(
+              scale: dynamicScale,
+              child: Scaffold(
+                body: SizedBox(
+                  width: 390,
+                  height: 480,
+                  child: MindSumReferenceSurface(
+                    frame: frame,
+                    visualStyle: style,
+                    showLayoutChooser: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final monthCell = tester.widget<DecoratedBox>(
+          find.byKey(const ValueKey('mind-sum-heatmap-cell-2025-1')),
+        );
+        final decoration = monthCell.decoration as BoxDecoration;
+        expect(decoration.color, expected.background);
+      }
+    },
+  );
+
+  testWidgets(
+    'SUMFIX-02: SUM reference is body content, not a nested rounded card above the footer',
+    (tester) async {
+      final frame =
+          MindSumHeatmapProjection.build(
+            identity: const MindTemporalHeatmapIdentity(
+              upstreamScopeKey: 'expense',
+              indexGeneration: 1,
+              coreRevision: 1,
+              timeScopeKey: 'sum',
+            ),
+            contributions: <MindYearHeatmapPreparedContribution>[
+              _entry(0, 50000, const LocalDate(year: 2025, month: 1, day: 2)),
+            ],
+          ).preview(
+            const QueryAmountRangeValues(
+              minimumScaled100: 1,
+              maximumScaled100: 100000,
+              lowerScaled100: 1,
+              upperScaled100: 100000,
+            ),
+          );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 480,
+              child: MindSumReferenceSurface(
+                frame: frame,
+                visualStyle: MindSumVisualStyle.sumA,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(
+        tester.widget(find.byKey(const ValueKey('mind-sum-reference-sumA'))),
+        isA<KeyedSubtree>(),
+      );
+    },
+  );
+
+  testWidgets(
+    'SUM-REFERENCE-03 RED: SUM-B year card and mother tone follow the same live range frame as the month cells',
     (tester) async {
       final projection = MindSumHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
@@ -181,13 +292,24 @@ void main() {
       );
       final beforeColors =
           (before.decoration! as BoxDecoration).gradient!.colors;
+      final beforeMother = tester.widget<Container>(
+        find.byKey(const ValueKey('mind-sum-b-mother-card-2026')),
+      );
+      final beforeMotherColors =
+          (beforeMother.decoration! as BoxDecoration).gradient!.colors;
       await pump(narrowed);
       final after = tester.widget<Container>(
         find.byKey(const ValueKey('mind-sum-b-year-card-2026')),
       );
       final afterColors = (after.decoration! as BoxDecoration).gradient!.colors;
+      final afterMother = tester.widget<Container>(
+        find.byKey(const ValueKey('mind-sum-b-mother-card-2026')),
+      );
+      final afterMotherColors =
+          (afterMother.decoration! as BoxDecoration).gradient!.colors;
 
       expect(afterColors, isNot(beforeColors));
+      expect(afterMotherColors, isNot(beforeMotherColors));
     },
   );
 }

@@ -4,76 +4,50 @@ import 'package:flutter/material.dart';
 
 import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
+import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_sum_year_band_header.dart';
 import 'mind_temporal_content_header.dart';
+import 'mind_heatmap_palette_scope.dart';
+import 'mind_year_heatmap_palette_resolver.dart';
 
 /// SUM-A/SUM-B presentation surfaces reconstructed from the supplied visual
 /// references. They consume only the existing live [MindSumHeatmapFrame].
 /// The canonical amount range control stays outside this surface, so this
 /// class deliberately never renders a second decorative or inactive rail.
-final class MindSumReferenceSurface extends StatefulWidget {
+final class MindSumReferenceSurface extends StatelessWidget {
   const MindSumReferenceSurface({
     super.key,
     required this.frame,
     required this.visualStyle,
-    required this.showLayoutChooser,
+    this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
+    this.scaleResolution = MindHeatmapScaleResolution.ten,
+    // Kept as an accepted input for persisted earlier preference state. The
+    // source-of-truth SUM layout is now deliberately fixed to 4×3 and never
+    // exposes a second layout selector.
+    this.showLayoutChooser = false,
   });
 
   final MindSumHeatmapFrame frame;
   final MindSumVisualStyle visualStyle;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final bool showLayoutChooser;
 
   @override
-  State<MindSumReferenceSurface> createState() =>
-      _MindSumReferenceSurfaceState();
-}
-
-final class _MindSumReferenceSurfaceState
-    extends State<MindSumReferenceSurface> {
-  // The SUM-A reference starts with three rows and four month cards per row.
-  var _layout = MindYearHeatmapGridLayout.threeByFour;
-
-  bool get _isSumB => widget.visualStyle == MindSumVisualStyle.sumB;
-
-  int get _columns => switch (_layout) {
-    MindYearHeatmapGridLayout.threeByFour => 4,
-    MindYearHeatmapGridLayout.fourByThree => 3,
-    MindYearHeatmapGridLayout.twoBySix => 6,
-  };
-
-  void _selectLayout(MindYearHeatmapGridLayout layout) {
-    if (_layout == layout) return;
-    setState(() => _layout = layout);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final years = widget.frame.years;
+    final years = frame.years;
     final period = years.isEmpty
         ? '— · 0 hónap'
         : '${years.first}–${years.last} · ${years.length * 12} hónap';
-    return DecoratedBox(
-      key: ValueKey<String>('mind-sum-reference-${widget.visualStyle.name}'),
-      decoration: BoxDecoration(
-        color: _isSumB ? const Color(0xfffdfbff) : const Color(0xfffffeff),
-        borderRadius: BorderRadius.circular(23),
-        border: Border.all(color: const Color(0x11879ab6)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x246078a2),
-            offset: Offset(0, 7),
-            blurRadius: 1,
-          ),
-          BoxShadow(
-            color: Color(0x163e547a),
-            offset: Offset(0, 15),
-            blurRadius: 22,
-          ),
-          BoxShadow(color: Color(0x88ffffff), offset: Offset(-1, -1)),
-        ],
-      ),
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
+    final isSumB = visualStyle == MindSumVisualStyle.sumB;
+    // The surrounding Mind seamless body owns the only actual content-card
+    // shell. This surface supplies body content only, preventing a second
+    // rounded bottom from appearing above the fixed slider footer.
+    return KeyedSubtree(
+      key: ValueKey<String>('mind-sum-reference-${visualStyle.name}'),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -82,32 +56,29 @@ final class _MindSumReferenceSurfaceState
               subtitle: period,
               titleKey: const ValueKey<String>('mind-sum-heatmap-title'),
               subtitleKey: const ValueKey<String>('mind-sum-heatmap-period'),
-              trailing: widget.showLayoutChooser
-                  ? _SumReferenceLayoutChooser(
-                      sumB: _isSumB,
-                      selectedLayout: _layout,
-                      onSelected: _selectLayout,
-                    )
-                  : null,
             ),
             const SizedBox(height: 8),
             Expanded(
               child: ListView.separated(
                 key: const ValueKey<String>('mind-sum-reference-year-list'),
-                padding: EdgeInsets.zero,
+                padding: const EdgeInsets.only(bottom: 4),
                 physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: years.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 9),
-                itemBuilder: (context, index) => _isSumB
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) => isSumB
                     ? _SumBYearBand(
-                        frame: widget.frame,
+                        frame: frame,
                         year: years[index],
-                        columns: _columns,
+                        paletteStyle: paletteStyle,
+                        scaleResolution: scaleResolution,
+                        dynamicScale: dynamicScale,
                       )
                     : _SumAYearBand(
-                        frame: widget.frame,
+                        frame: frame,
                         year: years[index],
-                        columns: _columns,
+                        paletteStyle: paletteStyle,
+                        scaleResolution: scaleResolution,
+                        dynamicScale: dynamicScale,
                       ),
               ),
             ),
@@ -118,189 +89,29 @@ final class _MindSumReferenceSurfaceState
   }
 }
 
-final class _SumReferenceLayoutChooser extends StatelessWidget {
-  const _SumReferenceLayoutChooser({
-    required this.sumB,
-    required this.selectedLayout,
-    required this.onSelected,
-  });
-
-  final bool sumB;
-  final MindYearHeatmapGridLayout selectedLayout;
-  final ValueChanged<MindYearHeatmapGridLayout> onSelected;
-
-  @override
-  Widget build(BuildContext context) => sumB
-      ? DecoratedBox(
-          key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
-          decoration: BoxDecoration(
-            color: const Color(0xffedf1fa),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0x13758ba8)),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                _SumIconChoice(
-                  key: const ValueKey<String>('mind-sum-layout-three-by-four'),
-                  icon: Icons.calendar_today_rounded,
-                  selected:
-                      selectedLayout == MindYearHeatmapGridLayout.threeByFour,
-                  onPressed: () =>
-                      onSelected(MindYearHeatmapGridLayout.threeByFour),
-                ),
-                _SumIconChoice(
-                  key: const ValueKey<String>('mind-sum-layout-four-by-three'),
-                  icon: Icons.bar_chart_rounded,
-                  selected:
-                      selectedLayout == MindYearHeatmapGridLayout.fourByThree,
-                  onPressed: () =>
-                      onSelected(MindYearHeatmapGridLayout.fourByThree),
-                ),
-                _SumIconChoice(
-                  key: const ValueKey<String>('mind-sum-layout-two-by-six'),
-                  icon: Icons.grid_view_rounded,
-                  selected:
-                      selectedLayout == MindYearHeatmapGridLayout.twoBySix,
-                  onPressed: () =>
-                      onSelected(MindYearHeatmapGridLayout.twoBySix),
-                ),
-              ],
-            ),
-          ),
-        )
-      : Row(
-          key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _SumTextChoice(
-              key: const ValueKey<String>('mind-sum-layout-three-by-four'),
-              label: '3×4',
-              selected: selectedLayout == MindYearHeatmapGridLayout.threeByFour,
-              onPressed: () =>
-                  onSelected(MindYearHeatmapGridLayout.threeByFour),
-            ),
-            const SizedBox(width: 4),
-            _SumTextChoice(
-              key: const ValueKey<String>('mind-sum-layout-four-by-three'),
-              label: '4×3',
-              selected: selectedLayout == MindYearHeatmapGridLayout.fourByThree,
-              onPressed: () =>
-                  onSelected(MindYearHeatmapGridLayout.fourByThree),
-            ),
-            const SizedBox(width: 4),
-            _SumTextChoice(
-              key: const ValueKey<String>('mind-sum-layout-two-by-six'),
-              label: '2×6',
-              selected: selectedLayout == MindYearHeatmapGridLayout.twoBySix,
-              onPressed: () => onSelected(MindYearHeatmapGridLayout.twoBySix),
-            ),
-          ],
-        );
-}
-
-final class _SumTextChoice extends StatelessWidget {
-  const _SumTextChoice({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.selected = false,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onPressed,
-    borderRadius: BorderRadius.circular(13),
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: selected ? const Color(0xfff8fbff) : Colors.transparent,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: selected ? const Color(0xff354a70) : const Color(0x337489a9),
-          width: selected ? 1.2 : 1,
-        ),
-      ),
-      child: SizedBox(
-        width: 48,
-        height: 24,
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xff34476a),
-              fontSize: 9,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-final class _SumIconChoice extends StatelessWidget {
-  const _SumIconChoice({
-    super.key,
-    required this.icon,
-    required this.onPressed,
-    this.selected = false,
-  });
-
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onPressed,
-    borderRadius: BorderRadius.circular(12),
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: selected
-            ? const LinearGradient(
-                colors: <Color>[Color(0xff7559f3), Color(0xffb08cf8)],
-              )
-            : null,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: SizedBox(
-        width: 30,
-        height: 25,
-        child: Icon(
-          icon,
-          size: 13,
-          color: selected ? Colors.white : const Color(0xff637796),
-        ),
-      ),
-    ),
-  );
-}
-
 final class _SumAYearBand extends StatelessWidget {
   const _SumAYearBand({
     required this.frame,
     required this.year,
-    required this.columns,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    this.dynamicScale,
   });
 
   final MindSumHeatmapFrame frame;
   final int year;
-  final int columns;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     key: ValueKey<String>('mind-sum-a-year-$year'),
-    height: switch (columns) {
-      3 => 142,
-      4 => 124,
-      _ => 102,
-    },
+    // Header (23) + gap (5) + three real, source-proportioned month rows.
+    // The fixed geometry deliberately does not infer a second layout from
+    // screen size. At the reference width this produces 4×3 cards instead of
+    // making the slider/footer compete with a vertically oversized year band.
+    height: 154,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -338,7 +149,13 @@ final class _SumAYearBand extends StatelessWidget {
         ),
         const SizedBox(height: 5),
         Expanded(
-          child: _SumMonthGrid(frame: frame, year: year, columns: columns),
+          child: _SumMonthGrid(
+            frame: frame,
+            year: year,
+            paletteStyle: paletteStyle,
+            scaleResolution: scaleResolution,
+            dynamicScale: dynamicScale,
+          ),
         ),
       ],
     ),
@@ -349,101 +166,117 @@ final class _SumBYearBand extends StatelessWidget {
   const _SumBYearBand({
     required this.frame,
     required this.year,
-    required this.columns,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    this.dynamicScale,
   });
 
   final MindSumHeatmapFrame frame;
   final int year;
-  final int columns;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    key: ValueKey<String>('mind-sum-b-mother-card-$year'),
-    height: switch (columns) {
-      3 => 142,
-      4 => 116,
-      _ => 102,
-    },
-    padding: const EdgeInsets.all(7),
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: year.isEven
-            ? const <Color>[Color(0xfff4eeff), Color(0xffece8ff)]
-            : const <Color>[Color(0xfffff2ed), Color(0xffffe7e7)],
-      ),
-      borderRadius: BorderRadius.circular(17),
-    ),
-    child: Row(
-      children: <Widget>[
-        _SumBYearIdentity(frame: frame, year: year),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'Éves összeg: ${formatMindCompactForints(frame.yearTotal(year) ~/ 100)}',
-                  key: ValueKey<String>('mind-sum-heatmap-total-$year'),
-                  style: const TextStyle(
-                    color: Color(0xff122a74),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 5),
-              Expanded(
-                child: _SumMonthGrid(
-                  frame: frame,
-                  year: year,
-                  columns: columns,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-final class _SumBYearIdentity extends StatelessWidget {
-  const _SumBYearIdentity({required this.frame, required this.year});
-  final MindSumHeatmapFrame frame;
-  final int year;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
 
   @override
   Widget build(BuildContext context) {
-    final intensity = _yearIntensity(frame, year);
-    final colors = year.isEven
-        ? <Color>[
-            Color.lerp(
-              const Color(0xff8166ef),
-              const Color(0xff3d209b),
-              intensity,
-            )!,
-            Color.lerp(
-              const Color(0xffbd9af7),
-              const Color(0xff7650e6),
-              intensity,
-            )!,
-          ]
-        : <Color>[
-            Color.lerp(
-              const Color(0xffff9da0),
-              const Color(0xffde3159),
-              intensity,
-            )!,
-            Color.lerp(
-              const Color(0xffff7679),
-              const Color(0xffff5661),
-              intensity,
-            )!,
-          ];
+    final palette = _sumYearPalette(
+      frame: frame,
+      year: year,
+      paletteStyle: paletteStyle,
+      scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
+    );
+    // SUM-B keeps its very pale mother surface, but that surface is still a
+    // live heatmap consumer. It must not remain a static parity-coloured card
+    // while its own year identity and month cells react to the range slider.
+    final motherColors = <Color>[
+      Color.lerp(palette.background, Colors.white, .84)!,
+      Color.lerp(palette.background, Colors.white, .69)!,
+    ];
+    return Container(
+      key: ValueKey<String>('mind-sum-b-mother-card-$year'),
+      height: 162,
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: motherColors,
+        ),
+        borderRadius: BorderRadius.circular(17),
+      ),
+      child: Row(
+        children: <Widget>[
+          _SumBYearIdentity(
+            frame: frame,
+            year: year,
+            paletteStyle: paletteStyle,
+            scaleResolution: scaleResolution,
+            dynamicScale: dynamicScale,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Éves összeg: ${formatMindCompactForints(frame.yearTotal(year) ~/ 100)}',
+                    key: ValueKey<String>('mind-sum-heatmap-total-$year'),
+                    style: const TextStyle(
+                      color: Color(0xff122a74),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Expanded(
+                  child: _SumMonthGrid(
+                    frame: frame,
+                    year: year,
+                    paletteStyle: paletteStyle,
+                    scaleResolution: scaleResolution,
+                    dynamicScale: dynamicScale,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final class _SumBYearIdentity extends StatelessWidget {
+  const _SumBYearIdentity({
+    required this.frame,
+    required this.year,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    this.dynamicScale,
+  });
+  final MindSumHeatmapFrame frame;
+  final int year;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _sumYearPalette(
+      frame: frame,
+      year: year,
+      paletteStyle: paletteStyle,
+      scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
+    );
+    final colors = <Color>[
+      Color.lerp(palette.background, const Color(0xff06194f), .18)!,
+      Color.lerp(palette.background, Colors.white, .17)!,
+    ];
     return Container(
       key: ValueKey<String>('mind-sum-b-year-card-$year'),
       width: 72,
@@ -501,43 +334,63 @@ final class _SumBYearIdentity extends StatelessWidget {
   }
 }
 
+MindYearHeatmapPaletteSample _sumYearPalette({
+  required MindSumHeatmapFrame frame,
+  required int year,
+  required MindYearHeatmapPaletteStyle paletteStyle,
+  required MindHeatmapScaleResolution scaleResolution,
+  MindHeatmapResolvedScale? dynamicScale,
+}) => MindYearHeatmapPaletteResolver.resolveTile(
+  style: paletteStyle,
+  isEmpty: frame.yearTotal(year) == 0,
+  intensity: _yearIntensity(frame, year),
+  paletteIntensity: MindYearHeatmapPaletteIntensity.interpolated,
+  scaleResolution: scaleResolution,
+  dynamicScale: dynamicScale,
+);
+
 final class _SumMonthGrid extends StatelessWidget {
   const _SumMonthGrid({
     required this.frame,
     required this.year,
-    required this.columns,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    this.dynamicScale,
   });
   final MindSumHeatmapFrame frame;
   final int year;
-  final int columns;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
 
   @override
   Widget build(BuildContext context) => GridView.builder(
-    key: ValueKey<String>('mind-sum-month-grid-$year-$columns'),
+    key: ValueKey<String>('mind-sum-month-grid-$year-4'),
     physics: const NeverScrollableScrollPhysics(),
     itemCount: 12,
-    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: columns,
+    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: 4,
       mainAxisSpacing: 4,
       crossAxisSpacing: 4,
-      childAspectRatio: columns == 6 ? 1.15 : 1.7,
+      // The SUM-A reference cards are intentionally wide and shallow: their
+      // visual rhythm is 4 columns × 3 rows, not a generic square heatmap.
+      childAspectRatio: 2.25,
     ),
     itemBuilder: (context, index) {
       final month = frame.month(year: year, month: index + 1);
-      final intensity = month.total == null ? 0.0 : month.intensity;
-      final background = Color.lerp(
-        const Color(0xfffff2ed),
-        const Color(0xffd62d78),
-        intensity,
-      )!;
-      final foreground = intensity > .55
-          ? Colors.white
-          : const Color(0xff07194d);
+      final palette = MindYearHeatmapPaletteResolver.resolveTile(
+        style: paletteStyle,
+        isEmpty: month.isEmpty,
+        intensity: month.intensity,
+        paletteIntensity: month.paletteIntensity,
+        scaleResolution: scaleResolution,
+        dynamicScale: dynamicScale,
+      );
       return DecoratedBox(
         key: ValueKey<String>('mind-sum-heatmap-cell-$year-${index + 1}'),
         decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(columns == 6 ? 13 : 8),
+          color: palette.background,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Padding(
           padding: const EdgeInsets.all(4),
@@ -550,12 +403,12 @@ final class _SumMonthGrid extends StatelessWidget {
               children: <Widget>[
                 Text(
                   _monthName(index + 1),
-                  style: TextStyle(color: foreground, fontSize: 8),
+                  style: TextStyle(color: palette.foreground, fontSize: 8),
                 ),
                 Text(
                   formatMindCompactForints((month.total ?? 0) ~/ 100),
                   style: TextStyle(
-                    color: foreground,
+                    color: palette.foreground,
                     fontSize: 9,
                     fontWeight: FontWeight.w900,
                   ),

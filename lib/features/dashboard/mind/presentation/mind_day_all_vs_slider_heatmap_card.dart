@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import '../domain/mind_day_hourly_comparison_projection.dart';
 import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
+import '../domain/mind_year_heatmap_projection.dart';
+import 'mind_heatmap_palette_scope.dart';
 import 'mind_temporal_content_header.dart';
+import 'mind_year_heatmap_palette_resolver.dart';
 
 /// Places the one canonical Mind amount-range control inside the active Day
 /// content card.  It is a location-only scope: the control's controller,
@@ -37,10 +40,14 @@ final class MindDayAllVsSliderHeatmapCard extends StatelessWidget {
   const MindDayAllVsSliderHeatmapCard({
     super.key,
     required this.frame,
+    this.paletteStyle = MindYearHeatmapPaletteStyle.fluvi,
+    this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.onTimelineRequested,
   });
 
   final MindDayHeatmapFrame frame;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
   final VoidCallback? onTimelineRequested;
 
   @override
@@ -50,28 +57,14 @@ final class MindDayAllVsSliderHeatmapCard extends StatelessWidget {
       selectedEvents: frame.timelineEvents,
     );
     final range = MindDayRangeFooterScope.maybeRangeOf(context);
-    return DecoratedBox(
+    final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
+    // The seamless Mind body already owns the white card and its bottom
+    // corners. This is content only, so Day cannot introduce a second false
+    // card edge beneath the canonical range footer.
+    return KeyedSubtree(
       key: const ValueKey<String>('mind-day-all-slider-card'),
-      decoration: BoxDecoration(
-        color: const Color(0xfffeffff),
-        borderRadius: BorderRadius.circular(23),
-        border: Border.all(color: const Color(0x128195b5)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x285e759d),
-            offset: Offset(0, 7),
-            blurRadius: 1,
-          ),
-          BoxShadow(
-            color: Color(0x173d5579),
-            offset: Offset(0, 15),
-            blurRadius: 22,
-          ),
-          BoxShadow(color: Color(0x88ffffff), offset: Offset(-1, -1)),
-        ],
-      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -88,11 +81,20 @@ final class MindDayAllVsSliderHeatmapCard extends StatelessWidget {
                     ),
             ),
             const SizedBox(height: 8),
-            Expanded(child: _MindDayHourlyBars(comparison: comparison)),
+            Expanded(
+              child: _MindDayHourlyBars(
+                comparison: comparison,
+                paletteStyle: paletteStyle,
+                scaleResolution: scaleResolution,
+                dynamicScale: dynamicScale,
+              ),
+            ),
             const SizedBox(height: 12),
-            const _MindDayComparisonLegend(),
-            const SizedBox(height: 12),
-            const _MindDayHeatmapScaleLegend(),
+            _MindDayComparisonLegend(
+              paletteStyle: paletteStyle,
+              scaleResolution: scaleResolution,
+              dynamicScale: dynamicScale,
+            ),
             if (range != null) ...<Widget>[
               const SizedBox(height: 5),
               SizedBox(
@@ -151,31 +153,35 @@ final class MindDayContentViewChooser extends StatelessWidget {
   final VoidCallback? onTimelineRequested;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    key: const ValueKey<String>('mind-day-content-view-toggle'),
-    decoration: BoxDecoration(
-      color: const Color(0xfff4f0ff),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0x177c90b5)),
-    ),
-    child: Padding(
-      padding: EdgeInsets.all(2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _MindDayViewChoice(
-            key: const ValueKey<String>('mind-day-timeline-view-heatmap'),
-            icon: Icons.grid_view_rounded,
-            selected: selected == MindDayContentView.allVsSliderHeatmap,
-            onPressed: onHeatmapRequested,
-          ),
-          _MindDayViewChoice(
-            key: const ValueKey<String>('mind-day-all-slider-view-timeline'),
-            icon: Icons.show_chart_rounded,
-            selected: selected == MindDayContentView.timeline,
-            onPressed: onTimelineRequested,
-          ),
-        ],
+  Widget build(BuildContext context) => SizedBox(
+    width: 54,
+    height: 26,
+    child: DecoratedBox(
+      key: const ValueKey<String>('mind-day-content-view-toggle'),
+      decoration: BoxDecoration(
+        color: const Color(0xfff4f0ff),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0x177c90b5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _MindDayViewChoice(
+              key: const ValueKey<String>('mind-day-timeline-view-heatmap'),
+              icon: Icons.grid_view_rounded,
+              selected: selected == MindDayContentView.allVsSliderHeatmap,
+              onPressed: onHeatmapRequested,
+            ),
+            _MindDayViewChoice(
+              key: const ValueKey<String>('mind-day-all-slider-view-timeline'),
+              icon: Icons.show_chart_rounded,
+              selected: selected == MindDayContentView.timeline,
+              onPressed: onTimelineRequested,
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -197,9 +203,9 @@ final class _MindDayViewChoice extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: onPressed != null,
     selected: selected,
-    child: InkWell(
+    child: GestureDetector(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(7),
+      behavior: HitTestBehavior.opaque,
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: selected
@@ -224,22 +230,44 @@ final class _MindDayViewChoice extends StatelessWidget {
 }
 
 final class _MindDayHourlyBars extends StatelessWidget {
-  const _MindDayHourlyBars({required this.comparison});
+  const _MindDayHourlyBars({
+    required this.comparison,
+    required this.paletteStyle,
+    required this.scaleResolution,
+    this.dynamicScale,
+  });
 
   final MindDayHourlyComparisonProjection comparison;
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       const labelHeight = 15.0;
       const gap = 4.0;
-      final plotHeight = math.max(0, constraints.maxHeight - labelHeight);
+      final plotHeight = math.max(0.0, constraints.maxHeight - labelHeight);
       return Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: comparison.hours
             .map((hour) {
               final fullHeight = plotHeight * hour.fullFraction;
               final selectedHeight = plotHeight * hour.selectedFraction;
+              final fullPalette = _paletteFor(
+                style: paletteStyle,
+                scaleResolution: scaleResolution,
+                dynamicScale: dynamicScale,
+                fraction: hour.fullFraction,
+                isEmpty: hour.fullTotal == 0,
+              );
+              final selectedPalette = _paletteFor(
+                style: paletteStyle,
+                scaleResolution: scaleResolution,
+                dynamicScale: dynamicScale,
+                fraction: hour.selectedFraction,
+                isEmpty: hour.selectedTotal == 0,
+              );
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 1.5),
@@ -253,45 +281,47 @@ final class _MindDayHourlyBars extends StatelessWidget {
                             key: ValueKey<String>(
                               'mind-day-all-slider-hour-${hour.hour.toString().padLeft(2, '0')}',
                             ),
-                            height: math.max(5, fullHeight),
+                            height: math.max(5.0, plotHeight),
                             child: DecoratedBox(
                               key: ValueKey<String>(
-                                'mind-day-all-slider-full-${hour.hour.toString().padLeft(2, '0')}',
+                                'mind-day-all-slider-capacity-${hour.hour.toString().padLeft(2, '0')}',
                               ),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: <Color>[
-                                    Color(0xfffdf0ec),
-                                    Color(0xffffd1c2),
-                                  ],
-                                ),
+                                color: const Color(0xffdce3eb),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Align(
                                 alignment: Alignment.bottomCenter,
-                                child: FractionallySizedBox(
-                                  heightFactor: hour.fullFraction == 0
-                                      ? 0
-                                      : (selectedHeight /
-                                                math.max(5, fullHeight))
-                                            .clamp(0, 1)
-                                            .toDouble(),
+                                child: SizedBox(
+                                  height: fullHeight,
+                                  width: double.infinity,
                                   child: DecoratedBox(
                                     key: ValueKey<String>(
-                                      'mind-day-all-slider-selected-${hour.hour.toString().padLeft(2, '0')}',
+                                      'mind-day-all-slider-full-${hour.hour.toString().padLeft(2, '0')}',
                                     ),
                                     decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: <Color>[
-                                          Color(0xfff34c92),
-                                          Color(0xff971374),
-                                        ],
+                                      color: fullPalette.background.withValues(
+                                        alpha: .36,
                                       ),
                                       borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: SizedBox(
+                                        height: selectedHeight,
+                                        width: double.infinity,
+                                        child: DecoratedBox(
+                                          key: ValueKey<String>(
+                                            'mind-day-all-slider-selected-${hour.hour.toString().padLeft(2, '0')}',
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: selectedPalette.background,
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -327,24 +357,48 @@ final class _MindDayHourlyBars extends StatelessWidget {
 }
 
 final class _MindDayComparisonLegend extends StatelessWidget {
-  const _MindDayComparisonLegend();
+  const _MindDayComparisonLegend({
+    required this.paletteStyle,
+    required this.scaleResolution,
+    this.dynamicScale,
+  });
+
+  final MindYearHeatmapPaletteStyle paletteStyle;
+  final MindHeatmapScaleResolution scaleResolution;
+  final MindHeatmapResolvedScale? dynamicScale;
 
   @override
-  Widget build(BuildContext context) => const Row(
-    children: <Widget>[
-      _MindDayLegendCopy(
-        color: Color(0xffffe0d3),
-        title: 'Teljes nap',
-        subtitle: 'Az adott órában elköltött teljes összeg',
-      ),
-      SizedBox(width: 12),
-      _MindDayLegendCopy(
-        color: Color(0xffe33f8d),
-        title: 'Aktuális szűrő',
-        subtitle: 'A kiválasztott idősáv összege az adott órában',
-      ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final full = _paletteFor(
+      style: paletteStyle,
+      scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
+      fraction: .72,
+      isEmpty: false,
+    ).background.withValues(alpha: .36);
+    final selected = _paletteFor(
+      style: paletteStyle,
+      scaleResolution: scaleResolution,
+      dynamicScale: dynamicScale,
+      fraction: .88,
+      isEmpty: false,
+    ).background;
+    return Row(
+      children: <Widget>[
+        _MindDayLegendCopy(
+          color: full,
+          title: 'Teljes nap',
+          subtitle: 'Az adott órában elköltött teljes összeg',
+        ),
+        SizedBox(width: 12),
+        _MindDayLegendCopy(
+          color: selected,
+          title: 'Aktuális szűrő',
+          subtitle: 'A kiválasztott idősáv összege az adott órában',
+        ),
+      ],
+    );
+  }
 }
 
 final class _MindDayLegendCopy extends StatelessWidget {
@@ -398,49 +452,21 @@ final class _MindDayLegendCopy extends StatelessWidget {
   );
 }
 
-final class _MindDayHeatmapScaleLegend extends StatelessWidget {
-  const _MindDayHeatmapScaleLegend();
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: <Widget>[
-      const Text(
-        'Kisebb összeg',
-        style: TextStyle(color: Color(0xff6982b2), fontSize: 8),
-      ),
-      const Spacer(),
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children:
-            const <Color>[
-                  Color(0xffffe9dc),
-                  Color(0xffffd8c4),
-                  Color(0xffffbc9f),
-                  Color(0xffff9474),
-                  Color(0xffff6e69),
-                  Color(0xfff54c92),
-                  Color(0xffd42d82),
-                  Color(0xff971374),
-                ]
-                .map<Widget>(
-                  (color) => Padding(
-                    padding: const EdgeInsets.only(right: 2),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                      child: const SizedBox(width: 11, height: 11),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-      ),
-      const Spacer(),
-      const Text(
-        'Nagyobb összeg',
-        style: TextStyle(color: Color(0xff6982b2), fontSize: 8),
-      ),
-    ],
-  );
-}
+MindYearHeatmapPaletteSample _paletteFor({
+  required MindYearHeatmapPaletteStyle style,
+  required MindHeatmapScaleResolution scaleResolution,
+  required double fraction,
+  required bool isEmpty,
+  MindHeatmapResolvedScale? dynamicScale,
+}) => MindYearHeatmapPaletteResolver.resolveTile(
+  style: style,
+  isEmpty: isEmpty,
+  intensity: fraction,
+  paletteIntensity: fraction <= 0
+      ? MindYearHeatmapPaletteIntensity.minimum
+      : fraction >= 1
+      ? MindYearHeatmapPaletteIntensity.maximum
+      : MindYearHeatmapPaletteIntensity.interpolated,
+  scaleResolution: scaleResolution,
+  dynamicScale: dynamicScale,
+);
