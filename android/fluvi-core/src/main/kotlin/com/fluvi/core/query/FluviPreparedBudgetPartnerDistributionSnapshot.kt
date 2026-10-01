@@ -7,9 +7,11 @@ import com.fluvi.core.model.LedgerDirection
 data class FluviPreparedBudgetPartnerDistributionCell(
     val actualScaled100: Long,
     val dominantCategoryId: String,
+    val transactionCount: Long = 0L,
 ) {
     init {
         require(actualScaled100 >= 0L)
+        require(transactionCount >= 0L)
     }
 }
 
@@ -17,10 +19,12 @@ data class FluviPreparedBudgetPartnerDistributionCell(
 data class FluviPreparedBudgetPartnerCategoryContribution(
     val partnerHandle: Int,
     val actualScaled100: Long,
+    val transactionCount: Long = 0L,
 ) {
     init {
         require(partnerHandle >= 0)
         require(actualScaled100 > 0L)
+        require(transactionCount >= 0L)
     }
 }
 
@@ -30,10 +34,12 @@ data class FluviPreparedBudgetPartnerDayCell(
     val partnerHandle: Int,
     val actualScaled100: Long,
     val dominantCategoryId: String,
+    val transactionCount: Long = 0L,
 ) {
     init {
         require(partnerHandle >= 0)
         require(actualScaled100 > 0L)
+        require(transactionCount >= 0L)
         require(dominantCategoryId.isNotBlank())
     }
 }
@@ -139,7 +145,11 @@ data class FluviPreparedBudgetPartnerDistributionDirectionBank(
     ): List<FluviPreparedBudgetPartnerCategoryContribution> {
         if (targetHandle == 0) {
             return dayAggregateFor(epochDay).map {
-                FluviPreparedBudgetPartnerCategoryContribution(it.partnerHandle, it.actualScaled100)
+                FluviPreparedBudgetPartnerCategoryContribution(
+                    partnerHandle = it.partnerHandle,
+                    actualScaled100 = it.actualScaled100,
+                    transactionCount = it.transactionCount,
+                )
             }
         }
         require(targetHandle in 1..orderedCategoryIds.size)

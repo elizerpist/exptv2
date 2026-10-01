@@ -48,7 +48,8 @@ class FluviBudgetReadService internal constructor(
         val rows = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
                 "SELECT direction, partner_id, category_id, booked_local_epoch_day, " +
-                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100, " +
+                    "COUNT(*) AS transaction_count " +
                     "FROM fluvi_ledger_entries " +
                     "GROUP BY direction, partner_id, category_id, booked_local_epoch_day",
             ),
@@ -62,6 +63,7 @@ class FluviBudgetReadService internal constructor(
                             categoryId = cursor.getString(2),
                             epochDay = cursor.getLong(3),
                             amountScaled100 = cursor.getLong(4),
+                            transactionCount = cursor.getLong(5),
                         ),
                     )
                 }
@@ -107,6 +109,7 @@ class FluviBudgetReadService internal constructor(
                 partnerHandle = handle,
                 categoryId = row.categoryId,
                 amount = row.amountScaled100,
+                transactionCount = row.transactionCount,
             )
             add(0)
             val date = LocalDate.ofEpochDay(row.epochDay)
@@ -116,6 +119,7 @@ class FluviBudgetReadService internal constructor(
                 partnerHandle = handle,
                 categoryId = row.categoryId,
                 amount = row.amountScaled100,
+                transactionCount = row.transactionCount,
             )
             val yearCount = yearWindow.endYearInclusive - yearWindow.startYear + 1
             add(1 + date.year - yearWindow.startYear)
@@ -153,7 +157,8 @@ class FluviBudgetReadService internal constructor(
         val monthlyRows = database.openHelper.readableDatabase.query(
             SimpleSQLiteQuery(
                 "SELECT direction, category_id, booked_local_epoch_day, booked_local_time_minutes, " +
-                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100 " +
+                    "COALESCE(SUM(amount_scaled_100), 0) AS amount_scaled_100, " +
+                    "COUNT(*) AS transaction_count " +
                     "FROM fluvi_ledger_entries " +
                     "GROUP BY direction, category_id, booked_local_epoch_day, booked_local_time_minutes",
             ),
@@ -167,6 +172,7 @@ class FluviBudgetReadService internal constructor(
                             epochDay = cursor.getLong(2),
                             bookedLocalTimeMinutes = cursor.getInt(3),
                             amountScaled100 = cursor.getLong(4),
+                            transactionCount = cursor.getLong(5),
                         ),
                     )
                 }
@@ -202,24 +208,30 @@ class FluviBudgetReadService internal constructor(
                     epochDay = row.epochDay,
                     bookedLocalTimeMinutes = row.bookedLocalTimeMinutes,
                     amount = row.amountScaled100,
+                    transactionCount = row.transactionCount,
                 )
                 bank.addSpendingRhythm(
                     targetHandle = categoryHandle,
                     epochDay = row.epochDay,
                     bookedLocalTimeMinutes = row.bookedLocalTimeMinutes,
                     amount = row.amountScaled100,
+                    transactionCount = row.transactionCount,
                 )
             }
             val date = LocalDate.ofEpochDay(row.epochDay)
             val sumSlice = 0
             addActual(bank.actualScaled100, bank.targetCount, sumSlice, 0, row.amountScaled100)
             addActual(bank.actualScaled100, bank.targetCount, sumSlice, categoryHandle, row.amountScaled100)
+            addActual(bank.transactionCount, bank.targetCount, sumSlice, 0, row.transactionCount)
+            addActual(bank.transactionCount, bank.targetCount, sumSlice, categoryHandle, row.transactionCount)
             if (date.year !in yearWindow.startYear..yearWindow.endYearInclusive) return@forEach
             val yearSlice = 1 + date.year - yearWindow.startYear
             val monthSlice = 1 + yearCount + (date.year - yearWindow.startYear) * 12 + date.monthValue - 1
             for (slice in intArrayOf(yearSlice, monthSlice)) {
                 addActual(bank.actualScaled100, bank.targetCount, slice, 0, row.amountScaled100)
                 addActual(bank.actualScaled100, bank.targetCount, slice, categoryHandle, row.amountScaled100)
+                addActual(bank.transactionCount, bank.targetCount, slice, 0, row.transactionCount)
+                addActual(bank.transactionCount, bank.targetCount, slice, categoryHandle, row.transactionCount)
             }
         }
 
@@ -332,6 +344,7 @@ class FluviBudgetReadService internal constructor(
         val epochDay: Long,
         val bookedLocalTimeMinutes: Int,
         val amountScaled100: Long,
+        val transactionCount: Long,
     )
 
     private data class PartnerLedgerDayRow(
@@ -340,6 +353,7 @@ class FluviBudgetReadService internal constructor(
         val categoryId: String,
         val epochDay: Long,
         val amountScaled100: Long,
+        val transactionCount: Long,
     )
 
     private data class PartnerCategoryCellKey(
@@ -367,13 +381,17 @@ class FluviBudgetReadService internal constructor(
             .withIndex()
             .associate { (index, id) -> id to index },
         val actualScaled100: LongArray = LongArray(periodSliceCount * orderedPartnerIds.size),
+        val transactionCount: LongArray = LongArray(periodSliceCount * orderedPartnerIds.size),
         val dominantCategoryIds: Array<String> =
             Array(periodSliceCount * orderedPartnerIds.size) { "" },
         val dominantCategoryAmounts: LongArray =
             LongArray(periodSliceCount * orderedPartnerIds.size),
         val categoryAmounts: MutableMap<PartnerCategoryCellKey, Long> = hashMapOf(),
+        val categoryTransactionCounts: MutableMap<PartnerCategoryCellKey, Long> = hashMapOf(),
         val dayActualScaled100: MutableMap<PartnerDayKey, Long> = hashMapOf(),
+        val dayTransactionCounts: MutableMap<PartnerDayKey, Long> = hashMapOf(),
         val dayCategoryAmounts: MutableMap<PartnerDayCategoryKey, Long> = hashMapOf(),
+        val dayCategoryTransactionCounts: MutableMap<PartnerDayCategoryKey, Long> = hashMapOf(),
     ) {
         val partnerCount: Int get() = orderedPartnerIds.size
 
@@ -382,12 +400,16 @@ class FluviBudgetReadService internal constructor(
             partnerHandle: Int,
             categoryId: String,
             amount: Long,
+            transactionCount: Long,
         ) {
             val index = slice * partnerCount + partnerHandle
             actualScaled100[index] += amount
+            this.transactionCount[index] += transactionCount
             val categoryKey = PartnerCategoryCellKey(index, categoryId)
             val categoryAmount = (categoryAmounts[categoryKey] ?: 0L) + amount
             categoryAmounts[categoryKey] = categoryAmount
+            categoryTransactionCounts[categoryKey] =
+                (categoryTransactionCounts[categoryKey] ?: 0L) + transactionCount
             val currentCategory = dominantCategoryIds[index]
             if (categoryAmount > dominantCategoryAmounts[index] ||
                 (categoryAmount == dominantCategoryAmounts[index] &&
@@ -403,12 +425,16 @@ class FluviBudgetReadService internal constructor(
             partnerHandle: Int,
             categoryId: String,
             amount: Long,
+            transactionCount: Long,
         ) {
             val key = PartnerDayKey(epochDay, partnerHandle)
             dayActualScaled100[key] = (dayActualScaled100[key] ?: 0L) + amount
+            dayTransactionCounts[key] = (dayTransactionCounts[key] ?: 0L) + transactionCount
             val categoryKey = PartnerDayCategoryKey(epochDay, partnerHandle, categoryId)
             dayCategoryAmounts[categoryKey] =
                 (dayCategoryAmounts[categoryKey] ?: 0L) + amount
+            dayCategoryTransactionCounts[categoryKey] =
+                (dayCategoryTransactionCounts[categoryKey] ?: 0L) + transactionCount
         }
 
         fun freeze(): FluviPreparedBudgetPartnerDistributionDirectionBank {
@@ -425,6 +451,9 @@ class FluviBudgetReadService internal constructor(
                             contributions += FluviPreparedBudgetPartnerCategoryContribution(
                                 partnerHandle = partnerHandle,
                                 actualScaled100 = amount,
+                                transactionCount = categoryTransactionCounts[
+                                    PartnerCategoryCellKey(slice * partnerCount + partnerHandle, categoryId)
+                                ] ?: 0L,
                             )
                         }
                     }
@@ -464,6 +493,9 @@ class FluviBudgetReadService internal constructor(
                             partnerHandle = partnerHandle,
                             actualScaled100 = amount,
                             dominantCategoryId = dominantCategoryId,
+                            transactionCount = dayTransactionCounts[
+                                PartnerDayKey(epochDay, partnerHandle)
+                            ] ?: 0L,
                         )
                     }
                 }
@@ -477,6 +509,9 @@ class FluviBudgetReadService internal constructor(
                             dayCategoryContributions += FluviPreparedBudgetPartnerCategoryContribution(
                                 partnerHandle = partnerHandle,
                                 actualScaled100 = amount,
+                                transactionCount = dayCategoryTransactionCounts[
+                                    PartnerDayCategoryKey(epochDay, partnerHandle, categoryId)
+                                ] ?: 0L,
                             )
                         }
                     }
@@ -492,6 +527,7 @@ class FluviBudgetReadService internal constructor(
                     FluviPreparedBudgetPartnerDistributionCell(
                         actualScaled100 = actualScaled100[index],
                         dominantCategoryId = dominantCategoryIds[index],
+                        transactionCount = transactionCount[index],
                     )
                 },
                 orderedCategoryIds = orderedCategoryIds,
@@ -513,6 +549,7 @@ class FluviBudgetReadService internal constructor(
             .withIndex()
             .associate { (index, id) -> id to index + 1 },
         val actualScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)),
+        val transactionCount: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)),
         val limitScaled100: LongArray = LongArray(periodSliceCount * (orderedCategoryIds.size + 1)) { -1L },
         val limitSource: ByteArray = ByteArray(periodSliceCount * (orderedCategoryIds.size + 1)),
         val spendingRhythmByTarget: MutableMap<Int, MutableMap<Long, MutableSpendingRhythmDay>> = hashMapOf(),
@@ -522,6 +559,7 @@ class FluviBudgetReadService internal constructor(
         fun freeze(): FluviPreparedBudgetDirectionBank = FluviPreparedBudgetDirectionBank(
             orderedCategoryIds = orderedCategoryIds,
             actualScaled100 = actualScaled100,
+            transactionCount = transactionCount,
             limitScaled100 = limitScaled100,
             limitSource = limitSource,
         )
@@ -531,12 +569,14 @@ class FluviBudgetReadService internal constructor(
             epochDay: Long,
             bookedLocalTimeMinutes: Int,
             amount: Long,
+            transactionCount: Long,
         ) {
             require(targetHandle in 0 until targetCount)
             require(amount > 0L)
             val days = spendingRhythmByTarget.getOrPut(targetHandle) { hashMapOf() }
             val day = days.getOrPut(epochDay) { MutableSpendingRhythmDay() }
             day.actualScaled100 += amount
+            day.transactionCount += transactionCount
             val part = BudgetRhythmDayPartClassifier.classify(bookedLocalTimeMinutes)
             day.dayPartActualScaled100[part.ordinal] += amount
         }
@@ -552,6 +592,7 @@ class FluviBudgetReadService internal constructor(
                         points += FluviPreparedSpendingRhythmPoint(
                             epochDay = epochDay,
                             actualScaled100 = day.actualScaled100,
+                            transactionCount = day.transactionCount,
                             dayPartActualScaled100 = day.dayPartActualScaled100,
                         )
                     }
@@ -566,6 +607,7 @@ class FluviBudgetReadService internal constructor(
 
         private class MutableSpendingRhythmDay(
             var actualScaled100: Long = 0L,
+            var transactionCount: Long = 0L,
             val dayPartActualScaled100: LongArray =
                 LongArray(SpendingRhythmDayPart.entries.size),
         )

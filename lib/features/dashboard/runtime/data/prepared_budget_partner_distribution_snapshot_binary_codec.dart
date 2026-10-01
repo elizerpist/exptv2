@@ -25,7 +25,7 @@ final class IsolateDashboardPreparedBudgetPartnerDistributionSnapshotDecodeWorke
 /// Compact versioned transport for exact, query-independent partner amounts.
 abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCodec {
   static const int magic = 0x464c4250; // FLBP
-  static const int version = 3;
+  static const int version = 4;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumPartnerCount = 2048;
   static const int maximumDenseCellCount =
@@ -101,6 +101,18 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
     if (amounts.any((amount) => amount < 0)) {
       throw FormatException('Negative Budget partner amount.');
     }
+    final transactionCount = reader.readInt32();
+    if (transactionCount != amountCount) {
+      throw FormatException('Budget partner amount/count vector mismatch.');
+    }
+    final counts = List<int>.generate(
+      transactionCount,
+      (_) => reader.readInt64(),
+      growable: false,
+    );
+    if (counts.any((count) => count < 0)) {
+      throw FormatException('Negative Budget partner transaction count.');
+    }
     final dominantCount = reader.readInt32();
     if (dominantCount != amountCount) {
       throw FormatException('Budget partner amount/category vector mismatch.');
@@ -109,6 +121,7 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
       amountCount,
       (index) => PreparedBudgetPartnerDistributionCell(
         actualScaled100: amounts[index],
+        transactionCount: counts[index],
         dominantCategoryId: reader.readUtf8(),
       ),
       growable: false,
@@ -142,6 +155,7 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
           (_) => PreparedBudgetPartnerCategoryContribution(
             partnerHandle: reader.readInt32(),
             actualScaled100: reader.readInt64(),
+            transactionCount: reader.readInt64(),
           ),
           growable: false,
         );
@@ -174,6 +188,7 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
         partnerHandle: reader.readInt32(),
         actualScaled100: reader.readInt64(),
         dominantCategoryId: reader.readUtf8(),
+        transactionCount: reader.readInt64(),
       ),
       growable: false,
     );
@@ -198,6 +213,7 @@ abstract final class DashboardPreparedBudgetPartnerDistributionSnapshotBinaryCod
           (_) => PreparedBudgetPartnerCategoryContribution(
             partnerHandle: reader.readInt32(),
             actualScaled100: reader.readInt64(),
+            transactionCount: reader.readInt64(),
           ),
           growable: false,
         );

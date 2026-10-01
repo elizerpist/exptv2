@@ -117,6 +117,25 @@ void main() {
   });
 
   test(
+    'projects the exact prepared transaction count beside monetary share',
+    () {
+      final snapshot = _snapshot(
+        expenseIds: const <String>['a', 'b'],
+        expenseMonth: const <int>[900, 600, 300],
+        expenseMonthCounts: const <int>[12, 9, 3],
+      );
+
+      final entries = DashboardBudgetCategoryDistributionProjector.project(
+        snapshot: snapshot,
+        categories: _categories('a', 'b'),
+        period: const BudgetLimitPeriod.month(2026, 1),
+      ).frameFor(LedgerDirection.expense).entries;
+
+      expect(entries.map((entry) => entry.transactionCount), <int>[9, 3]);
+    },
+  );
+
+  test(
     'revision-period cache reuses query-independent bundles and bounds retention',
     () {
       final snapshot = _snapshot(
@@ -193,6 +212,7 @@ PreparedBudgetLimitSnapshot _snapshot({
   List<int>? expenseSum,
   List<int>? expenseYear,
   List<int>? expenseMonth,
+  List<int>? expenseMonthCounts,
 }) => PreparedBudgetLimitSnapshot(
   coreRevision: 7,
   yearWindowStart: 2026,
@@ -208,6 +228,7 @@ PreparedBudgetLimitSnapshot _snapshot({
     sum: expenseSum,
     year: expenseYear,
     month: expenseMonth,
+    monthCounts: expenseMonthCounts,
   ),
 );
 
@@ -216,26 +237,28 @@ PreparedBudgetLimitDirectionBank _bank(
   List<int>? sum,
   List<int>? year,
   List<int>? month,
+  List<int>? monthCounts,
 }) {
   final targetCount = ids.length + 1;
   final cells = List<PreparedBudgetLimitCell>.filled(
     14 * targetCount,
     const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
   );
-  void install(int slice, List<int>? values) {
+  void install(int slice, List<int>? values, [List<int>? counts]) {
     if (values == null) return;
     expect(values.length, targetCount);
     for (var handle = 0; handle < targetCount; handle += 1) {
       cells[slice * targetCount + handle] = PreparedBudgetLimitCell(
         actualScaled100: values[handle],
         limitScaled100: null,
+        transactionCount: counts?[handle] ?? 0,
       );
     }
   }
 
   install(0, sum);
   install(1, year);
-  install(2, month);
+  install(2, month, monthCounts);
   return PreparedBudgetLimitDirectionBank(
     orderedCategoryIds: ids,
     cells: cells,

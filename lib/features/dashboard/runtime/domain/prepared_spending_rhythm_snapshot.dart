@@ -49,6 +49,7 @@ final class PreparedSpendingRhythmDay {
 
   int get epochDay => _bank.epochDays[index];
   int get actualScaled100 => _bank.dailyActualScaled100[index];
+  int get transactionCount => _bank.dailyTransactionCount[index];
 
   int actualFor(SpendingRhythmDayPart part) =>
       _bank.dayPartActualScaled100[index * SpendingRhythmDayPart.bucketCount +
@@ -68,10 +69,14 @@ final class PreparedSpendingRhythmDirectionBank {
     required List<int> targetOffsets,
     required List<int> epochDays,
     required List<int> dailyActualScaled100,
+    List<int>? dailyTransactionCount,
     required List<int> dayPartActualScaled100,
   }) : targetOffsets = List<int>.unmodifiable(targetOffsets),
        epochDays = List<int>.unmodifiable(epochDays),
        dailyActualScaled100 = List<int>.unmodifiable(dailyActualScaled100),
+       dailyTransactionCount = List<int>.unmodifiable(
+         dailyTransactionCount ?? List<int>.filled(epochDays.length, 0),
+       ),
        dayPartActualScaled100 = List<int>.unmodifiable(dayPartActualScaled100) {
     _validate();
     _aggregatesByTarget =
@@ -91,6 +96,7 @@ final class PreparedSpendingRhythmDirectionBank {
     targetOffsets: List<int>.filled(targetCount + 1, 0),
     epochDays: const <int>[],
     dailyActualScaled100: const <int>[],
+    dailyTransactionCount: const <int>[],
     dayPartActualScaled100: const <int>[],
   );
 
@@ -98,6 +104,7 @@ final class PreparedSpendingRhythmDirectionBank {
   final List<int> targetOffsets;
   final List<int> epochDays;
   final List<int> dailyActualScaled100;
+  final List<int> dailyTransactionCount;
   final List<int> dayPartActualScaled100;
   late final List<_PreparedSpendingRhythmTargetAggregates> _aggregatesByTarget;
 
@@ -121,6 +128,7 @@ final class PreparedSpendingRhythmDirectionBank {
         targetOffsets.firstOrNull != 0 ||
         targetOffsets.lastOrNull != epochDays.length ||
         dailyActualScaled100.length != epochDays.length ||
+        dailyTransactionCount.length != epochDays.length ||
         dayPartActualScaled100.length !=
             epochDays.length * SpendingRhythmDayPart.bucketCount) {
       throw ArgumentError('Invalid prepared Spending Rhythm vector layout.');
@@ -134,7 +142,9 @@ final class PreparedSpendingRhythmDirectionBank {
       var previousEpochDay = -0x7fffffffffffffff;
       for (var index = start; index < end; index += 1) {
         final total = dailyActualScaled100[index];
-        if (epochDays[index] <= previousEpochDay || total <= 0) {
+        if (epochDays[index] <= previousEpochDay ||
+            total <= 0 ||
+            dailyTransactionCount[index] < 0) {
           throw ArgumentError('Prepared Spending Rhythm days must be sorted.');
         }
         var partTotal = 0;
@@ -241,6 +251,9 @@ final class PreparedSpendingRhythmTargetView {
 
   int actualAtEpochDay(int epochDay) =>
       dayAtEpochDay(epochDay)?.actualScaled100 ?? 0;
+
+  int transactionCountAtEpochDay(int epochDay) =>
+      dayAtEpochDay(epochDay)?.transactionCount ?? 0;
 
   int actualForDayPartAtEpochDay({
     required int epochDay,

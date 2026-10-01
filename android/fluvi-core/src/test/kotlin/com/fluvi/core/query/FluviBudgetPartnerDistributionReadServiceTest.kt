@@ -89,6 +89,7 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         val januarySlice = 2
         val shopJanuary = snapshot.expenseBank.cells[januarySlice * 2]
         assertEquals(600L, shopJanuary.actualScaled100)
+        assertEquals(2L, shopJanuary.transactionCount)
         assertEquals(
             "equal category contribution resolves by stable category ID",
             FOOD,
@@ -113,14 +114,17 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         )
         assertEquals(listOf(0), foodJanuary.map { it.partnerHandle })
         assertEquals(listOf(300L), foodJanuary.map { it.actualScaled100 })
+        assertEquals(listOf(1L), foodJanuary.map { it.transactionCount })
         assertEquals(listOf(0), housingJanuary.map { it.partnerHandle })
         assertEquals(listOf(300L), housingJanuary.map { it.actualScaled100 })
+        assertEquals(listOf(1L), housingJanuary.map { it.transactionCount })
         val january10 = LocalDate.of(2026, 1, 10).toEpochDay()
         val january11 = LocalDate.of(2026, 1, 11).toEpochDay()
         assertEquals(listOf(january10, january11, LocalDate.of(2026, 2, 1).toEpochDay()),
             snapshot.expenseBank.dayEpochDays.toList())
         assertEquals(listOf(0), snapshot.expenseBank.dayAggregateFor(january10).map { it.partnerHandle })
         assertEquals(FOOD, snapshot.expenseBank.dayAggregateFor(january10).single().dominantCategoryId)
+        assertEquals(1L, snapshot.expenseBank.dayAggregateFor(january10).single().transactionCount)
         assertEquals(listOf(0), snapshot.expenseBank.dayContributionsFor(january11, 2).map { it.partnerHandle })
         assertEquals(emptyList<Int>(), snapshot.expenseBank.dayContributionsFor(january11, 1).map { it.partnerHandle })
     }

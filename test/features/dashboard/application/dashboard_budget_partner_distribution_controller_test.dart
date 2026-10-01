@@ -4,6 +4,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_di
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 void main() {
   test('projects both partner directions from an exact RAM snapshot only', () {
@@ -120,6 +122,49 @@ void main() {
       expect(identical(bundle.expenseTargetFrames[0], aggregate), isTrue);
     },
   );
+
+  test('projects category-target partner transaction counts from snapshot', () {
+    final bundle = DashboardBudgetPartnerDistributionProjector.project(
+      snapshot: _categoryContributionSnapshot(),
+      categories: <FluviCategory>[
+        _category('food', 'color_01'),
+        _category('rent', 'color_02'),
+      ],
+      period: const BudgetLimitPeriod.month(2026, 1),
+    );
+
+    expect(
+      bundle
+          .frameFor(LedgerDirection.expense, targetHandle: 1)
+          .entries
+          .single
+          .transactionCount,
+      6,
+    );
+  });
+
+  test('DAY partner ranking counts exact ledger transactions, never active days', () {
+    final bundle = DashboardBudgetPartnerDistributionProjector.projectForScope(
+      snapshot: _categoryContributionSnapshot(),
+      categories: <FluviCategory>[
+        _category('food', 'color_01'),
+        _category('rent', 'color_02'),
+      ],
+      scope: const DayScope(LocalDate(year: 2026, month: 1, day: 12)),
+    );
+
+    final aggregate = bundle.frameFor(LedgerDirection.expense);
+    expect(aggregate.entries.first.partnerId, 'shop');
+    expect(aggregate.entries.first.transactionCount, 6);
+    expect(
+      bundle
+          .frameFor(LedgerDirection.expense, targetHandle: 2)
+          .entries
+          .single
+          .transactionCount,
+      4,
+    );
+  });
 }
 
 FluviCategory _category(String id, String colorId) => FluviCategory(
@@ -151,10 +196,12 @@ PreparedBudgetPartnerDistributionSnapshot _snapshot() {
   const shop = PreparedBudgetPartnerDistributionCell(
     actualScaled100: 600,
     dominantCategoryId: 'food',
+    transactionCount: 6,
   );
   const landlord = PreparedBudgetPartnerDistributionCell(
     actualScaled100: 400,
     dominantCategoryId: 'rent',
+    transactionCount: 4,
   );
   const employer = PreparedBudgetPartnerDistributionCell(
     actualScaled100: 700,
@@ -217,6 +264,7 @@ PreparedBudgetPartnerDistributionSnapshot _snapshot() {
 }
 
 PreparedBudgetPartnerDistributionSnapshot _categoryContributionSnapshot() {
+  const day = LocalDate(year: 2026, month: 1, day: 12);
   const zero = PreparedBudgetPartnerDistributionCell(
     actualScaled100: 0,
     dominantCategoryId: '',
@@ -246,6 +294,7 @@ PreparedBudgetPartnerDistributionSnapshot _categoryContributionSnapshot() {
           PreparedBudgetPartnerCategoryContribution(
             partnerHandle: category,
             actualScaled100: category == 0 ? 600 : 400,
+            transactionCount: category == 0 ? 6 : 4,
           ),
         );
       }
@@ -260,6 +309,35 @@ PreparedBudgetPartnerDistributionSnapshot _categoryContributionSnapshot() {
         orderedCategoryIds: const <String>['food', 'rent'],
         categoryContributionOffsets: offsets,
         categoryContributions: contributions,
+        dayEpochDays: <int>[day.epochDay],
+        dayAggregateOffsets: const <int>[0, 2],
+        dayAggregateCells: const <PreparedBudgetPartnerDayCell>[
+          PreparedBudgetPartnerDayCell(
+            partnerHandle: 0,
+            actualScaled100: 600,
+            dominantCategoryId: 'food',
+            transactionCount: 6,
+          ),
+          PreparedBudgetPartnerDayCell(
+            partnerHandle: 1,
+            actualScaled100: 400,
+            dominantCategoryId: 'rent',
+            transactionCount: 4,
+          ),
+        ],
+        dayCategoryContributionOffsets: const <int>[0, 1, 2],
+        dayCategoryContributions: const <PreparedBudgetPartnerCategoryContribution>[
+          PreparedBudgetPartnerCategoryContribution(
+            partnerHandle: 0,
+            actualScaled100: 600,
+            transactionCount: 6,
+          ),
+          PreparedBudgetPartnerCategoryContribution(
+            partnerHandle: 1,
+            actualScaled100: 400,
+            transactionCount: 4,
+          ),
+        ],
       );
   PreparedBudgetPartnerDistributionDirectionBank empty() =>
       PreparedBudgetPartnerDistributionDirectionBank(

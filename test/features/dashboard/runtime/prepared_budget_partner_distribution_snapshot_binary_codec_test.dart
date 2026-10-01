@@ -37,6 +37,16 @@ void main() {
             period: const BudgetLimitPeriod.month(2026, 1),
             partnerHandle: 1,
           )
+          .transactionCount,
+      3,
+    );
+    expect(
+      snapshot
+          .cellAt(
+            direction: LedgerDirection.expense,
+            period: const BudgetLimitPeriod.month(2026, 1),
+            partnerHandle: 1,
+          )
           .dominantCategoryId,
       'food',
     );
@@ -141,6 +151,10 @@ Uint8List _encode({
     for (final amount in amounts) {
       int64(amount);
     }
+    int32(amounts.length);
+    for (final amount in amounts) {
+      int64(amount == 0 ? 0 : 3);
+    }
     int32(dominantCategoryIds.length);
     for (final categoryId in dominantCategoryIds) {
       text(categoryId);
@@ -157,6 +171,7 @@ Uint8List _encode({
     for (final contribution in contributions) {
       int32(contribution.$1);
       int64(contribution.$2);
+      int64(contribution.$2 == 0 ? 0 : 3);
     }
     int32(dayEpochDays.length);
     for (final epochDay in dayEpochDays) {
@@ -173,6 +188,7 @@ Uint8List _encode({
       int32(cell.$1);
       int64(cell.$2);
       text(cell.$3);
+      int64(cell.$2 == 0 ? 0 : 3);
     }
     final dayOffsets =
         dayCategoryContributionOffsets ??
@@ -185,6 +201,7 @@ Uint8List _encode({
     for (final contribution in dayCategoryContributions) {
       int32(contribution.$1);
       int64(contribution.$2);
+      int64(contribution.$2 == 0 ? 0 : 3);
     }
   }
 

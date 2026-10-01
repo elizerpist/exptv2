@@ -74,6 +74,7 @@ final class DashboardBudgetPartnerDistributionEntry {
     required this.title,
     required this.colorId,
     required this.actualScaled100,
+    required this.transactionCount,
     required this.roundedPercent,
   });
 
@@ -82,6 +83,7 @@ final class DashboardBudgetPartnerDistributionEntry {
   final String title;
   final String colorId;
   final int actualScaled100;
+  final int transactionCount;
   final int roundedPercent;
 }
 
@@ -282,6 +284,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
           title: bank.orderedPartnerTitles[handle],
           colorId: category.colorId,
           actualScaled100: amount.actualScaled100,
+          transactionCount: amount.transactionCount,
         ),
       );
     }
@@ -300,6 +303,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
           title: entry.title,
           colorId: entry.colorId,
           actualScaled100: entry.actualScaled100,
+          transactionCount: entry.transactionCount,
           roundedPercent: total == 0
               ? 0
               : (entry.actualScaled100 * 100 + total ~/ 2) ~/ total,
@@ -330,6 +334,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
             _PartnerAmount(
               partnerHandle: cell.partnerHandle,
               actualScaled100: cell.actualScaled100,
+              transactionCount: cell.transactionCount,
               dominantCategoryId: cell.dominantCategoryId,
             ),
         ]);
@@ -342,6 +347,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
           _PartnerAmount(
             partnerHandle: contribution.partnerHandle,
             actualScaled100: contribution.actualScaled100,
+            transactionCount: contribution.transactionCount,
             dominantCategoryId:
                 bank.dayDominantCategoryIdFor(
                   epochDay: epochDay,
@@ -372,6 +378,13 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
                     partnerHandle: handle,
                   )
                   .actualScaled100,
+              transactionCount: snapshot
+                  .cellAt(
+                    direction: direction,
+                    period: period,
+                    partnerHandle: handle,
+                  )
+                  .transactionCount,
               dominantCategoryId: snapshot
                   .cellAt(
                     direction: direction,
@@ -389,6 +402,7 @@ abstract final class DashboardBudgetPartnerDistributionProjector {
           _PartnerAmount(
             partnerHandle: contribution.partnerHandle,
             actualScaled100: contribution.actualScaled100,
+            transactionCount: contribution.transactionCount,
             dominantCategoryId: snapshot
                 .cellAt(
                   direction: direction,
@@ -414,11 +428,13 @@ final class _PartnerAmount {
   const _PartnerAmount({
     required this.partnerHandle,
     required this.actualScaled100,
+    required this.transactionCount,
     required this.dominantCategoryId,
   });
 
   final int partnerHandle;
   final int actualScaled100;
+  final int transactionCount;
   final String dominantCategoryId;
 }
 
@@ -429,6 +445,7 @@ final class _RawPartnerDistributionEntry {
     required this.title,
     required this.colorId,
     required this.actualScaled100,
+    required this.transactionCount,
   });
 
   final int partnerHandle;
@@ -436,6 +453,7 @@ final class _RawPartnerDistributionEntry {
   final String title;
   final String colorId;
   final int actualScaled100;
+  final int transactionCount;
 }
 
 /// Bounded RAM LRU. It caches both directions per period and therefore has no
