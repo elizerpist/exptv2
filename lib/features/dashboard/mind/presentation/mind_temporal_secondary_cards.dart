@@ -12,6 +12,7 @@ import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_heatmap_palette_scope.dart';
+import 'mind_temporal_content_header.dart';
 
 /// Presentation-only Month secondary card. It renders the immutable daily
 /// range-preview points carried by [MindMonthHeatmapFrame]; neither a widget
@@ -572,38 +573,23 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(
-                child: Text(
-                  'Napi tranzakciók idővonala',
-                  style: TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              if (timelineOnly)
-                Text(
-                  QueryMenuFormatters.money(frame.total),
-                  key: const ValueKey<String>(
-                    'mind-day-timeline-current-total',
-                  ),
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-            ],
-          ),
-          Text(
-            '${frame.date.year}. ${DashboardTimeLabelFormatter.monthName(frame.date.month)} ${frame.date.day}.',
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 8,
-            ),
+          MindTemporalContentHeader(
+            title: 'Napi tranzakciók idővonala',
+            subtitle:
+                '${frame.date.year}. ${DashboardTimeLabelFormatter.monthName(frame.date.month)} ${frame.date.day}.',
+            trailing: timelineOnly
+                ? Text(
+                    QueryMenuFormatters.money(frame.total),
+                    key: const ValueKey<String>(
+                      'mind-day-timeline-current-total',
+                    ),
+                    style: const TextStyle(
+                      color: FluviVisualTokens.textSecondary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(height: 4),
           Expanded(

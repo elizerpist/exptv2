@@ -109,7 +109,7 @@ void main() {
   );
 
   testWidgets(
-    'FBS-RED-E2E: the real app shell keeps Ledger count visible while the SearchPill meets a contained flat BottomNav',
+    'FBS-RED-E2E: the real app shell caps Ledger stretch to the released contained-FAB envelope while preserving the count row',
     (tester) async {
       final shell = DashboardShellPresentationController();
       addTearDown(shell.dispose);
@@ -128,14 +128,28 @@ void main() {
         find.byKey(const ValueKey('ready-core-dashboard')),
         findsOneWidget,
       );
+      shell.selectBottomNavEdgeShape(DashboardBottomNavEdgeShape.straight);
+      shell.selectBottomNavLayoutStyle(
+        DashboardBottomNavLayoutStyle.containedFlat,
+      );
+      await tester.pump();
+      final baselineSearchTop = tester
+          .getRect(find.byKey(const ValueKey('dashboard-logbox-search-pill')))
+          .top;
+      final baselineNavTop = tester
+          .getRect(find.byKey(const ValueKey('bnb03-physical-bar-surface')))
+          .top;
+      final baselineCount = tester.getRect(
+        find.byKey(const ValueKey('dashboard-logbox-entry-count')),
+      );
+      final physicalReleasedEnvelope =
+          DashboardFlatBottomNavStretchLayout.referenceRaisedFabOverflowTop *
+          tester.getSize(find.byType(FluviApp)).width /
+          DashboardFlatBottomNavStretchLayout.referenceBottomNavWidth;
       for (final stretch in <DashboardFlatBottomNavBodyStretch>[
         DashboardFlatBottomNavBodyStretch.expandedHeader,
         DashboardFlatBottomNavBodyStretch.modeContent,
       ]) {
-        shell.selectBottomNavEdgeShape(DashboardBottomNavEdgeShape.straight);
-        shell.selectBottomNavLayoutStyle(
-          DashboardBottomNavLayoutStyle.containedFlat,
-        );
         shell.selectFlatBottomNavBodyStretch(stretch);
         await tester.pump();
 
@@ -149,19 +163,36 @@ void main() {
           find.byKey(const ValueKey('dashboard-logbox-search-pill')),
         );
         expect(
-          search.top,
-          closeTo(navTop, .5),
+          search.top - baselineSearchTop,
+          greaterThan(0),
+          reason: 'The mounted Dashboard applies a real downstream stretch.',
+        );
+        expect(
+          search.top - baselineSearchTop,
+          lessThanOrEqualTo(physicalReleasedEnvelope + 1),
           reason:
-              'The actual shell/nav and CoreDashboard must share one body '
-              'geometry contract; SearchPill starts at the flat bar edge.',
+              'The mounted Dashboard never spends more than the exact release '
+              'from the contained FAB.',
+        );
+        expect(
+          navTop - count.bottom,
+          closeTo(
+            baselineNavTop -
+                baselineCount.bottom -
+                (search.top - baselineSearchTop),
+            1,
+          ),
+          reason:
+              'The same bounded downstream displacement moves the real Ledger '
+              'count and SearchPill together.',
         );
         expect(count.bottom, lessThanOrEqualTo(navTop));
         expect(
           navTop - count.bottom,
-          greaterThanOrEqualTo(10),
+          greaterThanOrEqualTo(count.height),
           reason:
-              'The real visible count row retains its authored breathing gap '
-              'instead of being sacrificed to hide SearchPill.',
+              'The real visible count row retains a full count-lane '
+              'clearance instead of being sacrificed to hide SearchPill.',
         );
         expect(tester.takeException(), isNull);
       }

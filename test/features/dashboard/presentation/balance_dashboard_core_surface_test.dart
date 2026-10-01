@@ -353,6 +353,52 @@ void main() {
   );
 
   testWidgets(
+    'Balance child-card setting changes only the primary content shell',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = BalancePresentationController();
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card-direct')),
+        findsNothing,
+      );
+
+      settings.setUsesChildCards(false);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('balance-primary-card-direct')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'BCL-03: the selected carousel card preserves the approved title-avatar-two-line visual grammar',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(412, 892));
@@ -391,6 +437,91 @@ void main() {
           '../../../goldens/balance_carousel_canonical_layout.png',
         ),
       );
+    },
+  );
+
+  testWidgets(
+    'BCP-RED-01: every carousel topic uses the same professional leading slot and copy hierarchy',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 892));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(categoryMovers: _moverPresentation()),
+      );
+      addTearDown(linked.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(
+                metrics: DashboardLayoutMetrics.reference.fitToViewport(
+                  const Size(412, 892),
+                ),
+              ),
+              balanceLinkedPresentation: linked,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final carousel = tester.widget<CenteredCarousel<BalanceCarouselCard>>(
+        find.byType(CenteredCarousel<BalanceCarouselCard>),
+      );
+      final cards =
+          (carousel.dataSource!
+                  as CyclicCarouselDataSource<BalanceCarouselCard>)
+              .items;
+      for (var index = 0; index < cards.length; index += 1) {
+        final card = cards[index];
+        carousel.controller.jumpToIndex(index);
+        await tester.pump();
+        final title = tester.widget<Text>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-title-${card.id}'),
+          ),
+        );
+        final primary = tester.widget<Text>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-primary-${card.id}'),
+          ),
+        );
+        final secondary = tester.widget<Text>(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-secondary-${card.id}'),
+          ),
+        );
+        final visual = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-visual-${card.id}'),
+          ),
+        );
+        final titleRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-title-${card.id}'),
+          ),
+        );
+        final primaryRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-primary-${card.id}'),
+          ),
+        );
+        final secondaryRect = tester.getRect(
+          find.byKey(
+            ValueKey<String>('balance-carousel-card-secondary-${card.id}'),
+          ),
+        );
+
+        expect(visual.width, greaterThanOrEqualTo(40));
+        expect(visual.height, greaterThanOrEqualTo(40));
+        expect(title.style!.fontSize, greaterThanOrEqualTo(11));
+        expect(primary.style!.fontSize, greaterThanOrEqualTo(14));
+        expect(secondary.style!.fontSize, greaterThanOrEqualTo(11));
+        expect(titleRect.bottom, lessThanOrEqualTo(visual.top));
+        expect(visual.right, lessThan(primaryRect.left));
+        expect(primaryRect.top, lessThan(secondaryRect.top));
+      }
+      expect(tester.takeException(), isNull);
     },
   );
 

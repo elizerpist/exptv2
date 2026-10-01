@@ -36,6 +36,7 @@ final class BalancePresentationSettings {
     required this.chartMode,
     required this.timeLabels,
     required this.latestTransactionCardPresentation,
+    required this.usesChildCards,
     required this.revision,
   });
 
@@ -44,12 +45,14 @@ final class BalancePresentationSettings {
       timeLabels = BalanceHeaderChartTimeLabels.visible,
       latestTransactionCardPresentation =
           BalanceLatestTransactionCardPresentation.avatarPartner,
+      usesChildCards = true,
       revision = 0;
 
   final BalanceHeaderChartMode chartMode;
   final BalanceHeaderChartTimeLabels timeLabels;
   final BalanceLatestTransactionCardPresentation
   latestTransactionCardPresentation;
+  final bool usesChildCards;
   final int revision;
 
   bool get showsTimeLabels =>
@@ -59,6 +62,7 @@ final class BalancePresentationSettings {
     BalanceHeaderChartMode? chartMode,
     BalanceHeaderChartTimeLabels? timeLabels,
     BalanceLatestTransactionCardPresentation? latestTransactionCardPresentation,
+    bool? usesChildCards,
     int? revision,
   }) => BalancePresentationSettings(
     chartMode: chartMode ?? this.chartMode,
@@ -66,6 +70,7 @@ final class BalancePresentationSettings {
     latestTransactionCardPresentation:
         latestTransactionCardPresentation ??
         this.latestTransactionCardPresentation,
+    usesChildCards: usesChildCards ?? this.usesChildCards,
     revision: revision ?? this.revision,
   );
 
@@ -76,6 +81,7 @@ final class BalancePresentationSettings {
       other.timeLabels == timeLabels &&
       other.latestTransactionCardPresentation ==
           latestTransactionCardPresentation &&
+      other.usesChildCards == usesChildCards &&
       other.revision == revision;
 
   @override
@@ -83,6 +89,7 @@ final class BalancePresentationSettings {
     chartMode,
     timeLabels,
     latestTransactionCardPresentation,
+    usesChildCards,
     revision,
   );
 }
@@ -113,6 +120,15 @@ final class BalancePresentationController
     if (current.latestTransactionCardPresentation == next) return;
     value = current.copyWith(
       latestTransactionCardPresentation: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setUsesChildCards(bool enabled) {
+    final current = value;
+    if (current.usesChildCards == enabled) return;
+    value = current.copyWith(
+      usesChildCards: enabled,
       revision: current.revision + 1,
     );
   }

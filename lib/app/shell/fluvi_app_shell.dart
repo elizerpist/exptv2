@@ -13,6 +13,7 @@ import '../../core/categories/domain/category_repository.dart';
 import '../../core/categories/presentation/category_avatar_palette_scope.dart';
 import '../../core/financial_limits/data/method_channel_financial_limit_repository.dart';
 import '../../core/financial_limits/domain/financial_limit_repository.dart';
+import '../../core/preferences/data/method_channel_dashboard_presentation_preferences_store.dart';
 import '../../core/design/dashboard_mode_palette.dart';
 import '../../core/design/fluvi_global_appearance.dart';
 import '../../core/design/fluvi_typography_scope.dart';
@@ -28,6 +29,7 @@ import '../../features/dashboard/application/dashboard_core_mode_controller.dart
 import '../../features/dashboard/application/transaction_direction_controller.dart';
 import '../../features/dashboard/application/dashboard_interaction_readiness.dart';
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
+import '../../features/dashboard/application/dashboard_presentation_preferences.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -175,6 +177,8 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final DashboardShellPresentationController _shellPresentation;
   late final bool _ownsShellPresentation;
   late final DashboardHeaderVisualController _headerVisualController;
+  late final DashboardPresentationPreferencesController
+  _dashboardPresentationPreferences;
   late final bool _seedDemo;
   Future<void>? _startupFlow;
   int _startupAttemptGeneration = 0;
@@ -192,6 +196,10 @@ class _FluviAppShellState extends State<FluviAppShell>
   void initState() {
     super.initState();
     _headerVisualController = DashboardHeaderVisualController(vsync: this);
+    _dashboardPresentationPreferences =
+        DashboardPresentationPreferencesController(
+          store: MethodChannelDashboardPresentationPreferencesStore(),
+        );
     _seedDemo = !kIsWeb && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     final repository = kIsWeb
         ? const EmptyDashboardDataRuntimeRepository()
@@ -553,6 +561,7 @@ class _FluviAppShellState extends State<FluviAppShell>
       _shellPresentation.dispose();
     }
     _headerVisualController.dispose();
+    _dashboardPresentationPreferences.dispose();
     _modeController.dispose();
     _controller.dispose();
     super.dispose();
@@ -749,6 +758,8 @@ class _FluviAppShellState extends State<FluviAppShell>
                                     shellPresentation: _shellPresentation,
                                     headerVisualController:
                                         _headerVisualController,
+                                    dashboardPresentationPreferences:
+                                        _dashboardPresentationPreferences,
                                     mindQueryFacetLoader: _appliedQueryFacets,
                                     initialSummaryPillVariant:
                                         widget.initialSummaryPillVariant ??

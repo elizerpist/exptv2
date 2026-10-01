@@ -1034,6 +1034,15 @@ final class _BalancePresentationSection extends StatelessWidget {
             ],
           ),
         ),
+        SwitchListTile(
+          key: const ValueKey<String>('balance-child-cards-enabled'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Balance child cardok'),
+          subtitle: const Text('Grafikonok külön belső kártyákon'),
+          value: settings.usesChildCards,
+          onChanged: controller.setUsesChildCards,
+        ),
       ],
     ),
   );
@@ -1052,6 +1061,44 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
     builder: (context, settings, _) => _TunerSection(
       title: 'Mind hőtérkép',
       children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('SUM stílus'),
+        ),
+        RadioGroup<MindSumVisualStyle>(
+          groupValue: settings.sumVisualStyle,
+          onChanged: (style) {
+            if (style != null) controller.setSumVisualStyle(style);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final style in MindSumVisualStyle.values)
+                RadioListTile<MindSumVisualStyle>(
+                  key: ValueKey('mind-sum-visual-style-${style.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(style.tunerLabel),
+                  value: style,
+                ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('mind-sum-layout-chooser-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('SUM layout-választó'),
+          value: settings.showSumLayoutChooser,
+          onChanged: controller.setShowSumLayoutChooser,
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('mind-year-mother-actions-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Év mother-card gombok'),
+          value: settings.showYearMotherCardActions,
+          onChanged: controller.setShowYearMotherCardActions,
+        ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
           child: Text('Színezés'),

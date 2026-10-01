@@ -957,6 +957,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'hamburger exposes and updates persisted SUM, Year and Balance display choices',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 2600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final mind = MindYearHeatmapPresentationController();
+      final balance = BalancePresentationController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 2500,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              mindYearHeatmapPresentation: mind,
+              balancePresentationSettings: balance,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.mindYearHeatmap,
+        DashboardHeaderTunerSection.balancePresentation,
+      ]);
+
+      final sumA = find.byKey(
+        const ValueKey<String>('mind-sum-visual-style-sumA'),
+      );
+      final layoutChooser = find.byKey(
+        const ValueKey<String>('mind-sum-layout-chooser-visible'),
+      );
+      final yearActions = find.byKey(
+        const ValueKey<String>('mind-year-mother-actions-visible'),
+      );
+      final balanceChildCards = find.byKey(
+        const ValueKey<String>('balance-child-cards-enabled'),
+      );
+      for (final control in <Finder>[
+        sumA,
+        layoutChooser,
+        yearActions,
+        balanceChildCards,
+      ]) {
+        expect(control, findsOneWidget);
+        await tester.ensureVisible(control);
+        await tester.tap(control);
+        await tester.pump();
+      }
+      await tester.pump();
+
+      expect(mind.value.sumVisualStyle, MindSumVisualStyle.sumA);
+      expect(mind.value.showSumLayoutChooser, isFalse);
+      expect(mind.value.showYearMotherCardActions, isFalse);
+      expect(balance.value.usesChildCards, isFalse);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      mind.dispose();
+      balance.dispose();
+    },
+  );
+
   test('tuner placement always reserves the live Header plus its gap', () {
     const gap = 12.0;
     for (final headerBottom in <double>[124, 214, 346]) {

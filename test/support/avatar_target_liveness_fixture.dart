@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membersh
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 /// Only the external data seam is synthetic. Production index/focus/cache,
@@ -205,6 +206,34 @@ final class AvatarTargetLivenessRepository
       yearWindowEndInclusive: yearWindowEndInclusive,
       incomeBank: bank(false),
       expenseBank: bank(true),
+      // The production native payload always carries timestamp-faithful DAY
+      // facts beside the limit bank. Keep this real-surface fixture faithful
+      // to that contract so DAY header/liveness assertions exercise a known
+      // selected-day actual and prior-month allowance rather than an absent
+      // data state.
+      spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
+        coreRevision: coreRevision,
+        incomeBank: PreparedSpendingRhythmDirectionBank.empty(targetCount: 9),
+        expenseBank: _expenseRhythmBank(),
+      ),
+    );
+  }
+
+  PreparedSpendingRhythmDirectionBank _expenseRhythmBank() {
+    const epochDay = 20648; // 2026-07-14, the fixture's one transaction day.
+    final totals = <int>[
+      rows.fold<int>(0, (sum, row) => sum + row.amountMinor),
+      for (var handle = 1; handle <= 8; handle += 1) handle * 100,
+    ];
+    return PreparedSpendingRhythmDirectionBank(
+      targetCount: 9,
+      targetOffsets: List<int>.generate(10, (index) => index),
+      epochDays: List<int>.filled(9, epochDay),
+      dailyActualScaled100: totals,
+      dailyTransactionCount: <int>[rows.length, ...List<int>.filled(8, 1)],
+      dayPartActualScaled100: <int>[
+        for (final total in totals) ...<int>[0, 0, 0, 0, total, 0, 0, 0],
+      ],
     );
   }
 

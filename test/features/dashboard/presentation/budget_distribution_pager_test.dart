@@ -13,13 +13,13 @@ import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_expansion_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_pager.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_ranking.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
@@ -489,7 +489,6 @@ void main() {
       final surfaceOwner = ValueNotifier<BudgetDistributionSurfaceOwner>(
         BudgetDistributionSurfaceOwner.splitCard2,
       );
-      final rhythm = ValueNotifier<DashboardSpendingRhythmState?>(_rhythm());
       addTearDown(categories.dispose);
       addTearDown(direction.dispose);
       addTearDown(visible.dispose);
@@ -498,7 +497,6 @@ void main() {
       addTearDown(rail.dispose);
       addTearDown(pages.dispose);
       addTearDown(surfaceOwner.dispose);
-      addTearDown(rhythm.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -514,7 +512,6 @@ void main() {
                   drawableFrames: drawables,
                   avatarRailController: rail,
                   expandCategoryDonutToFit: true,
-                  rhythm: rhythm,
                   surfaceOwner: owner,
                 ),
               ),
@@ -529,6 +526,7 @@ void main() {
       );
       final stablePageController = pageView.controller;
       final stablePagePosition = stablePageController!.position;
+      final stableDrawableFrame = drawables.value;
       final categoryCardBounds = tester.getRect(
         find.byKey(const ValueKey('budget-category-distribution-card')),
       );
@@ -545,6 +543,10 @@ void main() {
         find.byKey(const ValueKey('budget-distribution-donut-157')),
         findsOneWidget,
       );
+      final categoryDonutBounds = tester.getRect(
+        find.byKey(const ValueKey('budget-distribution-donut-157')),
+      );
+      final categoryListTitleBounds = tester.getRect(find.text('Kategóriák'));
       expect(find.text('Költési ritmus'), findsNothing);
       expect(
         find.byKey(const ValueKey('budget-category-distribution-card')),
@@ -573,6 +575,24 @@ void main() {
         categorySurface.decoration.borderRadius,
         FluviVisualTokens.roundedBoxRadius,
       );
+
+      pages.ranking.setCategory(BudgetDistributionRanking.transactionCount);
+      await tester.pump();
+      expect(find.text('0'), findsWidgets);
+      expect(
+        identical(drawables.value, stableDrawableFrame),
+        isTrue,
+        reason:
+            'Ranking is presentation-only: it must not rebuild the prepared '
+            'donut financial frame.',
+      );
+      expect(
+        identical(stablePageController.position, stablePagePosition),
+        isTrue,
+        reason: 'Ranking must retain the existing PageView ScrollPosition.',
+      );
+      pages.ranking.setCategory(BudgetDistributionRanking.share);
+      await tester.pump();
 
       surfaceOwner.value = BudgetDistributionSurfaceOwner.unifiedParent;
       await tester.pump();
@@ -667,23 +687,30 @@ void main() {
                 false),
       );
       expect(partnerDonut, findsOneWidget);
+      final partnerDonutBounds = tester.getRect(partnerDonut);
+      final partnerListTitleBounds = tester.getRect(find.text('Partnerek'));
+      expect(
+        partnerDonutBounds,
+        categoryDonutBounds,
+        reason:
+            'Under identical Card2 constraints Partner and Category must use '
+            'the exact same shared donut geometry.',
+      );
+      expect(
+        partnerListTitleBounds.top,
+        categoryListTitleBounds.top,
+        reason: 'Both list headings share the one body-aligned title row.',
+      );
       expect(
         tester.getSize(partnerDonut).height,
         greaterThan(100),
         reason:
-            'RG-G7: the additional 4.4dp Rhythm plot allocation is reclaimed '
-            'from the Partner upper region without changing Card2 height.',
+            'Partner now consumes the same shared Category pie/list region.',
       );
-      expect(find.text('Költési ritmus'), findsOneWidget);
-      final rhythmBounds = tester.getRect(
-        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
-      );
-      expect(rhythmBounds.width, 358);
+      expect(find.text('Költési ritmus'), findsNothing);
       expect(
-        rhythmBounds.width,
-        greaterThan(tester.getSize(partnerDonut).width),
-        reason:
-            'Partner rhythm owns the full inner card width, not the donut column.',
+        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
+        findsNothing,
       );
       expect(
         tester
@@ -816,26 +843,6 @@ void main() {
     },
   );
 }
-
-DashboardSpendingRhythmState _rhythm() => DashboardSpendingRhythmState(
-  analysis: MonthSpendingRhythm(
-    coreRevision: 7,
-    direction: LedgerDirection.expense,
-    targetHandle: 0,
-    scope: const MonthScope(YearMonth(year: 2026, month: 8)),
-    buckets: <SpendingRhythmBucket>[
-      for (var index = 0; index < 31; index += 1)
-        SpendingRhythmBucket(
-          label: '$index',
-          accessibilityLabel: '$index',
-          actualScaled100: index,
-        ),
-    ],
-  ),
-  startColorArgb: 0xff000001,
-  middleColorArgb: 0xff000002,
-  endColorArgb: 0xff000003,
-);
 
 final class _FakeRailDelegate implements BudgetTargetAvatarRailCommandDelegate {
   _FakeRailDelegate({required this.targetCount});

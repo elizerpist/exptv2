@@ -304,6 +304,7 @@ final class _BalanceDashboardCoreSurfaceState
               bounds: local.lowerBounds,
               presentation: widget.balanceLinkedPresentation,
               selectedTopic: _selectedTopic,
+              presentationSettings: widget.presentationSettings,
             ),
           ),
           DashboardCoreModeCascadeCard(
@@ -396,37 +397,53 @@ final class _BalancePrimaryCardHost extends StatelessWidget {
     required this.bounds,
     required this.presentation,
     required this.selectedTopic,
+    this.presentationSettings,
   });
 
   final DashboardBounds bounds;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
   final BalanceLinkedDetailTopic selectedTopic;
+  final ValueListenable<BalancePresentationSettings>? presentationSettings;
 
   @override
   Widget build(BuildContext context) {
     final listenable = presentation;
     if (listenable == null) return _placeholder();
-    return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
-      valueListenable: listenable,
-      builder: (context, value, _) {
-        if (value == null ||
-            (selectedTopic == BalanceLinkedDetailTopic.cashflow &&
-                value.cashflow.mode ==
-                    DashboardBalancePrimaryMode.unsupportedDay)) {
-          return _placeholder();
-        }
-        return DashboardPlaceholderCard(
-          bounds: bounds,
-          fillParent: true,
-          semanticKey: const ValueKey<String>('balance-primary-card'),
-          child: BalanceLinkedDetailCard(
-            presentation: value,
-            topic: selectedTopic,
-          ),
-        );
-      },
+    final settings = presentationSettings;
+    if (settings == null) return _withChildCardMode(true);
+    return ValueListenableBuilder<BalancePresentationSettings>(
+      valueListenable: settings,
+      builder: (context, value, _) => _withChildCardMode(value.usesChildCards),
     );
   }
+
+  Widget _withChildCardMode(bool usesChildCards) =>
+      ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
+        valueListenable: presentation!,
+        builder: (context, value, _) {
+          if (value == null ||
+              (selectedTopic == BalanceLinkedDetailTopic.cashflow &&
+                  value.cashflow.mode ==
+                      DashboardBalancePrimaryMode.unsupportedDay)) {
+            return _placeholder();
+          }
+          final content = BalanceLinkedDetailCard(
+            presentation: value,
+            topic: selectedTopic,
+          );
+          return usesChildCards
+              ? DashboardPlaceholderCard(
+                  bounds: bounds,
+                  fillParent: true,
+                  semanticKey: const ValueKey<String>('balance-primary-card'),
+                  child: content,
+                )
+              : KeyedSubtree(
+                  key: const ValueKey<String>('balance-primary-card-direct'),
+                  child: content,
+                );
+        },
+      );
 
   Widget _placeholder() => DashboardPlaceholderCard(
     bounds: bounds,
@@ -907,7 +924,9 @@ final class _BalanceCarouselCard extends StatelessWidget {
     // layout/hit bounds. The shared carousel keeps it at scale 1 and scales
     // only its neighbours down, so no selected visual relies on paint-only
     // overflow or an undersized interactive parent.
-    final compact = itemHeight < 42;
+    final visualSpec = _BalanceCarouselMiniCardVisualSpec.resolve(
+      size: Size(width, itemHeight),
+    );
     return SizedBox(
       key: ValueKey<String>('balance-carousel-card-${card.id}'),
       width: width,
@@ -932,13 +951,15 @@ final class _BalanceCarouselCard extends StatelessWidget {
               boxShadow: depth.shadows,
             ),
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: compact ? 4 : 8,
-                vertical: compact ? 2 : 6,
+              padding: EdgeInsets.fromLTRB(
+                visualSpec.horizontalPadding,
+                visualSpec.topPadding,
+                visualSpec.horizontalPadding,
+                visualSpec.bottomPadding,
               ),
               child: _BalanceCarouselMiniCardContent(
                 card: card,
-                compact: compact,
+                visualSpec: visualSpec,
               ),
             ),
           );
@@ -948,17 +969,67 @@ final class _BalanceCarouselCard extends StatelessWidget {
   }
 }
 
-/// One canonical card grammar for all Balance carousel topics. Compact cards
-/// shrink the same title/visual/two-line composition; they never fall back to
-/// a separate text-only or Latest-specific layout family.
+/// One responsive metric source for every Balance carousel card. The carousel
+/// itself is the only owner of selected/neighbor scale; this spec only adapts
+/// the one internal anatomy when an embedding gives it a genuinely smaller
+/// height.
+@immutable
+final class _BalanceCarouselMiniCardVisualSpec {
+  const _BalanceCarouselMiniCardVisualSpec._({
+    required this.horizontalPadding,
+    required this.topPadding,
+    required this.bottomPadding,
+    required this.titleToContentGap,
+    required this.visualSize,
+    required this.visualToCopyGap,
+    required this.titleFontSize,
+    required this.primaryFontSize,
+    required this.secondaryFontSize,
+    required this.primaryToSecondaryGap,
+  });
+
+  final double horizontalPadding;
+  final double topPadding;
+  final double bottomPadding;
+  final double titleToContentGap;
+  final double visualSize;
+  final double visualToCopyGap;
+  final double titleFontSize;
+  final double primaryFontSize;
+  final double secondaryFontSize;
+  final double primaryToSecondaryGap;
+
+  static _BalanceCarouselMiniCardVisualSpec resolve({required Size size}) {
+    // The normal Balance upper-card envelope is deliberately only 72 logical
+    // pixels high. These values retain the requested 42px leading visual and
+    // 15/12 copy hierarchy there, while every value scales together for an
+    // unusually constrained embed instead of creating a side-card variant.
+    final scale = ((size.height - 12) / 60).clamp(.55, 1.0).toDouble();
+    return _BalanceCarouselMiniCardVisualSpec._(
+      horizontalPadding: (size.width < 160 ? 10 : 14) * scale,
+      topPadding: 5 * scale,
+      bottomPadding: 5 * scale,
+      titleToContentGap: 3 * scale,
+      visualSize: 42 * scale,
+      visualToCopyGap: 10 * scale,
+      titleFontSize: 11 * scale,
+      primaryFontSize: 15 * scale,
+      secondaryFontSize: 12 * scale,
+      primaryToSecondaryGap: 2 * scale,
+    );
+  }
+}
+
+/// One canonical card grammar for all Balance carousel topics. It never falls
+/// back to a topic-specific text-only or Latest-specific layout family.
 final class _BalanceCarouselMiniCardContent extends StatelessWidget {
   const _BalanceCarouselMiniCardContent({
     required this.card,
-    required this.compact,
+    required this.visualSpec,
   });
 
   final BalanceCarouselCard card;
-  final bool compact;
+  final _BalanceCarouselMiniCardVisualSpec visualSpec;
 
   @override
   Widget build(BuildContext context) {
@@ -967,8 +1038,8 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
     // semantic primary on line one and compact context on line two.
     final primary = card.amount;
     final secondary = card.detail ?? '—';
-    final visualSize = compact ? 15.0 : 32.0;
-    final iconSize = compact ? 8.0 : 16.0;
+    final visualSize = visualSpec.visualSize;
+    final iconSize = visualSize * (16 / 42);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -979,12 +1050,12 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: FluviVisualTokens.textSecondary,
-            fontSize: compact ? 6.5 : 10,
+            fontSize: visualSpec.titleFontSize,
             height: 1,
             fontWeight: FontWeight.w600,
           ),
         ),
-        SizedBox(height: compact ? 1 : 4),
+        SizedBox(height: visualSpec.titleToContentGap),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -997,7 +1068,7 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
                 size: visualSize,
                 iconSize: iconSize,
               ),
-              SizedBox(width: compact ? 4 : 9),
+              SizedBox(width: visualSpec.visualToCopyGap),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1012,12 +1083,12 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: FluviVisualTokens.textPrimary,
-                        fontSize: compact ? 8 : 13,
+                        fontSize: visualSpec.primaryFontSize,
                         height: 1.05,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    SizedBox(height: compact ? 1 : 3),
+                    SizedBox(height: visualSpec.primaryToSecondaryGap),
                     Text(
                       secondary,
                       key: ValueKey<String>(
@@ -1028,7 +1099,7 @@ final class _BalanceCarouselMiniCardContent extends StatelessWidget {
                       style: TextStyle(
                         color:
                             FluviVisualTokens.appHighlightGradient.colors.first,
-                        fontSize: compact ? 6.5 : 10,
+                        fontSize: visualSpec.secondaryFontSize,
                         height: 1,
                         fontWeight: FontWeight.w700,
                       ),

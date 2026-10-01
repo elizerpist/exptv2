@@ -70,6 +70,20 @@ enum MindSumYearRowLayout {
   };
 }
 
+/// SUM visual family chosen from the dashboard hamburger menu. It changes only
+/// presentation; the prepared month/year financial frame stays untouched.
+enum MindSumVisualStyle {
+  current,
+  sumA,
+  sumB;
+
+  String get tunerLabel => switch (this) {
+    MindSumVisualStyle.current => 'Current',
+    MindSumVisualStyle.sumA => 'SUM-A',
+    MindSumVisualStyle.sumB => 'SUM-B',
+  };
+}
+
 /// Where the static Hungarian initial appears relative to a Sum month tile.
 enum MindSumMonthLabelPlacement {
   none,
@@ -151,6 +165,9 @@ final class MindYearHeatmapPresentationSettings {
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
     this.sumVisibleChartCount = MindSumVisibleChartCount.two,
+    this.sumVisualStyle = MindSumVisualStyle.current,
+    this.showSumLayoutChooser = true,
+    this.showYearMotherCardActions = true,
     this.yearMonthCardBorderEnabled = true,
     this.yearMonthCardProfitabilityTintEnabled = false,
     this.yearMonthCardProfitabilityTintOpacity = .16,
@@ -170,6 +187,9 @@ final class MindYearHeatmapPresentationSettings {
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       sumVisibleChartCount = MindSumVisibleChartCount.two,
+      sumVisualStyle = MindSumVisualStyle.current,
+      showSumLayoutChooser = true,
+      showYearMotherCardActions = true,
       yearMonthCardBorderEnabled = true,
       yearMonthCardProfitabilityTintEnabled = false,
       yearMonthCardProfitabilityTintOpacity = .16,
@@ -188,6 +208,9 @@ final class MindYearHeatmapPresentationSettings {
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
+  final MindSumVisualStyle sumVisualStyle;
+  final bool showSumLayoutChooser;
+  final bool showYearMotherCardActions;
 
   /// MonthCard chrome applies to card-based Year layouts only. It never
   /// affects direct 4×3 cells, palette inputs or financial data.
@@ -218,6 +241,9 @@ final class MindYearHeatmapPresentationSettings {
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     MindSumVisibleChartCount? sumVisibleChartCount,
+    MindSumVisualStyle? sumVisualStyle,
+    bool? showSumLayoutChooser,
+    bool? showYearMotherCardActions,
     bool? yearMonthCardBorderEnabled,
     bool? yearMonthCardProfitabilityTintEnabled,
     double? yearMonthCardProfitabilityTintOpacity,
@@ -237,6 +263,10 @@ final class MindYearHeatmapPresentationSettings {
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
     sumVisibleChartCount: sumVisibleChartCount ?? this.sumVisibleChartCount,
+    sumVisualStyle: sumVisualStyle ?? this.sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser ?? this.showSumLayoutChooser,
+    showYearMotherCardActions:
+        showYearMotherCardActions ?? this.showYearMotherCardActions,
     yearMonthCardBorderEnabled:
         yearMonthCardBorderEnabled ?? this.yearMonthCardBorderEnabled,
     yearMonthCardProfitabilityTintEnabled:
@@ -270,6 +300,9 @@ final class MindYearHeatmapPresentationSettings {
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.sumVisibleChartCount == sumVisibleChartCount &&
+      other.sumVisualStyle == sumVisualStyle &&
+      other.showSumLayoutChooser == showSumLayoutChooser &&
+      other.showYearMotherCardActions == showYearMotherCardActions &&
       other.yearMonthCardBorderEnabled == yearMonthCardBorderEnabled &&
       other.yearMonthCardProfitabilityTintEnabled ==
           yearMonthCardProfitabilityTintEnabled &&
@@ -294,6 +327,9 @@ final class MindYearHeatmapPresentationSettings {
     sumYearRowLayout,
     sumMonthLabelPlacement,
     sumVisibleChartCount,
+    sumVisualStyle,
+    showSumLayoutChooser,
+    showYearMotherCardActions,
     yearMonthCardBorderEnabled,
     yearMonthCardProfitabilityTintEnabled,
     yearMonthCardProfitabilityTintOpacity,
@@ -371,6 +407,33 @@ final class MindYearHeatmapPresentationController
     if (current.sumVisibleChartCount == count) return;
     value = current.copyWith(
       sumVisibleChartCount: count,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumVisualStyle(MindSumVisualStyle style) {
+    final current = value;
+    if (current.sumVisualStyle == style) return;
+    value = current.copyWith(
+      sumVisualStyle: style,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setShowSumLayoutChooser(bool visible) {
+    final current = value;
+    if (current.showSumLayoutChooser == visible) return;
+    value = current.copyWith(
+      showSumLayoutChooser: visible,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setShowYearMotherCardActions(bool visible) {
+    final current = value;
+    if (current.showYearMotherCardActions == visible) return;
+    value = current.copyWith(
+      showYearMotherCardActions: visible,
       revision: current.revision + 1,
     );
   }

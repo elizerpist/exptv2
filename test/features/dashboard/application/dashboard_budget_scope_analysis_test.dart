@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_scope_analysis.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
   group('resolved monthly Budget limits', () {
@@ -110,5 +111,49 @@ void main() {
     );
     expect(average.isAvailable, isTrue);
     expect(average.averageMonthlySpendScaled100, 20000);
+  });
+
+  group('DAY daily available Budget', () {
+    test('carries prior underspending into the selected-day allowance', () {
+      final analysis = DashboardBudgetDayAllowanceAnalysis.derive(
+        selectedDay: const LocalDate(year: 2026, month: 10, day: 21),
+        logicalAsOfDate: const LocalDate(year: 2026, month: 10, day: 21),
+        selectedDayActualScaled100: 520000,
+        spentBeforeSelectedDayScaled100: 14400000,
+        monthlyLimitScaled100: 30000000,
+      );
+
+      expect(analysis.isAvailable, isTrue);
+      expect(analysis.selectedDayActualScaled100, 520000);
+      // (300,000 - 144,000) / 11 remaining inclusive days.
+      expect(analysis.dailyAvailableScaled100, 1418182);
+      expect(analysis.displayRatio, closeTo(520000 / 1418182, 0.000001));
+    });
+
+    test('does not subtract selected-day spending from its own allowance', () {
+      final analysis = DashboardBudgetDayAllowanceAnalysis.derive(
+        selectedDay: const LocalDate(year: 2026, month: 10, day: 31),
+        logicalAsOfDate: const LocalDate(year: 2026, month: 10, day: 31),
+        selectedDayActualScaled100: 900000,
+        spentBeforeSelectedDayScaled100: 29900000,
+        monthlyLimitScaled100: 30000000,
+      );
+
+      expect(analysis.dailyAvailableScaled100, 100000);
+    });
+
+    test('is explicitly unavailable for a genuinely future selected day', () {
+      final analysis = DashboardBudgetDayAllowanceAnalysis.derive(
+        selectedDay: const LocalDate(year: 2026, month: 11, day: 1),
+        logicalAsOfDate: const LocalDate(year: 2026, month: 10, day: 21),
+        selectedDayActualScaled100: 0,
+        spentBeforeSelectedDayScaled100: 0,
+        monthlyLimitScaled100: 30000000,
+      );
+
+      expect(analysis.isAvailable, isFalse);
+      expect(analysis.selectedDayActualScaled100, isNull);
+      expect(analysis.dailyAvailableScaled100, isNull);
+    });
   });
 }

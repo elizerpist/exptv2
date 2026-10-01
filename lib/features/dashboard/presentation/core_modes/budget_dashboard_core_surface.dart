@@ -491,7 +491,6 @@ class BudgetDashboardCoreSurface extends StatelessWidget {
       drawableFrames: distributionDrawables!,
       avatarRailController: avatarRailController!,
       expandCategoryDonutToFit: !presentation.geometry.hasPhysicalRail,
-      rhythm: rhythm,
       drilldown: drilldown,
       upperVerticalGestures: upperVerticalGestures,
       surfaceOwner: surfaceOwner,

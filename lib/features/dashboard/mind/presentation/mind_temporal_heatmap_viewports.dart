@@ -25,6 +25,8 @@ import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_detailed_sum_chart.dart';
 import 'mind_monthly_overlay_bar_chart.dart';
 import 'mind_sum_year_band_header.dart';
+import 'mind_sum_reference_surface.dart';
+import 'mind_temporal_content_header.dart';
 import 'mind_temporal_secondary_cards.dart';
 
 export 'mind_sum_year_band_header.dart' show formatMindCompactForints;
@@ -77,6 +79,11 @@ final class MindSumHeatmapViewport extends StatelessWidget {
         sumVisibleChartCount:
             presentationSettings?.value.sumVisibleChartCount ??
             MindSumVisibleChartCount.two,
+        sumVisualStyle:
+            presentationSettings?.value.sumVisualStyle ??
+            MindSumVisualStyle.current,
+        showLayoutChooser:
+            presentationSettings?.value.showSumLayoutChooser ?? true,
         sumLineInterpolationMode:
             presentationSettings?.value.sumLineInterpolationMode ??
             MindSumLineInterpolationMode.linear,
@@ -104,6 +111,8 @@ final class MindSumHeatmapViewport extends StatelessWidget {
           sumYearRowLayout: value.sumYearRowLayout,
           sumMonthLabelPlacement: value.sumMonthLabelPlacement,
           sumVisibleChartCount: value.sumVisibleChartCount,
+          sumVisualStyle: value.sumVisualStyle,
+          showLayoutChooser: value.showSumLayoutChooser,
           sumLineInterpolationMode: value.sumLineInterpolationMode,
           sumLineCatmullRomTension: value.sumLineCatmullRomTension,
           sumLineTemporalSmoothingEnabled:
@@ -126,6 +135,8 @@ final class _MindSumHeatmapContent extends StatefulWidget {
     required this.sumYearRowLayout,
     required this.sumMonthLabelPlacement,
     required this.sumVisibleChartCount,
+    required this.sumVisualStyle,
+    required this.showLayoutChooser,
     required this.sumLineInterpolationMode,
     required this.sumLineCatmullRomTension,
     required this.sumLineTemporalSmoothingEnabled,
@@ -140,6 +151,8 @@ final class _MindSumHeatmapContent extends StatefulWidget {
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
+  final MindSumVisualStyle sumVisualStyle;
+  final bool showLayoutChooser;
   final MindSumLineInterpolationMode sumLineInterpolationMode;
   final double sumLineCatmullRomTension;
   final bool sumLineTemporalSmoothingEnabled;
@@ -208,6 +221,13 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
   @override
   Widget build(BuildContext context) {
     final years = widget.frame.years;
+    if (widget.sumVisualStyle != MindSumVisualStyle.current) {
+      return MindSumReferenceSurface(
+        frame: widget.frame,
+        visualStyle: widget.sumVisualStyle,
+        showLayoutChooser: widget.showLayoutChooser,
+      );
+    }
     final period = years.isEmpty
         ? '— · 0 hónap'
         : '${years.first}–${years.last} · ${years.length * 12} hónap';
@@ -216,70 +236,48 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Többéves aktivitás',
-                      key: ValueKey<String>('mind-sum-heatmap-title'),
-                      style: TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
+          MindTemporalContentHeader(
+            title: 'Többéves aktivitás',
+            subtitle: period,
+            titleKey: const ValueKey<String>('mind-sum-heatmap-title'),
+            subtitleKey: const ValueKey<String>('mind-sum-heatmap-period'),
+            trailing: widget.showLayoutChooser
+                ? ToggleButtons(
+                  key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 42,
+                    height: 22,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  isSelected: <bool>[
+                    _visualization == _MindSumVisualization.heatmap,
+                    _visualization == _MindSumVisualization.detailed,
+                    _visualization == _MindSumVisualization.monthlyOverlay,
+                  ],
+                  onPressed: (index) => _selectVisualization(switch (index) {
+                    0 => _MindSumVisualization.heatmap,
+                    1 => _MindSumVisualization.detailed,
+                    _ => _MindSumVisualization.monthlyOverlay,
+                  }),
+                  children: const <Widget>[
+                    Tooltip(
+                      key: ValueKey<String>('mind-sum-detail-toggle-heatmap'),
+                      message: 'Hőtérkép',
+                      child: Icon(Icons.grid_view_rounded, size: 13),
                     ),
-                    const SizedBox(height: 1),
-                    Text(
-                      period,
-                      key: const ValueKey<String>('mind-sum-heatmap-period'),
-                      style: const TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 9,
-                      ),
+                    Tooltip(
+                      key: ValueKey<String>('mind-sum-detail-toggle-line'),
+                      message: 'Vonal',
+                      child: Icon(Icons.show_chart, size: 13),
+                    ),
+                    Tooltip(
+                      key: ValueKey<String>('mind-sum-detail-toggle-bars'),
+                      message: 'Havi összevetés',
+                      child: Icon(Icons.bar_chart_rounded, size: 13),
                     ),
                   ],
-                ),
-              ),
-              ToggleButtons(
-                key: const ValueKey<String>('mind-sum-detail-mode-toggle'),
-                constraints: const BoxConstraints.tightFor(
-                  width: 42,
-                  height: 22,
-                ),
-                borderRadius: BorderRadius.circular(8),
-                isSelected: <bool>[
-                  _visualization == _MindSumVisualization.heatmap,
-                  _visualization == _MindSumVisualization.detailed,
-                  _visualization == _MindSumVisualization.monthlyOverlay,
-                ],
-                onPressed: (index) => _selectVisualization(switch (index) {
-                  0 => _MindSumVisualization.heatmap,
-                  1 => _MindSumVisualization.detailed,
-                  _ => _MindSumVisualization.monthlyOverlay,
-                }),
-                children: const <Widget>[
-                  Tooltip(
-                    key: ValueKey<String>('mind-sum-detail-toggle-heatmap'),
-                    message: 'Hőtérkép',
-                    child: Icon(Icons.grid_view_rounded, size: 13),
-                  ),
-                  Tooltip(
-                    key: ValueKey<String>('mind-sum-detail-toggle-line'),
-                    message: 'Vonal',
-                    child: Icon(Icons.show_chart, size: 13),
-                  ),
-                  Tooltip(
-                    key: ValueKey<String>('mind-sum-detail-toggle-bars'),
-                    message: 'Havi összevetés',
-                    child: Icon(Icons.bar_chart_rounded, size: 13),
-                  ),
-                ],
-              ),
-            ],
+                )
+                : null,
           ),
           const SizedBox(height: 5),
           Expanded(
@@ -293,6 +291,7 @@ final class _MindSumHeatmapContentState extends State<_MindSumHeatmapContent> {
                     paletteStyle: widget.paletteStyle,
                     scaleResolution: widget.scaleResolution,
                     layout: widget.sumYearRowLayout,
+                    visualStyle: widget.sumVisualStyle,
                     labelPlacement: widget.sumMonthLabelPlacement,
                     scrollController: _heatmapScrollController,
                   ),
@@ -342,6 +341,7 @@ final class _MindSumHeatmapPage extends StatefulWidget {
     required this.paletteStyle,
     required this.scaleResolution,
     required this.layout,
+    required this.visualStyle,
     required this.labelPlacement,
     required this.scrollController,
   });
@@ -350,6 +350,7 @@ final class _MindSumHeatmapPage extends StatefulWidget {
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final MindSumYearRowLayout layout;
+  final MindSumVisualStyle visualStyle;
   final MindSumMonthLabelPlacement labelPlacement;
   final ScrollController scrollController;
 
@@ -386,6 +387,7 @@ final class _MindSumHeatmapPageState extends State<_MindSumHeatmapPage> {
           paletteStyle: widget.paletteStyle,
           scaleResolution: widget.scaleResolution,
           layout: widget.layout,
+          visualStyle: widget.visualStyle,
           labelPlacement: widget.labelPlacement,
           onMonthTap: (month, anchor) => setState(() {
             final selected = _selectedMonth;
@@ -422,6 +424,7 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
     required this.paletteStyle,
     required this.scaleResolution,
     required this.layout,
+    required this.visualStyle,
     required this.labelPlacement,
     required this.onMonthTap,
   });
@@ -431,6 +434,7 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final MindSumYearRowLayout layout;
+  final MindSumVisualStyle visualStyle;
   final MindSumMonthLabelPlacement labelPlacement;
   final void Function(MindSumHeatmapMonth month, Offset anchor) onMonthTap;
 
@@ -499,7 +503,12 @@ final class _MindSumYearHeatmapUnit extends StatelessWidget {
       key: ValueKey<String>('mind-sum-heatmap-year-$year'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        MindSumYearBandHeader(frame: frame, year: year, surface: 'heatmap'),
+        MindSumYearBandHeader(
+          frame: frame,
+          year: year,
+          surface: 'heatmap',
+          visualStyle: visualStyle,
+        ),
         const SizedBox(height: 4),
         cells,
       ],
@@ -1069,8 +1078,8 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
         const horizontalPadding = 12.0;
         const gap = 4.0;
         const referenceGridWidth = 282.0;
-        // The B3M-MYM header has two horizontal information rows plus the
-        // compact total/footer and outer padding. Solve only the real
+        // The common temporal header plus the compact total/footer and outer
+        // padding. Solve only the real
         // calendar row count so a five-row month is never shrunk by a fake
         // sixth presentation row.
         const staticChrome = 77.0;
@@ -1102,61 +1111,21 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              SizedBox(
-                key: const ValueKey<String>('mind-month-heatmap-header-row'),
-                height: 20,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    const Text(
-                      'Napi aktivitás',
-                      key: ValueKey<String>('mind-month-heatmap-title'),
-                      style: TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '${frame.days.length} nap',
-                      key: const ValueKey<String>(
-                        'mind-month-heatmap-day-count',
-                      ),
-                      style: const TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+              MindTemporalContentHeader(
+                title: 'Napi aktivitás',
+                subtitle:
+                    '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
+                titleKey: const ValueKey<String>('mind-month-heatmap-title'),
+                subtitleKey: const ValueKey<String>(
+                  'mind-month-heatmap-summary-row',
                 ),
-              ),
-              SizedBox(
-                key: const ValueKey<String>('mind-month-heatmap-summary-row'),
-                height: 17,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Text(
-                      '${DashboardTimeLabelFormatter.monthName(frame.month)} ${frame.year}',
-                      style: const TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '${frame.activeDayCount} aktív nap',
-                      key: const ValueKey<String>(
-                        'mind-month-heatmap-active-days',
-                      ),
-                      style: const TextStyle(
-                        color: FluviVisualTokens.textSecondary,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
+                trailingTitle: '${frame.days.length} nap',
+                trailingSubtitle: '${frame.activeDayCount} aktív nap',
+                trailingTitleKey: const ValueKey<String>(
+                  'mind-month-heatmap-day-count',
+                ),
+                trailingSubtitleKey: const ValueKey<String>(
+                  'mind-month-heatmap-active-days',
                 ),
               ),
               const SizedBox(height: 7),

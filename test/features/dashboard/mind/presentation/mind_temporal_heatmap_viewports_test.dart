@@ -90,6 +90,123 @@ void main() {
     },
   );
 
+  testWidgets(
+    'SUM-REFERENCE-01: SUM-A renders the reference card with real month surfaces and range rail',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = ValueNotifier(
+        const MindYearHeatmapPresentationSettings.defaults(),
+      );
+      settings.value = settings.value.copyWith(
+        sumVisualStyle: MindSumVisualStyle.sumA,
+      );
+      addTearDown(listenable.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 420,
+              child: MindSumHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-reference-sumA')),
+        findsOneWidget,
+      );
+      expect(find.text('3×4'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-heatmap-cell-2025-5')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey<String>('mind-sum-reference-sumA')),
+        matchesGoldenFile('../../../../goldens/mind_sum_reference_a.png'),
+      );
+    },
+  );
+
+  testWidgets(
+    'SUM-REFERENCE-02: SUM-B keeps the month grid while using its raised yearly identity and cleanly hides the chooser',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = ValueNotifier(
+        const MindYearHeatmapPresentationSettings.defaults(),
+      );
+      settings.value = settings.value.copyWith(
+        sumVisualStyle: MindSumVisualStyle.sumB,
+        showSumLayoutChooser: false,
+      );
+      addTearDown(listenable.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 420,
+              child: MindSumHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-reference-sumB')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-b-mother-card-2025')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-b-year-card-2025')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-sum-detail-mode-toggle')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey<String>('mind-sum-reference-sumB')),
+        matchesGoldenFile('../../../../goldens/mind_sum_reference_b.png'),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'SUM-HEATMAP-02 RED: compact Mind annual amounts use the approved units',
     () {
@@ -783,8 +900,20 @@ void main() {
       final activeRect = tester.getRect(
         find.byKey(const ValueKey<String>('mind-month-heatmap-active-days')),
       );
-      expect(titleRect.center.dy, closeTo(dayCountRect.center.dy, .01));
-      expect(monthRect.center.dy, closeTo(activeRect.center.dy, .01));
+      expect(
+        titleRect.top,
+        lessThan(dayCountRect.bottom),
+        reason:
+            'The unified header keeps the primary title and compact trailing '
+            'summary in the same header lane.',
+      );
+      expect(
+        monthRect.bottom,
+        greaterThan(activeRect.top),
+        reason:
+            'Supporting copy and the lower compact metric share the second '
+            'header lane without reverting to an unrelated row.',
+      );
       expect(titleRect.left, lessThan(dayCountRect.left));
       expect(monthRect.left, lessThan(activeRect.left));
       expect(

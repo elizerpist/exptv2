@@ -32,7 +32,7 @@ import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.
 
 void main() {
   testWidgets(
-    'DAY Budget Header binds daily pace rather than month projection',
+    'DAY Budget Header binds selected-day actual and daily available Budget',
     (tester) async {
       final harness = _BudgetHeaderHarness(
         initialFrame: _dayVisibleFrame(),
@@ -48,14 +48,14 @@ void main() {
       );
       expect(
         amount.data,
-        '${DashboardPreparedFormatter.amountMinorPerDay(120000)} / '
-        '${DashboardPreparedFormatter.amountMinorPerDay(96774)}',
+        '${DashboardPreparedFormatter.amountMinor(0)} / '
+        '${DashboardPreparedFormatter.amountMinor(100000)}',
       );
       expect(amount.data, isNot(contains(',00 Ft')));
-      expect(find.text('Napi tempó'), findsOneWidget);
+      expect(find.text('Napi mozgástér'), findsOneWidget);
       // Mode naming is intentionally owned by the Header's right-corner
       // action icon, not duplicated as a standalone Budget Header label.
-      expect(find.text('tempó'), findsNothing);
+      expect(find.text('napi budget'), findsNothing);
     },
   );
 

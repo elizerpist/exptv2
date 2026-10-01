@@ -1554,6 +1554,45 @@ void main() {
   );
 
   testWidgets(
+    'Year mother-card actions hide without leaving a header selector lane',
+    (tester) async {
+      final frame = ValueNotifier(_projection().preview(range));
+      final settings = ValueNotifier(
+        const MindYearHeatmapPresentationSettings.defaults(),
+      );
+      settings.value = const MindYearHeatmapPresentationSettings.defaults()
+          .copyWith(showYearMotherCardActions: false);
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 440,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-direct-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-layout-selector-3x4')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'YEAR-PROFIT-01 RED: 3x4 keeps a rounded MonthCard surface while 4x3 remains untouched',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));

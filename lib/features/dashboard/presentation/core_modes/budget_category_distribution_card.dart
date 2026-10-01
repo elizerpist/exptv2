@@ -16,6 +16,7 @@ import '../../query/domain/ledger_direction.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_clay_donut_scene.dart';
 import 'budget_distribution_page_surface.dart';
+import 'budget_distribution_ranking.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
@@ -28,6 +29,8 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
     required this.drawableFrames,
     required this.avatarRailController,
     this.expandDonutToFit = false,
+    this.ranking,
+    this.onRankingChanged,
     this.upperVerticalGestures,
   });
 
@@ -36,6 +39,8 @@ class BudgetCategoryDistributionCard extends StatefulWidget {
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
   final bool expandDonutToFit;
+  final ValueListenable<BudgetDistributionRanking>? ranking;
+  final ValueChanged<BudgetDistributionRanking>? onRankingChanged;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
   @override
@@ -57,6 +62,7 @@ class _BudgetCategoryDistributionCardState
     _lastSelectionDirection = _direction;
     widget.presentation.addListener(_onPresentationChanged);
     widget.drawableFrames.addListener(_onStructuralInputChanged);
+    widget.ranking?.addListener(_onStructuralInputChanged);
   }
 
   @override
@@ -71,12 +77,17 @@ class _BudgetCategoryDistributionCardState
       oldWidget.drawableFrames.removeListener(_onStructuralInputChanged);
       widget.drawableFrames.addListener(_onStructuralInputChanged);
     }
+    if (!identical(oldWidget.ranking, widget.ranking)) {
+      oldWidget.ranking?.removeListener(_onStructuralInputChanged);
+      widget.ranking?.addListener(_onStructuralInputChanged);
+    }
   }
 
   @override
   void dispose() {
     widget.presentation.removeListener(_onPresentationChanged);
     widget.drawableFrames.removeListener(_onStructuralInputChanged);
+    widget.ranking?.removeListener(_onStructuralInputChanged);
     super.dispose();
   }
 
@@ -128,6 +139,19 @@ class _BudgetCategoryDistributionCardState
     final direction = _direction;
     final visualFrame = visualBank.frameFor(direction);
     final frame = visualFrame.semanticFrame;
+    final ranking = widget.ranking?.value ?? BudgetDistributionRanking.share;
+    final sortedEntries =
+        List<DashboardBudgetCategoryDistributionEntry>.of(frame.entries)..sort(
+          (left, right) => BudgetDistributionRankingOrder.compare(
+            ranking: ranking,
+            leftTransactionCount: left.transactionCount,
+            rightTransactionCount: right.transactionCount,
+            leftActualScaled100: left.actualScaled100,
+            rightActualScaled100: right.actualScaled100,
+            leftStableHandle: left.targetHandle,
+            rightStableHandle: right.targetHandle,
+          ),
+        );
     return BudgetDistributionPageSurface(
       heading: _DistributionHeading(presentation: widget.presentation),
       donut: _InteractiveDistributionDonut(
@@ -150,6 +174,12 @@ class _BudgetCategoryDistributionCardState
         ),
       ),
       rightHeading: 'Kategóriák',
+      rightHeaderTrailing: widget.ranking == null
+          ? null
+          : BudgetDistributionRankingSelector(
+              value: ranking,
+              onChanged: widget.onRankingChanged!,
+            ),
       listKey: const ValueKey('budget-category-distribution-list'),
       expandDonutToFit: widget.expandDonutToFit,
       upperVerticalGestures: widget.upperVerticalGestures,
@@ -157,13 +187,14 @@ class _BudgetCategoryDistributionCardState
           ? 'Nincs bevétel'
           : 'Nincs költés',
       rows: <Widget>[
-        for (final entry in frame.entries)
+        for (final entry in sortedEntries)
           _DistributionLegendRow(
             key: ValueKey(
               'budget-category-distribution-row-${entry.categoryId}',
             ),
             entry: entry,
             presentation: widget.presentation,
+            ranking: ranking,
             onTap: () => unawaited(
               widget.avatarRailController.animateToTargetHandle(
                 entry.targetHandle,
@@ -326,11 +357,13 @@ class _DistributionLegendRow extends StatefulWidget {
     required this.entry,
     required this.presentation,
     required this.onTap,
+    required this.ranking,
   });
 
   final DashboardBudgetCategoryDistributionEntry entry;
   final DashboardBudgetPresentationController presentation;
   final VoidCallback onTap;
+  final BudgetDistributionRanking ranking;
 
   @override
   State<_DistributionLegendRow> createState() => _DistributionLegendRowState();
@@ -379,7 +412,14 @@ class _DistributionLegendRowState extends State<_DistributionLegendRow> {
       id: entry.categoryId,
       title: entry.title,
       color: color,
-      roundedPercent: entry.roundedPercent,
+      trailingMetric: switch (widget.ranking) {
+        BudgetDistributionRanking.share =>
+          BudgetDistributionTrailingMetric.sharePercent(entry.roundedPercent),
+        BudgetDistributionRanking.transactionCount =>
+          BudgetDistributionTrailingMetric.transactionCount(
+            entry.transactionCount,
+          ),
+      },
       selected: _selected,
       stateKey: ValueKey(
         'budget-category-distribution-row-${_selected ? 'selected' : 'idle'}-${entry.categoryId}',

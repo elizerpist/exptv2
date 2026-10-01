@@ -26,6 +26,7 @@ import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_aggregate_line_chart.dart';
 import 'mind_anchored_info_card.dart';
 import 'mind_monthly_overlay_bar_chart.dart';
+import 'mind_temporal_content_header.dart';
 
 /// Immutable paint input for the Year comparison page. Full values intentionally
 /// come from the unfiltered directional month authority; filtered values come
@@ -274,7 +275,7 @@ final class _MindYearHeatmapViewportState
       builder: (context, constraints) {
         const horizontalPadding = 10.0;
         const rowGap = 4.0;
-        const headerHeight = 30.0;
+        const headerHeight = mindTemporalContentHeaderHeight;
         final columns = switch (_directGridLayout) {
           _MindYearHeatmapLayout.fourByThree => 4,
           _MindYearHeatmapLayout.threeByFour => 3,
@@ -472,34 +473,26 @@ final class _MindYearHeatmapViewportState
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        SizedBox(
-                          height: 30,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(10, 5, 10, 1),
-                            child: Row(
-                              children: <Widget>[
-                                const Expanded(
-                                  child: Text(
-                                    'Éves aktivitás',
-                                    key: ValueKey<String>(
-                                      'mind-year-direct-title',
-                                    ),
-                                    style: TextStyle(
-                                      color: FluviVisualTokens.textSecondary,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                _MindYearDirectGridSelector(
-                                  value: _directGridLayout,
-                                  onChanged: (next) {
-                                    if (next == _directGridLayout) return;
-                                    setState(() => _directGridLayout = next);
-                                  },
-                                ),
-                              ],
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                          child: MindTemporalContentHeader(
+                            title: 'Éves aktivitás',
+                            subtitle: '$year · 12 hónap',
+                            titleKey: const ValueKey<String>(
+                              'mind-year-direct-title',
                             ),
+                            trailing: _presentationSettings
+                                    .showYearMotherCardActions
+                                ? _MindYearDirectGridSelector(
+                                    value: _directGridLayout,
+                                    onChanged: (next) {
+                                      if (next == _directGridLayout) return;
+                                      setState(
+                                        () => _directGridLayout = next,
+                                      );
+                                    },
+                                  )
+                                : null,
                           ),
                         ),
                         Expanded(child: heatmapPage),

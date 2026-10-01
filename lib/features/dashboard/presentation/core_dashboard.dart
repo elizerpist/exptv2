@@ -28,6 +28,7 @@ import '../application/dashboard_spending_rhythm_controller.dart';
 import '../application/dashboard_budget_limit_edit_controller.dart';
 import '../application/dashboard_ephemeral_focus_controller.dart';
 import '../application/dashboard_performance_counters.dart';
+import '../application/dashboard_presentation_preferences.dart';
 import '../query/domain/ledger_direction.dart';
 import '../query/domain/query_amount_range.dart';
 import '../query/application/dashboard_applied_query_facet_loader.dart';
@@ -95,6 +96,7 @@ class CoreDashboard extends StatefulWidget {
     this.shellPresentation,
     this.headerVisualController,
     this.mindQueryFacetLoader,
+    this.dashboardPresentationPreferences,
     this.initialSummaryPillVariant = SummaryPillVariant.segmented,
   });
 
@@ -120,6 +122,8 @@ class CoreDashboard extends StatefulWidget {
   /// and embedded use.
   final DashboardHeaderVisualController? headerVisualController;
   final DashboardAppliedQueryFacetLoader? mindQueryFacetLoader;
+  final DashboardPresentationPreferencesController?
+  dashboardPresentationPreferences;
   final SummaryPillVariant initialSummaryPillVariant;
 
   @override
@@ -157,6 +161,9 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardHeaderVisualController _headerVisualController;
   late final bool _ownsHeaderVisualController;
   late final BalancePresentationController _balancePresentationSettings;
+  late final DashboardPresentationPreferencesController
+  _dashboardPresentationPreferences;
+  late final bool _ownsDashboardPresentationPreferences;
   late final DashboardBalanceHeaderColorPolicy _balanceHeaderColorPolicy;
   late final DashboardBudgetHeaderColorPolicy _budgetHeaderColorPolicy;
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
@@ -168,6 +175,7 @@ class _CoreDashboardState extends State<CoreDashboard>
   double _devicePixelRatio = 1;
   int? _lastMindRangeDiagnosticSignature;
   bool _mindAmountInteractionActive = false;
+  bool _applyingDashboardPresentationPreferences = false;
   int? _lastLayerStackDiagnosticSignature;
   late FluviGlobalAppearance _globalAppearance;
   late SummaryPillVariant _lastSummaryPillVariant;
@@ -265,6 +273,26 @@ class _CoreDashboardState extends State<CoreDashboard>
     _globalAppearance = _headerVisualController.tuning.value.globalAppearance;
     _headerVisualController.tuning.addListener(_onGlobalAppearanceChanged);
     _balancePresentationSettings = BalancePresentationController();
+    final suppliedDashboardPresentationPreferences =
+        widget.dashboardPresentationPreferences;
+    _ownsDashboardPresentationPreferences =
+        suppliedDashboardPresentationPreferences == null;
+    _dashboardPresentationPreferences =
+        suppliedDashboardPresentationPreferences ??
+        DashboardPresentationPreferencesController(
+          store: InMemoryDashboardPresentationPreferencesStore(),
+        );
+    controller.mindYearHeatmapPresentation.addListener(
+      _persistDashboardPresentationPreferences,
+    );
+    _balancePresentationSettings.addListener(
+      _persistDashboardPresentationPreferences,
+    );
+    _dashboardPresentationPreferences.addListener(
+      _applyDashboardPresentationPreferences,
+    );
+    unawaited(_dashboardPresentationPreferences.restore());
+    _applyDashboardPresentationPreferences();
     _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
     );
@@ -472,6 +500,37 @@ class _CoreDashboardState extends State<CoreDashboard>
     controller.setMotionLaneActive(
       DashboardMotionLane.summaryText,
       _summaryMotionController.stagedText.isAxisMotionActive,
+    );
+  }
+
+  void _applyDashboardPresentationPreferences() {
+    if (!mounted) return;
+    final restored = _dashboardPresentationPreferences.value;
+    _applyingDashboardPresentationPreferences = true;
+    try {
+      controller.mindYearHeatmapPresentation
+        ..setSumVisualStyle(restored.sumVisualStyle)
+        ..setShowSumLayoutChooser(restored.showSumLayoutChooser)
+        ..setShowYearMotherCardActions(restored.showYearMotherCardActions);
+      _balancePresentationSettings.setUsesChildCards(
+        restored.balanceUsesChildCards,
+      );
+    } finally {
+      _applyingDashboardPresentationPreferences = false;
+    }
+  }
+
+  void _persistDashboardPresentationPreferences() {
+    if (_applyingDashboardPresentationPreferences) return;
+    final mind = controller.mindYearHeatmapPresentation.value;
+    final balance = _balancePresentationSettings.value;
+    _dashboardPresentationPreferences.setPreferences(
+      DashboardPresentationPreferences(
+        sumVisualStyle: mind.sumVisualStyle,
+        showSumLayoutChooser: mind.showSumLayoutChooser,
+        showYearMotherCardActions: mind.showYearMotherCardActions,
+        balanceUsesChildCards: balance.usesChildCards,
+      ),
     );
   }
 
@@ -742,6 +801,18 @@ class _CoreDashboardState extends State<CoreDashboard>
     _headerVisualController.tuning.removeListener(_onGlobalAppearanceChanged);
     if (_ownsHeaderVisualController) {
       _headerVisualController.dispose();
+    }
+    controller.mindYearHeatmapPresentation.removeListener(
+      _persistDashboardPresentationPreferences,
+    );
+    _balancePresentationSettings.removeListener(
+      _persistDashboardPresentationPreferences,
+    );
+    _dashboardPresentationPreferences.removeListener(
+      _applyDashboardPresentationPreferences,
+    );
+    if (_ownsDashboardPresentationPreferences) {
+      _dashboardPresentationPreferences.dispose();
     }
     _balancePresentationSettings.dispose();
     _budgetPresentation.dispose();

@@ -58,6 +58,9 @@ void main() {
         controller.value.sumMonthLabelPlacement,
         MindSumMonthLabelPlacement.none,
       );
+      expect(controller.value.sumVisualStyle, MindSumVisualStyle.current);
+      expect(controller.value.showSumLayoutChooser, isTrue);
+      expect(controller.value.showYearMotherCardActions, isTrue);
       expect(controller.value.revision, 0);
     });
 
@@ -71,13 +74,19 @@ void main() {
       controller.setSumMonthLabelPlacement(
         MindSumMonthLabelPlacement.insideMonthCells,
       );
+      controller.setSumVisualStyle(MindSumVisualStyle.sumB);
+      controller.setShowSumLayoutChooser(false);
+      controller.setShowYearMotherCardActions(false);
 
-      expect(controller.value.revision, 4);
+      expect(controller.value.revision, 7);
       expect(controller.value.paletteStyle, MindYearHeatmapPaletteStyle.b3mMy3);
       expect(
         controller.value.scaleResolution,
         MindHeatmapScaleResolution.twenty,
       );
+      expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumB);
+      expect(controller.value.showSumLayoutChooser, isFalse);
+      expect(controller.value.showYearMotherCardActions, isFalse);
     });
 
     test(
