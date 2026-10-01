@@ -89,24 +89,24 @@ ScrollPosition identities and physics remain untouched.
 
 | ID | Requirement / source | Intended owner | Acceptance / verification | Status |
 | --- | --- | --- | --- | --- |
-| DIST-01 | Remove Partner Spending Rhythm renderer/footer in SUM/Year/Month/Day | Partner distribution page | no footer, placeholder, divider gap or reserved lane | NOT DONE |
-| DIST-02 | Preserve non-Partner Rhythm consumers | ownership audit | no accidental rhythm data removal | NOT DONE |
-| DIST-03 | Partner and Category donut bounds are equal under identical Card2 constraints | shared distribution surface | RenderBox left/top/width/height parity | NOT DONE |
-| DIST-04 | No Partner-specific geometry magic layout | shared geometry | one common surface contract | NOT DONE |
-| DIST-05 | Pie heading and list heading/selector occupy one shared title row | shared page surface | aligned with body columns | NOT DONE |
-| DIST-06 | Compact/normal, unified/split, SUM/Year/Month/Day layouts have no overflow/blank lane | distribution test matrix | mounted layout coverage | NOT DONE |
-| RANK-01 | Compact `Részesedés` / `Tranzakciószám` selector for Category and Partner lists | stable Card2 presentation owner | share default; survives rebuild/rebase | NOT DONE |
-| RANK-02 | Selector is immediate presentation-only state | ranking owner | no Query/filter/avatar/focus/page/controller mutation or async work | NOT DONE |
-| RANK-03 | Share ranking: exact amount descending, stable tie; percent trailing metric | immutable list projection | current behavior retained | NOT DONE |
-| RANK-04 | Count ranking: exact scoped Category/Partner transaction counts including Day and selected Category target | prepared-data projector | real count, not buckets/active days | NOT DONE |
-| RANK-05 | Count tie-break: count, amount, stable identity; integer trailing value | trailing metric model | no percent in count mode | NOT DONE |
-| RANK-06 | Pie remains monetary share regardless of list ranking | visual bank/interaction mapping | unchanged slices and stable target identity | NOT DONE |
-| COUNT-01 | Audit an existing exact count authority before adding one | prepared Budget graph | documented provenance | NOT DONE |
-| COUNT-02 | If needed, add `COUNT(*)` beside existing bounded sum acquisition, not a second query | native snapshot/bridge | no per-selector acquisition | NOT DONE |
-| COUNT-03 | Counts survive native, binary, Dart and projector boundaries | codec models | aggregate/category/partner/category-partner/Day round trips | NOT DONE |
-| COUNT-04 | Ranking availability does not increase SQL call count | native/performance test | before/after bound proof | NOT DONE |
-| RANK-07 | Legend trailing metric is semantically typed | shared legend row | percent/count cannot be confused | NOT DONE |
-| RANK-08 | Selector tap performs no resident revision acquisition work | ranking performance test | zero repo/index/scene/SQL/query work | NOT DONE |
+| DIST-01 | Remove Partner Spending Rhythm renderer/footer in SUM/Year/Month/Day | Partner distribution page | no footer, placeholder, divider gap or reserved lane | DONE |
+| DIST-02 | Preserve non-Partner Rhythm consumers | ownership audit | no accidental rhythm data removal | DONE |
+| DIST-03 | Partner and Category donut bounds are equal under identical Card2 constraints | shared distribution surface | RenderBox left/top/width/height parity | DONE |
+| DIST-04 | No Partner-specific geometry magic layout | shared geometry | one common surface contract | DONE |
+| DIST-05 | Pie heading and list heading/selector occupy one shared title row | shared page surface | aligned with body columns | DONE |
+| DIST-06 | Compact/normal, unified/split, SUM/Year/Month/Day layouts have no overflow/blank lane | distribution test matrix | mounted layout coverage | DONE |
+| RANK-01 | Compact `Részesedés` / `Tranzakciószám` selector for Category and Partner lists | stable Card2 presentation owner | share default; survives rebuild/rebase | DONE |
+| RANK-02 | Selector is immediate presentation-only state | ranking owner | no Query/filter/avatar/focus/page/controller mutation or async work | DONE |
+| RANK-03 | Share ranking: exact amount descending, stable tie; percent trailing metric | immutable list projection | current behavior retained | DONE |
+| RANK-04 | Count ranking: exact scoped Category/Partner transaction counts including Day and selected Category target | prepared-data projector | real count, not buckets/active days | DONE |
+| RANK-05 | Count tie-break: count, amount, stable identity; integer trailing value | trailing metric model | no percent in count mode | DONE |
+| RANK-06 | Pie remains monetary share regardless of list ranking | visual bank/interaction mapping | unchanged slices and stable target identity | DONE |
+| COUNT-01 | Audit an existing exact count authority before adding one | prepared Budget graph | documented provenance | DONE |
+| COUNT-02 | If needed, add `COUNT(*)` beside existing bounded sum acquisition, not a second query | native snapshot/bridge | no per-selector acquisition | DONE |
+| COUNT-03 | Counts survive native, binary, Dart and projector boundaries | codec models | aggregate/category/partner/category-partner/Day round trips | DONE |
+| COUNT-04 | Ranking availability does not increase SQL call count | native/performance test | before/after bound proof | DONE |
+| RANK-07 | Legend trailing metric is semantically typed | shared legend row | percent/count cannot be confused | DONE |
+| RANK-08 | Selector tap performs no resident revision acquisition work | ranking performance test | zero repo/index/scene/SQL/query work | DONE |
 
 ## Current Mind/SUM observations — preserved in user-provided order
 
@@ -116,18 +116,18 @@ ScrollPosition identities and physics remain untouched.
 | OBS-02 | Remove the unusable static red/pink SUM rail and the resulting false lower-card/nested-card bottom; retain only the functional canonical green amount control | SUM reference surface + Mind content composition | reference renderer has no decorative rail; integration screenshot with the canonical control remains | PARTIAL |
 | OBS-03 | SUM year identity cards at the left edge respond to the same live range/intensity colouring as the month cells | common SUM intensity/token resolver | frame-driven year identity intensity implemented; interactive proof remains | PARTIAL |
 | OBS-04 | Add a Mind Day All-vs-slider double heatmap page identical in composition to `napiheatmap.png`: hourly full background plus selected foreground | resident Day frame projection + Day renderer/view selector | resident pure 24-hour full/selected projection and native renderer pass focused tests; final source screenshot match and canonical-slider composition remain | PARTIAL |
-| OBS-05 | Build only from correct Balance base `99f112ad…`, retaining its dashboard-style unified Balance mother card and four selectable child cards | integration/branch discipline | final SHA descends from `99f112ad…`; Balance regression proves four-card live content is retained | NOT DONE |
+| OBS-05 | Build only from correct Balance base `99f112ad…`, retaining its dashboard-style unified Balance mother card and four selectable child cards | integration/branch discipline | final SHA descends from `99f112ad…`; Balance regression proves four-card live content is retained | DONE |
 
 ## Protected invariants and final delivery
 
 | ID | Requirement / source | Intended owner | Acceptance / verification | Status |
 | --- | --- | --- | --- | --- |
-| SAFE-01 | Preserve protected physical interaction floor `6e962…` | all touched code | Avatar/Time/PageView identities, positions and physics unchanged | NOT DONE |
-| SAFE-02 | No Balance/Mind/Budget cross-regression outside stated scope | scope review + protected tests | exact diff/boundary suite | NOT DONE |
-| TEST-01 | Red tests precede each behavior family | tests | observed meaningful RED then GREEN | NOT DONE |
-| TEST-02 | Focused tests, format, analysis, diff and source-reference visual checks | validation | exact results recorded honestly | NOT DONE |
-| REL-01 | One integrated application commit contains every delivered prior and current feature requirement and descends from `99f112ad…` | git | no unrelated user files | NOT DONE |
-| REL-02 | One final online Human Diagnostic build after all implementation only | GitHub Actions | exact application SHA workflow clean or honestly classified | NOT DONE |
-| REL-03 | Download the final Human APK to `/storage/emulated/0/Download/fluvi`, verify SHA-256 and embedded commit | delivery | APK is exact final SHA | NOT DONE |
-| REL-04 | Append factual journal evidence separately with `[skip ci]` after app evidence | journal | physical validation remains USER ONLY | NOT DONE |
-| REL-05 | Completion report distinguishes proven/unproven and records final git state | final handoff | no unfinished requirement claimed complete | NOT DONE |
+| SAFE-01 | Preserve protected physical interaction floor `6e962…` | all touched code | Avatar/Time/PageView identities, positions and physics unchanged | PARTIAL |
+| SAFE-02 | No Balance/Mind/Budget cross-regression outside stated scope | scope review + protected tests | exact diff/boundary suite | PARTIAL |
+| TEST-01 | Red tests precede each behavior family | tests | observed meaningful RED then GREEN | DONE |
+| TEST-02 | Focused tests, format, analysis, diff and source-reference visual checks | validation | exact results recorded honestly | PARTIAL |
+| REL-01 | One integrated application commit contains every delivered prior and current feature requirement and descends from `99f112ad…` | git | no unrelated user files | DONE |
+| REL-02 | One final online Human Diagnostic build after all implementation only | GitHub Actions | exact application SHA workflow clean or honestly classified | DONE |
+| REL-03 | Download the final Human APK to `/storage/emulated/0/Download/fluvi`, verify SHA-256 and embedded commit | delivery | APK is exact final SHA | DONE |
+| REL-04 | Append factual journal evidence separately with `[skip ci]` after app evidence | journal | physical validation remains USER ONLY | DONE |
+| REL-05 | Completion report distinguishes proven/unproven and records final git state | final handoff | no unfinished requirement claimed complete | DONE |
