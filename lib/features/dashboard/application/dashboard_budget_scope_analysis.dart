@@ -143,8 +143,9 @@ final class DashboardBudgetDayAllowanceAnalysis {
       throw ArgumentError('Budget actuals cannot be negative.');
     }
     final isFuture = _compare(selectedDay, logicalAsOfDate) > 0;
-    if (isFuture)
+    if (isFuture) {
       return const DashboardBudgetDayAllowanceAnalysis.unavailable();
+    }
     final limit = monthlyLimitScaled100;
     final daysInMonth = DateTime.utc(
       selectedDay.year,

@@ -11,6 +11,7 @@ import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membersh
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_dashboard_index.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_presentation_frame.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 
 /// Only the external data seam is synthetic. Production index/focus/cache,
@@ -199,12 +200,60 @@ final class AvatarTargetLivenessRepository
                 ),
           ],
         );
+    PreparedSpendingRhythmDirectionBank rhythmBank(bool expense) {
+      final targetOffsets = <int>[0];
+      final epochDays = <int>[];
+      final dailyActualScaled100 = <int>[];
+      final dailyTransactionCount = <int>[];
+      final dayPartActualScaled100 = <int>[];
+
+      void appendTarget(Iterable<DashboardLedgerEntry> targetRows) {
+        final entries = expense
+            ? targetRows.toList(growable: false)
+            : const <DashboardLedgerEntry>[];
+        if (entries.isNotEmpty) {
+          final actual = entries.fold<int>(
+            0,
+            (total, entry) => total + entry.amountMinor,
+          );
+          epochDays.add(entries.first.bookedLocalEpochDay);
+          dailyActualScaled100.add(actual);
+          dailyTransactionCount.add(entries.length);
+          dayPartActualScaled100.addAll(<int>[
+            actual,
+            ...List<int>.filled(SpendingRhythmDayPart.bucketCount - 1, 0),
+          ]);
+        }
+        targetOffsets.add(epochDays.length);
+      }
+
+      appendTarget(rows);
+      for (var handle = 1; handle <= 8; handle += 1) {
+        appendTarget(
+          rows.where((row) => row.categoryId == 'avatar-category-$handle'),
+        );
+      }
+      return PreparedSpendingRhythmDirectionBank(
+        targetCount: 9,
+        targetOffsets: targetOffsets,
+        epochDays: epochDays,
+        dailyActualScaled100: dailyActualScaled100,
+        dailyTransactionCount: dailyTransactionCount,
+        dayPartActualScaled100: dayPartActualScaled100,
+      );
+    }
+
     return PreparedBudgetLimitSnapshot(
       coreRevision: coreRevision,
       yearWindowStart: yearWindowStart,
       yearWindowEndInclusive: yearWindowEndInclusive,
       incomeBank: bank(false),
       expenseBank: bank(true),
+      spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
+        coreRevision: coreRevision,
+        incomeBank: rhythmBank(false),
+        expenseBank: rhythmBank(true),
+      ),
     );
   }
 
