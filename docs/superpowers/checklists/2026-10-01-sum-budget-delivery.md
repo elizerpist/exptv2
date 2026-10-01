@@ -101,7 +101,7 @@ physics, Query and selected-target owners remain unchanged.
 | TEST-01 | RED tests before each production behavior family | tests | DAY, DIST, RANK, COUNT old behavior shown failing before implementation | DONE |
 | TEST-02 | Focused/local/protected test, format, analysis and diff gates | project tests | commands/results recorded honestly | DONE |
 | VIS-01 | Visual verification for SUM-A/SUM-B and changed Budget cards | golden/screenshot evidence | reference inspection + production screenshots/RenderBox proofs | DONE |
-| REL-01 | Commit discipline | git | logically separated application commits if native contract change; no unrelated dirty files included | NOT DONE |
-| REL-02 | Push, exact GitHub Actions audit and human APK download | CI/release | final SHA build, normal human APK in `/storage/emulated/0/Download/fluvi`, SHA-256 and embedded identity verified | NOT DONE |
-| REL-03 | Separate factual journal update | engineering journal | `[skip ci]` journal-only commit after evidence, physical validation marked user-only | NOT DONE |
-| REL-04 | Final report | completion | required preflight/provenance/formula/geometry/ranking/tests/CI/APK/final-state sections | NOT DONE |
+| REL-01 | Commit discipline | git | `d40df643...` prepared-data contract followed by `c52f7a68...` presentation/settings; no unrelated dirty files included | DONE |
+| REL-02 | Push, exact GitHub Actions audit and human APK download | CI/release | `c52f7a68...` pushed; Actions `36794717003` audited; normal human APK downloaded, SHA-256 and embedded identity verified | DONE |
+| REL-03 | Separate factual journal update | engineering journal | `[skip ci]` journal-only commit after evidence, physical validation marked user-only | DONE |
+| REL-04 | Final report | completion | preflight/provenance/formula/geometry/ranking/tests/CI/APK/final-state report supplied; inherited profile gate explicitly classified | DONE |
