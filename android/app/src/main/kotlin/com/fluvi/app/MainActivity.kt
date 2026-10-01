@@ -52,6 +52,7 @@ class MainActivity : FlutterActivity() {
     private var queryTaskQueue: BinaryMessenger.TaskQueue? = null
     private var queryMenuChannel: MethodChannel? = null
     private var demoChannel: MethodChannel? = null
+    private var dashboardPresentationChannel: MethodChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -240,6 +241,48 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        dashboardPresentationChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DASHBOARD_PRESENTATION_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                val preferences = getSharedPreferences(
+                    DASHBOARD_PRESENTATION_PREFERENCES,
+                    MODE_PRIVATE,
+                )
+                when (call.method) {
+                    "readDashboardPresentationSettings" -> result.success(
+                        mapOf(
+                            "sumVisualStyle" to preferences.getInt("sumVisualStyle", 0),
+                            "showSumLayoutChooser" to preferences.getBoolean("showSumLayoutChooser", true),
+                            "showYearMotherCardActions" to preferences.getBoolean("showYearMotherCardActions", true),
+                            "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
+                        ),
+                    )
+                    "writeDashboardPresentationSettings" -> {
+                        val values = call.arguments as? Map<*, *>
+                            ?: throw IllegalArgumentException("Dashboard presentation settings must be a map.")
+                        val sumStyle = (values["sumVisualStyle"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing SUM visual style.")
+                        require(sumStyle in 0..2) { "Invalid SUM visual style." }
+                        val sumChooser = values["showSumLayoutChooser"] as? Boolean
+                            ?: throw IllegalArgumentException("Missing SUM layout chooser visibility.")
+                        val yearActions = values["showYearMotherCardActions"] as? Boolean
+                            ?: throw IllegalArgumentException("Missing Year action visibility.")
+                        val balanceChildren = values["balanceUsesChildCards"] as? Boolean
+                            ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
+                        preferences.edit()
+                            .putInt("sumVisualStyle", sumStyle)
+                            .putBoolean("showSumLayoutChooser", sumChooser)
+                            .putBoolean("showYearMotherCardActions", yearActions)
+                            .putBoolean("balanceUsesChildCards", balanceChildren)
+                            .apply()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
@@ -285,6 +328,8 @@ class MainActivity : FlutterActivity() {
         queryTaskQueue = null
         demoChannel?.setMethodCallHandler(null)
         demoChannel = null
+        dashboardPresentationChannel?.setMethodCallHandler(null)
+        dashboardPresentationChannel = null
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)
@@ -1023,6 +1068,8 @@ class MainActivity : FlutterActivity() {
         const val QUERY_CHANNEL = "com.fluvi/dashboard_query"
         const val QUERY_MENU_CHANNEL = "com.fluvi/query_menu"
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
+        const val DASHBOARD_PRESENTATION_CHANNEL = "fluvi/dashboard_presentation"
+        const val DASHBOARD_PRESENTATION_PREFERENCES = "dashboard_presentation"
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"
         const val DIAGNOSTIC_CHANNEL = "com.fluvi/diagnostics"

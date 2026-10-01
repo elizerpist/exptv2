@@ -109,6 +109,22 @@ void main() {
       expect(controller.value.revision, 0);
     });
 
+    test(
+      'SUM-VARIANT-01 RED: Current, SUM-A and SUM-B are one local presentation preference',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        expect(controller.value.sumVisualStyle, MindSumVisualStyle.current);
+        controller.setSumVisualStyle(MindSumVisualStyle.sumA);
+        expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumA);
+        expect(controller.value.revision, 1);
+        controller.setSumVisualStyle(MindSumVisualStyle.sumB);
+        expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumB);
+        expect(controller.value.revision, 2);
+      },
+    );
+
     test('each independent presentation preference advances one revision', () {
       final controller = MindYearHeatmapPresentationController();
       addTearDown(controller.dispose);

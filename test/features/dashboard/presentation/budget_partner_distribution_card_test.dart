@@ -3,19 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
-import 'package:fluvi/core/diagnostics/fluvi_diagnostic_logger.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_presentation_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_ephemeral_focus_controller.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_spending_rhythm_controller.dart';
 import 'package:fluvi/features/dashboard/application/transaction_direction_controller.dart';
 import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewport_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_partner_distribution_visual_bank.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/spending_rhythm_bar_chart.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
@@ -28,53 +24,6 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart'
 import 'package:fluvi/features/dashboard/visible/domain/dashboard_visible_frame.dart';
 
 void main() {
-  test(
-    'RG-G7: reference Card2 allocations conserve the envelope while scaling the current plot exactly 1.10x',
-    () {
-      const nonPlot =
-          SpendingRhythmBarChart.titleLaneHeight +
-          SpendingRhythmBarChart.titleToPlotGap +
-          SpendingRhythmBarChart.plotToAxisGap +
-          SpendingRhythmBarChart.axisLaneHeight;
-      for (final height in <double>[208, 217]) {
-        final layout = BudgetPartnerDistributionLayout.resolve(
-          availableSize: Size(378, height),
-        );
-        final content =
-            height -
-            BudgetDistributionPageSurface.outerPadding * 2 -
-            BudgetDistributionPageSurface.headingHeight;
-        final currentHeadPlot =
-            (content -
-                    BudgetPartnerDistributionLayout.dividerGap -
-                    BudgetPartnerDistributionLayout.preferredDonutDiameter -
-                    nonPlot)
-                .clamp(35.2, 44.0)
-                .toDouble();
-        final currentHeadUpper =
-            content -
-            BudgetPartnerDistributionLayout.dividerGap -
-            nonPlot -
-            currentHeadPlot;
-
-        expect(layout.plotLaneHeight, closeTo(currentHeadPlot * 1.10, .000001));
-        expect(
-          layout.upperSectionHeight,
-          closeTo(
-            currentHeadUpper - (layout.plotLaneHeight - currentHeadPlot),
-            .000001,
-          ),
-        );
-        expect(
-          layout.upperSectionHeight +
-              BudgetPartnerDistributionLayout.dividerGap +
-              layout.rhythmFooterHeight,
-          closeTo(content, .000001),
-        );
-      }
-    },
-  );
-
   testWidgets(
     'Partner list paints pending selection before focus acknowledgement',
     (tester) async {
@@ -207,7 +156,7 @@ void main() {
     );
   });
 
-  testWidgets('Partner donut is exactly 90 percent of its current 150px slot', (
+  testWidgets('Partner donut uses the shared 150px Category geometry', (
     tester,
   ) async {
     final harness = _PartnerCardHarness();
@@ -218,173 +167,36 @@ void main() {
           Future<bool>.value(true),
     );
 
-    final donut = find.byKey(const ValueKey('budget-distribution-donut-135'));
+    final donut = find.byKey(const ValueKey('budget-distribution-donut-150'));
     expect(donut, findsOneWidget);
-    expect(tester.getRect(donut).width, 135);
-    expect(tester.getRect(donut).height, 135);
+    expect(tester.getRect(donut).width, 150);
+    expect(tester.getRect(donut).height, 150);
   });
 
   testWidgets(
-    'RG-G7: Partner layout gives Rhythm another exact ten percent plot height while '
-    'reclaiming the same delta from the chart region',
-    (tester) async {
-      final harness = _PartnerCardHarness();
-      addTearDown(harness.dispose);
-      await harness.pump(
-        tester,
-        height: 300,
-        includeRhythm: true,
-        onCommit:
-            ({required partner, required source, required targetHandle}) =>
-                Future<bool>.value(true),
-      );
-
-      final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
-      final donut = find.byKey(const ValueKey('budget-distribution-donut-120'));
-      expect(plot, findsOneWidget);
-      expect(tester.getSize(plot).height, closeTo(48.4, .000001));
-      expect(donut, findsOneWidget);
-      expect(tester.getSize(donut).height, 120);
-      expect(
-        tester
-            .getSize(
-              find.byKey(const ValueKey('partner-spending-rhythm-chart')),
-            )
-            .height,
-        closeTo(70.4, .000001),
-      );
-    },
-  );
-
-  testWidgets(
-    'Partner layout reclaims the upper Partner region for the 48.4dp Rhythm plot in the '
-    '217dp reference Card2',
+    'Partner Card2 never mounts or reserves a Spending Rhythm footer',
     (tester) async {
       final harness = _PartnerCardHarness();
       addTearDown(harness.dispose);
       await harness.pump(
         tester,
         height: 217,
-        includeRhythm: true,
         onCommit:
             ({required partner, required source, required targetHandle}) =>
                 Future<bool>.value(true),
       );
 
-      expect(
-        tester
-            .getSize(find.byKey(const ValueKey('spending-rhythm-plot-lane')))
-            .height,
-        closeTo(48.4, .000001),
-      );
-      expect(
-        find.byKey(const ValueKey('budget-distribution-donut-101')),
-        findsOneWidget,
-        reason:
-            'The unchanged reference Card2 transfers the exact 4.4dp delta '
-            'from the upper Partner region to the Rhythm plot lane.',
-      );
-    },
-  );
-
-  testWidgets(
-    'Partner layout keeps the real Rhythm plot above its 38.72dp floor in a '
-    'shorter Card2 viewport without changing outer-card geometry',
-    (tester) async {
-      final harness = _PartnerCardHarness();
-      addTearDown(harness.dispose);
-      await harness.pump(
-        tester,
-        height: 190,
-        includeRhythm: true,
-        onCommit:
-            ({required partner, required source, required targetHandle}) =>
-                Future<bool>.value(true),
-      );
-
-      final plot = find.byKey(const ValueKey('spending-rhythm-plot-lane'));
-      expect(plot, findsOneWidget);
-      expect(tester.getSize(plot).height, greaterThanOrEqualTo(38.72));
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'Rhythm slot records its real ready/unavailable owner and contributes it to a bug marker',
-    (tester) async {
-      FluviDiagnosticLogger.clear();
-      final harness = _PartnerCardHarness();
-      addTearDown(harness.dispose);
-      await harness.pump(
-        tester,
-        height: 217,
-        includeRhythm: true,
-        onCommit:
-            ({required partner, required source, required targetHandle}) =>
-                Future<bool>.value(true),
-      );
-      await tester.pump();
-
-      expect(
-        find.byKey(const ValueKey('partner-spending-rhythm-chart')),
-        findsOneWidget,
-      );
-      final ready = FluviDiagnosticLogger.entries.lastWhere(
-        (event) => event.stage == 'RHYTHM|SLOT_STATE',
-      );
-      expect(ready.scope, contains('state=ready'));
-      expect(ready.scope, contains('renderer=SpendingRhythmBarChart'));
-      expect(ready.scope, contains('globalBounds='));
-      expect(ready.scope, contains('paintBounds='));
-      expect(ready.scope, contains('background=transparent'));
-      expect(ready.scope, contains('barCount=8'));
-
-      final readyEventCount = FluviDiagnosticLogger.entries
-          .where((event) => event.stage == 'RHYTHM|SLOT_STATE')
-          .length;
-      await tester.pump();
-      expect(
-        FluviDiagnosticLogger.entries
-            .where((event) => event.stage == 'RHYTHM|SLOT_STATE')
-            .length,
-        readyEventCount,
-        reason: 'Unchanged layout frames must not flood the rolling tail.',
-      );
-
-      harness.rhythm.value = null;
-      await tester.pump();
-      await tester.pump();
-
-      expect(
-        find.byKey(const ValueKey('partner-spending-rhythm-unavailable')),
-        findsOneWidget,
-      );
       expect(
         find.byKey(const ValueKey('partner-spending-rhythm-chart')),
         findsNothing,
       );
-      final unavailable = FluviDiagnosticLogger.entries.lastWhere(
-        (event) => event.stage == 'RHYTHM|SLOT_STATE',
-      );
-      expect(unavailable.scope, contains('state=rhythmUnavailable'));
-      expect(unavailable.scope, contains('renderer=transparentEmptySlot'));
-      expect(unavailable.scope, contains('background=transparent'));
-
-      FluviDiagnosticLogger.markUserBug('gray_rectangle');
-      final marker = FluviDiagnosticLogger.entries.last;
-      expect(marker.stage, 'USER_MARK');
-      expect(marker.scope, contains('issue=gray_rectangle'));
-      expect(marker.scope, contains('.state=rhythmUnavailable'));
-      expect(marker.scope, contains('.renderer=transparentEmptySlot'));
-      expect(marker.scope, contains('.globalBounds='));
-
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-      FluviDiagnosticLogger.markUserBug('other');
       expect(
-        FluviDiagnosticLogger.entries.last.scope,
-        isNot(contains('rhythmSlot.')),
-        reason: 'Disposed pages must not retain marker context providers.',
+        find.byKey(const ValueKey('spending-rhythm-plot-lane')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('budget-distribution-donut-150')),
+        findsOneWidget,
       );
     },
   );
@@ -437,68 +249,10 @@ final class _PartnerCardHarness {
       DashboardEphemeralFocusController();
   late final DashboardBudgetPresentationController presentation;
   late final ValueNotifier<DashboardBudgetDistributionDrawableFrame?> drawables;
-  final ValueNotifier<DashboardSpendingRhythmState?> rhythm =
-      ValueNotifier<DashboardSpendingRhythmState?>(
-        DashboardSpendingRhythmState(
-          analysis: DaySpendingRhythm(
-            coreRevision: 7,
-            direction: LedgerDirection.expense,
-            targetHandle: 0,
-            scope: const DayScope(LocalDate(year: 2026, month: 7, day: 1)),
-            buckets: const <SpendingRhythmBucket>[
-              SpendingRhythmBucket(
-                label: '0',
-                accessibilityLabel: 'Éjfél',
-                actualScaled100: 10,
-              ),
-              SpendingRhythmBucket(
-                label: '3',
-                accessibilityLabel: 'Hajnal',
-                actualScaled100: 20,
-              ),
-              SpendingRhythmBucket(
-                label: '6',
-                accessibilityLabel: 'Reggel',
-                actualScaled100: 5,
-              ),
-              SpendingRhythmBucket(
-                label: '9',
-                accessibilityLabel: 'Délelőtt',
-                actualScaled100: 0,
-              ),
-              SpendingRhythmBucket(
-                label: '12',
-                accessibilityLabel: 'Kora délután',
-                actualScaled100: 0,
-              ),
-              SpendingRhythmBucket(
-                label: '15',
-                accessibilityLabel: 'Délután',
-                actualScaled100: 0,
-              ),
-              SpendingRhythmBucket(
-                label: '18',
-                accessibilityLabel: 'Este',
-                actualScaled100: 0,
-              ),
-              SpendingRhythmBucket(
-                label: '21',
-                accessibilityLabel: 'Késő este',
-                actualScaled100: 0,
-              ),
-            ],
-          ),
-          startColorArgb: 0xffaa00ff,
-          middleColorArgb: 0xffbb00ff,
-          endColorArgb: 0xffcc00ff,
-        ),
-      );
-
   Future<void> pump(
     WidgetTester tester, {
     required BudgetPartnerFocusCommit onCommit,
     double height = 208,
-    bool includeRhythm = false,
   }) => tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -511,7 +265,6 @@ final class _PartnerCardHarness {
               drawableFrames: drawables,
               partnerFocusCommit: onCommit,
               focusController: focus,
-              rhythm: includeRhythm ? rhythm : null,
             ),
           ),
         ),
@@ -525,7 +278,6 @@ final class _PartnerCardHarness {
     visible.dispose();
     presentation.dispose();
     drawables.dispose();
-    rhythm.dispose();
   }
 }
 

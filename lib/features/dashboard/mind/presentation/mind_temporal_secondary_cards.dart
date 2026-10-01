@@ -12,6 +12,8 @@ import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_heatmap_palette_scope.dart';
+import 'mind_day_all_vs_slider_heatmap_card.dart';
+import 'mind_temporal_content_header.dart';
 
 /// Presentation-only Month secondary card. It renders the immutable daily
 /// range-preview points carried by [MindMonthHeatmapFrame]; neither a widget
@@ -548,16 +550,19 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
     required this.paletteStyle,
     required this.scaleResolution,
     this.timelineLayout = MindDayTimelineLayout.statsAndTimeline,
+    this.onHeatmapRequested,
   });
 
   final MindDayHeatmapFrame frame;
   final MindYearHeatmapPaletteStyle paletteStyle;
   final MindHeatmapScaleResolution scaleResolution;
   final MindDayTimelineLayout timelineLayout;
+  final VoidCallback? onHeatmapRequested;
 
   @override
   Widget build(BuildContext context) {
     final dynamicScale = MindHeatmapPaletteScope.maybeOf(context);
+    final range = MindDayRangeFooterScope.maybeRangeOf(context);
     final markerColor = MindYearHeatmapPaletteResolver.resolveTile(
       style: paletteStyle,
       isEmpty: false,
@@ -568,42 +573,22 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
     ).background;
     final timelineOnly = timelineLayout == MindDayTimelineLayout.timelineOnly;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(
-                child: Text(
-                  'Napi tranzakciók idővonala',
-                  style: TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
+          MindTemporalContentHeader(
+            title: 'Napi aktivitás',
+            subtitle:
+                '${frame.date.year}. ${DashboardTimeLabelFormatter.monthName(frame.date.month)} ${frame.date.day}.',
+            titleKey: const ValueKey<String>('mind-day-timeline-title'),
+            subtitleKey: const ValueKey<String>('mind-day-timeline-period'),
+            trailing: onHeatmapRequested == null
+                ? null
+                : MindDayContentViewChooser(
+                    selected: MindDayContentView.timeline,
+                    onHeatmapRequested: onHeatmapRequested,
                   ),
-                ),
-              ),
-              if (timelineOnly)
-                Text(
-                  QueryMenuFormatters.money(frame.total),
-                  key: const ValueKey<String>(
-                    'mind-day-timeline-current-total',
-                  ),
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-            ],
-          ),
-          Text(
-            '${frame.date.year}. ${DashboardTimeLabelFormatter.monthName(frame.date.month)} ${frame.date.day}.',
-            style: const TextStyle(
-              color: FluviVisualTokens.textSecondary,
-              fontSize: 8,
-            ),
           ),
           const SizedBox(height: 4),
           Expanded(
@@ -683,6 +668,14 @@ final class MindDayTransactionTimelineCard extends StatelessWidget {
               },
             ),
           ),
+          if (range != null) ...<Widget>[
+            const SizedBox(height: 5),
+            SizedBox(
+              key: const ValueKey<String>('mind-day-timeline-range-footer'),
+              height: 68,
+              child: range,
+            ),
+          ],
         ],
       ),
     );

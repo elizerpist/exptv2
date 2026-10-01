@@ -1,8 +1,4 @@
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/core/categories/data/empty_category_repository.dart';
 import 'package:fluvi/core/categories/domain/fluvi_category.dart';
@@ -11,7 +7,6 @@ import 'package:fluvi/app/fluvi_app.dart';
 import 'package:fluvi/app/shell/bnb03_bottom_navigation.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
-import 'package:fluvi/core/design/fluvi_rounded_box.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -19,9 +14,9 @@ import 'package:fluvi/features/dashboard/motion/dashboard_motion_state.dart';
 import 'package:fluvi/features/dashboard/presentation/core_dashboard.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_shell_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_avatar_rail.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_tuner.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
-import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_page_surface.dart';
 import 'package:fluvi/features/dashboard/presentation/summary_pill_variant.dart';
 import 'package:fluvi/features/dashboard/presentation/dashboard_summary_presentation.dart';
 import 'package:fluvi/features/dashboard/presentation/widgets/summary_pill_experiments.dart';
@@ -584,16 +579,13 @@ void main() {
       expect(find.byType(BudgetDistributionCardShell), findsOneWidget);
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsOneWidget,
+        findsNothing,
         reason:
-            'G4: Card2 owns its physical shell independently of the parent '
-            'Budget composition style.',
+            'The default Budget composition owns Card2 material in the '
+            'unified parent rather than a duplicate nested shell.',
       );
       expect(
-        find.descendant(
-          of: find.byType(BudgetDistributionCardShell),
-          matching: find.byType(FluviRoundedBox),
-        ),
+        find.byKey(const ValueKey('budget-unified-header-content-surface')),
         findsOneWidget,
       );
       expect(
@@ -1240,7 +1232,7 @@ void main() {
   );
 
   testWidgets(
-    'Budget starts in the accepted Split composition with its one Card2 shell',
+    'Budget starts in the accepted unified composition with one Card2 owner',
     (tester) async {
       final controller = DashboardCoreController(initialCoreRevision: 1);
       addTearDown(controller.dispose);
@@ -1257,11 +1249,11 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('budget-distribution-card-shell')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey('budget-unified-header-content-surface')),
-        findsNothing,
+        findsOneWidget,
       );
     },
   );
@@ -1323,7 +1315,7 @@ void main() {
       expect(viewportProbe.scope, contains('globalBounds='));
       expect(viewportProbe.scope, contains('paintBounds='));
       expect(viewportProbe.scope, contains('clip=ClipRRect'));
-      expect(viewportProbe.scope, contains('surfaceOwner=splitCard2'));
+      expect(viewportProbe.scope, contains('surfaceOwner=unifiedParent'));
 
       final logBoxProbe = FluviDiagnosticLogger.entries.lastWhere(
         (entry) =>
@@ -1348,7 +1340,7 @@ void main() {
   );
 
   testWidgets(
-    'G4 forensic proxy drives the real Partner Rhythm through every Dashboard collapse frame',
+    'Budget Partner Card2 removes Rhythm UI in the full Dashboard composition',
     (tester) async {
       final categories =
           ValueNotifier<List<FluviCategory>>(const <FluviCategory>[
@@ -1368,7 +1360,6 @@ void main() {
         initialDirection: LedgerDirection.expense,
         yearWindowRadius: 1,
       );
-      final boundaryKey = GlobalKey();
       addTearDown(categories.dispose);
       addTearDown(controller.dispose);
       await controller.bootstrap();
@@ -1382,43 +1373,16 @@ void main() {
         partnerDistributionSnapshot: _g4PartnerSnapshot(),
       );
 
-      FluviDiagnosticLogger.clear();
       await pumpDashboardSurface(
         tester,
-        RepaintBoundary(
-          key: boundaryKey,
-          child: CoreDashboard(
-            controller: controller,
-            modeController: _modeControllerFor(DashboardModeSpec.budget),
-            categoryCollection: categories,
-            initialSummaryPillVariant: SummaryPillVariant.legacy,
-          ),
+        CoreDashboard(
+          controller: controller,
+          modeController: _modeControllerFor(DashboardModeSpec.budget),
+          categoryCollection: categories,
+          initialSummaryPillVariant: SummaryPillVariant.legacy,
         ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      final rhythmStates = FluviDiagnosticLogger.entries
-          .where((entry) => entry.stage == 'SPENDING_RHYTHM|STATE')
-          .toList(growable: false);
-      expect(
-        rhythmStates,
-        isNotEmpty,
-        reason:
-            'G4 needs the real snapshot-to-footer state boundary. Without '
-            'this event a missing Rhythm body cannot be distinguished from a '
-            'clipped or overpainted one.',
-      );
-      expect(
-        rhythmStates.last.scope,
-        contains('availability=available'),
-        reason:
-            'The full Dashboard fixture provides a compatible prepared '
-            'snapshot, visible frame and selected target. If this is not '
-            'available, the lower Rhythm surface cannot be used to find the '
-            'grey pixel owner. state=${rhythmStates.last.scope}',
-      );
-
       await tester.drag(
         find.byKey(const ValueKey('budget-distribution-pager')),
         const Offset(-360, 0),
@@ -1426,16 +1390,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
-      final afterPagerRhythmState = FluviDiagnosticLogger.entries.lastWhere(
-        (entry) => entry.stage == 'SPENDING_RHYTHM|STATE',
-      );
-      expect(
-        afterPagerRhythmState.scope,
-        contains('availability=available'),
-        reason:
-            'A page transition may not clear the Partner footer input. '
-            'state=${afterPagerRhythmState.scope}',
-      );
+
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-card')),
         findsOneWidget,
@@ -1443,306 +1398,23 @@ void main() {
       expect(
         find.byKey(const ValueKey('budget-partner-distribution-preparing')),
         findsNothing,
-        reason:
-            'The real Partner page must be drawable before its footer can be '
-            'sampled for G4 provenance.',
       );
       expect(
         find.byKey(const ValueKey('partner-spending-rhythm-chart')),
-        findsOneWidget,
+        findsNothing,
         reason:
-            'This is a production-parent composition gate: a synthetic '
-            'Card2 without the Partner footer cannot prove the reported slab.',
+            'Partner Card2 must use the shared pie/list body only; Rhythm '
+            'remains available to its non-Partner consumers.',
       );
-
-      final lowerCard = find.byKey(
-        const ValueKey('dashboard-core-mode-budget-card-2'),
+      expect(find.text('Költési ritmus'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('spending-rhythm-track-1')),
+        findsNothing,
       );
-      final avatarRail = find.byKey(
-        const ValueKey('budget-target-avatar-rail'),
+      expect(
+        find.byKey(const ValueKey('spending-rhythm-track-2')),
+        findsNothing,
       );
-      final rhythm = find.byKey(
-        const ValueKey('partner-spending-rhythm-chart'),
-      );
-      final count = find.byKey(const ValueKey('dashboard-logbox-entry-count'));
-      final handle = find.byKey(const ValueKey('dashboard-collapse-handle'));
-      final transparentTrack = find.byKey(
-        const ValueKey('spending-rhythm-track-2'),
-      );
-      final previousTrack = find.byKey(
-        const ValueKey('spending-rhythm-track-1'),
-      );
-      final boundary = tester.renderObject<RenderRepaintBoundary>(
-        find.byKey(boundaryKey),
-      );
-      final observations = <_G4CollapseObservation>[];
-      final pager = find.byKey(const ValueKey('budget-distribution-pager'));
-      final pageViewBefore = tester.widget<PageView>(pager);
-
-      Future<void> assertNoSlabAcrossCollapse(
-        String topology, {
-        required bool chartFirst,
-      }) async {
-        observations.clear();
-        for (
-          var progress = 0.0;
-          progress <= controller.metrics.collapseTravel;
-          progress += 9
-        ) {
-          controller.expansion.setProgress(progress);
-          await tester.pump();
-          final cardBounds = tester.getRect(lowerCard);
-          final rhythmBounds = tester.getRect(rhythm);
-          final trackBounds = tester.getRect(transparentTrack);
-          final previousTrackBounds = tester.getRect(previousTrack);
-          final countBounds = tester.getRect(count);
-          final handleBounds = tester.getRect(handle);
-          // The centered 42x4 collapse affordance legitimately crosses the
-          // Rhythm lane at late collapse progress. Sample the lower-card
-          // material beside that authored control instead of treating the
-          // handle's own antialiased top edge or shadow as the reported slab.
-          // A slab with the device-observed rectangular extent still reaches
-          // this point, while an intended handle never does.
-          final centerAwayFromHandle = Offset(
-            rhythmBounds.left + rhythmBounds.width * .75,
-            rhythmBounds.center.dy,
-          );
-          final handleAdjacentRhythm = Offset(
-            (handleBounds.center.dx + 70)
-                .clamp(rhythmBounds.left + 1, rhythmBounds.right - 1)
-                .toDouble(),
-            trackBounds.center.dy,
-          );
-          final samplePoints = <String, Offset>{
-            'top': Offset(centerAwayFromHandle.dx, rhythmBounds.top + 1),
-            'middleAwayFromHandle': centerAwayFromHandle,
-            'bottom': Offset(centerAwayFromHandle.dx, rhythmBounds.bottom - 1),
-            'leftInset': Offset(rhythmBounds.left + 1, rhythmBounds.center.dy),
-            'rightInset': Offset(
-              rhythmBounds.right - 1,
-              rhythmBounds.center.dy,
-            ),
-            'barInterior': trackBounds.center,
-            'betweenBars': Offset(
-              (previousTrackBounds.right + trackBounds.left) / 2,
-              trackBounds.center.dy,
-            ),
-            // This is immediately beside the real handle, far enough beyond
-            // its 42dp bar and bounded blur that it cannot confuse the
-            // handle's intentional material with an exposed footer slab.
-            'handleAdjacentRhythm': handleAdjacentRhythm,
-          };
-          // Rendering a RepaintBoundary is comparatively expensive. One
-          // image per collapse geometry preserves eight spatial samples while
-          // keeping this forensic regression off the interaction hot path.
-          final samples = await _g4PixelsAt(tester, boundary, samplePoints);
-          observations.add(
-            _G4CollapseObservation(
-              progress: progress,
-              cardBounds: cardBounds,
-              rhythmBounds: rhythmBounds,
-              countBounds: countBounds,
-              handleBounds: handleBounds,
-              samples: samples,
-            ),
-          );
-
-          if (progress == 0) {
-            final avatarRailBounds = tester.getRect(avatarRail);
-            expect(
-              chartFirst
-                  ? cardBounds.top < avatarRailBounds.top
-                  : avatarRailBounds.top < cardBounds.top,
-              isTrue,
-              reason:
-                  '$topology must use the selected authored section order; '
-                  'otherwise a cached/off-screen tuner control could make '
-                  'this full-composition test a false green.',
-            );
-          }
-
-          expect(
-            cardBounds.overlaps(rhythmBounds),
-            isTrue,
-            reason:
-                '$topology Rhythm must remain inside its moving authored '
-                'Budget surface at progress=$progress.',
-          );
-          for (final entry in samples.entries) {
-            expect(
-              _isObservedPhysicalSlabColor(entry.value),
-              isFalse,
-              reason:
-                  '$topology must not expose the device-observed opaque '
-                  'neutral slab (#D3D4D5/#E1E2E4 families) at '
-                  'progress=$progress, '
-                  'sample=${entry.key}. samples=$observations',
-            );
-          }
-        }
-      }
-
-      Future<void> selectTunerOption(
-        Finder option,
-        ValueKey<String> sectionKey,
-      ) async {
-        await tester.tap(
-          find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
-        );
-        await tester.pump(const Duration(milliseconds: 300));
-        await tester.tap(find.byKey(sectionKey));
-        await tester.pump();
-        final scrollable = find.descendant(
-          of: find.byKey(
-            const ValueKey<String>('dashboard-header-visual-tuner-list'),
-          ),
-          matching: find.byType(Scrollable),
-        );
-        // Start each production interaction from the top of the panel. This
-        // makes every option selection an actual reachable-tuner path rather
-        // than a test-only controller mutation.
-        await tester.drag(scrollable, const Offset(0, 1200));
-        await tester.pump();
-        // ListView keeps a cache extent, so a finder becoming non-empty does
-        // not yet mean its center can receive a physical pointer. Advance the
-        // real scroll gesture until the complete RadioListTile is on screen;
-        // this deliberately does not rely on scrollUntilVisible's
-        // finder-exists shortcut.
-        var optionIsTouchTarget = false;
-        for (var attempt = 0; attempt < 20; attempt++) {
-          if (option.evaluate().isNotEmpty) {
-            final optionBounds = tester.getRect(option);
-            if (optionBounds.top >= 0 &&
-                optionBounds.bottom <= dashboardTestSurfaceSize.height) {
-              optionIsTouchTarget = true;
-              break;
-            }
-          }
-          await tester.drag(scrollable, const Offset(0, -240));
-          await tester.pump();
-        }
-        expect(
-          optionIsTouchTarget,
-          isTrue,
-          reason: 'The tuner option must become physically touchable.',
-        );
-        final optionBounds = tester.getRect(option);
-        expect(
-          optionBounds.top,
-          greaterThanOrEqualTo(0),
-          reason: 'The tuner option must be physically touchable.',
-        );
-        expect(
-          optionBounds.bottom,
-          lessThanOrEqualTo(dashboardTestSurfaceSize.height),
-          reason: 'The tuner option must be physically touchable.',
-        );
-        await tester.tap(option);
-        await tester.pump();
-        await tester.tap(
-          find.byKey(const ValueKey('dashboard-header-visual-tuner-button')),
-        );
-        await tester.pump(const Duration(milliseconds: 300));
-      }
-
-      void expectTopology({required bool unified, required String topology}) {
-        expect(
-          find.byKey(const ValueKey('budget-unified-header-content-surface')),
-          unified ? findsOneWidget : findsNothing,
-          reason:
-              '$topology must have exactly the physical surface selected by '
-              'the production Budget layout setting.',
-        );
-        expect(
-          find.byKey(const ValueKey('budget-distribution-card-shell')),
-          unified ? findsNothing : findsOneWidget,
-          reason:
-              '$topology must not retain the other layout\'s physical Card2 '
-              'surface.',
-        );
-        expect(
-          tester.widget<PageView>(pager).controller,
-          same(pageViewBefore.controller),
-          reason:
-              '$topology must not recreate the PageView controller or lose '
-              'the selected Partner page.',
-        );
-        expect(
-          find.byKey(const ValueKey('partner-spending-rhythm-chart')),
-          findsOneWidget,
-          reason: '$topology must retain the real Partner Rhythm footer.',
-        );
-      }
-
-      // Exercise all production-supported surface/order combinations. The
-      // lower Rhythm failure was observed only in the full moving composition,
-      // so each topology receives the same dense collapse samples.
-      expectTopology(unified: false, topology: 'Split avatars→chart');
-      await assertNoSlabAcrossCollapse(
-        'Split avatars→chart',
-        chartFirst: false,
-      );
-
-      await selectTunerOption(
-        find.byKey(
-          const ValueKey<String>(
-            'dashboard-budget-section-order-chartThenAvatars',
-          ),
-        ),
-        const ValueKey<String>(
-          'dashboard-header-tuner-section-budget-section-order',
-        ),
-      );
-      expectTopology(unified: false, topology: 'Split chart→avatars');
-      await assertNoSlabAcrossCollapse('Split chart→avatars', chartFirst: true);
-
-      await selectTunerOption(
-        find.byKey(
-          const ValueKey<String>('dashboard-budget-content-unifiedCard'),
-        ),
-        const ValueKey<String>(
-          'dashboard-header-tuner-section-budget-content-card-style',
-        ),
-      );
-      expectTopology(unified: true, topology: 'Unified chart→avatars');
-      await assertNoSlabAcrossCollapse(
-        'Unified chart→avatars',
-        chartFirst: true,
-      );
-
-      await selectTunerOption(
-        find.byKey(
-          const ValueKey<String>(
-            'dashboard-budget-section-order-avatarsThenChart',
-          ),
-        ),
-        const ValueKey<String>(
-          'dashboard-header-tuner-section-budget-section-order',
-        ),
-      );
-      expectTopology(unified: true, topology: 'Unified avatars→chart');
-      await assertNoSlabAcrossCollapse(
-        'Unified avatars→chart',
-        chartFirst: false,
-      );
-
-      for (final candidate in <String>[
-        'budgetChartCascadeCard',
-        'budgetDistributionViewport',
-        'budgetDistributionPageContent',
-        'partnerRhythmFooterLane',
-        'spendingRhythmChart',
-      ]) {
-        final event = FluviDiagnosticLogger.entries.lastWhere(
-          (entry) =>
-              entry.stage == 'COLLAPSE|LAYER' &&
-              entry.scope?.contains('candidate=$candidate') == true,
-        );
-        expect(event.scope, contains('globalBounds='));
-        expect(event.scope, contains('paintBounds='));
-        expect(event.scope, contains('clip='));
-        expect(event.scope, contains('zOrder='));
-      }
     },
   );
 
@@ -2462,76 +2134,3 @@ PreparedBudgetPartnerDistributionSnapshot _g4PartnerSnapshot() {
 
 int _g4EpochDay(int year, int month, int day) =>
     DateTime.utc(year, month, day).difference(DateTime.utc(1970)).inDays;
-
-Future<Map<String, Color>> _g4PixelsAt(
-  WidgetTester tester,
-  RenderRepaintBoundary boundary,
-  Map<String, Offset> points,
-) async {
-  final colors = await tester.runAsync(() async {
-    final image = await boundary.toImage(pixelRatio: 1);
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    final rgba = Uint8List.view(bytes!.buffer);
-    final result = <String, Color>{
-      for (final entry in points.entries)
-        entry.key: _g4RgbaAt(rgba, image.width, image.height, entry.value),
-    };
-    image.dispose();
-    return result;
-  });
-  return colors!;
-}
-
-Color _g4RgbaAt(Uint8List rgba, int width, int height, Offset point) {
-  final x = point.dx.floor().clamp(0, width - 1);
-  final y = point.dy.floor().clamp(0, height - 1);
-  final offset = (y * width + x) * 4;
-  return Color.fromARGB(
-    rgba[offset + 3],
-    rgba[offset],
-    rgba[offset + 1],
-    rgba[offset + 2],
-  );
-}
-
-/// Device screenshots captured both the opaque #D3D4D5 rectangle itself and
-/// its lighter #E1E2E4-family edge/composite. Neither is an authored Rhythm
-/// material. Keep both observed physical signatures in the production-parent
-/// probe; it must not turn green merely because the same slab rasterises one
-/// shade darker at a different collapse fraction or device scale.
-bool _isObservedPhysicalSlabColor(Color color) =>
-    _isNearRgb(color, red: 211, green: 212, blue: 213) ||
-    _isNearRgb(color, red: 225, green: 226, blue: 228);
-
-bool _isNearRgb(
-  Color color, {
-  required int red,
-  required int green,
-  required int blue,
-}) =>
-    ((color.r * 255).round() - red).abs() <= 8 &&
-    ((color.g * 255).round() - green).abs() <= 8 &&
-    ((color.b * 255).round() - blue).abs() <= 8;
-
-final class _G4CollapseObservation {
-  const _G4CollapseObservation({
-    required this.progress,
-    required this.cardBounds,
-    required this.rhythmBounds,
-    required this.countBounds,
-    required this.handleBounds,
-    required this.samples,
-  });
-
-  final double progress;
-  final Rect cardBounds;
-  final Rect rhythmBounds;
-  final Rect countBounds;
-  final Rect handleBounds;
-  final Map<String, Color> samples;
-
-  @override
-  String toString() =>
-      'p=${progress.toStringAsFixed(1)} card=$cardBounds rhythm=$rhythmBounds '
-      'count=$countBounds handle=$handleBounds samples=$samples';
-}

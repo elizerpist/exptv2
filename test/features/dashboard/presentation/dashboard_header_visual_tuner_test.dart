@@ -501,6 +501,26 @@ void main() {
         const ValueKey<String>('balance-content-surface-style'),
       );
       expect(balanceSurfaceStyle, findsOneWidget);
+      final childCardsOff = find.byKey(
+        const ValueKey<String>('balance-uses-child-cards-off'),
+      );
+      expect(
+        childCardsOff,
+        findsOneWidget,
+        reason:
+            'The user-facing child-card setting belongs in the existing '
+            'hamburger tuner even before unified Balance is selected.',
+      );
+      tester
+          .widget<RadioGroup<bool>>(
+            find.ancestor(
+              of: childCardsOff,
+              matching: find.byType(RadioGroup<bool>),
+            ),
+          )
+          .onChanged(false);
+      await tester.pump();
+      expect(balance.value.usesChildCards, isFalse);
       expect(
         find.byKey(const ValueKey<String>('balance-unified-body-layout')),
         findsNothing,
@@ -1699,6 +1719,31 @@ void main() {
       chartPresentation.value.timeLabels,
       MindHeaderScoreChartTimeLabels.visible,
     );
+    for (final style in MindSumVisualStyle.values) {
+      final sumStyle = find.byKey(
+        ValueKey('mind-sum-visual-style-${style.name}'),
+      );
+      await tester.ensureVisible(sumStyle);
+      await tester.tap(sumStyle);
+      await tester.pump();
+      expect(heatmapSettings.value.sumVisualStyle, style);
+    }
+    for (final toggle in <(Key, bool Function())>[
+      (
+        const ValueKey<String>('mind-sum-layout-chooser-visible'),
+        () => heatmapSettings.value.showSumLayoutChooser,
+      ),
+      (
+        const ValueKey<String>('mind-year-actions-visible'),
+        () => heatmapSettings.value.showYearMotherCardActions,
+      ),
+    ]) {
+      final control = find.byKey(toggle.$1);
+      await tester.ensureVisible(control);
+      await tester.tap(control);
+      await tester.pump();
+      expect(toggle.$2(), isFalse);
+    }
     for (final style in MindYearHeatmapPaletteStyle.values) {
       final palette = find.byKey(
         ValueKey('mind-heatmap-palette-${style.name}'),

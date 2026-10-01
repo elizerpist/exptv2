@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/categories/domain/budget_progress_health.dart';
 import 'dashboard_budget_month_end_projection.dart';
+import '../time_navigation/domain/local_date.dart';
 
 /// Persistence provenance of one effective monthly denominator. Widgets never
 /// implement the base/override fallback rule themselves.
@@ -108,21 +109,125 @@ final class DashboardBudgetMonthAnalysis extends DashboardBudgetScopeAnalysis {
        );
 }
 
+/// Exact, as-of-selected-day allowance for the Budget DAY header.
+///
+/// This is deliberately separate from [DashboardBudgetMonthEndProjection]:
+/// the forecast remains available to its existing consumers, while this type
+/// owns the product meaning “spent today / available today”. Every money
+/// operation remains on the project's scaled-integer representation.
+@immutable
+final class DashboardBudgetDayAllowanceAnalysis {
+  const DashboardBudgetDayAllowanceAnalysis.unavailable()
+    : isAvailable = false,
+      selectedDayActualScaled100 = null,
+      dailyAvailableScaled100 = null,
+      spentBeforeSelectedDayScaled100 = null,
+      remainingDaysInclusive = null;
+
+  const DashboardBudgetDayAllowanceAnalysis._({
+    required this.isAvailable,
+    required this.selectedDayActualScaled100,
+    required this.dailyAvailableScaled100,
+    required this.spentBeforeSelectedDayScaled100,
+    required this.remainingDaysInclusive,
+  });
+
+  factory DashboardBudgetDayAllowanceAnalysis.derive({
+    required LocalDate selectedDay,
+    required LocalDate logicalAsOfDate,
+    required int selectedDayActualScaled100,
+    required int spentBeforeSelectedDayScaled100,
+    required int? monthlyLimitScaled100,
+  }) {
+    if (selectedDayActualScaled100 < 0 || spentBeforeSelectedDayScaled100 < 0) {
+      throw ArgumentError('Budget actuals cannot be negative.');
+    }
+    final isFuture = _compare(selectedDay, logicalAsOfDate) > 0;
+    if (isFuture)
+      return const DashboardBudgetDayAllowanceAnalysis.unavailable();
+    final limit = monthlyLimitScaled100;
+    final daysInMonth = DateTime.utc(
+      selectedDay.year,
+      selectedDay.month + 1,
+      0,
+    ).day;
+    final remainingDaysInclusive = daysInMonth - selectedDay.day + 1;
+    final dailyAvailable = limit == null || limit <= 0
+        ? null
+        : _roundPositiveDivision(
+            (limit - spentBeforeSelectedDayScaled100).clamp(0, limit),
+            remainingDaysInclusive,
+          );
+    return DashboardBudgetDayAllowanceAnalysis._(
+      isAvailable: true,
+      selectedDayActualScaled100: selectedDayActualScaled100,
+      dailyAvailableScaled100: dailyAvailable,
+      spentBeforeSelectedDayScaled100: spentBeforeSelectedDayScaled100,
+      remainingDaysInclusive: remainingDaysInclusive,
+    );
+  }
+
+  final bool isAvailable;
+  final int? selectedDayActualScaled100;
+  final int? dailyAvailableScaled100;
+  final int? spentBeforeSelectedDayScaled100;
+  final int? remainingDaysInclusive;
+
+  int? dailyAvailableForMonthlyLimit(int effectiveMonthlyLimitScaled100) {
+    final spentBefore = spentBeforeSelectedDayScaled100;
+    final remainingDays = remainingDaysInclusive;
+    if (!isAvailable ||
+        effectiveMonthlyLimitScaled100 <= 0 ||
+        spentBefore == null ||
+        remainingDays == null) {
+      return null;
+    }
+    return _roundPositiveDivision(
+      (effectiveMonthlyLimitScaled100 - spentBefore).clamp(
+        0,
+        effectiveMonthlyLimitScaled100,
+      ),
+      remainingDays,
+    );
+  }
+
+  double get displayRatio =>
+      selectedDayActualScaled100 != null &&
+          dailyAvailableScaled100 != null &&
+          dailyAvailableScaled100! > 0
+      ? selectedDayActualScaled100! / dailyAvailableScaled100!
+      : 0;
+
+  static int _roundPositiveDivision(int numerator, int divisor) =>
+      divisor <= 0 ? 0 : (numerator + divisor ~/ 2) ~/ divisor;
+
+  static int _compare(LocalDate left, LocalDate right) {
+    final byYear = left.year.compareTo(right.year);
+    if (byYear != 0) return byYear;
+    final byMonth = left.month.compareTo(right.month);
+    return byMonth != 0 ? byMonth : left.day.compareTo(right.day);
+  }
+}
+
 final class DashboardBudgetDayProjectionAnalysis
     extends DashboardBudgetScopeAnalysis {
   DashboardBudgetDayProjectionAnalysis({
     required this.projection,
+    required this.dailyAllowance,
     required int canonicalMonthlyActualScaled100,
+    this.isCurrentLogicalDay = true,
   }) : super(
-         displayNumeratorScaled100: projection.actualDailyAverageScaled100,
-         displayDenominatorScaled100: projection.allowedDailyAverageScaled100,
+         displayNumeratorScaled100: dailyAllowance.selectedDayActualScaled100,
+         displayDenominatorScaled100: dailyAllowance.dailyAvailableScaled100,
          canonicalActualScaled100ForLimitEdit: canonicalMonthlyActualScaled100,
          canonicalLimitScaled100ForEdit:
              projection.effectiveMonthlyLimitScaled100,
-         rawRatioOverride: projection.paceRatio,
+         rawRatioOverride: dailyAllowance.displayRatio,
        );
 
   final DashboardBudgetMonthEndProjection projection;
+  final DashboardBudgetDayAllowanceAnalysis dailyAllowance;
+  final bool isCurrentLogicalDay;
 }
 
 final class DashboardBudgetYearAnalysis extends DashboardBudgetScopeAnalysis {

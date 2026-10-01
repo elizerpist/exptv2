@@ -8,6 +8,7 @@ import 'package:fluvi/features/dashboard/logbox/application/dashboard_log_viewpo
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_card.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_category_distribution_visual_bank.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_clay_donut_scene.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/budget_distribution_ranking.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/budget_target_avatar_rail_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/current_ledger_query_scope.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
@@ -49,6 +50,9 @@ void main() {
       );
       final drawableFrames =
           ValueNotifier<DashboardBudgetDistributionDrawableFrame?>(prepared);
+      final ranking = ValueNotifier<BudgetDistributionRanking>(
+        BudgetDistributionRanking.share,
+      );
       final delegate = _FakeRailDelegate(targetCount: 4);
       final rail = BudgetTargetAvatarRailController()..attach(delegate);
       addTearDown(categories.dispose);
@@ -56,6 +60,7 @@ void main() {
       addTearDown(visible.dispose);
       addTearDown(presentation.dispose);
       addTearDown(drawableFrames.dispose);
+      addTearDown(ranking.dispose);
       addTearDown(drawableController.dispose);
       addTearDown(rail.dispose);
 
@@ -70,6 +75,8 @@ void main() {
                   presentation: presentation,
                   drawableFrames: drawableFrames,
                   avatarRailController: rail,
+                  ranking: ranking,
+                  onRankingChanged: (next) => ranking.value = next,
                 ),
               ),
             ),
@@ -147,6 +154,41 @@ void main() {
         ),
         findsNothing,
       );
+
+      final stableDrawable = drawableFrames.value;
+      await tester.tap(
+        find.byKey(const ValueKey('budget-distribution-ranking-selector')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Tranzakciószám'), findsOneWidget);
+      await tester.tap(
+        find
+            .widgetWithText(
+              CheckedPopupMenuItem<BudgetDistributionRanking>,
+              'Tranzakciószám',
+            )
+            .first,
+      );
+      await tester.pump();
+      expect(ranking.value, BudgetDistributionRanking.transactionCount);
+      expect(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey('budget-category-distribution-row-b')),
+            )
+            .dy,
+        lessThan(
+          tester
+              .getTopLeft(
+                find.byKey(
+                  const ValueKey('budget-category-distribution-row-a'),
+                ),
+              )
+              .dy,
+        ),
+        reason: 'Count ranking orders the list but never remaps the donut.',
+      );
+      expect(identical(drawableFrames.value, stableDrawable), isTrue);
 
       await tester.tapAt(tester.getCenter(interaction) + const Offset(0, -50));
       await tester.pump();
@@ -365,6 +407,11 @@ PreparedBudgetLimitDirectionBank _bank(List<String> ids, List<int> month) {
     cells[2 * count + handle] = PreparedBudgetLimitCell(
       actualScaled100: month[handle],
       limitScaled100: null,
+      transactionCount: handle == 2
+          ? 9
+          : handle == 1
+          ? 2
+          : 0,
     );
   }
   return PreparedBudgetLimitDirectionBank(

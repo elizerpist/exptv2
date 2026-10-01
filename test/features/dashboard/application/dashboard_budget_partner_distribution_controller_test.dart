@@ -4,6 +4,8 @@ import 'package:fluvi/features/dashboard/application/dashboard_budget_partner_di
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_partner_distribution_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
   test('projects both partner directions from an exact RAM snapshot only', () {
@@ -118,6 +120,91 @@ void main() {
       expect(rent.entries.single.actualScaled100, 400);
       // Same prepared bundle, no category-specific native/read path.
       expect(identical(bundle.expenseTargetFrames[0], aggregate), isTrue);
+    },
+  );
+
+  test(
+    'projects exact DAY partner counts for both aggregate and selected category targets',
+    () {
+      const day = LocalDate(year: 2026, month: 1, day: 10);
+      const zero = PreparedBudgetPartnerDistributionCell(
+        actualScaled100: 0,
+        dominantCategoryId: '',
+      );
+      const represented = PreparedBudgetPartnerDistributionCell(
+        actualScaled100: 1000,
+        dominantCategoryId: 'food',
+        transactionCount: 5,
+      );
+      final expense = PreparedBudgetPartnerDistributionDirectionBank(
+        orderedPartnerIds: const <String>['shop'],
+        orderedPartnerTitles: const <String>['Bolt'],
+        cells: <PreparedBudgetPartnerDistributionCell>[
+          for (var slice = 0; slice < 14; slice += 1)
+            slice == 2 ? represented : zero,
+        ],
+        orderedCategoryIds: const <String>['food'],
+        categoryContributionOffsets: List<int>.generate(
+          15,
+          (index) => index >= 3 ? 1 : 0,
+          growable: false,
+        ),
+        categoryContributions:
+            const <PreparedBudgetPartnerCategoryContribution>[
+              PreparedBudgetPartnerCategoryContribution(
+                partnerHandle: 0,
+                actualScaled100: 1000,
+                transactionCount: 5,
+              ),
+            ],
+        dayEpochDays: <int>[day.epochDay],
+        dayAggregateOffsets: const <int>[0, 1],
+        dayAggregateCells: const <PreparedBudgetPartnerDayCell>[
+          PreparedBudgetPartnerDayCell(
+            partnerHandle: 0,
+            actualScaled100: 1000,
+            dominantCategoryId: 'food',
+            transactionCount: 5,
+          ),
+        ],
+        dayCategoryContributionOffsets: const <int>[0, 1],
+        dayCategoryContributions:
+            const <PreparedBudgetPartnerCategoryContribution>[
+              PreparedBudgetPartnerCategoryContribution(
+                partnerHandle: 0,
+                actualScaled100: 1000,
+                transactionCount: 5,
+              ),
+            ],
+      );
+      final snapshot = PreparedBudgetPartnerDistributionSnapshot(
+        coreRevision: 7,
+        yearWindowStart: 2026,
+        yearWindowEndInclusive: 2026,
+        incomeBank: PreparedBudgetPartnerDistributionDirectionBank(
+          orderedPartnerIds: const <String>[],
+          orderedPartnerTitles: const <String>[],
+          cells: const <PreparedBudgetPartnerDistributionCell>[],
+        ),
+        expenseBank: expense,
+      );
+
+      final bundle =
+          DashboardBudgetPartnerDistributionProjector.projectForScope(
+            snapshot: snapshot,
+            categories: <FluviCategory>[_category('food', 'color_01')],
+            scope: const DayScope(day),
+          );
+      final aggregate = bundle.frameFor(LedgerDirection.expense);
+      final food = bundle.frameFor(LedgerDirection.expense, targetHandle: 1);
+
+      expect(aggregate.entries.single.transactionCount, 5);
+      expect(food.entries.single.transactionCount, 5);
+      expect(
+        food.entries.single.actualScaled100,
+        1000,
+        reason: 'The selected category contribution remains target-local.',
+      );
     },
   );
 }

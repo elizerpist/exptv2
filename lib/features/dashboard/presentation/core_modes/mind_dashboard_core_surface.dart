@@ -23,6 +23,7 @@ import '../../mind/domain/mind_header_score_chart_presentation.dart';
 import '../../mind/presentation/mind_header_score_chart.dart';
 import '../../mind/presentation/mind_year_heatmap_palette_resolver.dart';
 import '../../mind/presentation/mind_heatmap_palette_scope.dart';
+import '../../mind/presentation/mind_day_all_vs_slider_heatmap_card.dart';
 import '../../mind/presentation/mind_year_heatmap_viewport.dart';
 import '../../mind/presentation/mind_temporal_heatmap_viewports.dart';
 import '../../time_navigation/domain/time_plane.dart';
@@ -398,6 +399,12 @@ class MindDashboardCoreSurface extends StatelessWidget {
           child: _MindTemporalBody(
             temporalContent: guardedTemporalContent,
             range: range,
+            // The Day source card contains the one canonical amount control
+            // beneath its all-vs-slider chart.  The scope below moves that
+            // same widget into the Day surface; it never creates a second
+            // RangeSlider, state owner or query write path.
+            rendersRangeWithinTemporalContent:
+                resolvedPlane == TimePlane.month && showTemporalDayHeatmap,
           ),
         );
       }
@@ -719,10 +726,16 @@ final class _MindHeaderScoreDetail extends StatelessWidget {
   );
 }
 
-/// Structural Mind topology: one clipped vertical viewport followed by an
-/// independent footer. The slider never overlays scroll content.
+/// Structural Mind topology: one clipped vertical viewport plus the one
+/// canonical amount control. SUM/Year/Month keep the measured outer footer;
+/// Day places that same control inside its source card. It never overlays
+/// scroll content or creates a second slider owner.
 final class _MindTemporalBody extends StatelessWidget {
-  const _MindTemporalBody({required this.temporalContent, required this.range});
+  const _MindTemporalBody({
+    required this.temporalContent,
+    required this.range,
+    this.rendersRangeWithinTemporalContent = false,
+  });
 
   // The compact shared slider keeps its existing touch geometry inside this
   // measured footer. The palette legend is permanently inline between Min.
@@ -731,20 +744,30 @@ final class _MindTemporalBody extends StatelessWidget {
 
   final Widget temporalContent;
   final Widget range;
+  final bool rendersRangeWithinTemporalContent;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: <Widget>[
-      Expanded(
-        key: const ValueKey<String>('mind-temporal-content-viewport'),
-        child: ClipRect(child: temporalContent),
-      ),
-      KeyedSubtree(
-        key: const ValueKey('mind-year-heatmap-fixed-footer'),
-        child: SizedBox(height: _footerHeight, child: range),
-      ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final viewport = Expanded(
+      key: const ValueKey<String>('mind-temporal-content-viewport'),
+      child: ClipRect(child: temporalContent),
+    );
+    if (rendersRangeWithinTemporalContent) {
+      return MindDayRangeFooterScope(
+        range: range,
+        child: Column(children: <Widget>[viewport]),
+      );
+    }
+    return Column(
+      children: <Widget>[
+        viewport,
+        KeyedSubtree(
+          key: const ValueKey('mind-year-heatmap-fixed-footer'),
+          child: SizedBox(height: _footerHeight, child: range),
+        ),
+      ],
+    );
+  }
 }
 
 /// A Mind-supplied, read-only center accessory. QueryAmountRangeControl owns

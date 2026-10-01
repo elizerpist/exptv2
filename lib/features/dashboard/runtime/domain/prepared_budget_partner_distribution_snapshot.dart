@@ -11,11 +11,14 @@ final class PreparedBudgetPartnerDistributionCell {
   const PreparedBudgetPartnerDistributionCell({
     required this.actualScaled100,
     required this.dominantCategoryId,
+    this.transactionCount = 0,
   }) : assert(actualScaled100 >= 0),
+       assert(transactionCount >= 0),
        assert(actualScaled100 == 0 || dominantCategoryId != '');
 
   final int actualScaled100;
   final String dominantCategoryId;
+  final int transactionCount;
 }
 
 /// One sparse positive amount for an exact period/category/partner triple.
@@ -25,11 +28,14 @@ final class PreparedBudgetPartnerCategoryContribution {
   const PreparedBudgetPartnerCategoryContribution({
     required this.partnerHandle,
     required this.actualScaled100,
+    this.transactionCount = 0,
   }) : assert(partnerHandle >= 0),
+       assert(transactionCount >= 0),
        assert(actualScaled100 > 0);
 
   final int partnerHandle;
   final int actualScaled100;
+  final int transactionCount;
 }
 
 /// One exact positive partner total for one ledger-local calendar day. The
@@ -41,13 +47,16 @@ final class PreparedBudgetPartnerDayCell {
     required this.partnerHandle,
     required this.actualScaled100,
     required this.dominantCategoryId,
+    this.transactionCount = 0,
   }) : assert(partnerHandle >= 0),
+       assert(transactionCount >= 0),
        assert(actualScaled100 > 0),
        assert(dominantCategoryId != '');
 
   final int partnerHandle;
   final int actualScaled100;
   final String dominantCategoryId;
+  final int transactionCount;
 }
 
 /// Dense, direction-local partner domain. Unlike Budget target handles this
@@ -292,6 +301,7 @@ final class PreparedBudgetPartnerDistributionDirectionBank {
           PreparedBudgetPartnerCategoryContribution(
             partnerHandle: cell.partnerHandle,
             actualScaled100: cell.actualScaled100,
+            transactionCount: cell.transactionCount,
           ),
       ];
     }

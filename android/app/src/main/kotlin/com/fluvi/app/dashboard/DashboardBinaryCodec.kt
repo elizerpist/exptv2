@@ -18,9 +18,9 @@ object DashboardBinaryCodec {
     const val PAGE_MAGIC: Int = 0x464C534C // FLSL
     const val INDEX_MAGIC: Int = 0x464C4449 // FLDI
     const val BUDGET_LIMIT_MAGIC: Int = 0x464C424C // FLBL
-    const val BUDGET_LIMIT_VERSION: Int = 5
+    const val BUDGET_LIMIT_VERSION: Int = 6
     const val BUDGET_PARTNER_MAGIC: Int = 0x464C4250 // FLBP
-    const val BUDGET_PARTNER_VERSION: Int = 3
+    const val BUDGET_PARTNER_VERSION: Int = 4
     const val INDEX_VERSION: Int = 5
     const val VERSION: Int = 1
 
@@ -111,6 +111,8 @@ object DashboardBinaryCodec {
         bank.orderedCategoryIds.forEach { categoryId -> writeUtf8(categoryId) }
         writeInt(bank.actualScaled100.size)
         bank.actualScaled100.forEach(::writeLong)
+        writeInt(bank.transactionCount.size)
+        bank.transactionCount.forEach(::writeLong)
         writeInt(bank.limitScaled100.size)
         bank.limitScaled100.forEach(::writeLong)
         writeInt(bank.limitSource.size)
@@ -127,6 +129,7 @@ object DashboardBinaryCodec {
         bank.points.forEach { point ->
             writeLong(point.epochDay)
             writeLong(point.actualScaled100)
+            writeLong(point.transactionCount)
             point.dayPartActualScaled100.forEach(::writeLong)
         }
     }
@@ -159,6 +162,8 @@ object DashboardBinaryCodec {
         writeInt(bank.cells.size)
         bank.cells.forEach { cell -> writeLong(cell.actualScaled100) }
         writeInt(bank.cells.size)
+        bank.cells.forEach { cell -> writeLong(cell.transactionCount) }
+        writeInt(bank.cells.size)
         bank.cells.forEach { cell -> writeUtf8(cell.dominantCategoryId) }
         writeInt(bank.orderedCategoryIds.size)
         bank.orderedCategoryIds.forEach { categoryId -> writeUtf8(categoryId) }
@@ -168,6 +173,7 @@ object DashboardBinaryCodec {
         bank.categoryContributions.forEach { contribution ->
             writeInt(contribution.partnerHandle)
             writeLong(contribution.actualScaled100)
+            writeLong(contribution.transactionCount)
         }
         writeInt(bank.dayEpochDays.size)
         bank.dayEpochDays.forEach(::writeLong)
@@ -178,6 +184,7 @@ object DashboardBinaryCodec {
             writeInt(cell.partnerHandle)
             writeLong(cell.actualScaled100)
             writeUtf8(cell.dominantCategoryId)
+            writeLong(cell.transactionCount)
         }
         writeInt(bank.dayCategoryContributionOffsets.size)
         bank.dayCategoryContributionOffsets.forEach(::writeInt)
@@ -185,6 +192,7 @@ object DashboardBinaryCodec {
         bank.dayCategoryContributions.forEach { contribution ->
             writeInt(contribution.partnerHandle)
             writeLong(contribution.actualScaled100)
+            writeLong(contribution.transactionCount)
         }
     }
 

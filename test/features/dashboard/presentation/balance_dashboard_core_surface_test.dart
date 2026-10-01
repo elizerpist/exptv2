@@ -545,6 +545,55 @@ void main() {
   );
 
   testWidgets(
+    'BALANCE-CHILD-CARDS-02 RED: Napi4 retains its live four-card content when child shells are toggled off',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(cashflow: _alternativeDayCashflow()),
+      );
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris)
+        ..setUsesChildCards(false);
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('balance-tetris-card-daily-impact')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('balance-tetris-card-combined')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('balance-alternative-child-card-shell')),
+        findsNothing,
+      );
+
+      settings.setUsesChildCards(true);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('balance-alternative-child-card-shell')),
+        findsWidgets,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'SHEET-01/02: 412×892 Havi 2 and Éves cards use direct HTML-scale content instead of a card-wide fallback',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(412, 892));

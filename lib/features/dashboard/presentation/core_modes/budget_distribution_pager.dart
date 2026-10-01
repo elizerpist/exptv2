@@ -6,11 +6,11 @@ import '../../../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../application/dashboard_budget_presentation_controller.dart';
 import '../../application/dashboard_budget_logbox_drilldown_coordinator.dart';
-import '../../application/dashboard_spending_rhythm_controller.dart';
 import 'budget_category_distribution_card.dart';
 import 'budget_category_distribution_visual_bank.dart';
 import 'budget_partner_distribution_card.dart';
 import 'budget_distribution_page_surface.dart';
+import 'budget_distribution_ranking.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 
@@ -25,9 +25,11 @@ final class BudgetDistributionPageController
     : assert(initialVirtualIndex >= 0),
       _virtualIndex = initialVirtualIndex,
       pageController = PageController(initialPage: initialVirtualIndex),
+      ranking = BudgetDistributionRankingController(),
       super(_pageFor(initialVirtualIndex));
 
   final PageController pageController;
+  final BudgetDistributionRankingController ranking;
   int _virtualIndex;
 
   static const _lowerRebaseWatermark = 1024;
@@ -72,6 +74,7 @@ final class BudgetDistributionPageController
 
   @override
   void dispose() {
+    ranking.dispose();
     pageController.dispose();
     super.dispose();
   }
@@ -87,7 +90,6 @@ class BudgetDistributionPager extends StatefulWidget {
     required this.drawableFrames,
     required this.avatarRailController,
     this.expandCategoryDonutToFit = false,
-    this.rhythm,
     this.drilldown,
     this.upperVerticalGestures,
     this.surfaceOwner = BudgetDistributionSurfaceOwner.splitCard2,
@@ -100,7 +102,6 @@ class BudgetDistributionPager extends StatefulWidget {
   drawableFrames;
   final BudgetTargetAvatarRailController avatarRailController;
   final bool expandCategoryDonutToFit;
-  final ValueListenable<DashboardSpendingRhythmState?>? rhythm;
   final DashboardBudgetLogboxDrilldownCoordinator? drilldown;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
   final BudgetDistributionSurfaceOwner surfaceOwner;
@@ -268,6 +269,8 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 drawableFrames: widget.drawableFrames,
                 avatarRailController: widget.avatarRailController,
                 expandDonutToFit: widget.expandCategoryDonutToFit,
+                ranking: widget.controller.ranking.category,
+                onRankingChanged: widget.controller.ranking.setCategory,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),
               BudgetDistributionPage.partner => BudgetPartnerDistributionCard(
@@ -275,7 +278,8 @@ class _BudgetDistributionPagerState extends State<BudgetDistributionPager> {
                 presentation: widget.presentation,
                 drawableFrames: widget.drawableFrames,
                 expandDonutToFit: widget.expandCategoryDonutToFit,
-                rhythm: widget.rhythm,
+                ranking: widget.controller.ranking.partner,
+                onRankingChanged: widget.controller.ranking.setPartner,
                 drilldown: widget.drilldown,
                 upperVerticalGestures: widget.upperVerticalGestures,
               ),

@@ -89,6 +89,7 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         val januarySlice = 2
         val shopJanuary = snapshot.expenseBank.cells[januarySlice * 2]
         assertEquals(600L, shopJanuary.actualScaled100)
+        assertEquals(2L, shopJanuary.transactionCount)
         assertEquals(
             "equal category contribution resolves by stable category ID",
             FOOD,
@@ -113,16 +114,63 @@ class FluviBudgetPartnerDistributionReadServiceTest {
         )
         assertEquals(listOf(0), foodJanuary.map { it.partnerHandle })
         assertEquals(listOf(300L), foodJanuary.map { it.actualScaled100 })
+        assertEquals(listOf(1L), foodJanuary.map { it.transactionCount })
         assertEquals(listOf(0), housingJanuary.map { it.partnerHandle })
         assertEquals(listOf(300L), housingJanuary.map { it.actualScaled100 })
+        assertEquals(listOf(1L), housingJanuary.map { it.transactionCount })
         val january10 = LocalDate.of(2026, 1, 10).toEpochDay()
         val january11 = LocalDate.of(2026, 1, 11).toEpochDay()
         assertEquals(listOf(january10, january11, LocalDate.of(2026, 2, 1).toEpochDay()),
             snapshot.expenseBank.dayEpochDays.toList())
         assertEquals(listOf(0), snapshot.expenseBank.dayAggregateFor(january10).map { it.partnerHandle })
+        assertEquals(listOf(1L), snapshot.expenseBank.dayAggregateFor(january10).map { it.transactionCount })
         assertEquals(FOOD, snapshot.expenseBank.dayAggregateFor(january10).single().dominantCategoryId)
         assertEquals(listOf(0), snapshot.expenseBank.dayContributionsFor(january11, 2).map { it.partnerHandle })
         assertEquals(emptyList<Int>(), snapshot.expenseBank.dayContributionsFor(january11, 1).map { it.partnerHandle })
+    }
+
+    @Test
+    fun preparesLimitCountsBesideAmountsWithoutAnotherLedgerAcquisition() = runBlocking {
+        val snapshot = budget.preparedLimitSnapshot(
+            expectedRevision = revisions.current(),
+            yearWindow = FluviPreparedYearWindow(2026, 2026),
+        )
+
+        // revision + categories + the one grouped ledger scan + limits + final
+        // revision. COUNT(*) is part of the existing acquisition, not a second
+        // Budget request.
+        assertEquals(5, snapshot.sqlCallCount)
+        val expense = snapshot.expenseBank
+        assertEquals(listOf(FOOD, HOUSING), expense.orderedCategoryIds)
+        val targetCount = expense.targetCount
+        val januarySlice = 2
+        assertEquals(
+            "Aggregate January count represents both exact ledger transactions.",
+            2L,
+            expense.transactionCount[januarySlice * targetCount],
+        )
+        assertEquals(
+            "Food January count remains target-local.",
+            1L,
+            expense.transactionCount[januarySlice * targetCount + 1],
+        )
+        assertEquals(
+            "Housing January count remains target-local.",
+            1L,
+            expense.transactionCount[januarySlice * targetCount + 2],
+        )
+
+        val january10 = LocalDate.of(2026, 1, 10).toEpochDay()
+        val rhythm = snapshot.spendingRhythmSnapshot.expenseBank
+        val aggregatePoints = rhythm.points.subList(
+            rhythm.targetOffsets[0],
+            rhythm.targetOffsets[1],
+        )
+        assertEquals(
+            "DAY count remains an exact transaction count, not an active-day count.",
+            1L,
+            aggregatePoints.single { it.epochDay == january10 }.transactionCount,
+        )
     }
 
     private fun category(id: String, name: String) = FluviCategoryEntity(

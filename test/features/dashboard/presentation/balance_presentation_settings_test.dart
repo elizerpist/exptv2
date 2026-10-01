@@ -454,6 +454,21 @@ void main() {
       expect(controller.value.alternativeMotherCardVisible, isTrue);
     },
   );
+
+  test(
+    'BALANCE-CHILD-CARDS-01: child-card chrome defaults on and remains a revisioned presentation-only preference',
+    () {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+
+      expect(controller.value.usesChildCards, isTrue);
+      controller.setUsesChildCards(false);
+      expect(controller.value.usesChildCards, isFalse);
+      expect(controller.value.revision, 1);
+      controller.reset();
+      expect(controller.value.usesChildCards, isTrue);
+    },
+  );
 }
 
 DashboardBalanceHistorySeries _history() => DashboardBalanceHistorySeries(

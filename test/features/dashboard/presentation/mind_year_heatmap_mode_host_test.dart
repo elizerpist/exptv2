@@ -1226,6 +1226,64 @@ void main() {
   );
 
   testWidgets(
+    'MIND-DAY-RANGE-01 RED: Day moves the one canonical range control inside its source card without a second footer',
+    (tester) async {
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.mind,
+      );
+      final year = ValueNotifier<MindYearHeatmapFrame?>(_frame());
+      final temporal = ValueNotifier<MindTemporalHeatmapFrame?>(_dayFrame());
+      final rangeChanges = ValueNotifier<int>(0);
+      addTearDown(mode.dispose);
+      addTearDown(year.dispose);
+      addTearDown(temporal.dispose);
+      addTearDown(rangeChanges.dispose);
+
+      await tester.pumpWidget(
+        _HostHarness(
+          mode: mode,
+          frame: year,
+          temporalFrame: temporal,
+          temporalPlane: TimePlane.month,
+          showYearHeatmap: false,
+          showTemporalHeatmap: true,
+          showTemporalDayHeatmap: true,
+          rangeChanges: rangeChanges,
+          expansion: _ExpansionRecorder(),
+        ),
+      );
+
+      final sourceCard = find.byKey(
+        const ValueKey<String>('mind-day-all-slider-card'),
+      );
+      expect(sourceCard, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-fixed-footer')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-day-heatmap-range-footer')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-query-amount-range')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: sourceCard,
+          matching: find.byKey(
+            const ValueKey<String>('mind-query-amount-range'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(RangeSlider), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'YEAR-DIRECT-07: four-by-three Year remains zero-scroll inside the shared legend and footer envelope',
     (tester) async {
       final mode = DashboardCoreModeController(
@@ -1486,6 +1544,7 @@ final class _HostHarness extends StatelessWidget {
     this.temporalFrame,
     this.temporalPlane,
     this.showTemporalHeatmap = false,
+    this.showTemporalDayHeatmap = false,
     this.presentationSettings,
     this.score,
     this.upperVerticalGestures,
@@ -1506,6 +1565,7 @@ final class _HostHarness extends StatelessWidget {
   final _ExpansionRecorder expansion;
   final bool showYearHeatmap;
   final bool showTemporalHeatmap;
+  final bool showTemporalDayHeatmap;
   final MindYearHeatmapPresentationController? presentationSettings;
   final ValueNotifier<MindBehavioralScoreFrame?>? score;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
@@ -1543,6 +1603,7 @@ final class _HostHarness extends StatelessWidget {
               mindBehavioralScore: score,
               mindYearHeatmapVisible: showYearHeatmap,
               mindTemporalHeatmapVisible: showTemporalHeatmap,
+              mindTemporalDayVisible: showTemporalDayHeatmap,
               mindQueryAmountRange: () => amountRange,
               mindQueryAmountRangeChanges: rangeChanges,
               onMindQueryAmountRangeCommitted: (_) {},
@@ -1659,6 +1720,38 @@ MindMonthHeatmapFrame _monthFrame() => MindMonthHeatmapProjection.build(
     ),
   ],
 ).preview(_temporalRange);
+
+MindDayHeatmapFrame _dayFrame() => MindDayHeatmapFrame(
+  identity: const MindTemporalHeatmapIdentity(
+    upstreamScopeKey: 'expense|day:2025-05-14',
+    indexGeneration: 1,
+    coreRevision: 1,
+    timeScopeKey: 'day:2025-05-14',
+  ),
+  range: _temporalRange,
+  date: const LocalDate(year: 2025, month: 5, day: 14),
+  hours: List<MindDayHeatmapHour>.generate(
+    24,
+    (hour) => MindDayHeatmapHour(
+      hour: hour,
+      total: null,
+      kind: MindYearHeatmapTileKind.empty,
+      intensity: 0,
+      paletteIntensity: MindYearHeatmapPaletteIntensity.empty,
+    ),
+  ),
+  timelineEvents: const <MindDayTimelineEvent>[
+    MindDayTimelineEvent(ordinal: 1, timeMinutes: 8 * 60, total: 450),
+  ],
+  fullTimelineEvents: const <MindDayTimelineEvent>[
+    MindDayTimelineEvent(ordinal: 1, timeMinutes: 8 * 60, total: 450),
+    MindDayTimelineEvent(ordinal: 2, timeMinutes: 17 * 60, total: 700),
+  ],
+  activeHourCount: 1,
+  total: 450,
+  minimumNonEmptyTotal: 450,
+  maximumNonEmptyTotal: 450,
+);
 
 const _temporalRange = QueryAmountRangeValues(
   minimumScaled100: 1,

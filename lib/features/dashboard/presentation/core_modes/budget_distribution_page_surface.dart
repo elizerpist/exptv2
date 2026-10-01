@@ -10,6 +10,7 @@ import '../dashboard_border_style.dart';
 import '../dashboard_upper_vertical_gesture_coordinator.dart';
 import '../dashboard_vertical_scroll_boundary_handoff.dart';
 import '../widgets/dashboard_render_diagnostic_probe.dart';
+import 'budget_distribution_ranking.dart';
 
 /// Explicitly separates physical material from PageView clipping ownership.
 enum BudgetDistributionSurfaceOwner { splitCard2, unifiedParent }
@@ -113,53 +114,27 @@ class BudgetDistributionPageSurface extends StatefulWidget {
     required this.listKey,
     required this.emptyLabel,
     this.donutDiameter = 150,
-    this.donutScale = 1,
     this.expandDonutToFit = false,
-    this.leftFooter,
-    this.leftFooterMinimumHeight = 0,
-    this.fullWidthFooter,
-    this.fullWidthFooterMinimumHeight = 0,
-    this.fullWidthFooterDividerGap = 3,
     this.donutVerticalInset = 8,
+    this.rightHeaderTrailing,
     this.upperVerticalGestures,
   });
 
   final Widget heading;
   final Widget donut;
   final String rightHeading;
+  final Widget? rightHeaderTrailing;
   final List<Widget> rows;
   final Key listKey;
   final String emptyLabel;
 
-  /// Category analysis may reserve a local footer below a smaller donut;
-  /// Partner retains the original full-height donut/list geometry.
+  /// One shared Category/Partner base diameter under ordinary Card2 bounds.
   final double donutDiameter;
-
-  /// Presentation-only diameter factor. Partner uses .90 so the existing
-  /// Column gives the exact reclaimed vertical delta to its rhythm footer.
-  final double donutScale;
 
   /// Legacy preserves its accepted authored diameter. Experimental lower
   /// cards opt into their real padded constraints, so their added height can
   /// increase the useful square without an arbitrary scale transform.
   final bool expandDonutToFit;
-  final Widget? leftFooter;
-
-  /// Partner-only lower section. It is deliberately separate from
-  /// [leftFooter]: Category keeps the original two-column geometry.
-  final Widget? fullWidthFooter;
-
-  /// A footer such as the existing partner rhythm chart keeps a real minimum
-  /// readable height. The constraint-driven donut consumes only the leftover
-  /// card height, rather than forcing that chart to overflow on an
-  /// intermediate dashboard geometry.
-  final double leftFooterMinimumHeight;
-  final double fullWidthFooterMinimumHeight;
-
-  /// Shared default preserves Category's accepted Card2 geometry. Partner's
-  /// Rhythm-first layout supplies its own measured divider and intentionally
-  /// gives the reclaimed upper lane to its donut instead of a hidden inset.
-  final double fullWidthFooterDividerGap;
   final double donutVerticalInset;
   final DashboardUpperVerticalGestureCoordinator? upperVerticalGestures;
 
@@ -190,38 +165,45 @@ final class _BudgetDistributionPageSurfaceState
     candidate: 'budgetDistributionPageContent',
     material: 'transparent page content',
     clip: 'inherited BudgetDistributionCardShell.ClipRRect',
-    zOrder: 'viewportClip<PageView>pageContent>partnerFooter',
+    zOrder: 'viewportClip<PageView>pageContent',
     child: Padding(
       padding: const EdgeInsets.all(BudgetDistributionPageSurface.outerPadding),
       child: Column(
         children: <Widget>[
           SizedBox(
             height: BudgetDistributionPageSurface.headingHeight,
-            child: widget.heading,
+            child: _buildTitleRow(),
           ),
-          Expanded(
-            child: widget.fullWidthFooter == null
-                ? _buildUpperRow()
-                : Column(
-                    children: <Widget>[
-                      Expanded(child: _buildUpperRow()),
-                      SizedBox(height: widget.fullWidthFooterDividerGap),
-                      DashboardRenderDiagnosticProbe(
-                        candidate: 'partnerRhythmFooterLane',
-                        material: 'transparent fullWidthFooter lane',
-                        clip: 'inherited BudgetDistributionCardShell.ClipRRect',
-                        zOrder: 'pageContent>partnerFooter>rhythmChart',
-                        child: SizedBox(
-                          height: widget.fullWidthFooterMinimumHeight,
-                          child: widget.fullWidthFooter,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+          Expanded(child: _buildUpperRow()),
         ],
       ),
     ),
+  );
+
+  Widget _buildTitleRow() => Row(
+    children: <Widget>[
+      Expanded(flex: 188, child: widget.heading),
+      const SizedBox(width: 10),
+      Expanded(
+        flex: 160,
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                widget.rightHeading,
+                style: const TextStyle(
+                  color: Color(0xff51617f),
+                  fontSize: 9,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            if (widget.rightHeaderTrailing != null) widget.rightHeaderTrailing!,
+          ],
+        ),
+      ),
+    ],
   );
 
   Widget _buildUpperRow() => Row(
@@ -230,12 +212,7 @@ final class _BudgetDistributionPageSurfaceState
         flex: 188,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final footerHeight = widget.leftFooter == null
-                ? 0.0
-                : widget.leftFooterMinimumHeight + 3;
-            final availableHeight = (constraints.maxHeight - footerHeight)
-                .clamp(0.0, double.infinity)
-                .toDouble();
+            final availableHeight = constraints.maxHeight;
             final available =
                 ((constraints.maxWidth < availableHeight
                             ? constraints.maxWidth
@@ -246,68 +223,44 @@ final class _BudgetDistributionPageSurfaceState
             final baselineDiameter = widget.expandDonutToFit
                 ? available
                 : widget.donutDiameter.clamp(0.0, available).toDouble();
-            final diameter = baselineDiameter * widget.donutScale;
             final donutBox = SizedBox(
-              key: ValueKey('budget-distribution-donut-${diameter.toInt()}'),
-              width: diameter,
-              height: diameter,
+              key: ValueKey(
+                'budget-distribution-donut-${baselineDiameter.toInt()}',
+              ),
+              width: baselineDiameter,
+              height: baselineDiameter,
               child: widget.donut,
             );
-            return widget.leftFooter == null
-                ? Center(child: donutBox)
-                : Column(
-                    children: <Widget>[
-                      Center(child: donutBox),
-                      const SizedBox(height: 3),
-                      Expanded(child: widget.leftFooter!),
-                    ],
-                  );
+            return Center(child: donutBox);
           },
         ),
       ),
       const SizedBox(width: 10),
       Expanded(
         flex: 160,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(
-              widget.rightHeading,
-              style: const TextStyle(
-                color: Color(0xff51617f),
-                fontSize: 9,
-                height: 1,
-                fontWeight: FontWeight.w900,
+        child: widget.rows.isEmpty
+            ? Center(
+                child: Text(
+                  widget.emptyLabel,
+                  style: const TextStyle(
+                    color: Color(0xff66738d),
+                    fontSize: 8,
+                    height: 1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              )
+            : DashboardVerticalScrollBoundaryHandoff(
+                upperVerticalGestures: widget.upperVerticalGestures,
+                child: ListView.builder(
+                  key: widget.listKey,
+                  controller: _legendScrollController,
+                  primary: false,
+                  padding: EdgeInsets.zero,
+                  itemCount: widget.rows.length,
+                  itemBuilder: (_, index) => widget.rows[index],
+                ),
               ),
-            ),
-            const SizedBox(height: 7),
-            Expanded(
-              child: widget.rows.isEmpty
-                  ? Center(
-                      child: Text(
-                        widget.emptyLabel,
-                        style: const TextStyle(
-                          color: Color(0xff66738d),
-                          fontSize: 8,
-                          height: 1,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    )
-                  : DashboardVerticalScrollBoundaryHandoff(
-                      upperVerticalGestures: widget.upperVerticalGestures,
-                      child: ListView.builder(
-                        key: widget.listKey,
-                        controller: _legendScrollController,
-                        primary: false,
-                        padding: EdgeInsets.zero,
-                        itemCount: widget.rows.length,
-                        itemBuilder: (_, index) => widget.rows[index],
-                      ),
-                    ),
-            ),
-          ],
-        ),
       ),
     ],
   );
@@ -322,7 +275,7 @@ class BudgetDistributionLegendRow extends StatelessWidget {
     required this.id,
     required this.title,
     required this.color,
-    required this.roundedPercent,
+    required this.trailingMetric,
     required this.selected,
     this.height = 22,
     this.stateKey,
@@ -332,7 +285,7 @@ class BudgetDistributionLegendRow extends StatelessWidget {
   final String id;
   final String title;
   final Color color;
-  final int roundedPercent;
+  final BudgetDistributionTrailingMetric trailingMetric;
   final bool selected;
   final double height;
   final Key? stateKey;
@@ -376,7 +329,7 @@ class BudgetDistributionLegendRow extends StatelessWidget {
           ),
           const SizedBox(width: 3),
           Text(
-            '$roundedPercent%',
+            trailingMetric.label,
             style: const TextStyle(
               color: Color(0xff25365c),
               fontSize: 8.2,
@@ -388,4 +341,71 @@ class BudgetDistributionLegendRow extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// The right-side legend value is semantic, never a percentage-shaped slot.
+sealed class BudgetDistributionTrailingMetric {
+  const BudgetDistributionTrailingMetric();
+
+  String get label;
+
+  const factory BudgetDistributionTrailingMetric.sharePercent(int value) =
+      _BudgetDistributionSharePercentMetric;
+  const factory BudgetDistributionTrailingMetric.transactionCount(int value) =
+      _BudgetDistributionTransactionCountMetric;
+}
+
+final class _BudgetDistributionSharePercentMetric
+    extends BudgetDistributionTrailingMetric {
+  const _BudgetDistributionSharePercentMetric(this.value);
+
+  final int value;
+
+  @override
+  String get label => '$value%';
+}
+
+final class _BudgetDistributionTransactionCountMetric
+    extends BudgetDistributionTrailingMetric {
+  const _BudgetDistributionTransactionCountMetric(this.value);
+
+  final int value;
+
+  @override
+  String get label => '$value';
+}
+
+/// Compact title-row control: changes only locally-owned list presentation.
+class BudgetDistributionRankingSelector extends StatelessWidget {
+  const BudgetDistributionRankingSelector({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final BudgetDistributionRanking value;
+  final ValueChanged<BudgetDistributionRanking> onChanged;
+
+  @override
+  Widget build(BuildContext context) =>
+      PopupMenuButton<BudgetDistributionRanking>(
+        key: const ValueKey('budget-distribution-ranking-selector'),
+        tooltip: value.label,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 132),
+        icon: const Icon(
+          Icons.sort_rounded,
+          size: 15,
+          color: Color(0xff70809a),
+        ),
+        itemBuilder: (context) => <PopupMenuEntry<BudgetDistributionRanking>>[
+          for (final ranking in BudgetDistributionRanking.values)
+            CheckedPopupMenuItem<BudgetDistributionRanking>(
+              value: ranking,
+              checked: ranking == value,
+              child: Text(ranking.label),
+            ),
+        ],
+        onSelected: onChanged,
+      );
 }

@@ -8,6 +8,31 @@ import '../../time_navigation/presentation/time_label_formatter.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_visual_tokens.dart';
 
+/// Shared render-only switch for the Balance extended-sheet child shells.
+/// The scope deliberately owns no financial data or layout geometry: turning
+/// chrome off keeps every card allocation and its content in the Mother Card.
+final class BalanceAlternativeChildCardScope extends InheritedWidget {
+  const BalanceAlternativeChildCardScope({
+    super.key,
+    required this.usesChildCards,
+    required super.child,
+  });
+
+  final bool usesChildCards;
+
+  static bool usesChildCardsOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<
+            BalanceAlternativeChildCardScope
+          >()
+          ?.usesChildCards ??
+      true;
+
+  @override
+  bool updateShouldNotify(BalanceAlternativeChildCardScope oldWidget) =>
+      oldWidget.usesChildCards != usesChildCards;
+}
+
 /// Shared exact child shell from Havi 2 / Éves in the canonical HTML. The
 /// child renderers below own data binding only; bounds/gutters remain owned by
 /// the alternative Balance body layout.
@@ -22,43 +47,50 @@ final class BalanceAlternativeHtmlCardSurface extends StatelessWidget {
   final Size? minimumContentSize;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BalanceAlternativeHtmlTokens.childCardDecoration(),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(
-        BalanceAlternativeHtmlTokens.childBorderRadius,
+  Widget build(BuildContext context) {
+    final content = LayoutBuilder(
+      builder: (context, constraints) {
+        final minimum = minimumContentSize;
+        if (minimum == null ||
+            (constraints.maxWidth +
+                        BalanceAlternativeHtmlTokens
+                            .directContentMinimumTolerance >=
+                    minimum.width &&
+                constraints.maxHeight +
+                        BalanceAlternativeHtmlTokens
+                            .directContentMinimumTolerance >=
+                    minimum.height)) {
+          return child;
+        }
+        // Test/preview hosts can deliberately provide a smaller-than-device
+        // content body. Preserve the authored visual hierarchy by scaling a
+        // complete source-faithful composition rather than overflowing,
+        // while production-size cards continue through the direct path.
+        return FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: minimum.width,
+            height: minimum.height,
+            child: child,
+          ),
+        );
+      },
+    );
+    if (!BalanceAlternativeChildCardScope.usesChildCardsOf(context)) {
+      return content;
+    }
+    return DecoratedBox(
+      key: const ValueKey<String>('balance-alternative-child-card-shell'),
+      decoration: BalanceAlternativeHtmlTokens.childCardDecoration(),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(
+          BalanceAlternativeHtmlTokens.childBorderRadius,
+        ),
+        child: content,
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final minimum = minimumContentSize;
-          if (minimum == null ||
-              (constraints.maxWidth +
-                          BalanceAlternativeHtmlTokens
-                              .directContentMinimumTolerance >=
-                      minimum.width &&
-                  constraints.maxHeight +
-                          BalanceAlternativeHtmlTokens
-                              .directContentMinimumTolerance >=
-                      minimum.height)) {
-            return child;
-          }
-          // Test/preview hosts can deliberately provide a smaller-than-device
-          // content body. Preserve the authored visual hierarchy by scaling a
-          // complete source-faithful composition rather than overflowing,
-          // while production-size cards continue through the direct path.
-          return FittedBox(
-            fit: BoxFit.contain,
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: minimum.width,
-              height: minimum.height,
-              child: child,
-            ),
-          );
-        },
-      ),
-    ),
-  );
+    );
+  }
 }
 
 /// Havi 2's dominant, data-driven daily-spend time chart.

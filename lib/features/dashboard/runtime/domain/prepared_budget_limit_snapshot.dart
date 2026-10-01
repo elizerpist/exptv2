@@ -38,11 +38,14 @@ final class PreparedBudgetLimitCell {
   const PreparedBudgetLimitCell({
     required this.actualScaled100,
     required this.limitScaled100,
+    this.transactionCount = 0,
     this.limitSource = PreparedBudgetLimitSource.unavailable,
   }) : assert(actualScaled100 >= 0),
+       assert(transactionCount >= 0),
        assert(limitScaled100 == null || limitScaled100 >= 0);
 
   final int actualScaled100;
+  final int transactionCount;
   final int? limitScaled100;
   final PreparedBudgetLimitSource limitSource;
 

@@ -75,6 +75,7 @@ final class DashboardBudgetCategoryDistributionEntry {
     required this.colorId,
     required this.iconId,
     required this.actualScaled100,
+    required this.transactionCount,
     required this.roundedPercent,
   });
 
@@ -84,6 +85,7 @@ final class DashboardBudgetCategoryDistributionEntry {
   final String colorId;
   final String iconId;
   final int actualScaled100;
+  final int transactionCount;
   final int roundedPercent;
 }
 
@@ -245,11 +247,18 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
         targetHandle: targetHandle,
       );
       if (actual <= 0) continue;
+      final transactionCount = _transactionCountFor(
+        snapshot: snapshot,
+        direction: direction,
+        scope: scope,
+        targetHandle: targetHandle,
+      );
       raw.add(
         _RawDistributionEntry(
           targetHandle: targetHandle,
           category: category,
           actualScaled100: actual,
+          transactionCount: transactionCount,
         ),
       );
     }
@@ -273,6 +282,7 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
           colorId: entry.category.colorId,
           iconId: entry.category.iconId,
           actualScaled100: entry.actualScaled100,
+          transactionCount: entry.transactionCount,
           roundedPercent: total == 0
               ? 0
               : (entry.actualScaled100 * 100 + total ~/ 2) ~/ total,
@@ -320,6 +330,26 @@ abstract final class DashboardBudgetCategoryDistributionProjector {
     return rhythm.directionBank(direction);
   }
 
+  static int _transactionCountFor({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required LedgerDirection direction,
+    required LedgerTimeScope scope,
+    required int targetHandle,
+  }) => switch (scope) {
+    DayScope(:final date) => _rhythmFor(
+      snapshot,
+      direction,
+    ).targetView(targetHandle).transactionCountAtEpochDay(date.epochDay),
+    _ =>
+      snapshot
+          .cellAt(
+            direction: direction,
+            period: DashboardBudgetPeriodResolver.fromTimeScope(scope),
+            targetHandle: targetHandle,
+          )
+          .transactionCount,
+  };
+
   static LedgerTimeScope _scopeForPeriod(BudgetLimitPeriod period) =>
       switch (period) {
         BudgetLimitSumPeriod() => const AllTimeScope(),
@@ -335,11 +365,13 @@ final class _RawDistributionEntry {
     required this.targetHandle,
     required this.category,
     required this.actualScaled100,
+    required this.transactionCount,
   });
 
   final int targetHandle;
   final FluviCategory category;
   final int actualScaled100;
+  final int transactionCount;
 }
 
 /// Small LRU for prepared RAM bundles. It intentionally caches only semantic

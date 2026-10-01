@@ -8,6 +8,8 @@ import com.fluvi.core.model.LedgerDirection
 data class FluviPreparedBudgetDirectionBank(
     val orderedCategoryIds: List<String>,
     val actualScaled100: LongArray,
+    /** Exact ledger transaction count beside each prepared monetary cell. */
+    val transactionCount: LongArray = LongArray(actualScaled100.size),
     /** -1 means no persisted limit; zero remains a valid real limit. */
     val limitScaled100: LongArray,
     /** 0 unavailable, 1 inherited base, 2 concrete month override. */
@@ -19,6 +21,8 @@ data class FluviPreparedBudgetDirectionBank(
         require(orderedCategoryIds.distinct().size == orderedCategoryIds.size)
         val expected = periodSliceCount * targetCount
         require(actualScaled100.size == expected)
+        require(transactionCount.size == expected)
+        require(transactionCount.all { it >= 0L })
         require(limitScaled100.size == expected)
         require(limitSource.size == expected)
         require(limitScaled100.all { it >= -1L })

@@ -1207,6 +1207,12 @@ final class _BalancePresentationSection extends StatelessWidget {
               keyPrefix: 'balance-alternative-mother-card-visible',
             ),
           ),
+        _BalanceBooleanChoice(
+          label: 'Child kártyák a Balance módban',
+          value: settings.usesChildCards,
+          onChanged: controller.setUsesChildCards,
+          keyPrefix: 'balance-uses-child-cards',
+        ),
         const SizedBox(height: 8),
         _BalanceCarouselCardVisibilitySubmenu(
           controller: controller,
@@ -1329,6 +1335,44 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
       children: <Widget>[
         const Padding(
           padding: EdgeInsets.only(top: 4),
+          child: Text('SUM elrendezés'),
+        ),
+        RadioGroup<MindSumVisualStyle>(
+          groupValue: settings.sumVisualStyle,
+          onChanged: (style) {
+            if (style != null) controller.setSumVisualStyle(style);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final style in MindSumVisualStyle.values)
+                RadioListTile<MindSumVisualStyle>(
+                  key: ValueKey('mind-sum-visual-style-${style.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(style.tunerLabel),
+                  value: style,
+                ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          key: const ValueKey('mind-sum-layout-chooser-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('SUM jobb felső nézetválasztó'),
+          value: settings.showSumLayoutChooser,
+          onChanged: controller.setShowSumLayoutChooser,
+        ),
+        SwitchListTile(
+          key: const ValueKey('mind-year-actions-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Év mother card jobb felső gombjai'),
+          value: settings.showYearMotherCardActions,
+          onChanged: controller.setShowYearMotherCardActions,
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
           child: Text('Színezés'),
         ),
         RadioGroup<MindYearHeatmapPaletteStyle>(
@@ -1421,7 +1465,29 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
-          child: Text('Day idővonal'),
+          child: Text('Napi nézet'),
+        ),
+        RadioGroup<MindDayContentView>(
+          groupValue: settings.dayContentView,
+          onChanged: (view) {
+            if (view != null) controller.setDayContentView(view);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final view in MindDayContentView.values)
+                RadioListTile<MindDayContentView>(
+                  key: ValueKey('mind-day-content-view-${view.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(view.tunerLabel),
+                  value: view,
+                ),
+            ],
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Idővonal részletei'),
         ),
         RadioGroup<MindDayTimelineLayout>(
           groupValue: settings.dayTimelineLayout,

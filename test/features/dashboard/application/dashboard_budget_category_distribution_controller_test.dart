@@ -3,6 +3,9 @@ import 'package:fluvi/core/categories/domain/fluvi_category.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_budget_category_distribution_controller.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';
 import 'package:fluvi/features/dashboard/runtime/domain/prepared_budget_limit_snapshot.dart';
+import 'package:fluvi/features/dashboard/runtime/domain/prepared_spending_rhythm_snapshot.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
 
 void main() {
   test(
@@ -11,6 +14,7 @@ void main() {
       final snapshot = _snapshot(
         expenseIds: const <String>['a', 'b', 'c', 'd'],
         expenseMonth: const <int>[1000, 600, 300, 100, 0],
+        expenseMonthCounts: const <int>[9, 2, 7, 7, 0],
       );
 
       final bundle = DashboardBudgetCategoryDistributionProjector.project(
@@ -36,8 +40,71 @@ void main() {
         30,
         10,
       ]);
+      expect(frame.entries.map((entry) => entry.transactionCount), <int>[
+        2,
+        7,
+        7,
+      ]);
       expect(frame.sliceIndexForTargetHandle(0), -1);
       expect(frame.sliceIndexForTargetHandle(4), -1);
+    },
+  );
+
+  test(
+    'projects a DAY transaction count from prepared transaction facts rather than active-day count',
+    () {
+      const day = LocalDate(year: 2026, month: 1, day: 10);
+      final snapshot = PreparedBudgetLimitSnapshot(
+        coreRevision: 7,
+        yearWindowStart: 2026,
+        yearWindowEndInclusive: 2026,
+        incomeBank: _bank(const <String>[]),
+        expenseBank: _bank(const <String>['a', 'b']),
+        spendingRhythmSnapshot: PreparedSpendingRhythmSnapshot(
+          coreRevision: 7,
+          incomeBank: PreparedSpendingRhythmDirectionBank.empty(targetCount: 1),
+          expenseBank: PreparedSpendingRhythmDirectionBank(
+            targetCount: 3,
+            targetOffsets: const <int>[0, 1, 2, 2],
+            epochDays: <int>[day.epochDay, day.epochDay],
+            dailyActualScaled100: const <int>[1000, 1000],
+            dailyTransactionCount: const <int>[5, 5],
+            dayPartActualScaled100: const <int>[
+              1000,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              1000,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+            ],
+          ),
+        ),
+      );
+
+      final frame =
+          DashboardBudgetCategoryDistributionProjector.projectForScope(
+            snapshot: snapshot,
+            categories: _categories('a', 'b'),
+            scope: const DayScope(day),
+          ).frameFor(LedgerDirection.expense);
+
+      expect(frame.entries.single.categoryId, 'a');
+      expect(frame.entries.single.actualScaled100, 1000);
+      expect(
+        frame.entries.single.transactionCount,
+        5,
+        reason: 'One active day contains five exact ledger transactions.',
+      );
     },
   );
 
@@ -193,6 +260,7 @@ PreparedBudgetLimitSnapshot _snapshot({
   List<int>? expenseSum,
   List<int>? expenseYear,
   List<int>? expenseMonth,
+  List<int>? expenseMonthCounts,
 }) => PreparedBudgetLimitSnapshot(
   coreRevision: 7,
   yearWindowStart: 2026,
@@ -208,6 +276,7 @@ PreparedBudgetLimitSnapshot _snapshot({
     sum: expenseSum,
     year: expenseYear,
     month: expenseMonth,
+    monthCounts: expenseMonthCounts,
   ),
 );
 
@@ -216,26 +285,29 @@ PreparedBudgetLimitDirectionBank _bank(
   List<int>? sum,
   List<int>? year,
   List<int>? month,
+  List<int>? monthCounts,
 }) {
   final targetCount = ids.length + 1;
   final cells = List<PreparedBudgetLimitCell>.filled(
     14 * targetCount,
     const PreparedBudgetLimitCell(actualScaled100: 0, limitScaled100: null),
   );
-  void install(int slice, List<int>? values) {
+  void install(int slice, List<int>? values, List<int>? counts) {
     if (values == null) return;
     expect(values.length, targetCount);
+    expect(counts == null || counts.length == targetCount, isTrue);
     for (var handle = 0; handle < targetCount; handle += 1) {
       cells[slice * targetCount + handle] = PreparedBudgetLimitCell(
         actualScaled100: values[handle],
         limitScaled100: null,
+        transactionCount: counts?[handle] ?? 0,
       );
     }
   }
 
-  install(0, sum);
-  install(1, year);
-  install(2, month);
+  install(0, sum, null);
+  install(1, year, null);
+  install(2, month, monthCounts);
   return PreparedBudgetLimitDirectionBank(
     orderedCategoryIds: ids,
     cells: cells,

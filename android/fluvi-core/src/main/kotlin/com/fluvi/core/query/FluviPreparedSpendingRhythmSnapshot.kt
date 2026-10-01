@@ -34,12 +34,14 @@ object BudgetRhythmDayPartClassifier {
 class FluviPreparedSpendingRhythmPoint(
     val epochDay: Long,
     val actualScaled100: Long,
+    val transactionCount: Long = 0L,
     dayPartActualScaled100: LongArray,
 ) {
     val dayPartActualScaled100: LongArray = dayPartActualScaled100.copyOf()
 
     init {
         require(actualScaled100 > 0L)
+        require(transactionCount >= 0L)
         require(this.dayPartActualScaled100.size == SpendingRhythmDayPart.entries.size)
         require(this.dayPartActualScaled100.all { it >= 0L })
         require(this.dayPartActualScaled100.sum() == actualScaled100)

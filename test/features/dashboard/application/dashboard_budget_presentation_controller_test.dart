@@ -44,11 +44,18 @@ void main() {
     final projections = <DashboardBudgetScopeAnalysis, (String, String, bool)>{
       DashboardBudgetDayProjectionAnalysis(
         projection: dayProjection,
+        dailyAllowance: DashboardBudgetDayAllowanceAnalysis.derive(
+          selectedDay: const LocalDate(year: 2026, month: 1, day: 10),
+          logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+          selectedDayActualScaled100: 520000,
+          spentBeforeSelectedDayScaled100: 12000000,
+          monthlyLimitScaled100: 30000000,
+        ),
         canonicalMonthlyActualScaled100: 12000000,
       ): (
-        'Napi tempó',
-        'tempó',
-        true,
+        'Mai mozgástér',
+        'napi budget',
+        false,
       ),
       const DashboardBudgetMonthAnalysis(
         monthlyActualScaled100: 100,
@@ -628,8 +635,8 @@ void main() {
 
       presentation.setTargetHandle(1);
 
-      expect(presentation.value.header.displayNumeratorScaled100, 4);
-      expect(presentation.value.header.displayDenominatorScaled100, 32);
+      expect(presentation.value.header.displayNumeratorScaled100, 42);
+      expect(presentation.value.header.displayDenominatorScaled100, 33);
       expect(presentation.value.header.limitScaled100, 1000);
       expect(
         presentation.value.header.limitKey!.period,
@@ -639,7 +646,7 @@ void main() {
   );
 
   test(
-    'a Day Budget publishes daily pace while preserving the monthly edit actual',
+    'a Day Budget publishes selected-day actual and daily allowance while preserving the monthly edit actual',
     () {
       final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
         _category('food'),
@@ -667,10 +674,10 @@ void main() {
       presentation.setTargetHandle(1);
       final day = presentation.value.liveSelection;
 
-      // DAY Header is average actual spend/day over allowed spend/day. The
-      // month-end forecast stays available as a secondary calculation only.
-      expect(day.displayNumeratorScaled100, 4);
-      expect(day.displayDenominatorScaled100, 32);
+      // DAY Header is selected-day actual over remaining daily allowance.
+      // The month-end forecast remains a secondary calculation.
+      expect(day.displayNumeratorScaled100, 42);
+      expect(day.displayDenominatorScaled100, 33);
       expect(day.monthlyLimitScaled100, 1000);
       expect(day.canonicalActualScaled100ForLimitEdit, 999);
       expect(day.monthEndProjection!.monthToDateActualScaled100, 42);
@@ -682,8 +689,8 @@ void main() {
         day.visual.chromeGeometry,
         BudgetLimitProgressChromeGeometry.verticalProjection,
       );
-      expect(day.visual.rawProgress, 42 * 31 / (10 * 1000));
-      expect(day.visual.visualProgress, closeTo(.09765, 1e-9));
+      expect(day.visual.rawProgress, 42 / 33);
+      expect(day.visual.visualProgress, 42 / 33 * .75);
       expect(day.limitEditContext!.actualScaled100, 999);
       expect(
         day.limitEditContext!.key.period,
@@ -694,9 +701,9 @@ void main() {
         scope: const DayScope(LocalDate(year: 2026, month: 1, day: 19)),
       );
       final otherDay = presentation.value.liveSelection;
-      expect(otherDay.displayNumeratorScaled100, 4);
-      expect(otherDay.displayDenominatorScaled100, 32);
-      expect(otherDay.monthEndProjection!.key, day.monthEndProjection!.key);
+      expect(otherDay.displayNumeratorScaled100, isNull);
+      expect(otherDay.displayDenominatorScaled100, isNull);
+      expect(otherDay.monthEndProjection, isNull);
 
       visible.value = _visibleFrame(
         scope: const MonthScope(YearMonth(year: 2026, month: 1)),
@@ -712,64 +719,67 @@ void main() {
     },
   );
 
-  test('a Day optimistic monthly-limit edit updates only the pace gauge', () {
-    final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
-      _category('food'),
-    ]);
-    final direction = TransactionDirectionController(
-      initialDirection: TransactionDirection.expense,
-    );
-    final visible = ValueNotifier<DashboardVisibleFrame?>(
-      _visibleFrame(
-        scope: const DayScope(LocalDate(year: 2026, month: 1, day: 2)),
-      ),
-    );
-    late final DashboardBudgetPresentationController presentation;
-    final edits = DashboardBudgetLimitEditController(
-      repository: const _NoReadFinancialLimitRepository(),
-      isKeyCurrent: (key) => presentation.value.header.limitKey == key,
-    );
-    presentation = DashboardBudgetPresentationController(
-      categoryCollection: categories,
-      visibleFrame: visible,
-      transactionDirection: direction,
-      snapshotForCurrentFrame: _dayAwareSnapshot,
-      logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
-      limitEditController: edits,
-    );
-    addTearDown(categories.dispose);
-    addTearDown(direction.dispose);
-    addTearDown(visible.dispose);
-    addTearDown(edits.dispose);
-    addTearDown(presentation.dispose);
+  test(
+    'a Day optimistic monthly-limit edit updates only the daily allowance gauge',
+    () {
+      final categories = ValueNotifier<List<FluviCategory>>(<FluviCategory>[
+        _category('food'),
+      ]);
+      final direction = TransactionDirectionController(
+        initialDirection: TransactionDirection.expense,
+      );
+      final visible = ValueNotifier<DashboardVisibleFrame?>(
+        _visibleFrame(
+          scope: const DayScope(LocalDate(year: 2026, month: 1, day: 2)),
+        ),
+      );
+      late final DashboardBudgetPresentationController presentation;
+      final edits = DashboardBudgetLimitEditController(
+        repository: const _NoReadFinancialLimitRepository(),
+        isKeyCurrent: (key) => presentation.value.header.limitKey == key,
+      );
+      presentation = DashboardBudgetPresentationController(
+        categoryCollection: categories,
+        visibleFrame: visible,
+        transactionDirection: direction,
+        snapshotForCurrentFrame: _dayAwareSnapshot,
+        logicalAsOfDate: const LocalDate(year: 2026, month: 1, day: 10),
+        limitEditController: edits,
+      );
+      addTearDown(categories.dispose);
+      addTearDown(direction.dispose);
+      addTearDown(visible.dispose);
+      addTearDown(edits.dispose);
+      addTearDown(presentation.dispose);
 
-    presentation.setTargetHandle(1);
-    final before = presentation.value.liveSelection;
-    final session = edits.startEdit(before.limitEditContext!)!;
-    edits.applySemanticTick(
-      session,
-      direction: 1,
-      amountStepScaled100: 100,
-      tickCount: 1,
-      source: DashboardBudgetLimitEditSource.drag,
-    );
-    final after = presentation.value.liveSelection;
+      presentation.setTargetHandle(1);
+      final before = presentation.value.liveSelection;
+      final session = edits.startEdit(before.limitEditContext!)!;
+      edits.applySemanticTick(
+        session,
+        direction: 1,
+        amountStepScaled100: 100,
+        tickCount: 1,
+        source: DashboardBudgetLimitEditSource.drag,
+      );
+      final after = presentation.value.liveSelection;
 
-    expect(after.limitKey, before.limitKey);
-    expect(after.displayNumeratorScaled100, before.displayNumeratorScaled100);
-    expect(
-      after.canonicalActualScaled100ForLimitEdit,
-      before.canonicalActualScaled100ForLimitEdit,
-    );
-    expect(after.limitScaled100, 1100);
-    expect(
-      after.monthEndProjection!.key,
-      isNot(before.monthEndProjection!.key),
-      reason: 'The limit-dependent forecast presentation has a new epoch.',
-    );
-    expect(after.visual.rawProgress, 42 * 31 / (10 * 1100));
-    expect(after.visual.visualProgress, (42 * 31 / (10 * 1100)) * .75);
-  });
+      expect(after.limitKey, before.limitKey);
+      expect(after.displayNumeratorScaled100, before.displayNumeratorScaled100);
+      expect(
+        after.canonicalActualScaled100ForLimitEdit,
+        before.canonicalActualScaled100ForLimitEdit,
+      );
+      expect(after.limitScaled100, 1100);
+      expect(
+        after.monthEndProjection!.key,
+        isNot(before.monthEndProjection!.key),
+        reason: 'The limit-dependent forecast presentation has a new epoch.',
+      );
+      expect(after.visual.rawProgress, 42 / 37);
+      expect(after.visual.visualProgress, 42 / 37 * .75);
+    },
+  );
 
   test('99 percent visual state cannot be published as a full ring', () {
     const key = FinancialLimitKey(

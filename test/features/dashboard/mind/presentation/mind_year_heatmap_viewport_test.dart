@@ -1313,6 +1313,43 @@ void main() {
     },
   );
 
+  testWidgets(
+    'YEAR-ACTIONS-01 RED: the Year mother-card top-right action follows the persisted visibility preference',
+    (tester) async {
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.fourByThree);
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(settings.dispose);
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 420,
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-year-direct-grid-selector-top')),
+        findsOneWidget,
+      );
+      settings.setShowYearMotherCardActions(false);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-direct-grid-selector-top')),
+        findsNothing,
+      );
+    },
+  );
+
   test(
     '4x3 fit derives independent live vertical cells without changing width',
     () {

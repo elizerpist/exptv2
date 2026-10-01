@@ -145,6 +145,7 @@ final class BalancePresentationSettings {
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.separateCards,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.currentCarouselDetail,
     this.alternativeMotherCardVisible = true,
+    this.usesChildCards = true,
     Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
         const <BalanceCarouselCardKind>{},
     required this.revision,
@@ -191,6 +192,7 @@ final class BalancePresentationSettings {
       contentSurfaceStyle = BalanceContentSurfaceStyle.separateCards,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.currentCarouselDetail,
       alternativeMotherCardVisible = true,
+      usesChildCards = true,
       hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
       revision = 0;
 
@@ -209,9 +211,16 @@ final class BalancePresentationSettings {
   final double balanceContentCardBorderOpacity;
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
+
   /// Controls only the physical unified parent/backplate. The alternative
   /// content composition and dashboard geometry retain their existing owners.
   final bool alternativeMotherCardVisible;
+
+  /// Retains the established four-card Balance dashboard geometry while
+  /// allowing its individual child-card chrome to be removed. This is a
+  /// presentation choice only: data, selected topic, carousel motion and
+  /// Mother Card ownership stay unchanged.
+  final bool usesChildCards;
   final Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds;
   final int revision;
 
@@ -242,6 +251,7 @@ final class BalancePresentationSettings {
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
     bool? alternativeMotherCardVisible,
+    bool? usesChildCards,
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
     int? revision,
   }) => BalancePresentationSettings(
@@ -277,6 +287,7 @@ final class BalancePresentationSettings {
     unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
     alternativeMotherCardVisible:
         alternativeMotherCardVisible ?? this.alternativeMotherCardVisible,
+    usesChildCards: usesChildCards ?? this.usesChildCards,
     hiddenBalanceCarouselCardKinds:
         hiddenBalanceCarouselCardKinds ?? this.hiddenBalanceCarouselCardKinds,
     revision: revision ?? this.revision,
@@ -307,6 +318,7 @@ final class BalancePresentationSettings {
       other.contentSurfaceStyle == contentSurfaceStyle &&
       other.unifiedBodyLayout == unifiedBodyLayout &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
+      other.usesChildCards == usesChildCards &&
       setEquals(
         other.hiddenBalanceCarouselCardKinds,
         hiddenBalanceCarouselCardKinds,
@@ -330,6 +342,7 @@ final class BalancePresentationSettings {
     contentSurfaceStyle,
     unifiedBodyLayout,
     alternativeMotherCardVisible,
+    usesChildCards,
     Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
     revision,
   );
@@ -476,6 +489,15 @@ final class BalancePresentationController
     if (current.alternativeMotherCardVisible == next) return;
     value = current.copyWith(
       alternativeMotherCardVisible: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setUsesChildCards(bool next) {
+    final current = value;
+    if (current.usesChildCards == next) return;
+    value = current.copyWith(
+      usesChildCards: next,
       revision: current.revision + 1,
     );
   }

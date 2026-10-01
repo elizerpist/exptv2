@@ -25,7 +25,7 @@ final class IsolateDashboardPreparedBudgetLimitSnapshotDecodeWorker {
 /// Compact versioned transport for query-independent dense Budget values.
 abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int magic = 0x464c424c;
-  static const int version = 5;
+  static const int version = 6;
   static const int missingLimitSentinel = -1;
   static const int maximumPayloadBytes = 16 * 1024 * 1024;
   static const int maximumCategoryCount = 512;
@@ -34,7 +34,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
   static const int spendingRhythmPartsPerPoint =
       SpendingRhythmDayPart.bucketCount;
   static const int spendingRhythmBytesPerPoint =
-      8 + 8 + spendingRhythmPartsPerPoint * 8;
+      8 + 8 + 8 + spendingRhythmPartsPerPoint * 8;
   static const int maximumSpendingRhythmPointCount =
       maximumPayloadBytes ~/ spendingRhythmBytesPerPoint;
 
@@ -104,6 +104,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     }
     final epochDays = List<int>.filled(pointCount, 0, growable: false);
     final actuals = List<int>.filled(pointCount, 0, growable: false);
+    final counts = List<int>.filled(pointCount, 0, growable: false);
     final parts = List<int>.filled(
       pointCount * spendingRhythmPartsPerPoint,
       0,
@@ -112,6 +113,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
     for (var point = 0; point < pointCount; point += 1) {
       epochDays[point] = reader.readInt64();
       actuals[point] = reader.readInt64();
+      counts[point] = reader.readInt64();
       for (var part = 0; part < spendingRhythmPartsPerPoint; part += 1) {
         parts[point * spendingRhythmPartsPerPoint + part] = reader.readInt64();
       }
@@ -121,6 +123,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       targetOffsets: offsets,
       epochDays: epochDays,
       dailyActualScaled100: actuals,
+      dailyTransactionCount: counts,
       dayPartActualScaled100: parts,
     );
   }
@@ -146,6 +149,18 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       (_) => reader.readInt64(),
       growable: false,
     );
+    final transactionCount = reader.readInt32();
+    if (transactionCount != actualCount) {
+      throw FormatException('Budget actual/count dense vector mismatch.');
+    }
+    final counts = List<int>.generate(
+      transactionCount,
+      (_) => reader.readInt64(),
+      growable: false,
+    );
+    if (counts.any((count) => count < 0)) {
+      throw FormatException('Negative Budget transaction count.');
+    }
     final limitCount = reader.readInt32();
     if (limitCount != actualCount) {
       throw FormatException('Budget actual/limit dense vector mismatch.');
@@ -170,6 +185,7 @@ abstract final class DashboardPreparedBudgetLimitSnapshotBinaryCodec {
       }
       return PreparedBudgetLimitCell(
         actualScaled100: actuals[index],
+        transactionCount: counts[index],
         limitScaled100: value == missingLimitSentinel ? null : value,
         limitSource: sources[index],
       );

@@ -532,6 +532,7 @@ final class _BalanceDashboardCoreSurfaceState
               _BalanceAlternativeScopeScaffold(
                 geometry: geometry,
                 presentation: widget.balanceLinkedPresentation,
+                usesChildCards: settings.usesChildCards,
               ),
             DashboardCoreModeHeaderScaffold(
               bounds: geometry.headerBounds,
@@ -909,46 +910,59 @@ final class _BalanceAlternativeScopeScaffold extends StatelessWidget {
   const _BalanceAlternativeScopeScaffold({
     required this.geometry,
     required this.presentation,
+    required this.usesChildCards,
   });
 
   final DashboardLayoutFrame geometry;
   final ValueListenable<DashboardBalanceLinkedPresentation?>? presentation;
+  final bool usesChildCards;
 
   @override
   Widget build(BuildContext context) {
     final linked = presentation;
-    if (linked == null) return _BalanceFourSectionScaffold(geometry: geometry);
+    if (linked == null) {
+      return BalanceAlternativeChildCardScope(
+        usesChildCards: usesChildCards,
+        child: _BalanceFourSectionScaffold(geometry: geometry),
+      );
+    }
     return ValueListenableBuilder<DashboardBalanceLinkedPresentation?>(
       valueListenable: linked,
       builder: (context, value, _) {
         if (value == null) {
-          return _BalanceFourSectionScaffold(geometry: geometry);
+          return BalanceAlternativeChildCardScope(
+            usesChildCards: usesChildCards,
+            child: _BalanceFourSectionScaffold(geometry: geometry),
+          );
         }
         final alternative = BalanceAlternativeScopePresentation.fromLinked(
           value,
         );
-        return switch (alternative) {
-          BalanceAlternativeSumPresentation() =>
-            _BalanceSumExtendedSheetScaffold(
-              geometry: geometry,
-              presentation: alternative,
-            ),
-          BalanceAlternativeYearPresentation() =>
-            _BalanceYearExtendedSheetScaffold(
-              geometry: geometry,
-              presentation: alternative,
-            ),
-          BalanceAlternativeMonthPresentation() =>
-            _BalanceMonthExtendedSheetScaffold(
-              geometry: geometry,
-              presentation: alternative,
-            ),
-          BalanceAlternativeDayPresentation() =>
-            _BalanceDayExtendedSheetScaffold(
-              geometry: geometry,
-              presentation: alternative,
-            ),
-        };
+        return BalanceAlternativeChildCardScope(
+          usesChildCards: usesChildCards,
+          child: switch (alternative) {
+            BalanceAlternativeSumPresentation() =>
+              _BalanceSumExtendedSheetScaffold(
+                geometry: geometry,
+                presentation: alternative,
+              ),
+            BalanceAlternativeYearPresentation() =>
+              _BalanceYearExtendedSheetScaffold(
+                geometry: geometry,
+                presentation: alternative,
+              ),
+            BalanceAlternativeMonthPresentation() =>
+              _BalanceMonthExtendedSheetScaffold(
+                geometry: geometry,
+                presentation: alternative,
+              ),
+            BalanceAlternativeDayPresentation() =>
+              _BalanceDayExtendedSheetScaffold(
+                geometry: geometry,
+                presentation: alternative,
+              ),
+          },
+        );
       },
     );
   }

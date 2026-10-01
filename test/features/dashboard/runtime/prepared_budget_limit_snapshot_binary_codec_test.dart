@@ -39,6 +39,16 @@ void main() {
       expect(snapshot.expenseBank.orderedCategoryIds, const <String>['rent']);
       expect(snapshot.nativeSqlCallCount, 4);
       expect(snapshot.nativeSqlDurationMicros, 1);
+      expect(
+        snapshot
+            .cellAt(
+              direction: LedgerDirection.income,
+              period: const BudgetLimitPeriod.sum(),
+              targetHandle: 1,
+            )
+            .transactionCount,
+        0,
+      );
       expect(snapshot.spendingRhythmSnapshot, isNotNull);
       expect(
         snapshot
@@ -218,6 +228,10 @@ Uint8List _encode({
     }
     int32(cells.length);
     for (final cell in cells) {
+      int64(cell.transactionCount);
+    }
+    int32(cells.length);
+    for (final cell in cells) {
       int64(
         cell.limitScaled100 ??
             DashboardPreparedBudgetLimitSnapshotBinaryCodec
@@ -249,6 +263,7 @@ Uint8List _encode({
     for (final point in points) {
       int64(point.$1);
       int64(point.$2);
+      int64(point.$2 > 0 ? 1 : 0);
       for (final part in point.$3) {
         int64(part);
       }

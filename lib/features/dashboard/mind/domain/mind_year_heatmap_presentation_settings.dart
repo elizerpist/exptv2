@@ -96,6 +96,20 @@ enum MindSumYearRowLayout {
   };
 }
 
+/// Visual family for SUM only. It is a local rendering preference and never
+/// changes the admitted month/year financial frame.
+enum MindSumVisualStyle {
+  current,
+  sumA,
+  sumB;
+
+  String get tunerLabel => switch (this) {
+    MindSumVisualStyle.current => 'Current',
+    MindSumVisualStyle.sumA => 'SUM-A',
+    MindSumVisualStyle.sumB => 'SUM-B',
+  };
+}
+
 /// Where the static Hungarian initial appears relative to a Sum month tile.
 enum MindSumMonthLabelPlacement {
   none,
@@ -164,6 +178,19 @@ enum MindDayTimelineLayout {
   };
 }
 
+/// Chooses which existing Day visualization is rendered over the same
+/// immutable resident frame.  The setting is presentation-only: it does not
+/// change the range, selected day, query or financial membership.
+enum MindDayContentView {
+  allVsSliderHeatmap,
+  timeline;
+
+  String get tunerLabel => switch (this) {
+    MindDayContentView.allVsSliderHeatmap => 'All vs slider hőtérkép',
+    MindDayContentView.timeline => 'Idővonal',
+  };
+}
+
 /// Immutable user preferences for visualizing an admitted annual heatmap.
 /// None of these values changes financial membership, Query state or score.
 @immutable
@@ -175,6 +202,9 @@ final class MindYearHeatmapPresentationSettings {
     this.scaleMode = MindHeatmapScaleMode.dynamicMixed,
     this.sliderHandleSize = MindSliderHandleSize.normal,
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
+    this.sumVisualStyle = MindSumVisualStyle.current,
+    this.showSumLayoutChooser = true,
+    this.showYearMotherCardActions = true,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
     this.sumVisibleChartCount = MindSumVisibleChartCount.two,
     this.yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
@@ -187,6 +217,7 @@ final class MindYearHeatmapPresentationSettings {
     this.sumLineTemporalSmoothingEnabled = false,
     this.sumLineSmoothingWindow = MindSumSmoothingWindow.days3,
     this.sumLineZoomAdaptiveSmoothingEnabled = false,
+    this.dayContentView = MindDayContentView.allVsSliderHeatmap,
     this.dayTimelineLayout = MindDayTimelineLayout.statsAndTimeline,
   });
 
@@ -196,6 +227,9 @@ final class MindYearHeatmapPresentationSettings {
       scaleMode = MindHeatmapScaleMode.dynamicMixed,
       sliderHandleSize = MindSliderHandleSize.normal,
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
+      sumVisualStyle = MindSumVisualStyle.current,
+      showSumLayoutChooser = true,
+      showYearMotherCardActions = true,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       sumVisibleChartCount = MindSumVisibleChartCount.two,
       yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
@@ -208,6 +242,7 @@ final class MindYearHeatmapPresentationSettings {
       sumLineTemporalSmoothingEnabled = false,
       sumLineSmoothingWindow = MindSumSmoothingWindow.days3,
       sumLineZoomAdaptiveSmoothingEnabled = false,
+      dayContentView = MindDayContentView.allVsSliderHeatmap,
       dayTimelineLayout = MindDayTimelineLayout.statsAndTimeline,
       revision = 0;
 
@@ -216,6 +251,9 @@ final class MindYearHeatmapPresentationSettings {
   final MindHeatmapScaleMode scaleMode;
   final MindSliderHandleSize sliderHandleSize;
   final MindSumYearRowLayout sumYearRowLayout;
+  final MindSumVisualStyle sumVisualStyle;
+  final bool showSumLayoutChooser;
+  final bool showYearMotherCardActions;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
   final MindYearHeatmapGridLayout yearGridLayout;
@@ -232,6 +270,7 @@ final class MindYearHeatmapPresentationSettings {
   final MindSumSmoothingWindow sumLineSmoothingWindow;
   final bool sumLineZoomAdaptiveSmoothingEnabled;
   final MindDayTimelineLayout dayTimelineLayout;
+  final MindDayContentView dayContentView;
 
   @Deprecated('Use yearMonthCardProfitabilityTintEnabled.')
   bool get yearThreeColumnProfitabilityTintEnabled =>
@@ -248,6 +287,9 @@ final class MindYearHeatmapPresentationSettings {
     MindHeatmapScaleMode? scaleMode,
     MindSliderHandleSize? sliderHandleSize,
     MindSumYearRowLayout? sumYearRowLayout,
+    MindSumVisualStyle? sumVisualStyle,
+    bool? showSumLayoutChooser,
+    bool? showYearMotherCardActions,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     MindSumVisibleChartCount? sumVisibleChartCount,
     MindYearHeatmapGridLayout? yearGridLayout,
@@ -260,6 +302,7 @@ final class MindYearHeatmapPresentationSettings {
     bool? sumLineTemporalSmoothingEnabled,
     MindSumSmoothingWindow? sumLineSmoothingWindow,
     bool? sumLineZoomAdaptiveSmoothingEnabled,
+    MindDayContentView? dayContentView,
     MindDayTimelineLayout? dayTimelineLayout,
     int? revision,
   }) => MindYearHeatmapPresentationSettings(
@@ -268,6 +311,10 @@ final class MindYearHeatmapPresentationSettings {
     scaleMode: scaleMode ?? this.scaleMode,
     sliderHandleSize: sliderHandleSize ?? this.sliderHandleSize,
     sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
+    sumVisualStyle: sumVisualStyle ?? this.sumVisualStyle,
+    showSumLayoutChooser: showSumLayoutChooser ?? this.showSumLayoutChooser,
+    showYearMotherCardActions:
+        showYearMotherCardActions ?? this.showYearMotherCardActions,
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
     sumVisibleChartCount: sumVisibleChartCount ?? this.sumVisibleChartCount,
@@ -292,6 +339,7 @@ final class MindYearHeatmapPresentationSettings {
     sumLineZoomAdaptiveSmoothingEnabled:
         sumLineZoomAdaptiveSmoothingEnabled ??
         this.sumLineZoomAdaptiveSmoothingEnabled,
+    dayContentView: dayContentView ?? this.dayContentView,
     dayTimelineLayout: dayTimelineLayout ?? this.dayTimelineLayout,
     revision: revision ?? this.revision,
   );
@@ -304,6 +352,9 @@ final class MindYearHeatmapPresentationSettings {
       other.scaleMode == scaleMode &&
       other.sliderHandleSize == sliderHandleSize &&
       other.sumYearRowLayout == sumYearRowLayout &&
+      other.sumVisualStyle == sumVisualStyle &&
+      other.showSumLayoutChooser == showSumLayoutChooser &&
+      other.showYearMotherCardActions == showYearMotherCardActions &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.sumVisibleChartCount == sumVisibleChartCount &&
       other.yearGridLayout == yearGridLayout &&
@@ -320,16 +371,20 @@ final class MindYearHeatmapPresentationSettings {
       other.sumLineSmoothingWindow == sumLineSmoothingWindow &&
       other.sumLineZoomAdaptiveSmoothingEnabled ==
           sumLineZoomAdaptiveSmoothingEnabled &&
+      other.dayContentView == dayContentView &&
       other.dayTimelineLayout == dayTimelineLayout &&
       other.revision == revision;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll(<Object?>[
     paletteStyle,
     scaleResolution,
     scaleMode,
     sliderHandleSize,
     sumYearRowLayout,
+    sumVisualStyle,
+    showSumLayoutChooser,
+    showYearMotherCardActions,
     sumMonthLabelPlacement,
     sumVisibleChartCount,
     yearGridLayout,
@@ -342,9 +397,10 @@ final class MindYearHeatmapPresentationSettings {
     sumLineTemporalSmoothingEnabled,
     sumLineSmoothingWindow,
     sumLineZoomAdaptiveSmoothingEnabled,
+    dayContentView,
     dayTimelineLayout,
     revision,
-  );
+  ]);
 }
 
 /// One small presentation owner for Mind's annual grid. It intentionally has
@@ -393,6 +449,33 @@ final class MindYearHeatmapPresentationController
     if (current.sumYearRowLayout == layout) return;
     value = current.copyWith(
       sumYearRowLayout: layout,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setSumVisualStyle(MindSumVisualStyle style) {
+    final current = value;
+    if (current.sumVisualStyle == style) return;
+    value = current.copyWith(
+      sumVisualStyle: style,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setShowSumLayoutChooser(bool visible) {
+    final current = value;
+    if (current.showSumLayoutChooser == visible) return;
+    value = current.copyWith(
+      showSumLayoutChooser: visible,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setShowYearMotherCardActions(bool visible) {
+    final current = value;
+    if (current.showYearMotherCardActions == visible) return;
+    value = current.copyWith(
+      showYearMotherCardActions: visible,
       revision: current.revision + 1,
     );
   }
@@ -511,6 +594,15 @@ final class MindYearHeatmapPresentationController
     if (current.sumLineZoomAdaptiveSmoothingEnabled == enabled) return;
     value = current.copyWith(
       sumLineZoomAdaptiveSmoothingEnabled: enabled,
+      revision: current.revision + 1,
+    );
+  }
+
+  void setDayContentView(MindDayContentView view) {
+    final current = value;
+    if (current.dayContentView == view) return;
+    value = current.copyWith(
+      dayContentView: view,
       revision: current.revision + 1,
     );
   }

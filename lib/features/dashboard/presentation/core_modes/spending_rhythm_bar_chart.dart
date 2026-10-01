@@ -4,16 +4,16 @@ import '../../application/dashboard_spending_rhythm_controller.dart';
 import '../widgets/dashboard_render_diagnostic_probe.dart';
 import 'spending_rhythm_bar_layout.dart';
 
-/// Full-width, scope-aware Partner Spending Rhythm renderer. Its immutable
-/// input already contains exact bucket identity and money; this widget only
-/// resolves layout and paint fractions.
+/// Full-width, scope-aware Spending Rhythm renderer for its remaining
+/// non-Partner consumers. Its immutable input already contains exact bucket
+/// identity and money; this widget only resolves layout and paint fractions.
 class SpendingRhythmBarChart extends StatefulWidget {
   const SpendingRhythmBarChart({super.key, required this.state});
 
   /// The footer is one named geometry contract, not an unexplained minimum.
   /// The previously accepted 44dp plot grows by another exact ten percent.
-  /// The 4.4dp delta is reclaimed by [BudgetPartnerDistributionLayout] from
-  /// the upper chart region, never from the outer Card2 envelope.
+  /// Its consumer owns the surrounding geometry; Partner Card2 deliberately
+  /// no longer reserves a footer lane for this visualization.
   static const double titleLaneHeight = 8;
   static const double titleToPlotGap = 3;
   static const double plotToAxisGap = 2;

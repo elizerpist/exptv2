@@ -53,11 +53,11 @@ final class DashboardBudgetTargetPresentationItem {
   };
 }
 
-/// Distinguishes canonical utilization from the DAY-only derived pace.
+/// Distinguishes canonical utilization from the DAY-only dynamic allowance.
 /// This is presentation analysis mode, not another persisted Budget period.
 enum DashboardBudgetAnalysisMode {
   actualUtilization,
-  dailyPace,
+  dailyAllowance,
   annualSegments,
   typicalMarker,
 }
@@ -149,7 +149,7 @@ final class DashboardBudgetLiveSelectionState {
       chromeGeometry: switch (analysisMode) {
         DashboardBudgetAnalysisMode.actualUtilization =>
           BudgetLimitProgressChromeGeometry.circular,
-        DashboardBudgetAnalysisMode.dailyPace =>
+        DashboardBudgetAnalysisMode.dailyAllowance =>
           BudgetLimitProgressChromeGeometry.verticalProjection,
         DashboardBudgetAnalysisMode.annualSegments =>
           BudgetLimitProgressChromeGeometry.annualSegments,
@@ -197,27 +197,16 @@ final class DashboardBudgetLiveSelectionState {
   DashboardBudgetLiveSelectionState withActiveScalarLimit(
     int effectiveLimitScaled100,
   ) {
-    final projection = monthEndProjection;
-    final displayDenominator =
-        analysisMode == DashboardBudgetAnalysisMode.dailyPace
-        ? projection == null ||
-                  projection.daysInMonth == 0 ||
-                  effectiveLimitScaled100 <= 0
-              ? null
-              : (effectiveLimitScaled100 + projection.daysInMonth ~/ 2) ~/
-                    projection.daysInMonth
-        : effectiveLimitScaled100;
+    final dayAllowance = scopeAnalysis is DashboardBudgetDayProjectionAnalysis
+        ? (scopeAnalysis as DashboardBudgetDayProjectionAnalysis).dailyAllowance
+        : null;
+    final displayDenominator = dayAllowance == null
+        ? effectiveLimitScaled100
+        : dayAllowance.dailyAvailableForMonthlyLimit(effectiveLimitScaled100);
     final rawProgress =
-        analysisMode == DashboardBudgetAnalysisMode.dailyPace &&
-            projection != null &&
-            effectiveLimitScaled100 > 0 &&
-            projection.elapsedCalendarDays > 0
-        ? projection.monthToDateActualScaled100 *
-              projection.daysInMonth /
-              (projection.elapsedCalendarDays * effectiveLimitScaled100)
-        : displayNumeratorScaled100 != null &&
-              displayDenominator != null &&
-              displayDenominator > 0
+        displayNumeratorScaled100 != null &&
+            displayDenominator != null &&
+            displayDenominator > 0
         ? displayNumeratorScaled100! / displayDenominator
         : 0.0;
     return DashboardBudgetLiveSelectionState._(
@@ -245,7 +234,7 @@ final class DashboardBudgetLiveSelectionState {
         chromeGeometry: switch (analysisMode) {
           DashboardBudgetAnalysisMode.actualUtilization =>
             BudgetLimitProgressChromeGeometry.circular,
-          DashboardBudgetAnalysisMode.dailyPace =>
+          DashboardBudgetAnalysisMode.dailyAllowance =>
             BudgetLimitProgressChromeGeometry.verticalProjection,
           DashboardBudgetAnalysisMode.annualSegments =>
             BudgetLimitProgressChromeGeometry.annualSegments,
@@ -277,8 +266,10 @@ final class DashboardBudgetHeaderMetricPresentation {
   factory DashboardBudgetHeaderMetricPresentation.forAnalysis(
     DashboardBudgetScopeAnalysis? analysis,
   ) => switch (analysis) {
-    DashboardBudgetDayProjectionAnalysis() =>
-      const DashboardBudgetHeaderMetricPresentation._day(),
+    DashboardBudgetDayProjectionAnalysis(:final isCurrentLogicalDay) =>
+      DashboardBudgetHeaderMetricPresentation._day(
+        isCurrentLogicalDay: isCurrentLogicalDay,
+      ),
     DashboardBudgetMonthAnalysis() =>
       const DashboardBudgetHeaderMetricPresentation._month(),
     DashboardBudgetYearAnalysis() =>
@@ -288,13 +279,14 @@ final class DashboardBudgetHeaderMetricPresentation {
     null => const DashboardBudgetHeaderMetricPresentation._unavailable(),
   };
 
-  const DashboardBudgetHeaderMetricPresentation._day()
-    : this._(
-        metricLabel: 'Napi tempó',
-        modeLabel: 'tempó',
-        usesPerDayAmounts: true,
-        supportingStatusKind: DashboardBudgetHeaderSupportingStatusKind.pace,
-      );
+  const DashboardBudgetHeaderMetricPresentation._day({
+    required bool isCurrentLogicalDay,
+  }) : this._(
+         metricLabel: isCurrentLogicalDay ? 'Mai mozgástér' : 'Napi mozgástér',
+         modeLabel: 'napi budget',
+         usesPerDayAmounts: false,
+         supportingStatusKind: DashboardBudgetHeaderSupportingStatusKind.pace,
+       );
 
   const DashboardBudgetHeaderMetricPresentation._month()
     : this._(
@@ -1404,7 +1396,15 @@ final class DashboardBudgetPresentationController
     final scopeAnalysis = switch (visibleScope) {
       DayScope() => DashboardBudgetDayProjectionAnalysis(
         projection: monthEndProjection!,
+        dailyAllowance: _dayAllowanceFor(
+          snapshot: preparedSnapshot,
+          direction: _direction,
+          targetHandle: target.handle,
+          selectedDay: visibleScope.date,
+          effectiveMonthlyLimitScaled100: effectiveLimitScaled100,
+        ),
         canonicalMonthlyActualScaled100: cell.actualScaled100,
+        isCurrentLogicalDay: visibleScope.date == _logicalAsOfDate,
       ),
       MonthScope() => DashboardBudgetMonthAnalysis(
         monthlyActualScaled100: cell.actualScaled100,
@@ -1438,7 +1438,7 @@ final class DashboardBudgetPresentationController
     }
     final analysisMode = switch (scopeAnalysis) {
       DashboardBudgetDayProjectionAnalysis() =>
-        DashboardBudgetAnalysisMode.dailyPace,
+        DashboardBudgetAnalysisMode.dailyAllowance,
       DashboardBudgetYearAnalysis() =>
         DashboardBudgetAnalysisMode.annualSegments,
       DashboardBudgetTypicalMonthAnalysis() =>
@@ -1961,6 +1961,38 @@ final class DashboardBudgetPresentationController
       monthToDateActualScaled100: monthToDate,
       finalMonthActualScaled100: canonicalMonthlyActualScaled100,
       effectiveMonthlyLimitScaled100: effectiveMonthlyLimitScaled100,
+    );
+  }
+
+  /// Resolves DAY Header data from the same resident timestamp-faithful
+  /// prepared rhythm bank as the monthly projection. It never acquires data
+  /// on query or direct presentation interaction.
+  DashboardBudgetDayAllowanceAnalysis _dayAllowanceFor({
+    required PreparedBudgetLimitSnapshot snapshot,
+    required LedgerDirection direction,
+    required int targetHandle,
+    required LocalDate selectedDay,
+    required int? effectiveMonthlyLimitScaled100,
+  }) {
+    final rhythm = snapshot.spendingRhythmSnapshot;
+    if (rhythm == null || rhythm.coreRevision != snapshot.coreRevision) {
+      return const DashboardBudgetDayAllowanceAnalysis.unavailable();
+    }
+    final bank = rhythm.directionBank(direction);
+    if (targetHandle < 0 || targetHandle >= bank.targetCount) {
+      return const DashboardBudgetDayAllowanceAnalysis.unavailable();
+    }
+    final target = bank.targetView(targetHandle);
+    return DashboardBudgetDayAllowanceAnalysis.derive(
+      selectedDay: selectedDay,
+      logicalAsOfDate: _logicalAsOfDate,
+      selectedDayActualScaled100: target.actualAtEpochDay(selectedDay.epochDay),
+      spentBeforeSelectedDayScaled100: target.actualForMonthThroughEpochDay(
+        year: selectedDay.year,
+        month: selectedDay.month,
+        throughEpochDay: selectedDay.epochDay - 1,
+      ),
+      monthlyLimitScaled100: effectiveMonthlyLimitScaled100,
     );
   }
 

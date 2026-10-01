@@ -33,6 +33,71 @@ void main() {
   ];
 
   testWidgets(
+    'SUM-VARIANT-RENDERER-01 RED: Current retains the legacy renderer while SUM-A and SUM-B select only their native reference surfaces',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|all',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'all',
+        ),
+        contributions: contributions,
+      ).preview(range);
+      final frames = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      final settings = MindYearHeatmapPresentationController();
+      addTearDown(frames.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 480,
+              child: MindSumHeatmapViewport(
+                frameListenable: frames,
+                presentationSettings: settings,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-sum-reference-sumA')),
+        findsNothing,
+      );
+      settings.setSumVisualStyle(MindSumVisualStyle.sumA);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-sum-reference-sumA')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-surface')),
+        findsNothing,
+      );
+      settings.setSumVisualStyle(MindSumVisualStyle.sumB);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-sum-reference-sumB')),
+        findsOneWidget,
+      );
+      settings.setSumVisualStyle(MindSumVisualStyle.current);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-sum-heatmap-surface')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'SUM-HEATMAP-01/02 RED: Sum starts on the approved two-row multi-year heatmap hierarchy',
     (tester) async {
       final frame = MindSumHeatmapProjection.build(
@@ -59,7 +124,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Többéves aktivitás'), findsOneWidget);
+      expect(find.text('SUM aktivitás'), findsOneWidget);
       expect(find.text('2024–2025 · 24 hónap'), findsOneWidget);
       expect(find.text('Éves aktivitás'), findsNothing);
       expect(
@@ -756,7 +821,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Napi aktivitás'), findsOneWidget);
+      expect(find.text('Havi aktivitás'), findsOneWidget);
       expect(find.text('31 nap'), findsOneWidget);
       expect(find.text('július 2026'), findsOneWidget);
       expect(find.text('0 aktív nap'), findsOneWidget);
@@ -783,8 +848,8 @@ void main() {
       final activeRect = tester.getRect(
         find.byKey(const ValueKey<String>('mind-month-heatmap-active-days')),
       );
-      expect(titleRect.center.dy, closeTo(dayCountRect.center.dy, .01));
-      expect(monthRect.center.dy, closeTo(activeRect.center.dy, .01));
+      expect(titleRect.center.dy, closeTo(dayCountRect.center.dy, .5));
+      expect(monthRect.center.dy, closeTo(activeRect.center.dy, .5));
       expect(titleRect.left, lessThan(dayCountRect.left));
       expect(monthRect.left, lessThan(activeRect.left));
       expect(
@@ -797,7 +862,7 @@ void main() {
   );
 
   testWidgets(
-    'DAY-TOPOLOGY RED: Day is a direct timeline, without an hourly heatmap pager or cell UI',
+    'DAY-TOPOLOGY RED: Day is a native 24-hour All-vs-slider heatmap without a duplicate range control',
     (tester) async {
       const date = LocalDate(year: 2026, month: 7, day: 14);
       final frame = MindDayHeatmapProjection.build(
@@ -828,13 +893,13 @@ void main() {
         ),
       );
 
-      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
+      expect(find.text('Napi aktivitás'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('mind-day-timeline-chart')),
+        find.byKey(const ValueKey('mind-day-all-slider-card')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('mind-day-timeline-stat-total')),
+        find.byKey(const ValueKey('mind-day-all-slider-hour-00')),
         findsOneWidget,
       );
       expect(
@@ -849,10 +914,9 @@ void main() {
         find.byKey(const ValueKey('mind-day-heatmap-page-1')),
         findsNothing,
       );
-      expect(find.byKey(const ValueKey('mind-day-heatmap-grid')), findsNothing);
       expect(
-        find.byKey(const ValueKey('mind-day-heatmap-cell-00')),
-        findsNothing,
+        find.byKey(const ValueKey('mind-day-all-slider-hour-23')),
+        findsOneWidget,
       );
     },
   );
@@ -951,7 +1015,7 @@ void main() {
   );
 
   testWidgets(
-    'DAY-LAYOUT RED: combined is compatible by default while timeline-only expands the timeline without changing its frame',
+    'DAY-LAYOUT RED: presentation settings leave the native comparison card on the same resident frame',
     (tester) async {
       const date = LocalDate(year: 2026, month: 7, day: 14);
       final frame = MindDayHeatmapProjection.build(
@@ -989,22 +1053,9 @@ void main() {
         ),
       );
 
-      expect(find.text('Napi tranzakciók idővonala'), findsOneWidget);
-      final combinedChart = find.byKey(
-        const ValueKey('mind-day-timeline-chart'),
-      );
-      expect(combinedChart, findsOneWidget);
-      final combinedHeight = tester.getRect(combinedChart).height;
+      expect(find.text('Napi aktivitás'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('mind-day-timeline-marker-1')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-day-timeline-stat-total')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-day-timeline-stat-range')),
+        find.byKey(const ValueKey('mind-day-all-slider-card')),
         findsOneWidget,
       );
 
@@ -1014,21 +1065,9 @@ void main() {
 
       expect(listenable.value, same(originalFrame));
       expect(
-        find.byKey(const ValueKey('mind-day-timeline-stat-total')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-day-timeline-stat-range')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-day-timeline-current-total')),
+        find.byKey(const ValueKey('mind-day-all-slider-card')),
         findsOneWidget,
       );
-      final timelineOnlyHeight = tester
-          .getRect(find.byKey(const ValueKey('mind-day-timeline-chart')))
-          .height;
-      expect(timelineOnlyHeight, greaterThan(combinedHeight + 20));
     },
   );
 
@@ -1192,9 +1231,9 @@ void main() {
       final grid = tester.getRect(
         find.byKey(const ValueKey<String>('mind-month-heatmap-grid')),
       );
-      expect(grid.width, closeTo(216, .01));
-      expect(grid.left, closeTo(12, .01));
-      expect(grid.height, closeTo((216 - 6 * 4) / 7 * 5 + 4 * 4, .01));
+      expect(grid.width, closeTo(212, .01));
+      expect(grid.left, closeTo(14, .01));
+      expect(grid.height, closeTo((212 - 6 * 4) / 7 * 5 + 4 * 4, .01));
     },
   );
 
