@@ -36,6 +36,7 @@ class DashboardBinaryCodecTest {
             FluviPreparedBudgetPartnerDistributionCell(
                 actualScaled100 = if (index == 2) 600L else 0L,
                 dominantCategoryId = if (index == 2) "food" else "",
+                transactionCount = if (index == 2) 3L else 0L,
             )
         }
         val snapshot = FluviPreparedBudgetPartnerDistributionSnapshot(
@@ -48,16 +49,16 @@ class DashboardBinaryCodecTest {
                 orderedCategoryIds = listOf("food"),
                 categoryContributionOffsets = contributionOffsets(),
                 categoryContributions = listOf(
-                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L, 3L),
                 ),
                 dayEpochDays = longArrayOf(20_000L),
                 dayAggregateOffsets = intArrayOf(0, 1),
                 dayAggregateCells = listOf(
-                    FluviPreparedBudgetPartnerDayCell(0, 600L, "food"),
+                    FluviPreparedBudgetPartnerDayCell(0, 600L, "food", 3L),
                 ),
                 dayCategoryContributionOffsets = intArrayOf(0, 1),
                 dayCategoryContributions = listOf(
-                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L, 3L),
                 ),
             ),
             expenseBank = FluviPreparedBudgetPartnerDistributionDirectionBank(
@@ -67,16 +68,16 @@ class DashboardBinaryCodecTest {
                 orderedCategoryIds = listOf("food"),
                 categoryContributionOffsets = contributionOffsets(),
                 categoryContributions = listOf(
-                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L, 3L),
                 ),
                 dayEpochDays = longArrayOf(20_000L),
                 dayAggregateOffsets = intArrayOf(0, 1),
                 dayAggregateCells = listOf(
-                    FluviPreparedBudgetPartnerDayCell(0, 600L, "food"),
+                    FluviPreparedBudgetPartnerDayCell(0, 600L, "food", 3L),
                 ),
                 dayCategoryContributionOffsets = intArrayOf(0, 1),
                 dayCategoryContributions = listOf(
-                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L),
+                    FluviPreparedBudgetPartnerCategoryContribution(0, 600L, 3L),
                 ),
             ),
             sqlCallCount = 4,
@@ -290,14 +291,17 @@ class DashboardBinaryCodecTest {
         limit: Long,
     ): FluviPreparedBudgetDirectionBank {
         val cells = LongArray(28)
+        val transactionCounts = LongArray(28)
         val limits = LongArray(28) { -1L }
         // 14 period slices * (aggregate + one category); month January is
         // slice 2 and category handle 1, proving the dense bank layout.
         cells[5] = actual
+        transactionCounts[5] = 3L
         limits[5] = limit
         return FluviPreparedBudgetDirectionBank(
             orderedCategoryIds = listOf(categoryId),
             actualScaled100 = cells,
+            transactionCount = transactionCounts,
             limitScaled100 = limits,
             limitSource = ByteArray(28) { 1 },
         )
@@ -315,6 +319,9 @@ class DashboardBinaryCodecTest {
         val actuals = LongArray(28) { input.readLong() }
         assertEquals(actual, actuals[5])
         assertEquals(28, input.readInt())
+        val transactionCounts = LongArray(28) { input.readLong() }
+        assertEquals(3L, transactionCounts[5])
+        assertEquals(28, input.readInt())
         val limits = LongArray(28) { input.readLong() }
         assertEquals(limit, limits[5])
         assertEquals(28, input.readInt())
@@ -330,6 +337,7 @@ class DashboardBinaryCodecTest {
                 FluviPreparedSpendingRhythmPoint(
                     epochDay = 20_000L,
                     actualScaled100 = value,
+                    transactionCount = 3L,
                     dayPartActualScaled100 = LongArray(SpendingRhythmDayPart.entries.size).also {
                         it[SpendingRhythmDayPart.LATE_EVENING.ordinal] = value
                     },
@@ -344,6 +352,7 @@ class DashboardBinaryCodecTest {
         assertEquals(1, input.readInt())
         assertEquals(20_000L, input.readLong())
         assertEquals(value, input.readLong())
+        assertEquals(3L, input.readLong())
         repeat(SpendingRhythmDayPart.entries.size - 1) {
             assertEquals(0L, input.readLong())
         }
@@ -366,6 +375,9 @@ class DashboardBinaryCodecTest {
         val amounts = LongArray(14) { input.readLong() }
         assertEquals(600L, amounts[2])
         assertEquals(14, input.readInt())
+        val transactionCounts = LongArray(14) { input.readLong() }
+        assertEquals(3L, transactionCounts[2])
+        assertEquals(14, input.readInt())
         val dominant = List(14) { input.readLengthPrefixedUtf8() }
         assertEquals("food", dominant[2])
         assertEquals(1, input.readInt())
@@ -377,6 +389,7 @@ class DashboardBinaryCodecTest {
         assertEquals(1, input.readInt())
         assertEquals(0, input.readInt())
         assertEquals(600L, input.readLong())
+        assertEquals(3L, input.readLong())
         assertEquals(1, input.readInt())
         assertEquals(20_000L, input.readLong())
         assertEquals(2, input.readInt())
@@ -385,11 +398,13 @@ class DashboardBinaryCodecTest {
         assertEquals(0, input.readInt())
         assertEquals(600L, input.readLong())
         assertEquals("food", input.readLengthPrefixedUtf8())
+        assertEquals(3L, input.readLong())
         assertEquals(2, input.readInt())
         assertArrayEquals(intArrayOf(0, 1), IntArray(2) { input.readInt() })
         assertEquals(1, input.readInt())
         assertEquals(0, input.readInt())
         assertEquals(600L, input.readLong())
+        assertEquals(3L, input.readLong())
     }
 
     private fun DataInputStream.readLengthPrefixedUtf8(): String {
