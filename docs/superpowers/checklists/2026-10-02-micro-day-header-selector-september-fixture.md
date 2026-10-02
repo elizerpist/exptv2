@@ -28,22 +28,22 @@ Status values: `NOT DONE`, `PARTIAL`, `DONE`, `BLOCKED`.
 
 | ID | Requirement/source | Intended area | Acceptance condition | Verification | Status |
 | --- | --- | --- | --- | --- | --- |
-| MDR-01 | Prompt 1 settings | Mind presentation settings + tuner | `Mikronapok` is the fourth existing SUM setting, revisioned through the one controller. | settings/tuner widget tests | NOT DONE |
-| MDR-02 | Prompt 1 routing | SUM viewport + dedicated surface | Only the new setting mounts a dedicated micro-day ribbon; Current/SUM-A/SUM-B retain their current surfaces. | routing widget test | NOT DONE |
-| MDR-03 | Prompt 1 geometry | micro-day support model/surface | A 365/366-day real-calendar year packs chronologically into five rows, twelve contiguous month groups, no fake days or dedicated inter-month gap. | pure geometry + leap/widget tests | NOT DONE |
-| MDR-04 | Prompt 1 live data | micro-day support model/surface | Year total and daily palette cells use the same slider-filtered resident SUM frame; day normalization is daily, not monthly. | preview/range regression + source-boundary inspection | NOT DONE |
-| MDR-05 | Prompt 1 visual/accessibility | micro-day surface | Compact header, Hungarian month labels, grouped semantics, no in-body `3×4`/`4×3`/`2×6` controls and no nested vertical scroll. | widget/semantics/layout tests | NOT DONE |
-| HMS-01 | Prompt 2 interaction | Header mode selector | Tap is inert; bounded vertical up/down drag/fling cycles the canonical three modes with directional physical icon motion. | mounted Header RED→GREEN tests | NOT DONE |
-| HMS-02 | Prompt 2 publication | Header adapter + mode controller | `onSelectedChanged` crossing synchronously changes mode epoch, Header binding and committed content before settlement. | production-parent crossing test | NOT DONE |
-| HMS-03 | Prompt 2 ownership | Header adapter + shared carousel | One persistent carousel controller/ScrollPosition/physics; interruption is latest-wins; Header expansion and tap-wave remain isolated. | identity/interruption/isolation tests | NOT DONE |
-| HMS-04 | Prompt 2 hot path | existing Core test harness | Rapid crossings add no repository/Room/index/Query/SVG/TextPainter work and preserve Dashboard/Query/LogBox owners. | production-parent counters + fast suite | NOT DONE |
-| SEP-01 | Prompt 3 fixture | `DemoDatasetGenerator` | Append only expense entries for every 2026-09 day; existing drafts and schema stay unchanged. | deterministic generator test | NOT DONE |
-| SEP-02 | Prompt 3 hourly shape | `DemoDatasetGenerator` | Each day has 8–14 active hours with 2–5 varied transactions/hour, frequent consecutive runs and wide/tight amount clusters. | data-quality contract test | NOT DONE |
-| SEP-03 | Prompt 3 integrity | generator/version tests | All existing expense categories/valid partners recur, IDs are unique, all new dates are September and all new directions are expense. | deterministic generator test | NOT DONE |
-| ARC-01 | architecture gate | changed source | No duplicate mode state, physics, slider, query, repository or data schema path. | focused boundary/source inspection | NOT DONE |
-| REL-01 | user delivery instruction | branch/release | One combined application commit is pushed; exact normal Human APK is built, downloaded to `/storage/emulated/0/Download/fluvi`, and hashed. | CI + local SHA-256 | NOT DONE |
-| GRAPH-01 | Prompt 2 | SCIP tooling | Exact final application SHA is indexed and the manifest/hash/tool test are recorded. | tooling output | NOT DONE |
-| VIS-01 | Prompt 1/2 | installed app | Supplied micro-day concept is visually checked on the delivered APK; Header physical acceptance remains user-only. | fresh device evidence | NOT DONE |
+| MDR-01 | Prompt 1 settings | Mind presentation settings + tuner | `Mikronapok` is the fourth existing SUM setting, revisioned through the one controller. | settings/tuner widget tests | DONE |
+| MDR-02 | Prompt 1 routing | SUM viewport + dedicated surface | Only the new setting mounts a dedicated micro-day ribbon; Current/SUM-A/SUM-B retain their current surfaces. | routing widget test | DONE |
+| MDR-03 | Prompt 1 geometry | micro-day support model/surface | A 365/366-day real-calendar year packs chronologically into five rows, twelve contiguous month groups, no fake days or dedicated inter-month gap. | pure geometry + leap/widget tests | DONE |
+| MDR-04 | Prompt 1 live data | micro-day support model/surface | Year total and daily palette cells use the same slider-filtered resident SUM frame; day normalization is daily, not monthly. | preview/range regression + source-boundary inspection | DONE |
+| MDR-05 | Prompt 1 visual/accessibility | micro-day surface | Compact header, Hungarian month labels, grouped semantics, no in-body `3×4`/`4×3`/`2×6` controls and no nested vertical scroll. | widget/semantics/layout tests | PARTIAL — automated widget/semantics coverage is green; fresh installed-device/raster review remains VIS-01. |
+| HMS-01 | Prompt 2 interaction | Header mode selector | Tap is inert; bounded vertical up/down drag/fling cycles the canonical three modes with directional physical icon motion. | mounted Header RED→GREEN tests | DONE |
+| HMS-02 | Prompt 2 publication | Header adapter + mode controller | `onSelectedChanged` crossing synchronously changes mode epoch, Header binding and committed content before settlement. | production-parent crossing test | DONE |
+| HMS-03 | Prompt 2 ownership | Header adapter + shared carousel | One persistent carousel controller/ScrollPosition/physics; interruption is latest-wins; Header expansion and tap-wave remain isolated. | identity/interruption/isolation tests | DONE |
+| HMS-04 | Prompt 2 hot path | existing Core test harness | Rapid crossings add no repository/Room/index/Query/SVG/TextPainter work and preserve Dashboard/Query/LogBox owners. | production-parent counters + fast suite | DONE |
+| SEP-01 | Prompt 3 fixture | `DemoDatasetGenerator` | Append only expense entries for every 2026-09 day; existing drafts and schema stay unchanged. | deterministic generator test | DONE |
+| SEP-02 | Prompt 3 hourly shape | `DemoDatasetGenerator` | Each day has 8–14 active hours with 2–5 varied transactions/hour, frequent consecutive runs and wide/tight amount clusters. | data-quality contract test | DONE |
+| SEP-03 | Prompt 3 integrity | generator/version tests | All existing expense categories/valid partners recur, IDs are unique, all new dates are September and all new directions are expense. | deterministic generator test | DONE |
+| ARC-01 | architecture gate | changed source | No duplicate mode state, physics, slider, query, repository or data schema path. | focused boundary/source inspection | DONE |
+| REL-01 | user delivery instruction | branch/release | One combined application commit is pushed; exact normal Human APK is built, downloaded to `/storage/emulated/0/Download/fluvi`, and hashed. | CI + local SHA-256 | DONE |
+| GRAPH-01 | Prompt 2 | SCIP tooling | Exact final application SHA is indexed and the manifest/hash/tool test are recorded. | tooling output | DONE |
+| VIS-01 | Prompt 1/2 | installed app | Supplied micro-day concept is visually checked on the delivered APK; Header physical acceptance remains user-only. | fresh device evidence | PARTIAL — APK is delivered; user device inspection/physical acceptance is still required. |
 
 ## Ordered inline implementation
 
