@@ -426,10 +426,21 @@ final class _BalanceDashboardCoreSurfaceState
             BalanceContentSurfaceStyle.unifiedCard &&
         contentProgress >= .999 &&
         geometry.collapseProgress <= .001;
+    final combinedBounds = DashboardHeaderContentMotherCardBounds.resolve(
+      geometry: geometry,
+    );
+    final fourSectionBodyRect = _balanceAlternativeBodyRect(
+      BoxConstraints.tightFor(
+        width: combinedBounds.width,
+        height: combinedBounds.height,
+      ),
+      geometry.headerBounds.height,
+    );
     final showsTetris =
         isHeaderLinked &&
         settings.unifiedBodyLayout ==
-            BalanceUnifiedBodyLayout.fourSectionTetris;
+            BalanceUnifiedBodyLayout.fourSectionTetris &&
+        BalanceFourSectionLayout.canRenderWithin(fourSectionBodyRect);
     final headerRadius = DashboardCornerRoundnessScope.profileOf(context)
         .borderRadiusFor(
           DashboardCornerSurfaceFamily.header,

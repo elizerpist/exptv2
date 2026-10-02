@@ -31,4 +31,25 @@ void main() {
     expect(layout.card1.top, closeTo(body.top + body.height * .6, .0001));
     expect(layout.card2.top, closeTo(body.top + body.height * .6, .0001));
   });
+
+  test(
+    'TET-03 RED: the full four-child composition only mounts when its shared body window has usable phone-card capacity',
+    () {
+      expect(
+        BalanceFourSectionLayout.canRenderWithin(
+          const Rect.fromLTWH(12, 120, 378, 440),
+        ),
+        isTrue,
+      );
+      expect(
+        BalanceFourSectionLayout.canRenderWithin(
+          const Rect.fromLTWH(12, 120, 164, 80),
+        ),
+        isFalse,
+        reason:
+            'A transient tiny dashboard frame must retain the established '
+            'carousel/detail fallback rather than clipping four live cards.',
+      );
+    },
+  );
 }

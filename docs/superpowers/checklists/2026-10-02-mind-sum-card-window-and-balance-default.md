@@ -18,7 +18,7 @@ Status values: `NOT DONE`, `PARTIAL`, `DONE`, `BLOCKED`.
 | --- | --- | --- |
 | SUM-A/SUM-B window allocation | `MindSumReferenceSurface` | Keep one shared 4×3 grid geometry, and make its explicit year-window height independent of Android's screen-level safe-area padding. |
 | SUM-A/SUM-B cells | `_SumMonthGrid` | Keep one renderer and one 12-cell data path; do not add a style-local second grid or widget-local scrolling state. |
-| Balance startup presentation | `BalancePresentationSettings` → `DashboardPresentationPreferences` restore boundary | Make the canonical defaults choose the existing unified mother card and existing four-section layout; retain an already-persisted explicit user choice. |
+| Balance startup presentation | `BalancePresentationSettings` → `BalanceFourSectionLayout` → `DashboardPresentationPreferences` restore boundary | Make the canonical defaults choose the existing unified mother card and existing four-section layout; retain an already-persisted explicit user choice. The shared layout owns a capacity gate so a transient too-small dashboard frame retains its safe legacy body instead of clipping four live cards. |
 
 ## Acceptance checklist
 
@@ -50,7 +50,12 @@ existing outer history scroll, but each rendered year remains a complete
 - Focused Mind, presentation-preference and Balance-settings suite: 22 tests
   passed.
 - `BALDEFAULT-01/02` surface-focused run: 2 tests passed.
-- Targeted analysis of all four changed Dart files: no issues.
+- `TET-03` was RED before the central capacity gate existed; it now proves the
+  full four-child layout stays active for the normal 378×440 card body but
+  cannot mount into a 164×80 transient body. The exact CI regression
+  (`dashboard_rebuild_isolation_test.dart`) is GREEN after the gate.
+- The CI-equivalent fast suite is GREEN: 434 tests passed.
+- Targeted analysis of all seven changed code/test targets: no issues.
 - Full analysis reports one pre-existing unrelated info-level import warning in
   `test/features/dashboard/application/dashboard_balance_daily_insights_projection_test.dart`;
   it is outside this change and is not modified here.
