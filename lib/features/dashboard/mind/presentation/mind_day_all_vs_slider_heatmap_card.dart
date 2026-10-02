@@ -242,6 +242,11 @@ final class _MindDayHourlyBars extends StatelessWidget {
   final MindHeatmapScaleResolution scaleResolution;
   final MindHeatmapResolvedScale? dynamicScale;
 
+  // A non-empty hour must remain visible even if another hour contains a much
+  // larger transaction. This is a rendering floor only: the immutable hourly
+  // totals and their common maximum remain the sole data/scale authority.
+  static const _minimumVisibleAmountBarHeight = 4.0;
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -252,8 +257,16 @@ final class _MindDayHourlyBars extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: comparison.hours
             .map((hour) {
-              final fullHeight = plotHeight * hour.fullFraction;
-              final selectedHeight = plotHeight * hour.selectedFraction;
+              final fullHeight = _visibleAmountBarHeight(
+                plotHeight: plotHeight,
+                fraction: hour.fullFraction,
+                hasAmount: hour.fullTotal > 0,
+              );
+              final selectedHeight = _visibleAmountBarHeight(
+                plotHeight: plotHeight,
+                fraction: hour.selectedFraction,
+                hasAmount: hour.selectedTotal > 0,
+              );
               final fullPalette = _paletteFor(
                 style: paletteStyle,
                 scaleResolution: scaleResolution,
@@ -354,6 +367,18 @@ final class _MindDayHourlyBars extends StatelessWidget {
       );
     },
   );
+
+  static double _visibleAmountBarHeight({
+    required double plotHeight,
+    required double fraction,
+    required bool hasAmount,
+  }) {
+    if (!hasAmount || plotHeight <= 0) return 0;
+    return math.min(
+      plotHeight,
+      math.max(_minimumVisibleAmountBarHeight, plotHeight * fraction),
+    );
+  }
 }
 
 final class _MindDayComparisonLegend extends StatelessWidget {

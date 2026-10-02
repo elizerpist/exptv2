@@ -130,6 +130,74 @@ void main() {
   );
 
   testWidgets(
+    'SUMROW-01/02 RED: every third-row month stays inside its SUM-A and SUM-B year band',
+    (tester) async {
+      final frame = MindSumHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'sum',
+        ),
+        contributions: <MindYearHeatmapPreparedContribution>[
+          for (var month = 1; month <= 12; month += 1)
+            _entry(
+              month,
+              10_000 + month,
+              LocalDate(year: 2025, month: month, day: 2),
+            ),
+        ],
+      ).preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 1,
+          maximumScaled100: 100_000,
+          lowerScaled100: 1,
+          upperScaled100: 100_000,
+        ),
+      );
+
+      for (final style in <MindSumVisualStyle>[
+        MindSumVisualStyle.sumA,
+        MindSumVisualStyle.sumB,
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 390,
+                height: 520,
+                child: MindSumReferenceSurface(
+                  frame: frame,
+                  visualStyle: style,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final december = find.byKey(
+          const ValueKey<String>('mind-sum-heatmap-cell-2025-12'),
+        );
+        final yearBand = find.byKey(
+          ValueKey<String>(
+            style == MindSumVisualStyle.sumA
+                ? 'mind-sum-a-year-2025'
+                : 'mind-sum-b-mother-card-2025',
+          ),
+        );
+        expect(december, findsOneWidget);
+        expect(
+          tester.getRect(december).bottom,
+          lessThanOrEqualTo(tester.getRect(yearBand).bottom - 8),
+          reason:
+              '${style.name} must leave a real lower inset after December, '
+              'rather than clipping the third row at the year-band edge.',
+        );
+      }
+    },
+  );
+
+  testWidgets(
     'SUMFIX-03 RED: SUM-A and SUM-B month cells consume the live shared heatmap palette',
     (tester) async {
       final frame =

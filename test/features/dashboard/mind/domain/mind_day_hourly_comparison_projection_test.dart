@@ -53,4 +53,34 @@ void main() {
       expect(comparison.hour(18).selectedFraction, 0);
     },
   );
+
+  test(
+    'DAYHOUR-01: four transactions in four local hours retain four distinct hourly cells',
+    () {
+      const full = <MindDayTimelineEvent>[
+        MindDayTimelineEvent(ordinal: 1, timeMinutes: 2 * 60, total: 100),
+        MindDayTimelineEvent(ordinal: 2, timeMinutes: 7 * 60, total: 250),
+        MindDayTimelineEvent(ordinal: 3, timeMinutes: 12 * 60, total: 600),
+        MindDayTimelineEvent(ordinal: 4, timeMinutes: 18 * 60, total: 30000),
+      ];
+
+      final comparison = MindDayHourlyComparisonProjection.build(
+        fullEvents: full,
+        selectedEvents: full,
+      );
+
+      for (final hour in <int>[2, 7, 12, 18]) {
+        expect(
+          comparison.hour(hour).fullTotal,
+          greaterThan(0),
+          reason: 'The $hour:00 transaction must stay in its own hour.',
+        );
+        expect(comparison.hour(hour).selectedTotal, greaterThan(0));
+      }
+      expect(
+        comparison.hours.where((hour) => hour.fullTotal > 0).length,
+        4,
+      );
+    },
+  );
 }

@@ -105,60 +105,65 @@ final class _SumAYearBand extends StatelessWidget {
   final MindHeatmapResolvedScale? dynamicScale;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    key: ValueKey<String>('mind-sum-a-year-$year'),
-    // Header (23) + gap (5) + three real, source-proportioned month rows.
-    // The fixed geometry deliberately does not infer a second layout from
-    // screen size. At the reference width this produces 4×3 cards instead of
-    // making the slider/footer compete with a vertically oversized year band.
-    height: 154,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final gridHeight = _SumMonthGridGeometry.heightForWidth(
+        constraints.maxWidth,
+      );
+      return KeyedSubtree(
+        key: ValueKey<String>('mind-sum-a-year-$year'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(
-              '$year',
-              key: ValueKey<String>('mind-sum-heatmap-year-label-$year'),
-              style: const TextStyle(
-                color: Color(0xff06194f),
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
+            Row(
+              children: <Widget>[
+                Text(
+                  '$year',
+                  key: ValueKey<String>('mind-sum-heatmap-year-label-$year'),
+                  style: const TextStyle(
+                    color: Color(0xff06194f),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Spacer(),
+                const Text(
+                  'Összesen:',
+                  style: TextStyle(
+                    color: Color(0xff607391),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  formatMindCompactForints(frame.yearTotal(year) ~/ 100),
+                  key: ValueKey<String>('mind-sum-heatmap-total-$year'),
+                  style: const TextStyle(
+                    color: Color(0xff06194f),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 5),
+            SizedBox(
+              height: gridHeight,
+              child: _SumMonthGrid(
+                frame: frame,
+                year: year,
+                paletteStyle: paletteStyle,
+                scaleResolution: scaleResolution,
+                dynamicScale: dynamicScale,
               ),
             ),
-            const Spacer(),
-            const Text(
-              'Összesen:',
-              style: TextStyle(
-                color: Color(0xff607391),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              formatMindCompactForints(frame.yearTotal(year) ~/ 100),
-              key: ValueKey<String>('mind-sum-heatmap-total-$year'),
-              style: const TextStyle(
-                color: Color(0xff06194f),
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+            const SizedBox(height: _SumMonthGridGeometry.lowerInset),
           ],
         ),
-        const SizedBox(height: 5),
-        Expanded(
-          child: _SumMonthGrid(
-            frame: frame,
-            year: year,
-            paletteStyle: paletteStyle,
-            scaleResolution: scaleResolution,
-            dynamicScale: dynamicScale,
-          ),
-        ),
-      ],
-    ),
+      );
+    },
   );
 }
 
@@ -193,59 +198,89 @@ final class _SumBYearBand extends StatelessWidget {
       Color.lerp(palette.background, Colors.white, .84)!,
       Color.lerp(palette.background, Colors.white, .69)!,
     ];
-    return Container(
-      key: ValueKey<String>('mind-sum-b-mother-card-$year'),
-      height: 162,
-      padding: const EdgeInsets.all(7),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: motherColors,
-        ),
-        borderRadius: BorderRadius.circular(17),
-      ),
-      child: Row(
-        children: <Widget>[
-          _SumBYearIdentity(
-            frame: frame,
-            year: year,
-            paletteStyle: paletteStyle,
-            scaleResolution: scaleResolution,
-            dynamicScale: dynamicScale,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Éves összeg: ${formatMindCompactForints(frame.yearTotal(year) ~/ 100)}',
-                    key: ValueKey<String>('mind-sum-heatmap-total-$year'),
-                    style: const TextStyle(
-                      color: Color(0xff122a74),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Expanded(
-                  child: _SumMonthGrid(
-                    frame: frame,
-                    year: year,
-                    paletteStyle: paletteStyle,
-                    scaleResolution: scaleResolution,
-                    dynamicScale: dynamicScale,
-                  ),
-                ),
-              ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const outerPadding = 7.0;
+        const identityWidth = 72.0;
+        const identityGap = 9.0;
+        const headingHeight = 17.0;
+        final gridWidth = math.max(
+          0.0,
+          constraints.maxWidth -
+              outerPadding * 2 -
+              identityWidth -
+              identityGap,
+        );
+        final gridHeight = _SumMonthGridGeometry.heightForWidth(gridWidth);
+        final contentHeight =
+            headingHeight +
+            5 +
+            gridHeight +
+            _SumMonthGridGeometry.lowerInset;
+        return Container(
+          key: ValueKey<String>('mind-sum-b-mother-card-$year'),
+          // The 4×3 month matrix is a real, fixed composition. Its container
+          // must follow the actual width-derived row height rather than clip a
+          // third row at a stale fixed-band height.
+          height: math.max(176, contentHeight + outerPadding * 2),
+          padding: const EdgeInsets.all(outerPadding),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: motherColors,
             ),
+            borderRadius: BorderRadius.circular(17),
           ),
-        ],
-      ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _SumBYearIdentity(
+                frame: frame,
+                year: year,
+                paletteStyle: paletteStyle,
+                scaleResolution: scaleResolution,
+                dynamicScale: dynamicScale,
+              ),
+              const SizedBox(width: identityGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    SizedBox(
+                      height: headingHeight,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Éves összeg: ${formatMindCompactForints(frame.yearTotal(year) ~/ 100)}',
+                          key: ValueKey<String>('mind-sum-heatmap-total-$year'),
+                          style: const TextStyle(
+                            color: Color(0xff122a74),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    SizedBox(
+                      height: gridHeight,
+                      child: _SumMonthGrid(
+                        frame: frame,
+                        year: year,
+                        paletteStyle: paletteStyle,
+                        scaleResolution: scaleResolution,
+                        dynamicScale: dynamicScale,
+                      ),
+                    ),
+                    const SizedBox(height: _SumMonthGridGeometry.lowerInset),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -369,12 +404,12 @@ final class _SumMonthGrid extends StatelessWidget {
     physics: const NeverScrollableScrollPhysics(),
     itemCount: 12,
     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 4,
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
+      crossAxisCount: _SumMonthGridGeometry.columnCount,
+      mainAxisSpacing: _SumMonthGridGeometry.mainAxisSpacing,
+      crossAxisSpacing: _SumMonthGridGeometry.crossAxisSpacing,
       // The SUM-A reference cards are intentionally wide and shallow: their
       // visual rhythm is 4 columns × 3 rows, not a generic square heatmap.
-      childAspectRatio: 2.25,
+      childAspectRatio: _SumMonthGridGeometry.childAspectRatio,
     ),
     itemBuilder: (context, index) {
       final month = frame.month(year: year, month: index + 1);
@@ -420,6 +455,27 @@ final class _SumMonthGrid extends StatelessWidget {
       );
     },
   );
+}
+
+/// One fixed 4×3 grid contract shared by both reference SUM styles. The row
+/// height is width-derived, so a year band can reserve exactly three complete
+/// card rows rather than relying on a stale fixed parent height.
+abstract final class _SumMonthGridGeometry {
+  static const columnCount = 4;
+  static const rowCount = 3;
+  static const mainAxisSpacing = 4.0;
+  static const crossAxisSpacing = 4.0;
+  static const childAspectRatio = 2.25;
+  static const lowerInset = 8.0;
+
+  static double heightForWidth(double width) {
+    final usableWidth = math.max(
+      0.0,
+      width - crossAxisSpacing * (columnCount - 1),
+    );
+    final cellHeight = usableWidth / columnCount / childAspectRatio;
+    return cellHeight * rowCount + mainAxisSpacing * (rowCount - 1);
+  }
 }
 
 double _yearIntensity(MindSumHeatmapFrame frame, int year) {

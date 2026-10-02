@@ -1528,7 +1528,7 @@ void main() {
   );
 
   test(
-    'AMD-04: Mind publishes the visible 2027 amount maximum, not an all-time rent maximum',
+    'SLIDERSCOPE-02: Mind publishes the exact visible 2027 amount span, not the all-time rent span',
     () async {
       final core = DashboardCoreController(
         dataRepository: _FocusSeedRepository(
@@ -1571,7 +1571,8 @@ void main() {
       final binding = core.mindAmountRangeBindingFor(LedgerDirection.expense)!;
 
       expect(binding.values.maximumScaled100, 1350000);
-      expect(binding.values.minimumScaled100, 100000);
+      expect(binding.values.minimumScaled100, 180000);
+      expect(binding.values.lowerScaled100, 180000);
       expect(binding.values.upperScaled100, 1350000);
     },
   );
@@ -2264,7 +2265,7 @@ void main() {
       slider().onChanged!(const RangeValues(200000, 200000));
       await tester.pump();
       const onlyLow = QueryAmountRangeValues(
-        minimumScaled100: 100000,
+        minimumScaled100: 200000,
         maximumScaled100: 500000,
         lowerScaled100: 200000,
         upperScaled100: 200000,
@@ -2425,7 +2426,7 @@ void main() {
   );
 
   testWidgets(
-    'FOOT-04/DAY-01: the real Mind Day rail retains the one compact fixed range and legend without an hourly heatmap',
+    'FOOT-04/DAY-01/SLIDERSCOPE-02: the real Mind Day rail keeps its exact scoped range and one compact legend without an hourly heatmap',
     (tester) async {
       final core = DashboardCoreController(
         dataRepository: _FocusSeedRepository(
@@ -2468,6 +2469,14 @@ void main() {
       await tester.pump();
       expect(await core.primeMindAmountPreviewDomain(), isTrue);
       await tester.pump();
+
+      final dayRange = core
+          .mindAmountRangeBindingFor(LedgerDirection.income)!
+          .values;
+      expect(dayRange.minimumScaled100, 250000);
+      expect(dayRange.maximumScaled100, 250000);
+      expect(dayRange.lowerScaled100, 250000);
+      expect(dayRange.upperScaled100, 250000);
 
       expect(core.navigation.state.isRailOpen, isTrue);
       expect(core.navigation.state.plane, TimePlane.month);

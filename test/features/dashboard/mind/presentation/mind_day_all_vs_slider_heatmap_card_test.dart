@@ -270,6 +270,77 @@ void main() {
       expect(find.byKey(rangeKey), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'DAYHOUR-02 RED: every non-empty local hour retains a visible full-day bar',
+    (tester) async {
+      const fullEvents = <MindDayTimelineEvent>[
+        MindDayTimelineEvent(ordinal: 1, timeMinutes: 2 * 60, total: 100),
+        MindDayTimelineEvent(ordinal: 2, timeMinutes: 7 * 60, total: 250),
+        MindDayTimelineEvent(ordinal: 3, timeMinutes: 12 * 60, total: 600),
+        MindDayTimelineEvent(
+          ordinal: 4,
+          timeMinutes: 18 * 60,
+          total: 30_000,
+        ),
+      ];
+      final frame = MindDayHeatmapFrame(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'day',
+        ),
+        range: const QueryAmountRangeValues(
+          minimumScaled100: 100,
+          maximumScaled100: 30_000,
+          lowerScaled100: 100,
+          upperScaled100: 30_000,
+        ),
+        date: const LocalDate(year: 2026, month: 7, day: 2),
+        hours: List<MindDayHeatmapHour>.generate(
+          24,
+          (hour) => MindDayHeatmapHour(
+            hour: hour,
+            total: null,
+            kind: MindYearHeatmapTileKind.empty,
+            intensity: 0,
+            paletteIntensity: MindYearHeatmapPaletteIntensity.empty,
+          ),
+        ),
+        timelineEvents: fullEvents,
+        fullTimelineEvents: fullEvents,
+        activeHourCount: 4,
+        total: 30_950,
+        minimumNonEmptyTotal: 100,
+        maximumNonEmptyTotal: 30_000,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 390,
+              height: 520,
+              child: MindDayAllVsSliderHeatmapCard(frame: frame),
+            ),
+          ),
+        ),
+      );
+
+      for (final hour in <String>['02', '07', '12', '18']) {
+        expect(
+          tester
+              .getSize(find.byKey(ValueKey<String>('mind-day-all-slider-full-$hour')))
+              .height,
+          greaterThanOrEqualTo(4),
+          reason:
+              'A transaction at $hour:00 must remain visibly represented, '
+              'even when another hour has a much larger amount.',
+        );
+      }
+    },
+  );
 }
 
 MindDayHeatmapFrame _frame() => MindDayHeatmapFrame(

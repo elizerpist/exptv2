@@ -7,13 +7,15 @@ import 'query_menu_data.dart';
 
 /// The one canonical two-ended amount refinement used by every Query host.
 ///
-/// Amount values are scaled HUF. The floor, dynamic maximum, clamping and
-/// immutable Query mutation live here so a renderer can never create a
+/// Amount values are scaled HUF. The exact dynamic domain endpoints, clamping
+/// and immutable Query mutation live here so a renderer can never create a
 /// Mind-only filtering policy.
 abstract final class QueryAmountRange {
   static const String minimumRefinementKey = 'minimumAmountScaled100';
   static const String maximumRefinementKey = 'maximumAmountScaled100';
-  static const int minimumScaled100 = 100000; // 1000 HUF
+  /// Fallback only for an unavailable amount domain. A ready control always
+  /// uses the exact cheapest resident transaction from its active domain.
+  static const int minimumScaled100 = 100000; // 1000 HUF fallback
   static const int _minimumInteractionStepScaled100 = 1000; // 10 HUF
 
   /// Canonical data identity for the range controlled by this refinement.
@@ -41,14 +43,17 @@ abstract final class QueryAmountRange {
   }) {
     // `amountDomain` is calculated by the native Query boundary from
     // `domainScope(scope)`: it retains every current filter except this
-    // control's own two endpoints. Its maximum is therefore the one physical
-    // slider ceiling. Do not manufacture the old 1,000-HUF ceiling when an
-    // exact one-value/small-value domain is supplied.
+    // control's own two endpoints. Its exact endpoints are therefore the one
+    // physical slider span. Do not manufacture a fixed 1,000-HUF floor when
+    // a scoped resident domain has a different cheapest transaction.
+    final domainMinimum = amountDomain?.minimumAmountScaled100;
     final domainMaximum = amountDomain?.maximumAmountScaled100;
     final maximum = domainMaximum == null
         ? minimumScaled100
         : math.max(0, domainMaximum);
-    final minimum = minimumScaled100.clamp(0, maximum).toInt();
+    final minimum = (domainMinimum ?? minimumScaled100)
+        .clamp(0, maximum)
+        .toInt();
     final requestedLower =
         _refinement(refinements, minimumRefinementKey) ?? minimum;
     final lower = requestedLower.clamp(minimum, maximum).toInt();

@@ -28,11 +28,29 @@ void main() {
       amountDomain: domain,
     );
 
-    expect(values.minimumScaled100, 100000);
+    expect(values.minimumScaled100, 0);
     expect(values.maximumScaled100, 900000);
-    expect(values.lowerScaled100, 100000);
+    expect(values.lowerScaled100, 1);
     expect(values.upperScaled100, 900000);
   });
+
+  test(
+    'SLIDERSCOPE-01 RED: a ready range starts at the exact cheapest transaction in its active domain',
+    () {
+      final values = QueryAmountRange.resolve(
+        refinements: const <String, Object?>{},
+        amountDomain: const QueryMenuAmountDomain(
+          minimumAmountScaled100: 23_400,
+          maximumAmountScaled100: 785_600,
+        ),
+      );
+
+      expect(values.minimumScaled100, 23_400);
+      expect(values.maximumScaled100, 785_600);
+      expect(values.lowerScaled100, 23_400);
+      expect(values.upperScaled100, 785_600);
+    },
+  );
 
   test(
     'G3: an open upper end remains absent while a narrow range writes both bounds',

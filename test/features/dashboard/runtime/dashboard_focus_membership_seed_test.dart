@@ -3,6 +3,7 @@ import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart'
 import 'package:fluvi/features/dashboard/runtime/domain/dashboard_focus_membership_seed.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart';
+import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 
 void main() {
   DashboardLedgerEntry row(
@@ -177,6 +178,115 @@ void main() {
       expect(domain.entryCount, 2);
       expect(domain.minimumAmountScaled100, 180000);
       expect(domain.maximumAmountScaled100, 1350000);
+    },
+  );
+
+  test(
+    'SLIDERSCOPE-02: prepared membership derives exact SUM, Year, Month and Day slider spans',
+    () {
+      final seed = DashboardFocusMembershipSeed(<DashboardLedgerEntry>[
+        DashboardLedgerEntry(
+          id: 'sum-low',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 23_400,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2025,
+            month: 12,
+            day: 31,
+          ).epochDay,
+          bookedLocalTimeMinutes: 8 * 60,
+        ),
+        DashboardLedgerEntry(
+          id: 'year-low',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 80_000,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2026,
+            month: 1,
+            day: 2,
+          ).epochDay,
+          bookedLocalTimeMinutes: 9 * 60,
+        ),
+        DashboardLedgerEntry(
+          id: 'month-low',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 150_000,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2026,
+            month: 7,
+            day: 2,
+          ).epochDay,
+          bookedLocalTimeMinutes: 10 * 60,
+        ),
+        DashboardLedgerEntry(
+          id: 'day-high',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 420_000,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2026,
+            month: 7,
+            day: 2,
+          ).epochDay,
+          bookedLocalTimeMinutes: 17 * 60,
+        ),
+        DashboardLedgerEntry(
+          id: 'month-high',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 660_000,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2026,
+            month: 7,
+            day: 28,
+          ).epochDay,
+          bookedLocalTimeMinutes: 10 * 60,
+        ),
+        DashboardLedgerEntry(
+          id: 'year-high',
+          categoryId: 'food',
+          partnerId: 'market',
+          direction: 'expense',
+          amountMinor: 785_600,
+          bookedLocalEpochDay: const LocalDate(
+            year: 2026,
+            month: 11,
+            day: 4,
+          ).epochDay,
+          bookedLocalTimeMinutes: 10 * 60,
+        ),
+      ]);
+
+      void expectSpan(
+        LedgerTimeScope scope, {
+        required int minimum,
+        required int maximum,
+      }) {
+        final domain = seed.amountDomain(timeScope: scope);
+        expect(domain.minimumAmountScaled100, minimum);
+        expect(domain.maximumAmountScaled100, maximum);
+      }
+
+      expectSpan(const AllTimeScope(), minimum: 23_400, maximum: 785_600);
+      expectSpan(const YearScope(2026), minimum: 80_000, maximum: 785_600);
+      expectSpan(
+        const MonthScope(YearMonth(year: 2026, month: 7)),
+        minimum: 150_000,
+        maximum: 660_000,
+      );
+      expectSpan(
+        const DayScope(LocalDate(year: 2026, month: 7, day: 2)),
+        minimum: 150_000,
+        maximum: 420_000,
+      );
     },
   );
 
