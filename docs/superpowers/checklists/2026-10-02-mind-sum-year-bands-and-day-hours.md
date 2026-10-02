@@ -60,4 +60,17 @@ Status values: `NOT DONE`, `PARTIAL`, `DONE`, `BLOCKED`.
 | SLIDERSCOPE-02 | user slider instruction | same owner + existing range footer consumers | changing time scope/filter replaces the limits immediately; range preview alters only the selected interval and starts no Query/repository/index work | mounted Core liveness/regression test | DONE |
 | SAFE-01 | existing app architecture | focused Mind surfaces/projections | no new Query/repository/index work or slider state owner; existing preview/liveness behavior remains | focused Core + source inspection | DONE |
 | VIS-01 | screenshot sources | final installed app | inspect final screenshot against the two SUM sources and user Day scenario | physical screenshot **PENDING — USER ONLY** | NOT DONE |
-| REL-01 | delivery | branch/build | one app commit, online Human APK from the exact SHA, then factual docs commit | CI/release evidence | NOT DONE |
+| REL-01 | delivery | branch/build | one app commit, online Human APK from the exact SHA, then factual docs commit | CI/release evidence | DONE |
+
+## Delivery evidence
+
+- Application commit: `e2bbfe74cd16ca066f97672cf32d884a5e6533bc`
+- Push branch: `feature/balance-wave-defaults`
+- Exact GitHub Actions run: `36962812694` — `test-flutter`, `test-core`, and
+  `build-human-diagnostic-apk` succeeded for that application SHA.
+- Human APK:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_e2bbfe7.apk`
+- SHA-256:
+  `d53a972ac12be0d9a1e8e6b4e419074cfd699227a5eed962de2a8bc1c6f5fedd`
+- `VIS-01` intentionally remains `NOT DONE`: it requires the final, installed
+  APK's physical screenshot comparison against the supplied references.
