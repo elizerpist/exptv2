@@ -1291,13 +1291,18 @@ Future<void> _prepareScenario(
   }
 }
 
-/// Reaches Budget through the real production Header mode icon. This keeps the
-/// Avatar profile on the same persistent FluviApp/CoreDashboard composition as
-/// the Time matrix and deliberately does not install a category scene itself.
+/// Reaches Budget through the real bounded Header mode selector. This keeps
+/// the Avatar profile on the same persistent FluviApp/CoreDashboard
+/// composition as the Time matrix and deliberately does not install a
+/// category scene itself.
 Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
-  await tester.tap(
-    find.byKey(const ValueKey('dashboard-header-mode-icon-balance')),
+  await tester.drag(
+    find.byKey(
+      const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+    ),
+    const Offset(0, -36),
   );
+  await tester.pump();
   final deadline = DateTime.now().add(const Duration(seconds: 8));
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump();
@@ -1314,7 +1319,10 @@ Future<void> _showBudgetAvatarRail(WidgetTester tester) async {
     }
     await Future<void>.delayed(const Duration(milliseconds: 16));
   }
-  fail('Budget Avatar rail did not mount after the real Header mode icon tap.');
+  fail(
+    'Budget Avatar rail did not mount after the real Header mode selector '
+    'crossing.',
+  );
 }
 
 Future<void> _resetRailToIndex(
