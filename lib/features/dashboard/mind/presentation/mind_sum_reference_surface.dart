@@ -206,17 +206,11 @@ final class _SumBYearBand extends StatelessWidget {
         const headingHeight = 17.0;
         final gridWidth = math.max(
           0.0,
-          constraints.maxWidth -
-              outerPadding * 2 -
-              identityWidth -
-              identityGap,
+          constraints.maxWidth - outerPadding * 2 - identityWidth - identityGap,
         );
         final gridHeight = _SumMonthGridGeometry.heightForWidth(gridWidth);
         final contentHeight =
-            headingHeight +
-            5 +
-            gridHeight +
-            _SumMonthGridGeometry.lowerInset;
+            headingHeight + 5 + gridHeight + _SumMonthGridGeometry.lowerInset;
         return Container(
           key: ValueKey<String>('mind-sum-b-mother-card-$year'),
           // The 4×3 month matrix is a real, fixed composition. Its container
@@ -401,6 +395,12 @@ final class _SumMonthGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) => GridView.builder(
     key: ValueKey<String>('mind-sum-month-grid-$year-4'),
+    // This is a fixed three-row panel inside the surrounding year window,
+    // never a screen-level scroll view.  GridView otherwise adopts the
+    // device safe-area padding, which pushes the first row down and clips
+    // December below the explicit width-derived height on real phones.
+    primary: false,
+    padding: EdgeInsets.zero,
     physics: const NeverScrollableScrollPhysics(),
     itemCount: 12,
     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

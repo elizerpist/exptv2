@@ -232,32 +232,72 @@ void main() {
   });
 
   test(
-    'BAL-UNI-01/TET-01: Balance surface choices default separately and remain presentation-only',
+    'BALDEFAULT-01: Balance starts as one continuous mother card with the four-child layout',
     () {
       final controller = BalancePresentationController();
       addTearDown(controller.dispose);
 
       expect(
         controller.value.contentSurfaceStyle,
-        BalanceContentSurfaceStyle.separateCards,
+        BalanceContentSurfaceStyle.unifiedCard,
       );
       expect(
         controller.value.unifiedBodyLayout,
-        BalanceUnifiedBodyLayout.currentCarouselDetail,
+        BalanceUnifiedBodyLayout.fourSectionTetris,
       );
       controller
-        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
-        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.fourSectionTetris);
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       expect(controller.value.revision, 2);
       controller.reset();
       expect(
         controller.value.contentSurfaceStyle,
-        BalanceContentSurfaceStyle.separateCards,
+        BalanceContentSurfaceStyle.unifiedCard,
       );
       expect(
         controller.value.unifiedBodyLayout,
-        BalanceUnifiedBodyLayout.currentCarouselDetail,
+        BalanceUnifiedBodyLayout.fourSectionTetris,
       );
+    },
+  );
+
+  testWidgets(
+    'BALDEFAULT-02: an unconfigured Balance surface mounts the continuous four-child composition',
+    (tester) async {
+      final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
+        _linked(),
+      );
+      final settings = BalancePresentationController();
+      addTearDown(linked.dispose);
+      addTearDown(settings.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BalanceDashboardCoreSurface(
+              presentation: _balanceModePresentation(),
+              balanceLinkedPresentation: linked,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('balance-unified-header-content-surface'),
+        ),
+        findsOneWidget,
+      );
+      for (final key in <String>[
+        'balance-tetris-card-3',
+        'balance-tetris-card-4',
+        'balance-tetris-card-5',
+        'balance-tetris-card-combined',
+      ]) {
+        expect(find.byKey(ValueKey<String>(key)), findsOneWidget);
+      }
     },
   );
 
@@ -268,7 +308,8 @@ void main() {
         _linked(),
       );
       final settings = BalancePresentationController()
-        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard);
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.unifiedCard)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
       final mode = _balanceModePresentation();
@@ -396,7 +437,9 @@ void main() {
       final linked = ValueNotifier<DashboardBalanceLinkedPresentation?>(
         _linked(),
       );
-      final settings = BalancePresentationController();
+      final settings = BalancePresentationController()
+        ..setContentSurfaceStyle(BalanceContentSurfaceStyle.separateCards)
+        ..setUnifiedBodyLayout(BalanceUnifiedBodyLayout.currentCarouselDetail);
       addTearDown(linked.dispose);
       addTearDown(settings.dispose);
       final mode = _balanceModePresentation(
