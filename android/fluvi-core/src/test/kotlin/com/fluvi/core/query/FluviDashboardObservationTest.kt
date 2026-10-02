@@ -192,12 +192,12 @@ class FluviDashboardObservationTest {
         assertEquals(94, julyExpense.entryCount)
         assertEquals(493_800_000L, yearIncome.totalMinor)
         assertEquals(42, yearIncome.entryCount)
-        assertEquals(492_500_000L, yearExpense.totalMinor)
-        assertEquals(658, yearExpense.entryCount)
+        assertEquals(3_053_360_000L, yearExpense.totalMinor)
+        assertEquals(1_773, yearExpense.entryCount)
         assertEquals(1_804, denseYearIncome.entryCount)
         assertEquals(1_800, denseYearExpense.entryCount)
         assertEquals(1_846, allIncome.entryCount)
-        assertEquals(2_558, allExpense.entryCount)
+        assertEquals(3_673, allExpense.entryCount)
         assertEquals(783_300_000L, denseYearIncome.totalMinor)
         assertEquals(
             yearIncome.totalMinor + denseYearIncome.totalMinor,

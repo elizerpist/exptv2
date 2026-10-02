@@ -26,6 +26,7 @@ import 'mind_detailed_sum_chart.dart';
 import 'mind_day_all_vs_slider_heatmap_card.dart';
 import 'mind_monthly_overlay_bar_chart.dart';
 import 'mind_sum_year_band_header.dart';
+import 'mind_sum_micro_day_ribbon_surface.dart';
 import 'mind_sum_reference_surface.dart';
 import 'mind_temporal_content_header.dart';
 import 'mind_temporal_secondary_cards.dart';
@@ -103,32 +104,38 @@ final class MindSumHeatmapViewport extends StatelessWidget {
       return ValueListenableBuilder<MindYearHeatmapPresentationSettings>(
         valueListenable: settings,
         builder: (context, value, _) {
-          if (value.sumVisualStyle != MindSumVisualStyle.current) {
-            return MindSumReferenceSurface(
+          return switch (value.sumVisualStyle) {
+            MindSumVisualStyle.microDayRibbon => MindSumMicroDayRibbonSurface(
+              frame: frame,
+              paletteStyle: value.paletteStyle,
+              scaleResolution: value.scaleResolution,
+            ),
+            MindSumVisualStyle.sumA ||
+            MindSumVisualStyle.sumB => MindSumReferenceSurface(
               frame: frame,
               visualStyle: value.sumVisualStyle,
               paletteStyle: value.paletteStyle,
               scaleResolution: value.scaleResolution,
               showLayoutChooser: value.showSumLayoutChooser,
-            );
-          }
-          return _MindSumHeatmapContent(
-            frame: frame,
-            paletteStyle: value.paletteStyle,
-            scaleResolution: value.scaleResolution,
-            sumYearRowLayout: value.sumYearRowLayout,
-            sumMonthLabelPlacement: value.sumMonthLabelPlacement,
-            sumVisibleChartCount: value.sumVisibleChartCount,
-            sumLineInterpolationMode: value.sumLineInterpolationMode,
-            sumLineCatmullRomTension: value.sumLineCatmullRomTension,
-            sumLineTemporalSmoothingEnabled:
-                value.sumLineTemporalSmoothingEnabled,
-            sumLineSmoothingWindow: value.sumLineSmoothingWindow,
-            sumLineZoomAdaptiveSmoothingEnabled:
-                value.sumLineZoomAdaptiveSmoothingEnabled,
-            showLayoutChooser: value.showSumLayoutChooser,
-            upperVerticalGestures: upperVerticalGestures,
-          );
+            ),
+            MindSumVisualStyle.current => _MindSumHeatmapContent(
+              frame: frame,
+              paletteStyle: value.paletteStyle,
+              scaleResolution: value.scaleResolution,
+              sumYearRowLayout: value.sumYearRowLayout,
+              sumMonthLabelPlacement: value.sumMonthLabelPlacement,
+              sumVisibleChartCount: value.sumVisibleChartCount,
+              sumLineInterpolationMode: value.sumLineInterpolationMode,
+              sumLineCatmullRomTension: value.sumLineCatmullRomTension,
+              sumLineTemporalSmoothingEnabled:
+                  value.sumLineTemporalSmoothingEnabled,
+              sumLineSmoothingWindow: value.sumLineSmoothingWindow,
+              sumLineZoomAdaptiveSmoothingEnabled:
+                  value.sumLineZoomAdaptiveSmoothingEnabled,
+              showLayoutChooser: value.showSumLayoutChooser,
+              upperVerticalGestures: upperVerticalGestures,
+            ),
+          };
         },
       );
     },

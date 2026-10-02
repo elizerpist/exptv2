@@ -32,7 +32,7 @@ import 'budget_category_distribution_visual_bank.dart';
 import 'budget_distribution_pager.dart';
 import 'budget_target_avatar_rail_controller.dart';
 import 'dashboard_core_mode_presentation.dart';
-import 'dashboard_core_mode_surface_primitives.dart';
+import 'dashboard_header_mode_selector.dart';
 import 'dashboard_header_visual_engine.dart';
 import 'dashboard_header_visual_tuner.dart';
 import 'mind_dashboard_core_surface.dart';
@@ -217,10 +217,6 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
 
   void _onHeaderVerticalEnd(DragEndDetails _) => _finishPointerSequence();
 
-  void _switchModeFromHeaderIcon() {
-    widget.controller.switchMode(DashboardCoreModeDirection.forward);
-  }
-
   /// Content cards are an extension of Header vertical expansion, never a
   /// mode-switch surface. Keeping this separate from the Header's pan path
   /// keeps horizontal card motion outside both navigation and expansion.
@@ -325,10 +321,20 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
                   onVerticalDragCancel: _finishPointerSequence,
                 ),
               ),
-              // This is deliberately a sibling above the passive wave
-              // Listener. A pointer on the actual mode action must cycle
-              // mode without also seeding the decorative Header splash.
-              Positioned(top: 12, right: 14, child: _modeHeaderIcon(mode.mode)),
+              // This remains a sibling above the passive wave listener. Its
+              // bounded carousel owns vertical mode input and never seeds the
+              // decorative Header tap wave or the Header expansion lane.
+              Positioned(
+                top: 12,
+                right: 14,
+                child: DashboardHeaderModeSelector(
+                  controller: widget.controller,
+                  selectedMode: mode,
+                  balanceVisualFrame: widget.balanceHeaderVisualFrame,
+                  budgetVisualFrame: widget.budgetHeaderVisualFrame,
+                  mindVisualFrame: widget.mindHeaderVisualFrame,
+                ),
+              ),
             ],
           ),
         ),
@@ -341,29 +347,6 @@ class _DashboardCoreModeHostState extends State<DashboardCoreModeHost> {
             child: DashboardHeaderVisualTunerButton(controller: controller),
           ),
       ],
-    );
-  }
-
-  Widget _modeHeaderIcon(DashboardMode mode) {
-    final frames = switch (mode) {
-      DashboardMode.balance => widget.balanceHeaderVisualFrame,
-      DashboardMode.budget => widget.budgetHeaderVisualFrame,
-      DashboardMode.mind => widget.mindHeaderVisualFrame,
-    };
-    if (frames == null) {
-      return DashboardHeaderModeIconButton(
-        mode: mode,
-        onPressed: _switchModeFromHeaderIcon,
-      );
-    }
-    return ValueListenableBuilder<DashboardHeaderVisualFrame>(
-      valueListenable: frames,
-      builder: (context, frame, _) => DashboardHeaderModeIconButton(
-        mode: mode,
-        color: frame.headerIconColor,
-        sizePercent: frame.headerModeIconSizePercent,
-        onPressed: _switchModeFromHeaderIcon,
-      ),
     );
   }
 

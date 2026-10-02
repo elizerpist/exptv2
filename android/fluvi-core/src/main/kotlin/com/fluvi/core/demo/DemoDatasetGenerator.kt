@@ -50,7 +50,17 @@ class DemoDatasetGenerator(
                 partners = partners,
                 ordinalStart = ordinal,
             )
+            ordinal += fastfood2027.entries.size
             addAll(fastfood2027.entries)
+            // This intentionally appends after every established fixture
+            // range: no pre-existing deterministic entry ID is renumbered.
+            // It is a Day/Mind slider stress fixture, not a second data path.
+            val september2026 = generateSeptember2026HourlyStressMonth(
+                categories = categories,
+                partners = partners,
+                ordinalStart = ordinal,
+            )
+            addAll(september2026.entries)
         }
         val monthlyReports = entries.monthlyReports()
         validatePlan(categories, partners, entries, monthlyReports)
@@ -435,6 +445,107 @@ class DemoDatasetGenerator(
         return MonthlyEntries(entries)
     }
 
+    /**
+     * Deterministic September-only expense fixture for the Mind Day hourly
+     * bar chart. Each selected hour contains several independently filterable
+     * amounts; wide and tight distributions exercise both large and small
+     * lower-bound slider moves without altering the normal ledger schema.
+     */
+    private fun generateSeptember2026HourlyStressMonth(
+        categories: List<DemoCategoryDraft>,
+        partners: List<DemoPartnerDraft>,
+        ordinalStart: Int,
+    ): MonthlyEntries {
+        val categoriesByName = categories.associateBy { it.name }
+        val partnersByName = partners.associateBy { it.name }
+        val random = Random(SEPTEMBER_2026_STRESS_SEED)
+        val entries = mutableListOf<DemoEntryDraft>()
+        var ordinal = ordinalStart
+
+        september2026ActiveHours.forEachIndexed { dayIndex, activeHours ->
+            val day = dayIndex + 1
+            activeHours.forEachIndexed { hourIndex, hour ->
+                val transactionCount = transactionCountForSeptemberHour(
+                    day = day,
+                    hourIndex = hourIndex,
+                )
+                val definitionsOffset = random.nextInt(septemberExpenseDefinitions.size)
+                val amounts = septemberAmountsForHour(
+                    day = day,
+                    hourIndex = hourIndex,
+                    transactionCount = transactionCount,
+                )
+                amounts.forEachIndexed { transactionIndex, amountHuf ->
+                    val definition = septemberExpenseDefinitions[
+                        (definitionsOffset + transactionIndex * 3 + day) %
+                            septemberExpenseDefinitions.size
+                    ]
+                    entries += entry(
+                        ordinal = ordinal++,
+                        partner = partnersByName.getValue(definition.partnerName),
+                        category = categoriesByName.getValue(definition.categoryName),
+                        direction = LedgerDirection.expense,
+                        amountScaled100 = amountHuf * 100L,
+                        date = LocalDate.of(2026, 9, day),
+                        minutes = septemberMinuteFor(
+                            day = day,
+                            hour = hour,
+                            transactionIndex = transactionIndex,
+                        ),
+                        note = definition.note,
+                        assignmentMode = CategoryAssignmentMode.partnerDefault,
+                    )
+                }
+            }
+        }
+        check(entries.all { it.direction == LedgerDirection.expense })
+        check(entries.all {
+            LocalDate.ofEpochDay(it.bookedLocalEpochDay).let { date ->
+                date.year == 2026 && date.monthValue == 9
+            }
+        })
+        return MonthlyEntries(entries)
+    }
+
+    private fun transactionCountForSeptemberHour(day: Int, hourIndex: Int): Int =
+        transactionCountForStatic(day = day, hourIndex = hourIndex)
+
+    private fun septemberAmountsForHour(
+        day: Int,
+        hourIndex: Int,
+        transactionCount: Int,
+    ): List<Long> {
+        val source = when {
+            day in september2026WideSpreadDays -> septemberWideSpreadAmountsHuf
+            day in september2026TightClusterDays -> septemberTightClusterAmountsHuf
+            (day + hourIndex) % 5 == 0 -> septemberWideSpreadAmountsHuf
+            (day * 3 + hourIndex) % 7 == 0 -> septemberTightClusterAmountsHuf
+            else -> septemberRegularAmountSetsHuf[
+                (day * 5 + hourIndex * 3) % septemberRegularAmountSetsHuf.size
+            ]
+        }
+        // Wide source selection keeps both the tiny and dominant amount even
+        // in a two-transaction hour. Tight sets retain nearby thresholds.
+        return when {
+            source === septemberWideSpreadAmountsHuf && transactionCount == 2 ->
+                listOf(source.first(), source[3])
+            source === septemberWideSpreadAmountsHuf && transactionCount == 3 ->
+                listOf(source.first(), source[2], source[3])
+            else -> source.take(transactionCount)
+        }
+    }
+
+    private fun septemberMinuteFor(
+        day: Int,
+        hour: Int,
+        transactionIndex: Int,
+    ): Int {
+        val minute = septemberMinuteOffsets[
+            (day * 5 + hour * 7 + transactionIndex * 2) % septemberMinuteOffsets.size
+        ]
+        return hour * 60 + minute
+    }
+
     private fun allocateWholeHufAmounts(
         targetHuf: Long,
         count: Int,
@@ -533,16 +644,26 @@ class DemoDatasetGenerator(
             }
             val income = monthEntries.filter { it.direction == LedgerDirection.income }
             val expense = monthEntries.filter { it.direction == LedgerDirection.expense }
+            val incomeTotal = income.sumOf { it.amountScaled100 }
+            val expenseTotal = expense.sumOf { it.amountScaled100 }
             DemoMonthReport(
                 year = period.year,
                 month = period.monthValue,
                 entryCount = monthEntries.size,
                 incomeCount = income.size,
                 expenseCount = expense.size,
-                incomeTargetScaled100 = incomeTargetHuf(period.year, period.monthValue) * 100L,
-                expenseTargetScaled100 = expenseTargetHuf(period.year, period.monthValue) * 100L,
-                incomeTotalScaled100 = income.sumOf { it.amountScaled100 },
-                expenseTotalScaled100 = expense.sumOf { it.amountScaled100 },
+                incomeTargetScaled100 = if (period.year == 2026 && period.monthValue == 9) {
+                    incomeTotal
+                } else {
+                    incomeTargetHuf(period.year, period.monthValue) * 100L
+                },
+                expenseTargetScaled100 = if (period.year == 2026 && period.monthValue == 9) {
+                    expenseTotal
+                } else {
+                    expenseTargetHuf(period.year, period.monthValue) * 100L
+                },
+                incomeTotalScaled100 = incomeTotal,
+                expenseTotalScaled100 = expenseTotal,
             )
         }
 
@@ -568,8 +689,13 @@ class DemoDatasetGenerator(
     ) {
         require(categories.size == 11)
         require(partners.size == 33)
-        require(entries.size == 700 + highDensityEntryCounts.sum() + FastfoodPrototype2025Rows.rows.size)
-        require(reports.filter { it.year == 2026 }.all { it.entryCount == 100 })
+        require(entries.size == 700 + highDensityEntryCounts.sum() + FastfoodPrototype2025Rows.rows.size + september2026StressEntryCount)
+        require(reports.filter { it.year == 2026 && it.month in 1..7 }.all { it.entryCount == 100 })
+        require(reports.single { it.year == 2026 && it.month == 9 }.let {
+            it.incomeCount == 0 &&
+                it.expenseCount == september2026StressEntryCount &&
+                it.expenseTargetScaled100 == it.expenseTotalScaled100
+        })
         require(reports.filter { it.year == 2025 }.size == 12)
         require(reports.filter { it.year == 2025 }.all { it.entryCount in 280..320 })
         require(reports.filter { it.year == 2025 }.all {
@@ -628,5 +754,86 @@ class DemoDatasetGenerator(
             FixedExpense("Mintalakás Bérbeadó", "Lakhatás", 160_000L, 20, 12 * 60, "Nyaralási előleg"),
             FixedExpense("Mintalakás Bérbeadó", "Lakhatás", 130_000L, 19, 12 * 60 + 20, "Nagyobb javítás"),
         )
+        const val SEPTEMBER_2026_STRESS_SEED = 202_609L
+        val september2026WideSpreadDays = setOf(1, 11, 21)
+        val september2026TightClusterDays = setOf(5, 15, 25)
+        val septemberWideSpreadAmountsHuf = listOf(800L, 3_500L, 17_000L, 68_000L, 135_000L)
+        val septemberTightClusterAmountsHuf = listOf(11_800L, 12_600L, 14_100L, 15_300L, 16_000L)
+        val septemberRegularAmountSetsHuf = listOf(
+            listOf(700L, 4_800L, 18_000L, 72_000L, 128_000L),
+            listOf(1_200L, 6_500L, 22_000L, 48_000L, 94_000L),
+            listOf(1_800L, 8_200L, 15_500L, 36_000L, 81_000L),
+            listOf(2_400L, 9_800L, 44_000L, 96_000L, 122_000L),
+            listOf(900L, 3_200L, 12_400L, 28_000L, 63_000L),
+            listOf(5_200L, 11_000L, 19_500L, 42_000L, 76_000L),
+        )
+        val septemberMinuteOffsets = intArrayOf(3, 8, 11, 16, 19, 27, 34, 37, 43, 49, 52, 57)
+        val septemberExpenseDefinitions = listOf(
+            SeptemberExpenseDefinition("Mintalakás Bérbeadó", "Lakhatás", "Lakhatási kiadás"),
+            SeptemberExpenseDefinition("Tesco", "Élelmiszer", "Bevásárlás"),
+            SeptemberExpenseDefinition("Lidl", "Élelmiszer", "Napi vásárlás"),
+            SeptemberExpenseDefinition("BKK", "Közlekedés", "Városi közlekedés"),
+            SeptemberExpenseDefinition("MOL", "Közlekedés", "Üzemanyag"),
+            SeptemberExpenseDefinition("MVM", "Rezsi", "Közüzemi kiadás"),
+            SeptemberExpenseDefinition("Telekom", "Rezsi", "Előfizetés"),
+            SeptemberExpenseDefinition("Gyógyszertár", "Egészség", "Egészségügyi vásárlás"),
+            SeptemberExpenseDefinition("Mozi", "Szórakozás", "Kikapcsolódás"),
+            SeptemberExpenseDefinition("Elektronikai üzlet", "Vásárlás", "Háztartási vásárlás"),
+            SeptemberExpenseDefinition("Ruházati üzlet", "Vásárlás", "Ruházat"),
+            SeptemberExpenseDefinition("Netflix", "Előfizetések", "Előfizetés"),
+            SeptemberExpenseDefinition("Spotify", "Előfizetések", "Előfizetés"),
+            SeptemberExpenseDefinition("McDonald's", "Gyorsétterem", "Gyorsétterem"),
+            SeptemberExpenseDefinition("KFC", "Gyorsétterem", "Gyorsétterem"),
+        )
+        val september2026ActiveHours = listOf(
+            (7..16).toList(),
+            (6..10).toList() + (17..22).toList(),
+            listOf(1, 4, 7, 9, 12, 15, 18, 20, 22, 23),
+            (5..13).toList(),
+            (13..22).toList(),
+            (6..8).toList() + (12..15).toList() + (19..22).toList(),
+            (5..18).toList(),
+            (8..16).toList(),
+            listOf(0, 3, 6, 9, 11, 14, 17, 20, 22, 23),
+            (7..12).toList() + (16..20).toList(),
+            (7..17).toList(),
+            (6..9).toList() + (14..18).toList() + (21..23).toList(),
+            listOf(2, 5, 8, 10, 13, 16, 19, 21, 23),
+            (5..14).toList(),
+            (12..21).toList(),
+            (6..10).toList() + (15..19).toList(),
+            (4..17).toList(),
+            (8..11).toList() + (17..22).toList(),
+            listOf(1, 4, 7, 10, 12, 15, 18, 20, 22, 23),
+            (6..15).toList(),
+            (7..16).toList(),
+            (5..8).toList() + (12..16).toList() + (19..21).toList(),
+            listOf(0, 3, 6, 9, 11, 14, 17, 20, 22, 23),
+            (13..22).toList(),
+            (6..15).toList(),
+            (5..9).toList() + (16..20).toList(),
+            (7..18).toList(),
+            (8..12).toList() + (18..22).toList(),
+            listOf(1, 4, 7, 9, 12, 15, 18, 20, 22, 23),
+            (6..16).toList(),
+        )
+        val september2026StressEntryCount = september2026ActiveHours.indices.sumOf { dayIndex ->
+            september2026ActiveHours[dayIndex].indices.sumOf { hourIndex ->
+                transactionCountForStatic(day = dayIndex + 1, hourIndex = hourIndex)
+            }
+        }
+
+        private fun transactionCountForStatic(day: Int, hourIndex: Int): Int =
+            if (day in september2026TightClusterDays) {
+                3 + ((day * 7 + hourIndex * 5) % 3)
+            } else {
+                2 + ((day * 11 + hourIndex * 7) % 4)
+            }
     }
+
+    private data class SeptemberExpenseDefinition(
+        val partnerName: String,
+        val categoryName: String,
+        val note: String,
+    )
 }

@@ -2,6 +2,7 @@ import 'dart:ui' show Clip;
 
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart' show Axis;
 
@@ -100,6 +101,7 @@ class CenteredCarouselSpec {
     this.programmaticScrollDuration = defaultProgrammaticScrollDuration,
     this.programmaticScrollCurve = defaultProgrammaticScrollCurve,
     this.clipBehavior = Clip.hardEdge,
+    this.dragStartBehavior = DragStartBehavior.start,
   }) : motionProfile =
            motionProfile ?? CenteredCarouselMotionProfiles.timeRefinementRail;
 
@@ -126,6 +128,10 @@ class CenteredCarouselSpec {
   final Duration programmaticScrollDuration;
   final Curve programmaticScrollCurve;
   final Clip clipBehavior;
+
+  /// Lets bounded, very small controls begin translating with the first
+  /// pointer delta. Existing consumers keep Flutter's default [start].
+  final DragStartBehavior dragStartBehavior;
 
   double get frictionDrag => motionProfile.frictionDrag;
   double get velocityMultiplier => motionProfile.velocityMultiplier;

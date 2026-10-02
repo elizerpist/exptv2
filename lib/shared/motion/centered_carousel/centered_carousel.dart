@@ -221,6 +221,7 @@ class _CenteredCarouselState<T> extends State<CenteredCarousel<T>> {
                         key: widget.viewportKey,
                         controller: widget.controller.scrollController,
                         scrollDirection: scrollDirection,
+                        dragStartBehavior: widget.spec.dragStartBehavior,
                         itemExtent: widget.spec.itemExtent,
                         padding: scrollDirection == Axis.horizontal
                             ? EdgeInsets.symmetric(horizontal: sidePadding)

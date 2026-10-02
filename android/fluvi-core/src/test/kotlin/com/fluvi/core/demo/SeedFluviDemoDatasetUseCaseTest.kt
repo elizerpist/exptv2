@@ -50,16 +50,16 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertFalse(report.alreadySeeded)
         assertEquals(11, report.createdCategoryCount)
         assertEquals(33, report.createdPartnerCount)
-        assertEquals(4_404, report.createdEntryCount)
+        assertEquals(5_519, report.createdEntryCount)
         assertEquals(12, core.categories.list().size)
 
         val income = core.query.total(yearScope(LedgerDirection.income))
         val expense = core.query.total(yearScope(LedgerDirection.expense))
 
         assertEquals(493_800_000L, income.amountScaled100)
-        assertEquals(492_500_000L, expense.amountScaled100)
+        assertEquals(3_053_360_000L, expense.amountScaled100)
         assertEquals(42L, income.entryCount)
-        assertEquals(658L, expense.entryCount)
+        assertEquals(1_773L, expense.entryCount)
         assertEquals(707_000L * 100L, core.query.total(monthScope(LedgerDirection.income, 7)).amountScaled100)
         assertEquals(689_000L * 100L, core.query.total(monthScope(LedgerDirection.expense, 7)).amountScaled100)
         val highDensityReports = report.monthlyReports.filter { it.year == 2025 }
@@ -88,7 +88,7 @@ class SeedFluviDemoDatasetUseCaseTest {
         assertEquals(0, second.createdPartnerCount)
         assertEquals(0, second.createdEntryCount)
         assertEquals(
-            4_404L,
+            5_519L,
             core.query.total(FluviQueryScope(direction = LedgerDirection.income)).entryCount +
                 core.query.total(FluviQueryScope(direction = LedgerDirection.expense)).entryCount,
         )
@@ -383,7 +383,7 @@ class SeedFluviDemoDatasetUseCaseTest {
 
         assertTrue(core.categories.getById(userCategoryId) != null)
         assertEquals(
-            659L,
+            1_774L,
             core.query.total(yearScope(LedgerDirection.expense)).entryCount,
         )
     }

@@ -6,10 +6,10 @@ import java.time.ZoneOffset
 import java.util.Random
 
 object DemoDatasetVersion {
-    // Version 6 adds an exact, static 2025-prototype Fastfood mirror in 2027.
+    // Version 7 adds the append-only September 2026 hourly expense fixture.
     // The manifest version deliberately forces a complete deterministic reset
     // instead of mixing a prior fixture with new category, partner and rows.
-    const val current = 6
+    const val current = 7
     const val prngSeed = 2_026_010_7L
     const val localZoneId = "Europe/Budapest"
     val startInclusive: LocalDate = LocalDate.of(2025, 1, 1)

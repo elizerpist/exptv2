@@ -44,13 +44,28 @@ final class DashboardCoreModeController extends ChangeNotifier {
   /// Immediately advances to one adjacent logical mode in the fixed ring.
   bool switchMode(DashboardCoreModeDirection direction) {
     final source = _committedMode;
-    final target = _neighbourOf(source, direction);
-    _committedMode = target;
+    return commitModeTarget(_neighbourOf(source, direction), direction);
+  }
+
+  /// Atomically publishes an already-resolved carousel crossing through the
+  /// same semantic owner and switch observer used by adjacent navigation.
+  ///
+  /// The Header carousel owns only physical position. It calls this method at
+  /// a discrete selected-index crossing, so the mode surface replaces before
+  /// that carousel's ballistic motion has settled.
+  bool commitModeTarget(
+    DashboardModeSpec target,
+    DashboardCoreModeDirection direction,
+  ) {
+    final source = _committedMode;
+    final next = _canonicalMode(target);
+    if (identical(source, next)) return false;
+    _committedMode = next;
     _committedModeEpoch += 1;
     onModeSwitched?.call(
       DashboardCoreModeSwitchEvent(
         fromMode: source,
-        toMode: target,
+        toMode: next,
         direction: direction,
       ),
     );

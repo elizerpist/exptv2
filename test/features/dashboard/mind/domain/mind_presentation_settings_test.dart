@@ -110,7 +110,7 @@ void main() {
     });
 
     test(
-      'SUM-VARIANT-01 RED: Current, SUM-A and SUM-B are one local presentation preference',
+      'SUM-VARIANT-01 RED: Current, SUM-A, SUM-B and Mikronapok are one local presentation preference',
       () {
         final controller = MindYearHeatmapPresentationController();
         addTearDown(controller.dispose);
@@ -122,6 +122,12 @@ void main() {
         controller.setSumVisualStyle(MindSumVisualStyle.sumB);
         expect(controller.value.sumVisualStyle, MindSumVisualStyle.sumB);
         expect(controller.value.revision, 2);
+        controller.setSumVisualStyle(MindSumVisualStyle.microDayRibbon);
+        expect(
+          controller.value.sumVisualStyle,
+          MindSumVisualStyle.microDayRibbon,
+        );
+        expect(controller.value.revision, 3);
       },
     );
 

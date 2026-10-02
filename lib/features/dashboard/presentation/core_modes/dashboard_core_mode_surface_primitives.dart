@@ -428,32 +428,58 @@ class DashboardHeaderModeIconButton extends StatelessWidget {
   };
 
   @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: semanticLabelFor(mode),
+    onTap: onPressed,
+    child: GestureDetector(
+      key: ValueKey<String>('dashboard-header-mode-icon-${mode.name}'),
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTap: onPressed,
+      child: DashboardHeaderModeIconVisual(
+        mode: mode,
+        color: color,
+        sizePercent: sizePercent,
+      ),
+    ),
+  );
+}
+
+/// Render-only Header icon primitive. The bounded Header carousel reuses the
+/// exact prepared-vector path without introducing a second tap owner.
+final class DashboardHeaderModeIconVisual extends StatelessWidget {
+  const DashboardHeaderModeIconVisual({
+    super.key,
+    required this.mode,
+    this.color = Colors.white,
+    this.sizePercent = 0,
+  });
+
+  final DashboardMode mode;
+  final Color color;
+  final double sizePercent;
+
+  @override
   Widget build(BuildContext context) {
     final picture = PreparedVectorAssetAtlas.instance.picture(
-      atlasHandleFor(mode),
+      DashboardHeaderModeIconButton.atlasHandleFor(mode),
     );
-    final glyphExtent = glyphExtentFor(sizePercent);
-    final buttonExtent = buttonExtentFor(sizePercent);
-    return Semantics(
-      button: true,
-      label: semanticLabelFor(mode),
-      onTap: onPressed,
-      child: GestureDetector(
-        key: ValueKey<String>('dashboard-header-mode-icon-${mode.name}'),
-        behavior: HitTestBehavior.opaque,
-        excludeFromSemantics: true,
-        onTap: onPressed,
-        child: SizedBox(
-          width: buttonExtent,
-          height: buttonExtent,
-          child: Center(
-            child: PreparedVectorPictureView(
-              picture: picture,
-              width: glyphExtent,
-              height: glyphExtent,
-              color: color,
-            ),
-          ),
+    final glyphExtent = DashboardHeaderModeIconButton.glyphExtentFor(
+      sizePercent,
+    );
+    final buttonExtent = DashboardHeaderModeIconButton.buttonExtentFor(
+      sizePercent,
+    );
+    return SizedBox(
+      width: buttonExtent,
+      height: buttonExtent,
+      child: Center(
+        child: PreparedVectorPictureView(
+          picture: picture,
+          width: glyphExtent,
+          height: glyphExtent,
+          color: color,
         ),
       ),
     );

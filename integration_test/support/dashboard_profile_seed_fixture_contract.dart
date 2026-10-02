@@ -5,10 +5,10 @@ import 'package:fluvi/core/demo_data/demo_seed_report.dart';
 /// rail fixture, and exact 2027 Fastfood mirror explicit here instead of
 /// scattering counts.
 abstract final class DashboardProfileSeedFixtureContract {
-  static const int expectedSeededTransactionCount = 4404;
+  static const int expectedSeededTransactionCount = 5519;
   static const Map<int, int> expectedMonthsByYear = <int, int>{
     2025: 12,
-    2026: 7,
+    2026: 8,
     2027: 12,
   };
 

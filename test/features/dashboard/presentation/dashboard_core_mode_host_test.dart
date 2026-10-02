@@ -6,6 +6,7 @@ import 'package:fluvi/core/design/dashboard_geometry_resolver.dart';
 import 'package:fluvi/core/design/dashboard_layout_metrics.dart';
 import 'package:fluvi/core/design/dashboard_mode_palette.dart';
 import 'package:fluvi/core/design/fluvi_global_appearance.dart';
+import 'package:fluvi/shared/motion/centered_carousel/centered_carousel.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_presentation.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
@@ -229,13 +230,14 @@ void main() {
   });
 
   testWidgets(
-    'HEADER-MODE-ACTION-RED: local white mode icons replace labels and are the only Header mode switch affordance',
+    'HMS-01 RED: the Header mode icon is a bounded vertical selector and normal tap never cycles the core mode',
     (tester) async {
       final controller = DashboardCoreModeController(
         initialMode: DashboardModeSpec.balance,
       );
       addTearDown(controller.dispose);
       await tester.pumpWidget(_ModeHostHarness(controller: controller));
+      await tester.pump();
 
       expect(
         find.byKey(const ValueKey<String>('dashboard-core-mode-label-balance')),
@@ -247,6 +249,10 @@ void main() {
         ),
         findsOneWidget,
       );
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      );
+      expect(selector, findsOneWidget);
       expect(
         DashboardHeaderModeIconButton.assetFor(DashboardMode.balance),
         'assets/fluvi/header_mode_icons/balance-scale.svg',
@@ -271,13 +277,23 @@ void main() {
         reason: 'Horizontal Header swipes no longer own mode selection.',
       );
 
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('dashboard-header-mode-icon-balance'),
-        ),
-      );
+      await tester.tap(selector);
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.balance);
+
+      await tester.drag(selector, const Offset(0, -36));
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.budget);
+      expect(controller.committedModeEpoch, 1);
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-core-mode-budget')),
+        findsOneWidget,
+        reason: 'The content root changes at the selected-index crossing.',
+      );
+      expect(
+        find.byKey(const ValueKey<String>('dashboard-core-mode-balance')),
+        findsNothing,
+      );
       expect(
         find.byKey(const ValueKey<String>('dashboard-header-mode-icon-budget')),
         findsOneWidget,
@@ -287,9 +303,7 @@ void main() {
         'assets/fluvi/header_mode_icons/budget-sliders-vertical.svg',
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('dashboard-header-mode-icon-budget')),
-      );
+      await tester.drag(selector, const Offset(0, -36));
       await tester.pump();
       expect(controller.committedMode, DashboardModeSpec.mind);
       expect(
@@ -301,10 +315,102 @@ void main() {
         'assets/fluvi/header_mode_icons/mind-brain.svg',
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('dashboard-header-mode-icon-mind')),
+      await tester.drag(selector, const Offset(0, -36));
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.balance);
+
+      await tester.drag(selector, const Offset(0, 36));
+      await tester.pump();
+      expect(controller.committedMode, DashboardModeSpec.mind);
+      expect(controller.committedModeEpoch, 4);
+    },
+  );
+
+  testWidgets(
+    'HMS-02 RED: a partial vertical drag moves the real clipped items before semantic crossing',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_ModeHostHarness(controller: controller));
+      await tester.pump();
+      await tester.pump();
+
+      final viewport = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      );
+      final outgoing = _headerModeVisual(DashboardMode.balance);
+      final upwardIncoming = _headerModeVisual(DashboardMode.budget);
+      final downwardIncoming = _headerModeVisual(DashboardMode.mind);
+      final center = tester.getCenter(viewport);
+      final up = await tester.startGesture(center);
+      // The Header selector opts into pointer-down drag ownership because its
+      // 32px viewport is smaller than the platform touch slop. A 10px move
+      // is therefore a real pre-crossing scroll, not an injected animation.
+      await up.moveBy(const Offset(0, -10));
+      await tester.pump();
+      expect(tester.getCenter(outgoing).dy, lessThan(center.dy));
+      expect(tester.getCenter(upwardIncoming).dy, greaterThan(center.dy));
+      expect(controller.committedMode, DashboardModeSpec.balance);
+      await up.up();
+      await tester.pumpAndSettle();
+
+      final down = await tester.startGesture(tester.getCenter(viewport));
+      await down.moveBy(const Offset(0, 10));
+      await tester.pump();
+      expect(tester.getCenter(outgoing).dy, greaterThan(center.dy));
+      expect(tester.getCenter(downwardIncoming).dy, lessThan(center.dy));
+      expect(controller.committedMode, DashboardModeSpec.balance);
+      await down.up();
+    },
+  );
+
+  testWidgets(
+    'HMS-03 RED: selector input is isolated from Header expansion and preserves the physical carousel owner',
+    (tester) async {
+      final controller = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final expansion = _ExpansionRecorder();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _ModeHostHarness(controller: controller, expansion: expansion),
       );
       await tester.pump();
+      final carouselFinder = find.byType(CenteredCarousel<DashboardModeSpec>);
+      final carousel = tester.widget<CenteredCarousel<DashboardModeSpec>>(
+        carouselFinder,
+      );
+      final carouselController = carousel.controller;
+      final scrollController = carouselController.scrollController;
+      final physicsCreations = carouselController.physicsCreationCount;
+      final selector = find.byKey(
+        const ValueKey<String>('dashboard-header-mode-selector-viewport'),
+      );
+
+      await tester.drag(selector, const Offset(0, -36));
+      await tester.pump();
+      await tester.drag(selector, const Offset(0, -36));
+      await tester.pump();
+      await tester.drag(selector, const Offset(0, -36));
+      await tester.pump();
+
+      final after = tester.widget<CenteredCarousel<DashboardModeSpec>>(
+        carouselFinder,
+      );
+      expect(identical(after.controller, carouselController), isTrue);
+      expect(
+        identical(after.controller.scrollController, scrollController),
+        isTrue,
+      );
+      expect(after.controller.physicsCreationCount, physicsCreations);
+      expect(expansion.starts, 0);
+      expect(expansion.ends, 0);
+
+      await _dragHeader(tester, const Offset(0, -80));
+      expect(expansion.starts, 1);
+      expect(expansion.ends, 1);
       expect(controller.committedMode, DashboardModeSpec.balance);
     },
   );
@@ -334,7 +440,7 @@ void main() {
       );
       final semantics = tester.ensureSemantics();
       expect(
-        find.bySemanticsLabel('Balance mód, következő mód'),
+        find.bySemanticsLabel('Mód: Balance. Függőlegesen húzva válthat.'),
         findsOneWidget,
       );
       expect(
@@ -365,11 +471,11 @@ void main() {
 
       await tester.tapAt(Offset(enlarged.right - 2, enlarged.center.dy));
       await tester.pump();
-      expect(mode.committedMode, DashboardModeSpec.budget);
+      expect(mode.committedMode, DashboardModeSpec.balance);
       expect(
         visual.tapWave.rippleCount,
         0,
-        reason: 'The mode action must not seed the Header splash.',
+        reason: 'The bounded selector must not seed the Header splash.',
       );
       await tester.tap(
         find.byKey(const ValueKey('dashboard-core-mode-header-gesture-region')),
@@ -666,9 +772,7 @@ void main() {
     final balanceHeader = tester.getRect(
       find.byKey(const ValueKey('dashboard-core-mode-balance-header')),
     );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('dashboard-header-mode-icon-balance')),
-    );
+    controller.switchMode(DashboardCoreModeDirection.forward);
     await tester.pump();
     final budgetHeader = tester.getRect(
       find.byKey(const ValueKey('dashboard-core-mode-budget-header')),
@@ -765,3 +869,7 @@ int _mountedModeRootCount(WidgetTester tester) => <Finder>[
   find.byKey(const ValueKey('dashboard-core-mode-budget')),
   find.byKey(const ValueKey('dashboard-core-mode-mind')),
 ].fold(0, (count, finder) => count + finder.evaluate().length);
+
+Finder _headerModeVisual(DashboardMode mode) => find.byWidgetPredicate(
+  (widget) => widget is DashboardHeaderModeIconVisual && widget.mode == mode,
+);

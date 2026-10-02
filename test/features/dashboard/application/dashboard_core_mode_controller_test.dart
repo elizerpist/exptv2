@@ -66,6 +66,39 @@ void main() {
       expect(events.single.toMode, DashboardModeSpec.balance);
     });
 
+    test(
+      'commits one exact carousel crossing through the canonical event path',
+      () {
+        final events = <DashboardCoreModeSwitchEvent>[];
+        final controller = DashboardCoreModeController(
+          initialMode: DashboardModeSpec.balance,
+          onModeSwitched: events.add,
+        );
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.commitModeTarget(
+            DashboardModeSpec.mind,
+            DashboardCoreModeDirection.backward,
+          ),
+          isTrue,
+        );
+        expect(controller.committedMode, DashboardModeSpec.mind);
+        expect(controller.committedModeEpoch, 1);
+        expect(events, hasLength(1));
+        expect(events.single.direction, DashboardCoreModeDirection.backward);
+        expect(
+          controller.commitModeTarget(
+            DashboardModeSpec.mind,
+            DashboardCoreModeDirection.backward,
+          ),
+          isFalse,
+        );
+        expect(controller.committedModeEpoch, 1);
+        expect(events, hasLength(1));
+      },
+    );
+
     test('advances the visible epoch for every real mode replacement', () {
       final controller = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,

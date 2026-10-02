@@ -101,12 +101,14 @@ enum MindSumYearRowLayout {
 enum MindSumVisualStyle {
   current,
   sumA,
-  sumB;
+  sumB,
+  microDayRibbon;
 
   String get tunerLabel => switch (this) {
     MindSumVisualStyle.current => 'Current',
     MindSumVisualStyle.sumA => 'SUM-A',
     MindSumVisualStyle.sumB => 'SUM-B',
+    MindSumVisualStyle.microDayRibbon => 'Mikronapok',
   };
 }
 

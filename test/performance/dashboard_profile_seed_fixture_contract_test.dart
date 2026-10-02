@@ -7,13 +7,13 @@ void main() {
   test('defines the authoritative 2025–2027 profile seed contract', () {
     expect(
       DashboardProfileSeedFixtureContract.expectedSeededTransactionCount,
-      4404,
+      5519,
     );
     expect(
       DashboardProfileSeedFixtureContract.expectedMonthsByYear,
-      const <int, int>{2025: 12, 2026: 7, 2027: 12},
+      const <int, int>{2025: 12, 2026: 8, 2027: 12},
     );
-    expect(DashboardProfileSeedFixtureContract.expectedTotalMonthCount, 31);
+    expect(DashboardProfileSeedFixtureContract.expectedTotalMonthCount, 32);
 
     expect(
       () => DashboardProfileSeedFixtureContract.verify(_currentSeedReport()),
@@ -42,7 +42,7 @@ void main() {
     expect(fixture.incomeEntryCount(), 19);
     expect(fixture.incomeEntryCount(year: 2025), 12);
     expect(fixture.incomeEntryCount(year: 2026, month: 7), 1);
-    expect(fixture.expenseEntryCount(), 100);
+    expect(fixture.expenseEntryCount(), 1215);
     expect(fixture.expenseEntryCount(year: 2027), 100);
   });
 }
@@ -60,6 +60,7 @@ DemoSeedReport _currentSeedReport({List<DemoMonthReport>? months}) =>
           <DemoMonthReport>[
             ..._monthsFor(year: 2025, count: 12),
             ..._monthsFor(year: 2026, count: 7),
+            _september2026(),
             ..._fastfoodMonthsFor2027(),
           ],
       earliestEntryAtUtcMs: 1735686000000,
@@ -83,6 +84,18 @@ List<DemoMonthReport> _monthsFor({required int year, required int count}) =>
         expenseTotalMinor: 0,
       ),
     );
+
+DemoMonthReport _september2026() => const DemoMonthReport(
+  year: 2026,
+  month: 9,
+  entryCount: 1115,
+  incomeCount: 0,
+  expenseCount: 1115,
+  incomeTargetMinor: 2560860000,
+  expenseTargetMinor: 2560860000,
+  incomeTotalMinor: 0,
+  expenseTotalMinor: 2560860000,
+);
 
 List<DemoMonthReport> _fastfoodMonthsFor2027() =>
     List<DemoMonthReport>.generate(

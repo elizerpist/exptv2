@@ -33,7 +33,7 @@ void main() {
   ];
 
   testWidgets(
-    'SUM-VARIANT-RENDERER-01 RED: Current retains the legacy renderer while SUM-A and SUM-B select only their native reference surfaces',
+    'SUM-VARIANT-RENDERER-01 RED: Current retains the legacy renderer while SUM-A, SUM-B and Mikronapok select their own native surfaces',
     (tester) async {
       final frame = MindSumHeatmapProjection.build(
         identity: const MindTemporalHeatmapIdentity(
@@ -87,6 +87,20 @@ void main() {
       expect(
         find.byKey(const ValueKey('mind-sum-reference-sumB')),
         findsOneWidget,
+      );
+      settings.setSumVisualStyle(MindSumVisualStyle.microDayRibbon);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-sum-micro-day-ribbon-surface')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-sum-reference-sumA')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-sum-reference-sumB')),
+        findsNothing,
       );
       settings.setSumVisualStyle(MindSumVisualStyle.current);
       await tester.pump();

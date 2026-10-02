@@ -1,7 +1,7 @@
 # Fluvi deterministic demo dataset
 
-Status: implementation slice in progress; no commit, push, or APK build has
-been performed.
+Status: deterministic fixture specification. The generator is the source of
+truth for exact rows and retains historical append-only ID ranges.
 
 ## Dataset contract
 
@@ -12,14 +12,14 @@ inside one `withTransaction` block.
 
 | Field | Value |
 | --- | --- |
-| Seed version | `1` |
+| Seed version | `7` |
 | PRNG seed | `20260107` |
 | Local timezone | `Europe/Budapest` |
-| Local interval | `2026-01-01` inclusive to `2026-08-01` exclusive |
-| Entries | `700` (`100` per month) |
-| Monthly mix | `6` income + `94` expense |
-| Categories | `10` demo + the existing single Uncategorized |
-| Partners | `27` |
+| Local interval | `2025-01-01` inclusive to `2028-01-01` exclusive |
+| Entries | `5,519` |
+| September 2026 extension | `1,115` append-only expense rows; fixed seed `202609` |
+| Categories | `11` demo categories |
+| Partners | `33` |
 | Money | existing `amount_scaled_100` integer contract |
 
 The seed is idempotent by deterministic manifest IDs and the app-settings
@@ -44,6 +44,7 @@ assignment is:
 | Szórakozás | `color_12` | `icon_43` |
 | Vásárlás | `color_02` | `icon_49` |
 | Előfizetések | `color_20` | `icon_14` |
+| Gyorsétterem | generator-assigned | generator-assigned |
 
 Uncategorized remains explicitly pinned to `color_01` + `icon_01`; the seed
 never creates a second system category.
@@ -62,12 +63,28 @@ the exact integer totals before Room is touched.
 | 2026-05 | 100 | 698,000 | 612,000 |
 | 2026-06 | 100 | 721,000 | 798,000 |
 | 2026-07 | 100 | 707,000 | 689,000 |
+| 2026-09 | 1,115 | 0 | generated total |
 
 Each month contains recurring rent/utilities/transport/subscriptions,
 low-value daily purchases, medium variable purchases, and a high-value
 exception such as a household appliance, dental treatment, travel, electronics,
 insurance, holiday advance, or repair. Entry overrides are deliberately
 included and can differ from the partner default category.
+
+## September 2026 Mind Day fixture
+
+September is an additive expense-only stress fixture for Mind Day's hourly
+bar chart and its live amount lower bound. Every one of the 30 days has 9–14
+active hours, and every active hour contains 2–5 entries. The deterministic
+day archetypes include long consecutive blocks, two/three clusters, scattered
+days, morning/evening-heavy days, and two 14-hour dense days.
+
+Three reference days use deliberately wide within-hour values (for example
+800 / 3,500 / 17,000 / 68,000 / 135,000 Ft); three use tight 11,800–16,000 Ft
+clusters. The complete fixture repeatedly uses every pre-existing expense
+category and only valid category-compatible partners. Its ordinal range is
+appended after the existing 2026/2025/2027 fixture rows, so historical IDs and
+their generated rows are unchanged.
 
 ## Runtime path
 
