@@ -30,7 +30,7 @@ Status values: `NOT DONE`, `PARTIAL`, `DONE`, `BLOCKED`.
 | BALDEFAULT-02 | User instruction (“inicializálás után”) | preferences model/store + Core restore | Missing native preference uses the new default, while an explicitly persisted choice still restores intact. | focused preference/restore tests | DONE |
 | SAFE-01 | Architecture gate | affected owners only | No duplicate grid/gesture/Query pipeline; Balance choice remains presentation-only. | source inspection + existing focused regressions | DONE |
 | VIS-01 | Latest screenshot + source references | final installed Android app | Compare SUM-A and SUM-B against the phone safe-area on the exact delivered APK; all three rows must be visibly present. | fresh installed screenshot | NOT DONE |
-| REL-01 | User delivery instruction | branch/release | App-code commit pushed; exact GitHub Human APK succeeds, is downloaded to `/storage/emulated/0/Download/fluvi`, and SHA-256 is recorded. | GitHub Actions + local hash | NOT DONE |
+| REL-01 | User delivery instruction | branch/release | App-code commit pushed; exact GitHub Human APK succeeds, is downloaded to `/storage/emulated/0/Download/fluvi`, and SHA-256 is recorded. | GitHub Actions + local hash | DONE |
 
 ## Implementation invariant
 
@@ -56,6 +56,12 @@ existing outer history scroll, but each rendered year remains a complete
   (`dashboard_rebuild_isolation_test.dart`) is GREEN after the gate.
 - The CI-equivalent fast suite is GREEN: 434 tests passed.
 - Targeted analysis of all seven changed code/test targets: no issues.
+- GitHub Actions run `36970806395` is GREEN for app commit `98c0200d`;
+  the `build-human-diagnostic-apk` job completed successfully. The verified
+  89,112,183-byte APK is
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_98c0200.apk`
+  with SHA-256
+  `0a3c3c1dd9a17519911c9f25d9ae5ea832d5488de77b1a922ee3c3fada31d272`.
 - Full analysis reports one pre-existing unrelated info-level import warning in
   `test/features/dashboard/application/dashboard_balance_daily_insights_projection_test.dart`;
   it is outside this change and is not modified here.
