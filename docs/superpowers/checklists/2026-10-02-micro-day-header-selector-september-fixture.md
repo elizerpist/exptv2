@@ -41,8 +41,8 @@ Status values: `NOT DONE`, `PARTIAL`, `DONE`, `BLOCKED`.
 | SEP-02 | Prompt 3 hourly shape | `DemoDatasetGenerator` | Each day has 8–14 active hours with 2–5 varied transactions/hour, frequent consecutive runs and wide/tight amount clusters. | data-quality contract test | DONE |
 | SEP-03 | Prompt 3 integrity | generator/version tests | All existing expense categories/valid partners recur, IDs are unique, all new dates are September and all new directions are expense. | deterministic generator test | DONE |
 | ARC-01 | architecture gate | changed source | No duplicate mode state, physics, slider, query, repository or data schema path. | focused boundary/source inspection | DONE |
-| REL-01 | user delivery instruction | branch/release | One combined application commit is pushed; exact normal Human APK is built, downloaded to `/storage/emulated/0/Download/fluvi`, and hashed. | CI + local SHA-256 | DONE |
-| GRAPH-01 | Prompt 2 | SCIP tooling | Exact final application SHA is indexed and the manifest/hash/tool test are recorded. | tooling output | DONE |
+| REL-01 | user delivery instruction | branch/release | The implementation commit and its necessary profile-interaction test follow-up are pushed; the exact final `766710ea` normal Human APK is built, downloaded to `/storage/emulated/0/Download/fluvi`, and hashed. | CI + local SHA-256 | DONE |
+| GRAPH-01 | Prompt 2 | SCIP tooling | Exact final `766710ea` application SHA is indexed and the manifest/hash/tool test are recorded. | tooling output | DONE |
 | VIS-01 | Prompt 1/2 | installed app | Supplied micro-day concept is visually checked on the delivered APK; Header physical acceptance remains user-only. | fresh device evidence | PARTIAL — APK is delivered; user device inspection/physical acceptance is still required. |
 
 ## Ordered inline implementation
