@@ -49,7 +49,7 @@ existing widget/golden tests, GitHub Actions Human Diagnostic APK.
 | BS-01 | Parts 11–13, 16–17 | Balance presentation settings and extended-sheet cards | SUM/Month/Year use one shared Savings component and controller-owned Percentage/Amount mode; card tap toggles it | settings/widget tests + shared routing test | DONE |
 | BS-02 | Parts 14–15 | shared Savings component | percentage mode uses `BudgetCategoryAvatarSelectionChrome` with percentage center text, not an avatar or generic circle | structural/widget + golden test | DONE |
 | RG-01 | Parts 18–19 | affected Mind/Budget tests and boundaries | slider, Year grids, Day views, Budget avatar ring/limits, Balance, Query semantics retain coverage | 126 focused Mind tests, Budget/boundary suites, 434-test fast suite | DONE |
-| REL-01 | Parts 20–21 | changed source/tests + CI | formatting, analysis, complete checklist re-read, pushed production commit, exact Human APK download/hash | local command evidence; set DONE after CI/APK delivery | PARTIAL |
+| REL-01 | Parts 20–21 | changed source/tests + CI | formatting, analysis, complete checklist re-read, pushed production commit, exact Human APK download/hash | `d15a150a`; local analyzer/434-test suite; GitHub run 37125699829; verified Human APK | DONE |
 
 ## Implementation order
 
@@ -69,3 +69,14 @@ existing widget/golden tests, GitHub Actions Human Diagnostic APK.
    the approved Budget selection chrome, and make them green.
 6. Run focused regression suites, visual evidence/goldens for modified states,
    project validation, commit, push, and obtain the exact online Human APK.
+
+## Delivery evidence
+
+- Application commit: `d15a150aab042d6916d79a5715a159ea4b1dabb9`.
+- GitHub Actions run `37125699829`: `test-flutter`, `test-core`, and
+  `build-human-diagnostic-apk` succeeded.
+- Downloaded Human Diagnostic APK:
+  `/storage/emulated/0/Download/fluvi/fluvi_HUMAN_DIAGNOSTIC_d15a150.apk`
+  (89,341,559 bytes; SHA-256
+  `b53809bf883652f7d77764f7f9b9de251da5153fc017d6bb46e8f7772e5053de`).
+- ZIP integrity passed and `libapp.so` contains the exact application SHA.
