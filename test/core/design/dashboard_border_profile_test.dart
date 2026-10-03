@@ -15,7 +15,7 @@ void main() {
     );
   });
 
-  test('border defaults preserve each current outer-surface appearance', () {
+  test('border defaults preserve each outer-surface appearance', () {
     const settings = DashboardBorderSettings.defaults;
 
     expect(settings.isEnabled(DashboardBorderSurface.header), isTrue);
@@ -28,7 +28,8 @@ void main() {
     expect(settings.isEnabled(DashboardBorderSurface.searchPill), isTrue);
     expect(settings.isEnabled(DashboardBorderSurface.balanceContent), isTrue);
     expect(settings.isEnabled(DashboardBorderSurface.mindContent), isTrue);
-    expect(settings.isEnabled(DashboardBorderSurface.budgetContent), isTrue);
+    expect(settings.isEnabled(DashboardBorderSurface.budgetHeader), isFalse);
+    expect(settings.isEnabled(DashboardBorderSurface.budgetContent), isFalse);
     expect(settings.isEnabled(DashboardBorderSurface.logBoxGroup), isFalse);
   });
 

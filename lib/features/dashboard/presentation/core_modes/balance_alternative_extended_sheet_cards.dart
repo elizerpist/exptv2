@@ -2,11 +2,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/categories/presentation/budget_category_avatar_artwork.dart';
 import '../../prepared/data/dashboard_prepared_formatter.dart';
 import '../../time_navigation/domain/ledger_time_scope.dart';
 import '../../time_navigation/presentation/time_label_formatter.dart';
 import 'balance_alternative_scope_presentation.dart';
 import 'balance_alternative_visual_tokens.dart';
+import 'balance_presentation_settings.dart';
 
 /// Shared render-only switch for the Balance extended-sheet child shells.
 /// The scope deliberately owns no financial data or layout geometry: turning
@@ -450,67 +452,128 @@ final class BalanceAlternativeSavingsRingCard extends StatelessWidget {
     super.key,
     required this.presentation,
     this.minimumContentSize,
+    this.displayMode = BalanceSavingsDisplayMode.percentage,
+    this.onDisplayModeToggle,
   });
 
   final BalanceAlternativeSavingsPresentation presentation;
   final Size? minimumContentSize;
+  final BalanceSavingsDisplayMode displayMode;
+  final VoidCallback? onDisplayModeToggle;
 
   @override
   Widget build(BuildContext context) {
     final ratio = presentation.retentionBasisPoints;
     final percentage = ratio == null ? null : ratio / 10000;
-    final label = ratio == null ? '—' : '${(ratio / 100).round()}%';
+    final percentageLabel = ratio == null ? '—' : '${(ratio / 100).round()}%';
+    final amountLabel = DashboardPreparedFormatter.compactAmountMinor(
+      presentation.netMinor,
+    );
+    final isPercentage = displayMode == BalanceSavingsDisplayMode.percentage;
+    final metricLabel = isPercentage ? percentageLabel : amountLabel;
     return BalanceAlternativeHtmlCardSurface(
       minimumContentSize:
           minimumContentSize ??
           BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize,
-      child: Padding(
-        padding: BalanceAlternativeHtmlTokens.smallCardPadding,
-        child: Column(
-          children: <Widget>[
-            Row(
+      child: Semantics(
+        button: onDisplayModeToggle != null,
+        label: 'Megtakarítás: $metricLabel. Érintse meg a nézet váltásához.',
+        child: GestureDetector(
+          key: const ValueKey<String>('balance-alternative-savings-card'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onDisplayModeToggle,
+          child: Padding(
+            padding: BalanceAlternativeHtmlTokens.smallCardPadding,
+            child: Column(
               children: <Widget>[
-                Icon(
-                  Icons.savings_rounded,
-                  size: BalanceAlternativeHtmlTokens.logical(29),
-                  color: BalanceAlternativeHtmlTokens.purple,
-                ),
-                SizedBox(width: BalanceAlternativeHtmlTokens.logical(9)),
-                Expanded(
-                  child: Text(
-                    'Megtakarítás',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.smallTitleSize,
-                      BalanceAlternativeHtmlTokens.textPrimary,
-                      FontWeight.w800,
-                      height: 1.05,
+                Row(
+                  children: <Widget>[
+                    Icon(
+                      Icons.savings_rounded,
+                      size: BalanceAlternativeHtmlTokens.logical(29),
+                      color: BalanceAlternativeHtmlTokens.purple,
                     ),
+                    SizedBox(width: BalanceAlternativeHtmlTokens.logical(9)),
+                    Expanded(
+                      child: Text(
+                        'Megtakarítás',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _text(
+                          BalanceAlternativeHtmlTokens.smallTitleSize,
+                          BalanceAlternativeHtmlTokens.textPrimary,
+                          FontWeight.w800,
+                          height: 1.05,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                SizedBox.square(
+                  dimension: BalanceAlternativeHtmlTokens.smallRingSize,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox.square(
+                      dimension: BudgetCategoryAvatarGeometry
+                          .selectionShellVisualDiameter,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: <Widget>[
+                          BudgetCategoryAvatarSelectionChrome(
+                            key: const ValueKey<String>(
+                              'balance-alternative-savings-budget-3d',
+                            ),
+                            categoryColor: BalanceAlternativeHtmlTokens.purple,
+                            progressColor: BalanceAlternativeHtmlTokens.purple,
+                            sourceProgress: isPercentage ? percentage ?? 0 : 0,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                metricLabel,
+                                key: ValueKey<String>(
+                                  isPercentage
+                                      ? 'balance-alternative-savings-percentage'
+                                      : 'balance-alternative-savings-amount',
+                                ),
+                                textAlign: TextAlign.center,
+                                style: _text(
+                                  isPercentage
+                                      ? BalanceAlternativeHtmlTokens.logical(24)
+                                      : BalanceAlternativeHtmlTokens.logical(
+                                          18,
+                                        ),
+                                  BalanceAlternativeHtmlTokens.purple,
+                                  FontWeight.w800,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  isPercentage ? 'arány a bevételhez' : 'félretett összeg',
+                  key: const ValueKey<String>(
+                    'balance-alternative-savings-supporting-label',
+                  ),
+                  style: _text(
+                    BalanceAlternativeHtmlTokens.smallBodySize,
+                    BalanceAlternativeHtmlTokens.textSecondary,
+                    FontWeight.w600,
+                    height: 1,
                   ),
                 ),
               ],
             ),
-            const Spacer(),
-            SizedBox.square(
-              dimension: BalanceAlternativeHtmlTokens.smallRingSize,
-              child: CustomPaint(
-                painter: _SavingsRingPainter(value: percentage ?? 0),
-                child: Center(
-                  child: Text(
-                    label,
-                    style: _text(
-                      BalanceAlternativeHtmlTokens.logical(24),
-                      BalanceAlternativeHtmlTokens.purple,
-                      FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const Spacer(),
-          ],
+          ),
         ),
       ),
     );
@@ -1005,92 +1068,6 @@ final class BalanceAlternativePositiveCloseCard extends StatelessWidget {
   );
 }
 
-final class BalanceAlternativeAnnualSavingsCard extends StatelessWidget {
-  const BalanceAlternativeAnnualSavingsCard({
-    super.key,
-    required this.presentation,
-  });
-
-  final BalanceAlternativeSavingsPresentation presentation;
-
-  @override
-  Widget build(BuildContext context) => BalanceAlternativeHtmlCardSurface(
-    minimumContentSize:
-        BalanceAlternativeHtmlTokens.extendedSheetSideCardMinimumSize,
-    child: Padding(
-      padding: EdgeInsets.fromLTRB(
-        BalanceAlternativeHtmlTokens.logical(19),
-        BalanceAlternativeHtmlTokens.logical(22),
-        BalanceAlternativeHtmlTokens.logical(19),
-        BalanceAlternativeHtmlTokens.logical(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'Megtakarítások',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _text(
-                    BalanceAlternativeHtmlTokens.annualSavingsTitleSize,
-                    BalanceAlternativeHtmlTokens.textPrimary,
-                    FontWeight.w800,
-                    height: 1.06,
-                  ),
-                ),
-              ),
-              DecoratedBox(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE0F8EC),
-                  shape: BoxShape.circle,
-                ),
-                child: SizedBox.square(
-                  dimension: BalanceAlternativeHtmlTokens
-                      .annualIncomeExpenseIconExtent,
-                  child: Icon(
-                    Icons.savings_rounded,
-                    color: BalanceAlternativeHtmlTokens.positive,
-                    size: BalanceAlternativeHtmlTokens.logical(25),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            DashboardPreparedFormatter.compactAmountMinor(
-              presentation.netMinor,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: _text(
-              BalanceAlternativeHtmlTokens.annualSavingsValueSize,
-              presentation.netMinor >= 0
-                  ? BalanceAlternativeHtmlTokens.positive
-                  : const Color(0xFFFF5F8A),
-              FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            'félretett összeg\nebben az évben',
-            style: _text(
-              BalanceAlternativeHtmlTokens.smallBodySize,
-              BalanceAlternativeHtmlTokens.textSecondary,
-              FontWeight.w500,
-              height: 1.22,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
 /// Éves lower combined Card 1+2. It retains the reference mode switch while
 /// mapping both its bar and line alternatives to the same prepared data.
 final class BalanceAlternativeAnnualIncomeExpenseCard extends StatefulWidget {
@@ -1383,45 +1360,6 @@ final class _DailySpendPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DailySpendPainter oldDelegate) =>
       oldDelegate.points != points;
-}
-
-final class _SavingsRingPainter extends CustomPainter {
-  const _SavingsRingPainter({required this.value});
-
-  final double value;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = BalanceAlternativeHtmlTokens.logical(13);
-    final rect = Offset.zero & size;
-    final center = rect.center;
-    final radius = (math.min(size.width, size.height) - stroke) / 2;
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = const Color(0xFFECE7FF)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke,
-    );
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      math.pi * 2 * value.clamp(-1.0, 1.0),
-      false,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: <Color>[Color(0xFF7C3AED), Color(0xFFA879FF)],
-        ).createShader(rect)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SavingsRingPainter oldDelegate) =>
-      oldDelegate.value != value;
 }
 
 final class _AnnualClosingsPainter extends CustomPainter {

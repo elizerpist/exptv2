@@ -7,6 +7,7 @@ import 'dashboard_mode_palette.dart';
 /// setting while Income and Expense retain their explicitly separate controls.
 enum DashboardBorderSurface {
   header,
+  budgetHeader,
   incomeDirection,
   expenseDirection,
   summary,
@@ -26,19 +27,21 @@ enum DashboardBorderSurface {
 final class DashboardBorderSettings {
   const DashboardBorderSettings({
     this.header = true,
+    this.budgetHeader = false,
     this.incomeDirection = false,
     this.expenseDirection = false,
     this.summary = false,
     this.searchPill = true,
     this.balanceContent = true,
     this.mindContent = true,
-    this.budgetContent = true,
+    this.budgetContent = false,
     this.logBoxGroup = false,
   });
 
   static const defaults = DashboardBorderSettings();
 
   final bool header;
+  final bool budgetHeader;
   final bool incomeDirection;
   final bool expenseDirection;
   final bool summary;
@@ -50,6 +53,7 @@ final class DashboardBorderSettings {
 
   bool isEnabled(DashboardBorderSurface surface) => switch (surface) {
     DashboardBorderSurface.header => header,
+    DashboardBorderSurface.budgetHeader => budgetHeader,
     DashboardBorderSurface.incomeDirection => incomeDirection,
     DashboardBorderSurface.expenseDirection => expenseDirection,
     DashboardBorderSurface.summary => summary,
@@ -66,6 +70,19 @@ final class DashboardBorderSettings {
   }) => switch (surface) {
     DashboardBorderSurface.header => DashboardBorderSettings(
       header: enabled,
+      budgetHeader: budgetHeader,
+      incomeDirection: incomeDirection,
+      expenseDirection: expenseDirection,
+      summary: summary,
+      searchPill: searchPill,
+      balanceContent: balanceContent,
+      mindContent: mindContent,
+      budgetContent: budgetContent,
+      logBoxGroup: logBoxGroup,
+    ),
+    DashboardBorderSurface.budgetHeader => DashboardBorderSettings(
+      header: header,
+      budgetHeader: enabled,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -77,6 +94,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.incomeDirection => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: enabled,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -88,6 +106,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.expenseDirection => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: enabled,
       summary: summary,
@@ -99,6 +118,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.summary => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: enabled,
@@ -110,6 +130,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.searchPill => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -121,6 +142,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.balanceContent => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -132,6 +154,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.mindContent => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -143,6 +166,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.budgetContent => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -154,6 +178,7 @@ final class DashboardBorderSettings {
     ),
     DashboardBorderSurface.logBoxGroup => DashboardBorderSettings(
       header: header,
+      budgetHeader: budgetHeader,
       incomeDirection: incomeDirection,
       expenseDirection: expenseDirection,
       summary: summary,
@@ -169,6 +194,7 @@ final class DashboardBorderSettings {
   bool operator ==(Object other) =>
       other is DashboardBorderSettings &&
       other.header == header &&
+      other.budgetHeader == budgetHeader &&
       other.incomeDirection == incomeDirection &&
       other.expenseDirection == expenseDirection &&
       other.summary == summary &&
@@ -181,6 +207,7 @@ final class DashboardBorderSettings {
   @override
   int get hashCode => Object.hash(
     header,
+    budgetHeader,
     incomeDirection,
     expenseDirection,
     summary,

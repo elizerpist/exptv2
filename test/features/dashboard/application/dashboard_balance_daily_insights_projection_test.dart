@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_daily_insights_projection.dart';
-import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_identity.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_balance_primary_projection.dart';
 import 'package:fluvi/features/dashboard/query/data/dashboard_ledger_entry.dart';
 import 'package:fluvi/features/dashboard/query/domain/ledger_direction.dart';

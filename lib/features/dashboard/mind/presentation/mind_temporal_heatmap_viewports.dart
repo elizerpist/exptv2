@@ -1073,11 +1073,11 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
         const horizontalPadding = 14.0;
         const gap = 4.0;
         const referenceGridWidth = 282.0;
-        // The shared temporal header, compact total/footer and outer padding
-        // are fixed. Solve only the real
+        // The shared temporal header, the Sum-aligned scope-total row and
+        // outer padding are fixed. Solve only the real
         // calendar row count so a five-row month is never shrunk by a fake
         // sixth presentation row.
-        const staticChrome = 82.0;
+        const staticChrome = 92.0;
         final availableGridWidth =
             (constraints.maxWidth - horizontalPadding * 2)
                 .clamp(0.0, double.infinity)
@@ -1120,6 +1120,17 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                 trailingSubtitleKey: const ValueKey<String>(
                   'mind-month-heatmap-active-days',
                 ),
+              ),
+              const SizedBox(height: 7),
+              MindSumScopeTotalHeader(
+                key: const ValueKey<String>('mind-month-heatmap-total-header'),
+                label: 'Összesen',
+                amount: QueryMenuFormatters.money(frame.total),
+                surface: 'month-heatmap',
+                labelKey: const ValueKey<String>(
+                  'mind-month-heatmap-total-label',
+                ),
+                amountKey: const ValueKey<String>('mind-month-heatmap-total'),
               ),
               const SizedBox(height: 7),
               Align(
@@ -1167,29 +1178,6 @@ final class _MindMonthHeatmapPage extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Row(
-                children: <Widget>[
-                  const Text(
-                    'Összesen',
-                    style: TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    QueryMenuFormatters.money(frame.total),
-                    key: const ValueKey<String>('mind-month-heatmap-total'),
-                    style: const TextStyle(
-                      color: FluviVisualTokens.textSecondary,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -1295,7 +1283,8 @@ final class MindDayHeatmapViewport extends StatelessWidget {
                 frame: frame,
                 paletteStyle: value.paletteStyle,
                 scaleResolution: value.scaleResolution,
-                onTimelineRequested: controller == null
+                onTimelineRequested:
+                    !value.showDayContentViewChooser || controller == null
                     ? null
                     : () => controller.setDayContentView(
                         MindDayContentView.timeline,
@@ -1313,7 +1302,8 @@ final class MindDayHeatmapViewport extends StatelessWidget {
                 paletteStyle: value.paletteStyle,
                 scaleResolution: value.scaleResolution,
                 timelineLayout: value.dayTimelineLayout,
-                onHeatmapRequested: controller == null
+                onHeatmapRequested:
+                    !value.showDayContentViewChooser || controller == null
                     ? null
                     : () => controller.setDayContentView(
                         MindDayContentView.allVsSliderHeatmap,

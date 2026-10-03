@@ -18,7 +18,9 @@ void main() {
           sumVisualStyle: MindSumVisualStyle.sumB,
           showSumLayoutChooser: false,
           yearGridLayout: MindYearHeatmapGridLayout.twoBySix,
-          showYearFourByThreeScopeAmounts: false,
+          yearMonthlyAmountPresentation:
+              MindYearMonthlyAmountPresentation.hidden,
+          showDayContentViewChooser: true,
           balanceUsesChildCards: false,
         ),
       );
@@ -30,7 +32,11 @@ void main() {
       expect(restored.value.sumVisualStyle, MindSumVisualStyle.sumB);
       expect(restored.value.showSumLayoutChooser, isFalse);
       expect(restored.value.yearGridLayout, MindYearHeatmapGridLayout.twoBySix);
-      expect(restored.value.showYearFourByThreeScopeAmounts, isFalse);
+      expect(
+        restored.value.yearMonthlyAmountPresentation,
+        MindYearMonthlyAmountPresentation.hidden,
+      );
+      expect(restored.value.showDayContentViewChooser, isTrue);
       expect(restored.value.balanceUsesChildCards, isFalse);
     },
   );

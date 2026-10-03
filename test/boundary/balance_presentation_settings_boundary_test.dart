@@ -1,8 +1,22 @@
 import 'dart:io';
 
+import 'package:fluvi/core/design/dashboard_border_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('BU-BORDER-RED-01: fresh Budget header and content are borderless', () {
+    expect(DashboardBorderSettings.defaults.budgetHeader, isFalse);
+    expect(DashboardBorderSettings.defaults.budgetContent, isFalse);
+    final budgetSurface = _read(
+      'lib/features/dashboard/presentation/core_modes/'
+      'budget_dashboard_core_surface.dart',
+    );
+    expect(
+      budgetSurface,
+      contains('borderSurface: DashboardBorderSurface.budgetHeader'),
+    );
+  });
+
   test(
     'BWD-BOUNDARY: Balance appearance retains one state owner and write path',
     () {
@@ -43,10 +57,7 @@ void main() {
         tuner,
         contains('controller.setBalanceContentCardColoredBorderEnabled'),
       );
-      expect(
-        tuner,
-        contains('controller.setAlternativeMotherCardVisible'),
-      );
+      expect(tuner, contains('controller.setAlternativeMotherCardVisible'));
       expect(
         tuner,
         isNot(contains('BalancePresentationController(')),
@@ -84,7 +95,10 @@ void main() {
         hasLength(1),
       );
       expect(surface, contains('final class _BalanceUpperCarouselState'));
-      expect(surface, contains('_wavePhaseController.repeat(period: requestedPeriod)'));
+      expect(
+        surface,
+        contains('_wavePhaseController.repeat(period: requestedPeriod)'),
+      );
       expect(surface, contains('_wavePhaseController.stop()'));
       expect(surface, contains('final class _BalanceCarouselAmbientWave'));
     },

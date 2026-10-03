@@ -27,6 +27,10 @@ final class MethodChannelDashboardPresentationPreferencesStore
       final yearGridLayoutIndex =
           values['yearGridLayout'] as int? ??
           MindYearHeatmapGridLayout.fourByThree.index;
+      final amountPresentationIndex =
+          values['yearMonthlyAmountPresentation'] as int?;
+      final legacyScopeAmounts =
+          values['showYearFourByThreeScopeAmounts'] as bool? ?? true;
       return DashboardPresentationPreferences(
         sumVisualStyle:
             styleIndex >= 0 && styleIndex < MindSumVisualStyle.values.length
@@ -38,8 +42,17 @@ final class MethodChannelDashboardPresentationPreferencesStore
                 yearGridLayoutIndex < MindYearHeatmapGridLayout.values.length
             ? MindYearHeatmapGridLayout.values[yearGridLayoutIndex]
             : MindYearHeatmapGridLayout.fourByThree,
-        showYearFourByThreeScopeAmounts:
-            values['showYearFourByThreeScopeAmounts'] as bool? ?? true,
+        yearMonthlyAmountPresentation:
+            amountPresentationIndex != null &&
+                amountPresentationIndex >= 0 &&
+                amountPresentationIndex <
+                    MindYearMonthlyAmountPresentation.values.length
+            ? MindYearMonthlyAmountPresentation.values[amountPresentationIndex]
+            : legacyScopeAmounts
+            ? MindYearMonthlyAmountPresentation.inline
+            : MindYearMonthlyAmountPresentation.hidden,
+        showDayContentViewChooser:
+            values['showDayContentViewChooser'] as bool? ?? false,
         balanceUsesChildCards: values['balanceUsesChildCards'] as bool? ?? true,
       );
     } on PlatformException {
@@ -57,8 +70,9 @@ final class MethodChannelDashboardPresentationPreferencesStore
           'sumVisualStyle': preferences.sumVisualStyle.index,
           'showSumLayoutChooser': preferences.showSumLayoutChooser,
           'yearGridLayout': preferences.yearGridLayout.index,
-          'showYearFourByThreeScopeAmounts':
-              preferences.showYearFourByThreeScopeAmounts,
+          'yearMonthlyAmountPresentation':
+              preferences.yearMonthlyAmountPresentation.index,
+          'showDayContentViewChooser': preferences.showDayContentViewChooser,
           'balanceUsesChildCards': preferences.balanceUsesChildCards,
         },
       );

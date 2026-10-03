@@ -256,7 +256,8 @@ class MainActivity : FlutterActivity() {
                             "sumVisualStyle" to preferences.getInt("sumVisualStyle", 0),
                             "showSumLayoutChooser" to preferences.getBoolean("showSumLayoutChooser", true),
                             "yearGridLayout" to preferences.getInt("yearGridLayout", 1),
-                            "showYearFourByThreeScopeAmounts" to preferences.getBoolean("showYearFourByThreeScopeAmounts", true),
+                            "yearMonthlyAmountPresentation" to if (preferences.contains("yearMonthlyAmountPresentation")) preferences.getInt("yearMonthlyAmountPresentation", 1) else if (preferences.getBoolean("showYearFourByThreeScopeAmounts", true)) 1 else 0,
+                            "showDayContentViewChooser" to preferences.getBoolean("showDayContentViewChooser", false),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                         ),
                     )
@@ -271,15 +272,19 @@ class MainActivity : FlutterActivity() {
                         val yearGridLayout = (values["yearGridLayout"] as? Number)?.toInt()
                             ?: throw IllegalArgumentException("Missing Year grid layout.")
                         require(yearGridLayout in 0..2) { "Invalid Year grid layout." }
-                        val showYearFourByThreeScopeAmounts = values["showYearFourByThreeScopeAmounts"] as? Boolean
-                            ?: throw IllegalArgumentException("Missing Year 4x3 scope-total visibility.")
+                        val yearMonthlyAmountPresentation = (values["yearMonthlyAmountPresentation"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing Year monthly amount presentation.")
+                        require(yearMonthlyAmountPresentation in 0..2) { "Invalid Year monthly amount presentation." }
+                        val showDayContentViewChooser = values["showDayContentViewChooser"] as? Boolean
+                            ?: throw IllegalArgumentException("Missing Day view chooser visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
                             .putInt("yearGridLayout", yearGridLayout)
-                            .putBoolean("showYearFourByThreeScopeAmounts", showYearFourByThreeScopeAmounts)
+                            .putInt("yearMonthlyAmountPresentation", yearMonthlyAmountPresentation)
+                            .putBoolean("showDayContentViewChooser", showDayContentViewChooser)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
                             .apply()
                         result.success(null)

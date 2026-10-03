@@ -530,9 +530,10 @@ class _CoreDashboardState extends State<CoreDashboard>
         ..setSumVisualStyle(restored.sumVisualStyle)
         ..setShowSumLayoutChooser(restored.showSumLayoutChooser)
         ..setYearGridLayout(restored.yearGridLayout)
-        ..setShowYearFourByThreeScopeAmounts(
-          restored.showYearFourByThreeScopeAmounts,
-        );
+        ..setYearMonthlyAmountPresentation(
+          restored.yearMonthlyAmountPresentation,
+        )
+        ..setShowDayContentViewChooser(restored.showDayContentViewChooser);
       _balancePresentationSettings.setUsesChildCards(
         restored.balanceUsesChildCards,
       );
@@ -549,7 +550,8 @@ class _CoreDashboardState extends State<CoreDashboard>
         sumVisualStyle: mind.sumVisualStyle,
         showSumLayoutChooser: mind.showSumLayoutChooser,
         yearGridLayout: mind.yearGridLayout,
-        showYearFourByThreeScopeAmounts: mind.showYearFourByThreeScopeAmounts,
+        yearMonthlyAmountPresentation: mind.yearMonthlyAmountPresentation,
+        showDayContentViewChooser: mind.showDayContentViewChooser,
         balanceUsesChildCards:
             _balancePresentationSettings.value.usesChildCards,
       ),

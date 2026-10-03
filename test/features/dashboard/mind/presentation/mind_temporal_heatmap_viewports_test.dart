@@ -880,6 +880,58 @@ void main() {
   );
 
   testWidgets(
+    'MONTH-SUM-HEADER-01: Month total uses the shared Sum header lane above its non-scrollable heatmap',
+    (tester) async {
+      final frame = MindMonthHeatmapProjection.build(
+        identity: const MindTemporalHeatmapIdentity(
+          upstreamScopeKey: 'expense|month:2026-07',
+          indexGeneration: 1,
+          coreRevision: 1,
+          timeScopeKey: 'month:2026-07',
+        ),
+        year: 2026,
+        month: 7,
+        contributions: const <MindYearHeatmapPreparedContribution>[],
+      ).preview(range);
+      final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(frame);
+      addTearDown(listenable.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 300,
+              child: MindMonthHeatmapViewport(frameListenable: listenable),
+            ),
+          ),
+        ),
+      );
+
+      final header = find.byKey(
+        const ValueKey<String>('mind-month-heatmap-total-header'),
+      );
+      final label = find.byKey(
+        const ValueKey<String>('mind-month-heatmap-total-label'),
+      );
+      final total = find.byKey(
+        const ValueKey<String>('mind-month-heatmap-total'),
+      );
+      final grid = find.byKey(
+        const ValueKey<String>('mind-month-heatmap-grid'),
+      );
+      expect(header, findsOneWidget);
+      expect(tester.getSize(header).height, 18);
+      expect(
+        tester.getRect(label).center.dy,
+        closeTo(tester.getRect(total).center.dy, .01),
+      );
+      expect(tester.getRect(header).bottom, lessThan(tester.getRect(grid).top));
+      expect(find.byType(ListView), findsNothing);
+    },
+  );
+
+  testWidgets(
     'DAY-TOPOLOGY RED: Day is a native 24-hour All-vs-slider heatmap without a duplicate range control',
     (tester) async {
       const date = LocalDate(year: 2026, month: 7, day: 14);

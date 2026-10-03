@@ -86,6 +86,53 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'VIS-4x3-VEIL: one translucent annual veil keeps all monthly values in place',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 560));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final frame = ValueNotifier(_frame());
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearMonthlyAmountPresentation(
+          MindYearMonthlyAmountPresentation.veil,
+        );
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: const ValueKey<String>('mind-year-4x3-veil-golden-boundary'),
+              child: SizedBox(
+                width: 430,
+                height: 560,
+                child: MindYearHeatmapViewport(
+                  frameListenable: frame,
+                  presentationSettings: settings,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-month-tap-1')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-monthly-amount-veil')),
+        findsOneWidget,
+      );
+      await expectLater(
+        find.byKey(
+          const ValueKey<String>('mind-year-4x3-veil-golden-boundary'),
+        ),
+        matchesGoldenFile('../../../../goldens/mind_year_heatmap_4x3_veil.png'),
+      );
+    },
+  );
 }
 
 MindYearHeatmapFrame _frame() {

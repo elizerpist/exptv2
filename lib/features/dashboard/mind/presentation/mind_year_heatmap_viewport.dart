@@ -24,7 +24,6 @@ import 'mind_year_heatmap_palette_resolver.dart';
 import 'mind_heatmap_palette_scope.dart';
 import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_aggregate_line_chart.dart';
-import 'mind_anchored_info_card.dart';
 import 'mind_monthly_overlay_bar_chart.dart';
 import 'mind_sum_year_band_header.dart';
 import 'mind_temporal_content_header.dart';
@@ -117,7 +116,7 @@ final class _MindYearHeatmapViewportState
   late final ScrollController _ownedAnnualScrollController;
   late final ScrollController _barPageScrollController;
   late final ScrollController _linePageScrollController;
-  _MindYearDaySelection? _selectedDay;
+  var _isMonthlyAmountVeilOpen = false;
 
   @override
   void initState() {
@@ -148,7 +147,6 @@ final class _MindYearHeatmapViewportState
       final nextFrame = widget.frameListenable.value;
       _hasFrame = nextFrame != null;
       _geometryYear = nextFrame?.identity.year;
-      _invalidateDayInfoFor(nextFrame);
       _acceptStaticFrame(nextFrame);
       widget.frameListenable.addListener(_onFrameChanged);
     }
@@ -196,6 +194,10 @@ final class _MindYearHeatmapViewportState
     setState(() {
       _presentationSettings = next;
       _directGridLayout = next.yearGridLayout;
+      if (next.yearMonthlyAmountPresentation !=
+          MindYearMonthlyAmountPresentation.veil) {
+        _isMonthlyAmountVeilOpen = false;
+      }
     });
     // A 2×6 → 3×4 transition shortens the one existing viewport. Preserve
     // its controller/physics and correct only an offset that became outside
@@ -218,6 +220,7 @@ final class _MindYearHeatmapViewportState
     if (frame != null) _scheduleVisiblePaintDiagnostics(frame);
     final hasFrame = frame != null;
     final geometryYear = frame?.identity.year;
+    final geometryYearChanged = geometryYear != _geometryYear;
     final identityChanged = frame?.identity != _staticFrameIdentity;
     if ((hasFrame == _hasFrame &&
             geometryYear == _geometryYear &&
@@ -232,18 +235,12 @@ final class _MindYearHeatmapViewportState
       });
       return;
     }
-    _invalidateDayInfoFor(frame);
     setState(() {
       _hasFrame = hasFrame;
       _geometryYear = geometryYear;
       _acceptStaticFrame(frame);
+      if (geometryYearChanged) _isMonthlyAmountVeilOpen = false;
     });
-  }
-
-  void _invalidateDayInfoFor(MindYearHeatmapFrame? frame) {
-    if (_selectedDay?.day.date.year != frame?.identity.year) {
-      _selectedDay = null;
-    }
   }
 
   void _acceptStaticFrame(MindYearHeatmapFrame? frame) {
@@ -254,14 +251,6 @@ final class _MindYearHeatmapViewportState
         frame?.inspectionScope ?? const MindYearHeatmapInspectionScope();
     _activeDirectionIsIncome =
         frame?.identity.upstreamScopeKey.startsWith('income|') ?? false;
-  }
-
-  void _onDayTapped(MindYearHeatmapDay day, Offset anchor) {
-    setState(() {
-      _selectedDay = _selectedDay?.day.date == day.date
-          ? null
-          : _MindYearDaySelection(day, anchor);
-    });
   }
 
   @override
@@ -285,11 +274,17 @@ final class _MindYearHeatmapViewportState
         };
         final footerRowCount = switch (_directGridLayout) {
           MindYearHeatmapGridLayout.fourByThree => 0,
-          // 3×4 intentionally presents only its MonthCard calendar field.
-          // Neither former financial footer retains a hidden envelope.
+          // Monthly amounts now use the one shared mini-header or global veil.
+          // No layout retains a second footer value or a hidden envelope.
           MindYearHeatmapGridLayout.threeByFour => 0,
-          MindYearHeatmapGridLayout.twoBySix => 1,
+          MindYearHeatmapGridLayout.twoBySix => 0,
         };
+        final amountPresentation =
+            _presentationSettings.yearMonthlyAmountPresentation;
+        final showsInlineAmounts =
+            amountPresentation == MindYearMonthlyAmountPresentation.inline;
+        final usesMonthlyAmountVeil =
+            amountPresentation == MindYearMonthlyAmountPresentation.veil;
         final contentWidth = (constraints.maxWidth - horizontalPadding * 2)
             .clamp(0.0, double.infinity)
             .toDouble();
@@ -376,8 +371,7 @@ final class _MindYearHeatmapViewportState
                                         _presentationSettings.scaleResolution,
                                     showMonthlyClosing: false,
                                     showScopeAmount: false,
-                                    showHeaderScopeAmount: _presentationSettings
-                                        .showYearFourByThreeScopeAmounts,
+                                    showHeaderScopeAmount: showsInlineAmounts,
                                     showMonthCard: false,
                                     monthlyAggregates: _monthlyAggregates,
                                     scopedMonthlyAggregates:
@@ -385,7 +379,12 @@ final class _MindYearHeatmapViewportState
                                     inspectionScope: _inspectionScope,
                                     activeDirectionIsIncome:
                                         _activeDirectionIsIncome,
-                                    onDayTap: _onDayTapped,
+                                    onTap: usesMonthlyAmountVeil
+                                        ? () => setState(
+                                            () =>
+                                                _isMonthlyAmountVeilOpen = true,
+                                          )
+                                        : null,
                                   ),
                                 );
                               },
@@ -448,10 +447,8 @@ final class _MindYearHeatmapViewportState
                           scaleResolution:
                               _presentationSettings.scaleResolution,
                           showMonthlyClosing: false,
-                          showScopeAmount:
-                              _directGridLayout ==
-                              MindYearHeatmapGridLayout.twoBySix,
-                          showHeaderScopeAmount: false,
+                          showScopeAmount: false,
+                          showHeaderScopeAmount: showsInlineAmounts,
                           showMonthCard: true,
                           showDayNumbers:
                               _directGridLayout ==
@@ -466,7 +463,11 @@ final class _MindYearHeatmapViewportState
                           scopedMonthlyAggregates: _scopedMonthlyAggregates,
                           inspectionScope: _inspectionScope,
                           activeDirectionIsIncome: _activeDirectionIsIncome,
-                          onDayTap: _onDayTapped,
+                          onTap: usesMonthlyAmountVeil
+                              ? () => setState(
+                                  () => _isMonthlyAmountVeilOpen = true,
+                                )
+                              : null,
                         ),
                       );
                     }, growable: false),
@@ -501,18 +502,25 @@ final class _MindYearHeatmapViewportState
                             ),
                           ),
                         ),
-                        Expanded(child: heatmapPage),
+                        Expanded(
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: <Widget>[
+                              heatmapPage,
+                              if (usesMonthlyAmountVeil &&
+                                  _isMonthlyAmountVeilOpen)
+                                _MindYearMonthlyAmountVeil(
+                                  frameListenable: widget.frameListenable,
+                                  columns: columns,
+                                  onDismiss: () => setState(
+                                    () => _isMonthlyAmountVeilOpen = false,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                    if (_selectedDay case final selection?)
-                      MindAnchoredInfoCard(
-                        globalAnchor: selection.anchor,
-                        cardKey: _heatmapCardKey,
-                        child: _MindYearDayInfoCard(
-                          day: selection.day,
-                          onDismiss: () => setState(() => _selectedDay = null),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -602,47 +610,107 @@ final class _MindYearHeatmapViewportState
       : null;
 }
 
-final class _MindYearDaySelection {
-  const _MindYearDaySelection(this.day, this.anchor);
+/// A single annual information veil. It deliberately receives the same live
+/// resident frame as the heatmap and contains no per-month popup state.
+final class _MindYearMonthlyAmountVeil extends StatelessWidget {
+  const _MindYearMonthlyAmountVeil({
+    required this.frameListenable,
+    required this.columns,
+    required this.onDismiss,
+  });
 
-  final MindYearHeatmapDay day;
-  final Offset anchor;
-}
-
-final class _MindYearDayInfoCard extends StatelessWidget {
-  const _MindYearDayInfoCard({required this.day, required this.onDismiss});
-
-  final MindYearHeatmapDay day;
+  final ValueListenable<MindYearHeatmapFrame?> frameListenable;
+  final int columns;
   final VoidCallback onDismiss;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    key: const ValueKey<String>('mind-year-day-infocard'),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(10),
-      boxShadow: const <BoxShadow>[
-        BoxShadow(color: Color(0x22000000), blurRadius: 12),
-      ],
-    ),
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(8, 5, 4, 5),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            '${day.date.year}. ${DashboardTimeLabelFormatter.monthName(day.date.month)} ${day.date.day}.\n${QueryMenuFormatters.money(day.total ?? 0)}',
-            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
+  Widget build(
+    BuildContext context,
+  ) => ValueListenableBuilder<MindYearHeatmapFrame?>(
+    valueListenable: frameListenable,
+    builder: (context, frame, _) => Semantics(
+      label: 'Éves havi összegek',
+      button: true,
+      child: GestureDetector(
+        key: const ValueKey<String>('mind-year-monthly-amount-veil'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onDismiss,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(color: Color(0xB56B7280)),
+          child: IgnorePointer(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const padding = EdgeInsets.fromLTRB(10, 5, 10, 4);
+                final rows = (12 + columns - 1) ~/ columns;
+                final usableWidth = (constraints.maxWidth - padding.horizontal)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+                final usableHeight = (constraints.maxHeight - padding.vertical)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+                // The veil is one annual field: solve its month cells from
+                // its actual body bounds, rather than letting a 2×6 grid
+                // become taller than the Year surface and clip months.
+                final cellWidth = usableWidth / columns;
+                final cellHeight = usableHeight / rows;
+                final childAspectRatio = cellHeight == 0
+                    ? 1.0
+                    : cellWidth / cellHeight;
+                return GridView.count(
+                  key: const ValueKey<String>(
+                    'mind-year-monthly-amount-veil-grid',
+                  ),
+                  crossAxisCount: columns,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: padding,
+                  childAspectRatio: childAspectRatio,
+                  children: List<Widget>.generate(12, (index) {
+                    final month = index + 1;
+                    final amount =
+                        (frame?.month(month) ?? const <MindYearHeatmapDay>[])
+                            .fold<int>(0, (sum, day) => sum + (day.total ?? 0));
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            DashboardTimeLabelFormatter.monthName(month),
+                            key: ValueKey<String>(
+                              'mind-year-monthly-amount-veil-name-$month',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            QueryMenuFormatters.money(amount),
+                            key: ValueKey<String>(
+                              'mind-year-monthly-amount-veil-total-$month',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }, growable: false),
+                );
+              },
+            ),
           ),
-          IconButton(
-            key: const ValueKey<String>('mind-year-day-infocard-dismiss'),
-            tooltip: 'Bezárás',
-            onPressed: onDismiss,
-            constraints: const BoxConstraints.tightFor(width: 18, height: 18),
-            padding: EdgeInsets.zero,
-            icon: const Icon(Icons.close, size: 12),
-          ),
-        ],
+        ),
       ),
     ),
   );
@@ -1029,7 +1097,6 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     this.isInspected = false,
     this.inspectionProgress,
     this.onTap,
-    this.onDayTap,
   });
 
   static const _padding = 6.0;
@@ -1074,7 +1141,6 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
   final bool isInspected;
   final Animation<double>? inspectionProgress;
   final VoidCallback? onTap;
-  final void Function(MindYearHeatmapDay day, Offset anchor)? onDayTap;
 
   static double cellExtentFor(double width) {
     const totalHorizontalGaps =
@@ -1235,7 +1301,6 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                 final days =
                     frame?.month(month) ?? const <MindYearHeatmapDay>[];
                 final cellWidth = cellExtent ?? cellExtentFor(width);
-                final resolvedCellHeight = cellHeight ?? cellWidth;
                 return Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
@@ -1287,18 +1352,6 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
                             )
                             .toList(growable: false),
                       ),
-                    if (onDayTap != null)
-                      for (final day in days.where((day) => !day.isEmpty))
-                        _MindYearDayCellTapTarget(
-                          key: ValueKey(
-                            'mind-year-heatmap-day-tap-${day.date.year}-${day.date.month}-${day.date.day}',
-                          ),
-                          geometry: geometry,
-                          day: day,
-                          cellWidth: cellWidth,
-                          cellHeight: resolvedCellHeight,
-                          onTap: onDayTap!,
-                        ),
                   ],
                 );
               },
@@ -1360,7 +1413,14 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         readOnly: true,
         label:
             '${DashboardTimeLabelFormatter.monthName(month)} ${geometry.year}',
-        child: _contentFor(surface),
+        child: onTap == null
+            ? _contentFor(surface)
+            : GestureDetector(
+                key: ValueKey<String>('mind-year-heatmap-month-tap-$month'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onTap,
+                child: _contentFor(surface),
+              ),
       ),
     );
   }
@@ -1396,55 +1456,6 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// One colored annual day tile is a presentation-local clean-tap target. It
-/// enters no horizontal/vertical drag path: Flutter rejects its tap when the
-/// surrounding pager or annual scroll starts moving.
-final class _MindYearDayCellTapTarget extends StatelessWidget {
-  const _MindYearDayCellTapTarget({
-    super.key,
-    required this.geometry,
-    required this.day,
-    required this.cellWidth,
-    required this.cellHeight,
-    required this.onTap,
-  });
-
-  final MindYearHeatmapCalendarGeometry geometry;
-  final MindYearHeatmapDay day;
-  final double cellWidth;
-  final double cellHeight;
-  final void Function(MindYearHeatmapDay day, Offset anchor) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final slot = geometry.slotIndexForDay(day.date.day);
-    final row = slot ~/ MindYearHeatmapMonthPainter.columnCount;
-    final column = slot % MindYearHeatmapMonthPainter.columnCount;
-    return Positioned(
-      left: column * (cellWidth + MindYearHeatmapMonthPainter.gap),
-      top: row * (cellHeight + MindYearHeatmapMonthPainter.gap),
-      width: cellWidth,
-      height: cellHeight,
-      child: Semantics(
-        button: true,
-        label:
-            '${day.date.year}. ${DashboardTimeLabelFormatter.monthName(day.date.month)} ${day.date.day}. ${QueryMenuFormatters.money(day.total ?? 0)}',
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            final box = context.findRenderObject() as RenderBox?;
-            final anchor = box == null
-                ? Offset.zero
-                : box.localToGlobal(box.size.center(Offset.zero));
-            onTap(day, anchor);
-          },
-          child: const SizedBox.expand(),
-        ),
-      ),
     );
   }
 }

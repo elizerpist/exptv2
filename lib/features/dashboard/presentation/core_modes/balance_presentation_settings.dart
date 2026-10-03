@@ -124,6 +124,11 @@ enum BalanceUnifiedBodyLayout {
   };
 }
 
+/// One presentation state for the Savings card across SUM, Month and Year.
+/// It is intentionally dashboard-session UI state, never a scoped financial
+/// value or a second savings calculation.
+enum BalanceSavingsDisplayMode { percentage, amount }
+
 /// Session-only alternatives over the immutable all-time Balance history.
 /// Financial totals and the latest transaction are never settings-dependent.
 @immutable
@@ -144,6 +149,7 @@ final class BalancePresentationSettings {
     required this.balanceContentCardBorderOpacity,
     this.contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
     this.unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
+    this.savingsDisplayMode = BalanceSavingsDisplayMode.percentage,
     this.alternativeMotherCardVisible = true,
     this.usesChildCards = true,
     Set<BalanceCarouselCardKind> hiddenBalanceCarouselCardKinds =
@@ -191,6 +197,7 @@ final class BalancePresentationSettings {
       balanceContentCardBorderOpacity = 1,
       contentSurfaceStyle = BalanceContentSurfaceStyle.unifiedCard,
       unifiedBodyLayout = BalanceUnifiedBodyLayout.fourSectionTetris,
+      savingsDisplayMode = BalanceSavingsDisplayMode.percentage,
       alternativeMotherCardVisible = true,
       usesChildCards = true,
       hiddenBalanceCarouselCardKinds = const <BalanceCarouselCardKind>{},
@@ -211,6 +218,7 @@ final class BalancePresentationSettings {
   final double balanceContentCardBorderOpacity;
   final BalanceContentSurfaceStyle contentSurfaceStyle;
   final BalanceUnifiedBodyLayout unifiedBodyLayout;
+  final BalanceSavingsDisplayMode savingsDisplayMode;
 
   /// Controls only the physical unified parent/backplate. The alternative
   /// content composition and dashboard geometry retain their existing owners.
@@ -250,6 +258,7 @@ final class BalancePresentationSettings {
     double? balanceContentCardBorderOpacity,
     BalanceContentSurfaceStyle? contentSurfaceStyle,
     BalanceUnifiedBodyLayout? unifiedBodyLayout,
+    BalanceSavingsDisplayMode? savingsDisplayMode,
     bool? alternativeMotherCardVisible,
     bool? usesChildCards,
     Set<BalanceCarouselCardKind>? hiddenBalanceCarouselCardKinds,
@@ -285,6 +294,7 @@ final class BalancePresentationSettings {
         balanceContentCardBorderOpacity ?? this.balanceContentCardBorderOpacity,
     contentSurfaceStyle: contentSurfaceStyle ?? this.contentSurfaceStyle,
     unifiedBodyLayout: unifiedBodyLayout ?? this.unifiedBodyLayout,
+    savingsDisplayMode: savingsDisplayMode ?? this.savingsDisplayMode,
     alternativeMotherCardVisible:
         alternativeMotherCardVisible ?? this.alternativeMotherCardVisible,
     usesChildCards: usesChildCards ?? this.usesChildCards,
@@ -317,6 +327,7 @@ final class BalancePresentationSettings {
           balanceContentCardBorderOpacity &&
       other.contentSurfaceStyle == contentSurfaceStyle &&
       other.unifiedBodyLayout == unifiedBodyLayout &&
+      other.savingsDisplayMode == savingsDisplayMode &&
       other.alternativeMotherCardVisible == alternativeMotherCardVisible &&
       other.usesChildCards == usesChildCards &&
       setEquals(
@@ -341,6 +352,7 @@ final class BalancePresentationSettings {
     balanceContentCardBorderOpacity,
     contentSurfaceStyle,
     unifiedBodyLayout,
+    savingsDisplayMode,
     alternativeMotherCardVisible,
     usesChildCards,
     Object.hashAllUnordered(hiddenBalanceCarouselCardKinds),
@@ -478,6 +490,19 @@ final class BalancePresentationController
     if (current.unifiedBodyLayout == next) return;
     value = current.copyWith(
       unifiedBodyLayout: next,
+      revision: current.revision + 1,
+    );
+  }
+
+  void toggleSavingsDisplayMode() {
+    final current = value;
+    value = current.copyWith(
+      savingsDisplayMode: switch (current.savingsDisplayMode) {
+        BalanceSavingsDisplayMode.percentage =>
+          BalanceSavingsDisplayMode.amount,
+        BalanceSavingsDisplayMode.amount =>
+          BalanceSavingsDisplayMode.percentage,
+      },
       revision: current.revision + 1,
     );
   }

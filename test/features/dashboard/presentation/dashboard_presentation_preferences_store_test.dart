@@ -22,7 +22,9 @@ void main() {
           'sumVisualStyle': MindSumVisualStyle.sumB.index,
           'showSumLayoutChooser': false,
           'yearGridLayout': MindYearHeatmapGridLayout.twoBySix.index,
-          'showYearFourByThreeScopeAmounts': false,
+          'yearMonthlyAmountPresentation':
+              MindYearMonthlyAmountPresentation.veil.index,
+          'showDayContentViewChooser': true,
           'balanceUsesChildCards': false,
         };
       });
@@ -33,7 +35,11 @@ void main() {
       expect(preferences.sumVisualStyle, MindSumVisualStyle.sumB);
       expect(preferences.showSumLayoutChooser, isFalse);
       expect(preferences.yearGridLayout, MindYearHeatmapGridLayout.twoBySix);
-      expect(preferences.showYearFourByThreeScopeAmounts, isFalse);
+      expect(
+        preferences.yearMonthlyAmountPresentation,
+        MindYearMonthlyAmountPresentation.veil,
+      );
+      expect(preferences.showDayContentViewChooser, isTrue);
       expect(preferences.balanceUsesChildCards, isFalse);
     },
   );
@@ -50,7 +56,8 @@ void main() {
         sumVisualStyle: MindSumVisualStyle.sumA,
         showSumLayoutChooser: false,
         yearGridLayout: MindYearHeatmapGridLayout.threeByFour,
-        showYearFourByThreeScopeAmounts: true,
+        yearMonthlyAmountPresentation: MindYearMonthlyAmountPresentation.inline,
+        showDayContentViewChooser: false,
         balanceUsesChildCards: false,
       ),
     );
@@ -60,7 +67,9 @@ void main() {
       'sumVisualStyle': MindSumVisualStyle.sumA.index,
       'showSumLayoutChooser': false,
       'yearGridLayout': MindYearHeatmapGridLayout.threeByFour.index,
-      'showYearFourByThreeScopeAmounts': true,
+      'yearMonthlyAmountPresentation':
+          MindYearMonthlyAmountPresentation.inline.index,
+      'showDayContentViewChooser': false,
       'balanceUsesChildCards': false,
     });
   });

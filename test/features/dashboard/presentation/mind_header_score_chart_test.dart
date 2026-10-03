@@ -320,6 +320,20 @@ void main() {
       expect(temporal.left, greaterThanOrEqualTo(header.left));
       expect(score.right, lessThanOrEqualTo(header.right));
       expect(temporal.right, lessThanOrEqualTo(header.right));
+      final crosshair = tester.getRect(
+        find.byKey(
+          const ValueKey<String>('mind-header-score-chart-selected-crosshair'),
+        ),
+      );
+      expect(
+        temporal.top,
+        greaterThan(plot.bottom),
+        reason: 'The selected date lives below, never inside, the plot.',
+      );
+      expect(temporal.bottom, lessThanOrEqualTo(header.bottom));
+      expect(header.bottom - temporal.bottom, closeTo(2, .01));
+      expect(crosshair.top, closeTo(plot.top, .01));
+      expect(crosshair.bottom, closeTo(temporal.center.dy, .01));
 
       final second = _seriesFor(
         DateTime.utc(2028, 1, 1),

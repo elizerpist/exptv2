@@ -42,6 +42,59 @@ Future<void> _openTunerTopics(
 
 void main() {
   testWidgets(
+    'MY-SETTINGS-RED-01: Year amount presentation and Day selector visibility live only in Mind Settings',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = DashboardHeaderVisualController(vsync: tester);
+      final settings = MindYearHeatmapPresentationController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 360,
+            height: 1500,
+            child: DashboardHeaderVisualTuner(
+              controller: controller,
+              mindYearHeatmapPresentation: settings,
+            ),
+          ),
+        ),
+      );
+      await _openTunerTopics(tester, controller, <DashboardHeaderTunerSection>[
+        DashboardHeaderTunerSection.mindYearHeatmap,
+      ]);
+
+      expect(
+        find.byKey(
+          const ValueKey('mind-year-four-by-three-scope-amounts-visible'),
+        ),
+        findsNothing,
+        reason:
+            'The obsolete boolean must not remain as a dead settings switch.',
+      );
+      for (final mode in <String>['hidden', 'inline', 'veil']) {
+        expect(
+          find.byKey(ValueKey('mind-year-monthly-amount-presentation-$mode')),
+          findsOneWidget,
+        );
+      }
+      final dayVisibility = find.byKey(
+        const ValueKey('mind-day-content-view-chooser-visible'),
+      );
+      expect(dayVisibility, findsOneWidget);
+      expect(
+        tester.widget<SwitchListTile>(dayVisibility).value,
+        isFalse,
+        reason: 'A fresh app starts with no Day top-right selector.',
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      settings.dispose();
+    },
+  );
+
+  testWidgets(
     'custom settings use compact topic collapsibles without resetting controls',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1800));
@@ -399,6 +452,8 @@ void main() {
   testWidgets(
     'BALANCE-PRESENTATION-TUNER: visual controls are independently addressable while retired geometry controls remain absent',
     (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
       final controller = DashboardHeaderVisualController(vsync: tester);
       final balance = BalancePresentationController();
       addTearDown(balance.dispose);
@@ -523,7 +578,10 @@ void main() {
       expect(balance.value.usesChildCards, isFalse);
       expect(
         find.byKey(const ValueKey<String>('balance-unified-body-layout')),
-        findsNothing,
+        findsOneWidget,
+        reason:
+            'Child-card chrome is independent from the already-selected '
+            'unified Balance content layout.',
       );
       final unifiedBalance = find.byKey(
         const ValueKey<String>('balance-content-style-unified'),
@@ -1752,16 +1810,22 @@ void main() {
         const ValueKey<String>('mind-sum-layout-chooser-visible'),
         () => heatmapSettings.value.showSumLayoutChooser,
       ),
-      (
-        const ValueKey<String>('mind-year-four-by-three-scope-amounts-visible'),
-        () => heatmapSettings.value.showYearFourByThreeScopeAmounts,
-      ),
     ]) {
       final control = find.byKey(toggle.$1);
-      await tester.ensureVisible(control);
-      await tester.tap(control);
+      tester.widget<SwitchListTile>(control).onChanged!(false);
       await tester.pump();
       expect(toggle.$2(), isFalse);
+    }
+    for (final presentation in MindYearMonthlyAmountPresentation.values) {
+      final option = find.byKey(
+        ValueKey<String>(
+          'mind-year-monthly-amount-presentation-${presentation.name}',
+        ),
+      );
+      await tester.ensureVisible(option);
+      await tester.tap(option);
+      await tester.pump();
+      expect(heatmapSettings.value.yearMonthlyAmountPresentation, presentation);
     }
     for (final style in MindYearHeatmapPaletteStyle.values) {
       final palette = find.byKey(

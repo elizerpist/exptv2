@@ -1385,16 +1385,32 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
             ],
           ),
         ),
-        SwitchListTile(
-          key: const ValueKey<String>(
-            'mind-year-four-by-three-scope-amounts-visible',
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text('Éves havi összegek'),
+        ),
+        RadioGroup<MindYearMonthlyAmountPresentation>(
+          groupValue: settings.yearMonthlyAmountPresentation,
+          onChanged: (presentation) {
+            if (presentation != null) {
+              controller.setYearMonthlyAmountPresentation(presentation);
+            }
+          },
+          child: Column(
+            children: <Widget>[
+              for (final presentation
+                  in MindYearMonthlyAmountPresentation.values)
+                RadioListTile<MindYearMonthlyAmountPresentation>(
+                  key: ValueKey<String>(
+                    'mind-year-monthly-amount-presentation-${presentation.name}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(presentation.tunerLabel),
+                  value: presentation,
+                ),
+            ],
           ),
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Éves 4×3 havi összegek'),
-          subtitle: const Text('Az aktuális összegszűrő szerint'),
-          value: settings.showYearFourByThreeScopeAmounts,
-          onChanged: controller.setShowYearFourByThreeScopeAmounts,
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
@@ -1509,6 +1525,14 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+        SwitchListTile(
+          key: const ValueKey<String>('mind-day-content-view-chooser-visible'),
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Napi jobb felső nézetválasztó'),
+          value: settings.showDayContentViewChooser,
+          onChanged: controller.setShowDayContentViewChooser,
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),
@@ -3460,6 +3484,7 @@ final class _DashboardBorderSection extends StatelessWidget {
   static String _borderLabel(DashboardBorderSurface surface) =>
       switch (surface) {
         DashboardBorderSurface.header => 'Header',
+        DashboardBorderSurface.budgetHeader => 'Budget fejléc',
         DashboardBorderSurface.incomeDirection => 'Bevétel',
         DashboardBorderSurface.expenseDirection => 'Kiadás',
         DashboardBorderSurface.summary => 'Summary',

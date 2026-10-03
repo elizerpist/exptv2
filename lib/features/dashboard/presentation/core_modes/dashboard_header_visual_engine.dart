@@ -2304,7 +2304,11 @@ final class DashboardHeaderVisualTuning {
       chartVeilColor: DashboardHeaderForegroundColor.white,
       chartVeilEnabled: true,
     ),
-    mindHeader: const DashboardHeaderModeVisualState.defaults(),
+    // Fresh Mind presentation deliberately starts at the approved softer
+    // header opacity. Persisted user choices continue to win on restore.
+    mindHeader: const DashboardHeaderModeVisualState.defaults(
+      opacityPercent: 75,
+    ),
     budgetHeader: const DashboardHeaderModeVisualState.defaults(),
     globalAppearance: const FluviGlobalAppearance.defaults(),
     headerModeIconSizePercent: 0,

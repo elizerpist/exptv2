@@ -237,46 +237,56 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
     return Positioned.fill(
       key: const ValueKey<String>('mind-header-score-chart'),
       child: LayoutBuilder(
-        builder: (context, constraints) => Stack(
-          children: <Widget>[
-            Positioned(
-              left: MindHeaderScoreChartStyle.plotLeft,
-              top: widget.layout.plotTop,
-              width: MindHeaderScoreChartStyle.plotWidth,
-              height: widget.layout.plotHeight,
-              child: Listener(
-                key: _plotKey,
-                behavior: HitTestBehavior.translucent,
-                onPointerDown: _observePointerDown,
-                onPointerMove: _observePointerMove,
-                onPointerUp: (event) => _onPointerUp(event, projection),
-                onPointerCancel: _observePointerCancel,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    key: const ValueKey<String>(
-                      'mind-header-score-chart-reveal',
-                    ),
-                    width: MindHeaderScoreChartStyle.plotWidth,
-                    height: widget.layout.plotHeight * reveal,
-                    child: ClipRect(
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: MindHeaderScoreChartStyle.plotWidth,
-                          height: widget.layout.plotHeight,
-                          child: RepaintBoundary(
-                            child: CustomPaint(
-                              key: const ValueKey<String>(
-                                'mind-header-score-chart-paint',
-                              ),
-                              painter: MindHeaderScoreChartPainter(
-                                series: series,
-                                selectedEpochDay: selected?.epochDay,
-                                lineColor: widget.lineColor,
-                                areaFadeColor:
-                                    widget.areaFadeColor ?? widget.lineColor,
-                                showsAreaFade: widget.showsAreaFade,
+        builder: (context, constraints) {
+          final selectionGeometry = selected == null
+              ? null
+              : MindHeaderScoreChartSelectionGeometry.resolve(
+                  point: selected,
+                  projection: projection,
+                  layout: widget.layout,
+                  availableHeight: constraints.maxHeight,
+                );
+          return Stack(
+            children: <Widget>[
+              Positioned(
+                left: MindHeaderScoreChartStyle.plotLeft,
+                top: widget.layout.plotTop,
+                width: MindHeaderScoreChartStyle.plotWidth,
+                height: widget.layout.plotHeight,
+                child: Listener(
+                  key: _plotKey,
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: _observePointerDown,
+                  onPointerMove: _observePointerMove,
+                  onPointerUp: (event) => _onPointerUp(event, projection),
+                  onPointerCancel: _observePointerCancel,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      key: const ValueKey<String>(
+                        'mind-header-score-chart-reveal',
+                      ),
+                      width: MindHeaderScoreChartStyle.plotWidth,
+                      height: widget.layout.plotHeight * reveal,
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: MindHeaderScoreChartStyle.plotWidth,
+                            height: widget.layout.plotHeight,
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                key: const ValueKey<String>(
+                                  'mind-header-score-chart-paint',
+                                ),
+                                painter: MindHeaderScoreChartPainter(
+                                  series: series,
+                                  selectedEpochDay: selected?.epochDay,
+                                  lineColor: widget.lineColor,
+                                  areaFadeColor:
+                                      widget.areaFadeColor ?? widget.lineColor,
+                                  showsAreaFade: widget.showsAreaFade,
+                                ),
                               ),
                             ),
                           ),
@@ -286,23 +296,27 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
                   ),
                 ),
               ),
-            ),
-            if (widget.showTimeLabels)
-              _MindHeaderScoreChartTimeLabels(
-                series: series,
-                expansionProgress: reveal,
-                layout: widget.layout,
-              ),
-            if (selected != null)
-              _MindHeaderScoreChartSelectedLabels(
-                point: selected,
-                projection: projection,
-                temporalContext: widget.temporalContext,
-                availableWidth: constraints.maxWidth,
-                layout: widget.layout,
-              ),
-          ],
-        ),
+              if (widget.showTimeLabels)
+                _MindHeaderScoreChartTimeLabels(
+                  series: series,
+                  expansionProgress: reveal,
+                  layout: widget.layout,
+                ),
+              if (selectionGeometry != null)
+                _MindHeaderScoreChartSelectedCrosshair(
+                  geometry: selectionGeometry,
+                  color: widget.lineColor,
+                ),
+              if (selected != null && selectionGeometry != null)
+                _MindHeaderScoreChartSelectedLabels(
+                  point: selected,
+                  temporalContext: widget.temporalContext,
+                  availableWidth: constraints.maxWidth,
+                  geometry: selectionGeometry,
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -386,39 +400,102 @@ final class _MindHeaderScoreChartState extends State<MindHeaderScoreChart> {
   }
 }
 
+/// One selected-label/crosshair geometry resolves from the live Header bounds.
+/// Keeping these values together prevents the marker and its lower time label
+/// from drifting onto independently calculated vertical lanes.
+@visibleForTesting
+@immutable
+final class MindHeaderScoreChartSelectionGeometry {
+  const MindHeaderScoreChartSelectionGeometry({
+    required this.centerX,
+    required this.temporalLabelTop,
+    required this.crosshairTop,
+    required this.crosshairBottom,
+  });
+
+  factory MindHeaderScoreChartSelectionGeometry.resolve({
+    required MindBehavioralScorePoint point,
+    required MindHeaderScoreChartTemporalProjection projection,
+    required DashboardHeaderTrendChartLayout layout,
+    required double availableHeight,
+  }) {
+    // The selected temporal label is an inspection endpoint, not the regular
+    // axis lane. Keep it in the Header's lower inset so the marker connects a
+    // selected point all the way through the plot to its date. The chart is
+    // always hosted by the bounded Header shell; a very short host still
+    // clamps safely instead of leaking into the content surface.
+    final temporalLabelTop =
+        (availableHeight - MindHeaderScoreChartStyle.timeLabelHeight - 2)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+    final centerX =
+        MindHeaderScoreChartStyle.plotLeft +
+        projection.plotXForEpochDay(
+          point.epochDay,
+          MindHeaderScoreChartStyle.plotWidth,
+        );
+    return MindHeaderScoreChartSelectionGeometry(
+      centerX: centerX,
+      temporalLabelTop: temporalLabelTop,
+      crosshairTop: layout.plotTop,
+      crosshairBottom:
+          temporalLabelTop + MindHeaderScoreChartStyle.timeLabelHeight / 2,
+    );
+  }
+
+  final double centerX;
+  final double temporalLabelTop;
+  final double crosshairTop;
+  final double crosshairBottom;
+}
+
+final class _MindHeaderScoreChartSelectedCrosshair extends StatelessWidget {
+  const _MindHeaderScoreChartSelectedCrosshair({
+    required this.geometry,
+    required this.color,
+  });
+
+  final MindHeaderScoreChartSelectionGeometry geometry;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    key: const ValueKey<String>('mind-header-score-chart-selected-crosshair'),
+    left: geometry.centerX - .5,
+    top: geometry.crosshairTop,
+    width: 1,
+    height: (geometry.crosshairBottom - geometry.crosshairTop)
+        .clamp(0.0, double.infinity)
+        .toDouble(),
+    child: IgnorePointer(child: ColoredBox(color: color)),
+  );
+}
+
 final class _MindHeaderScoreChartSelectedLabels extends StatelessWidget {
   const _MindHeaderScoreChartSelectedLabels({
     required this.point,
-    required this.projection,
     required this.temporalContext,
     required this.availableWidth,
-    required this.layout,
+    required this.geometry,
   });
 
   static const _scoreWidth = 46.0;
   static const _temporalWidth = 64.0;
 
   final MindBehavioralScorePoint point;
-  final MindHeaderScoreChartTemporalProjection projection;
   final MindHeaderScoreChartTemporalContext temporalContext;
   final double availableWidth;
-  final DashboardHeaderTrendChartLayout layout;
+  final MindHeaderScoreChartSelectionGeometry geometry;
 
   @override
   Widget build(BuildContext context) {
-    final x =
-        MindHeaderScoreChartStyle.plotLeft +
-        projection.plotXForEpochDay(
-          point.epochDay,
-          MindHeaderScoreChartStyle.plotWidth,
-        );
     return Stack(
       children: <Widget>[
         _label(
           key: const ValueKey<String>('mind-header-score-chart-selected-score'),
           text: '${point.roundedScore}/100',
-          left: _clampedLeft(x, _scoreWidth),
-          top: layout.plotTop + 1,
+          left: _clampedLeft(geometry.centerX, _scoreWidth),
+          top: geometry.crosshairTop + 1,
           width: _scoreWidth,
         ),
         _label(
@@ -429,11 +506,8 @@ final class _MindHeaderScoreChartSelectedLabels extends StatelessWidget {
             point,
             temporalContext,
           ),
-          left: _clampedLeft(x, _temporalWidth),
-          top:
-              layout.plotTop +
-              layout.plotHeight -
-              MindHeaderScoreChartStyle.timeLabelHeight,
+          left: _clampedLeft(geometry.centerX, _temporalWidth),
+          top: geometry.temporalLabelTop,
           width: _temporalWidth,
         ),
       ],

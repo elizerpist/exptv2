@@ -13,7 +13,9 @@ void main() {
     'MIND-DAY-VIEW-01 RED: Day defaults to the All-vs-slider native heatmap page',
     (tester) async {
       final listenable = ValueNotifier<MindTemporalHeatmapFrame?>(_frame());
+      final settings = MindYearHeatmapPresentationController();
       addTearDown(listenable.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -21,7 +23,10 @@ void main() {
             body: SizedBox(
               width: 390,
               height: 540,
-              child: MindDayHeatmapViewport(frameListenable: listenable),
+              child: MindDayHeatmapViewport(
+                frameListenable: listenable,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
@@ -35,6 +40,18 @@ void main() {
         find.byKey(const ValueKey('mind-day-timeline-chart')),
         findsNothing,
       );
+      expect(
+        find.byKey(const ValueKey('mind-day-content-view-toggle')),
+        findsNothing,
+        reason: 'The fresh presentation state leaves no selector or hit box.',
+      );
+
+      settings.setShowDayContentViewChooser(true);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-day-content-view-toggle')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -45,6 +62,7 @@ void main() {
         _frame(),
       );
       final settings = MindYearHeatmapPresentationController();
+      settings.setShowDayContentViewChooser(true);
       addTearDown(frameListenable.dispose);
       addTearDown(settings.dispose);
 

@@ -6,6 +6,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alterna
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_sum_cards.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_alternative_visual_tokens.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/balance_extended_sheet_layout.dart';
+import 'package:fluvi/features/dashboard/presentation/core_modes/balance_presentation_settings.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/ledger_time_scope.dart';
 import 'package:fluvi/features/dashboard/time_navigation/domain/year_month.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,55 @@ const _identity = DashboardBalancePrimaryIdentity(
 );
 
 void main() {
+  testWidgets(
+    'BS-RED-01: Savings is one tappable shared 3D progress component',
+    (tester) async {
+      final controller = BalancePresentationController();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 180,
+              height: 180,
+              child: ValueListenableBuilder<BalancePresentationSettings>(
+                valueListenable: controller,
+                builder: (context, settings, _) =>
+                    BalanceAlternativeSavingsRingCard(
+                      presentation: const BalanceAlternativeSavingsPresentation(
+                        netMinor: 620000,
+                        retentionBasisPoints: 6200,
+                      ),
+                      displayMode: settings.savingsDisplayMode,
+                      onDisplayModeToggle: controller.toggleSavingsDisplayMode,
+                    ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final card = find.byKey(
+        const ValueKey('balance-alternative-savings-card'),
+      );
+      expect(card, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('balance-alternative-savings-budget-3d')),
+        findsOneWidget,
+      );
+      await tester.tap(card);
+      await tester.pump();
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('balance-alternative-savings-amount')),
+            )
+            .data,
+        '6 k Ft',
+      );
+    },
+  );
+
   testWidgets(
     'SUM-UI: source-truth histogram, streak and stability cards render immutable live models in neutral child shells',
     (tester) async {

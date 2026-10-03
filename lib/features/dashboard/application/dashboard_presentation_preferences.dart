@@ -11,21 +11,24 @@ final class DashboardPresentationPreferences {
     required this.sumVisualStyle,
     required this.showSumLayoutChooser,
     required this.yearGridLayout,
-    required this.showYearFourByThreeScopeAmounts,
+    required this.yearMonthlyAmountPresentation,
+    required this.showDayContentViewChooser,
     required this.balanceUsesChildCards,
   });
 
   final MindSumVisualStyle sumVisualStyle;
   final bool showSumLayoutChooser;
   final MindYearHeatmapGridLayout yearGridLayout;
-  final bool showYearFourByThreeScopeAmounts;
+  final MindYearMonthlyAmountPresentation yearMonthlyAmountPresentation;
+  final bool showDayContentViewChooser;
   final bool balanceUsesChildCards;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.current,
     showSumLayoutChooser: true,
     yearGridLayout: MindYearHeatmapGridLayout.fourByThree,
-    showYearFourByThreeScopeAmounts: true,
+    yearMonthlyAmountPresentation: MindYearMonthlyAmountPresentation.inline,
+    showDayContentViewChooser: false,
     balanceUsesChildCards: true,
   );
 
@@ -35,8 +38,8 @@ final class DashboardPresentationPreferences {
       other.sumVisualStyle == sumVisualStyle &&
       other.showSumLayoutChooser == showSumLayoutChooser &&
       other.yearGridLayout == yearGridLayout &&
-      other.showYearFourByThreeScopeAmounts ==
-          showYearFourByThreeScopeAmounts &&
+      other.yearMonthlyAmountPresentation == yearMonthlyAmountPresentation &&
+      other.showDayContentViewChooser == showDayContentViewChooser &&
       other.balanceUsesChildCards == balanceUsesChildCards;
 
   @override
@@ -44,7 +47,8 @@ final class DashboardPresentationPreferences {
     sumVisualStyle,
     showSumLayoutChooser,
     yearGridLayout,
-    showYearFourByThreeScopeAmounts,
+    yearMonthlyAmountPresentation,
+    showDayContentViewChooser,
     balanceUsesChildCards,
   );
 }

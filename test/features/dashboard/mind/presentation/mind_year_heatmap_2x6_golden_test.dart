@@ -41,6 +41,44 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'VIS-3x4: Year three-by-four MonthCards retain the settings-only layout',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 560));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final frame = ValueNotifier(_frame());
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
+      addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RepaintBoundary(
+              key: const ValueKey<String>('mind-year-3x4-golden-boundary'),
+              child: SizedBox(
+                width: 430,
+                height: 560,
+                child: MindYearHeatmapViewport(
+                  frameListenable: frame,
+                  presentationSettings: settings,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('3×4'), findsNothing);
+      expect(find.text('4×3'), findsNothing);
+      expect(find.text('2×6'), findsNothing);
+      await expectLater(
+        find.byKey(const ValueKey<String>('mind-year-3x4-golden-boundary')),
+        matchesGoldenFile('../../../../goldens/mind_year_heatmap_3x4.png'),
+      );
+    },
+  );
 }
 
 MindYearHeatmapFrame _frame() {

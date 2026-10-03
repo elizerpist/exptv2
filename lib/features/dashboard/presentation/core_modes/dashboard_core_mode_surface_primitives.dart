@@ -307,6 +307,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
     this.borderRadiusOverride,
     this.showsDepth = true,
     this.showsBorder = true,
+    this.borderSurface = DashboardBorderSurface.header,
   });
 
   final DashboardBounds bounds;
@@ -327,6 +328,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
   final BorderRadius? borderRadiusOverride;
   final bool showsDepth;
   final bool showsBorder;
+  final DashboardBorderSurface borderSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -350,6 +352,7 @@ class DashboardCoreModeHeaderScaffold extends StatelessWidget {
             borderRadius: borderRadius,
             showsDepth: showsDepth,
             showsBorder: showsBorder,
+            borderSurface: borderSurface,
           ),
           if (showModeLabel)
             Positioned(
@@ -535,6 +538,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     required this.borderRadius,
     required this.showsDepth,
     required this.showsBorder,
+    required this.borderSurface,
   });
 
   final DashboardBounds bounds;
@@ -545,6 +549,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
   final BorderRadius borderRadius;
   final bool showsDepth;
   final bool showsBorder;
+  final DashboardBorderSurface borderSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -555,7 +560,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
     ).depthFor(DashboardCornerSurfaceFamily.header);
     final border = DashboardBorderScope.profileOf(
       context,
-    ).borderFor(DashboardBorderSurface.header);
+    ).borderFor(borderSurface);
     if (visualController == null || frames == null) {
       return DashboardPlaceholderCard(
         bounds: bounds,
@@ -563,6 +568,7 @@ final class _HeaderPhysicalShell extends StatelessWidget {
         semanticKey: semanticKey,
         surfaceColor: surfaceColor,
         cornerFamily: DashboardCornerSurfaceFamily.header,
+        borderSurface: borderSurface,
         borderRadiusOverride: borderRadius,
         showsDepth: showsDepth,
         showsBorder: showsBorder,

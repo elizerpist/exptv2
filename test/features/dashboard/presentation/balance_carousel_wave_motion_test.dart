@@ -7,6 +7,31 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/balance_carouse
 void main() {
   group('Balance carousel wave motion', () {
     test(
+      'Savings display mode is one revisioned presentation state for every temporal card',
+      () {
+        final controller = BalancePresentationController();
+        addTearDown(controller.dispose);
+
+        expect(
+          controller.value.savingsDisplayMode,
+          BalanceSavingsDisplayMode.percentage,
+        );
+        controller.toggleSavingsDisplayMode();
+        expect(
+          controller.value.savingsDisplayMode,
+          BalanceSavingsDisplayMode.amount,
+        );
+        expect(controller.value.revision, 1);
+        controller.toggleSavingsDisplayMode();
+        expect(
+          controller.value.savingsDisplayMode,
+          BalanceSavingsDisplayMode.percentage,
+        );
+        expect(controller.value.revision, 2);
+      },
+    );
+
+    test(
       'BWA-STARTUP RED: the physical default enables the ambient wave clock while retaining a user toggle',
       () {
         const defaults = BalancePresentationSettings.defaults();

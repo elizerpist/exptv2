@@ -23,6 +23,16 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_static_color_renderer.dart';
 
 void main() {
+  test(
+    'MH-DEFAULT-RED-01: fresh Mind Header material starts at 75 percent',
+    () {
+      expect(
+        DashboardHeaderVisualTuning.defaults().mindHeader.opacityPercent,
+        75,
+      );
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
@@ -716,7 +726,7 @@ void main() {
       controller.setBalanceHeaderOpacityPercent(0);
       expect(balance.value.opacity, 0);
       expect(budget.value.opacity, .5);
-      expect(mind.value.opacity, .5);
+      expect(mind.value.opacity, .75);
       controller.setMindHeaderOpacityPercent(100);
       expect(balance.value.opacity, 0);
       expect(budget.value.opacity, .5);

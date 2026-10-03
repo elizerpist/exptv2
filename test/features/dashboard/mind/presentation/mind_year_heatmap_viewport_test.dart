@@ -23,6 +23,35 @@ void main() {
   );
 
   testWidgets(
+    'MY-AMOUNT-RED-01: a Year day cell never exposes the retired detail popup',
+    (tester) async {
+      final frame = ValueNotifier(_inspectionProjection().preview(range));
+      addTearDown(frame.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              height: 500,
+              child: MindYearHeatmapViewport(frameListenable: frame),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+        findsNothing,
+        reason: 'Year day detail inspection is retired in every amount mode.',
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-day-infocard')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'RED MYHR-04/05: 12 compact MonthCards form four calendar-driven annual rows',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
@@ -470,54 +499,101 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-DAY-INFO-01/02: MonthCards are no longer tap targets and a colored day owns the bounded infocard',
+    'YEAR-AMOUNT-MODES-01: hidden, inline and veil retire day popups without changing resident cells',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearMonthlyAmountPresentation(
+          MindYearMonthlyAmountPresentation.hidden,
+        );
       addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 360,
               height: 500,
-              child: MindYearHeatmapViewport(frameListenable: frame),
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
       );
 
       expect(
-        find.byKey(const ValueKey('mind-year-heatmap-month-tap-1')),
+        find.byKey(const ValueKey('mind-year-month-scope-total-1')),
         findsNothing,
       );
-      final day = find.byKey(
-        const ValueKey('mind-year-heatmap-day-tap-2025-1-2'),
-      );
-      expect(day, findsOneWidget);
-      await tester.tap(day);
-      await tester.pump();
       expect(
-        find.byKey(const ValueKey('mind-year-day-infocard')),
+        find.byKey(const ValueKey('mind-year-monthly-amount-veil')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-month-cells-1')),
         findsOneWidget,
       );
-      expect(find.textContaining('2025.'), findsOneWidget);
-      expect(find.textContaining('1 000 Ft'), findsAtLeastNWidgets(1));
-      final dismiss = find.byKey(
-        const ValueKey('mind-year-day-infocard-dismiss'),
+
+      settings.setYearMonthlyAmountPresentation(
+        MindYearMonthlyAmountPresentation.inline,
       );
-      expect(dismiss, findsOneWidget);
-      await tester.tap(dismiss);
       await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-month-scope-total-1')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('mind-year-day-infocard')),
         findsNothing,
-        reason: 'An anchored popup retains an explicit accessible dismissal.',
+      );
+
+      settings.setYearMonthlyAmountPresentation(
+        MindYearMonthlyAmountPresentation.veil,
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-month-scope-total-1')),
+        findsNothing,
+      );
+      final month = find.byKey(const ValueKey('mind-year-heatmap-month-tap-1'));
+      expect(month, findsOneWidget);
+      await tester.tap(month);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-monthly-amount-veil')),
+        findsOneWidget,
+      );
+      for (var index = 1; index <= 12; index += 1) {
+        expect(
+          find.byKey(
+            ValueKey<String>('mind-year-monthly-amount-veil-total-$index'),
+          ),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-monthly-amount-veil')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('mind-year-monthly-amount-veil')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-year-day-infocard')),
+        findsNothing,
       );
     },
   );
 
   testWidgets(
-    'YEAR-DAY-INFO-03: a Year scroll drag never becomes a colored-day inspection tap',
+    'YEAR-DAY-INFO-03: retired day inspection leaves the existing Year scroll owner intact',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
       final scrollController = ScrollController();
@@ -543,7 +619,7 @@ void main() {
         ),
       );
       await tester.drag(
-        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+        find.byKey(const ValueKey('mind-year-direct-month-1')),
         const Offset(0, -100),
       );
       await tester.pump();
@@ -552,92 +628,87 @@ void main() {
       expect(
         find.byKey(const ValueKey('mind-year-day-infocard')),
         findsNothing,
-        reason: 'The tap observer must not enter the Scrollable gesture arena.',
+        reason: 'No removed per-day listener may enter the Scrollable arena.',
       );
     },
   );
 
   testWidgets(
-    'YEAR-DAY-INFO-ANCHOR-01: day infocards follow their actual colored cells instead of a fixed annual origin',
+    'YEAR-VEIL-01: one month trigger opens an annual overlay without a per-day popup',
     (tester) async {
       final frame = ValueNotifier(
         _inspectionProjection(includeSeptemberDay: true).preview(range),
       );
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearMonthlyAmountPresentation(
+          MindYearMonthlyAmountPresentation.veil,
+        );
       addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 360,
               height: 500,
-              child: MindYearHeatmapViewport(frameListenable: frame),
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
       );
 
-      final januaryDay = find.byKey(
-        const ValueKey('mind-year-heatmap-day-tap-2025-1-2'),
+      await tester.tap(
+        find.byKey(const ValueKey('mind-year-heatmap-month-tap-1')),
       );
-      await tester.tap(januaryDay);
       await tester.pump();
-      final januaryPopup = tester.getRect(
-        find.byKey(const ValueKey('mind-year-day-infocard')),
+      final veil = find.byKey(const ValueKey('mind-year-monthly-amount-veil'));
+      expect(veil, findsOneWidget);
+      expect(
+        tester.getRect(veil),
+        tester.getRect(
+          find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
+        ),
       );
       expect(
-        (januaryPopup.center.dx - tester.getRect(januaryDay).center.dx).abs(),
-        lessThan(100),
-      );
-
-      final septemberDay = find.byKey(
-        const ValueKey('mind-year-heatmap-day-tap-2025-9-2'),
-      );
-      await tester.tap(septemberDay);
-      await tester.pump();
-      final septemberPopup = tester.getRect(
         find.byKey(const ValueKey('mind-year-day-infocard')),
-      );
-      expect(septemberPopup.center.dx, greaterThan(januaryPopup.center.dx));
-      expect(
-        (septemberPopup.center.dx - tester.getRect(septemberDay).center.dx)
-            .abs(),
-        lessThan(100),
+        findsNothing,
       );
     },
   );
 
   testWidgets(
-    'YEAR-DAY-INFO-04/05: a same-Year day selection retains current frame identity and clears before another Year paints',
+    'YEAR-VEIL-02: a new Year frame closes its open annual amount veil',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearMonthlyAmountPresentation(
+          MindYearMonthlyAmountPresentation.veil,
+        );
       addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 360,
               height: 500,
-              child: MindYearHeatmapViewport(frameListenable: frame),
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
       );
       await tester.tap(
-        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+        find.byKey(const ValueKey('mind-year-heatmap-month-tap-1')),
       );
       await tester.pump();
       expect(
-        find.byKey(const ValueKey('mind-year-day-infocard')),
-        findsOneWidget,
-      );
-
-      frame.value = _inspectionProjection(
-        upstreamScopeKey: 'income|year:2025',
-        coreRevision: 2,
-      ).preview(range);
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('mind-year-day-infocard')),
+        find.byKey(const ValueKey('mind-year-monthly-amount-veil')),
         findsOneWidget,
       );
 
@@ -648,7 +719,7 @@ void main() {
       ).preview(range);
       await tester.pump();
       expect(
-        find.byKey(const ValueKey('mind-year-day-infocard')),
+        find.byKey(const ValueKey('mind-year-monthly-amount-veil')),
         findsNothing,
       );
       expect(tester.takeException(), isNull);
@@ -1516,7 +1587,7 @@ void main() {
   );
 
   testWidgets(
-    '4x3 painted cells and day hit targets share the resolved rectangular geometry',
+    '4x3 painted cells remain one paint field with no individual day hit targets',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
       addTearDown(frame.dispose);
@@ -1539,23 +1610,14 @@ void main() {
       final painter =
           tester.widget<CustomPaint>(paint).painter!
               as MindYearHeatmapMonthPainter;
-      final paintRect = tester.getRect(paint);
-      final expected = painter
-          .cellRectForSlot(
-            painter.slotIndexForDate(
-              const LocalDate(year: 2025, month: 1, day: 2),
-            ),
-            paintRect.size,
-          )
-          .shift(paintRect.topLeft);
-      final hit = tester.getRect(
-        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+      expect(
+        painter.slotIndexForDate(const LocalDate(year: 2025, month: 1, day: 2)),
+        greaterThanOrEqualTo(0),
       );
-
-      expect(hit.left, closeTo(expected.left, .001));
-      expect(hit.top, closeTo(expected.top, .001));
-      expect(hit.width, closeTo(expected.width, .001));
-      expect(hit.height, closeTo(expected.height, .001));
+      expect(
+        find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+        findsNothing,
+      );
     },
   );
 
@@ -1588,7 +1650,7 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-DAY-INFO-06: four-column colored-day inspection stays inside the annual card at supported mobile widths',
+    'YEAR-DAY-INFO-06: no retired day detail surface appears at supported mobile widths',
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
       addTearDown(frame.dispose);
@@ -1608,22 +1670,13 @@ void main() {
             ),
           ),
         );
-        await tester.tap(
-          find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
-        );
-        await tester.pump();
-        final info = tester.getRect(
-          find.byKey(const ValueKey('mind-year-day-infocard')),
-        );
-        final page = tester.getRect(
-          find.byKey(const ValueKey('mind-year-heatmap-page-0')),
-        );
-        expect(info.width, greaterThan(0));
-        expect(info.height, greaterThan(0));
-        expect(page.contains(info.topLeft), isTrue);
         expect(
-          page.contains(info.bottomRight - const Offset(.01, .01)),
-          isTrue,
+          find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('mind-year-day-infocard')),
+          findsNothing,
         );
         expect(tester.takeException(), isNull, reason: 'width=$width');
       }
@@ -1662,7 +1715,7 @@ void main() {
   );
 
   testWidgets(
-    'Y26-01/02/03/04/05 RED: 2x6 renders card-only chrome, monthly values and Month-style day numbers',
+    'Y26-01/02/03/04/05: 2x6 renders card-only chrome, inline values and Month-style day numbers',
     (tester) async {
       final settings = MindYearHeatmapPresentationController()
         ..setYearGridLayout(MindYearHeatmapGridLayout.twoBySix);
@@ -1689,11 +1742,15 @@ void main() {
         find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
         findsOneWidget,
       );
-      expect(find.text('Scope'), findsAtLeastNWidgets(1));
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-scope-total-1')),
+        findsOneWidget,
+      );
       expect(
         find.text('Zárás'),
         findsNothing,
-        reason: '2x6 keeps Scope but reclaims the monthly closing footer.',
+        reason:
+            'Monthly amounts use the shared mini-header, never a second footer.',
       );
       expect(
         find.byKey(
@@ -2096,7 +2153,9 @@ void main() {
         '9 k',
       );
 
-      settings.setShowYearFourByThreeScopeAmounts(false);
+      settings.setYearMonthlyAmountPresentation(
+        MindYearMonthlyAmountPresentation.hidden,
+      );
       await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('mind-year-month-scope-total-1')),
