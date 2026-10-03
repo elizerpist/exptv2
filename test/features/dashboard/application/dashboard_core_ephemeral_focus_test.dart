@@ -2528,6 +2528,9 @@ void main() {
       addTearDown(core.dispose);
       addTearDown(modes.dispose);
       await core.bootstrap();
+      core.mindYearHeatmapPresentation.setYearGridLayout(
+        MindYearHeatmapGridLayout.fourByThree,
+      );
       await pumpDashboardSurface(
         tester,
         CoreDashboard(
@@ -2545,19 +2548,14 @@ void main() {
         const ValueKey<String>('dashboard-core-mode-mind-body'),
       );
       final baselineBounds = tester.getRect(body);
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
-      await tester.pump();
-
       expect(tester.getRect(body).height, baselineBounds.height);
       expect(
         find.byKey(const ValueKey<String>('mind-year-heatmap-fit-scroll')),
         findsOneWidget,
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-3x4')),
+      core.mindYearHeatmapPresentation.setYearGridLayout(
+        MindYearHeatmapGridLayout.threeByFour,
       );
       await tester.pump();
       expect(tester.getRect(body).height, baselineBounds.height);

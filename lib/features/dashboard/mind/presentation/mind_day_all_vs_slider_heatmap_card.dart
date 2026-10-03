@@ -7,6 +7,7 @@ import '../domain/mind_temporal_heatmap_projection.dart';
 import '../domain/mind_year_heatmap_presentation_settings.dart';
 import '../domain/mind_year_heatmap_projection.dart';
 import 'mind_heatmap_palette_scope.dart';
+import 'mind_full_vs_filtered_bar_geometry.dart';
 import 'mind_temporal_content_header.dart';
 import 'mind_year_heatmap_palette_resolver.dart';
 
@@ -257,23 +258,24 @@ final class _MindDayHourlyBars extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: comparison.hours
             .map((hour) {
-              final fullHeight = _visibleAmountBarHeight(
-                plotHeight: plotHeight,
-                fraction: hour.fullFraction,
-                hasAmount: hour.fullTotal > 0,
-              );
-              final selectedHeight = _visibleAmountBarHeight(
-                plotHeight: plotHeight,
-                fraction: hour.selectedFraction,
-                hasAmount: hour.selectedTotal > 0,
-              );
-              final fullPalette = _paletteFor(
-                style: paletteStyle,
-                scaleResolution: scaleResolution,
-                dynamicScale: dynamicScale,
-                fraction: hour.fullFraction,
-                isEmpty: hour.fullTotal == 0,
-              );
+              final fullHeight =
+                  MindFullVsFilteredBarGeometry.heightForFraction(
+                    plotHeight: plotHeight,
+                    fraction: hour.fullFraction,
+                    hasAmount: MindFullVsFilteredBarGeometry.hasReference(
+                      hour.fullTotal,
+                    ),
+                    minimumVisibleHeight: _minimumVisibleAmountBarHeight,
+                  );
+              final selectedHeight =
+                  MindFullVsFilteredBarGeometry.heightForFraction(
+                    plotHeight: plotHeight,
+                    fraction: hour.selectedFraction,
+                    hasAmount: MindFullVsFilteredBarGeometry.hasForeground(
+                      hour.selectedTotal,
+                    ),
+                    minimumVisibleHeight: _minimumVisibleAmountBarHeight,
+                  );
               final selectedPalette = _paletteFor(
                 style: paletteStyle,
                 scaleResolution: scaleResolution,
@@ -295,51 +297,54 @@ final class _MindDayHourlyBars extends StatelessWidget {
                               'mind-day-all-slider-hour-${hour.hour.toString().padLeft(2, '0')}',
                             ),
                             height: math.max(5.0, plotHeight),
-                            child: DecoratedBox(
-                              key: ValueKey<String>(
-                                'mind-day-all-slider-capacity-${hour.hour.toString().padLeft(2, '0')}',
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xffdce3eb),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Align(
-                                alignment: Alignment.bottomCenter,
-                                child: SizedBox(
-                                  height: fullHeight,
-                                  width: double.infinity,
-                                  child: DecoratedBox(
-                                    key: ValueKey<String>(
-                                      'mind-day-all-slider-full-${hour.hour.toString().padLeft(2, '0')}',
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: fullPalette.background.withValues(
-                                        alpha: .36,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Align(
-                                      alignment: Alignment.bottomCenter,
-                                      child: SizedBox(
-                                        height: selectedHeight,
-                                        width: double.infinity,
-                                        child: DecoratedBox(
-                                          key: ValueKey<String>(
-                                            'mind-day-all-slider-selected-${hour.hour.toString().padLeft(2, '0')}',
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: selectedPalette.background,
-                                            borderRadius: BorderRadius.circular(
-                                              6,
+                            child:
+                                MindFullVsFilteredBarGeometry.hasReference(
+                                  hour.fullTotal,
+                                )
+                                ? Stack(
+                                    fit: StackFit.expand,
+                                    children: <Widget>[
+                                      Align(
+                                        alignment: Alignment.bottomCenter,
+                                        child: SizedBox(
+                                          height: fullHeight,
+                                          width: double.infinity,
+                                          child: DecoratedBox(
+                                            key: ValueKey<String>(
+                                              'mind-day-all-slider-reference-${hour.hour.toString().padLeft(2, '0')}',
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xffd4d7dc),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                                      if (MindFullVsFilteredBarGeometry.hasForeground(
+                                        hour.selectedTotal,
+                                      ))
+                                        Align(
+                                          alignment: Alignment.bottomCenter,
+                                          child: SizedBox(
+                                            height: selectedHeight,
+                                            width: double.infinity,
+                                            child: DecoratedBox(
+                                              key: ValueKey<String>(
+                                                'mind-day-all-slider-selected-${hour.hour.toString().padLeft(2, '0')}',
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    selectedPalette.background,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ),
                       ),
@@ -367,18 +372,6 @@ final class _MindDayHourlyBars extends StatelessWidget {
       );
     },
   );
-
-  static double _visibleAmountBarHeight({
-    required double plotHeight,
-    required double fraction,
-    required bool hasAmount,
-  }) {
-    if (!hasAmount || plotHeight <= 0) return 0;
-    return math.min(
-      plotHeight,
-      math.max(_minimumVisibleAmountBarHeight, plotHeight * fraction),
-    );
-  }
 }
 
 final class _MindDayComparisonLegend extends StatelessWidget {
@@ -394,13 +387,6 @@ final class _MindDayComparisonLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final full = _paletteFor(
-      style: paletteStyle,
-      scaleResolution: scaleResolution,
-      dynamicScale: dynamicScale,
-      fraction: .72,
-      isEmpty: false,
-    ).background.withValues(alpha: .36);
     final selected = _paletteFor(
       style: paletteStyle,
       scaleResolution: scaleResolution,
@@ -411,7 +397,7 @@ final class _MindDayComparisonLegend extends StatelessWidget {
     return Row(
       children: <Widget>[
         _MindDayLegendCopy(
-          color: full,
+          color: const Color(0xffd4d7dc),
           title: 'Teljes nap',
           subtitle: 'Az adott órában elköltött teljes összeg',
         ),

@@ -174,6 +174,10 @@ void main() {
     () {
       expect(formatMindCompactForints(7728364), '7,73 M Ft');
       expect(formatMindCompactForints(645560), '646 k Ft');
+      expect(
+        formatMindCompactForints(645560, includeCurrencySuffix: false),
+        '646 k',
+      );
     },
   );
 

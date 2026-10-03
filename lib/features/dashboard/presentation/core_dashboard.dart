@@ -529,7 +529,10 @@ class _CoreDashboardState extends State<CoreDashboard>
       controller.mindYearHeatmapPresentation
         ..setSumVisualStyle(restored.sumVisualStyle)
         ..setShowSumLayoutChooser(restored.showSumLayoutChooser)
-        ..setShowYearMotherCardActions(restored.showYearMotherCardActions);
+        ..setYearGridLayout(restored.yearGridLayout)
+        ..setShowYearFourByThreeScopeAmounts(
+          restored.showYearFourByThreeScopeAmounts,
+        );
       _balancePresentationSettings.setUsesChildCards(
         restored.balanceUsesChildCards,
       );
@@ -545,7 +548,8 @@ class _CoreDashboardState extends State<CoreDashboard>
       DashboardPresentationPreferences(
         sumVisualStyle: mind.sumVisualStyle,
         showSumLayoutChooser: mind.showSumLayoutChooser,
-        showYearMotherCardActions: mind.showYearMotherCardActions,
+        yearGridLayout: mind.yearGridLayout,
+        showYearFourByThreeScopeAmounts: mind.showYearFourByThreeScopeAmounts,
         balanceUsesChildCards:
             _balancePresentationSettings.value.usesChildCards,
       ),

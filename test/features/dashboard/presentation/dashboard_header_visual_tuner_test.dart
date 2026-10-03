@@ -1728,14 +1728,33 @@ void main() {
       await tester.pump();
       expect(heatmapSettings.value.sumVisualStyle, style);
     }
+    final yearFourByThree = find.byKey(
+      const ValueKey<String>('mind-year-grid-layout-fourByThree'),
+    );
+    expect(
+      yearFourByThree,
+      findsOneWidget,
+      reason:
+          'Year grid layout selection belongs in the presentation Settings.',
+    );
+    await tester.ensureVisible(yearFourByThree);
+    for (final layout in MindYearHeatmapGridLayout.values) {
+      final option = find.byKey(
+        ValueKey<String>('mind-year-grid-layout-${layout.name}'),
+      );
+      await tester.ensureVisible(option);
+      await tester.tap(option);
+      await tester.pump();
+      expect(heatmapSettings.value.yearGridLayout, layout);
+    }
     for (final toggle in <(Key, bool Function())>[
       (
         const ValueKey<String>('mind-sum-layout-chooser-visible'),
         () => heatmapSettings.value.showSumLayoutChooser,
       ),
       (
-        const ValueKey<String>('mind-year-actions-visible'),
-        () => heatmapSettings.value.showYearMotherCardActions,
+        const ValueKey<String>('mind-year-four-by-three-scope-amounts-visible'),
+        () => heatmapSettings.value.showYearFourByThreeScopeAmounts,
       ),
     ]) {
       final control = find.byKey(toggle.$1);

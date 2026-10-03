@@ -26,6 +26,7 @@ import 'mind_heatmap_day_number_overlay.dart';
 import 'mind_aggregate_line_chart.dart';
 import 'mind_anchored_info_card.dart';
 import 'mind_monthly_overlay_bar_chart.dart';
+import 'mind_sum_year_band_header.dart';
 import 'mind_temporal_content_header.dart';
 
 /// Immutable paint input for the Year comparison page. Full values intentionally
@@ -263,25 +264,6 @@ final class _MindYearHeatmapViewportState
     });
   }
 
-  void _setDirectGridLayout(MindYearHeatmapGridLayout next) {
-    if (next == _directGridLayout) return;
-    final owner = widget.presentationSettings;
-    if (owner is MindYearHeatmapPresentationController) {
-      owner.setYearGridLayout(next);
-      return;
-    }
-    // Isolated embedding callers without the session controller still obtain
-    // one immutable local presentation snapshot. Production CoreDashboard
-    // always supplies the canonical controller above.
-    setState(() {
-      _presentationSettings = _presentationSettings.copyWith(
-        yearGridLayout: next,
-        revision: _presentationSettings.revision + 1,
-      );
-      _directGridLayout = next;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     if (!_hasFrame) {
@@ -325,7 +307,6 @@ final class _MindYearHeatmapViewportState
         );
         _scheduleCalendarGeometryDiagnostics(year, geometries);
         final Widget heatmapPage;
-        MindYearHeatmapFourColumnFit? directFourColumnFit;
         if (_directGridLayout == MindYearHeatmapGridLayout.fourByThree) {
           final fit = MindYearHeatmapFourColumnFit.resolve(
             viewportHeight: math.max(
@@ -341,7 +322,6 @@ final class _MindYearHeatmapViewportState
             compactChrome: true,
             style: _presentationSettings.fourColumnCellStyle,
           );
-          directFourColumnFit = fit;
           heatmapPage = KeyedSubtree(
             key: const ValueKey('mind-year-heatmap-scroll'),
             child: SingleChildScrollView(
@@ -396,6 +376,8 @@ final class _MindYearHeatmapViewportState
                                         _presentationSettings.scaleResolution,
                                     showMonthlyClosing: false,
                                     showScopeAmount: false,
+                                    showHeaderScopeAmount: _presentationSettings
+                                        .showYearFourByThreeScopeAmounts,
                                     showMonthCard: false,
                                     monthlyAggregates: _monthlyAggregates,
                                     scopedMonthlyAggregates:
@@ -413,22 +395,6 @@ final class _MindYearHeatmapViewportState
                         ),
                       );
                     }, growable: false),
-                    if (fit.selectorPlacement ==
-                        MindYearFourColumnSelectorPlacement.bottomFreeRegion)
-                      SizedBox(
-                        height: fit.freeHeight,
-                        child: Center(
-                          child: KeyedSubtree(
-                            key: const ValueKey(
-                              'mind-year-direct-grid-selector-bottom',
-                            ),
-                            child: _MindYearDirectGridSelector(
-                              value: _directGridLayout,
-                              onChanged: _setDirectGridLayout,
-                            ),
-                          ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -485,6 +451,7 @@ final class _MindYearHeatmapViewportState
                           showScopeAmount:
                               _directGridLayout ==
                               MindYearHeatmapGridLayout.twoBySix,
+                          showHeaderScopeAmount: false,
                           showMonthCard: true,
                           showDayNumbers:
                               _directGridLayout ==
@@ -532,22 +499,6 @@ final class _MindYearHeatmapViewportState
                             titleKey: const ValueKey<String>(
                               'mind-year-direct-title',
                             ),
-                            trailing:
-                                _presentationSettings
-                                        .showYearMotherCardActions &&
-                                    directFourColumnFit?.selectorPlacement !=
-                                        MindYearFourColumnSelectorPlacement
-                                            .bottomFreeRegion
-                                ? KeyedSubtree(
-                                    key: const ValueKey(
-                                      'mind-year-direct-grid-selector-top',
-                                    ),
-                                    child: _MindYearDirectGridSelector(
-                                      value: _directGridLayout,
-                                      onChanged: _setDirectGridLayout,
-                                    ),
-                                  )
-                                : null,
                           ),
                         ),
                         Expanded(child: heatmapPage),
@@ -656,66 +607,6 @@ final class _MindYearDaySelection {
 
   final MindYearHeatmapDay day;
   final Offset anchor;
-}
-
-final class _MindYearDirectGridSelector extends StatelessWidget {
-  const _MindYearDirectGridSelector({
-    required this.value,
-    required this.onChanged,
-  });
-
-  final MindYearHeatmapGridLayout value;
-  final ValueChanged<MindYearHeatmapGridLayout> onChanged;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: <Widget>[
-      _button(
-        layout: MindYearHeatmapGridLayout.threeByFour,
-        key: const ValueKey<String>('mind-year-layout-selector-3x4'),
-        label: '3×4',
-      ),
-      const SizedBox(width: 3),
-      _button(
-        layout: MindYearHeatmapGridLayout.fourByThree,
-        key: const ValueKey<String>('mind-year-layout-selector-4x3'),
-        label: '4×3',
-      ),
-      const SizedBox(width: 3),
-      _button(
-        layout: MindYearHeatmapGridLayout.twoBySix,
-        key: const ValueKey<String>('mind-year-layout-selector-2x6'),
-        label: '2×6',
-      ),
-    ],
-  );
-
-  Widget _button({
-    required MindYearHeatmapGridLayout layout,
-    required Key key,
-    required String label,
-  }) => SizedBox(
-    height: 22,
-    child: OutlinedButton(
-      key: key,
-      onPressed: () => onChanged(layout),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        side: BorderSide(
-          color: value == layout
-              ? FluviVisualTokens.textSecondary
-              : FluviVisualTokens.textSecondary.withValues(alpha: .25),
-        ),
-        foregroundColor: FluviVisualTokens.textSecondary,
-        visualDensity: VisualDensity.compact,
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900),
-      ),
-    ),
-  );
 }
 
 final class _MindYearDayInfoCard extends StatelessWidget {
@@ -953,9 +844,6 @@ final class _MindYearMonthlyLinePage extends StatelessWidget {
 }
 
 @visibleForTesting
-enum MindYearFourColumnSelectorPlacement { topTitleRow, bottomFreeRegion }
-
-@visibleForTesting
 final class MindYearHeatmapFourColumnFit {
   const MindYearHeatmapFourColumnFit._({
     required this.annualViewportHeight,
@@ -969,7 +857,6 @@ final class MindYearHeatmapFourColumnFit {
     required this.resolvedContentHeight,
     required this.gridConsumedHeight,
     required this.freeHeight,
-    required this.selectorPlacement,
   });
 
   final double annualViewportHeight;
@@ -983,7 +870,6 @@ final class MindYearHeatmapFourColumnFit {
   final double resolvedContentHeight;
   final double gridConsumedHeight;
   final double freeHeight;
-  final MindYearFourColumnSelectorPlacement selectorPlacement;
 
   static MindYearHeatmapFourColumnFit resolve({
     required double viewportHeight,
@@ -1061,13 +947,6 @@ final class MindYearHeatmapFourColumnFit {
         rowHeights.fold<double>(0, (total, height) => total + height);
     final gridConsumedHeight = staticHeight + totalCalendarRows * cellHeight;
     final freeHeight = math.max(0.0, viewportHeight - gridConsumedHeight);
-    const selectorHeight = 22.0;
-    const selectorVerticalClearance = 8.0;
-    final selectorPlacement =
-        style == MindYearFourColumnCellStyle.squareCells &&
-            freeHeight >= selectorHeight + selectorVerticalClearance * 2
-        ? MindYearFourColumnSelectorPlacement.bottomFreeRegion
-        : MindYearFourColumnSelectorPlacement.topTitleRow;
     return MindYearHeatmapFourColumnFit._(
       annualViewportHeight: viewportHeight,
       staticHeight: staticHeight,
@@ -1080,7 +959,6 @@ final class MindYearHeatmapFourColumnFit {
       resolvedContentHeight: resolvedContentHeight,
       gridConsumedHeight: gridConsumedHeight,
       freeHeight: freeHeight,
-      selectorPlacement: selectorPlacement,
     );
   }
 }
@@ -1138,6 +1016,7 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
     this.scaleResolution = MindHeatmapScaleResolution.ten,
     this.showMonthlyClosing = false,
     this.showScopeAmount = false,
+    this.showHeaderScopeAmount = false,
     this.showMonthCard = false,
     this.showDayNumbers = false,
     this.monthCardBorderEnabled = true,
@@ -1179,6 +1058,10 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
   final MindHeatmapScaleResolution scaleResolution;
   final bool showMonthlyClosing;
   final bool showScopeAmount;
+
+  /// The direct 4×3 variant can render current range metadata in the existing
+  /// mini-header. This does not reserve a footer row or alter day geometry.
+  final bool showHeaderScopeAmount;
   final bool showMonthCard;
   final bool showDayNumbers;
   final bool monthCardBorderEnabled;
@@ -1281,21 +1164,66 @@ final class MindYearHeatmapMonthGroup extends StatelessWidget {
         children: <Widget>[
           SizedBox(
             height: titleHeight,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  DashboardTimeLabelFormatter.monthName(month),
-                  maxLines: 1,
-                  style: const TextStyle(
-                    color: FluviVisualTokens.textSecondary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        DashboardTimeLabelFormatter.monthName(month),
+                        key: ValueKey<String>('mind-year-month-name-$month'),
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: FluviVisualTokens.textSecondary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                if (showHeaderScopeAmount) const SizedBox(width: 2),
+                if (showHeaderScopeAmount)
+                  Flexible(
+                    child: ValueListenableBuilder<MindYearHeatmapFrame?>(
+                      valueListenable: frameListenable,
+                      builder: (context, frame, _) {
+                        final amount =
+                            (frame?.month(month) ??
+                                    const <MindYearHeatmapDay>[])
+                                .fold<int>(
+                                  0,
+                                  (sum, day) => sum + (day.total ?? 0),
+                                );
+                        return Align(
+                          alignment: Alignment.centerRight,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              formatMindCompactForints(
+                                amount ~/ 100,
+                                includeCurrencySuffix: false,
+                              ),
+                              key: ValueKey<String>(
+                                'mind-year-month-scope-total-$month',
+                              ),
+                              maxLines: 1,
+                              style: const TextStyle(
+                                color: FluviVisualTokens.textSecondary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
           ),
           SizedBox(height: titleBottomGap),

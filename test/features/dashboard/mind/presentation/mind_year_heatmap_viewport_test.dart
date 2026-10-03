@@ -26,7 +26,10 @@ void main() {
     'RED MYHR-04/05: 12 compact MonthCards form four calendar-driven annual rows',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -34,16 +37,14 @@ void main() {
             body: SizedBox(
               width: 280,
               height: 500,
-              child: MindYearHeatmapViewport(frameListenable: frame),
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
-
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-scroll')),
         findsOneWidget,
@@ -520,8 +521,11 @@ void main() {
     (tester) async {
       final frame = ValueNotifier(_inspectionProjection().preview(range));
       final scrollController = ScrollController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(frame.dispose);
       addTearDown(scrollController.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -532,16 +536,12 @@ void main() {
               child: MindYearHeatmapViewport(
                 frameListenable: frame,
                 scrollController: scrollController,
+                presentationSettings: settings,
               ),
             ),
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
-
       await tester.drag(
         find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
         const Offset(0, -100),
@@ -719,8 +719,11 @@ void main() {
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
       final scrollController = ScrollController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(frame.dispose);
       addTearDown(scrollController.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -734,6 +737,7 @@ void main() {
                     child: MindYearHeatmapViewport(
                       frameListenable: frame,
                       scrollController: scrollController,
+                      presentationSettings: settings,
                     ),
                   ),
                   SizedBox(
@@ -751,10 +755,6 @@ void main() {
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
       final footerBefore = tester.getRect(
         find.byKey(const ValueKey('mind-year-heatmap-fixed-footer')),
       );
@@ -783,22 +783,24 @@ void main() {
     (tester) async {
       final projection = _projection();
       final frame = ValueNotifier(projection.preview(range));
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SizedBox(
               width: 360,
               height: 480,
-              child: MindYearHeatmapViewport(frameListenable: frame),
+              child: MindYearHeatmapViewport(
+                frameListenable: frame,
+                presentationSettings: settings,
+              ),
             ),
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
       final gridBefore = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
       );
@@ -1000,8 +1002,11 @@ void main() {
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
       final scrollController = ScrollController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(frame.dispose);
       addTearDown(scrollController.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1012,15 +1017,12 @@ void main() {
               child: MindYearHeatmapViewport(
                 frameListenable: frame,
                 scrollController: scrollController,
+                presentationSettings: settings,
               ),
             ),
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
 
       final grid = tester.widget<ListView>(
         find.byKey(const ValueKey('mind-year-heatmap-grid')),
@@ -1196,21 +1198,23 @@ void main() {
       monthlyAggregates: aggregates,
     );
     final frame = ValueNotifier(projection.preview(range));
+    final settings = MindYearHeatmapPresentationController()
+      ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
     addTearDown(frame.dispose);
+    addTearDown(settings.dispose);
 
     await tester.pumpWidget(
       MaterialApp(
         home: SizedBox(
           width: 360,
           height: 500,
-          child: MindYearHeatmapViewport(frameListenable: frame),
+          child: MindYearHeatmapViewport(
+            frameListenable: frame,
+            presentationSettings: settings,
+          ),
         ),
       ),
     );
-    await tester.tap(
-      find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-    );
-    await tester.pump();
     expect(find.text('Zárás'), findsNothing);
     expect(find.text('Scope'), findsNothing);
 
@@ -1252,11 +1256,6 @@ void main() {
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
-      );
-      await tester.pump();
-
       expect(find.byType(MindYearHeatmapMonthGroup), findsNWidgets(12));
       expect(
         find.byKey(const ValueKey('mind-year-heatmap-annual-row-0')),
@@ -1314,39 +1313,24 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-ACTIONS-01 RED: the Year mother-card top-right action follows the persisted visibility preference',
+    'YEAR-SETTINGS-ONLY-01: the Year content card never exposes layout pills',
     (tester) async {
-      final settings = MindYearHeatmapPresentationController()
-        ..setYearGridLayout(MindYearHeatmapGridLayout.fourByThree);
       final frame = ValueNotifier(_projection().preview(range));
-      addTearDown(settings.dispose);
       addTearDown(frame.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 360,
-              height: 420,
-              child: MindYearHeatmapViewport(
-                frameListenable: frame,
-                presentationSettings: settings,
-              ),
-            ),
+          home: SizedBox(
+            width: 360,
+            height: 420,
+            child: MindYearHeatmapViewport(frameListenable: frame),
           ),
         ),
       );
 
-      expect(
-        find.byKey(const ValueKey('mind-year-direct-grid-selector-top')),
-        findsOneWidget,
-      );
-      settings.setShowYearMotherCardActions(false);
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('mind-year-direct-grid-selector-top')),
-        findsNothing,
-      );
+      for (final label in <String>['3×4', '4×3', '2×6']) {
+        expect(find.text(label), findsNothing);
+      }
     },
   );
 
@@ -1380,7 +1364,7 @@ void main() {
   );
 
   test(
-    'RED MIND-SQ-02: square 4x3 cells reserve a calculated lower selector zone',
+    'MIND-SQ-02: square 4x3 cells preserve their calculated free region without a body selector',
     () {
       final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
         12,
@@ -1403,17 +1387,13 @@ void main() {
       );
 
       expect(fit.cellHeight, closeTo(fit.cellWidth, .0001));
-      expect(fit.freeHeight, greaterThan(22 + 16));
-      expect(
-        fit.selectorPlacement,
-        MindYearFourColumnSelectorPlacement.bottomFreeRegion,
-      );
+      expect(fit.freeHeight, greaterThan(0));
       expect(fit.gridConsumedHeight, lessThan(fit.annualViewportHeight));
     },
   );
 
   test(
-    'RED MIND-SQ-02: constrained square 4x3 keeps the one selector in the title row',
+    'MIND-SQ-02: constrained square 4x3 retains its fixed day-cell geometry',
     () {
       final geometries = List<MindYearHeatmapCalendarGeometry>.generate(
         12,
@@ -1436,15 +1416,11 @@ void main() {
       );
 
       expect(fit.cellHeight, closeTo(fit.cellWidth, .0001));
-      expect(
-        fit.selectorPlacement,
-        MindYearFourColumnSelectorPlacement.topTitleRow,
-      );
     },
   );
 
   testWidgets(
-    'MIND-SQ-02: tall square 4x3 mounts one bottom selector inside the calculated free region',
+    'MIND-SQ-02: tall square 4x3 keeps the free region free of layout controls',
     (tester) async {
       final settings = MindYearHeatmapPresentationController()
         ..setFourColumnCellStyle(MindYearFourColumnCellStyle.squareCells);
@@ -1467,25 +1443,9 @@ void main() {
         ),
       );
 
-      expect(
-        find.byKey(const ValueKey('mind-year-direct-grid-selector-bottom')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('mind-year-direct-grid-selector-top')),
-        findsNothing,
-      );
-      final selector = tester.getRect(
-        find.byKey(const ValueKey('mind-year-direct-grid-selector-bottom')),
-      );
-      final december = tester.getRect(
-        find.byKey(const ValueKey('mind-year-direct-month-12')),
-      );
-      final viewport = tester.getRect(
-        find.byKey(const ValueKey('mind-year-heatmap-fit-scroll')),
-      );
-      expect(selector.top, greaterThanOrEqualTo(december.bottom + 8));
-      expect(selector.bottom, lessThanOrEqualTo(viewport.bottom - 8));
+      expect(find.text('3×4'), findsNothing);
+      expect(find.text('4×3'), findsNothing);
+      expect(find.text('2×6'), findsNothing);
     },
   );
 
@@ -1649,10 +1609,6 @@ void main() {
           ),
         );
         await tester.tap(
-          find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
-        );
-        await tester.pump();
-        await tester.tap(
           find.byKey(const ValueKey('mind-year-heatmap-day-tap-2025-1-2')),
         );
         await tester.pump();
@@ -1696,10 +1652,6 @@ void main() {
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-4x3')),
-      );
-      await tester.pump();
       expect(scrollController.position.maxScrollExtent, closeTo(0, .001));
       expect(
         find.byKey(const ValueKey('mind-year-direct-month-1')),
@@ -1712,7 +1664,8 @@ void main() {
   testWidgets(
     'Y26-01/02/03/04/05 RED: 2x6 renders card-only chrome, monthly values and Month-style day numbers',
     (tester) async {
-      final settings = MindYearHeatmapPresentationController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.twoBySix);
       final frame = ValueNotifier(_inspectionProjection().preview(range));
       addTearDown(settings.dispose);
       addTearDown(frame.dispose);
@@ -1730,15 +1683,6 @@ void main() {
           ),
         ),
       );
-
-      expect(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-2x6')),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-2x6')),
-      );
-      await tester.pump();
 
       expect(find.byType(MindYearHeatmapMonthGroup), findsAtLeastNWidgets(4));
       expect(
@@ -1811,9 +1755,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
+      settings.setYearGridLayout(MindYearHeatmapGridLayout.fourByThree);
       await tester.pump();
       expect(
         find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
@@ -1831,7 +1773,7 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-DIRECT-01/02/04: fresh Year uses direct 4x3 while the selector remains user-changeable',
+    'YEAR-DIRECT-01/02/04: fresh Year uses direct 4x3 without content selectors',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
       addTearDown(frame.dispose);
@@ -1851,18 +1793,9 @@ void main() {
         find.byKey(const ValueKey<String>('mind-year-direct-title')),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-3x4')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-2x6')),
-        findsOneWidget,
-      );
+      expect(find.text('3×4'), findsNothing);
+      expect(find.text('4×3'), findsNothing);
+      expect(find.text('2×6'), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('mind-year-direct-month-1')),
         findsOneWidget,
@@ -1870,10 +1803,6 @@ void main() {
       expect(find.text('Scope'), findsNothing);
       expect(find.text('Zárás'), findsNothing);
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
-      await tester.pump();
       final annualScroll = tester.state<ScrollableState>(
         find
             .descendant(
@@ -1893,31 +1822,30 @@ void main() {
     'YEAR-PROFIT-01 RED: 3x4 keeps a rounded MonthCard surface while 4x3 remains untouched',
     (tester) async {
       final frame = ValueNotifier(_projection().preview(range));
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(frame.dispose);
+      addTearDown(settings.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
           home: SizedBox(
             width: 390,
             height: 440,
-            child: MindYearHeatmapViewport(frameListenable: frame),
+            child: MindYearHeatmapViewport(
+              frameListenable: frame,
+              presentationSettings: settings,
+            ),
           ),
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('mind-year-layout-selector-3x4')),
-      );
-      await tester.pump();
-
       expect(
         find.byKey(const ValueKey<String>('mind-year-month-card-surface-1')),
         findsOneWidget,
         reason: 'Every 3x4 month must remain inside its own rounded card.',
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
+      settings.setYearGridLayout(MindYearHeatmapGridLayout.fourByThree);
       await tester.pump();
 
       expect(
@@ -2077,6 +2005,108 @@ void main() {
       await tester.pump();
       expect(cardDecoration(1).color, FluviVisualTokens.surface);
       expect(cardDecoration(2).color, FluviVisualTokens.surface);
+    },
+  );
+
+  testWidgets(
+    'YEAR-SCOPE-01/02/03: direct 4x3 month headers show live scope totals on their existing row only when enabled',
+    (tester) async {
+      final settings = MindYearHeatmapPresentationController();
+      final frame = ValueNotifier(_projection().preview(range));
+      addTearDown(settings.dispose);
+      addTearDown(frame.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 390,
+            height: 440,
+            child: MindYearHeatmapViewport(
+              frameListenable: frame,
+              presentationSettings: settings,
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-scope-total-1')),
+        findsOneWidget,
+        reason:
+            'The January scope amount must occupy the existing 4x3 mini-header row.',
+      );
+      for (var month = 1; month <= 12; month += 1) {
+        expect(
+          find.byKey(ValueKey<String>('mind-year-month-scope-total-$month')),
+          findsOneWidget,
+        );
+      }
+      final januaryName = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-year-month-name-1')),
+      );
+      final januaryAmount = tester.getRect(
+        find.byKey(const ValueKey<String>('mind-year-month-scope-total-1')),
+      );
+      expect(januaryName.center.dy, closeTo(januaryAmount.center.dy, .01));
+      expect(januaryAmount.top, closeTo(januaryName.top, .01));
+      expect(januaryAmount.bottom, closeTo(januaryName.bottom, .01));
+      final amountText = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-year-month-scope-total-1')),
+      );
+      final nameText = tester.widget<Text>(
+        find.byKey(const ValueKey<String>('mind-year-month-name-1')),
+      );
+      expect(amountText.data, '1 k');
+      expect(amountText.style?.color, nameText.style?.color);
+      expect(amountText.style?.fontSize, nameText.style?.fontSize);
+      expect(find.byType(MindYearHeatmapMonthGroup), findsNWidgets(12));
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-month-cells-1')),
+        findsOneWidget,
+      );
+
+      frame.value = _projection().preview(
+        const QueryAmountRangeValues(
+          minimumScaled100: 100000,
+          maximumScaled100: 1000000,
+          lowerScaled100: 200000,
+          upperScaled100: 1000000,
+        ),
+      );
+      await tester.pump();
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey<String>('mind-year-month-scope-total-1'),
+              ),
+            )
+            .data,
+        '0',
+        reason: 'The header consumes the current range-preview day totals.',
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(
+                const ValueKey<String>('mind-year-month-scope-total-9'),
+              ),
+            )
+            .data,
+        '9 k',
+      );
+
+      settings.setShowYearFourByThreeScopeAmounts(false);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-month-scope-total-1')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('mind-year-heatmap-month-cells-1')),
+        findsOneWidget,
+        reason: 'The switch changes header metadata only, not heatmap cells.',
+      );
     },
   );
 }

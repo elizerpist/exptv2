@@ -24,14 +24,22 @@ final class MethodChannelDashboardPresentationPreferencesStore
       );
       if (values == null) return DashboardPresentationPreferences.defaults;
       final styleIndex = values['sumVisualStyle'] as int? ?? 0;
+      final yearGridLayoutIndex =
+          values['yearGridLayout'] as int? ??
+          MindYearHeatmapGridLayout.fourByThree.index;
       return DashboardPresentationPreferences(
         sumVisualStyle:
             styleIndex >= 0 && styleIndex < MindSumVisualStyle.values.length
             ? MindSumVisualStyle.values[styleIndex]
             : MindSumVisualStyle.current,
         showSumLayoutChooser: values['showSumLayoutChooser'] as bool? ?? true,
-        showYearMotherCardActions:
-            values['showYearMotherCardActions'] as bool? ?? true,
+        yearGridLayout:
+            yearGridLayoutIndex >= 0 &&
+                yearGridLayoutIndex < MindYearHeatmapGridLayout.values.length
+            ? MindYearHeatmapGridLayout.values[yearGridLayoutIndex]
+            : MindYearHeatmapGridLayout.fourByThree,
+        showYearFourByThreeScopeAmounts:
+            values['showYearFourByThreeScopeAmounts'] as bool? ?? true,
         balanceUsesChildCards: values['balanceUsesChildCards'] as bool? ?? true,
       );
     } on PlatformException {
@@ -48,7 +56,9 @@ final class MethodChannelDashboardPresentationPreferencesStore
         <String, Object>{
           'sumVisualStyle': preferences.sumVisualStyle.index,
           'showSumLayoutChooser': preferences.showSumLayoutChooser,
-          'showYearMotherCardActions': preferences.showYearMotherCardActions,
+          'yearGridLayout': preferences.yearGridLayout.index,
+          'showYearFourByThreeScopeAmounts':
+              preferences.showYearFourByThreeScopeAmounts,
           'balanceUsesChildCards': preferences.balanceUsesChildCards,
         },
       );

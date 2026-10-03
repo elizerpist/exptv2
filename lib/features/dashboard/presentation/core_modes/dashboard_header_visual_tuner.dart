@@ -1363,13 +1363,38 @@ final class _MindYearHeatmapPresentationSection extends StatelessWidget {
           value: settings.showSumLayoutChooser,
           onChanged: controller.setShowSumLayoutChooser,
         ),
+        const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text('Éves elrendezés'),
+        ),
+        RadioGroup<MindYearHeatmapGridLayout>(
+          groupValue: settings.yearGridLayout,
+          onChanged: (layout) {
+            if (layout != null) controller.setYearGridLayout(layout);
+          },
+          child: Column(
+            children: <Widget>[
+              for (final layout in MindYearHeatmapGridLayout.values)
+                RadioListTile<MindYearHeatmapGridLayout>(
+                  key: ValueKey<String>('mind-year-grid-layout-${layout.name}'),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(layout.tunerLabel),
+                  value: layout,
+                ),
+            ],
+          ),
+        ),
         SwitchListTile(
-          key: const ValueKey('mind-year-actions-visible'),
+          key: const ValueKey<String>(
+            'mind-year-four-by-three-scope-amounts-visible',
+          ),
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text('Év mother card jobb felső gombjai'),
-          value: settings.showYearMotherCardActions,
-          onChanged: controller.setShowYearMotherCardActions,
+          title: const Text('Éves 4×3 havi összegek'),
+          subtitle: const Text('Az aktuális összegszűrő szerint'),
+          value: settings.showYearFourByThreeScopeAmounts,
+          onChanged: controller.setShowYearFourByThreeScopeAmounts,
         ),
         const Padding(
           padding: EdgeInsets.only(top: 4),

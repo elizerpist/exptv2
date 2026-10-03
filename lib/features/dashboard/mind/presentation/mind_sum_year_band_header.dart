@@ -6,8 +6,13 @@ import '../domain/mind_temporal_heatmap_projection.dart';
 
 /// Format an already-admitted annual total for the compact Sum band header.
 /// This is formatting only; the immutable frame remains the financial owner.
-String formatMindCompactForints(int forints) =>
-    DashboardPreparedFormatter.compactForints(forints);
+String formatMindCompactForints(
+  int forints, {
+  bool includeCurrencySuffix = true,
+}) => DashboardPreparedFormatter.compactForints(
+  forints,
+  includeCurrencySuffix: includeCurrencySuffix,
+);
 
 /// Shared visual header for every annually stacked Sum renderer. Detailed
 /// lines and monthly overlay bars therefore share year placement, typography,

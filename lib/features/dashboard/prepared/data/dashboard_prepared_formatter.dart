@@ -15,17 +15,23 @@ abstract final class DashboardPreparedFormatter {
 
   /// Shared compact whole-HUF formatter. Mind's annual labels and Balance
   /// carousel previews intentionally use the same `k Ft` / `M Ft` grammar.
-  static String compactForints(int forints) {
+  /// Dense repeated metadata can omit only the repeated currency suffix while
+  /// retaining the exact same compact magnitude and locale convention.
+  static String compactForints(
+    int forints, {
+    bool includeCurrencySuffix = true,
+  }) {
     final absolute = forints.abs();
     final sign = forints < 0 ? '-' : '';
+    final suffix = includeCurrencySuffix ? ' Ft' : '';
     if (absolute >= 1000000) {
       final millions = (absolute / 1000000)
           .toStringAsFixed(2)
           .replaceAll('.', ',');
-      return '$sign$millions M Ft';
+      return '$sign$millions M$suffix';
     }
-    if (absolute >= 1000) return '$sign${(absolute / 1000).round()} k Ft';
-    return '$forints Ft';
+    if (absolute >= 1000) return '$sign${(absolute / 1000).round()} k$suffix';
+    return '$forints$suffix';
   }
 
   /// Presentation copy for the DAY Budget Header. Domain pace values remain

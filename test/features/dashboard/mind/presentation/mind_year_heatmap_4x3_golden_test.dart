@@ -44,7 +44,7 @@ void main() {
   );
 
   testWidgets(
-    'VIS-4x3-SQUARE: the optional square field places the one selector in its lower free region',
+    'VIS-4x3-SQUARE: the optional square field remains selector-free in its lower free region',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(430, 560));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -73,10 +73,9 @@ void main() {
         ),
       );
 
-      expect(
-        find.byKey(const ValueKey('mind-year-direct-grid-selector-bottom')),
-        findsOneWidget,
-      );
+      expect(find.text('3×4'), findsNothing);
+      expect(find.text('4×3'), findsNothing);
+      expect(find.text('2×6'), findsNothing);
       await expectLater(
         find.byKey(
           const ValueKey<String>('mind-year-4x3-square-golden-boundary'),

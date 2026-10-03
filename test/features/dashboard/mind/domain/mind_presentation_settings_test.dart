@@ -59,6 +59,7 @@ void main() {
           MindYearHeatmapGridLayout.fourByThree,
         );
         expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+        expect(controller.value.showYearFourByThreeScopeAmounts, isTrue);
         expect(
           controller.value.fourColumnCellStyle,
           MindYearFourColumnCellStyle.fillHeight,
@@ -66,6 +67,7 @@ void main() {
 
         controller.setYearGridLayout(MindYearHeatmapGridLayout.twoBySix);
         controller.setYearMonthCardBorderEnabled(true);
+        controller.setShowYearFourByThreeScopeAmounts(false);
         controller.setFourColumnCellStyle(
           MindYearFourColumnCellStyle.squareCells,
         );
@@ -74,6 +76,7 @@ void main() {
           MindYearHeatmapGridLayout.twoBySix,
         );
         expect(controller.value.yearMonthCardBorderEnabled, isTrue);
+        expect(controller.value.showYearFourByThreeScopeAmounts, isFalse);
         expect(
           controller.value.fourColumnCellStyle,
           MindYearFourColumnCellStyle.squareCells,
@@ -85,6 +88,7 @@ void main() {
           MindYearHeatmapGridLayout.fourByThree,
         );
         expect(controller.value.yearMonthCardBorderEnabled, isFalse);
+        expect(controller.value.showYearFourByThreeScopeAmounts, isTrue);
         expect(
           controller.value.fourColumnCellStyle,
           MindYearFourColumnCellStyle.fillHeight,
@@ -108,6 +112,27 @@ void main() {
       );
       expect(controller.value.revision, 0);
     });
+
+    test(
+      'YEAR-SCOPE-SETTINGS-01: the 4x3 scope-total switch is presentation-only, revisioned and value-equal',
+      () {
+        final controller = MindYearHeatmapPresentationController();
+        addTearDown(controller.dispose);
+
+        final defaults = controller.value;
+        final hidden = defaults.copyWith(
+          showYearFourByThreeScopeAmounts: false,
+        );
+        expect(hidden, isNot(defaults));
+        expect(hidden.hashCode, isNot(defaults.hashCode));
+
+        controller.setShowYearFourByThreeScopeAmounts(false);
+        expect(controller.value.showYearFourByThreeScopeAmounts, isFalse);
+        expect(controller.value.revision, 1);
+        controller.setShowYearFourByThreeScopeAmounts(false);
+        expect(controller.value.revision, 1);
+      },
+    );
 
     test(
       'SUM-VARIANT-01 RED: Current, SUM-A, SUM-B and Mikronapok are one local presentation preference',

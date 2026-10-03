@@ -77,9 +77,55 @@ void main() {
         );
         expect(comparison.hour(hour).selectedTotal, greaterThan(0));
       }
+      expect(comparison.hours.where((hour) => hour.fullTotal > 0).length, 4);
+    },
+  );
+
+  test(
+    'DAYHOUR-03: one hour sums every admitted transaction and shrinks at the same full-hour scale',
+    () {
+      const full = <MindDayTimelineEvent>[
+        MindDayTimelineEvent(ordinal: 1, timeMinutes: 8 * 60 + 4, total: 2000),
+        MindDayTimelineEvent(
+          ordinal: 2,
+          timeMinutes: 8 * 60 + 17,
+          total: 15000,
+        ),
+        MindDayTimelineEvent(
+          ordinal: 3,
+          timeMinutes: 8 * 60 + 31,
+          total: 47000,
+        ),
+        MindDayTimelineEvent(
+          ordinal: 4,
+          timeMinutes: 8 * 60 + 52,
+          total: 90000,
+        ),
+      ];
+
+      final atTenThousand = MindDayHourlyComparisonProjection.build(
+        fullEvents: full,
+        selectedEvents: full.where((event) => event.total >= 10000),
+      );
+      final atTwentyThousand = MindDayHourlyComparisonProjection.build(
+        fullEvents: full,
+        selectedEvents: full.where((event) => event.total >= 20000),
+      );
+      final atFiftyThousand = MindDayHourlyComparisonProjection.build(
+        fullEvents: full,
+        selectedEvents: full.where((event) => event.total >= 50000),
+      );
+
+      expect(atTenThousand.hour(8).fullTotal, 154000);
+      expect(atTenThousand.hour(8).selectedTotal, 152000);
+      expect(atTwentyThousand.hour(8).fullTotal, 154000);
+      expect(atTwentyThousand.hour(8).selectedTotal, 137000);
+      expect(atFiftyThousand.hour(8).fullTotal, 154000);
+      expect(atFiftyThousand.hour(8).selectedTotal, 90000);
+      expect(atFiftyThousand.maximumFullTotal, 154000);
       expect(
-        comparison.hours.where((hour) => hour.fullTotal > 0).length,
-        4,
+        atFiftyThousand.hour(8).selectedFraction,
+        closeTo(90000 / 154000, .000001),
       );
     },
   );

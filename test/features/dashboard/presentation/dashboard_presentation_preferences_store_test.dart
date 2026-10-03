@@ -21,7 +21,8 @@ void main() {
         return <String, Object?>{
           'sumVisualStyle': MindSumVisualStyle.sumB.index,
           'showSumLayoutChooser': false,
-          'showYearMotherCardActions': false,
+          'yearGridLayout': MindYearHeatmapGridLayout.twoBySix.index,
+          'showYearFourByThreeScopeAmounts': false,
           'balanceUsesChildCards': false,
         };
       });
@@ -31,7 +32,8 @@ void main() {
 
       expect(preferences.sumVisualStyle, MindSumVisualStyle.sumB);
       expect(preferences.showSumLayoutChooser, isFalse);
-      expect(preferences.showYearMotherCardActions, isFalse);
+      expect(preferences.yearGridLayout, MindYearHeatmapGridLayout.twoBySix);
+      expect(preferences.showYearFourByThreeScopeAmounts, isFalse);
       expect(preferences.balanceUsesChildCards, isFalse);
     },
   );
@@ -47,7 +49,8 @@ void main() {
       const DashboardPresentationPreferences(
         sumVisualStyle: MindSumVisualStyle.sumA,
         showSumLayoutChooser: false,
-        showYearMotherCardActions: true,
+        yearGridLayout: MindYearHeatmapGridLayout.threeByFour,
+        showYearFourByThreeScopeAmounts: true,
         balanceUsesChildCards: false,
       ),
     );
@@ -56,7 +59,8 @@ void main() {
     expect(request?.arguments, <String, Object>{
       'sumVisualStyle': MindSumVisualStyle.sumA.index,
       'showSumLayoutChooser': false,
-      'showYearMotherCardActions': true,
+      'yearGridLayout': MindYearHeatmapGridLayout.threeByFour.index,
+      'showYearFourByThreeScopeAmounts': true,
       'balanceUsesChildCards': false,
     });
   });

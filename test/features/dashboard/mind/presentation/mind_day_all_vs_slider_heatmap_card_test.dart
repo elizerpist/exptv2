@@ -11,7 +11,7 @@ import 'package:fluvi/features/dashboard/time_navigation/domain/local_date.dart'
 
 void main() {
   testWidgets(
-    'DAYFIX-04 RED: renders capacity, full-day and selected native layers for each hour',
+    'DAY-TWO-LAYER-01 RED: renders only a full reference bar and selected foreground for an active hour',
     (tester) async {
       final frame = MindDayHeatmapFrame(
         identity: const MindTemporalHeatmapIdentity(
@@ -77,30 +77,20 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('mind-day-all-slider-full-08')),
+        find.byKey(const ValueKey('mind-day-all-slider-reference-08')),
         findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('mind-day-all-slider-capacity-08')),
-        findsOneWidget,
-        reason: 'The neutral 100% capacity bar remains behind both values.',
+        findsNothing,
+        reason:
+            'There is no always-present capacity track in the two-layer model.',
       );
       expect(
         tester
             .getSize(
-              find.byKey(const ValueKey('mind-day-all-slider-capacity-08')),
+              find.byKey(const ValueKey('mind-day-all-slider-reference-08')),
             )
-            .height,
-        tester
-            .getSize(
-              find.byKey(const ValueKey('mind-day-all-slider-capacity-18')),
-            )
-            .height,
-        reason: 'Every neutral capacity bar uses the common 100% envelope.',
-      );
-      expect(
-        tester
-            .getSize(find.byKey(const ValueKey('mind-day-all-slider-full-08')))
             .height,
         greaterThan(
           tester
@@ -114,6 +104,32 @@ void main() {
       expect(
         find.byKey(const ValueKey('mind-day-all-slider-selected-08')),
         findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-all-slider-full-08')),
+        findsNothing,
+        reason: 'The reduced-opacity full-total palette layer was removed.',
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-all-slider-reference-00')),
+        findsNothing,
+        reason: 'A genuinely empty hour has no reference bar or empty track.',
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-all-slider-selected-00')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-all-slider-reference-18')),
+        findsOneWidget,
+        reason:
+            'An hour excluded by the current range retains its full-scope '
+            'neutral reference.',
+      );
+      expect(
+        find.byKey(const ValueKey('mind-day-all-slider-selected-18')),
+        findsNothing,
+        reason: 'Only the admitted filtered foreground disappears.',
       );
       expect(find.text('Teljes nap'), findsOneWidget);
       expect(find.text('Aktuális szűrő'), findsOneWidget);
@@ -272,17 +288,13 @@ void main() {
   );
 
   testWidgets(
-    'DAYHOUR-02 RED: every non-empty local hour retains a visible full-day bar',
+    'DAYHOUR-02: every non-empty local hour retains a visible reference bar and the full range covers it',
     (tester) async {
       const fullEvents = <MindDayTimelineEvent>[
         MindDayTimelineEvent(ordinal: 1, timeMinutes: 2 * 60, total: 100),
         MindDayTimelineEvent(ordinal: 2, timeMinutes: 7 * 60, total: 250),
         MindDayTimelineEvent(ordinal: 3, timeMinutes: 12 * 60, total: 600),
-        MindDayTimelineEvent(
-          ordinal: 4,
-          timeMinutes: 18 * 60,
-          total: 30_000,
-        ),
+        MindDayTimelineEvent(ordinal: 4, timeMinutes: 18 * 60, total: 30_000),
       ];
       final frame = MindDayHeatmapFrame(
         identity: const MindTemporalHeatmapIdentity(
@@ -331,12 +343,27 @@ void main() {
       for (final hour in <String>['02', '07', '12', '18']) {
         expect(
           tester
-              .getSize(find.byKey(ValueKey<String>('mind-day-all-slider-full-$hour')))
+              .getSize(
+                find.byKey(
+                  ValueKey<String>('mind-day-all-slider-reference-$hour'),
+                ),
+              )
               .height,
           greaterThanOrEqualTo(4),
           reason:
               'A transaction at $hour:00 must remain visibly represented, '
               'even when another hour has a much larger amount.',
+        );
+        expect(
+          tester.getRect(
+            find.byKey(ValueKey<String>('mind-day-all-slider-selected-$hour')),
+          ),
+          tester.getRect(
+            find.byKey(ValueKey<String>('mind-day-all-slider-reference-$hour')),
+          ),
+          reason:
+              'At the full range, the opaque foreground completely covers '
+              'the neutral reference at $hour:00.',
         );
       }
     },

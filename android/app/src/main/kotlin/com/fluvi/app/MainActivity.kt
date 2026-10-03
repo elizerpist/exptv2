@@ -255,7 +255,8 @@ class MainActivity : FlutterActivity() {
                         mapOf(
                             "sumVisualStyle" to preferences.getInt("sumVisualStyle", 0),
                             "showSumLayoutChooser" to preferences.getBoolean("showSumLayoutChooser", true),
-                            "showYearMotherCardActions" to preferences.getBoolean("showYearMotherCardActions", true),
+                            "yearGridLayout" to preferences.getInt("yearGridLayout", 1),
+                            "showYearFourByThreeScopeAmounts" to preferences.getBoolean("showYearFourByThreeScopeAmounts", true),
                             "balanceUsesChildCards" to preferences.getBoolean("balanceUsesChildCards", true),
                         ),
                     )
@@ -264,17 +265,21 @@ class MainActivity : FlutterActivity() {
                             ?: throw IllegalArgumentException("Dashboard presentation settings must be a map.")
                         val sumStyle = (values["sumVisualStyle"] as? Number)?.toInt()
                             ?: throw IllegalArgumentException("Missing SUM visual style.")
-                        require(sumStyle in 0..2) { "Invalid SUM visual style." }
+                        require(sumStyle in 0..3) { "Invalid SUM visual style." }
                         val sumChooser = values["showSumLayoutChooser"] as? Boolean
                             ?: throw IllegalArgumentException("Missing SUM layout chooser visibility.")
-                        val yearActions = values["showYearMotherCardActions"] as? Boolean
-                            ?: throw IllegalArgumentException("Missing Year action visibility.")
+                        val yearGridLayout = (values["yearGridLayout"] as? Number)?.toInt()
+                            ?: throw IllegalArgumentException("Missing Year grid layout.")
+                        require(yearGridLayout in 0..2) { "Invalid Year grid layout." }
+                        val showYearFourByThreeScopeAmounts = values["showYearFourByThreeScopeAmounts"] as? Boolean
+                            ?: throw IllegalArgumentException("Missing Year 4x3 scope-total visibility.")
                         val balanceChildren = values["balanceUsesChildCards"] as? Boolean
                             ?: throw IllegalArgumentException("Missing Balance child-card visibility.")
                         preferences.edit()
                             .putInt("sumVisualStyle", sumStyle)
                             .putBoolean("showSumLayoutChooser", sumChooser)
-                            .putBoolean("showYearMotherCardActions", yearActions)
+                            .putInt("yearGridLayout", yearGridLayout)
+                            .putBoolean("showYearFourByThreeScopeAmounts", showYearFourByThreeScopeAmounts)
                             .putBoolean("balanceUsesChildCards", balanceChildren)
                             .apply()
                         result.success(null)

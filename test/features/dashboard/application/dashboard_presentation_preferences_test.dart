@@ -17,7 +17,8 @@ void main() {
         const DashboardPresentationPreferences(
           sumVisualStyle: MindSumVisualStyle.sumB,
           showSumLayoutChooser: false,
-          showYearMotherCardActions: false,
+          yearGridLayout: MindYearHeatmapGridLayout.twoBySix,
+          showYearFourByThreeScopeAmounts: false,
           balanceUsesChildCards: false,
         ),
       );
@@ -28,7 +29,8 @@ void main() {
       await restored.restore();
       expect(restored.value.sumVisualStyle, MindSumVisualStyle.sumB);
       expect(restored.value.showSumLayoutChooser, isFalse);
-      expect(restored.value.showYearMotherCardActions, isFalse);
+      expect(restored.value.yearGridLayout, MindYearHeatmapGridLayout.twoBySix);
+      expect(restored.value.showYearFourByThreeScopeAmounts, isFalse);
       expect(restored.value.balanceUsesChildCards, isFalse);
     },
   );

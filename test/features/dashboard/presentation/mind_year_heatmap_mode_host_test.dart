@@ -738,10 +738,6 @@ void main() {
           presentationSettings: settings,
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
-      await tester.pump();
       final inline = find.byKey(
         const ValueKey<String>('mind-heatmap-inline-legend'),
       );
@@ -1307,10 +1303,6 @@ void main() {
           presentationSettings: settings,
         ),
       );
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
-      await tester.pump();
       final scroll = tester.state<ScrollableState>(
         find
             .descendant(
@@ -1326,14 +1318,15 @@ void main() {
   );
 
   testWidgets(
-    'YEAR-HEIGHT-02: local 3x4 and 4x3 selector keeps one outer Mind envelope',
+    'YEAR-HEIGHT-02: Settings-selected 3x4 and 4x3 layouts keep one outer Mind envelope',
     (tester) async {
       final mode = DashboardCoreModeController(
         initialMode: DashboardModeSpec.mind,
       );
       final frame = ValueNotifier<MindYearHeatmapFrame?>(_frame());
       final rangeChanges = ValueNotifier<int>(0);
-      final settings = MindYearHeatmapPresentationController();
+      final settings = MindYearHeatmapPresentationController()
+        ..setYearGridLayout(MindYearHeatmapGridLayout.threeByFour);
       addTearDown(mode.dispose);
       addTearDown(frame.dispose);
       addTearDown(rangeChanges.dispose);
@@ -1353,9 +1346,7 @@ void main() {
         find.byKey(const ValueKey('mind-temporal-content-viewport')),
       );
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('mind-year-layout-selector-4x3')),
-      );
+      settings.setYearGridLayout(MindYearHeatmapGridLayout.fourByThree);
       await tester.pump();
       final fourColumnContent = tester.getRect(
         find.byKey(const ValueKey('mind-temporal-content-viewport')),

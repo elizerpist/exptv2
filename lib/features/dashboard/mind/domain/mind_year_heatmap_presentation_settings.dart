@@ -206,7 +206,7 @@ final class MindYearHeatmapPresentationSettings {
     this.sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
     this.sumVisualStyle = MindSumVisualStyle.current,
     this.showSumLayoutChooser = true,
-    this.showYearMotherCardActions = true,
+    this.showYearFourByThreeScopeAmounts = true,
     this.sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
     this.sumVisibleChartCount = MindSumVisibleChartCount.two,
     this.yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
@@ -231,7 +231,7 @@ final class MindYearHeatmapPresentationSettings {
       sumYearRowLayout = MindSumYearRowLayout.twoRowExpanded,
       sumVisualStyle = MindSumVisualStyle.current,
       showSumLayoutChooser = true,
-      showYearMotherCardActions = true,
+      showYearFourByThreeScopeAmounts = true,
       sumMonthLabelPlacement = MindSumMonthLabelPlacement.none,
       sumVisibleChartCount = MindSumVisibleChartCount.two,
       yearGridLayout = MindYearHeatmapGridLayout.fourByThree,
@@ -255,7 +255,10 @@ final class MindYearHeatmapPresentationSettings {
   final MindSumYearRowLayout sumYearRowLayout;
   final MindSumVisualStyle sumVisualStyle;
   final bool showSumLayoutChooser;
-  final bool showYearMotherCardActions;
+
+  /// Controls only the subtle current-range month metadata in Year's direct
+  /// 4×3 layout. It has no data, Query, palette or range authority.
+  final bool showYearFourByThreeScopeAmounts;
   final MindSumMonthLabelPlacement sumMonthLabelPlacement;
   final MindSumVisibleChartCount sumVisibleChartCount;
   final MindYearHeatmapGridLayout yearGridLayout;
@@ -291,7 +294,7 @@ final class MindYearHeatmapPresentationSettings {
     MindSumYearRowLayout? sumYearRowLayout,
     MindSumVisualStyle? sumVisualStyle,
     bool? showSumLayoutChooser,
-    bool? showYearMotherCardActions,
+    bool? showYearFourByThreeScopeAmounts,
     MindSumMonthLabelPlacement? sumMonthLabelPlacement,
     MindSumVisibleChartCount? sumVisibleChartCount,
     MindYearHeatmapGridLayout? yearGridLayout,
@@ -315,8 +318,8 @@ final class MindYearHeatmapPresentationSettings {
     sumYearRowLayout: sumYearRowLayout ?? this.sumYearRowLayout,
     sumVisualStyle: sumVisualStyle ?? this.sumVisualStyle,
     showSumLayoutChooser: showSumLayoutChooser ?? this.showSumLayoutChooser,
-    showYearMotherCardActions:
-        showYearMotherCardActions ?? this.showYearMotherCardActions,
+    showYearFourByThreeScopeAmounts:
+        showYearFourByThreeScopeAmounts ?? this.showYearFourByThreeScopeAmounts,
     sumMonthLabelPlacement:
         sumMonthLabelPlacement ?? this.sumMonthLabelPlacement,
     sumVisibleChartCount: sumVisibleChartCount ?? this.sumVisibleChartCount,
@@ -356,7 +359,8 @@ final class MindYearHeatmapPresentationSettings {
       other.sumYearRowLayout == sumYearRowLayout &&
       other.sumVisualStyle == sumVisualStyle &&
       other.showSumLayoutChooser == showSumLayoutChooser &&
-      other.showYearMotherCardActions == showYearMotherCardActions &&
+      other.showYearFourByThreeScopeAmounts ==
+          showYearFourByThreeScopeAmounts &&
       other.sumMonthLabelPlacement == sumMonthLabelPlacement &&
       other.sumVisibleChartCount == sumVisibleChartCount &&
       other.yearGridLayout == yearGridLayout &&
@@ -386,7 +390,7 @@ final class MindYearHeatmapPresentationSettings {
     sumYearRowLayout,
     sumVisualStyle,
     showSumLayoutChooser,
-    showYearMotherCardActions,
+    showYearFourByThreeScopeAmounts,
     sumMonthLabelPlacement,
     sumVisibleChartCount,
     yearGridLayout,
@@ -473,11 +477,11 @@ final class MindYearHeatmapPresentationController
     );
   }
 
-  void setShowYearMotherCardActions(bool visible) {
+  void setShowYearFourByThreeScopeAmounts(bool visible) {
     final current = value;
-    if (current.showYearMotherCardActions == visible) return;
+    if (current.showYearFourByThreeScopeAmounts == visible) return;
     value = current.copyWith(
-      showYearMotherCardActions: visible,
+      showYearFourByThreeScopeAmounts: visible,
       revision: current.revision + 1,
     );
   }

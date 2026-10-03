@@ -10,19 +10,22 @@ final class DashboardPresentationPreferences {
   const DashboardPresentationPreferences({
     required this.sumVisualStyle,
     required this.showSumLayoutChooser,
-    required this.showYearMotherCardActions,
+    required this.yearGridLayout,
+    required this.showYearFourByThreeScopeAmounts,
     required this.balanceUsesChildCards,
   });
 
   final MindSumVisualStyle sumVisualStyle;
   final bool showSumLayoutChooser;
-  final bool showYearMotherCardActions;
+  final MindYearHeatmapGridLayout yearGridLayout;
+  final bool showYearFourByThreeScopeAmounts;
   final bool balanceUsesChildCards;
 
   static const defaults = DashboardPresentationPreferences(
     sumVisualStyle: MindSumVisualStyle.current,
     showSumLayoutChooser: true,
-    showYearMotherCardActions: true,
+    yearGridLayout: MindYearHeatmapGridLayout.fourByThree,
+    showYearFourByThreeScopeAmounts: true,
     balanceUsesChildCards: true,
   );
 
@@ -31,14 +34,17 @@ final class DashboardPresentationPreferences {
       other is DashboardPresentationPreferences &&
       other.sumVisualStyle == sumVisualStyle &&
       other.showSumLayoutChooser == showSumLayoutChooser &&
-      other.showYearMotherCardActions == showYearMotherCardActions &&
+      other.yearGridLayout == yearGridLayout &&
+      other.showYearFourByThreeScopeAmounts ==
+          showYearFourByThreeScopeAmounts &&
       other.balanceUsesChildCards == balanceUsesChildCards;
 
   @override
   int get hashCode => Object.hash(
     sumVisualStyle,
     showSumLayoutChooser,
-    showYearMotherCardActions,
+    yearGridLayout,
+    showYearFourByThreeScopeAmounts,
     balanceUsesChildCards,
   );
 }

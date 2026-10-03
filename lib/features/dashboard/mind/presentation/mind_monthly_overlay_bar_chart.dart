@@ -6,6 +6,7 @@ import '../../../../core/design/dashboard_mode_palette.dart';
 import '../../../../core/design/fluvi_global_appearance.dart';
 import '../../query/presentation/query_menu_formatters.dart';
 import '../domain/mind_monthly_overlay_series.dart';
+import 'mind_full_vs_filtered_bar_geometry.dart';
 
 /// Reusable paint implementation for the immutable monthly full/current-scope
 /// comparison series. Month labels intentionally remain the page owner's
@@ -64,9 +65,18 @@ class MindMonthlyOverlayBarPainter extends CustomPainter {
     for (var index = 0; index < series.values.length; index += 1) {
       final value = series.values[index];
       final x = plot.left + unit * index + (unit - barWidth) / 2;
-      final fullHeight = plot.height * value.fullAmount / series.scale.top;
-      final filteredHeight =
-          plot.height * value.filteredAmount / series.scale.top;
+      final fullHeight = MindFullVsFilteredBarGeometry.heightForFraction(
+        plotHeight: plot.height,
+        fraction: value.fullAmount / series.scale.top,
+        hasAmount: MindFullVsFilteredBarGeometry.hasReference(value.fullAmount),
+      );
+      final filteredHeight = MindFullVsFilteredBarGeometry.heightForFraction(
+        plotHeight: plot.height,
+        fraction: value.filteredAmount / series.scale.top,
+        hasAmount: MindFullVsFilteredBarGeometry.hasForeground(
+          value.filteredAmount,
+        ),
+      );
       final fullRect = Rect.fromLTWH(
         x,
         plot.bottom - fullHeight,
